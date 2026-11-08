@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshGeometryBufferPolicy{
+    public Expected<ComputeEmulationLayout> resolveComputeEmulationLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount)const{
+        if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
+            return makeUnexpected(Failure());
+        const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshEmulationFirstVertexIndex;
+        if(vertexCount >= s_MeshAddressableBytes / s_MeshEmulationVertexByteSize)
+            return makeUnexpected(Failure());
+        const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
+        const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+        // Every raw index store must fit its uint byte address, including the final four-byte element.
+        if(indexedByteSize > s_MeshAddressableBytes)
+            return makeUnexpected(Failure());
+        const u64 alignedIndexedByteSize = alignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
+        const u64 expandedByteSize = cast<u64>(primitiveIndexCount) * s_MeshEmulationVertexByteSize;
+        ComputeEmulationLayout outLayout;
+        outLayout.bufferByteSize = max(expandedByteSize, alignedIndexedByteSize);
+        outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+        return outLayout;
+    }
+
+    public Expected<ObjectGeometryCacheLayout> resolveObjectCacheLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount)const{
+        if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
+            return makeUnexpected(Failure());
+        const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshObjectFirstVertexIndex;
+        if(vertexCount > s_MeshMaxU32Value / s_MeshObjectVertexByteSize)
+            return makeUnexpected(Failure());
+        const u64 indexByteOffset = vertexCount * s_MeshObjectVertexByteSize;
+        const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+        if(indexedByteSize > s_MeshAddressableBytes)
+            return makeUnexpected(Failure());
+        // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
+        const u64 bufferByteSize = alignUp(indexedByteSize, s_MeshObjectVertexByteSize);
+        if(bufferByteSize > s_MeshAddressableBytes)
+            return makeUnexpected(Failure());
+        ObjectGeometryCacheLayout outLayout;
+        outLayout.bufferByteSize = bufferByteSize;
+        outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+        outLayout.indexCount = primitiveIndexCount;
+        return outLayout;
+    }
+
+    public b8 requiresObjectCacheDecode(
+        in b8 acceptedContent,
+        in b8 runtimeMesh,
+        in u64 runtimeGeometryContentRevision,
+        in u64 acceptedContentRevision
+    )const{
+        return !acceptedContent || (runtimeMesh && (runtimeGeometryContentRevision == 0u || acceptedContentRevision != runtimeGeometryContentRevision));
+    }
+
+    public b8 acceptObjectCacheContent(
+        in b8 sameDecoderPipeline,
+        in b8 sameHeapHandle,
+        in u32 cacheIndexByteOffset,
+        in u32 expectedIndexByteOffset,
+        in u32 cacheIndexCount,
+        in u32 expectedIndexCount,
+        in b8 meshRuntimeMesh,
+        in b8 expectedRuntimeMesh,
+        in u64 meshRuntimeGeometryContentRevision,
+        in u64 expectedSourceRevision,
+        in b8 sameBuffers,
+        mut b8 outInitialized,
+        mut b8 outAcceptedContent,
+        mut u64 inOutAcceptedContentRevision
+    )const{
+        outInitialized = true;
+        outAcceptedContent = false;
+        if(
+            !sameDecoderPipeline
+            || !sameHeapHandle
+            || cacheIndexByteOffset != expectedIndexByteOffset
+            || cacheIndexCount != expectedIndexCount
+            || meshRuntimeMesh != expectedRuntimeMesh
+            || meshRuntimeGeometryContentRevision != expectedSourceRevision
+            || !sameBuffers
+        )
+            return false;
+        outAcceptedContent = !expectedRuntimeMesh || expectedSourceRevision != 0u;
+        inOutAcceptedContentRevision = expectedSourceRevision;
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

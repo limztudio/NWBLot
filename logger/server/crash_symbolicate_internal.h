@@ -31,6 +31,7 @@ inline constexpr AStringView s_SymbolStorePresentText = "present";
 inline constexpr AStringView s_SymbolStoreMissingText = "missing";
 inline constexpr AStringView s_SymbolStoreErrorText = "error";
 inline constexpr AStringView s_CallstackSectionHeader = "\n[callstack]\n";
+inline constexpr AStringView s_AnonymousModulePath = "<anonymous>";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

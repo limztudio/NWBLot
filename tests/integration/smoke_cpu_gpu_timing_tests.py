@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import smoke_cpu_gpu_timing as diagnostic
 import stress_timing_smoke as smoke
+from stress_launch_environment import StressLaunchEnvironment
 from window_capture_smoke import SmokeFailure
 
 LIT_STRESS = "stress"
@@ -164,7 +165,7 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
             renderer.write_bytes(b"synthetic")
             argv = ["--executable", str(renderer), "--working-directory", str(root), "--no-logserver"]
             args = smoke.parse_args(argv)
-            env = smoke.launch_environment({LIT_NWB_STRESS_CPU_DIAGNOSTICS: "1", LIT_NWB_STRESS_CPU_TIMING_FILE: "old"}, args, root)
+            env = StressLaunchEnvironment.launch_environment({LIT_NWB_STRESS_CPU_DIAGNOSTICS: "1", LIT_NWB_STRESS_CPU_TIMING_FILE: "old"}, args, root)
             self.assertNotIn(LIT_NWB_STRESS_CPU_DIAGNOSTICS, env)
             self.assertNotIn(LIT_NWB_STRESS_CPU_TIMING_FILE, env)
 

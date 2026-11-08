@@ -3,6 +3,8 @@
 
 
 #include "backend.h"
+#include "graphics_pipeline_state_builder.h"
+#include "framebuffer_rendering_preparation.h"
 #include "arena_names.h"
 #include "command_validation.h"
 
@@ -121,10 +123,10 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
-    auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
+    auto rasterizer = VulkanDetail::GraphicsPipelineStateBuilder::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
     const Array<VkDynamicState, 4> dynamicStates = {{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS, VK_DYNAMIC_STATE_STENCIL_REFERENCE }};
-    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
+    const auto fixedState = VulkanDetail::GraphicsPipelineStateBuilder::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});
 
@@ -134,7 +136,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr;
     pipelineInfo.pInputAssemblyState = nullptr;
-    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
+    VulkanDetail::GraphicsPipelineStateBuilder::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
     if(!createPipeline(s_OperationName, pipelineInfo, *pso))
@@ -152,7 +154,7 @@ void CommandList::setMeshletState(const MeshletState& state){
         return;
     if(!validateMeshletState(state))
         return;
-    if(!prepareFramebufferForRendering(state.framebuffer, s_SetMeshletStateOperation))
+    if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
         return;
 
     if(state.indirectParams)

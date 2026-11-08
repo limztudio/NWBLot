@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 
 #include <global/scope_exit.h>
 
@@ -28,7 +29,7 @@ b8 Builder::image(const AStringView stableKey, const Name& regionName, const Ima
     const auto widget = m_context.declare(stableKey, WidgetKind::Image);
     ImageFrame frame;
     frame.options = options;
-    if(!widget || !TryResolveImageRegionMetrics(*m_skin, regionName, options, frame.metrics, frame.region)){
+    if(!widget || !ControlStyleMetrics().imageMetrics(*m_skin, regionName, options, frame.metrics, frame.region)){
         m_context.fail();
         return false;
     }

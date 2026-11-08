@@ -6,6 +6,7 @@
 
 
 #include "operations_file_io.h"
+#include "staged_file_writer.h"
 #include "operations_remove.h"
 
 #include <global/diagnostics.h>
@@ -346,14 +347,14 @@ template<typename ArenaT>
     ScopeExit restoreOnFailure(rollback);
 
     const auto publish = [&]()noexcept -> b8{
-        const auto primaryStaged = StageNewBinaryFileDurable(paths.primaryTemporary, primaryData, primaryByteCount, ownedTemporary[0u]);
+        const auto primaryStaged = StagedFileWriter(paths.primaryTemporary).create(primaryData, primaryByteCount, ownedTemporary[0u]);
         if(!primaryStaged){
             result.failureStage = StagedFilePairFailureStage::StagePrimary;
             result.failedIndex = 0u;
             result.error = primaryStaged.error();
             return false;
         }
-        const auto secondaryStaged = StageNewBinaryFileDurable(paths.secondaryTemporary, secondaryData, secondaryByteCount, ownedTemporary[1u]);
+        const auto secondaryStaged = StagedFileWriter(paths.secondaryTemporary).create(secondaryData, secondaryByteCount, ownedTemporary[1u]);
         if(!secondaryStaged){
             result.failureStage = StagedFilePairFailureStage::StageSecondary;
             result.failedIndex = 1u;

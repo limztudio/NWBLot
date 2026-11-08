@@ -108,6 +108,7 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
     , m_cpuTiming(cpuTiming)
     , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_cpuScheduler)))
     , m_standaloneGraphWorkspaces(MakeNotNullUnique(MakeGlobalUnique<GraphicsModuleDetail::StandaloneGraphWorkspacePool>(m_allocator.getObjectArena(), m_allocator.getObjectArena())))
+    , m_standaloneGraph(*this, *m_standaloneGraphWorkspaces, m_cpuScheduler)
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -235,7 +236,7 @@ b8 GraphicsRuntime::destroy(){
     }
 
     m_acquiredPresentationFrame = {};
-    invalidateRenderPassResources();
+    m_renderPasses.invalidateResources();
     m_renderPasses.clear();
     m_gpuTiming.resetQueries();
 
@@ -305,13 +306,7 @@ u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
 }
 
 void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
-    m_renderPasses.remove(MakeNotNull(&pass));
-    m_renderPasses.push_back(MakeNotNull(&pass));
-
-    pass.backBufferResizing();
-    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
-    if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
+    m_renderPasses.addToBack(pass, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 }
 
 void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
@@ -319,8 +314,7 @@ void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
     GraphicsBackend::Device* const device = m_backend->getDevice();
     NWB_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
 
-    pass.invalidateResources();
-    m_renderPasses.remove(MakeNotNull(&pass));
+    m_renderPasses.remove(pass);
 }
 
 QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noexcept{
@@ -380,24 +374,6 @@ Expected<CooperativeVectorDeviceFeatures> GraphicsRuntime::queryCoopVecFeatures(
 Expected<usize> GraphicsRuntime::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
     auto& device = getDevice();
     return device.getCoopVecMatrixSize(type, layout, rows, columns);
-}
-
-void GraphicsRuntime::invalidateRenderPassResources(){
-    for(const auto renderPass : m_renderPasses)
-        renderPass->invalidateResources();
-}
-
-b8 GraphicsRuntime::validateRenderPassResources(){
-    b8 valid = true;
-    for(const auto renderPass : m_renderPasses){
-        valid = renderPass->validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount) && valid;
-    }
-    return valid;
-}
-
-void GraphicsRuntime::animate(const f64 elapsedTime){
-    for(const auto renderPass : m_renderPasses)
-        renderPass->animate(static_cast<f32>(elapsedTime));
 }
 
 void GraphicsRuntime::notifyPointerScaleChanged()const{

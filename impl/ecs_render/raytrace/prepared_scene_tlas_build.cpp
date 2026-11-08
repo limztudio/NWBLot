@@ -4,6 +4,8 @@
 
 #include "prepared_scene_tlas_build.h"
 
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
+
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <core/graphics/backend_selection/backend.h>
@@ -76,7 +78,7 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
         return;
 
     // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
-    PublishConfirmedSceneTlasBuild(
+    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(
         storageMatches(state),
         m_static,
         m_staticSceneHash,

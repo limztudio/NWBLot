@@ -12,6 +12,10 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import refraction_density_benchmark as benchmark  # noqa: E402
+from renderer_benchmark_identity import RendererBenchmarkIdentity
+from gpu_timing_evidence import ScopeSample
+from refraction_density_evidence import RefractionDensityEvidence
+from refraction_density_comparison import RefractionDensityComparison
 
 
 class RefractionDensityBenchmarkTests(unittest.TestCase):
@@ -37,31 +41,31 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
     def test_zero_density_requires_occlusion_without_removing_glass(self):
         cell = benchmark.Cell("960x720", 0, "hardware")
         text = self.fixture(0, (0, 0, 0, 0), 0, 0, "occluded")
-        benchmark.validate_fixture(text, cell)
+        RefractionDensityEvidence.validate_fixture(text, cell)
         for bad in (text.replace("glass_instances 1", "glass_instances 0"), text.replace("occluded", "visible"), text.replace("admitted_pixels 0", "admitted_pixels 1")):
             with self.subTest(log=bad), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.validate_fixture(bad, cell)
+                RefractionDensityEvidence.validate_fixture(bad, cell)
 
     def test_requested_density_cannot_hide_incorrect_coverage_or_tile_bounds(self):
         cell = benchmark.Cell("960x720", 1, "hardware")
         text = self.fixture()
-        benchmark.validate_fixture(text, cell)
+        RefractionDensityEvidence.validate_fixture(text, cell)
         for bad in (text.replace("active_tiles 120", "active_tiles 119"), text.replace("admitted_pixels 6912", "admitted_pixels 6911"),
             self.fixture(1, (328, 246, 632, 474), 69312, 1140), text + text):
             with self.subTest(log=bad), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.validate_fixture(bad, cell)
+                RefractionDensityEvidence.validate_fixture(bad, cell)
 
     def test_full_density_requires_framebuffer_tail_tiles(self):
         cell = benchmark.Cell("960x720", 100, "hardware")
         text = self.fixture(100, (0, 0, 960, 720), 691200, 10800)
-        benchmark.validate_fixture(text, cell)
+        RefractionDensityEvidence.validate_fixture(text, cell)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.validate_fixture(self.fixture(100, (1, 1, 959, 719), 958 * 718, 10800), cell)
+            RefractionDensityEvidence.validate_fixture(self.fixture(100, (1, 1, 959, 719), 958 * 718, 10800), cell)
 
     def test_hardware_route_cannot_pass_without_capability(self):
         text = self.fixture().replace("ray_query_supported 1", "ray_query_supported 0")
         with self.assertRaisesRegex(benchmark.SmokeFailure, "hardware capability"):
-            benchmark.validate_fixture(text, benchmark.Cell("960x720", 1, "hardware"))
+            RefractionDensityEvidence.validate_fixture(text, benchmark.Cell("960x720", 1, "hardware"))
 
     def test_argument_clear_regression_is_not_hidden_by_resolve_saving(self):
         trials = [self.trial(arm, block) for block in range(2) for arm in ("baseline", "candidate")]
@@ -70,7 +74,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
                 trial["scopes"][benchmark.RESOLVE]["total_ms"] = 1
                 trial["scopes"][benchmark.RESOLVE]["mean_ms"] = .01
                 trial["scopes"][benchmark.CLEAR_ARGUMENTS]["total_ms"] = 100
-        comparison = benchmark.comparison(trials, 2)
+        comparison = RefractionDensityComparison.comparison(trials, 2)
         aggregate = comparison["metrics"]["argument_clear_plus_classification_plus_resolve_plus_compositor_per_frame_ms"]
         self.assertGreater(aggregate["candidate_minus_baseline"], 0)
         self.assertLess(comparison["metrics"][benchmark.RESOLVE]["candidate_minus_baseline"], 0)
@@ -113,26 +117,26 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
                 if arm == "baseline":
                     trial["scopes"][benchmark.CLEAR_ARGUMENTS]["total_ms"] = 100
                 trials.append(trial)
-        result = benchmark.comparison(trials, 2, baseline_scheduling="tiled")
+        result = RefractionDensityComparison.comparison(trials, 2, baseline_scheduling="tiled")
         aggregate = result["metrics"]["argument_clear_plus_classification_plus_resolve_plus_compositor_per_frame_ms"]
         self.assertAlmostEqual(aggregate["baseline"], 1.3)
         self.assertAlmostEqual(aggregate["candidate"], .4)
         self.assertEqual(result["baseline_scheduling"], "tiled")
         self.assertIn("both arms", result["reference_contract"])
         with self.assertRaisesRegex(benchmark.SmokeFailure, "mismatched scheduling"):
-            benchmark.comparison(trials, 2)
+            RefractionDensityComparison.comparison(trials, 2)
         for missing in (benchmark.CLASSIFY, benchmark.CLEAR_ARGUMENTS):
             removed = trials[0]["scopes"].pop(missing)
             with self.subTest(missing=missing), self.assertRaisesRegex(benchmark.SmokeFailure, "lacks required"):
-                benchmark.comparison(trials, 2, baseline_scheduling="tiled")
+                RefractionDensityComparison.comparison(trials, 2, baseline_scheduling="tiled")
             trials[0]["scopes"][missing] = removed
         trials[0]["scheduling"] = "full-frame"
         with self.assertRaisesRegex(benchmark.SmokeFailure, "mismatched scheduling"):
-            benchmark.comparison(trials, 2, baseline_scheduling="tiled")
+            RefractionDensityComparison.comparison(trials, 2, baseline_scheduling="tiled")
 
     def test_stall_rejects_wall_timing_without_erasing_evidence(self):
         raw = {"eligible": True, "source": "fixture", "policy": "callback delta", "max_frame_ms": 44257.6, "mean_frame_ms": 29, "mean_fps": 34}
-        with mock.patch.object(benchmark.ab, "summarize_wall_frames", return_value=raw.copy()):
+        with mock.patch.object(benchmark.RendererWallFrameEvidence, "summarize_wall_frames", return_value=raw.copy()):
             result = benchmark.wall_frames("", "", benchmark.workload_for(SimpleNamespace(name="candidate"), benchmark.Cell("960x720", 1, "screen")), 2, 14, 1000)
         self.assertFalse(result["eligible"])
         self.assertEqual(result["max_frame_ms"], raw["max_frame_ms"])
@@ -142,7 +146,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         trials = [self.trial(arm, block) for block in range(2) for arm in ("baseline", "candidate")]
         for broken in (trials[:-1], trials + trials[:1]):
             with self.assertRaisesRegex(benchmark.SmokeFailure, "duplicate or incomplete"):
-                benchmark.comparison(broken, 2)
+                RefractionDensityComparison.comparison(broken, 2)
 
     def test_mismatched_frozen_fixture_instrumentation_is_rejected(self):
         files = lambda arm, digest: {"source": {"files": {f"C:/{arm}/source/{path}": digest for path in benchmark.FIXTURE_SOURCE_FILES}}}
@@ -169,11 +173,11 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
             "RendererSystem: deferred rendering targets ready (1904x1011, format)\n"
             "GraphicsRuntime: Back buffer resized to 1920x1080\n"
             "RendererSystem: deferred rendering targets ready (1920x1080, format)\n")
-        benchmark.validate_extent_history(text, cell)
+        RefractionDensityEvidence.validate_extent_history(text, cell)
         for corrupted in (text.replace("Frame Win32 client size clamped", "Unrelated window size"), text.replace("Back buffer resized to 1920x1080", "Back buffer resized to 1904x1011"),
             text + "RendererSystem: deferred rendering targets ready (1280x720, format)\n", text.replace("from 1920x1080", "from 1600x900")):
             with self.subTest(log=corrupted), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.validate_extent_history(corrupted, cell)
+                RefractionDensityEvidence.validate_extent_history(corrupted, cell)
 
     def test_workarea_clamp_resizes_real_client_before_timing_admission(self):
         cell = benchmark.Cell("1920x1080", 1, "screen")
@@ -191,7 +195,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         self.assertEqual(result["initial_client_extent"], [1904, 1011])
 
     def test_old_extent_and_unsealed_boundary_reports_cannot_count_as_target_warmup(self):
-        sample = lambda frames: {benchmark.FRAME: benchmark.timing.ScopeSample(1, frames)}
+        sample = lambda frames: {benchmark.FRAME: ScopeSample(1, frames)}
         reports = [sample(10000), sample(10000), sample(10000), sample(20), sample(30), sample(50), sample(500)]
         # Discard the unsealed third header present at resize confirmation.
         start, retained = benchmark.retain_target_reports(reports, 3, 2, 100)
@@ -204,7 +208,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         self.assertEqual(benchmark.startup_report_boundary(""), 1)
 
     def test_elapsed_warmup_excludes_old_extent_and_requires_the_complete_target_interval(self):
-        sample = {benchmark.FRAME: benchmark.timing.ScopeSample(1, 100)}
+        sample = {benchmark.FRAME: ScopeSample(1, 100)}
         reports = [sample] * 10
         durations = [100., 100., .5, .5, .5, .5, .5, .5, .5, .5]
         start, retained = benchmark.retain_target_reports(reports, 2, 2, 100, 3, durations)
@@ -215,7 +219,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         self.assertEqual(retained, [])
 
     def test_elapsed_warmup_does_not_override_completed_gpu_frame_minimum(self):
-        reports = [{benchmark.FRAME: benchmark.timing.ScopeSample(1, 10)}] * 13
+        reports = [{benchmark.FRAME: ScopeSample(1, 10)}] * 13
         start, retained = benchmark.retain_target_reports(reports, 2, 2, 100, 1, [.5] * len(reports))
         self.assertEqual(start, 12)
         self.assertEqual(retained, reports[12:])
@@ -234,10 +238,10 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
             with mock.patch.object(benchmark, "workload_for"), mock.patch.object(benchmark, "load_name_symbols"), \
                     mock.patch.object(benchmark, "build_launch_environment", return_value={}), \
                     mock.patch.object(benchmark.ab, "configure_environment", return_value=({}, {})), \
-                    mock.patch.object(benchmark.ab, "cache_identity", return_value={}), \
+                    mock.patch.object(RendererBenchmarkIdentity, "cache_identity", return_value={}), \
                     mock.patch.object(benchmark, "write"), mock.patch.object(benchmark, "create_capture_backend", return_value=backend), \
                     mock.patch.object(benchmark, "launch_logserver", side_effect=benchmark.SmokeFailure("startup failed")), \
-                    mock.patch.object(benchmark, "terminate_process", side_effect=terminate), \
+                    mock.patch.object(benchmark.CaptureProcessTermination, "terminate_process", side_effect=terminate), \
                     mock.patch.object(Path, "write_text", side_effect=OSError("report failed")), \
                     mock.patch.object(benchmark, "write_status") as status:
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "startup failed"):
@@ -257,7 +261,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
                 raise benchmark.SmokeFailure("plan failed")
 
             stderr = io.StringIO()
-            with mock.patch.object(benchmark.ab, "validate_arm_separation"), \
+            with mock.patch.object(RendererBenchmarkIdentity, "validate_arm_separation"), \
                     mock.patch.object(benchmark, "freeze", return_value={}), \
                     mock.patch.object(benchmark, "require_same_fixture_sources", return_value={}), \
                     mock.patch.object(benchmark, "write", side_effect=fail_write), \
@@ -267,7 +271,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
             self.assertIn("report failed", str(status.call_args))
 
     def test_missing_or_invalid_publication_durations_cannot_establish_elapsed_warmup(self):
-        reports = [{benchmark.FRAME: benchmark.timing.ScopeSample(1, 100)}] * 4
+        reports = [{benchmark.FRAME: ScopeSample(1, 100)}] * 4
         for durations in (None, [.5] * 3, [.5, .5, float("nan"), .5], [.5, 0., .5, .5]):
             with self.subTest(durations=durations), self.assertRaisesRegex(benchmark.SmokeFailure, "positive durations"):
                 benchmark.retain_target_reports(reports, 0, 2, 100, 1, durations)

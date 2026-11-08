@@ -1,0 +1,173 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/bind_schema.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindLayoutLookupBuilder{
+    public b8 buildMaterialBindTypedLayoutBlockLookup(
+        in StringView contextLabel,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        mut HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry> outBlockLookup
+    ){
+        outBlockLookup.clear();
+        outBlockLookup.reserve(typedLayoutBlocks.size());
+
+        usize blockByteBegin = 0u;
+        u32 constantByteBegin = 0u;
+        for(usize blockIndex = 0u; blockIndex < typedLayoutBlocks.size(); ++blockIndex){
+            const MaterialTypedLayoutBlock block = typedLayoutBlocks[blockIndex];
+            assert(blockIndex < cast<usize>(u32.max));
+            if(blockByteBegin > cast<usize>(u32.max)){
+                error("Material bind typed layout: block byte offset exceeds u32 for '{}'", contextLabel);
+                return false;
+            }
+
+            MaterialBindTypedLayoutBlockLookupEntry entry;
+            entry.blockIndex = cast<u32>(blockIndex);
+            entry.byteBegin = cast<u32>(blockByteBegin);
+            entry.constantByteBegin = constantByteBegin;
+            if(outBlockLookup.contains(block.blockName)){
+                error("Material bind typed layout: duplicate block in '{}'", contextLabel);
+                return false;
+            }
+            outBlockLookup.try_emplace(block.blockName, entry);
+            assert(cast<usize>(block.byteSize) <= usize.max - blockByteBegin);
+
+            blockByteBegin += cast<usize>(block.byteSize);
+            if(block.blockClass == MaterialBlockClass::MaterialConstant){
+                assert(block.byteSize <= u32.max - constantByteBegin);
+                constantByteBegin += block.byteSize;
+            }
+        }
+
+        return true;
+    }
+
+    public b8 tryInsertMaterialBindTypedLayoutParameterLookupEntry(
+        in StringView interfacePath,
+        in StringView contextLabel,
+        in StringView instanceName,
+        in StringView structName,
+        in StringView fieldName,
+        in MaterialBindTypedLayoutBlockLookupEntry blockEntry,
+        in MaterialTypedLayoutBlock block,
+        in usize fieldIndex,
+        in MaterialTypedLayoutField field,
+        mut HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> inOutParameterLookup
+    ){
+        if(fieldIndex > cast<usize>(u32.max)){
+            error("Material bind typed layout: interface '{}' instance '{}' field range exceeds layout for '{}'", interfacePath, instanceName, contextLabel);
+            return false;
+        }
+        if(field.offset > u32.max - blockEntry.byteBegin){
+            error(
+                "Material bind typed layout: interface '{}' field '{}.{}' byte offset exceeds u32 for '{}'"
+                , interfacePath
+                , structName
+                , fieldName
+                , contextLabel
+            );
+            return false;
+        }
+        assert(!IsMaterialLayoutResourceFieldType(field.fieldType) || field.offset <= u32.max - blockEntry.constantByteBegin);
+
+        const Expected<CompactString> parameterName = BuildMaterialBindParameterKey(instanceName, fieldName);
+        if(!parameterName.has_value()){
+            error("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity", instanceName, fieldName, contextLabel);
+            return false;
+        }
+
+        MaterialBindTypedLayoutParameterLookupEntry entry;
+        entry.fieldIndex = cast<u32>(fieldIndex);
+        entry.byteOffset = blockEntry.byteBegin + field.offset;
+        entry.constantByteOffset = blockEntry.constantByteBegin + field.offset;
+        entry.blockName = block.blockName;
+        if(inOutParameterLookup.contains(parameterName.value())){
+            error("Material bind typed layout: duplicate parameter '{}' in '{}'", parameterName.value().view(), contextLabel);
+            return false;
+        }
+        inOutParameterLookup.try_emplace(parameterName.value(), entry);
+        return true;
+    }
+
+    public b8 insertMaterialBindInstanceParameterLookupEntries(
+        in StringView interfaceVirtualPath,
+        in StringView contextLabel,
+        in MaterialBindInstance instance,
+        in MaterialBindStruct bindStruct,
+        in HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry> blockLookup,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        mut HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> outParameterLookup
+    ){
+        const Expected<Name> instanceName = TryParseMaterialBindName(instance.name);
+        assert(instanceName.has_value());
+        assert(blockLookup.contains(instanceName.value()));
+        const MaterialBindTypedLayoutBlockLookupEntry blockEntry = blockLookup.at(instanceName.value());
+        assert(cast<usize>(blockEntry.blockIndex) < typedLayoutBlocks.size());
+
+        const MaterialTypedLayoutBlock block = typedLayoutBlocks[cast<usize>(blockEntry.blockIndex)];
+        assert(cast<usize>(block.fieldCount) == bindStruct.fields.size());
+
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const usize fieldIndex = cast<usize>(block.fieldBegin) + cast<usize>(fieldOffset);
+            assert(fieldIndex < typedLayoutFields.size());
+            if(!this.tryInsertMaterialBindTypedLayoutParameterLookupEntry(
+                interfaceVirtualPath,
+                contextLabel,
+                instance.name,
+                bindStruct.name,
+                bindStruct.fields[cast<usize>(fieldOffset)].name,
+                blockEntry,
+                block,
+                fieldIndex,
+                typedLayoutFields[fieldIndex],
+                outParameterLookup
+            ))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 buildMaterialBindTypedLayoutParameterLookup(
+        in StringView interfaceVirtualPath,
+        in StringView contextLabel,
+        in Span<MaterialBindStruct> structs,
+        in Span<MaterialBindInstance> instances,
+        in HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry> blockLookup,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        mut HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> outParameterLookup
+    ){
+        outParameterLookup.clear();
+        outParameterLookup.reserve(typedLayoutFields.size());
+
+        for(in MaterialBindInstance instance : instances){
+            const Expected<usize> structIndex = FindMaterialBindStructIndex(structs, instance.type);
+            assert(structIndex.has_value());
+            if(!this.insertMaterialBindInstanceParameterLookupEntries(
+                interfaceVirtualPath,
+                contextLabel,
+                instance,
+                structs[structIndex.value()],
+                blockLookup,
+                typedLayoutBlocks,
+                typedLayoutFields,
+                outParameterLookup
+            ))
+                return false;
+        }
+
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
-"""CmakeSettings: CMake configure/build settings, cache reads, and File API helpers."""
+"""CmakeSettings: CMake configuration, cache settings, and launch paths."""
 
 from __future__ import annotations
 
-import fnmatch
-import json
 import os
 import shlex
 import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import CMakeTargetInfo, LaunchSettings
+from launcher.models import LaunchSettings
 from launcher.host import HostProbe
-from launcher.constants import (ARCH_X64, ARG_JOIN_SEPARATOR, CACHE_ENTRY_SEPARATOR, CACHE_FILE_ENCODING, CACHE_FILE_ERRORS, CACHE_FILE_MODE, CACHE_KEY_SEPARATOR, CACHE_LINE_END, CMAKE_BINARY_FLAG, CMAKE_BOOL_FALSE_TOKENS, CMAKE_BOOL_TRUE_TOKENS,
-    CMAKE_BUILD_ROOT_DIR, CMAKE_BUILD_SUBDIR, CMAKE_CACHE_FILE, CMAKE_COMMAND_ENV, CMAKE_DEFAULT_EXECUTABLE, CMAKE_DEFINE_EQUALS, CMAKE_DEFINE_PREFIX, CMAKE_LOCAL_BIN_POSIX, CMAKE_LOCAL_BIN_WINDOWS, CMAKE_OUTPUT_DOMAIN_KEY, CMAKE_PRESET_FLAG,
-    CMAKE_SOURCE_FLAG, CMAKE_TOOL_VENV_DIR, CONFIGURE_ALWAYS, CONFIGURE_NEVER, DEFAULT_DOMAIN, DEFAULT_DOMAIN_FALLBACK, EMPTY_STRING, FILE_API_ARTIFACTS_KEY, FILE_API_CODEMODEL, FILE_API_CODEMODEL_VERSION, FILE_API_CONFIGURATIONS_KEY, FILE_API_DIR_API,
-    FILE_API_DIR_CMAKE, FILE_API_DIR_QUERY, FILE_API_DIR_REPLY, FILE_API_DIR_V1, FILE_API_INDEX_GLOB, FILE_API_JSON_FILE_KEY, FILE_API_KIND_CODEMODEL, FILE_API_KIND_KEY, FILE_API_NAME_KEY, FILE_API_OBJECTS_KEY, FILE_API_PATH_KEY, FILE_API_TARGETS_KEY,
-    FILE_API_TYPE_KEY, FILE_API_VERSION_KEY, FILE_API_VERSION_MAJOR, LOG_PREFIX, MSG_ARCH_PRESET_CONFLICT, MSG_CMAKE_DEFINE_EMPTY, MSG_CMAKE_DEFINE_USAGE, MSG_CONFIGURE_REQUIRED, OS_WINDOWS, PLATFORM_WINDOWS, PRESET_ARCH_SEPARATOR, PRESET_PREFIX_FORMAT,
-    PRESET_TOOLCHAIN, PROFILE_REQUIRED_DEFINES,)
+from launcher.cmake_file_api import CmakeFileApi
+from launcher.constants import (ARCH_X64, ARG_JOIN_SEPARATOR, CACHE_ENTRY_SEPARATOR, CACHE_FILE_ENCODING, CACHE_FILE_ERRORS, CACHE_FILE_MODE,
+    CACHE_KEY_SEPARATOR, CACHE_LINE_END, CMAKE_BINARY_FLAG, CMAKE_BOOL_FALSE_TOKENS, CMAKE_BOOL_TRUE_TOKENS, CMAKE_BUILD_ROOT_DIR, CMAKE_BUILD_SUBDIR,
+    CMAKE_CACHE_FILE, CMAKE_COMMAND_ENV, CMAKE_DEFAULT_EXECUTABLE, CMAKE_DEFINE_EQUALS, CMAKE_DEFINE_PREFIX, CMAKE_LOCAL_BIN_POSIX,
+    CMAKE_LOCAL_BIN_WINDOWS, CMAKE_OUTPUT_DOMAIN_KEY, CMAKE_PRESET_FLAG, CMAKE_SOURCE_FLAG, CMAKE_TOOL_VENV_DIR, CONFIGURE_ALWAYS, CONFIGURE_NEVER,
+    DEFAULT_DOMAIN, DEFAULT_DOMAIN_FALLBACK, LOG_PREFIX, MSG_ARCH_PRESET_CONFLICT, MSG_CMAKE_DEFINE_EMPTY, MSG_CMAKE_DEFINE_USAGE,
+    MSG_CONFIGURE_REQUIRED, OS_WINDOWS, PLATFORM_WINDOWS, PRESET_ARCH_SEPARATOR, PRESET_PREFIX_FORMAT, PRESET_TOOLCHAIN, PROFILE_REQUIRED_DEFINES,)
 
 
 class CmakeSettings:
-    """CMake configure/build settings, cache reads, and File API helpers."""
+    """CMake configuration, cache settings, and launch paths."""
 
     @staticmethod
     def repo_root() -> Path:
@@ -148,82 +147,6 @@ class CmakeSettings:
         return dict(PROFILE_REQUIRED_DEFINES)
 
     @staticmethod
-    def file_api_query_path(build_dir: Path) -> Path:
-        return build_dir / FILE_API_DIR_CMAKE / FILE_API_DIR_API / FILE_API_DIR_V1 / FILE_API_DIR_QUERY / FILE_API_CODEMODEL
-
-    @staticmethod
-    def file_api_reply_dir(build_dir: Path) -> Path:
-        return build_dir / FILE_API_DIR_CMAKE / FILE_API_DIR_API / FILE_API_DIR_V1 / FILE_API_DIR_REPLY
-
-    @staticmethod
-    def ensure_file_api_query(build_dir: Path) -> None:
-        query = CmakeSettings.file_api_query_path(build_dir)
-        query.parent.mkdir(parents=True, exist_ok=True)
-        query.touch()
-
-    @staticmethod
-    def latest_file_api_index(build_dir: Path) -> Optional[Path]:
-        reply_dir = CmakeSettings.file_api_reply_dir(build_dir)
-        try:
-            with os.scandir(reply_dir) as entries:
-                indexes = [reply_dir / entry.name for entry in entries if fnmatch.fnmatch(entry.name, FILE_API_INDEX_GLOB)]
-        except FileNotFoundError:
-            return None
-        if not indexes:
-            return None
-        return max(indexes, key=lambda path: (path.stat().st_mtime, path.name))
-
-    @staticmethod
-    def file_api_has_reply(build_dir: Path) -> bool:
-        return CmakeSettings.latest_file_api_index(build_dir) is not None
-
-    @staticmethod
-    def read_json(path: Path):
-        with path.open(CACHE_FILE_MODE, encoding=CACHE_FILE_ENCODING) as file:
-            return json.load(file)
-
-    @staticmethod
-    def load_cmake_target_info(build_dir: Path, target_name: str, config: str) -> Optional[CMakeTargetInfo]:
-        index_path = CmakeSettings.latest_file_api_index(build_dir)
-        if index_path is None:
-            return None
-
-        index = CmakeSettings.read_json(index_path)
-        codemodel_file = None
-        for item in index.get(FILE_API_OBJECTS_KEY, []):
-            if item.get(FILE_API_KIND_KEY) != FILE_API_KIND_CODEMODEL:
-                continue
-            version = item.get(FILE_API_VERSION_KEY, {})
-            if version.get(FILE_API_VERSION_MAJOR) == FILE_API_CODEMODEL_VERSION:
-                codemodel_file = item.get(FILE_API_JSON_FILE_KEY)
-                break
-        if not codemodel_file:
-            return None
-
-        reply_dir = index_path.parent
-        codemodel = CmakeSettings.read_json(reply_dir / codemodel_file)
-        configurations = codemodel.get(FILE_API_CONFIGURATIONS_KEY, [])
-        configuration = next((entry for entry in configurations if entry.get(FILE_API_NAME_KEY) == config), None)
-        if configuration is None:
-            return None
-
-        for target_ref in configuration.get(FILE_API_TARGETS_KEY, []):
-            if target_ref.get(FILE_API_NAME_KEY) != target_name:
-                continue
-
-            target = CmakeSettings.read_json(reply_dir / target_ref[FILE_API_JSON_FILE_KEY])
-            artifacts = []
-            for artifact in target.get(FILE_API_ARTIFACTS_KEY, []):
-                artifact_path = Path(artifact[FILE_API_PATH_KEY])
-                if not artifact_path.is_absolute():
-                    artifact_path = build_dir / artifact_path
-                artifacts.append(artifact_path)
-
-            return CMakeTargetInfo(name=target.get(FILE_API_NAME_KEY, target_name), target_type=target.get(FILE_API_TYPE_KEY, EMPTY_STRING), artifacts=tuple(artifacts),)
-
-        return None
-
-    @staticmethod
     def resolve_repo_root(value: Optional[Path]) -> Path:
         if value is not None:
             return value.resolve()
@@ -270,12 +193,12 @@ class CmakeSettings:
     def maybe_configure(args, settings: LaunchSettings, required_defines: Dict[str, str], env: Dict[str, str]) -> None:
         build_dir_was_configured = (settings.build_dir / CMAKE_CACHE_FILE).exists()
         if not args.dry_run:
-            CmakeSettings.ensure_file_api_query(settings.build_dir)
+            CmakeFileApi.ensure_file_api_query(settings.build_dir)
 
         extra_defines = CmakeSettings.parse_define_entries(args.defines)
         extra_defines.update(required_defines)
 
-        needs_configure = (args.configure == CONFIGURE_ALWAYS or bool(args.defines) or not build_dir_was_configured or not CmakeSettings.file_api_has_reply(settings.build_dir) or not CmakeSettings.cache_matches_required_defines(settings.build_dir, required_defines))
+        needs_configure = (args.configure == CONFIGURE_ALWAYS or bool(args.defines) or not build_dir_was_configured or not CmakeFileApi.file_api_has_reply(settings.build_dir) or not CmakeSettings.cache_matches_required_defines(settings.build_dir, required_defines))
         if not needs_configure:
             return
 

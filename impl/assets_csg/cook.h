@@ -63,8 +63,6 @@ using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
 
 [[nodiscard]] b8 AssignCsgShapeCookIds(Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena);
 
-[[nodiscard]] Expected<Path> EmitCsgShapeModuleIncludes(const Path& cacheDirectory, AStringView configurationSafeName, Span<const CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -81,12 +81,7 @@ struct SwapChainSurfaceFormatSelection{
     return primaryGraphicsQueue.valid() && executionQueue && executionQueue->queueClass == CommandQueue::Graphics && executionQueue->id == primaryGraphicsQueue;
 }
 
-[[nodiscard]] inline constexpr b8 SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkFormat format, const VkColorSpaceKHR colorSpace)noexcept{
-    return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
-}
 
-[[nodiscard]] Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(Span<const VkSurfaceFormatKHR> supportedFormats, Format::Enum requestedSdrFormat, b8 hdr10Allowed)noexcept;
-[[nodiscard]] VkExtent2D ResolveSwapChainSurfaceExtent(const VkSurfaceCapabilitiesKHR& surfaceCaps, u32 requestedWidth, u32 requestedHeight)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,8 +4,6 @@
 
 #include "scheduler.h"
 
-#include <global/atomic_identity.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,44 +40,28 @@ CpuTaskScheduler::ProfileMeasure::~ProfileMeasure()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 CpuTaskScheduler::AllocateProfileLabelIdentity()noexcept{
-    static Atomic<u64> s_Next{ 1u };
-    return NextNonWrappingIdentity(s_Next);
-}
-
 CpuTaskProfileLabel CpuTaskScheduler::registerProfileLabel(const Name& name){
     if(name == s_NameNone)
         return {};
     ScopedLock lock(m_mutex);
-
-    for(const ProfileLabelRecord& record : m_profileLabels){
-        if(record.name == name)
-            return record.label;
-    }
-    const CpuTaskProfileLabel label{ AllocateProfileLabelIdentity() };
-    m_profileLabels.push_back(ProfileLabelRecord{ label, name });
-    return label;
+    return m_profileBuffer.registerLabelLocked(name);
 }
 
 void CpuTaskScheduler::setProfiling(const b8 enabled, const u64 frameIndex){
-    const b8 active = enabled && m_profileEventCapacity != 0u;
+    const b8 active = enabled && m_profileBuffer.capacity() != 0u;
     if(!active && !m_profileEnabled.load(MemoryOrder::relaxed))
         return;
     NothrowScopedLock lock(m_mutex);
 
     if(active){
-        if(m_profileEvents.empty())
-            m_profileEvents.resize(m_profileEventCapacity);
+        m_profileBuffer.ensureAllocatedLocked();
         if(m_readyProfiles.size() < m_nodes.size())
             m_readyProfiles.resize(m_nodes.size());
     }
     if(active != m_profileEnabled.load(MemoryOrder::relaxed)){
         if(++m_profileEpoch == 0u)
             TerminateInvariant();
-        m_profileRead = 0u;
-        m_profileCount = 0u;
-        m_profileRecordedEvents = 0u;
-        m_profileDroppedEvents = 0u;
+        m_profileBuffer.resetLocked();
         m_profileEnabled.store(active, MemoryOrder::release);
     }
     m_profileFrameIndex = frameIndex;
@@ -90,14 +72,7 @@ usize CpuTaskScheduler::readProfileEvents(CpuTaskProfileEvent* const output, con
         return 0u;
     NothrowScopedLock lock(m_mutex);
 
-    const usize count = Min(capacity, m_profileCount);
-    for(usize index = 0u; index < count; ++index){
-        output[index] = m_profileEvents[m_profileRead];
-        if(++m_profileRead == m_profileEvents.size())
-            m_profileRead = 0u;
-    }
-    m_profileCount -= count;
-    return count;
+    return m_profileBuffer.readLocked(output, capacity);
 }
 
 
@@ -128,27 +103,7 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(const Cpu
 void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Timer end)noexcept{
     if(!m_profileEnabled.load(MemoryOrder::relaxed) || sample.captureEpoch != m_profileEpoch)
         return;
-    if(m_profileCount == m_profileEvents.size()){
-        ++m_profileDroppedEvents;
-        return;
-    }
-    CpuTaskProfileEvent& event = m_profileEvents[(m_profileRead + m_profileCount) % m_profileEvents.size()];
-    event.kind = sample.kind;
-    event.task = sample.task;
-    event.label = s_NameNone;
-    if(sample.label.valid()){
-        const auto found = LowerBound(m_profileLabels.begin(), m_profileLabels.end(), sample.label.value, [](const ProfileLabelRecord& record, const u64 identity)noexcept{ return record.label.value < identity; }
-        );
-        if(found != m_profileLabels.end() && found->label.value == sample.label.value)
-            event.label = found->name;
-    }
-    event.durationNanoseconds = DurationInNS<u64>(end, sample.begin);
-    event.frameIndex = sample.frameIndex;
-    event.captureEpoch = sample.captureEpoch;
-    event.workerIndex = sample.workerIndex;
-    event.affinity = sample.affinity;
-    ++m_profileCount;
-    ++m_profileRecordedEvents;
+    m_profileBuffer.recordLocked(sample, end);
 }
 
 

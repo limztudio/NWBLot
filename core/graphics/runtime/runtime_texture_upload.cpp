@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "runtime_internal.h"
+#include "runtime_setup_upload_graph.h"
 
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/task_graph.h>
@@ -38,7 +38,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     return formatInfo.hasDepth || formatInfo.hasStencil;
 }
 
-[[nodiscard]] static b8 ValidateTextureUploadRegion(const TextureDesc& textureDesc, const GraphicsRuntime::TextureUploadRegion& region){
+[[nodiscard]] static b8 ValidateTextureUploadRegion(const TextureDesc& textureDesc, const GraphicsStandaloneService::TextureUploadRegion& region){
     if(!region.data && region.dataSize == 0)
         return true;
     if(!region.data || region.dataSize == 0){
@@ -69,7 +69,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 }
 
 
-[[nodiscard]] static Expected<usize> ValidateTextureUploadBatch(const GraphicsRuntime::TextureUploadBatchDesc& desc){
+[[nodiscard]] static Expected<usize> ValidateTextureUploadBatch(const GraphicsStandaloneService::TextureUploadBatchDesc& desc){
     usize totalByteCount = 0u;
     if(!desc.destination){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch: destination texture is null"));
@@ -103,7 +103,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     }
 
     for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
-        const GraphicsRuntime::TextureUploadRegion& region = desc.regions[regionIndex];
+        const GraphicsStandaloneService::TextureUploadRegion& region = desc.regions[regionIndex];
         if(!ValidateTextureUploadRegion(textureDesc, region))
             return MakeUnexpected(Failure{});
         if(AddOverflows<usize>(totalByteCount, region.dataSize)){
@@ -134,7 +134,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 
     switch(requestedConsumerQueue){
     case CommandQueue::kCount:
-        return uploadBytes < GraphicsModuleDetail::s_SetupUploadLargeMinimumBytes ? CommandQueue::Graphics : availableConsumerQueue();
+        return uploadBytes < GraphicsModuleDetail::SetupUploadGraph::s_LargeMinimumBytes ? CommandQueue::Graphics : availableConsumerQueue();
     case CommandQueue::Transfer:
         return availableConsumerQueue();
     case CommandQueue::Compute:
@@ -149,7 +149,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 
 
 struct TextureUploadBatchSubmissionData{
-    const GraphicsRuntime::TextureUploadBatchDesc& setupDesc;
+    const GraphicsStandaloneService::TextureUploadBatchDesc& setupDesc;
     const TextureDesc& textureDesc;
     QueueSubmissionToken& uploadToken;
     ResourceStates::Mask graphInitialState = ResourceStates::Unknown;
@@ -175,13 +175,13 @@ struct TextureUploadBatchSubmissionData{
 
     GpuTaskId previousTask;
     for(usize regionIndex = 0u; regionIndex < submissionData.setupDesc.regionCount; ++regionIndex){
-        const GraphicsRuntime::TextureUploadRegion& region = submissionData.setupDesc.regions[regionIndex];
+        const GraphicsStandaloneService::TextureUploadRegion& region = submissionData.setupDesc.regions[regionIndex];
         const auto sourceResult = graph.copyUploadData(region.data, region.dataSize, alignof(u32));
         if(!sourceResult)
             return MakeUnexpected(Failure{});
         const GpuUploadBlobId source = *sourceResult;
 
-        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraphScheduling(region.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily);
+        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraph::scheduling(region.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily);
         scheduling.forceSubmissionBoundary = false;
         scheduling.allowPacketMerge = true;
         scheduling.mergeWithPrevious = previousTask.valid();
@@ -224,8 +224,8 @@ struct TextureUploadBatchSubmissionData{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
-    auto& device = getDevice();
+b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
+    auto& device = m_graphics.getDevice();
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
 
@@ -236,7 +236,7 @@ b8 GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState ? desc.physicalInitialState : textureDesc.initialState;
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(device, desc.queue, *totalByteCount, textureDesc);
-    GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, *totalByteCount);
+    GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::resolveSameClassRouting(device, consumerQueue, *totalByteCount);
     // Existing batch destinations cannot be recreated with a wider sharing contract.
     // Cross-family producer needs the texture already created for that queue class; same-family offload keeps exclusive sharing.
     if(sameClassRouting.crossesQueueFamily && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, consumerQueue))
@@ -250,14 +250,14 @@ b8 GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         .sameClassRouting = sameClassRouting,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        *this,
+    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::submit(
+        m_graphics,
         textureDesc.queueSharing,
         consumerQueue,
         MakeNotNull(&__hidden_graphics_texture_upload::DeclareTextureUploadBatch),
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{},
         &submissionData,
-        *m_standaloneGraphWorkspaces,
+        m_workspaces,
         uploadToken
     );
     if(!submitted){

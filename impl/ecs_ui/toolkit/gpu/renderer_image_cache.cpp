@@ -16,7 +16,27 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
+GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
+    : m_glyphCache(arena)
+    , m_sdfCache(arena)
+    , m_textureCache(arena)
+{}
+
+GpuImageCache::~GpuImageCache()noexcept = default;
+
+void GpuImageCache::reserve(){
+    m_glyphCache.reserve(s_PaintMaxImages);
+    m_sdfCache.reserve(s_PaintMaxImages);
+    m_textureCache.reserve(s_PaintMaxImages);
+}
+
+void GpuImageCache::clear()noexcept{
+    m_glyphCache.clear();
+    m_sdfCache.clear();
+    m_textureCache.clear();
+}
+
+void GpuImageCache::trim(const DrawSnapshot& snapshot){
     const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
         return SameGlyphPageKey(cached->m_page->binding(), page->binding());
     };
@@ -45,7 +65,7 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     retainReferenced(snapshot.textureImages(), sameTextureKey, m_textureCache);
 }
 
-void GpuRendererState::evictImageCacheEntry()noexcept{
+void GpuImageCache::evict()noexcept{
     // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
     if(!m_glyphCache.empty())
         m_glyphCache.erase(m_glyphCache.begin());

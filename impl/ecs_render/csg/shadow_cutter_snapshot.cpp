@@ -4,6 +4,8 @@
 
 #include "shadow_cutter_snapshot.h"
 
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd.h>
+
 #include <global/hash_utils.h>
 
 
@@ -43,7 +45,7 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
             return;
 
         const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
-        UpdateShadowCutterSnapshotHashes(
+        CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
             entity,
             cutter.shapeType,
             worldToShape,
@@ -109,17 +111,17 @@ b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<cons
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);
-    InitializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
+    CsgSnapshotIdentityBuilder().initializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
     for(usize index = 0u; index < receiverCount; ++index){
         const CsgShadowReceiverInput& receiver = receivers[index];
-        UpdateShadowReceiverSnapshotHeaderHashes(receiver, drawStates[index].active, outSnapshot.contentIdentity, outSnapshot.identity);
+        CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotHeaderHashes(receiver, drawStates[index].active, outSnapshot.contentIdentity, outSnapshot.identity);
         CsgShadowReceiverRangeGpu& range = outSnapshot.receiverRanges[index];
         range = CsgShadowReceiverRangeGpu{};
         if(drawStates[index].active){
             __hidden_shadow_cutter_snapshot::AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
             outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         }
-        UpdateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
+        CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
     }
     if(!outSnapshot.hasCsg){
         outSnapshot.receiverRanges.clear();

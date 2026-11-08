@@ -15,8 +15,9 @@ from text_area_probe import document_fields, observe_text_area, snapshot_from_lo
 from window_smoke import parse_args
 from window_capture_image import read_bmp_24_rows
 from window_capture_logs import wait_for_log_message
+from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+    require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_expected_log_text
 from fixture_environment import build_fixture_environment
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
@@ -188,7 +189,7 @@ class TextAreaRun:
         deadline, observed = min(self.deadline, time.monotonic() + CLIPBOARD_VERIFY_TIMEOUT_SECONDS), None
         while time.monotonic() < deadline:
             ensure_process_running(self.process, "during TextArea OS clipboard verification")
-            observed = self.native.clipboard_text(timeout=min(LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS, max(LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS, deadline - time.monotonic())))
+            observed = self.native.clipboard.read_text(timeout=min(LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS, max(LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS, deadline - time.monotonic())))
             if observed == expected:
                 self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: expected, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)
@@ -439,7 +440,7 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle)
+                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle)
                 require_normal_process_exit(exit_code, tail, LIT_UI_TEXTAREA_FIXTURE)
         finally:
             try:
@@ -451,7 +452,7 @@ def run(args):
             finally:
                 try:
                     if logserver is not None:
-                        terminate_process(logserver, "UI TextArea logserver")
+                        CaptureProcessTermination.terminate_process(logserver, "UI TextArea logserver")
                 finally:
                     try:
                         if text_run is not None:

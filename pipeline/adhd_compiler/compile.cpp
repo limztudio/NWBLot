@@ -3,6 +3,7 @@
 
 
 #include "compile.h"
+#include "output_transaction.h"
 
 #include <core/common/log.h>
 
@@ -82,7 +83,7 @@ namespace __hidden_compile{
             --slashPos;
             ancestor = Move(ancestor).parentPath();
 
-            const auto sameDir = AreSameExistingPath(ancestor, *resolvedInc);
+            const auto sameDir = PathIdentity(ancestor, *resolvedInc).sameExisting();
             if(sameDir && *sameDir){
                 considerCandidate(resolvedGenericView.substr(slashPos + 1u));
                 break;
@@ -218,7 +219,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         outputPaths.push_back(Move(*absoluteSource));
     }
     const auto conflictingPaths = [](const Path<MetaArena>& lhs, const Path<MetaArena>& rhs) -> b8{
-        const auto same = SameOutputPath(lhs, rhs);
+        const auto same = PathIdentity(lhs, rhs).sameOutput();
         if(!same){
             NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to compare '{}' and '{}': {}"), PathToString<tchar>(lhs), PathToString<tchar>(rhs), ConvertString(same.error().message()));
             return true;
@@ -359,134 +360,8 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     if(!options.depfilePath.empty())
         outputContents.push_back(combinedDepContent);
 
-    MVector<b8> hadExisting(arena);
-    MVector<b8> hasStaged(arena);
-    MVector<b8> hasBackup(arena);
-    MVector<b8> promoted(arena);
-    MVector<Path<MetaArena>> stagedPaths(arena);
-    MVector<Path<MetaArena>> backupPaths(arena);
-    hadExisting.resize(totalOutputs, false);
-    hasStaged.resize(totalOutputs, false);
-    hasBackup.resize(totalOutputs, false);
-    promoted.resize(totalOutputs, false);
-    stagedPaths.reserve(totalOutputs);
-    backupPaths.reserve(totalOutputs);
-    for(usize k = 0u; k < totalOutputs; ++k){
-        stagedPaths.emplace_back(arena);
-        backupPaths.emplace_back(arena);
-    }
-
-    const auto logOutputWriteFailure = [&](const usize outputIndex){
-        if(!options.depfilePath.empty() && outputIndex + 1u == totalOutputs)
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(options.depfilePath));
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to write generated output for '{}'"), ConvertString(options.inputs[outputIndex / 2u]));
-    };
-
-    for(usize k = 0u; k < totalOutputs; ++k){
-        if(!CanRepresentStreamSize(static_cast<u64>(outputContents[k].size()))){
-            logOutputWriteFailure(k);
-            return false;
-        }
-        const auto exists = FileExistsNoFollow(outputPaths[k]);
-        if(!exists){
-            logOutputWriteFailure(k);
-            return false;
-        }
-        if(*exists){
-            const auto regular = IsRegularFile(outputPaths[k]);
-            if(!regular || !*regular){
-                logOutputWriteFailure(k);
-                return false;
-            }
-            hadExisting[k] = true;
-        }
-    }
-
-    const auto rollbackOutputs = [&]()noexcept{
-        for(usize rev = totalOutputs; rev > 0u; --rev){
-            const usize k = rev - 1u;
-            if(promoted[k]){
-                const auto removed = RemoveFile(outputPaths[k]);
-                if(!removed)
-                    NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed removing '{}'"), PathToString<tchar>(outputPaths[k]));
-            }
-            if(hasBackup[k]){
-                const auto restored = RenamePath(backupPaths[k], outputPaths[k]);
-                if(!restored)
-                    NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed restoring '{}'"), PathToString<tchar>(outputPaths[k]));
-            }
-            if(hasStaged[k]){
-                const auto removed = RemoveFile(stagedPaths[k]);
-                if(!removed)
-                    NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed removing staged '{}'"), PathToString<tchar>(stagedPaths[k]));
-            }
-        }
-    };
-
-    for(usize k = 0u; k < totalOutputs; ++k){
-        const auto staged = StageUniqueBinaryFileDurable(outputPaths[k], outputContents[k].data(), outputContents[k].size());
-        if(!staged){
-            logOutputWriteFailure(k);
-            rollbackOutputs();
-            return false;
-        }
-        stagedPaths[k] = *staged;
-        hasStaged[k] = true;
-    }
-
-    for(usize k = 0u; k < totalOutputs; ++k){
-        if(!hadExisting[k])
-            continue;
-        const auto stillExists = FileExistsNoFollow(outputPaths[k]);
-        if(!stillExists){
-            logOutputWriteFailure(k);
-            rollbackOutputs();
-            return false;
-        }
-        if(!*stillExists){
-            hadExisting[k] = false;
-            continue;
-        }
-        const auto reservedBackup = StageUniqueBinaryFileDurable(outputPaths[k], nullptr, 0u, NWB_TEXT("backup"));
-        if(!reservedBackup){
-            logOutputWriteFailure(k);
-            rollbackOutputs();
-            return false;
-        }
-        const auto backedUp = RenamePath(outputPaths[k], *reservedBackup);
-        if(!backedUp){
-            const auto removedBackup = RemoveFile(*reservedBackup);
-            if(!removedBackup)
-                NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: failed removing backup reservation '{}'"), PathToString<tchar>(*reservedBackup));
-            logOutputWriteFailure(k);
-            rollbackOutputs();
-            return false;
-        }
-        backupPaths[k] = *reservedBackup;
-        hasBackup[k] = true;
-    }
-
-    for(usize k = 0u; k < totalOutputs; ++k){
-        const auto finalized = RenamePath(stagedPaths[k], outputPaths[k]);
-        if(!finalized){
-            logOutputWriteFailure(k);
-            rollbackOutputs();
-            return false;
-        }
-        hasStaged[k] = false;
-        promoted[k] = true;
-    }
-
-    for(usize k = 0u; k < totalOutputs; ++k){
-        if(!hasBackup[k])
-            continue;
-        const auto removedBackup = RemoveFile(backupPaths[k]);
-        if(!removedBackup)
-            NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: failed removing backup '{}'"), PathToString<tchar>(backupPaths[k]));
-    }
-
-    return true;
+    AdhdOutputTransaction transaction(arena, outputPaths, outputContents, options.inputs, options.depfilePath);
+    return transaction.publish();
 }
 
 

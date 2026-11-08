@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -37,7 +38,7 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
     }
     m_scope->m_window.title = Move(*titleLayout);
     const auto titleBounds = m_text.measure(m_scope->m_window.title, m_paint.displayMetrics());
-    if(!titleBounds || !TryResolveWindowChromeMetrics(*m_skin, m_style, options, { titleBounds->width, titleBounds->height }, m_scope->m_window.metrics)){
+    if(!titleBounds || !ControlStyleMetrics().windowMetrics(*m_skin, m_style, options, { titleBounds->width, titleBounds->height }, m_scope->m_window.metrics)){
         m_context.fail();
         return false;
     }

@@ -3,7 +3,7 @@
 
 
 #include "backend.h"
-#include "aftermath.h"
+#include "amd_breadcrumb_ring.h"
 
 #include <core/common/log.h>
 
@@ -19,244 +19,10 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_device_diagnostics{
-
-[[nodiscard]] static constexpr StringView BoolToAvailabilityText(const b8 value)noexcept{
-    return value ? StringView("available") : StringView("unavailable");
-}
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void Device::captureDeviceLoss(const AStringView context){
-    // Device-loss state must not depend on optional crash diagnostics.
+    // Device loss must be recorded even when diagnostics are disabled.
     markDeviceLost();
-    if(!m_gpuCrashDiagnosticsEnabled)
-        return;
-
-    const b8 hasCheckpoints = m_context.extensions.nvDeviceDiagnosticCheckpoints;
-    const b8 hasDeviceFault = m_context.extensions.extDeviceFault;
-    const b8 hasBufferMarker = m_context.extensions.amdBufferMarker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
-
-    // Capture only the first concurrent device-loss report.
-    if(m_gpuCrashCaptured.exchange(true))
-        return;
-
-    GpuCrashReport report(m_gpuCrashReportArena);
-    Vector<u8, Alloc::PersistentArena> vendorBinary(m_gpuCrashVendorBinaryArena);
-
-    // Bound all temporary capture allocations to the fixed crash arenas.
-    {
-        report.details.reserve(s_MaxGpuCrashReportChars);
-        report.context.append(context.data(), context.size());
-
-        // One aggregate budget bounds all fault sections.
-        u32 remainingEntries = s_MaxGpuCrashCaptureEntries;
-
-        if(hasCheckpoints){
-            for(const auto physicalQueue : m_physicalQueues){
-
-                if(remainingEntries == 0u)
-                    continue;
-
-                // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization requirement.
-                // Do not wait behind a potentially wedged submission lock while collecting it.
-                VkQueue queue = physicalQueue->m_nativeQueue.queue;
-                uint32_t checkpointCount = 0;
-                m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
-                if(checkpointCount == 0)
-                    continue;
-                if(checkpointCount > remainingEntries)
-                    checkpointCount = remainingEntries;
-
-                Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
-                checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
-                m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
-
-                for(const auto& checkpoint : checkpoints){
-                    const usize markerHash = reinterpret_cast<usize>(checkpoint.pCheckpointMarker);
-                    if(markerHash == 0)
-                        continue;
-
-                    const auto resolved = m_gpuCrashTracker.resolveMarker(markerHash);
-                    if(!resolved.first())
-                        continue;
-
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)));
-                }
-
-                remainingEntries -= checkpointCount;
-            }
-        }
-
-        if(hasBufferMarker && remainingEntries > 0u){
-            NWB_ASSERT(m_amdBreadcrumb.mappedMemory && m_amdBreadcrumb.metadata && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount);
-            const auto breadcrumbSlots = MakeNotNull(static_cast<const u32*>(m_amdBreadcrumb.mappedMemory));
-            // Select each exact queue independently because physical queues remain unordered globally.
-            for(usize queueIndex = 0u; queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
-                const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
-                const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, 0u);
-                if(!firstSlot)
-                    continue;
-
-                AmdBreadcrumbSlotRecord newestRecord;
-                b8 hasObservedMarker = false;
-                {
-                    // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
-                    ScopedLock lock(m_amdBreadcrumb.slotMutex);
-                    for(usize localSlot = 0u; localSlot < m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
-                        const usize flatSlot = firstSlot->flatSlot + localSlot;
-                        const u32 observedMarker = breadcrumbSlots.get()[flatSlot];
-                        if(observedMarker == 0u)
-                            continue;
-
-                        hasObservedMarker = true;
-                        const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.metadata->slotRecords[flatSlot];
-                        if(VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker) && record.serial > newestRecord.serial)
-                            newestRecord = record;
-                    }
-                }
-
-                if(!hasObservedMarker)
-                    continue;
-
-                if(newestRecord.serial != 0u){
-                    const auto resolved = m_gpuCrashTracker.resolveMarker(newestRecord.markerHash);
-                    if(resolved.first()){
-                        report.details.append(StringFormat(
-                            m_gpuCrashReportArena,
-                            "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): {}\n",
-                            queue.index,
-                            queue.deviceGeneration,
-                            newestRecord.serial,
-                            newestRecord.marker,
-                            TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)
-                        ));
-                    }
-                    else{
-                        report.details.append(StringFormat(
-                            m_gpuCrashReportArena,
-                            "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): "
-                            "<unresolved marker>\n",
-                            queue.index,
-                            queue.deviceGeneration,
-                            newestRecord.serial,
-                            newestRecord.marker
-                        ));
-                    }
-                }
-                else{
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration));
-                }
-                --remainingEntries;
-            }
-        }
-
-        if(hasDeviceFault && remainingEntries > 0u){
-            auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
-            if(m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
-                const VkDeviceSize vendorBinaryByteSize = faultCounts.vendorBinarySize;
-                const b8 vendorBinaryIsRgd = m_context.physicalDeviceProperties.vendorID == s_AmdVendorId;
-                if(faultCounts.addressInfoCount > remainingEntries)
-                    faultCounts.addressInfoCount = remainingEntries;
-                remainingEntries -= faultCounts.addressInfoCount;
-                if(faultCounts.vendorInfoCount > remainingEntries)
-                    faultCounts.vendorInfoCount = remainingEntries;
-                remainingEntries -= faultCounts.vendorInfoCount;
-
-                Vector<VkDeviceFaultAddressInfoEXT, Alloc::PersistentArena> addressInfos(m_gpuCrashReportArena);
-                Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
-                addressInfos.resize(faultCounts.addressInfoCount, VkDeviceFaultAddressInfoEXT{});
-                vendorInfos.resize(faultCounts.vendorInfoCount, VkDeviceFaultVendorInfoEXT{});
-                if(vendorBinaryIsRgd && vendorBinaryByteSize != 0u && vendorBinaryByteSize <= static_cast<VkDeviceSize>(s_MaxDeviceFaultVendorBinaryBytes))
-                    vendorBinary.resize(static_cast<usize>(vendorBinaryByteSize));
-
-                auto faultInfo = VulkanDetail::MakeVkStruct<VkDeviceFaultInfoEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT);
-                faultInfo.pAddressInfos = addressInfos.empty() ? nullptr : addressInfos.data();
-                faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
-                faultInfo.pVendorBinaryData = vendorBinary.empty() ? nullptr : vendorBinary.data();
-
-                const VkResult faultResult = m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
-                if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
-                    const AStringView faultDescription(faultInfo.description, NWB_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
-                    if(vendorBinaryByteSize != 0u){
-                        if(!vendorBinary.empty()){
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary (RGD): {} bytes\n", vendorBinary.size()));
-                            report.binaryDumpKind = GpuCrashDumpKind::RadeonGpuDetective;
-                            report.binaryDump = vendorBinary.data();
-                            report.binaryDumpSize = vendorBinary.size();
-                        }
-                        else if(!vendorBinaryIsRgd){
-                            report.details.append(StringFormat(
-                                m_gpuCrashReportArena,
-                                "device fault vendor binary not packaged: {} bytes from vendor 0x{:x}\n",
-                                static_cast<u64>(vendorBinaryByteSize),
-                                static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
-                            ));
-                        }
-                        else{
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary skipped: {} bytes exceeds {} byte cap\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u64>(s_MaxDeviceFaultVendorBinaryBytes)));
-                        }
-                    }
-
-                    for(u32 i = 0u; i < faultCounts.addressInfoCount; ++i){
-                        const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
-                        report.details.append(StringFormat(m_gpuCrashReportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
-                            , static_cast<u64>(addressInfo.reportedAddress)
-                            , static_cast<u32>(addressInfo.addressType)
-                            , static_cast<u64>(addressInfo.addressPrecision)
-                        ));
-                    }
-
-                    for(u32 i = 0u; i < faultCounts.vendorInfoCount; ++i){
-                        const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                        const AStringView vendorDescription(vendorInfo.description, NWB_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
-                        report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
-                            , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
-                            , static_cast<u64>(vendorInfo.vendorFaultCode)
-                            , static_cast<u64>(vendorInfo.vendorFaultData)
-                        ));
-                    }
-                }
-            }
-        }
-
-        if(report.details.empty())
-            report.details.append(StringFormat(
-                m_gpuCrashReportArena,
-                "minimal GPU crash report: no vendor GPU dump or device-fault details were available\n"
-                "capture context: {}\n"
-                "device: {} (vendor 0x{:x}, device 0x{:x}, driver 0x{:x})\n"
-                "diagnostic paths: NV_device_diagnostic_checkpoints={}, AMD_buffer_marker={}, VK_EXT_device_fault={}, NVIDIA Aftermath={}\n"
-                , TruncateView(context, s_MaxGpuCrashMarkerChars)
-                , TruncateView(AStringView(m_context.physicalDeviceProperties.deviceName), s_MaxGpuCrashMarkerChars)
-                , static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
-                , static_cast<u32>(m_context.physicalDeviceProperties.deviceID)
-                , static_cast<u32>(m_context.physicalDeviceProperties.driverVersion)
-                , __hidden_device_diagnostics::BoolToAvailabilityText(hasCheckpoints)
-                , __hidden_device_diagnostics::BoolToAvailabilityText(hasBufferMarker)
-                , __hidden_device_diagnostics::BoolToAvailabilityText(hasDeviceFault)
-                , __hidden_device_diagnostics::BoolToAvailabilityText(Aftermath::IsActive())
-            ));
-    }
-
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), ConvertString(report.context), ConvertString(report.details));
-
-    // Attach available Aftermath dump while its bytes remain owned by the module.
-    if(Aftermath::IsActive()){
-        const Aftermath::GpuCrashDumpView dump = Aftermath::WaitForCrashDump();
-        if(dump.data && dump.size != 0u){
-            report.binaryDumpKind = GpuCrashDumpKind::Aftermath;
-            report.binaryDump = dump.data;
-            report.binaryDumpSize = dump.size;
-        }
-    }
-
-    DispatchGpuCrash(report);
+    m_gpuCrashDiagnostics.capture(*this, context);
 }
 
 Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, const usize markerHash)noexcept{
@@ -274,10 +40,10 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     {
         // Serialize the queue-local reservation and its paired CPU record.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
-        const auto reservation = VulkanDetail::TryBuildNextAmdBreadcrumbReservation(m_amdBreadcrumb.metadata->nextSerials[queue.index], m_amdBreadcrumb.layout.slotsPerQueue);
+        const auto reservation = VulkanDetail::AmdBreadcrumbRing::BuildNextReservation(m_amdBreadcrumb.metadata->nextSerials[queue.index], m_amdBreadcrumb.layout.slotsPerQueue);
         if(!reservation)
             return write;
-        const auto slot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, reservation->localSlot);
+        const auto slot = VulkanDetail::AmdBreadcrumbRing::ResolveSlot(m_amdBreadcrumb.layout, queue, reservation->localSlot);
         if(!slot)
             return write;
 

@@ -402,13 +402,13 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
     reversedTiles.resize(s_QueueWords, s_Sentinel);
     for(u32 tile = 0u; tile < s_TileCount; ++tile)
         reversedTiles[tile] = s_TileCount - 1u - tile;
-    Core::GraphicsRuntime::BufferSetupDesc reversedSetup;
+    Core::GraphicsStandaloneService::BufferSetupDesc reversedSetup;
     reversedSetup.bufferDesc.setDebugName(Name("RefractionTileProbeReversedQueue")).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
     reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
     reversedSetup.data = reversedTiles.data();
     reversedSetup.dataSize = static_cast<u64>(s_QueueWords) * sizeof(u32);
     reversedSetup.queue = Core::CommandQueue::Graphics;
-    const auto reversedQueue = graphics.setupBuffer(reversedSetup);
+    const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
     const auto queue = createBuffer(Name("RefractionTileProbeQueue"), s_QueueWords, false, false);
     const auto arguments = createBuffer(Name("RefractionTileProbeArguments"), s_ArgumentWords, true, false);
     const auto visits = createBuffer(Name("RefractionTileProbeVisits"), s_VisitWords, false, false);
@@ -438,12 +438,12 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
         return false;
     Impl::DeferredBindlessResourceSlots slots;
     slots.refractionDepth = sampled->slot();
-    Core::GraphicsRuntime::BufferSetupDesc setup;
+    Core::GraphicsStandaloneService::BufferSetupDesc setup;
     setup.bufferDesc.setDebugName(Name("RefractionTileProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
     setup.data = &slots;
     setup.dataSize = sizeof(slots);
     setup.queue = Core::CommandQueue::Graphics;
-    const auto uploadedSlots = graphics.setupBuffer(setup);
+    const auto uploadedSlots = graphics.standaloneGraph().setupBuffer(setup);
     if(!uploadedSlots)
         return false;
     slotsBuffer = *uploadedSlots;
@@ -464,7 +464,7 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
     payload.push.materialContextSlotsHeapSlot = descriptors[2].slot();
     for(u32 phase = 0u; phase < s_PhaseCount; ++phase){
         payload.phase = phase;
-        const auto token = graphics.submitStandaloneTaskGraph(&payload, DeclareProbe);
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareProbe);
         if(!token){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} standalone graph rejected at {}"), phase, stage);
             return false;

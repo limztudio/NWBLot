@@ -4,6 +4,8 @@
 
 #include "edit_box_host.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/edit_geometry.adhd.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -141,7 +143,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             m_clickTracker.cancel();
             return;
         }
-        const auto byte = HitUiEditBoxGeometry(
+        const auto byte = UiEditGeometry().hitCaret(
             entry->displayed,
             entry->owner,
             entry->popup,
@@ -151,7 +153,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             m_clickTracker.cancel();
             return;
         }
-        const auto wordByte = HitUiEditBoxWordGeometry(
+        const auto wordByte = UiEditGeometry().hitWord(
             entry->displayed,
             entry->owner,
             entry->popup,

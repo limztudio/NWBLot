@@ -7,6 +7,7 @@ target_sources(nwb_os_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_input_text_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/linux_text_input_model_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/wayland_text_input_state_tests.cpp"
 )
 target_link_libraries(nwb_os_tests PRIVATE nwb_os)
 if(WIN32)

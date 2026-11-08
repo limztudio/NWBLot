@@ -15,6 +15,9 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
+from window_capture_arguments import WindowCaptureArguments
+import window_capture_frame
+from window_capture_frame import WindowFrameCapture
 import window_capture_smoke  # noqa: E402
 import window_capture_environment  # noqa: E402
 
@@ -64,7 +67,7 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, "0.5"],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RENDER_READY_TIMEOUT, LIT_INF], [LIT_RESIZE_SETTLE_SECONDS, "2"],):
             with self.subTest(extra=extra), mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
-                window_capture_smoke.parse_args(self.base_args() + extra)
+                WindowCaptureArguments(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES).parse_args(self.base_args() + extra)
 
     def test_resize_rejects_active_freeze_and_application_self_capture(self):
         for name in (LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
@@ -104,12 +107,12 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         def capture(capture_args, *_):
             events.append((LIT_CAPTURE, capture_args.output))
             return before if len([event for event in events if isinstance(event, tuple) and event[0] == LIT_CAPTURE]) < 3 else after
-        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=capture), \
-             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO]), \
-             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+        with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=capture), \
+             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO]), \
+             mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 10.1]), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda seconds: events.append((LIT_SLEEP, seconds))):
-            window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
+            WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
         self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path(LIT_CAPTURE_BEFORE_RESIZE_BMP)), (LIT_SLEEP, 2.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BEFORE_RESIZE_BMP)), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
             (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
@@ -119,26 +122,26 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
                 args = self.make_args()
                 backend = mock.Mock()
                 backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), client]
-                with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
-                     mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=log), \
-                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+                with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+                     mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, return_value=log), \
+                     mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
                      mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 11.0]), \
                      mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
                      self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "resize did not produce"):
-                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
+                    WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
                 backend.resize_client.assert_called_once()
 
     def test_final_capture_cannot_keep_the_old_extent(self):
         args = self.make_args()
         backend = mock.Mock()
         backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), (1001, 701)]
-        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
-             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), \
-             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+        with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, return_value=LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), \
+             mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, return_value=10.0), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "final client/capture extent"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
+            WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
 
     def test_settled_original_capture_or_client_extent_change_prevents_resize(self):
         original = SimpleNamespace(width=1280, height=900)
@@ -150,20 +153,20 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
                 settled_client = (1280, 900) if capture_changed else (1279, 900)
                 backend.client_size.side_effect = [(1280, 900), (1280, 900), settled_client]
                 settled = changed if capture_changed else original
-                with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=[original, settled]), \
-                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+                with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=[original, settled]), \
+                     mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
                      mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
                      self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "settled original client/capture extent"):
-                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
+                    WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
                 backend.resize_client.assert_not_called()
 
     def test_noop_resize_is_rejected_before_sleep_or_window_mutation(self):
         args = self.make_args()
         backend = mock.Mock()
-        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1001, height=701)), \
+        with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1001, height=701)), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep, \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "must change"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
+            WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
         sleep.assert_not_called()
         backend.resize_client.assert_not_called()
 
@@ -172,11 +175,11 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         backend = mock.Mock()
         backend.client_size.return_value = (1280, 900)
         process = SimpleNamespace(poll=lambda: 7, returncode=7, _nwb_output_capture=None)
-        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
-             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+        with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+             mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "before client resize"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
+            WindowFrameCapture(window_capture_smoke.ensure_process_running).capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
         backend.resize_client.assert_not_called()
 
 

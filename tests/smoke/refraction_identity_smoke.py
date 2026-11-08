@@ -8,7 +8,8 @@ import subprocess
 import sys
 
 from csg_optics_smoke import require_refraction_match, require_refraction_distinct
-from refraction_gallery_smoke import capture, png_rgb_bytes
+from refraction_gallery_smoke import capture
+from framebuffer_png_encoder import FramebufferPngEncoder
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_AUTOMATIC = "automatic"
@@ -123,7 +124,7 @@ def main(argv):
             if frame is None:
                 return SKIP_EXIT_CODE
             frames[(case, route)] = frame
-            (args.output_directory / f"{case}_{route}.png").write_bytes(png_rgb_bytes(frame))
+            (args.output_directory / f"{case}_{route}.png").write_bytes(FramebufferPngEncoder.encode(frame))
         comparisons = {} if args.near_air_only else analyze_frames(frames, args.identity_only)
         if not args.identity_only:
             comparisons.update(analyze_near_air_frames(frames))

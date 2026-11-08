@@ -1,0 +1,128 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshAccelerationStatePolicy{
+    public b8 requiresBlasUpdate(
+        in b8 blasBuildPending,
+        in b8 blasBuildAccepted,
+        in b8 runtimeMesh,
+        in u64 runtimeGeometryContentRevision,
+        in u64 blasGeometryContentRevision
+    )const{
+        return blasBuildPending || !blasBuildAccepted || (runtimeMesh && (runtimeGeometryContentRevision == 0u || runtimeGeometryContentRevision != blasGeometryContentRevision));
+    }
+
+    public b8 requiresSoftwareBvhUpdate(
+        in b8 swBvhBuildPending,
+        in b8 swBvhTopologyBuilt,
+        in b8 swBvhBuildAccepted,
+        in b8 runtimeMesh,
+        in u64 runtimeGeometryContentRevision,
+        in u64 swBvhGeometryContentRevision
+    )const{
+        return swBvhBuildPending || !swBvhTopologyBuilt || !swBvhBuildAccepted || (runtimeMesh && (runtimeGeometryContentRevision == 0u || runtimeGeometryContentRevision != swBvhGeometryContentRevision));
+    }
+
+    public void commitSnapshot(
+        in b8 blasReplaced,
+        in b8 swBvhReplaced,
+        in u32 desiredBlasRefitsSinceRebuild,
+        in u32 desiredSwBvhRefitsSinceRebuild,
+        in b8 desiredBlasBuildPending,
+        in b8 desiredBlasBackingFresh,
+        in b8 desiredSwBvhBuildPending,
+        in b8 desiredSwBvhTopologyBuilt,
+        in b8 desiredBlasBuildAccepted,
+        in b8 desiredSwBvhBuildAccepted,
+        in u64 desiredBlasGeometryContentRevision,
+        in u64 desiredSwBvhGeometryContentRevision,
+        mut u32 outBlasRefitsSinceRebuild,
+        mut u32 outSwBvhRefitsSinceRebuild,
+        mut b8 outBlasBuildPending,
+        mut b8 outBlasBackingFresh,
+        mut b8 outSwBvhBuildPending,
+        mut b8 outSwBvhTopologyBuilt,
+        mut b8 outBlasBuildAccepted,
+        mut b8 outSwBvhBuildAccepted,
+        mut u64 outBlasGeometryContentRevision,
+        mut u64 outSwBvhGeometryContentRevision
+    )const{
+        if(blasReplaced)
+            outBlasRefitsSinceRebuild = 0u;
+        else
+            outBlasRefitsSinceRebuild = desiredBlasRefitsSinceRebuild;
+
+        if(swBvhReplaced)
+            outSwBvhRefitsSinceRebuild = 0u;
+        else
+            outSwBvhRefitsSinceRebuild = desiredSwBvhRefitsSinceRebuild;
+
+        outBlasBuildPending = blasReplaced || desiredBlasBuildPending;
+        outBlasBackingFresh = desiredBlasBackingFresh;
+        outSwBvhBuildPending = swBvhReplaced || desiredSwBvhBuildPending;
+        outSwBvhTopologyBuilt = !swBvhReplaced && desiredSwBvhTopologyBuilt;
+        outBlasBuildAccepted = !blasReplaced && desiredBlasBuildAccepted;
+        outSwBvhBuildAccepted = !swBvhReplaced && desiredSwBvhBuildAccepted;
+
+        if(outBlasBuildAccepted)
+            outBlasGeometryContentRevision = desiredBlasGeometryContentRevision;
+        else
+            outBlasGeometryContentRevision = 0u;
+
+        if(outSwBvhBuildAccepted)
+            outSwBvhGeometryContentRevision = desiredSwBvhGeometryContentRevision;
+        else
+            outSwBvhGeometryContentRevision = 0u;
+    }
+
+    public void resetBuild(
+        in b8 hasBlas,
+        in b8 hasSwBvhBuffers,
+        mut b8 inOutBlasBuildPending,
+        mut b8 outBlasBuildAccepted,
+        mut u64 outBlasGeometryContentRevision,
+        mut u32 outBlasRefitsSinceRebuild,
+        mut b8 inOutSwBvhBuildPending,
+        mut b8 inOutSwBvhTopologyBuilt,
+        mut b8 outSwBvhBuildAccepted,
+        mut u64 outSwBvhGeometryContentRevision,
+        mut u32 outSwBvhRefitsSinceRebuild
+    )const{
+        outBlasBuildAccepted = false;
+        outSwBvhBuildAccepted = false;
+        outBlasGeometryContentRevision = 0u;
+        outSwBvhGeometryContentRevision = 0u;
+        if(hasBlas)
+            inOutBlasBuildPending = true;
+        if(hasSwBvhBuffers){
+            inOutSwBvhBuildPending = true;
+            inOutSwBvhTopologyBuilt = false;
+        }
+        outBlasRefitsSinceRebuild = 0u;
+        outSwBvhRefitsSinceRebuild = 0u;
+    }
+
+    public void finalizeShadowIndices(
+        in Name meshPath,
+        in usize triangleIndexCount,
+        in u32 expectedPrimitiveIndexCount,
+        in b8 rtSupported,
+        in b8 swShadow,
+        mut b8 outBlasBuildPending,
+        mut b8 outSwBvhBuildPending
+    )const{
+        info(
+            "RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})"
+            , meshPath.resolvedText()
+            , cast<u64>(triangleIndexCount)
+            , cast<u64>(expectedPrimitiveIndexCount)
+        );
+        outBlasBuildPending = rtSupported;
+        // Keep software geometry pending until a software preparation route accepts its build.
+        outSwBvhBuildPending = swShadow || rtSupported;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

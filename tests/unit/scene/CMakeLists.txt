@@ -12,6 +12,8 @@ target_sources(nwb_ecs_scene_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
+nwb_target_adhd_sources(nwb_ecs_scene_tests NAMESPACE "Testbed" SOURCES "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/fly_camera_motion.adhd")
+target_sources(nwb_ecs_scene_tests PRIVATE "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/fly_camera_input.cpp")
 nwb_target_link_libraries_whole_archive(nwb_ecs_scene_tests
     nwb_assets_graphics
     nwb_assets_mesh

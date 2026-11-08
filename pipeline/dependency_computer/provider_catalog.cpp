@@ -4,6 +4,8 @@
 
 #include "provider_catalog.h"
 
+#include <core/assets/asset_file_discovery.h>
+#include <core/assets/cook_input_selection.h>
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_paths.h>
 #include <core/common/log.h>
@@ -78,7 +80,7 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::All
     );
     if(!roots)
         return false;
-    auto files = Assets::DiscoverFilesWithExtension(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
+    auto files = Assets::AssetFileDiscovery::discover(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
     if(!files)
         return false;
     Assets::AssetVector<Name> virtualPaths(m_arena);
@@ -130,7 +132,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
         return selection;
     }
 
-    const auto selectionResult = Assets::SelectDiscoveredNwbInputs(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
+    const auto selectionResult = Assets::CookInputSelector::Select(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
     if(!selectionResult){
         LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("DependencyComputer"));
         return MakeUnexpected(Failure{});

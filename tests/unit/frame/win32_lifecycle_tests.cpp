@@ -104,6 +104,49 @@ public:
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 
+class CollectionTestPass final : public NWB::Core::IRenderPass{
+public:
+    explicit CollectionTestPass(NWB::Core::GraphicsRuntime& graphics)noexcept
+        : IRenderPass(graphics)
+    {}
+
+    virtual b8 validateResources(u32, u32, u32)override{
+        ++validationCount;
+        return valid;
+    }
+
+    virtual void invalidateResources()override{ ++invalidationCount; }
+
+    u32 validationCount = 0u;
+    u32 invalidationCount = 0u;
+    b8 valid = true;
+};
+
+static void CheckRenderPassCollection(NWB::Core::GraphicsRuntime& graphics){
+    NWB::Core::Alloc::GlobalArena arena(Name("tests/frame/render_pass_collection"));
+    NWB::Core::GraphicsModuleDetail::RenderPassCollection passes(arena);
+    CollectionTestPass first(graphics);
+    CollectionTestPass second(graphics);
+    passes.addToBack(first, 64u, 64u, 1u);
+    passes.addToBack(second, 64u, 64u, 1u);
+    first.validationCount = 0u;
+    second.validationCount = 0u;
+    first.valid = false;
+    EXPECT_FALSE(passes.validateResources(64u, 64u, 1u));
+    EXPECT_EQ(first.validationCount, 1u);
+    EXPECT_EQ(second.validationCount, 1u);
+
+    first.valid = true;
+    passes.addToBack(first, 64u, 64u, 1u);
+    ASSERT_EQ(passes.passes().size(), 2u);
+    EXPECT_EQ(passes.passes().front().get(), &second);
+    EXPECT_EQ(passes.passes().back().get(), &first);
+    passes.remove(first);
+    EXPECT_EQ(first.invalidationCount, 1u);
+    EXPECT_EQ(passes.passes().size(), 1u);
+}
+
+
 struct LoopCallbackState{
     NWB::Core::Frame& frame;
     u32 callbacks = 0u;
@@ -165,6 +208,8 @@ static void CheckInactiveLoop(const b8 renderUnfocused){
     ASSERT_NE(native.hwnd(), nullptr);
     ASSERT_FALSE(IsWindowVisible(native.hwnd()));
     native.setActive(false);
+    if(renderUnfocused)
+        CheckRenderPassCollection(frame.graphics());
     UnfocusedLoopRenderPass pass(frame.graphics());
     if(renderUnfocused)
         frame.graphics().addRenderPassToBack(pass);

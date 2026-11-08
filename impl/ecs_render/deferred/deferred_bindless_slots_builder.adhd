@@ -1,0 +1,107 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredBindlessSlotsBuilder{
+    public DeferredBindlessResourceSlots buildHistory(
+        in DeferredBindlessResourceSlots baseSlots,
+        in u32 shadowVisibilitySlot,
+        in u32 causticIrradianceSlot,
+        in u32 surfelIrradianceSlot
+    )const{
+        DeferredBindlessResourceSlots slots = baseSlots;
+        slots.shadowVisibility = shadowVisibilitySlot;
+        slots.causticIrradiance = causticIrradianceSlot;
+        slots.surfelIrradiance = surfelIrradianceSlot;
+        return slots;
+    }
+
+    public DeferredBindlessResourceSlots build(
+        in u32 gbufferBaseColor,
+        in u32 gbufferNormal,
+        in u32 gbufferWorldPosition,
+        in u32 gbufferDepth,
+        in u32 shadowVisibility,
+        in u32 causticIrradiance,
+        in u32 surfelIrradiance,
+        in u32 sampler,
+        in u32 opaqueColor,
+        in u32 opaqueColorStorage,
+        in u32 compositeColor,
+        in u32 compositeColorStorage,
+        in u32 avboitAccumColor,
+        in u32 avboitAccumExtinction,
+        in u32 refractionDepth,
+        in u32 refractionNormalIor,
+        in u32 refractionTintCoverage,
+        in u32 refractionInstance,
+        in u32 refractionResolve,
+        in u32 avboitForegroundColor,
+        in u32 avboitForegroundExtinction,
+        in u32 refractionResolveStorage,
+        in u32 avboitTransmittance,
+        in u32 avboitLinearSampler,
+        in u32 sceneShading,
+        in u32 lightList,
+        in u32 csgCapBackNormal,
+        in u32 csgIntervalDepth,
+        in u32 csgIntervalId,
+        in u32 csgReceiverEventData,
+        in u32 csgReceiverEventCount,
+        in u32 csgReceiverSpanData,
+        in u32 csgReceiverSpanCount,
+        in u32 csgRemovedIntervalDepth,
+        in u32 csgRemovedIntervalCapNormal,
+        in u32 csgRemovedIntervalData,
+        in u32 csgRemovedIntervalCount
+    )const{
+        DeferredBindlessResourceSlots slots;
+        slots.gbufferBaseColor = gbufferBaseColor;
+        slots.gbufferNormal = gbufferNormal;
+        slots.gbufferWorldPosition = gbufferWorldPosition;
+        slots.gbufferDepth = gbufferDepth;
+        slots.shadowVisibility = shadowVisibility;
+        slots.causticIrradiance = causticIrradiance;
+        slots.surfelIrradiance = surfelIrradiance;
+        slots.sampler = sampler;
+        slots.opaqueColor = opaqueColor;
+        slots.opaqueColorStorage = opaqueColorStorage;
+        slots.compositeColor = compositeColor;
+        slots.compositeColorStorage = compositeColorStorage;
+        slots.avboitAccumColor = avboitAccumColor;
+        slots.avboitAccumExtinction = avboitAccumExtinction;
+        slots.refractionDepth = refractionDepth;
+        slots.refractionNormalIor = refractionNormalIor;
+        slots.refractionTintCoverage = refractionTintCoverage;
+        slots.refractionInstance = refractionInstance;
+        slots.refractionResolve = refractionResolve;
+        slots.avboitForegroundColor = avboitForegroundColor;
+        slots.avboitForegroundExtinction = avboitForegroundExtinction;
+        slots.refractionResolveStorage = refractionResolveStorage;
+        slots.avboitTransmittance = avboitTransmittance;
+        slots.avboitLinearSampler = avboitLinearSampler;
+        slots.sceneShading = sceneShading;
+        slots.lightList = lightList;
+        slots.csgCapBackNormal = csgCapBackNormal;
+        slots.csgIntervalDepth = csgIntervalDepth;
+        slots.csgIntervalId = csgIntervalId;
+        slots.csgReceiverEventData = csgReceiverEventData;
+        slots.csgReceiverEventCount = csgReceiverEventCount;
+        slots.csgReceiverSpanData = csgReceiverSpanData;
+        slots.csgReceiverSpanCount = csgReceiverSpanCount;
+        slots.csgRemovedIntervalDepth = csgRemovedIntervalDepth;
+        slots.csgRemovedIntervalCapNormal = csgRemovedIntervalCapNormal;
+        slots.csgRemovedIntervalData = csgRemovedIntervalData;
+        slots.csgRemovedIntervalCount = csgRemovedIntervalCount;
+        return slots;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

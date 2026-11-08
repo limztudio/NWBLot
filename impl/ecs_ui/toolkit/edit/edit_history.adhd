@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditHistoryRecord{
+    public String before;
+    public String after;
+    public usize beforeAnchor = 0u;
+    public usize beforeCaret = 0u;
+    public usize afterAnchor = 0u;
+    public usize afterCaret = 0u;
+};
+
+
+class EditHistoryRules{
+    public void clear(
+        mut Vector<EditHistoryRecord> inOutHistory,
+        mut usize outHistoryCursor,
+        mut usize outHistoryBytes
+    ){
+        inOutHistory.clear();
+        outHistoryCursor = 0u;
+        outHistoryBytes = 0u;
+    }
+
+    public void record(
+        in StringView before,
+        in usize beforeAnchor,
+        in usize beforeCaret,
+        in StringView after,
+        in usize afterAnchor,
+        in usize afterCaret,
+        in usize maxHistoryRecords,
+        in usize maxHistoryBytes,
+        mut Vector<EditHistoryRecord> inOutHistory,
+        mut usize inOutHistoryCursor,
+        mut usize inOutHistoryBytes
+    ){
+        const usize cost = before.size() + after.size();
+        if(!this.canRecord(maxHistoryRecords, maxHistoryBytes, cost)){
+            this.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
+            return;
+        }
+        EditHistoryRecord candidate;
+        if(!before.empty())
+            candidate.before.assign(before);
+        if(!after.empty())
+            candidate.after.assign(after);
+        candidate.beforeAnchor = beforeAnchor;
+        candidate.beforeCaret = beforeCaret;
+        candidate.afterAnchor = afterAnchor;
+        candidate.afterCaret = afterCaret;
+        while(inOutHistory.size() > inOutHistoryCursor){
+            const EditHistoryRecord discarded = inOutHistory.back();
+            inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
+            inOutHistory.pop_back();
+        }
+        while(!inOutHistory.empty() && (inOutHistory.size() >= maxHistoryRecords || inOutHistoryBytes > maxHistoryBytes - cost)){
+            const EditHistoryRecord discarded = inOutHistory.front();
+            inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
+            for(usize moveIndex = 1u; moveIndex < inOutHistory.size(); ++moveIndex)
+                inOutHistory[moveIndex - 1u] = inOutHistory[moveIndex];
+            inOutHistory.pop_back();
+            --inOutHistoryCursor;
+        }
+        inOutHistory.push_back(candidate);
+        inOutHistoryBytes += cost;
+        inOutHistoryCursor = inOutHistory.size();
+    }
+
+    private b8 canRecord(in usize maxHistoryRecords, in usize maxHistoryBytes, in usize cost){
+        return maxHistoryRecords != 0u && cost <= maxHistoryBytes;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

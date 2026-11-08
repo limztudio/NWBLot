@@ -25,6 +25,8 @@ NWB_IMPL_UI_BEGIN
 // The host lends state through the outermost popup end; each opening binds to its exact parent lifetime.
 class PopupState final : NoCopy{
     friend class Builder;
+    friend class ComboCoordinator;
+    friend class ContextMenuCoordinator;
 
 
 private:

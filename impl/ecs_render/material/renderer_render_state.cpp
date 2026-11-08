@@ -3,6 +3,7 @@
 
 
 #include "renderer_render_state_private.h"
+#include <impl/ecs_render/avboit/avboit_raster_configuration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,11 +50,11 @@ Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass,
     }
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
-        return applyTwoSided(BuildRendererAvboitVoxelRenderState());
+        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitVoxelRenderState());
     case MaterialPipelinePass::AvboitAccumulate:
-        return applyTwoSided(BuildRendererAvboitAccumulateRenderState());
+        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitAccumulateRenderState());
     case MaterialPipelinePass::AvboitRefractionCapture:
-        return applyTwoSided(BuildRendererAvboitRefractionCaptureRenderState());
+        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitRefractionCaptureRenderState());
     default:
         return applyTwoSided(BuildMeshRenderState());
     }

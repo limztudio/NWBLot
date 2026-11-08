@@ -143,17 +143,6 @@ public:
 // Always written; after AssignMaterialShadingModelIds, before PrepareShaderEntriesForCook.
 [[nodiscard]] Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 
-// Surface dispatch module (per-`.surface` include, macro-isolated per id, switch on surfaceDispatchId).
-// Unknown id: neutral optical fields for shadow, fixed mid-grey for GI.
-// Always written; run after AssignMaterialShadingModelIds.
-[[nodiscard]] Expected<Path> EmitShadowSurfaceDispatchModule(
-    const Path& cacheDirectory,
-    AStringView configurationSafeName,
-    Span<const MaterialBindEntry> materialBindEntries,
-    Span<const MaterialCookEntry> materialEntries,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
 // G-buffer PS per `surface` material (engine authoring + typed `.bind` + resolved hook); pixel = generated PS, mesh = shared.
 // Explicit `shaders` only for opaque non-refractive; transparent/refractive must use `surface`.
 // Sources must be absolute paths.
@@ -166,32 +155,7 @@ public:
     Span<MaterialCookEntry> materialEntries
 );
 
-// Transparent twin of EmitMaterialPixelShaders: one AVBOIT accumulate PS per TRANSPARENT `surface`.
-// Opaque skipped; explicit-stage transparent rejected (no separate AVBOIT hook in the schema).
-// `surfaceSource` must be an absolute path.
-[[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShaders(
-    const Path& cacheDirectory,
-    AStringView configurationSafeName,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
 
-// Occupancy/extinction twins of the accumulate PS; names stay on the cooked material, not stage shaders.
-[[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShaders(
-    const Path& cacheDirectory,
-    AStringView configurationSafeName,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
-[[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShaders(
-    const Path& cacheDirectory,
-    AStringView configurationSafeName,
-    MaterialCookArena& arena,
-    Core::Alloc::ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

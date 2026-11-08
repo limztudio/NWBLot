@@ -101,6 +101,10 @@ Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
     return value.value();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
     if(!ValidateIntegerBounds(bounds))
         return NumericParseStatus::Invalid;
@@ -125,6 +129,10 @@ NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds b
     return NumericParseStatus::Complete;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult inOutResult){
     inOutResult.valid = inOutResult.valid && delta.valid;
     inOutResult.committed = inOutResult.committed || delta.committed;
@@ -137,3 +145,4 @@ void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult in
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings
 from launcher.cmake_settings import CmakeSettings
+from launcher.cmake_file_api import CmakeFileApi
 from launcher.host import HostProbe
 from launcher.constants import (CMAKE_BUILD_FLAG, CMAKE_CONFIG_FLAG, CMAKE_PARALLEL_FLAG, CMAKE_TARGET_FLAG, DEFAULT_DOMAIN, FILE_API_TARGET_EXECUTABLE, MSG_NOT_EXECUTABLE, MSG_EXECUTABLE_ARTIFACT_REQUIRED, MSG_EXECUTABLE_METADATA_REQUIRED, MSG_NO_TARGETS,)
 
@@ -45,7 +46,7 @@ class BuildController:
             return executable_override if executable_override.is_absolute() else settings.root / executable_override
 
         if not dry_run:
-            target_info = CmakeSettings.load_cmake_target_info(settings.build_dir, target, settings.config)
+            target_info = CmakeFileApi.load_cmake_target_info(settings.build_dir, target, settings.config)
             if target_info is None:
                 raise SystemExit(MSG_EXECUTABLE_METADATA_REQUIRED.format(target=target, config=settings.config))
             if target_info.target_type != FILE_API_TARGET_EXECUTABLE:

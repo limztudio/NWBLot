@@ -7,8 +7,10 @@
 
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
+#include <core/crash/package_archive.h>
 #include <core/crash/package_names.h>
 
+#include <global/filesystem/executable_paths.h>
 #include <global/diagnostics.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/optional.h>
@@ -52,7 +54,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        const auto executableDirectory = GetExecutableDirectory(m_arena);
+        const auto executableDirectory = ExecutablePaths(m_arena).directory();
         ASSERT_TRUE(executableDirectory);
         const AStringView testName(::testing::UnitTest::GetInstance()->current_test_info()->name());
         m_root = *executableDirectory / "crashes" / "test_storage" / testName;
@@ -93,7 +95,7 @@ TEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError){
     const auto nativeDirectory = DirectoryIterator<Arena>::Create(missing);
     ASSERT_FALSE(nativeDirectory);
     ScratchArena scratchArena(s_OperationScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(m_arena, scratchArena, missing);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(m_arena, scratchArena, missing);
     ASSERT_FALSE(archive);
     EXPECT_EQ(archive.error(), nativeDirectory.error());
 }
@@ -103,7 +105,7 @@ TEST_F(CrashArchiveUpload, ResultOwnsBytesAfterWorkingScratchExpires){
     Optional<NWB::Core::Crash::CrashDetail::CrashBytesT<Arena>> archive;
     {
         ScratchArena scratchArena(s_OperationScratch);
-        auto produced = NWB::Core::Crash::CrashDetail::BuildPackageArchive(m_arena, scratchArena, m_root);
+        auto produced = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(m_arena, scratchArena, m_root);
         ASSERT_TRUE(produced);
         archive.emplace(Move(*produced));
     }

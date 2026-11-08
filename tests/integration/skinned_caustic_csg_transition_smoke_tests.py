@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import skinned_caustic_csg_transition_smoke as smoke
+from skinned_caustic_transition_image_evidence import VARIANTS, SkinnedCausticTransitionImageEvidence
 from window_capture_smoke import SmokeFailure
 
 LIT_CURRENT = "current"
@@ -60,7 +61,7 @@ def region(color):
 
 def image_series():
     series = {}
-    for variant in smoke.VARIANTS:
+    for variant in VARIANTS:
         frames = []
         for sample in range(8):
             value = 10 + (sample % 4) * 10
@@ -99,17 +100,17 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
 
     def test_stale_pose_after_csg_removal_is_rejected(self):
         series = image_series()
-        smoke.compare_series(series)
+        SkinnedCausticTransitionImageEvidence.compare_series(series)
         series[LIT_LAGGED][4][LIT_RECEIVER] = region((150, 150, 150))
         with self.assertRaises(SmokeFailure):
-            smoke.compare_series(series)
+            SkinnedCausticTransitionImageEvidence.compare_series(series)
 
     def test_photon_control_without_visible_ground_signal_is_rejected(self):
         series = image_series()
         for sample in range(8):
             series[LIT_NO_PHOTONS][sample][LIT_GROUND] = deepcopy(series[LIT_CURRENT][sample][LIT_GROUND])
         with self.assertRaises(SmokeFailure):
-            smoke.compare_series(series)
+            SkinnedCausticTransitionImageEvidence.compare_series(series)
 
     def test_cutter_without_visible_receiver_signal_is_rejected(self):
         series = image_series()
@@ -117,7 +118,7 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
             for sample in (2, 3, 6, 7):
                 series[variant][sample][LIT_RECEIVER] = deepcopy(series[variant][sample % 2][LIT_RECEIVER])
         with self.assertRaises(SmokeFailure):
-            smoke.compare_series(series)
+            SkinnedCausticTransitionImageEvidence.compare_series(series)
 
     def test_static_bind_pose_cannot_satisfy_live_animation(self):
         series = image_series()
@@ -125,7 +126,7 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
             for sample in (1, 3, 5, 7):
                 series[variant][sample][LIT_RECEIVER] = deepcopy(series[variant][sample - 1][LIT_RECEIVER])
         with self.assertRaises(SmokeFailure):
-            smoke.compare_series(series)
+            SkinnedCausticTransitionImageEvidence.compare_series(series)
 
 
 class SkinnedTransitionOutputTests(unittest.TestCase):
@@ -138,7 +139,7 @@ class SkinnedTransitionOutputTests(unittest.TestCase):
             destinations = []
 
             def capture(args, variant):
-                if variant == smoke.VARIANTS[0]:
+                if variant == VARIANTS[0]:
                     self.assertFalse(any(args.output_directory.iterdir()))
                     destinations.append(args.output_directory)
                 output = args.output_directory / variant
@@ -154,12 +155,12 @@ class SkinnedTransitionOutputTests(unittest.TestCase):
             self.assertTrue(all(destination.parent == root for destination in destinations))
             self.assertEqual(retained.read_text(encoding=LIT_UTF_8), LIT_RETAINED_EVIDENCE)
             for index, destination in enumerate(destinations, 1):
-                self.assertEqual((destination / smoke.VARIANTS[0] / LIT_PROOF_TXT).read_text(encoding=LIT_UTF_8), f"capture {index}")
+                self.assertEqual((destination / VARIANTS[0] / LIT_PROOF_TXT).read_text(encoding=LIT_UTF_8), f"capture {index}")
 
     def test_nonempty_exact_variant_directory_keeps_freshness_rejection_and_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
-            retained = output / smoke.VARIANTS[0] / LIT_PROOF_TXT
+            retained = output / VARIANTS[0] / LIT_PROOF_TXT
             retained.parent.mkdir()
             retained.write_text(LIT_RETAINED_EVIDENCE, encoding=LIT_UTF_8)
             required = [LIT_EXECUTABLE, LIT_APP_EXE, LIT_WORKING_DIRECTORY, LIT_RUNTIME, LIT_OUTPUT_DIRECTORY, str(output)]

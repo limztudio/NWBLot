@@ -4,6 +4,8 @@
 
 #include <impl/assets_graphics/components.adhd.h>
 
+#include <impl/assets_graphics/graphics_component_binary_codec.adhd.h>
+
 #include <core/common/log.h>
 
 
@@ -40,7 +42,7 @@ template<typename ComponentAssetT, typename TAsset>
 [[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const Core::Assets::AssetRef<TAsset>& assetRef, const TStringView context, const AStringView contextAscii, const AStringView kindLabel){
     if(!componentAsset.checkVirtualPath(context))
         return false;
-    return ValidateSingleAssetRefComponentAssetPayload(assetRef.valid(), componentAsset.virtualPath(), contextAscii, kindLabel);
+    return GraphicsComponentBinaryCodec{}.validateAssetRef(assetRef.valid(), componentAsset.virtualPath(), contextAscii, kindLabel);
 }
 
 
@@ -54,7 +56,7 @@ template<typename ComponentAssetT, typename TAsset>
 
 
 b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeSingleAssetRefComponentPayloadBinary(payload, "ModelComponentAsset::loadComponentPayload", component.model.virtualPath);
+    return GraphicsComponentBinaryCodec{}.deserializeAssetRef(payload, "ModelComponentAsset::loadComponentPayload", component.model.virtualPath);
 }
 
 b8 ModelComponentAsset::validatePayload()const{
@@ -66,7 +68,7 @@ b8 ModelComponentAsset::validatePayload()const{
 
 
 b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeSingleAssetRefComponentPayloadBinary(payload, "MeshComponentAsset::loadComponentPayload", component.mesh.virtualPath);
+    return GraphicsComponentBinaryCodec{}.deserializeAssetRef(payload, "MeshComponentAsset::loadComponentPayload", component.mesh.virtualPath);
 }
 
 b8 MeshComponentAsset::validatePayload()const{
@@ -78,13 +80,13 @@ b8 MeshComponentAsset::validatePayload()const{
 
 
 b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeRendererComponentPayloadBinary(payload, component);
+    return GraphicsComponentBinaryCodec{}.deserializeRenderer(payload, component);
 }
 
 b8 RendererComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
         return false;
-    return ValidateRendererComponentAssetPayload(component, virtualPath());
+    return GraphicsComponentBinaryCodec{}.validateRenderer(component, virtualPath());
 }
 
 

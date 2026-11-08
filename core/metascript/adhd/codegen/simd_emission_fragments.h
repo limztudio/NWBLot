@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../sema/type_utils.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+class SimdEmissionFragments final{
+public:
+    static void emitSimdMatrixBinaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix);
+    static void emitSimdMatrixUnaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix, MStringView fnSuffix);
+    static void emitSimdIntTwosComplementNegatePrefix(MString& out, b8 isDouble);
+    static void emitSimdIntTwosComplementNegateSuffix(MString& out, b8 isDouble);
+};
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

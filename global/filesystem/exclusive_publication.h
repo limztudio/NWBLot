@@ -11,6 +11,7 @@
 #include <global/scope_exit.h>
 #include <global/thread.h>
 #include <global/filesystem/operations_file_io.h>
+#include <global/filesystem/staged_file_writer.h>
 #include <global/filesystem/operations_remove.h>
 
 
@@ -30,7 +31,7 @@ template<typename ArenaT>
     staging += ".partial";
 
     b8 created = false;
-    const auto staged = StageNewBinaryFileDurable(staging, bytes.data(), bytes.size(), created);
+    const auto staged = StagedFileWriter(staging).create(bytes.data(), bytes.size(), created);
     if(!staged)
         return { false, created, staged.error() };
 
@@ -79,7 +80,7 @@ template<typename ArenaT>
     if(!IsMissingPathError(existing.error()))
         return MakeUnexpected(existing.error());
 
-    auto staged = StageUniqueBinaryFileDurable(destination, bytes.data(), bytes.size());
+    auto staged = StagedFileWriter(destination).stageUnique(bytes.data(), bytes.size());
     if(!staged)
         return MakeUnexpected(staged.error());
     ::Path<ArenaT> temporary = Move(*staged);

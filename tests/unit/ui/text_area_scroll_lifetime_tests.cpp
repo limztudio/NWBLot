@@ -5,6 +5,7 @@
 #include "text_area_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <global/simdmath.h>
 
 

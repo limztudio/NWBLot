@@ -2,7 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 #include "type_checker.h"
+#include "constructor_argument_checker.h"
+
+#include "type_comparator.h"
+#include "type_layout_analyzer.h"
+#include "type_resolver.h"
+
+#include <core/metascript/adhd/sema/asset_type_analyzer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,7 +156,7 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
             continue;
         const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
         for(usize j = 0u; j < i; ++j){
-            if(iface.baseInterfaces[j] && AreTypeRefsEquivalent(iface.baseInterfaces[j], baseType, m_symbols)){
+            if(iface.baseInterfaces[j] && TypeComparator(m_symbols).areEquivalent(iface.baseInterfaces[j], baseType)){
                 reportError(errors, iface.span, "duplicate base interface in interface declaration");
                 ok = false;
                 break;
@@ -176,7 +187,7 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
             continue;
         for(usize j = 0u; j < i; ++j){
             const MethodDecl* prev = iface.methods[j];
-            if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && DoParamListsMatch(prev->params, m->params, m_symbols)){
+            if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)){
                 reportError(errors, m->span, "duplicate interface method declaration with identical signature");
                 ok = false;
                 break;
@@ -201,9 +212,9 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
             reportError(errors, method.params[0].span, "operator overload parameter must be passed by 'in', not 'mut'");
             ok = false;
         }
-        if(IsBoolReturnOperatorSymbol(method.name)){
+        if(OperatorSemantics::IsBoolReturnOperatorSymbol(method.name)){
             const MStringView retBase = method.returnType ? m_symbols.resolveBaseTypeName(method.returnType->name) : MStringView{};
-            if(!method.returnType || !IsBoolScalarType(retBase) || m_symbols.resolveRefMode(method.returnType) != ParamPassingMode::None){
+            if(!method.returnType || !BuiltinTypeSemantics::IsBoolScalarType(retBase) || m_symbols.resolveRefMode(method.returnType) != ParamPassingMode::None){
                 reportError(errors, method.span, "comparison and logical '!' operator overloads must return 'b8' by value");
                 ok = false;
             }
@@ -265,7 +276,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             }
             MStringView assetName;
             b8 isVectorField = false;
-            if(!TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField)){
+            if(!AssetTypeAnalyzer(m_symbols).tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField)){
                 reportError(errors, field->span, "'[subsystem(\"...\")]' field must have type 'AssetRef<TAsset>' or 'Vector<AssetRef<TAsset>>'");
                 ok = false;
             }
@@ -289,7 +300,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(!ifaceType)
             continue;
         for(usize j = 0u; j < i; ++j){
-            if(classDecl.implementedInterfaces[j] && AreTypeRefsEquivalent(classDecl.implementedInterfaces[j], ifaceType, m_symbols)){
+            if(classDecl.implementedInterfaces[j] && TypeComparator(m_symbols).areEquivalent(classDecl.implementedInterfaces[j], ifaceType)){
                 reportError(errors, classDecl.span, "duplicate implemented interface in class declaration");
                 ok = false;
                 break;
@@ -322,7 +333,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     b8 exactParamsMatch = (m->isConst == req->isConst);
                     if(exactParamsMatch){
                         for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
-                            if(m->params[pIdx].mode != req->params[pIdx].mode || !AreTypeRefsEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs, m_symbols)){
+                            if(m->params[pIdx].mode != req->params[pIdx].mode || !TypeComparator(m_symbols).areEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs)){
                                 exactParamsMatch = false;
                                 break;
                             }
@@ -361,14 +372,14 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     reportError(errors, impl->span, "override method 'const' qualifier does not match interface contract");
                     ok = false;
                 }
-                if(!AreTypeRefsEquivalentWithSubst(impl->returnType, req->returnType, ifaceParams, ifaceArgs, m_symbols)){
+                if(!TypeComparator(m_symbols).areEquivalentWithSubst(impl->returnType, req->returnType, ifaceParams, ifaceArgs)){
                     reportError(errors, impl->span, "override method return type does not match interface contract");
                     ok = false;
                 }
                 for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
                     const ParamDecl& implP = impl->params[pIdx];
                     const ParamDecl& reqP = req->params[pIdx];
-                    if(implP.mode != reqP.mode || !AreTypeRefsEquivalentWithSubst(implP.type, reqP.type, ifaceParams, ifaceArgs, m_symbols)){
+                    if(implP.mode != reqP.mode || !TypeComparator(m_symbols).areEquivalentWithSubst(implP.type, reqP.type, ifaceParams, ifaceArgs)){
                         reportError(errors, implP.span, "override method parameter 'in'/'mut' mode or type does not match interface contract");
                         ok = false;
                         break;
@@ -438,13 +449,13 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
                 ok = false;
             }
-            if(TypeContainsSimdRegisterType(*field->type, m_symbols)){
+            if(TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*field->type)){
                 reportError(errors, field->span, "class member cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
                 ok = false;
             }
         }
         const TypeRef* unwrappedFieldType = field->type ? m_symbols.unwrapTypeAlias(field->type) : nullptr;
-        if(TypeRef* targetFuncType = ExtractUnderlyingFuncType(field->type, m_symbols); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda){
+        if(TypeRef* targetFuncType = TypeResolver(m_symbols).extractUnderlyingFuncType(field->type); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda){
             if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < s_InferredLambdaCaptureBytes)
                 targetFuncType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
         }
@@ -471,7 +482,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 }
             }
             if(field->hasCtorInit){
-                if(!checkConstructorInitArguments(&classDecl, unwrappedFieldType, emptyScope, field->span, fieldInitDummy, field->ctorArgs, errors))
+                if(!ConstructorArgumentChecker(*this).check(&classDecl, unwrappedFieldType, emptyScope, field->span, fieldInitDummy, field->ctorArgs, errors))
                     ok = false;
             }
             m_inClassArenaContext = savedClassArenaCtx;
@@ -497,7 +508,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 && prev->name == m->name
                 && prev->isConst == m->isConst
                 && prev->templateParams.size() == m->templateParams.size()
-                && DoParamListsMatch(prev->params, m->params, m_symbols)
+                && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)
             ){
                 reportError(errors, m->span, "duplicate class method declaration with identical signature");
                 ok = false;

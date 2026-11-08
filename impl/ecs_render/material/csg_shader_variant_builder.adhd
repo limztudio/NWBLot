@@ -1,0 +1,178 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/material/pipeline_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgShaderVariantBuilder{
+    private StringView segmentDefineName(in StringView segment)const{
+        const usize equalPos = segment.find('=');
+        if(equalPos >= segment.size())
+            return "";
+        return segment.substr(0u, equalPos);
+    }
+
+    public Expected<StringView> findDefineAssignment(
+        in StringView variant,
+        in StringView defineName,
+        in StringView defaultVariant
+    )const{
+        if(variant.empty() || defineName.empty() || variant == defaultVariant)
+            return makeUnexpected(Failure());
+
+        usize begin = 0u;
+        while(begin < variant.size()){
+            usize segmentEnd = variant.find(';', begin);
+            if(segmentEnd >= variant.size())
+                segmentEnd = variant.size();
+
+            const StringView segment = variant.substr(begin, segmentEnd - begin);
+            const StringView segmentDefineName = this.segmentDefineName(segment);
+            if(segmentDefineName.empty())
+                return makeUnexpected(Failure());
+            if(segmentDefineName == defineName){
+                const usize valueBegin = segmentDefineName.size() + 1u;
+                if(valueBegin >= segment.size())
+                    return makeUnexpected(Failure());
+                return segment;
+            }
+
+            begin = segmentEnd + 1u;
+        }
+        return makeUnexpected(Failure());
+    }
+
+    public Expected<String> buildClipVariant(
+        in StringView baseVariant,
+        in StringView defaultVariant,
+        in Span<ShaderVariantDefineAssignment> defineAssignments
+    )const{
+        String outVariant = "";
+        const usize defineAssignmentCount = defineAssignments.size();
+        if(baseVariant.empty() || defineAssignmentCount == 0u || defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
+            return makeUnexpected(Failure());
+        if(baseVariant == defaultVariant){
+            Array<b8, s_MaxCsgClipShaderVariantDefineAssignments> insertedDefines;
+            for(usize outputIndex = 0u; outputIndex < defineAssignmentCount; ++outputIndex){
+                usize selectedIndex = defineAssignmentCount;
+                for(usize i = 0u; i < defineAssignmentCount; ++i){
+                    if(insertedDefines[i])
+                        continue;
+                    if(selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name)
+                        selectedIndex = i;
+                }
+                if(selectedIndex == defineAssignmentCount)
+                    return makeUnexpected(Failure());
+                if(!outVariant.empty())
+                    outVariant += ";";
+                outVariant += defineAssignments[selectedIndex].assignment;
+                insertedDefines[selectedIndex] = true;
+            }
+            return outVariant;
+        }
+
+        usize reserveSize = baseVariant.size();
+        for(usize i = 0u; i < defineAssignmentCount; ++i)
+            reserveSize += 1u + defineAssignments[i].assignment.size();
+        outVariant.reserve(reserveSize);
+
+        Array<b8, s_MaxCsgClipShaderVariantDefineAssignments> insertedDefines;
+        usize begin = 0u;
+        while(begin < baseVariant.size()){
+            usize segmentEnd = baseVariant.find(';', begin);
+            if(segmentEnd >= baseVariant.size())
+                segmentEnd = baseVariant.size();
+
+            const StringView segment = baseVariant.substr(begin, segmentEnd - begin);
+            const StringView defineName = this.segmentDefineName(segment);
+            if(defineName.empty())
+                return makeUnexpected(Failure());
+
+            for(usize step = 0u; step < defineAssignmentCount; ++step){
+                usize selectedIndex = defineAssignmentCount;
+                for(usize i = 0u; i < defineAssignmentCount; ++i){
+                    if(insertedDefines[i])
+                        continue;
+                    if(defineName > defineAssignments[i].name && (selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name))
+                        selectedIndex = i;
+                }
+                if(selectedIndex == defineAssignmentCount)
+                    break;
+                if(!outVariant.empty())
+                    outVariant += ";";
+                outVariant += defineAssignments[selectedIndex].assignment;
+                insertedDefines[selectedIndex] = true;
+            }
+
+            b8 replacedExistingSegment = false;
+            for(usize i = 0u; i < defineAssignmentCount; ++i){
+                if(defineName != defineAssignments[i].name)
+                    continue;
+                if(!outVariant.empty())
+                    outVariant += ";";
+                outVariant += defineAssignments[i].assignment;
+                insertedDefines[i] = true;
+                replacedExistingSegment = true;
+                break;
+            }
+            if(!replacedExistingSegment){
+                if(!outVariant.empty())
+                    outVariant += ";";
+                outVariant += segment;
+            }
+
+            begin = segmentEnd + 1u;
+        }
+
+        for(usize step = 0u; step < defineAssignmentCount; ++step){
+            usize selectedIndex = defineAssignmentCount;
+            for(usize i = 0u; i < defineAssignmentCount; ++i){
+                if(insertedDefines[i])
+                    continue;
+                if(selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name)
+                    selectedIndex = i;
+            }
+            if(selectedIndex == defineAssignmentCount)
+                break;
+            if(!outVariant.empty())
+                outVariant += ";";
+            outVariant += defineAssignments[selectedIndex].assignment;
+            insertedDefines[selectedIndex] = true;
+        }
+        return outVariant;
+    }
+
+    public String buildEvaluatorAssignment(in StringView moduleInclude)const{
+        String assignment = "";
+        if(moduleInclude.empty())
+            return assignment;
+
+        assignment.reserve(s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + s_ModuleAssignmentPunctuationSize);
+        assignment += s_CsgProjectEvaluatorModuleDefineName;
+        assignment += "=\"";
+        assignment += moduleInclude;
+        assignment.push_back('"');
+        return assignment;
+    }
+
+    public Expected<String> buildVariant(
+        in StringView baseVariant,
+        in StringView defaultVariant,
+        in StringView projectEvaluatorModuleAssignment
+    )const{
+        FixedVector<ShaderVariantDefineAssignment, s_MaxCsgClipShaderVariantDefineAssignments> defineAssignments;
+        defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment));
+        defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgIntervalSampleEnabledDefineName, s_CsgIntervalSampleEnabledDefineAssignment));
+        if(!projectEvaluatorModuleAssignment.empty())
+            defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgProjectEvaluatorModuleDefineName, projectEvaluatorModuleAssignment));
+
+        return this.buildClipVariant(baseVariant, defaultVariant, defineAssignments);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

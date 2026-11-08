@@ -8,6 +8,7 @@
 #include "module.h"
 #include "backend_forward.h"
 #include "backend_core_context.h"
+#include "descriptor_buffer_manager.h"
 
 #include <core/task/cpu/scheduler.h>
 
@@ -28,163 +29,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
-
-namespace DescriptorBufferSegmentKind{
-    static constexpr u8 s_DescriptorBufferSegmentKindNoneBase = 0;
-    enum Enum : u8{
-        None = s_DescriptorBufferSegmentKindNoneBase,
-        Resource,
-        Sampler,
-    };
-};
-
-struct DescriptorBufferSegment{
-    // Process-unique identity of the exact resource or sampler storage.
-    u64 storageIdentity = 0;
-    // Prevents stale handles from writing a recycled byte range.
-    u64 allocationSerial = 0;
-    u32 offsetBytes = 0;
-    u32 sizeBytes = 0;
-    DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler) && sizeBytes > 0 && storageIdentity != 0u && allocationSerial != 0u;
-    }
-};
-
-class DescriptorBufferManager final : NoCopy{
-    friend class Device;
-    friend class CommandList;
-    friend class GpuDescriptorHeap;
-    friend class Queue;
-
-
-public:
-    // Resource and sampler descriptor buffers are always bound in this order.
-    // A TLAS set reuses the resource descriptor buffer, so the optional third offset extends this fixed topology.
-    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
-    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
-    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
-    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
-
-
-private:
-    // Mergeable free byte range.
-    struct FreeRange{
-        u32 offsetBytes = 0;
-        u32 sizeBytes = 0;
-    };
-
-    // Host-mapped descriptor segment with synchronized free ranges and live-allocation tracking.
-    struct SegmentStorage{
-        const Expected<u64> storageIdentity;
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VulkanAllocationHandle allocation = nullptr;
-        void* mappedMemory = nullptr;
-        VkDeviceAddress deviceAddress = 0;
-        u32 capacityBytes = 0;
-        u32 writableOffsetBytes = 0;
-        // Preserve serial across reinitialization so stale handles stay invalid.
-        u64 nextAllocationSerial = 1u;
-        VkDescriptorBufferBindingInfoEXT bindingInfo{};
-        Futex mutex;
-        Vector<FreeRange, Alloc::GlobalArena> freeRanges;
-        Vector<DescriptorBufferSegment, Alloc::GlobalArena> liveAllocations;
-
-
-    public:
-        SegmentStorage(Alloc::GlobalArena& arena, Expected<u64> storageIdentityValue)noexcept
-            : storageIdentity(Move(storageIdentityValue))
-            , freeRanges(arena)
-            , liveAllocations(arena)
-        {}
-    };
-    struct BindingSnapshot{
-        Array<VkDescriptorBufferBindingInfoEXT, s_PersistentDescriptorBufferCount> bindingInfos{};
-        u64 generation = 0u;
-        u32 offsetAlignmentBytes = 0u;
-    };
-
-
-public:
-    DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)noexcept;
-    ~DescriptorBufferManager()noexcept{
-        shutdownForDeviceTeardown();
-    }
-
-
-public:
-    b8 initialize();
-    [[nodiscard]] b8 shutdown();
-
-    [[nodiscard]] b8 isEnabled()const noexcept;
-
-    // Exact driver descriptor size; 0 when descriptor buffers are disabled.
-    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
-    [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
-    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept{
-        return Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
-    }
-
-    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const noexcept{
-        return Max<u64>(m_context.physicalDeviceProperties.limits.minStorageBufferOffsetAlignment, 1u);
-    }
-
-    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const noexcept{
-        return Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
-    }
-
-    [[nodiscard]] u32 getMaxTexelBufferElements()const noexcept{
-        return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
-    }
-
-    // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
-    [[nodiscard]] Expected<DescriptorBufferSegment> allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes){
-        return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
-    }
-
-    void free(const DescriptorBufferSegment& segment){
-        freeForBindingGeneration(segment, 0u);
-    }
-
-    // Validates allocation identity, then encodes one descriptor.
-    b8 writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
-
-
-private:
-    [[nodiscard]] Expected<VkResult, VkResult> shutdownForLifecycleOperation();
-    void shutdownForDeviceTeardown()noexcept;
-    // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
-    [[nodiscard]] b8 reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
-    [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
-    void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);
-    [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const noexcept;
-    [[nodiscard]] b8 isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
-    b8 initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
-    void shutdownSegment(SegmentStorage& segment)noexcept;
-
-
-private:
-    Device& m_device;
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
-    Futex m_lifecycleOperationMutex;
-    mutable Futex m_lifecycleMutex;
-    u64 m_bindingGeneration = 0u;
-    u64 m_nextBindingGeneration = 1u;
-    b8 m_enabled = false;
-    b8 m_lifecycleTransitioning = false;
-    SegmentStorage m_resourceSegment;
-    SegmentStorage m_samplerSegment;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Descriptor-buffer-only bindless heap at sets 0/1; required at device creation.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
@@ -194,6 +38,8 @@ class GpuDescriptorHeap final : NoCopy{
 
 
 private:
+    class DescriptorBufferWriter;
+
     // Capacities are fixed per initialized generation.
     // The shared pool outlives these typed allocations, including partially initialized tables.
     template<typename T>
@@ -375,10 +221,6 @@ private:
     void resetStateForShutdownLocked()noexcept;
     [[nodiscard]] b8 initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
 
-    // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
-    b8 initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
-    // Encodes one descriptor at the class/slot offset.
-    b8 writeDescriptorBuffer(const DescriptorWriteItem& writeItem, GpuDescriptorClass::Enum descriptorClass);
 
 
 private:

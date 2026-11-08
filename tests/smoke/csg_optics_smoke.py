@@ -9,6 +9,7 @@ import sys
 
 import reflection_optical_smoke as reflection
 import refraction_gallery_smoke as refraction
+from framebuffer_png_encoder import FramebufferPngEncoder
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_PIXELS_OVER_EIGHT = "pixels_over_eight"
@@ -86,7 +87,7 @@ def run_refraction(args):
         if frame is None:
             return SKIP_EXIT_CODE
         frames[(case, route)] = frame
-        (args.output_directory / f"{case}_{route}.png").write_bytes(refraction.png_rgb_bytes(frame))
+        (args.output_directory / f"{case}_{route}.png").write_bytes(FramebufferPngEncoder.encode(frame))
     reference = frames[(LIT_CSG_REFERENCE, LIT_AUTOMATIC)]
     carved = frames[(LIT_CSG_CAP, LIT_AUTOMATIC)]
     metrics = { "retained_slab_matches": require_refraction_match(reference, carved), "cap_only_slab_matches": require_refraction_match(reference, frames[(LIT_CSG_MIDDLE, LIT_AUTOMATIC)]),

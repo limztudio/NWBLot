@@ -3,6 +3,8 @@
 
 
 #include "mesh_system.h"
+#include "mesh_raytracing_snapshot_policy.h"
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
 
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/assets_mesh/asset.h>
@@ -25,161 +27,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_mesh_raytracing_snapshots{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 RuntimeMeshletBoundsReady(const MeshResources& mesh)noexcept{
-    const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
-    const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
-    if(
-        !mesh.runtimeMesh || mesh.runtimeGeometryContentRevision == 0u || mesh.meshletCount == 0u
-        || !mesh.meshletDescBuffer || !mesh.runtimeMeshletLocalBoundsBuffer
-        || !descriptor.valid() || descriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !bounds.valid() || bounds.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    )
-        return false;
-    return true;
-}
-
-[[nodiscard]] b8 RuntimeMeshletSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
-    if(!RuntimeMeshletBoundsReady(mesh))
-        return snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid();
-    return
-        snapshot.meshletCount == mesh.meshletCount
-        && snapshot.meshletDescBuffer == mesh.meshletDescBuffer
-        && snapshot.meshletLocalBoundsBuffer == mesh.runtimeMeshletLocalBoundsBuffer
-        && snapshot.meshletDescHeapHandle == mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC]
-        && snapshot.meshletLocalBoundsHeapHandle == mesh.runtimeMeshletLocalBoundsHeapHandle
-    ;
-}
-
-ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapshot(const MeshResources& mesh)noexcept{
-    ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot = {
-        .meshName = mesh.meshName,
-        .runtimeMeshVersion = mesh.runtimeMeshVersion,
-        .runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision,
-        .blasGeometryContentRevision = mesh.blasGeometryContentRevision,
-        .swBvhGeometryContentRevision = mesh.swBvhGeometryContentRevision,
-        .positionBuffer = mesh.positionBuffer,
-        .triangleIndexBuffer = mesh.triangleIndexBuffer,
-        .attributeBuffer = mesh.attributeBuffer,
-        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), ExpectedMeshletSolidTriangleWordCount(mesh.meshletPrimitiveIndexCount)),
-        .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
-        .meshletDescBuffer = {},
-        .meshletLocalBoundsBuffer = {},
-        .blas = mesh.blas,
-        .swBvhNodeBuffer = mesh.swBvhNodeBuffer,
-        .swBvhParentBuffer = mesh.swBvhParentBuffer,
-        .csgLocalBounds = mesh.csgLocalBounds,
-        .runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle,
-        .meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid(),
-        .meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid(),
-        .swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle,
-        .swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
-        .swBvhNodeHeapHandle = mesh.swBvhNodeHeapHandle,
-        .swBvhParentHeapHandle = mesh.swBvhParentHeapHandle,
-        .meshletCount = 0u,
-        .meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount,
-        .blasRefitsSinceRebuild = mesh.blasRefitsSinceRebuild,
-        .swBvhRefitsSinceRebuild = mesh.swBvhRefitsSinceRebuild,
-        .runtimeMesh = mesh.runtimeMesh,
-        .blasBuildPending = mesh.blasBuildPending,
-        .blasBackingFresh = mesh.blasBackingFresh,
-        .swBvhBuildPending = mesh.swBvhBuildPending,
-        .swBvhTopologyBuilt = mesh.swBvhTopologyBuilt,
-        .blasBuildAccepted = mesh.blasBuildAccepted,
-        .swBvhBuildAccepted = mesh.swBvhBuildAccepted,
-    };
-    if(RuntimeMeshletBoundsReady(mesh)){
-        snapshot.meshletCount = mesh.meshletCount;
-        snapshot.meshletDescBuffer = mesh.meshletDescBuffer;
-        snapshot.meshletLocalBoundsBuffer = mesh.runtimeMeshletLocalBoundsBuffer;
-        snapshot.meshletDescHeapHandle = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
-        snapshot.meshletLocalBoundsHeapHandle = mesh.runtimeMeshletLocalBoundsHeapHandle;
-    }
-    return snapshot;
-}
-
-[[nodiscard]] b8 RayTracingResourceSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
-    return
-        mesh.meshName == snapshot.meshName
-        && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
-        && mesh.triangleIndexBuffer.get() == snapshot.triangleIndexBuffer.get()
-        && mesh.attributeBuffer.get() == snapshot.attributeBuffer.get()
-        && mesh.solidTriangleWords.get() == snapshot.solidTriangleWords.data()
-        && mesh.runtimeLocalBoundsBuffer == snapshot.runtimeLocalBoundsBuffer
-        && mesh.runtimeLocalBoundsHeapHandle == snapshot.runtimeLocalBoundsHeapHandle
-        && RuntimeMeshletSnapshotMatches(mesh, snapshot)
-        && mesh.blas.get() == snapshot.blas.get()
-        && mesh.swBvhPositionHeapHandle == snapshot.swBvhPositionHeapHandle
-        && mesh.swBvhTriangleIndexHeapHandle == snapshot.swBvhTriangleIndexHeapHandle
-        && mesh.swBvhNodeBuffer.get() == snapshot.swBvhNodeBuffer.get()
-        && mesh.swBvhParentBuffer.get() == snapshot.swBvhParentBuffer.get()
-        && mesh.swBvhNodeHeapHandle == snapshot.swBvhNodeHeapHandle
-        && mesh.swBvhParentHeapHandle == snapshot.swBvhParentHeapHandle
-        && mesh.meshletPrimitiveIndexCount == snapshot.meshletPrimitiveIndexCount
-        && mesh.blasRefitsSinceRebuild == snapshot.blasRefitsSinceRebuild
-        && mesh.swBvhRefitsSinceRebuild == snapshot.swBvhRefitsSinceRebuild
-        && mesh.runtimeMesh == snapshot.runtimeMesh
-        && mesh.blasBuildPending == snapshot.blasBuildPending
-        && mesh.blasBackingFresh == snapshot.blasBackingFresh
-        && mesh.swBvhBuildPending == snapshot.swBvhBuildPending
-        && mesh.swBvhTopologyBuilt == snapshot.swBvhTopologyBuilt
-        && mesh.runtimeMeshVersion == snapshot.runtimeMeshVersion
-        && mesh.runtimeGeometryContentRevision == snapshot.runtimeGeometryContentRevision
-        && mesh.blasGeometryContentRevision == snapshot.blasGeometryContentRevision
-        && mesh.swBvhGeometryContentRevision == snapshot.swBvhGeometryContentRevision
-        && mesh.blasBuildAccepted == snapshot.blasBuildAccepted
-        && mesh.swBvhBuildAccepted == snapshot.swBvhBuildAccepted
-        && mesh.csgLocalBounds.minBounds == snapshot.csgLocalBounds.minBounds
-        && mesh.csgLocalBounds.maxBounds == snapshot.csgLocalBounds.maxBounds
-    ;
-}
-
-[[nodiscard]] b8 RayTracingResourceIdentityMatches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept{
-    return
-        lhs.meshName == rhs.meshName
-        && lhs.positionBuffer.get() == rhs.positionBuffer.get()
-        && lhs.triangleIndexBuffer.get() == rhs.triangleIndexBuffer.get()
-        && lhs.attributeBuffer.get() == rhs.attributeBuffer.get()
-        && lhs.solidTriangleWords.data() == rhs.solidTriangleWords.data()
-        && lhs.solidTriangleWords.size() == rhs.solidTriangleWords.size()
-        && lhs.runtimeLocalBoundsBuffer == rhs.runtimeLocalBoundsBuffer
-        && lhs.runtimeLocalBoundsHeapHandle == rhs.runtimeLocalBoundsHeapHandle
-        && lhs.meshletCount == rhs.meshletCount
-        && lhs.meshletDescBuffer == rhs.meshletDescBuffer
-        && lhs.meshletLocalBoundsBuffer == rhs.meshletLocalBoundsBuffer
-        && lhs.meshletDescHeapHandle == rhs.meshletDescHeapHandle
-        && lhs.meshletLocalBoundsHeapHandle == rhs.meshletLocalBoundsHeapHandle
-        && lhs.swBvhPositionHeapHandle == rhs.swBvhPositionHeapHandle
-        && lhs.swBvhTriangleIndexHeapHandle == rhs.swBvhTriangleIndexHeapHandle
-        && lhs.meshletPrimitiveIndexCount == rhs.meshletPrimitiveIndexCount
-        && lhs.runtimeMesh == rhs.runtimeMesh
-        && lhs.runtimeMeshVersion == rhs.runtimeMeshVersion
-        && lhs.runtimeGeometryContentRevision == rhs.runtimeGeometryContentRevision
-        && lhs.csgLocalBounds.minBounds == rhs.csgLocalBounds.minBounds
-        && lhs.csgLocalBounds.maxBounds == rhs.csgLocalBounds.maxBounds
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererMeshSystem::collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const{
     outSnapshots.clear();
     outSnapshots.reserve(m_meshState.m_meshes.size());
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-        auto snapshot = __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(meshIt.value());
+        auto snapshot = MeshRayTracingSnapshotPolicy::capture(meshIt.value());
         outSnapshots.push_back(Move(snapshot));
     }
 }
@@ -189,7 +41,7 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     if(found == m_meshState.m_meshes.end())
         return MakeUnexpected(Failure{});
 
-    return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(found.value());
+    return MeshRayTracingSnapshotPolicy::capture(found.value());
 }
 
 Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const noexcept{
@@ -217,13 +69,13 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     )
         return MakeUnexpected(Failure{});
 
-    return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(mesh);
+    return MeshRayTracingSnapshotPolicy::capture(mesh);
 }
 
 b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    const b8 currentMatches = found != m_meshState.m_meshes.end() && __hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected);
-    if(!currentMatches || !__hidden_mesh_raytracing_snapshots::RayTracingResourceIdentityMatches(expected, desired)){
+    const b8 currentMatches = found != m_meshState.m_meshes.end() && MeshRayTracingSnapshotPolicy::matches(found.value(), expected);
+    if(!currentMatches || !MeshRayTracingSnapshotPolicy::sameIdentity(expected, desired)){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhNodeHeapHandle : Core::GpuDescriptorHandle::Invalid();
         const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhParentHeapHandle : Core::GpuDescriptorHandle::Invalid();
@@ -276,7 +128,7 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
     mesh.swBvhParentBuffer = desired.swBvhParentBuffer;
     mesh.swBvhNodeHeapHandle = desired.swBvhNodeHeapHandle;
     mesh.swBvhParentHeapHandle = desired.swBvhParentHeapHandle;
-    CommitMeshRayTracingSnapshotState(
+    MeshAccelerationStatePolicy().commitSnapshot(
         blasReplaced,
         swBvhReplaced,
         desired.blasRefitsSinceRebuild,
@@ -305,16 +157,16 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
 
 Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    if(found == m_meshState.m_meshes.end() || !__hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected) || !ensureMeshSwBvhInputHeapHandles(found.value()))
+    if(found == m_meshState.m_meshes.end() || !MeshRayTracingSnapshotPolicy::matches(found.value(), expected) || !ensureMeshSwBvhInputHeapHandles(found.value()))
         return MakeUnexpected(Failure{});
 
-    return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(found.value());
+    return MeshRayTracingSnapshotPolicy::capture(found.value());
 }
 
 void RendererMeshSystem::discardRayTracingBuildState()noexcept{
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         MeshResources& mesh = meshIt.value();
-        ResetMeshRayTracingBuildState(
+        MeshAccelerationStatePolicy().resetBuild(
             mesh.blas != nullptr,
             mesh.swBvhNodeBuffer != nullptr || mesh.swBvhParentBuffer != nullptr,
             mesh.blasBuildPending,
@@ -374,7 +226,7 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
         if(!mesh.blas)
             continue;
         // This predicate consumes only build/revision state; the graph output below retains the BLAS.
-        const b8 nativeBuildsBlas = RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
+        const b8 nativeBuildsBlas = MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
         outStates.push_back({ .meshName = mesh.meshName, .blas = mesh.blas, .backingFresh = mesh.blasBackingFresh, .nativeBuildsBlas = nativeBuildsBlas, });
     }
 }

@@ -89,7 +89,6 @@ CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
 
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(AllocateDomainIdentity())
-    , m_profileEventCapacity(config.profileEventCapacity)
     , m_arena(TaskArenaScope::s_CpuTaskScheduler)
     , m_nodes(m_arena)
     , m_placements(m_arena)
@@ -97,8 +96,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_searchStack(m_arena)
     , m_searchVisits(m_arena)
     , m_scopeContributionVisits(m_arena)
-    , m_profileLabels(m_arena)
-    , m_profileEvents(m_arena)
+    , m_profileBuffer(m_arena, config.profileEventCapacity)
     , m_readyProfiles(m_arena)
     , m_mainThread(QueryCurrentThreadId())
     , m_workers(m_arena)
@@ -175,9 +173,9 @@ CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const noexcept{
     CpuTaskSchedulerStatistics result = m_statistics;
     result.outstandingTasks = m_outstanding;
     result.profileEnabled = m_profileEnabled.load(MemoryOrder::relaxed);
-    result.profilePendingEvents = m_profileCount;
-    result.profileRecordedEvents = m_profileRecordedEvents;
-    result.profileDroppedEvents = m_profileDroppedEvents;
+    result.profilePendingEvents = m_profileBuffer.pending();
+    result.profileRecordedEvents = m_profileBuffer.recorded();
+    result.profileDroppedEvents = m_profileBuffer.dropped();
     return result;
 }
 

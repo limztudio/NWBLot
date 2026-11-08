@@ -1,0 +1,160 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShadowMaterialContextPolicy{
+    public void captureBytes(
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialTypedBytes,
+        mut Vector<u8> outInstanceMaterialBytes,
+        mut Vector<u8> outInstanceBytes,
+        mut Vector<u8> outMaterialTypedBytes
+    )const{
+        outInstanceMaterialBytes.clear();
+        outInstanceMaterialBytes.reserve(instanceMaterials.size() * s_NwbRtInstanceMaterialGpuByteSize);
+        for(in NwbRtInstanceMaterialGpu material : instanceMaterials)
+            AppendPOD(outInstanceMaterialBytes, material);
+
+        outInstanceBytes.clear();
+        outInstanceBytes.reserve(instances.size() * s_InstanceGpuDataByteSize);
+        for(in InstanceGpuData instance : instances)
+            AppendPOD(outInstanceBytes, instance);
+
+        outMaterialTypedBytes.clear();
+        outMaterialTypedBytes.reserve(materialTypedBytes.size());
+        for(in u8 b : materialTypedBytes)
+            outMaterialTypedBytes.push_back(b);
+    }
+
+    public b8 publishAcceptedUpload(
+        in b8 ready,
+        in b8 uploadRequired,
+        in PreparedShadowMaterialContextRoute route,
+        in u64 hash,
+        in b8 staticScene,
+        mut u64 inOutHwHash,
+        mut b8 inOutHwHashValid,
+        mut u64 inOutSwHash,
+        mut b8 inOutSwHashValid
+    )const{
+        if(!ready || !uploadRequired)
+            return false;
+
+        if(route == PreparedShadowMaterialContextRoute::Hardware){
+            inOutHwHash = hash;
+            inOutHwHashValid = staticScene;
+            inOutSwHashValid = false;
+        }
+        else if(route == PreparedShadowMaterialContextRoute::Software){
+            inOutSwHash = hash;
+            inOutSwHashValid = staticScene;
+            inOutHwHashValid = false;
+        }
+        return true;
+    }
+
+    public b8 softwareSnapshotCovers(
+        in b8 ready,
+        in PreparedShadowMaterialContextRoute route,
+        in usize instanceMaterialCount,
+        in usize instanceCount,
+        in usize sceneInstanceCount
+    )const{
+        return ready
+            && route == PreparedShadowMaterialContextRoute::Software
+            && instanceMaterialCount == sceneInstanceCount
+            && instanceCount == sceneInstanceCount;
+    }
+
+    public b8 softwareSnapshotAccepted(
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in b8 swHashValid,
+        in u64 swHash,
+        in u64 expectedHash,
+        in usize sceneBvhInstanceCount,
+        in usize expectedInstanceCount
+    )const{
+        return uploadRequired
+            || (staticScene && swHashValid && swHash == expectedHash && sceneBvhInstanceCount == expectedInstanceCount);
+    }
+
+    public b8 validateRetainState(
+        in PreparedShadowMaterialContextRoute route,
+        in usize instanceMaterialCount,
+        in usize instanceCount,
+        in usize materialTypedUploadBytes,
+        in b8 storageMatches,
+        in usize stateInstanceMaterialCapacity,
+        in usize expectedInstanceMaterialCapacity,
+        in usize stateInstanceCapacity,
+        in usize expectedInstanceCapacity,
+        in usize stateMaterialTypedCapacity,
+        in usize expectedMaterialTypedCapacity,
+        in b8 storageReady,
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in b8 swHashValid,
+        in u64 swHash,
+        in u64 expectedHash,
+        in usize sceneBvhInstanceCount,
+        in usize instanceMaterialByteCount,
+        in usize instanceByteCount,
+        in usize materialTypedByteCount
+    )const{
+        if(
+            route == PreparedShadowMaterialContextRoute::None
+            || instanceMaterialCount == 0u
+            || instanceCount == 0u
+            || materialTypedUploadBytes == 0u
+            || !storageMatches
+            || stateInstanceMaterialCapacity != expectedInstanceMaterialCapacity
+            || stateInstanceCapacity != expectedInstanceCapacity
+            || stateMaterialTypedCapacity != expectedMaterialTypedCapacity
+            || !storageReady
+        ){
+            error("RendererSystem: frozen shadow material-context identity no longer matches preflight storage");
+            return false;
+        }
+        if(!uploadRequired){
+            if(
+                route != PreparedShadowMaterialContextRoute::Software
+                || !staticScene
+                || !swHashValid
+                || swHash != expectedHash
+                || sceneBvhInstanceCount != instanceMaterialCount
+                || sceneBvhInstanceCount != instanceCount
+                || instanceMaterialByteCount != 0u
+                || instanceByteCount != 0u
+                || materialTypedByteCount != 0u
+            ){
+                error("RendererSystem: frozen software material-context cache identity is no longer accepted");
+                return false;
+            }
+            return true;
+        }
+        if(
+            instanceMaterialByteCount == 0u
+            || instanceByteCount == 0u
+            || materialTypedByteCount == 0u
+            || instanceMaterialByteCount != instanceMaterialCount * s_NwbRtInstanceMaterialGpuByteSize
+            || instanceByteCount != instanceCount * s_InstanceGpuDataByteSize
+            || materialTypedByteCount != materialTypedUploadBytes
+        ){
+            error("RendererSystem: frozen shadow material-context payload is incomplete");
+            return false;
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

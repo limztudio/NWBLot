@@ -14,6 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from utilities.ui_skin import generate_default as generator
+from utilities.ui_skin import skin_publisher as publisher
 
 
 NAMES = ("source.png", "atlas.nwb", "texture.nwb", "texture.tex")
@@ -48,13 +49,13 @@ class UiSkinPublicationTests(unittest.TestCase):
     def test_converter_failure_and_incomplete_output_preserve_all_files(self):
         with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture):
             for result in (subprocess.CalledProcessError(1, "converter"), subprocess.CompletedProcess([], 0)):
-                with self.subTest(result=result), mock.patch.object(generator.subprocess, "run", side_effect=result if isinstance(result, Exception) else None, return_value=result):
+                with self.subTest(result=result), mock.patch.object(publisher.subprocess, "run", side_effect=result if isinstance(result, Exception) else None, return_value=result):
                     with self.assertRaises((subprocess.CalledProcessError, RuntimeError)):
-                        generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                        publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
                     self.assert_previous()
 
     def test_each_publication_failure_restores_all_previous_files(self):
-        replace = generator.os.replace
+        replace = publisher.os.replace
         for failure_step in range(1, 9):
             calls = 0
 
@@ -65,14 +66,14 @@ class UiSkinPublicationTests(unittest.TestCase):
                     raise OSError("injected publication failure")
                 return replace(source, target)
 
-            with self.subTest(failure_step=failure_step), mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=fail_once):
+            with self.subTest(failure_step=failure_step), mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=fail_once):
                 with self.assertRaises(OSError):
-                    generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                    publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
                 self.assert_previous()
                 self.assertEqual(list(self.directory.glob(".ui_skin_*")), [])
 
     def test_rollback_failure_preserves_recovery_files(self):
-        replace = generator.os.replace
+        replace = publisher.os.replace
         calls = 0
 
         def fail_publication_and_restore(source, target):
@@ -82,15 +83,15 @@ class UiSkinPublicationTests(unittest.TestCase):
                 raise OSError("injected failure")
             return replace(source, target)
 
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=fail_publication_and_restore):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=fail_publication_and_restore):
             with self.assertRaisesRegex(RuntimeError, "recovery files remain"):
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         stages = list(self.directory.glob(".ui_skin_*"))
         self.assertEqual(len(stages), 1)
         self.assertTrue(any(stages[0].glob("*.previous")))
 
     def test_broken_stderr_does_not_replace_rollback_failure(self):
-        replace = generator.os.replace
+        replace = publisher.os.replace
         calls = 0
 
         def fail_publication_and_restore(source, target):
@@ -102,9 +103,9 @@ class UiSkinPublicationTests(unittest.TestCase):
 
         stream = mock.Mock()
         stream.write.side_effect = BrokenPipeError("stderr closed")
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=fail_publication_and_restore), mock.patch.object(generator.sys, "stderr", stream):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=fail_publication_and_restore), mock.patch.object(publisher.sys, "stderr", stream):
             with self.assertRaisesRegex(RuntimeError, "recovery files remain"):
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         stages = list(self.directory.glob(".ui_skin_*"))
         self.assertEqual(len(stages), 1)
         self.assertTrue(any(stages[0].glob("*.previous")))
@@ -112,7 +113,7 @@ class UiSkinPublicationTests(unittest.TestCase):
     def test_failure_removes_new_files_and_restores_existing_files(self):
         (self.directory / "atlas.nwb").unlink()
         (self.directory / "texture.tex").unlink()
-        replace = generator.os.replace
+        replace = publisher.os.replace
         calls = 0
 
         def fail_last_publication(source, target):
@@ -122,9 +123,9 @@ class UiSkinPublicationTests(unittest.TestCase):
                 raise OSError("injected publication failure")
             return replace(source, target)
 
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=fail_last_publication):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=fail_last_publication):
             with self.assertRaises(OSError):
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         self.assertEqual((self.directory / "source.png").read_bytes(), b"old source.png")
         self.assertEqual((self.directory / "texture.nwb").read_bytes(), b"old texture.nwb")
         self.assertFalse((self.directory / "atlas.nwb").exists())
@@ -132,15 +133,15 @@ class UiSkinPublicationTests(unittest.TestCase):
 
     def test_success_without_converter_leaves_texture_pair_unchanged(self):
         with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture):
-            generator.generate_and_publish(self.directory, None)
+            publisher.SkinPublisher(self.directory, None, generator._generate_into).publish()
         self.assertEqual((self.directory / "source.png").read_bytes(), b"new source")
         self.assertEqual((self.directory / "atlas.nwb").read_bytes(), b"new atlas")
         for name in NAMES[2:]:
             self.assertEqual((self.directory / name).read_bytes(), ("old " + name).encode())
 
     def test_success_with_converter_publishes_all_outputs(self):
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture):
-            generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture):
+            publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         for name, expected in zip(NAMES, (b"new source", b"new atlas", b"new texture metadata", b"new texture")):
             self.assertEqual((self.directory / name).read_bytes(), expected)
         self.assertEqual((self.directory / "unrelated").read_bytes(), b"keep")
@@ -163,7 +164,7 @@ class UiSkinPublicationTests(unittest.TestCase):
 
         stream = mock.Mock()
         stream.write.side_effect = BrokenPipeError("stderr closed")
-        with mock.patch.object(generator, "_generate_into", side_effect=fail_generation), mock.patch.object(pathlib.Path, "rmdir", side_effect=OSError("cleanup failed")), mock.patch.object(generator.sys, "stderr", stream):
+        with mock.patch.object(generator, "_generate_into", side_effect=fail_generation), mock.patch.object(pathlib.Path, "rmdir", side_effect=OSError("cleanup failed")), mock.patch.object(publisher.sys, "stderr", stream):
             with self.assertRaisesRegex(OSError, "generation failed"):
                 generator.generate(self.directory)
         self.assert_previous()
@@ -173,8 +174,8 @@ class UiSkinPublicationTests(unittest.TestCase):
     def test_existing_restrictive_modes_survive_publication(self):
         for name in NAMES:
             os.chmod(self.directory / name, 0o600)
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture):
-            generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture):
+            publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         for name in NAMES:
             self.assertEqual(stat.S_IMODE((self.directory / name).stat().st_mode), 0o600)
 
@@ -189,11 +190,11 @@ class UiSkinPublicationTests(unittest.TestCase):
 
         with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(pathlib.Path, "lstat", autospec=True, side_effect=fail_inspection):
             with self.assertRaises(PermissionError):
-                generator.generate_and_publish(self.directory, None)
+                publisher.SkinPublisher(self.directory, None, generator._generate_into).publish()
         self.assert_previous()
 
     def test_interrupted_rollback_keeps_unrestored_backups(self):
-        replace = generator.os.replace
+        replace = publisher.os.replace
         calls = 0
 
         def interrupt_restore(source, target):
@@ -206,9 +207,9 @@ class UiSkinPublicationTests(unittest.TestCase):
             return replace(source, target)
 
         output = io.StringIO()
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=interrupt_restore), contextlib.redirect_stderr(output):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=interrupt_restore), contextlib.redirect_stderr(output):
             with self.assertRaises(KeyboardInterrupt):
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         stages = list(self.directory.glob(".ui_skin_*"))
         self.assertEqual(len(stages), 1)
         self.assertTrue(any(stages[0].glob("*.previous")))
@@ -218,7 +219,7 @@ class UiSkinPublicationTests(unittest.TestCase):
         class LegacyInterrupt(KeyboardInterrupt):
             add_note = None
 
-        replace = generator.os.replace
+        replace = publisher.os.replace
         calls = 0
 
         def interrupt_restore(source, target):
@@ -232,16 +233,16 @@ class UiSkinPublicationTests(unittest.TestCase):
 
         stream = mock.Mock()
         stream.write.side_effect = BrokenPipeError("stderr closed")
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=interrupt_restore), mock.patch.object(generator.sys, "stderr", stream):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=interrupt_restore), mock.patch.object(publisher.sys, "stderr", stream):
             with self.assertRaises(LegacyInterrupt) as caught:
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         stages = list(self.directory.glob(".ui_skin_*"))
         self.assertEqual(len(stages), 1)
         self.assertIn(str(stages[0]), str(caught.exception))
         self.assertTrue(any(stages[0].glob("*.previous")))
 
     def test_backup_inspection_failure_keeps_recovery_files(self):
-        replace = generator.os.replace
+        replace = publisher.os.replace
         lstat = pathlib.Path.lstat
         calls = 0
 
@@ -257,9 +258,9 @@ class UiSkinPublicationTests(unittest.TestCase):
                 raise PermissionError("injected backup inspection failure")
             return lstat(path, *args, **kwargs)
 
-        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(generator.subprocess, "run", side_effect=convert_fixture), mock.patch.object(generator.os, "replace", side_effect=fail_publication), mock.patch.object(pathlib.Path, "lstat", autospec=True, side_effect=fail_backup_inspection):
+        with mock.patch.object(generator, "_generate_into", side_effect=generate_fixture), mock.patch.object(publisher.subprocess, "run", side_effect=convert_fixture), mock.patch.object(publisher.os, "replace", side_effect=fail_publication), mock.patch.object(pathlib.Path, "lstat", autospec=True, side_effect=fail_backup_inspection):
             with self.assertRaisesRegex(RuntimeError, "recovery files remain"):
-                generator.generate_and_publish(self.directory, pathlib.Path("converter"))
+                publisher.SkinPublisher(self.directory, pathlib.Path("converter"), generator._generate_into).publish()
         stages = list(self.directory.glob(".ui_skin_*"))
         self.assertEqual(len(stages), 1)
         self.assertTrue((stages[0] / "atlas.nwb.previous").is_file())

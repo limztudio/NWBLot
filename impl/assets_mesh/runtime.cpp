@@ -8,6 +8,10 @@
 #include "meshlet_triangle_visit.h"
 #include "meshlet_vertex_attributes.h"
 
+#include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
+#include <impl/assets_mesh/payload_validation.adhd.h>
+#include <impl/assets_mesh/mesh_binary_codec.adhd.h>
+
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
 
@@ -32,7 +36,7 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
         return false;
 
     Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
-    if(!DeserializeMeshAssetBinary(
+    if(!MeshBinaryCodec().deserialize(
         binary,
         candidate.m_positionStream,
         candidate.m_normalStream,
@@ -160,3 +164,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

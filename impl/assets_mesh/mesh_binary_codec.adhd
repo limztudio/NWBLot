@@ -1,0 +1,316 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/payload_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshBinaryCodec{
+    private void appendStreams(
+        in Span<f32x3u> positions,
+        in Span<f16x4u> normals,
+        in Span<f16x4u> tangents,
+        in Span<f32x2u> uv0,
+        in Span<f16x4u> colors,
+        in Span<MeshletDesc> meshlets,
+        in Span<MeshletBounds> meshletBounds,
+        in Span<u8> meshletPositionRefDeltas,
+        in Span<u8> meshletAttributeRefDeltas,
+        in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+        in Span<u8> meshletPrimitiveIndices,
+        in Span<u32> solidTriangleWords,
+        mut Vector<u8> outBinary
+    )const{
+        const MeshBinaryHeader header = MakeMeshBinaryHeader(
+            positions.size(),
+            normals.size(),
+            tangents.size(),
+            uv0.size(),
+            colors.size(),
+            meshlets.size(),
+            meshletBounds.size(),
+            meshletPositionRefDeltas.size(),
+            meshletAttributeRefDeltas.size(),
+            meshletLocalVertexRefs.size(),
+            meshletPrimitiveIndices.size()
+        );
+        AppendPOD(outBinary, header);
+        for(in f32x3u v : positions)
+            AppendPOD(outBinary, v);
+        for(in f16x4u v : normals)
+            AppendPOD(outBinary, v);
+        for(in f16x4u v : tangents)
+            AppendPOD(outBinary, v);
+        for(in f32x2u v : uv0)
+            AppendPOD(outBinary, v);
+        for(in f16x4u v : colors)
+            AppendPOD(outBinary, v);
+        for(in MeshletDesc v : meshlets)
+            AppendPOD(outBinary, v);
+        for(in MeshletBounds v : meshletBounds)
+            AppendPOD(outBinary, v);
+        for(in u8 v : meshletPositionRefDeltas)
+            outBinary.push_back(v);
+        for(in u8 v : meshletAttributeRefDeltas)
+            outBinary.push_back(v);
+        for(in MeshletLocalVertexRef v : meshletLocalVertexRefs)
+            AppendPOD(outBinary, v);
+        for(in u8 v : meshletPrimitiveIndices)
+            outBinary.push_back(v);
+        for(in u32 v : solidTriangleWords)
+            AppendPOD(outBinary, v);
+    }
+
+    private b8 validateStreamRange(
+        in Span<u8> binary,
+        in u64 count,
+        in usize elementBytes,
+        in usize maxCount,
+        in StringView label,
+        in usize cursor
+    )const{
+        if(count > cast<u64>(usize.max / elementBytes)){
+            error("Mesh::loadBinary failed: '{}' payload byte size overflows", label);
+            return false;
+        }
+        const usize valueCount = cast<usize>(count);
+        if(!CanReadBytes(binary, cursor, valueCount * elementBytes) || valueCount > maxCount){
+            error("Mesh::loadBinary failed: malformed '{}' payload", label);
+            return false;
+        }
+        return true;
+    }
+
+    private b8 readPositions(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x3u> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshPositionElementBytes, outValues.max_size(), "positions", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<f32x3u> item = ReadPOD<f32x3u>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readHalf4(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<f16x4u> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshHalf4ElementBytes, outValues.max_size(), label, inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<f16x4u> item = ReadPOD<f16x4u>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readUv0(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x2u> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshUv0ElementBytes, outValues.max_size(), "uv0", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<f32x2u> item = ReadPOD<f32x2u>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readMeshlets(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletDesc> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshletDescElementBytes, outValues.max_size(), "meshlets", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<MeshletDesc> item = ReadPOD<MeshletDesc>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readMeshletBounds(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletBounds> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshletBoundsElementBytes, outValues.max_size(), "meshlet bounds", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<MeshletBounds> item = ReadPOD<MeshletBounds>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readBytes(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<u8> outValues)const{
+        if(!this.validateStreamRange(binary, count, 1u, outValues.max_size(), label, inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i)
+            outValues.push_back(binary[inOutCursor + i]);
+        inOutCursor += valueCount;
+        return true;
+    }
+
+    private b8 readLocalVertexRefs(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletLocalVertexRef> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshletLocalVertexRefElementBytes, outValues.max_size(), "meshlet local vertex refs", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<MeshletLocalVertexRef> item = ReadPOD<MeshletLocalVertexRef>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    private b8 readSolidTriangleWords(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<u32> outValues)const{
+        if(!this.validateStreamRange(binary, count, s_MeshSolidTriangleWordElementBytes, outValues.max_size(), "solid triangle words", inOutCursor))
+            return false;
+        const usize valueCount = cast<usize>(count);
+        outValues.clear();
+        outValues.reserve(valueCount);
+        for(usize i = 0u; i < valueCount; ++i){
+            const Expected<u32> item = ReadPOD<u32>(binary, inOutCursor);
+            if(!item.has_value())
+                return false;
+            outValues.push_back(item.value());
+        }
+        return true;
+    }
+
+    public b8 deserialize(
+        in Span<u8> binary,
+        mut Vector<f32x3u> outPositions,
+        mut Vector<f16x4u> outNormals,
+        mut Vector<f16x4u> outTangents,
+        mut Vector<f32x2u> outUv0,
+        mut Vector<f16x4u> outColors,
+        mut Vector<MeshletDesc> outMeshlets,
+        mut Vector<MeshletBounds> outMeshletBounds,
+        mut Vector<u8> outMeshletPositionRefDeltas,
+        mut Vector<u8> outMeshletAttributeRefDeltas,
+        mut Vector<MeshletLocalVertexRef> outMeshletLocalVertexRefs,
+        mut Vector<u8> outMeshletPrimitiveIndices,
+        mut Vector<u32> outSolidTriangleWords
+    )const{
+        usize cursor = 0u;
+        const Expected<MeshBinaryHeader> headerResult = ReadPOD<MeshBinaryHeader>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("Mesh::loadBinary failed: malformed header");
+            return false;
+        }
+        const MeshBinaryHeader header = headerResult.value();
+        if(header.magic != s_MeshBinaryMagic){
+            error("Mesh::loadBinary failed: invalid mesh asset format; recook required");
+            return false;
+        }
+        if(!ValidateMeshBaseHeader(header))
+            return false;
+
+        if(
+            !this.readPositions(binary, header.positionCount, cursor, outPositions)
+            || !this.readHalf4(binary, header.normalCount, "normals", cursor, outNormals)
+            || !this.readHalf4(binary, header.tangentCount, "tangents", cursor, outTangents)
+            || !this.readUv0(binary, header.uv0Count, cursor, outUv0)
+            || !this.readHalf4(binary, header.colorCount, "colors", cursor, outColors)
+            || !this.readMeshlets(binary, header.meshletCount, cursor, outMeshlets)
+            || !this.readMeshletBounds(binary, header.meshletBoundCount, cursor, outMeshletBounds)
+            || !this.readBytes(binary, header.meshletPositionRefDeltaByteCount, "meshlet position ref deltas", cursor, outMeshletPositionRefDeltas)
+            || !this.readBytes(binary, header.meshletAttributeRefDeltaByteCount, "meshlet attribute ref deltas", cursor, outMeshletAttributeRefDeltas)
+            || !this.readLocalVertexRefs(binary, header.meshletLocalVertexRefCount, cursor, outMeshletLocalVertexRefs)
+            || !this.readBytes(binary, header.meshletPrimitiveIndexCount, "meshlet primitive indices", cursor, outMeshletPrimitiveIndices)
+            || !this.readSolidTriangleWords(binary, ComputeMeshSolidTriangleWordCount(header.meshletPrimitiveIndexCount), cursor, outSolidTriangleWords)
+        )
+            return false;
+
+        if(cursor != binary.size()){
+            error("Mesh::loadBinary failed: trailing bytes detected");
+            return false;
+        }
+        return true;
+    }
+
+    public b8 serialize(
+        in Span<f32x3u> positions,
+        in Span<f16x4u> normals,
+        in Span<f16x4u> tangents,
+        in Span<f32x2u> uv0,
+        in Span<f16x4u> colors,
+        in Span<MeshletDesc> meshlets,
+        in Span<MeshletBounds> meshletBounds,
+        in Span<u8> meshletPositionRefDeltas,
+        in Span<u8> meshletAttributeRefDeltas,
+        in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+        in Span<u8> meshletPrimitiveIndices,
+        in Span<u32> solidTriangleWords,
+        mut Vector<u8> outBinary
+    )const{
+        usize reserveBytes = s_MeshBinaryHeaderBytes;
+        const b8 canReserve =
+            AddBinaryRepeatedReserveBytes(reserveBytes, positions.size(), s_MeshPositionElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, normals.size(), s_MeshHalf4ElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, tangents.size(), s_MeshHalf4ElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, uv0.size(), s_MeshUv0ElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, colors.size(), s_MeshHalf4ElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, meshlets.size(), s_MeshletDescElementBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, meshletBounds.size(), s_MeshletBoundsElementBytes)
+            && AddBinaryReserveBytes(reserveBytes, meshletPositionRefDeltas.size())
+            && AddBinaryReserveBytes(reserveBytes, meshletAttributeRefDeltas.size())
+            && AddBinaryRepeatedReserveBytes(reserveBytes, meshletLocalVertexRefs.size(), s_MeshletLocalVertexRefElementBytes)
+            && AddBinaryReserveBytes(reserveBytes, meshletPrimitiveIndices.size())
+            && AddBinaryRepeatedReserveBytes(reserveBytes, solidTriangleWords.size(), s_MeshSolidTriangleWordElementBytes)
+            && CanStoreValueCount(outBinary, reserveBytes)
+        ;
+        if(!canReserve){
+            error("MeshAssetCodec::serialize failed: mesh payload byte size overflows");
+            return false;
+        }
+
+        outBinary.clear();
+        outBinary.reserve(reserveBytes);
+        this.appendStreams(
+            positions,
+            normals,
+            tangents,
+            uv0,
+            colors,
+            meshlets,
+            meshletBounds,
+            meshletPositionRefDeltas,
+            meshletAttributeRefDeltas,
+            meshletLocalVertexRefs,
+            meshletPrimitiveIndices,
+            solidTriangleWords,
+            outBinary
+        );
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

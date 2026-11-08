@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/material_instance_mutable_cache.h>
 #include <impl/assets_sampler/loader.h>
 #include <impl/assets_texture/loader.h>
 
@@ -48,7 +49,7 @@ public:
         : m_surfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , m_resourceState(arena)
         , m_pipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
-        , m_instanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
+        , m_instanceMutableCache(arena)
         , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 
@@ -69,7 +70,6 @@ public:
         m_loggedMaterialPaths.clear();
         m_instanceBufferCapacity = 0u;
         m_materialTypedBufferCapacity = 0u;
-        m_instanceMutableCacheComponentMutationVersion = 0u;
     }
 
 
@@ -86,11 +86,10 @@ public:
     HashMap<Name, MaterialSurfaceInfo, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, Core::Alloc::GlobalArena, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo> m_pipelines;
-    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_instanceMutableCache;
+    MaterialInstanceMutableCache m_instanceMutableCache;
     HashMap<Name, RenderPath::Enum, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
     usize m_instanceBufferCapacity = 0u;
     usize m_materialTypedBufferCapacity = 0u;
-    u64 m_instanceMutableCacheComponentMutationVersion = 0u;
 };
 
 

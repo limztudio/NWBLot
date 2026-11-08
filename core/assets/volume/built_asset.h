@@ -35,7 +35,6 @@ struct BuiltAssetPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 WriteBinaryFileIfChanged(const ::Path<Alloc::ScratchArena>& path, Span<const u8> bytes, b8 replaceDifferent, Vector<u8, Alloc::ScratchArena>& existing);
 [[nodiscard]] b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes);
 

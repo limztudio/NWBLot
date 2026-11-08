@@ -4,6 +4,8 @@
 
 #include "skin_asset.h"
 
+#include <impl/assets_mesh/skin_binary_codec.adhd.h>
+
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
@@ -39,7 +41,7 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 
 b8 Skin::loadBinary(const Span<const u8> binary){
     Skin candidate(m_influences.get_allocator().arena(), virtualPath());
-    if(!DeserializeSkinAssetBinary(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
+    if(!SkinBinaryCodec().deserialize(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
         return false;
     *this = Move(candidate);
     return true;

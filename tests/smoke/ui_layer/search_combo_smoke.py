@@ -29,6 +29,7 @@ LIT_FILTER_QUERY = "12"
 LIT_EXCLUSION_QUERY = "5"
 LIT_NO_RESULT_QUERY = "999999"
 LIT_EXACT_QUERY = "100000"
+LIT_SEARCH_COMBO_GRACEFUL_EXIT_TIMEOUT_SECONDS = 60.0
 
 
 class SearchComboRun(KeyedRun):
@@ -161,7 +162,7 @@ class SearchComboRun(KeyedRun):
 
 
 def run(args):
-    return run_keyed_fixture(args, fixture="SEARCH_COMBO", display_marker="UiSearchComboSmoke: display", driver_type=SearchComboRun, log_name="search_combo.log", label="UI searchable combo", window_label=LIT_COMBO, process_label=LIT_COMBO)
+    return run_keyed_fixture(args, fixture="SEARCH_COMBO", display_marker="UiSearchComboSmoke: display", driver_type=SearchComboRun, log_name="search_combo.log", label="UI searchable combo", window_label=LIT_COMBO, process_label=LIT_COMBO, graceful_exit_timeout=LIT_SEARCH_COMBO_GRACEFUL_EXIT_TIMEOUT_SECONDS)
 
 
 def main(argv):

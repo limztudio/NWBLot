@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_cpu_timing_smoke as smoke
+from reflection_cpu_timing_evidence import REQUIRED_GPU, ReflectionCpuTimingEvidence
 import smoke_cpu_gpu_timing as timing
 from window_capture_smoke import SmokeFailure
 
@@ -38,7 +39,7 @@ def native_log():
 
 def raw_publications():
     names = [(0, index, name) for index, name in enumerate(sorted(timing.REQUIRED_CPU))]
-    names += [(1, index, name) for index, name in enumerate(smoke.REQUIRED_GPU)]
+    names += [(1, index, name) for index, name in enumerate(REQUIRED_GPU)]
     lines = ["NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1", "window 80 190 100 210 33"]
     lines += [f"scope {domain} {index} 1 {name}" for domain, index, name in names]
     for interval in range(11):
@@ -51,11 +52,11 @@ def raw_publications():
 
 def replay(log=None, raw=None):
     log = native_log() if log is None else log
-    measurement = smoke.parse_runtime_log(log, CASE)
+    measurement = ReflectionCpuTimingEvidence.parse_runtime_log(log, CASE)
     with TemporaryDirectory() as directory:
         path = Path(directory) / smoke.RAW_NAME
         path.write_text(raw_publications() if raw is None else raw, encoding="utf-8")
-        return smoke.validate_publications(log, path, measurement)
+        return ReflectionCpuTimingEvidence.validate_publications(log, path, measurement)
 
 
 class ReflectionCpuTimingTests(unittest.TestCase):

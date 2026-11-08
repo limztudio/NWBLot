@@ -3,11 +3,11 @@
 
 
 #include "name_symbols.h"
+#include "name_symbol_document.h"
+#include "name_symbol_sidecars.h"
 
 #include <global/algorithm.h>
-#include <global/allocation_size.h>
 #include <global/arena_memory.h>
-#include <global/filesystem/directory_iterator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,54 +29,9 @@ using SymbolArena = Alloc::GlobalArena;
 using SymbolString = AString<SymbolArena>;
 using SymbolMap = ParallelHashMap<NameHash, SymbolString, SymbolArena>;
 
-struct SymbolRecordView{
-    NameHash hash = {};
-    NotNull<const SymbolString*> text;
-};
-
-inline constexpr char s_NamesymRecordSeparator = '\t';
-inline constexpr char s_NamesymRecordTerminator = '\n';
-inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
-inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
-inline constexpr usize s_NamesymEscapedCharBytes = 2u;
-inline constexpr AStringView s_NamesymEscapedBackslash = "\\\\";
-inline constexpr AStringView s_NamesymEscapedNewline = "\\n";
-inline constexpr AStringView s_NamesymEscapedCarriageReturn = "\\r";
-inline constexpr AStringView s_NamesymEscapedTab = "\\t";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename ArenaT>
-void AppendDebugHashText(AString<ArenaT>& outText, const NameHash& hash){
-    Array<char, s_DebugHashTextLength + 1u> hashText;
-    HashToDebugString(hashText.data(), hashText.size(), hash);
-    outText += AStringView(hashText.data(), s_DebugHashTextLength);
-}
-
-template<typename ArenaT>
-void AppendEscapedNamesymText(AString<ArenaT>& outText, const AStringView text){
-    for(const char ch : text){
-        switch(ch){
-        case '\\':
-            outText += s_NamesymEscapedBackslash;
-            break;
-        case '\n':
-            outText += s_NamesymEscapedNewline;
-            break;
-        case '\r':
-            outText += s_NamesymEscapedCarriageReturn;
-            break;
-        case '\t':
-            outText += s_NamesymEscapedTab;
-            break;
-        default:
-            outText += ch;
-            break;
-        }
-    }
-}
 
 class RuntimeRegistry final : NoCopy{
 public:
@@ -143,40 +98,15 @@ public:
 
     [[nodiscard]] b8 writeDefaultFile(){
         Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-        const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
-        if(!executableDirectory)
+        const auto outputPath = NameSymbolSidecars::DefaultPath(scratchArena);
+        if(!outputPath)
             return false;
-
-        const auto executableName = ::GetExecutableName(scratchArena);
-        if(!executableName)
-            return false;
-
-        ::Path<Alloc::ScratchArena> outputPath = *executableDirectory / *executableName;
-        outputPath.replaceExtension(NameSymbols::s_FileExtension);
-        return writeFile(outputPath, scratchArena);
+        return writeFile(*outputPath, scratchArena);
     }
 
     [[nodiscard]] b8 loadLine(const AStringView line, Alloc::ScratchArena& scratchArena){
-        if(line.empty())
-            return false;
-
-        const usize hashEnd = line.find(s_NamesymRecordSeparator);
-        if(hashEnd == AStringView::npos)
-            return false;
-
-        const usize sourceEnd = line.find(s_NamesymRecordSeparator, hashEnd + 1u);
-        if(sourceEnd == AStringView::npos)
-            return false;
-
-        const auto hash = DecodeDebugHashText(line.substr(0u, hashEnd));
-        if(!hash)
-            return false;
-
-        const auto unescapedText = unescapeNamesymText(line.substr(sourceEnd + 1u), scratchArena);
-        if(!unescapedText)
-            return false;
-
-        return insert(*hash, AStringView(*unescapedText));
+        auto record = NameSymbolDocument::Decode(line, scratchArena);
+        return record && insert(record->hash, AStringView(record->text.data(), record->text.size()));
     }
 
 
@@ -204,36 +134,15 @@ private:
     template<typename ArenaT>
     void appendFileText(Alloc::ScratchArena& scratchArena, AString<ArenaT>& outText)const{
         ScopedLock lock(m_mutex);
-        Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
+        Vector<NameSymbolDocumentView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
-            records.push_back(SymbolRecordView{ symbol.first, MakeNotNull(&symbol.second) });
+            records.push_back(NameSymbolDocumentView{ symbol.first, AStringView(symbol.second.data(), symbol.second.size()) });
 
-        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
+        Sort(records.begin(), records.end(), [](const NameSymbolDocumentView& lhs, const NameSymbolDocumentView& rhs)noexcept{
             return LessNameHash(lhs.hash, rhs.hash);
         });
-
-        usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
-        requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
-        for(const SymbolRecordView& record : records){
-            requiredSize = AddSize(requiredSize, s_DebugHashTextLength);
-            requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
-            for(const char ch : *record.text){
-                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? s_NamesymEscapedCharBytes : 1u;
-                requiredSize = AddSize(requiredSize, encodedSize);
-            }
-            requiredSize = AddSize(requiredSize, 1u);
-        }
-        outText.reserve(requiredSize);
-
-        outText += NameSymbols::s_FileHeader;
-        outText += s_NamesymProducerSuffix;
-        for(const SymbolRecordView& record : records){
-            AppendDebugHashText(outText, record.hash);
-            outText += s_NamesymRuntimeSource;
-            AppendEscapedNamesymText(outText, AStringView(record.text->data(), record.text->size()));
-            outText += s_NamesymRecordTerminator;
-        }
+        NameSymbolDocument::Append(Span<const NameSymbolDocumentView>(records.data(), records.size()), outText);
     }
 
     [[nodiscard]] b8 writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
@@ -241,44 +150,9 @@ private:
             return false;
         AString<Alloc::ScratchArena> fileText(scratchArena);
         appendFileText(scratchArena, fileText);
-        return ::WriteTextFileAtomic(path, AStringView(fileText.data(), fileText.size()));
+        return NameSymbolSidecars::Write(path, AStringView(fileText.data(), fileText.size()));
     }
 
-    [[nodiscard]] Expected<AString<Alloc::ScratchArena>> unescapeNamesymText(const AStringView text, Alloc::ScratchArena& scratchArena){
-        AString<Alloc::ScratchArena> unescapedText(scratchArena);
-        unescapedText.reserve(text.size());
-
-        for(usize i = 0u; i < text.size(); ++i){
-            const char ch = text[i];
-            if(ch != '\\'){
-                unescapedText += ch;
-                continue;
-            }
-
-            if((i + 1u) >= text.size())
-                return MakeUnexpected(Failure{});
-
-            const char escaped = text[++i];
-            switch(escaped){
-            case '\\':
-                unescapedText += '\\';
-                break;
-            case 'n':
-                unescapedText += '\n';
-                break;
-            case 'r':
-                unescapedText += '\r';
-                break;
-            case 't':
-                unescapedText += '\t';
-                break;
-            default:
-                return MakeUnexpected(Failure{});
-            }
-        }
-
-        return unescapedText;
-    }
 
 
 private:
@@ -379,43 +253,7 @@ b8 LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
 }
 
 Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
-    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-    const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
-    if(!executableDirectory)
-        return MakeUnexpected(DefaultFileLoadFailure{ executableDirectory.error(), false });
-
-    b8 loadedAny = false;
-    ErrorCode firstError;
-
-    const auto directory = ::DirectoryIterator<Alloc::ScratchArena>::Create(*executableDirectory);
-    if(!directory)
-        return MakeUnexpected(DefaultFileLoadFailure{ directory.error(), loadedAny });
-
-    for(const ::DirectoryEntry<Alloc::ScratchArena>& entry : *directory){
-        if(entry.path().extensionView() != s_FileExtension)
-            continue;
-
-        const auto isRegularFile = entry.isRegularFile();
-        if(!isRegularFile){
-            if(!firstError)
-                firstError = isRegularFile.error();
-            continue;
-        }
-        if(!*isRegularFile)
-            continue;
-
-        const auto loaded = LoadFile(entry.path(), scratchArena);
-        if(!loaded){
-            if(!firstError)
-                firstError = loaded.error();
-            continue;
-        }
-        loadedAny = *loaded || loadedAny;
-    }
-
-    if(firstError)
-        return MakeUnexpected(DefaultFileLoadFailure{ firstError, loadedAny });
-    return loadedAny;
+    return NameSymbolSidecars::LoadDefault();
 }
 
 

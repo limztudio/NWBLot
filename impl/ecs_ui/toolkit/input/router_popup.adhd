@@ -45,6 +45,23 @@ Expected<PopupDismissReason> TryConsumeRouterPopupDismissal(in PopupToken token,
     return makeUnexpected(Failure());
 }
 
+Expected<PopupDismissRequest> TryPrepareRouterPopupDismissal(
+    in Span<PopupRecord> popups,
+    in b8 canAppendDismissal,
+    in PopupDismissReason reason
+){
+    if(popups.empty() || !canAppendDismissal)
+        return makeUnexpected(Failure());
+    const PopupRecord top = popups.back();
+    if(!CanDismissPopupScope(top.scope, top.closing, reason))
+        return makeUnexpected(Failure());
+    PopupDismissRequest request;
+    request.expectedTop = top.scope.token;
+    request.reason = reason;
+    request.requested = true;
+    return request;
+}
+
 b8 TryDismissRouterPopup(
     in PopupDismissReason reason,
     mut Vector<PopupRecord> popups,
@@ -124,3 +141,4 @@ void RetireRouterCommandFocus(mut Vector<CommandSource> commandSources){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

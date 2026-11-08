@@ -9,6 +9,8 @@
 
 
 #include "bind_private.h"
+
+#include <impl/assets_material/bind_source_emitter.adhd.h>
 #include "cook_private.h"
 
 
@@ -50,7 +52,7 @@ static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const Mat
 
 Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEntry& entry, MaterialCookArena& arena, Core::Alloc::ScratchArena&){
     MaterialCookString source(arena);
-    if(!BuildMaterialBindIncludeSourceFromData(
+    if(!MaterialBindSourceEmitter{}.buildMaterialBindIncludeSourceFromData(
         AStringView(entry.source),
         AStringView(entry.virtualPath),
         entry.structs,

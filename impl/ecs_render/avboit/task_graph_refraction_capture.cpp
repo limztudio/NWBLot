@@ -3,6 +3,8 @@
 
 
 #include "task_graph_refraction_capture.h"
+#include "refraction_cap_builder.h"
+#include "refraction_capture_resources.h"
 #include "generated_geometry_reuse.h"
 
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
@@ -81,13 +83,13 @@ struct CaptureDrawTask{
         b8 resourcesReady = false;
         switch(payload.renderPath){
         case RenderPath::MeshShader:
-            resourcesReady = payload.materialSystem.meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.drawRecorder().meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         case RenderPath::VertexIndexed:
-            resourcesReady = payload.materialSystem.indexedMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.drawRecorder().indexedMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         case RenderPath::ComputeEmulation:
-            resourcesReady = payload.materialSystem.computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         default:
             return false;
@@ -112,46 +114,13 @@ struct CaptureDrawTask{
             payload.conservativeGeometryScissor
         };
         if(payload.generate)
-            payload.materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
+            payload.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
         else if(payload.renderPath == RenderPath::ComputeEmulation)
-            payload.materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
+            payload.materialSystem.drawRecorder().renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         else if(payload.renderPath == RenderPath::VertexIndexed)
-            payload.materialSystem.renderIndexedMaterialPassDrawItems(drawContext, drawItems);
+            payload.materialSystem.drawRecorder().renderIndexedMaterialPassDrawItems(drawContext, drawItems);
         else
-            payload.materialSystem.renderMeshMaterialPassDrawItems(drawContext, drawItems);
-        commandList.endRenderPass();
-        return true;
-    }
-};
-
-struct CaptureCapTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {Core::GpuQueueCapability::Graphics};
-
-
-public:
-    struct Payload{
-        RendererCsgSystem& csgSystem;
-        const DeferredFrameTargets& targets;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
-        Core::Rect workRect;
-        Vector<u32, Core::Alloc::GlobalArena> receiverIndices;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererCsgSystem& csgSystemIn, const DeferredFrameTargets& targetsIn)noexcept
-            : csgSystem(csgSystemIn)
-            , targets(targetsIn)
-            , receiverIndices(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        if(!payload.csgResources.refractionCapFillPipeline || !payload.csgResources.bindingValid() || !payload.targets.avboit.refractionFramebuffer || !payload.targets.bindless.slotsBufferDescriptor.valid() || payload.receiverIndices.empty())
-            return false;
-        commandList.endRenderPass();
-        payload.csgSystem.renderRefractionIntervalCaps(commandList, payload.targets, payload.csgResources, payload.workRect, payload.receiverIndices);
+            payload.materialSystem.drawRecorder().renderMeshMaterialPassDrawItems(drawContext, drawItems);
         commandList.endRenderPass();
         return true;
     }
@@ -270,8 +239,8 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const b8 hasCsg = !drawItems.csg.empty();
     if(
         !frameBindings.frameReady(instances.size(), typedBytes.size())
-        || !materialSystem.materialPassDrawResourcesReady(drawItems.regular, frameBindings)
-        || (hasCsg && (!csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !materialSystem.materialPassDrawResourcesReady(drawItems.csg, frameBindings)))
+        || !materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.regular, frameBindings)
+        || (hasCsg && (!csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.csg, frameBindings)))
     )
         return MakeUnexpected(Failure{});
 
@@ -303,25 +272,10 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const Core::GpuGraphResourceId slots = *slotsResult;
     const Core::GpuGraphResourceId opaqueDepth = *opaqueDepthResult;
 
-    const auto appendUpload = [&](const Name identity, const Core::GpuGraphResourceId destination, const void* bytes, const usize byteSize, const usize alignment){
-        if(!destination.valid() || !bytes || byteSize == 0u)
-            return false;
-        const auto blobResult = graph.copyUploadData(bytes, byteSize, alignment);
-        if(!blobResult)
-            return false;
-        const Core::GpuUploadBlobId blob = *blobResult;
-        Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Upload", dependency);
-        const auto producedTask = graph.addUploadBufferTask(desc, Core::GpuUploadBufferTaskDesc{ .source = blob, .destination = destination, .finalState = Core::ResourceStates::Common, });
-        if(!producedTask){
-            dependency = {};
-            return false;
-        }
-        dependency = *producedTask;
-        return true;
-    };
+    AvboitRefractionCaptureResources captureResources(graph, dependency);
     if(
-        !appendUpload(Name("render.refraction.capture.instances_upload"), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
-        || !appendUpload(Name("render.refraction.capture.material_upload"), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32))
+        !captureResources.appendUpload(Name("render.refraction.capture.instances_upload"), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
+        || !captureResources.appendUpload(Name("render.refraction.capture.material_upload"), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32))
     )
         return MakeUnexpected(Failure{});
 
@@ -333,42 +287,8 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     commonUses.push_back(ReadUse(slots, Core::ResourceStates::ConstantBuffer));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses{scratchArena};
-    if(hasCsg){
-        csgUses.reserve(s_RefractionCaptureCsgUseCapacity);
-        const auto clipContext = csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings);
-        if(!clipContext)
-            return MakeUnexpected(Failure{});
-        const auto rangesResult = ImportBuffer(graph, csgResources.receiverRanges);
-        const auto cuttersResult = ImportBuffer(graph, csgResources.cutters);
-        const auto clipResult = ImportBuffer(graph, csgResources.clipContextSlots);
-        const auto intervalResult = ImportBuffer(graph, csgResources.intervalSampleState);
-        if(
-            !intervalResult
-            || !rangesResult
-            || !appendUpload(Name("render.refraction.capture.csg_ranges_upload"), *rangesResult, csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData))
-            || !cuttersResult
-            || !appendUpload(Name("render.refraction.capture.csg_cutters_upload"), *cuttersResult, csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData))
-            || !clipResult
-            || !appendUpload(Name("render.refraction.capture.csg_context_upload"), *clipResult, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots))
-        )
-            return MakeUnexpected(Failure{});
-        const Core::GpuGraphResourceId interval = *intervalResult;
-        const Core::GpuGraphResourceId ranges = *rangesResult;
-        const Core::GpuGraphResourceId cutters = *cuttersResult;
-        const Core::GpuGraphResourceId clip = *clipResult;
-        csgUses.push_back(ReadBufferUse(ranges, Core::BufferRange(0u, csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData))));
-        csgUses.push_back(ReadBufferUse(cutters, Core::BufferRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData))));
-        csgUses.push_back(ReadUse(clip, Core::ResourceStates::ConstantBuffer));
-        csgUses.push_back(ReadUse(interval, Core::ResourceStates::ConstantBuffer));
-        const Array<ReferenceWrapper<const Core::TextureHandle>, 4u> intervalTextures = { targets.csgRemovedIntervalDepth, targets.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalData, targets.csgRemovedIntervalCount, };
-        for(const Core::TextureHandle& texture : intervalTextures){
-            const auto resourceResult = ImportTexture(graph, texture);
-            if(!resourceResult)
-                return MakeUnexpected(Failure{});
-            const Core::GpuGraphResourceId resource = *resourceResult;
-            csgUses.push_back(ReadTextureUse(resource, Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess));
-        }
-    }
+    if(hasCsg && !captureResources.appendCsg(csgSystem, targets, csgFrameData, csgResources, frameBindings, csgUses))
+        return MakeUnexpected(Failure{});
 
     if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems, frameBindings, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
@@ -440,38 +360,15 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         }
     }
     if(hasCsg){
-        if(!csgResources.refractionCapFillPipeline)
-            return MakeUnexpected(Failure{});
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-        uses.reserve(commonUses.size() + csgUses.size() + s_RefractionCaptureCapExtraUseCapacity);
-        uses.assign(commonUses.begin(), commonUses.end());
-        uses.insert(uses.end(), csgUses.begin(), csgUses.end());
-        uses.push_back(ReadUse(opaqueDepth));
-        uses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));
-        uses.push_back(ReadWriteUse(normalIor, Core::ResourceStates::RenderTarget));
-        uses.push_back(ReadWriteUse(tintCoverage, Core::ResourceStates::RenderTarget));
-        uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
-        uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
-        Core::GpuTaskDesc desc = TaskDesc(Name("render.refraction.capture.caps"), "Refraction Capture Caps", dependency);
-        desc.setResourceUses(uses);
-        if(sampledTextureSet->valid())
-            desc.setResourceSetUses({ &setUses[1], 1u });
-        CaptureCapTask::Payload payload{arena, csgSystem, targets};
-        payload.csgResources = csgResources;
-        payload.workRect = ToCoreRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height));
-        payload.receiverIndices.reserve(csgFrameData.receiverRanges.size());
-        for(usize receiverIndex = 0u; receiverIndex < csgFrameData.receiverRanges.size(); ++receiverIndex){
-            if(csgFrameData.receiverRanges[receiverIndex].cutterCount != 0u)
-                payload.receiverIndices.push_back(static_cast<u32>(receiverIndex));
-        }
-        if(payload.receiverIndices.empty())
-            return MakeUnexpected(Failure{});
-        const auto dependencyResult = graph.addTask<CaptureCapTask>(desc, Move(payload));
-        if(!dependencyResult){
-            dependency = {};
-            return MakeUnexpected(Failure{});
-        }
-        dependency = *dependencyResult;
+        const AvboitRefractionCapInputs capInputs{
+            scratchArena, graph, arena, csgSystem, targets, csgResources, csgFrameData,
+            commonUses, csgUses, opaqueDepth, depth, normalIor, tintCoverage, instance, specularRoughness,
+            sampledTextureSet->valid() ? &setUses[1] : nullptr, dependency
+        };
+        const auto capResult = AvboitRefractionCapBuilder::Declare(capInputs);
+        if(!capResult)
+            return MakeUnexpected(capResult.error());
+        dependency = *capResult;
     }
     const auto completionResult = finalize();
     if(!completionResult){

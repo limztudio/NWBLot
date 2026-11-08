@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
 #include "decl_parser.h"
 
 
@@ -59,7 +61,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 
     if(m_cursor.match(TokenType::Colon)){
         for(;;){
-            if(m_cursor.check(TokenType::Identifier) && ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
+            if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
                 m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd");
                 return nullptr;
             }
@@ -92,7 +94,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 }
 
 void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
-    while(m_cursor.check(TokenType::Identifier) && IsMethodQualifierKeyword(m_cursor.current().text)){
+    while(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsMethodQualifierKeyword(m_cursor.current().text)){
 #define NWB_ADHD_EXPORT_METHOD_QUALIFIER(adhdKeyword, declField, duplicateErrorMessage) \
         if(m_cursor.matchIdentifier(adhdKeyword)){ \
             if(method.declField) \
@@ -186,7 +188,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
     AccessSpecifier::Enum access = AccessSpecifier::None;
     if(m_cursor.check(TokenType::Identifier)){
-        access = ParseAccessSpecifierKeyword(m_cursor.current().text);
+        access = KeywordSemantics::ParseAccessSpecifierKeyword(m_cursor.current().text);
         if(access != AccessSpecifier::None)
             m_cursor.advance();
     }
@@ -196,13 +198,13 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         return false;
     }
     if(m_cursor.check(TokenType::Identifier)){
-        const MStringView prohibitedErr = FindProhibitedMemberKeywordError(m_cursor.current().text, false);
+        const MStringView prohibitedErr = KeywordSemantics::FindProhibitedMemberKeywordError(m_cursor.current().text, false);
         if(!prohibitedErr.empty()){
             m_cursor.error(prohibitedErr);
             return false;
         }
     }
-    if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
+    if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsNestedTypeKeyword(m_cursor.current().text, true)){
         m_cursor.error("nested type declarations inside a class are prohibited in adhd");
         return false;
     }
@@ -318,7 +320,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.advance();
         b8 isMethodSig = m_cursor.check(TokenType::RightParen) || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
         if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
-            if(!FindProhibitedTypeKeywordError(m_cursor.current().text).empty()){
+            if(!KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text).empty()){
                 isMethodSig = true;
             }
             else{

@@ -5,6 +5,7 @@
 #include "fixture_text_shaping.h"
 
 #include <impl/ecs_ui/toolkit/text/layout.h>
+#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
 
 #include <gtest/gtest.h>
 

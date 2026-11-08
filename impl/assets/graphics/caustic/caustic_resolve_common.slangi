@@ -1,0 +1,180 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CAUSTIC_RESOLVE_COMMON_SLANGI
+#define NWB_CAUSTIC_RESOLVE_COMMON_SLANGI
+
+
+#include "resolve_binding_slots.h"
+#include "splat_constants.slangi"
+#include "../bindless/bindless_heap_uint_array.slangi"
+#include "../scene/binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Spatial-only filtering avoids reprojection ghosts from non-rigid caustic motion.
+// Half-resolution a-trous resolve: prepare, wavelet, then edge-aware upsample.
+
+// Compile wavelet and upsample separately; preparation retains the original dynamic program's rounding behavior.
+// Large wavelet dilations use the direct variant without reserving the small-step shared-memory tile.
+#ifndef NWB_CAUSTIC_RESOLVE_COMPILED_STAGE
+#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select a resolve stage.
+#endif
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_WAVELET \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO
+#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select a supported resolve compilation.
+#endif
+
+struct NwbCausticResolvePushConstants{
+    // Must match CausticResolvePushConstants in C++; heap slots select every stage resource.
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
+    float causticIntensity;
+    uint stepWidth;
+    uint stage;
+    uint worldPositionSlot;
+    uint depthSlot;
+    uint inputColorSlot;
+    uint geometrySlot;
+    uint accumulatorSlot;
+    uint outputStorageSlot;
+    uint activityInputSlot;
+    uint activityOutputSlot;
+};
+
+[[vk::push_constant]] ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
+
+#define g_NwbCausticResolveOutput nwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
+
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH 1u
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP 1
+#elif NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH 2u
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP 2
+#else
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH max(g_NwbCausticResolvePushConstants.stepWidth, 1u)
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP
+#endif
+// The 5x5 kernel reaches two dilated steps on each side of the center tap.
+#define NWB_CAUSTIC_RESOLVE_KERNEL_TAP_COUNT 5
+#define NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS 2
+#define NWB_CAUSTIC_RESOLVE_KERNEL_SPAN 4
+#define NWB_CAUSTIC_RESOLVE_TILE_SIDE (NWB_CAUSTIC_RESOLVE_GROUP_SIZE + NWB_CAUSTIC_RESOLVE_KERNEL_SPAN * NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP)
+#define NWB_CAUSTIC_RESOLVE_TILE_TEXELS (NWB_CAUSTIC_RESOLVE_TILE_SIDE * NWB_CAUSTIC_RESOLVE_TILE_SIDE)
+
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+// Groupshared tile for small-dilation wavelet passes.
+groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+// Geometry cache is RGBA16F. Keep positions compact in LDS; widen only for the edge-stop math.
+groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   g_NwbCausticResolveTileActive;
+#endif
+
+static const half NWB_CAUSTIC_RESOLVE_VALID_THRESHOLD = 0.5h;
+static const float NWB_CAUSTIC_RESOLVE_MIN_PIXEL_AREA = 1e-4;
+static const float NWB_CAUSTIC_RESOLVE_MIN_PIXEL_SPACING = 1e-4;
+static const float NWB_CAUSTIC_RESOLVE_WAVELET_SIGMA_SCALE = 2.0;
+static const float NWB_CAUSTIC_RESOLVE_UPSAMPLE_SIGMA_SCALE = 3.0;
+static const uint NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES = 4u;
+// Small steps reach only adjacent tiles; large steps put each kernel tap in its own tile.
+static const uint NWB_CAUSTIC_RESOLVE_SMALL_STEP_ACTIVITY_SPAN = 3u;
+static const uint NWB_CAUSTIC_RESOLVE_LARGE_STEP_ACTIVITY_SPAN = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+half4 nwbCausticResolveGeometryAtHalf(const int2 halfTexel){
+    return half4(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)));
+}
+
+half3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
+    return nwbCausticResolveGeometryAtHalf(halfTexel).xyz;
+}
+
+bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
+    return nwbCausticResolveGeometryAtHalf(halfTexel).w > half(NWB_CAUSTIC_RESOLVE_VALID_THRESHOLD);
+}
+
+half3 nwbCausticResolveWorldAtFull(const int2 fullTexel){
+    return half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
+}
+
+// World-space area subtended by one half-resolution pixel.
+float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
+    const float3 center = float3(nwbCausticResolveWorldAtHalf(halfTexel));
+    const int2 right = int2(min(halfTexel.x + 1, (int)g_NwbCausticResolvePushConstants.halfWidth - 1), halfTexel.y);
+    const int2 down = int2(halfTexel.x, min(halfTexel.y + 1, (int)g_NwbCausticResolvePushConstants.halfHeight - 1));
+    const float3 dx = float3(nwbCausticResolveWorldAtHalf(right)) - center;
+    const float3 dy = float3(nwbCausticResolveWorldAtHalf(down)) - center;
+    return max(length(cross(dx, dy)), NWB_CAUSTIC_RESOLVE_MIN_PIXEL_AREA);
+}
+
+// 5x5 B-spline a-trous kernel.
+// Geometry-only edge stop: luminance is sparse-splat noise and must not gate filtering.
+static const half NWB_CAUSTIC_RESOLVE_KERNEL[NWB_CAUSTIC_RESOLVE_KERNEL_TAP_COUNT] = { half(1.0h / 16.0h), half(4.0h / 16.0h), half(6.0h / 16.0h), half(4.0h / 16.0h), half(1.0h / 16.0h) };
+
+groupshared uint g_NwbCausticResolveInputActivity;
+groupshared uint g_NwbCausticResolveOutputActivity;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
+    const uint step = NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
+    const bool smallStep = step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP;
+    if(g_NwbCausticResolvePushConstants.activityInputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT || (!smallStep && step % NWB_CAUSTIC_RESOLVE_GROUP_SIZE != 0u))
+        return false;
+    if(threadIndex == 0u)
+        g_NwbCausticResolveInputActivity = 0u;
+    GroupMemoryBarrierWithGroupSync();
+    // Small-step halos span at most the adjacent tile in each direction; large steps preserve tile residues.
+    const uint side = smallStep ? NWB_CAUSTIC_RESOLVE_SMALL_STEP_ACTIVITY_SPAN : NWB_CAUSTIC_RESOLVE_LARGE_STEP_ACTIVITY_SPAN;
+    if(threadIndex < side * side){
+        const uint2 tiles = (uint2(g_NwbCausticResolvePushConstants.halfWidth, g_NwbCausticResolvePushConstants.halfHeight) + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const int2 offset = (int2(threadIndex % side, threadIndex / side) - int2(side / 2u)) * (smallStep ? 1 : (int)(step / NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+        const int2 tile = int2(group) + offset;
+        if(all(tile >= int2(0, 0)) && all(tile < int2(tiles))){
+            const uint index = (uint)tile.y * tiles.x + (uint)tile.x;
+            if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load(index * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
+                InterlockedOr(g_NwbCausticResolveInputActivity, 1u);
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    return g_NwbCausticResolveInputActivity == 0u;
+}
+
+void nwbCausticResolvePublishActivity(const half3 color, const bool inBounds, const uint2 group, const uint threadIndex){
+    if(g_NwbCausticResolvePushConstants.activityOutputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT)
+        return;
+    if(threadIndex == 0u)
+        g_NwbCausticResolveOutputActivity = 0u;
+    GroupMemoryBarrierWithGroupSync();
+    // Keep the original FP32 nonzero check after the half result.
+    if(inBounds && any(float3(color) != float3(0.0)))
+        InterlockedOr(g_NwbCausticResolveOutputActivity, 1u);
+    GroupMemoryBarrierWithGroupSync();
+    if(threadIndex == 0u){
+        const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        g_NwbHeapStorageBuffers[g_NwbCausticResolvePushConstants.activityOutputSlot].Store((group.y * tilesX + group.x) * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES, g_NwbCausticResolveOutputActivity);
+    }
+}
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

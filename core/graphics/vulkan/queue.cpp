@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "queue_command_arena_statistics.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
@@ -80,74 +81,13 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateCommandBuffer(cons
     return getOrCreateWorkerCommandBuffer(recordingWorkerDomain, recordingWorkerIndex);
 }
 
-GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
-    const u64 directCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
-    const u64 explicitWorkerArenaCount = m_explicitWorkerArenaCount.load(MemoryOrder::relaxed);
-    const u64 currentCommandBufferCount = m_currentCommandBufferCount.load(MemoryOrder::relaxed);
-    const u64 commandPoolEpochCount = directCommandBufferCount + explicitWorkerArenaCount;
 
-    return GpuCommandArenaStatistics{
-        .workerArenaCount = explicitWorkerArenaCount + (directCommandBufferCount > 0u ? 1u : 0u),
-        .commandPoolEpochCount = commandPoolEpochCount,
-        .pendingCommandPoolEpochCount =
-            m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed)
-            + m_pendingWorkerEpochCount.load(MemoryOrder::relaxed),
-        .currentCommandBufferCount = currentCommandBufferCount,
-        .highWaterCommandBufferCount = m_highWaterCommandBufferCount.load(MemoryOrder::relaxed),
-        .reusableCommandBufferCount = m_reusableCommandBufferCount.load(MemoryOrder::relaxed),
-        .leasedCommandBufferCount = m_leasedCommandBufferCount.load(MemoryOrder::relaxed),
-        .pendingCommandBufferCount = m_pendingCommandBufferCount.load(MemoryOrder::relaxed),
-        .growthEventCount = m_commandBufferGrowthEventCount.load(MemoryOrder::relaxed),
-        .resetEventCount = m_commandBufferResetEventCount.load(MemoryOrder::relaxed),
-        .nativeHandleStorageLowerBoundBytes = commandPoolEpochCount * sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
-        .queue = m_physicalQueue,
-    };
+GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
+    return CommandArenaStatistics(*this).collect();
 }
 
 GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
-    if(recordingWorkerIndex == 0u){
-        if(recordingWorkerDomain != 0u)
-            return {};
-
-        const u64 currentCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
-        const u64 pendingCommandBufferCount = m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed);
-        return GpuCommandArenaWorkerStatistics{
-            .recordingWorkerDomain = 0u,
-            .commandPoolEpochCount = currentCommandBufferCount,
-            .pendingCommandPoolEpochCount = pendingCommandBufferCount,
-            .currentCommandBufferCount = currentCommandBufferCount,
-            .highWaterCommandBufferCount = m_directHighWaterCommandBufferCount.load(MemoryOrder::relaxed),
-            .reusableCommandBufferCount = m_directReusableCommandBufferCount.load(MemoryOrder::relaxed),
-            .leasedCommandBufferCount = m_directLeasedCommandBufferCount.load(MemoryOrder::relaxed),
-            .pendingCommandBufferCount = pendingCommandBufferCount,
-            .growthEventCount = m_directCommandBufferGrowthEventCount.load(MemoryOrder::relaxed),
-            .resetEventCount = m_directCommandBufferResetEventCount.load(MemoryOrder::relaxed),
-            .nativeHandleStorageLowerBoundBytes = currentCommandBufferCount * (sizeof(VkCommandPool) + sizeof(VkCommandBuffer)),
-            .queue = m_physicalQueue,
-            .recordingWorkerIndex = 0u,
-        };
-    }
-
-    const WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
-    if(!arena)
-        return {};
-    const u64 currentCommandBufferCount = arena->currentCommandBufferCount.load(MemoryOrder::relaxed);
-    const u64 pendingCommandBufferCount = arena->pendingCommandBufferCount.load(MemoryOrder::relaxed);
-    return GpuCommandArenaWorkerStatistics{
-        .recordingWorkerDomain = recordingWorkerDomain,
-        .commandPoolEpochCount = 1u,
-        .pendingCommandPoolEpochCount = pendingCommandBufferCount > 0u ? 1u : 0u,
-        .currentCommandBufferCount = currentCommandBufferCount,
-        .highWaterCommandBufferCount = arena->highWaterCommandBufferCount.load(MemoryOrder::relaxed),
-        .reusableCommandBufferCount = arena->reusableCommandBufferCount.load(MemoryOrder::relaxed),
-        .leasedCommandBufferCount = arena->leasedCommandBufferCount.load(MemoryOrder::relaxed),
-        .pendingCommandBufferCount = pendingCommandBufferCount,
-        .growthEventCount = arena->growthEventCount.load(MemoryOrder::relaxed),
-        .resetEventCount = arena->resetEventCount.load(MemoryOrder::relaxed),
-        .nativeHandleStorageLowerBoundBytes = sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
-        .queue = m_physicalQueue,
-        .recordingWorkerIndex = recordingWorkerIndex,
-    };
+    return CommandArenaStatistics(*this).collectWorker(recordingWorkerDomain, recordingWorkerIndex);
 }
 
 

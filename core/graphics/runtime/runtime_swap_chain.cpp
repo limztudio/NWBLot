@@ -48,17 +48,15 @@ Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
 
     m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
-    invalidateRenderPassResources();
+    m_renderPasses.invalidateResources();
     m_swapChainFramebuffers.clear();
 
-    for(const auto renderPass : m_renderPasses)
-        renderPass->backBufferResizing();
+    m_renderPasses.backBufferResizing();
     return Move(*ticket);
 }
 
 b8 GraphicsRuntime::backBufferResized(){
-    for(const auto renderPass : m_renderPasses)
-        renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    m_renderPasses.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
     const u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.clear();
@@ -68,16 +66,16 @@ b8 GraphicsRuntime::backBufferResized(){
         if(!framebufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
             m_swapChainFramebuffers.clear();
-            invalidateRenderPassResources();
+            m_renderPasses.invalidateResources();
             return false;
         }
         m_swapChainFramebuffers.push_back(Move(*framebufferResult));
     }
 
-    if(!validateRenderPassResources()){
+    if(!m_renderPasses.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: one or more render passes failed to validate resources after back buffer resize"));
         m_swapChainFramebuffers.clear();
-        invalidateRenderPassResources();
+        m_renderPasses.invalidateResources();
         return false;
     }
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
@@ -87,8 +85,7 @@ b8 GraphicsRuntime::backBufferResized(){
 void GraphicsRuntime::displayScaleChanged(){
     notifyPointerScaleChanged();
 
-    for(const auto renderPass : m_renderPasses)
-        renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
+    m_renderPasses.displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
 b8 GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height){

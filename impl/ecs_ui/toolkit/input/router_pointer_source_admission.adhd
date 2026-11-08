@@ -1,0 +1,173 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_target_staging.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RouterPointerSourceAdmission{
+    private void eraseSource(in usize index, mut Vector<PointerSource> pointerSources)const{
+        for(usize moveIndex = index + 1u; moveIndex < pointerSources.size(); ++moveIndex)
+            pointerSources[moveIndex - 1u] = pointerSources[moveIndex];
+        pointerSources.pop_back();
+    }
+
+    public void finishRelease(
+        in usize heldIndex,
+        in b8 primaryDown,
+        in b8 secondaryDown,
+        mut Vector<PointerSource> pointerSources,
+        mut InputSource inOutActivePointerSource
+    )const{
+        this.eraseSource(heldIndex, pointerSources);
+        if(!primaryDown && !secondaryDown)
+            inOutActivePointerSource = InputSource();
+    }
+
+    public b8 admitEvent(
+        in Span<HitTarget> targets,
+        in Span<TargetLookup> lookup,
+        in Span<PopupRecord> popups,
+        in InputEvent event,
+        in b8 primaryDown,
+        in b8 pointerSequenceConsumed,
+        in b8 secondarySequenceConsumed,
+        mut Point inOutPointer,
+        mut b8 inOutPointerKnown,
+        mut InputSource inOutHoverPointerSource,
+        mut HoverIdentity inOutHoverIdentity,
+        mut WidgetId inOutHover,
+        mut Vector<PointerSource> inOutPointerSources,
+        mut InputSource inOutActivePointerSource,
+        mut Point outInteractionPosition,
+        mut InputRoutingResult inOutResult,
+        mut b8 outHasHit,
+        mut HitTarget outHit,
+        mut usize outHeldIndex,
+        mut b8 outAdvanceHoverActivity
+    )const{
+        outHasHit = false;
+        outHit = HitTarget();
+        outHeldIndex = inOutPointerSources.size();
+        outAdvanceHoverActivity = false;
+        const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
+        const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+        b8 hitResolved = false;
+        if(event.hoverCapable){
+            const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+            outHasHit = hitIndex.has_value();
+            if(outHasHit)
+                outHit = targets[hitIndex.value()];
+            hitResolved = true;
+        }
+        ObserveRouterPointer(
+            targets,
+            lookup,
+            popups,
+            event,
+            outHasHit,
+            outHit,
+            inOutPointer,
+            inOutPointerKnown,
+            inOutHoverPointerSource,
+            inOutHoverIdentity,
+            inOutHover,
+            outAdvanceHoverActivity
+        );
+        PointerIntent intent = PointerIntent::Activate;
+        if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
+            intent = PointerIntent::ContextMenu;
+        const Expected<usize> heldFound = FindRouterPointerSourceIndex(inOutPointerSources, event.source, intent);
+        if(press){
+            if(heldFound.has_value()){
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSources[heldFound.value()].consumed;
+                return false;
+            }
+            if(inOutPointerSources.size() == s_InputMaxSources)
+                return false;
+            const b8 accepted = !event.repeat && AcceptsRouterPointerSource(inOutActivePointerSource, inOutPointerSources, event.source);
+            b8 consumed = false;
+            if(!event.repeat){
+                if(inOutActivePointerSource == event.source){
+                    if(primaryDown)
+                        consumed = pointerSequenceConsumed;
+                    else
+                        consumed = secondarySequenceConsumed;
+                }
+                else{
+                    if(!hitResolved){
+                        const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+                        outHasHit = hitIndex.has_value();
+                        if(outHasHit)
+                            outHit = targets[hitIndex.value()];
+                        hitResolved = true;
+                    }
+                    consumed = !popups.empty() || outHasHit;
+                }
+            }
+            PointerSource added;
+            added.source = event.source;
+            added.intent = intent;
+            added.consumed = consumed;
+            added.inert = !accepted;
+            inOutPointerSources.push_back(added);
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || consumed;
+            if(!accepted)
+                return false;
+            inOutActivePointerSource = event.source;
+            outHeldIndex = inOutPointerSources.size() - 1u;
+        }
+        else if(release){
+            if(!heldFound.has_value()){
+                if(!hitResolved){
+                    const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+                    outHasHit = hitIndex.has_value();
+                    if(outHasHit)
+                        outHit = targets[hitIndex.value()];
+                    hitResolved = true;
+                }
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || outHasHit;
+                return false;
+            }
+            const usize heldIndex = heldFound.value();
+            const PointerSource held = inOutPointerSources[heldIndex];
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || held.consumed;
+            if(held.inert || inOutActivePointerSource != event.source){
+                this.eraseSource(heldIndex, inOutPointerSources);
+                return false;
+            }
+            outHeldIndex = heldIndex;
+        }
+        else{
+            const Expected<usize> activationIndex = FindRouterPointerSourceIndex(inOutPointerSources, event.source, PointerIntent::Activate);
+            const Expected<usize> contextIndex = FindRouterPointerSourceIndex(inOutPointerSources, event.source, PointerIntent::ContextMenu);
+            const b8 activationInert = activationIndex.has_value() && inOutPointerSources[activationIndex.value()].inert;
+            const b8 contextInert = contextIndex.has_value() && inOutPointerSources[contextIndex.value()].inert;
+            const b8 blocked = activationInert || contextInert || !AcceptsRouterPointerSource(inOutActivePointerSource, inOutPointerSources, event.source);
+            if(blocked){
+                const b8 activationConsumed = activationIndex.has_value() && inOutPointerSources[activationIndex.value()].consumed;
+                const b8 contextConsumed = contextIndex.has_value() && inOutPointerSources[contextIndex.value()].consumed;
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || activationConsumed || contextConsumed;
+                return false;
+            }
+            if(!inOutActivePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)
+                return false;
+        }
+        if((press || release || event.type == InputEventType::PointerWheel) && !hitResolved){
+            const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+            outHasHit = hitIndex.has_value();
+            if(outHasHit)
+                outHit = targets[hitIndex.value()];
+            hitResolved = true;
+        }
+        inOutResult.pointerRouted = true;
+        outInteractionPosition = event.position;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

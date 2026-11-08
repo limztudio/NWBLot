@@ -85,13 +85,6 @@ namespace GlobalFilesystemDetail{
 inline constexpr usize s_InitialPathBufferCapacity = 256u;
 inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
 inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
-inline constexpr char s_StagedDirectoryPrefix = '.';
-inline constexpr AStringView s_StageDirectorySuffix = "_stage";
-inline constexpr AStringView s_BackupDirectorySuffix = "_backup";
-inline constexpr usize s_StageDirectorySuffixLength = s_StageDirectorySuffix.size();
-inline constexpr usize s_BackupDirectorySuffixLength = s_BackupDirectorySuffix.size();
-inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirectorySuffixLength;
-inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,23 +122,6 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-struct StagedDirectoryPaths{
-    Path<ArenaT> stageDirectory;
-    Path<ArenaT> backupDirectory;
-
-
-public:
-    explicit StagedDirectoryPaths(ArenaT& arena)noexcept(noexcept(decltype(stageDirectory)(arena)) && noexcept(decltype(backupDirectory)(arena)))
-        : stageDirectory(arena)
-        , backupDirectory(arena)
-    {}
 };
 
 
@@ -232,70 +208,6 @@ template<typename ArenaT>
     for(auto it = path.begin(); it != path.end(); ++it)
         ++depth;
     return depth;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutablePath(ArenaT& arena){
-#if defined(NWB_PLATFORM_WINDOWS)
-    constexpr usize s_MaxPathLength = 4096;
-    Array<tchar, s_MaxPathLength> executablePathBuffer = {};
-    const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer.data(), static_cast<DWORD>(s_MaxPathLength));
-    if(copiedLength == 0u)
-        return MakeUnexpected(LastSystemError());
-    if(copiedLength >= static_cast<DWORD>(s_MaxPathLength))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    return Path<ArenaT>(arena, TStringView(executablePathBuffer.data(), static_cast<usize>(copiedLength)));
-#elif defined(NWB_PLATFORM_LINUX)
-    const auto path = ReadSymlink(Path<ArenaT>(arena, "/proc/self/exe"));
-    if(!path)
-        return MakeUnexpected(path.error());
-    if(path->empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
-    return LexicallyNormal(*path);
-#else
-    return GetCurrentPath(arena);
-#endif
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutableDirectory(ArenaT& arena){
-    const auto executablePath = GetExecutablePath(arena);
-    if(!executablePath)
-        return MakeUnexpected(executablePath.error());
-    Path<ArenaT> result = executablePath->parentPath();
-    if(result.empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
-    return result;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Path<ArenaT> ResolveDefaultStorageDirectory(ArenaT& arena, const AStringView defaultDirectoryName){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / defaultDirectoryName;
-    return Path<ArenaT>(arena, defaultDirectoryName);
-}
-
-template<typename ArenaT, typename SourceArenaT>
-[[nodiscard]] inline Path<ArenaT> ResolveStorageDirectory(ArenaT& arena, const Path<SourceArenaT>& configuredStorageDirectory, const AStringView defaultDirectoryName){
-    if(!configuredStorageDirectory.empty())
-        return Path<ArenaT>(arena, configuredStorageDirectory);
-    return ResolveDefaultStorageDirectory(arena, defaultDirectoryName);
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutableName(ArenaT& arena){
-    const auto executablePath = GetExecutablePath(arena);
-    if(!executablePath)
-        return MakeUnexpected(executablePath.error());
-    Path<ArenaT> result = executablePath->stem();
-    if(result.empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
-    return result;
 }
 
 
@@ -462,98 +374,6 @@ template<typename ArenaT>
     }
 #else
     return error == ErrorCondition::too_many_symbolic_link_levels;
-#endif
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<b8, ErrorCode> AreSameExistingPath(const Path<ArenaT>& lhs, const Path<ArenaT>& rhs)noexcept{
-    if(lhs.empty() || rhs.empty())
-        return false;
-#if defined(NWB_PLATFORM_WINDOWS)
-    const HANDLE lhsHandle = CreateFile(
-        lhs.c_str(),
-        0u,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS,
-        nullptr
-    );
-    if(lhsHandle == INVALID_HANDLE_VALUE){
-        const ErrorCode lhsError = LastSystemError();
-        if(IsMissingOrInvalidPathLookupError(lhsError))
-            return false;
-        return MakeUnexpected(lhsError);
-    }
-    const HANDLE rhsHandle = CreateFile(
-        rhs.c_str(),
-        0u,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS,
-        nullptr
-    );
-    if(rhsHandle == INVALID_HANDLE_VALUE){
-        const ErrorCode rhsError = LastSystemError();
-        const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
-        const ErrorCode closeError = lhsClosed ? ErrorCode{} : LastSystemError();
-        if(IsMissingOrInvalidPathLookupError(rhsError)){
-            if(closeError)
-                return MakeUnexpected(closeError);
-            return false;
-        }
-        return MakeUnexpected(rhsError);
-    }
-
-    b8 same = false;
-    ErrorCode queryError;
-    FILE_ID_INFO lhsId = {};
-    FILE_ID_INFO rhsId = {};
-    if(
-        GetFileInformationByHandleEx(lhsHandle, FileIdInfo, &lhsId, sizeof(lhsId))
-        && GetFileInformationByHandleEx(rhsHandle, FileIdInfo, &rhsId, sizeof(rhsId))
-    ){
-        same = lhsId.VolumeSerialNumber == rhsId.VolumeSerialNumber
-            && NWB_MEMCMP(&lhsId.FileId, &rhsId.FileId, sizeof(lhsId.FileId)) == 0;
-    }
-    else{
-        BY_HANDLE_FILE_INFORMATION lhsInfo = {};
-        BY_HANDLE_FILE_INFORMATION rhsInfo = {};
-        if(GetFileInformationByHandle(lhsHandle, &lhsInfo) && GetFileInformationByHandle(rhsHandle, &rhsInfo)){
-            same = lhsInfo.dwVolumeSerialNumber == rhsInfo.dwVolumeSerialNumber
-                && lhsInfo.nFileIndexHigh == rhsInfo.nFileIndexHigh
-                && lhsInfo.nFileIndexLow == rhsInfo.nFileIndexLow;
-        }
-        else
-            queryError = LastSystemError();
-    }
-
-    const b8 rhsClosed = CloseHandle(rhsHandle) != 0;
-    const ErrorCode rhsCloseError = rhsClosed ? ErrorCode{} : LastSystemError();
-    const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
-    const ErrorCode lhsCloseError = lhsClosed ? ErrorCode{} : LastSystemError();
-    if(queryError)
-        return MakeUnexpected(queryError);
-    if(rhsCloseError)
-        return MakeUnexpected(rhsCloseError);
-    if(lhsCloseError)
-        return MakeUnexpected(lhsCloseError);
-    return same;
-#else
-    const auto lhsStat = GlobalFilesystemDetail::StatPath(lhs);
-    if(!lhsStat){
-        if(IsMissingOrInvalidPathLookupError(lhsStat.error()))
-            return false;
-        return MakeUnexpected(lhsStat.error());
-    }
-    const auto rhsStat = GlobalFilesystemDetail::StatPath(rhs);
-    if(!rhsStat){
-        if(IsMissingOrInvalidPathLookupError(rhsStat.error()))
-            return false;
-        return MakeUnexpected(rhsStat.error());
-    }
-    return lhsStat->st_dev == rhsStat->st_dev && lhsStat->st_ino == rhsStat->st_ino;
 #endif
 }
 

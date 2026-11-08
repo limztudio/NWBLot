@@ -36,11 +36,6 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<Core::GpuGraphResourceId> importBuffer(const Core::BufferHandle& buffer, AStringView label);
-    [[nodiscard]] Expected<Core::GpuGraphPipelineId> importComputePipeline(const Core::ComputePipelineHandle& pipeline, const Name identity, const AStringView label){
-        return m_graph.importComputePipeline(pipeline, Core::GpuGraphPipelineDesc{}.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphPipelineType::Compute));
-    }
-    [[nodiscard]] b8 importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
     [[nodiscard]] b8 declareUploadTask(
         const MeshSkinningRuntimeInstance& instance,
         AStringView identitySuffix,

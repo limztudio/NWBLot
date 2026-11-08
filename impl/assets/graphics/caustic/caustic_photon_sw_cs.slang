@@ -432,19 +432,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
+    const uint targetIndex = NwbCausticPhotonEmission.hashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticSwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredTemporalCell(photonIndex, g_NwbCausticSwPushConstants.gridSide, g_NwbCausticSwPushConstants.frameIndex, g_NwbCausticSwPushConstants.temporalPhaseCount);
+    const float2 cell = NwbCausticPhotonEmission.temporalCell(photonIndex, g_NwbCausticSwPushConstants.gridSide, g_NwbCausticSwPushConstants.frameIndex, g_NwbCausticSwPushConstants.temporalPhaseCount);
 
-    const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
+    const NwbCausticEmission emission = NwbCausticPhotonEmission.emitAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
-        emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticSwPushConstants.emissionTargetCount,
+    const NwbCausticPhoton photon = NwbCausticPhotonEmission.createPhoton(
+        emission, NwbCausticPhotonEmission.lightColor(light.colorIntensity), g_NwbCausticSwPushConstants.emissionTargetCount,
         g_NwbCausticSwPushConstants.photonCount, light.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX, light.position.xyz
     );
 

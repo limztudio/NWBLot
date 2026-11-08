@@ -3,6 +3,8 @@
 
 
 #include "mesh_system.h"
+#include "mesh_swbvh_bindings.h"
+#include "mesh_emulation_resources.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
@@ -27,133 +29,15 @@ NWB_IMPL_BEGIN
 
 
 b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
-    if(mesh.emulationVertexHeapHandle.valid())
-        return true;
-    if(!mesh.emulationVertexBuffer){
-        const Expected<ComputeEmulationLayout> layoutResult = TryResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
-        if(!layoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
-            return false;
-        }
-        const ComputeEmulationLayout& layout = *layoutResult;
-        const auto emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
-        if(!emulationVertexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
-            return false;
-        }
-
-        Core::BufferDesc emulationVertexBufferDesc;
-        emulationVertexBufferDesc
-            .setByteSize(layout.bufferByteSize)
-            .setStructStride(s_EmulatedVertexStride)
-            .setCanHaveRawViews(true)
-            .setCanHaveUAVs(true)
-            .setIsVertexBuffer(true)
-            .setIsIndexBuffer(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(*emulationVertexBufferName)
-        ;
-        auto emulationVertexBufferResult = m_graphics.createBuffer(emulationVertexBufferDesc);
-        if(emulationVertexBufferResult)
-            mesh.emulationVertexBuffer = Move(*emulationVertexBufferResult);
-        else
-            mesh.emulationVertexBuffer.reset();
-        if(!emulationVertexBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
-            return false;
-        }
-        mesh.emulationIndexByteOffset = layout.indexByteOffset;
-    }
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap"));
-        return false;
-    }
-    if(RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()), mesh.emulationVertexHeapHandle))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
-    return false;
+    return MeshEmulationResources{}.prepare(m_graphics, mesh);
 }
 
 b8 RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers){
-    if(m_meshState.m_frameBindings.matches(materialBuffers, m_meshState.m_meshViewBuffer))
-        return true;
-
-    if(!materialBuffers.valid() || !m_meshState.m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires instance, typed-material, and view buffers"));
-        return false;
-    }
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires the initialized global descriptor heap"));
-        return false;
-    }
-    const Expected<Core::GpuDescriptorHandle> instanceHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!instanceHandleResult)
-        return false;
-    const Core::GpuDescriptorHandle instanceHandle = *instanceHandleResult;
-    Core::GpuDescriptorRetirementGuard retireInstance(heap, instanceHandle);
-    const Expected<Core::GpuDescriptorHandle> materialTypedHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!materialTypedHandleResult)
-        return false;
-    const Core::GpuDescriptorHandle materialTypedHandle = *materialTypedHandleResult;
-    Core::GpuDescriptorRetirementGuard retireMaterialTyped(heap, materialTypedHandle);
-    const Expected<Core::GpuDescriptorHandle> viewHandleResult = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!viewHandleResult)
-        return false;
-    const Core::GpuDescriptorHandle viewHandle = *viewHandleResult;
-    Core::GpuDescriptorRetirementGuard retireView(heap, viewHandle);
-    const b8 registered =
-        heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
-        && heap.write(materialTypedHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get()))
-        && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
-    ;
-    if(!registered)
-        return false;
-
-    ECSRenderDetail::MeshFrameBindingSnapshot replacement = {
-        .instanceBuffer = materialBuffers.instanceBuffer,
-        .materialTypedBuffer = materialBuffers.materialTypedBuffer,
-        .meshView = { .buffer = m_meshState.m_meshViewBuffer, .heapHandle = viewHandle, },
-        .instanceHeapHandle = instanceHandle,
-        .materialTypedHeapHandle = materialTypedHandle,
-        .instanceBufferCapacity = materialBuffers.instanceBufferCapacity,
-        .materialTypedBufferCapacity = materialBuffers.materialTypedBufferCapacity,
-    };
-    ECSRenderDetail::MeshFrameBindingSnapshot retired = Move(m_meshState.m_frameBindings);
-    m_meshState.m_frameBindings = Move(replacement);
-    retireInstance.release();
-    retireMaterialTyped.release();
-    retireView.release();
-
-    // Keep retired buffers alive until descriptors enter deferred-reuse quarantine.
-    if(retired.instanceHeapHandle.valid())
-        heap.free(retired.instanceHeapHandle);
-    if(retired.materialTypedHeapHandle.valid())
-        heap.free(retired.materialTypedHeapHandle);
-    if(retired.meshView.heapHandle.valid())
-        heap.free(retired.meshView.heapHandle);
-
-    NWB_ASSERT(m_meshState.m_frameBindings.matches(materialBuffers, m_meshState.m_meshViewBuffer));
-    return true;
+    return m_meshState.m_frameBindings.prepare(m_graphics, materialBuffers, m_meshState.m_meshViewBuffer);
 }
 
 ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const noexcept{
-    const ECSRenderDetail::MeshFrameBindingSnapshot& bindings = m_meshState.m_frameBindings;
-    return {
-        .instanceBuffer = bindings.instanceBuffer,
-        .materialTypedBuffer = bindings.materialTypedBuffer,
-        .meshView = meshViewBufferSnapshot(),
-        .instanceHeapHandle = bindings.instanceHeapHandle,
-        .materialTypedHeapHandle = bindings.materialTypedHeapHandle,
-        .instanceBufferCapacity = bindings.instanceBufferCapacity,
-        .materialTypedBufferCapacity = bindings.materialTypedBufferCapacity,
-    };
+    return m_meshState.m_frameBindings.snapshot(m_meshState.m_meshViewBuffer);
 }
 
 void RendererMeshSystem::populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept{
@@ -216,17 +100,7 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
 }
 
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        if(m_meshState.m_frameBindings.instanceHeapHandle.valid())
-            heap.free(m_meshState.m_frameBindings.instanceHeapHandle);
-        if(m_meshState.m_frameBindings.materialTypedHeapHandle.valid())
-            heap.free(m_meshState.m_frameBindings.materialTypedHeapHandle);
-        if(m_meshState.m_frameBindings.meshView.heapHandle.valid())
-            heap.free(m_meshState.m_frameBindings.meshView.heapHandle);
-    }
-    m_meshState.m_frameBindings = {};
+    m_meshState.m_frameBindings.release(m_graphics);
 }
 
 b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
@@ -317,54 +191,7 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 }
 
 b8 RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
-    const auto inputsReady = [&mesh]()noexcept{
-        return
-            mesh.swBvhPositionHeapHandle.valid()
-            && mesh.swBvhPositionHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-            && mesh.swBvhTriangleIndexHeapHandle.valid()
-            && mesh.swBvhTriangleIndexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        ;
-    };
-    if(inputsReady())
-        return true;
-
-    NWB_ASSERT(!mesh.swBvhPositionHeapHandle.valid());
-    NWB_ASSERT(!mesh.swBvhTriangleIndexHeapHandle.valid());
-    if(!mesh.positionBuffer || !mesh.triangleIndexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no software-BVH position or triangle-index input"), ConvertString(mesh.meshName.resolvedText()));
-        return false;
-    }
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap for software-BVH inputs"), ConvertString(mesh.meshName.resolvedText()));
-        return false;
-    }
-
-    const auto registrationFailed = [&mesh](){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-BVH inputs for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
-        return false;
-    };
-    const Expected<Core::GpuDescriptorHandle> positionHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!positionHandleResult)
-        return registrationFailed();
-    const Core::GpuDescriptorHandle positionHandle = *positionHandleResult;
-    Core::GpuDescriptorRetirementGuard retirePosition(heap, positionHandle);
-    const Expected<Core::GpuDescriptorHandle> triangleIndexHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!triangleIndexHandleResult)
-        return registrationFailed();
-    const Core::GpuDescriptorHandle triangleIndexHandle = *triangleIndexHandleResult;
-    Core::GpuDescriptorRetirementGuard retireTriangleIndex(heap, triangleIndexHandle);
-    if(!heap.write(positionHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.positionBuffer.get())) || !heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.triangleIndexBuffer.get())))
-        return registrationFailed();
-
-    mesh.swBvhPositionHeapHandle = positionHandle;
-    mesh.swBvhTriangleIndexHeapHandle = triangleIndexHandle;
-    retirePosition.release();
-    retireTriangleIndex.release();
-    NWB_ASSERT(inputsReady());
-    return true;
+    return MeshSoftwareBvhBindings{}.ensure(m_graphics, mesh);
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

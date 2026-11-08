@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/sfnt_directory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FontBinaryCodec{
+    private FontBinaryHeader makeHeader(in u32 faceIndex, in u64 byteCount)const{
+        FontBinaryHeader header;
+        header.faceIndex = faceIndex;
+        header.byteCount = byteCount;
+        return header;
+    }
+
+    private b8 validHeader(in FontBinaryHeader header)const{
+        return
+            header.magic == s_FontBinaryMagic
+            && header.version == s_FontBinaryVersion
+            && header.faceIndex == 0u
+            && header.reserved == 0u
+        ;
+    }
+
+    private b8 validatePayloadHeader(in FontBinaryHeader header, in usize remainingBytes)const{
+        if(!this.validHeader(header)){
+            error("Font::loadBinary failed: unsupported version, flags, or face index; recook required");
+            return false;
+        }
+        if(header.byteCount == 0u || header.byteCount > cast<u64>(s_FontMaxSourceBytes)){
+            error("Font::loadBinary failed: source size must be 1..{} bytes", s_FontMaxSourceBytes);
+            return false;
+        }
+        if(header.byteCount != cast<u64>(remainingBytes)){
+            error("Font::loadBinary failed: truncated source bytes or trailing payload");
+            return false;
+        }
+        return true;
+    }
+
+    public void serialize(in u32 faceIndex, in Span<u8> fontBytes, mut Vector<u8> outBinary)const{
+        const FontBinaryHeader header = this.makeHeader(faceIndex, cast<u64>(fontBytes.size()));
+        outBinary.clear();
+        outBinary.reserve(s_FontBinaryHeaderBytes + fontBytes.size());
+        AppendPOD(outBinary, header);
+        for(in u8 byteValue : fontBytes)
+            outBinary.push_back(byteValue);
+    }
+
+    public b8 deserialize(in Span<u8> binary, mut Vector<u8> outFontBytes, mut u32 outFaceIndex)const{
+        usize cursor = 0u;
+        const Expected<FontBinaryHeader> headerResult = ReadPOD<FontBinaryHeader>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("Font::loadBinary failed: malformed header");
+            return false;
+        }
+        const FontBinaryHeader header = headerResult.value();
+        if(header.magic != s_FontBinaryMagic){
+            error("Font::loadBinary failed: invalid font asset format; recook required");
+            return false;
+        }
+        const usize remainingBytes = binary.size() - cursor;
+        if(!this.validatePayloadHeader(header, remainingBytes))
+            return false;
+
+        outFontBytes.clear();
+        outFontBytes.resize(remainingBytes);
+        for(usize i = 0u; i < remainingBytes; ++i)
+            outFontBytes[i] = binary[cursor + i];
+        outFaceIndex = header.faceIndex;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

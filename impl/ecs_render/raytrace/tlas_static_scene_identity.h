@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <core/graphics/api.h>
+
+
+NWB_IMPL_BEGIN
+
+
+class TlasStaticSceneIdentity final{
+public:
+    [[nodiscard]] static u64 compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
+
+private:
+    static void append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
+};
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

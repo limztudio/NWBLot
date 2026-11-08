@@ -9,6 +9,10 @@
 
 
 #include "cook_meshlets.h"
+
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
+#include <impl/assets_mesh/cook_meshlet_metrics.adhd.h>
+
 #include <global/algorithm.h>
 
 
@@ -229,3 +233,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

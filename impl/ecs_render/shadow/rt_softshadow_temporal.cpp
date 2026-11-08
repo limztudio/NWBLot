@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -73,8 +74,8 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Command
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedTemporalPipeline(){
+    auto& resolve = m_shadow.m_softShadowResolve;
     if(resolve.m_combinedTemporal.m_pipeline)
         return true;
     if(resolve.m_combinedTemporalFailed)

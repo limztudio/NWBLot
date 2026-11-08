@@ -12,6 +12,8 @@
 #include <core/task/cpu/scheduler.h>
 
 #include "command_buffer_resource_references.h"
+#include "timer_query_claim_journal.h"
+#include "accel_struct_build_journal.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
 #include "native_resource_provenance.h"
@@ -33,55 +35,6 @@ struct RetainedTextureStateCommit{
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
 };
-
-struct AccelStructGeometryBuildSignature{
-    VkDeviceSize vertexStride = 0u;
-    VkDeviceSize radiusStride = 0u;
-    VkDeviceSize indexStride = 0u;
-    VkGeometryTypeKHR geometryType = VK_GEOMETRY_TYPE_MAX_ENUM_KHR;
-    VkGeometryFlagsKHR geometryFlags = 0u;
-    u32 primitiveCount = 0u;
-    VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
-    VkFormat radiusFormat = VK_FORMAT_UNDEFINED;
-    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
-    u32 maxVertex = 0u;
-    VkRayTracingLssIndexingModeNV lssIndexingMode = VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
-    VkRayTracingLssPrimitiveEndCapsModeNV lssEndCapsMode = VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
-    b8 transformDataPresent = false;
-};
-
-struct AccelStructBottomLevelReferences{
-    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> resources;
-
-
-public:
-    explicit AccelStructBottomLevelReferences(Alloc::GlobalArena& arena)noexcept
-        : resources(arena)
-    {}
-};
-using AccelStructBottomLevelReferenceControl = RefCounter<AccelStructBottomLevelReferences>;
-using AccelStructBottomLevelReferenceHandle = RefCountPtr<AccelStructBottomLevelReferenceControl, ArenaRefDeleter<AccelStructBottomLevelReferenceControl, Alloc::GlobalArena>>;
-
-struct AccelStructBuildSignatureRole{
-    VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
-    VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
-    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> geometrySignatures;
-    AccelStructBottomLevelReferenceHandle bottomLevelReferences;
-    AccelStructBuildSignatureRole* nextRetiredRole = nullptr;
-
-
-public:
-    explicit AccelStructBuildSignatureRole(Alloc::GlobalArena& arena)noexcept
-        : geometrySignatures(arena)
-    {}
-};
-
-struct PendingAccelStructBuildCommit{
-    NotNull<AccelStruct*> accelStruct;
-    AccelStructBuildSignatureRole* preparedRole = nullptr;
-    AccelStructBuildSignatureRole* displacedRole = nullptr;
-};
-static_assert(IsTriviallyCopyable_V<PendingAccelStructBuildCommit>, "accepted acceleration-structure publication must remain scalar-only");
 
 struct PendingOpacityMicromapBuildCommit{
     NotNull<OpacityMicromap*> opacityMicromap;
@@ -108,31 +61,12 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>{
     friend class Queue;
     friend class StateTracker;
     friend class GpuDescriptorHeap;
+    friend class TimerQueryClaimJournal;
+    friend class AccelStructBuildJournal;
 
 
 private:
-    struct TimerQueryRecordingClaim{
-        NotNull<TimerQuery*> query;
-        GpuPhysicalQueueId queue;
-        QueueSubmissionToken resetAuthorizationSubmission;
-        QueueSubmissionToken prerequisiteSubmission;
-        u64 queryIncarnation = 0u;
-        u64 generation = 0u;
-        u64 resetRecordingAuthorizationGeneration = 0u;
-        u64 consumedResetAuthorizationGeneration = 0u;
-        u64 recordingID = 0u;
-        b8 prerequisiteObservedComplete = false;
-        b8 recordsReset = false;
-        b8 recordsBegin = false;
-        b8 recordsEnd = false;
-        b8 consumesResetAuthorization = false;
-    };
-
-    struct TimerQueryClaimOwnerMatches{
-        b8 resetOwnerMatches = false;
-        b8 beginOwnerMatches = false;
-        b8 endOwnerMatches = false;
-    };
+    using TimerQueryRecordingClaim = TimerQueryClaimJournal::Claim;
 
 
 public:
@@ -144,11 +78,9 @@ public:
         , m_referencedStagingBuffers(context.objectArena)
         , m_referencedDescriptorHeaps(context.objectArena)
         , m_retainedTextureStateCommits(context.objectArena)
-        , m_pendingAccelStructBuildCommits(context.objectArena)
-        , m_referencedTopLevelAccelStructs(context.objectArena)
-        , m_referencedBottomLevelReferenceSets(context.objectArena)
+        , m_accelStructJournal(*this, context.objectArena)
         , m_pendingOpacityMicromapBuildCommits(context.objectArena)
-        , m_timerQueryRecordingClaims(context.objectArena)
+        , m_timerQueryClaims(*this, context.objectArena)
         , m_ownsCmdPool(ownsCommandPool)
         , m_context(context)
         , m_queue(queue)
@@ -160,8 +92,6 @@ private:
     [[nodiscard]] Expected<void, VkResult> initialize(u32 queueFamilyIndex);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
-    [[nodiscard]] b8 recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
-    [[nodiscard]] TimerQueryClaimOwnerMatches resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept;
     [[nodiscard]] b8 validateTimerQueryRecordingClaims(const Queue& submissionQueue, Span<const QueueSubmissionWait> localWaits, Span<const NotNull<TrackedCommandBuffer*>> precedingCommandBuffers)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
@@ -179,7 +109,7 @@ private:
     [[nodiscard]] b8 validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void retainTopLevelAccelStruct(AccelStruct& accelStruct);
-    void retainBottomLevelReferenceSet(const AccelStructBottomLevelReferenceHandle& references);
+    [[nodiscard]] b8 hasRetainedTopLevelAccelStructs()const noexcept{ return m_accelStructJournal.hasRetainedTopLevelAccelStructs(); }
     void retainAcceptedTopLevelAccelStructReferences();
     void retainPendingTopLevelAccelStructReferences(const TrackedCommandBuffer& buildCommandBuffer);
     void abandonPendingAccelStructBuildCommits()noexcept;
@@ -199,11 +129,9 @@ private:
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<NotNull<GpuDescriptorHeap*>, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
-    Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
-    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_referencedTopLevelAccelStructs;
-    Vector<AccelStructBottomLevelReferenceHandle, Alloc::GlobalArena> m_referencedBottomLevelReferenceSets;
+    AccelStructBuildJournal m_accelStructJournal;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
-    Vector<TimerQueryRecordingClaim, Alloc::GlobalArena> m_timerQueryRecordingClaims;
+    TimerQueryClaimJournal m_timerQueryClaims;
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
     u64 m_descriptorBufferGeneration = 0u;
 

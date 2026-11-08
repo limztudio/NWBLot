@@ -39,17 +39,6 @@ public:
 );
 
 
-// Rewritten on primary Graphics after accepted skinning, then retained by all optical readers in this graph.
-// The explicit selector drain also orders preceding asynchronous optical readers.
-[[nodiscard]] Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinalize(
-    const RayTracingOpticalSceneSnapshot& resources,
-    Core::GpuGraphResourceId source,
-    Core::GpuTaskId priorReadersDrained,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

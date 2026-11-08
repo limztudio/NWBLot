@@ -30,7 +30,15 @@ NWB_VULKAN_BEGIN
 class Queue final : NoCopy{
     friend class CommandList;
     friend class Device;
+    friend class DeviceCrashDiagnostics;
     friend class TrackedCommandBuffer;
+    friend class TimerQueryClaimJournal;
+
+
+private:
+    class SubmissionValidator;
+    class DescriptorSubmission;
+    class CommandArenaStatistics;
 
 
 private:

@@ -33,7 +33,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShaderDefinePlanner;
+
 class ShaderCook : NoCopy{
+    friend class ShaderDefinePlanner;
 public:
     using CookArena = Core::Assets::CookArena;
     using CookString = Core::Assets::CookString;
@@ -234,10 +237,6 @@ public:
 public:
     [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
-
-    void mergeInheritedDefines(Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena, ShaderEntry& inOutEntry);
-
-    [[nodiscard]] b8 expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
 
 private:

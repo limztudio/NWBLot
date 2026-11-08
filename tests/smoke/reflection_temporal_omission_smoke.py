@@ -14,14 +14,12 @@ import sys
 import tempfile
 
 import reflection_benchmark as benchmark
+from reflection_temporal_omission_evidence import CAPS, VARIANT, ReflectionTemporalOmissionEvidence
 from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import window_capture_source_paths
-from renderer_ab_benchmark import binary_identity, runtime_identity
+from renderer_benchmark_identity import RendererBenchmarkIdentity
 
 LIT_VARIANT = "variant"
-LIT_UTF_8 = "utf-8"
-LIT_REPORTS = "reports"
-LIT_GPU_SAMPLES = "gpu_samples"
 LIT_COMPLETED_GPU_FRAMES = "completed_gpu_frames"
 LIT_TESTS_SMOKE = "tests/smoke"
 LIT_EXECUTABLE = "--executable"
@@ -42,58 +40,10 @@ LIT_REPORT_JSON = "report.json"
 LIT_MAIN = "__main__"
 
 
-CAPS = (1, 16)
-VARIANT = benchmark.Variant("hardware_temporal", "hardware", temporal=True)
-
-
-def hardware_unavailable_without_errors(text):
-    lines = text.replace("\r\n", "\n").splitlines()
-    if lines.count("ReflectionSmokeProject: hardware unavailable") != 1 \
-        or "ReflectionSmokeProject: hardware available" in lines:
-        return False
-    try:
-        benchmark.validate_expected_log_text(text, [], benchmark.STRICT_LOG_FAILURE_MESSAGES)
-    except benchmark.SmokeFailure:
-        return False
-    return True
-
-
-def hardware_skip_is_proven(error, log_path, cleanup_status):
-    acquisition_failure = str(error).startswith("GPU benchmark timed out:") \
-        or str(error) == "hardware was unavailable for a hardware benchmark route"
-    return acquisition_failure and cleanup_status.succeeded and log_path.is_file() \
-        and hardware_unavailable_without_errors(log_path.read_text(encoding=LIT_UTF_8))
-
-
-def validate_recording_evidence(trial, history_samples, symbols=None):
-    """Reparse retained evidence and reject cap-one work even outside the measured window."""
-    if history_samples not in CAPS or trial[LIT_VARIANT] != asdict(VARIANT):
-        raise benchmark.SmokeFailure("unexpected temporal omission proof configuration")
-    timing = Path(trial["artifacts"]) / "gpu_timing.txt"
-    reports = benchmark.parse_intervals(timing.read_text(encoding=LIT_UTF_8), symbols, finalized=True)
-    start, end = trial["retained_report_range"]
-    if not 0 <= start < end <= len(reports) or end - start != trial[LIT_REPORTS]:
-        raise benchmark.SmokeFailure("retained timing report range is inconsistent")
-    retained = benchmark.summarize_intervals(reports[start:end])
-    if retained != trial["scopes"]:
-        raise benchmark.SmokeFailure("raw timing reports differ from the retained trial summary")
-    benchmark.validate_coverage(retained, VARIANT, trial[LIT_REPORTS], 100, trial["mip_count"], history_samples)
-    frames = retained[benchmark.FRAME][LIT_GPU_SAMPLES]
-    # Require common control and presentation timing ranges alongside reflection kernels.
-    for scope in benchmark.OBSERVED_CONTROLS:
-        if abs(retained[scope][LIT_GPU_SAMPLES] - frames) > max(2, frames * .02):
-            raise benchmark.SmokeFailure("control scope coverage differs from completed GPU frames: " + scope)
-    all_temporal = sum(report[benchmark.TEMPORAL].gpu_samples for report in reports if benchmark.TEMPORAL in report)
-    if history_samples == 1 and all_temporal:
-        raise benchmark.SmokeFailure("cap-one temporal work appeared during warm-up, acquisition, or shutdown")
-    return {"history_samples": history_samples, LIT_COMPLETED_GPU_FRAMES: frames, "retained_temporal_ranges": retained.get(benchmark.TEMPORAL, {}).get(LIT_GPU_SAMPLES, 0), "all_completed_temporal_ranges": all_temporal, "finalized_reports": len(reports),
-        "expected_temporal_ranges_per_frame": int(history_samples > 1), "coverage_tolerance": "max(2 completed ranges, 2% of completed GPU frames)"}
-
-
 def source_identity(namesym):
     root = Path(__file__).resolve().parents[2]
     files = {Path(__file__).resolve(), *window_capture_source_paths()}
-    for module in ("reflection_benchmark", "renderer_ab_benchmark", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
+    for module in ("reflection_benchmark", "reflection_workload_qualification", "reflection_gpu_coverage", "reflection_temporal_omission_evidence", "gpu_timing_evidence", "renderer_benchmark_identity", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
         files.add(Path(sys.modules[module].__file__).resolve())
     for relative in ("impl/ecs_render/reflection", "impl/assets/graphics/reflection"):
         files.update(path for path in (root / relative).rglob("*") if path.is_file())
@@ -119,7 +69,7 @@ def run(args):
     benchmark.write_status("Temporal omission proof artifacts: " + str(output))
     trials = []
     try:
-        frozen = {LIT_BINARIES: binary_identity(args.executable), LIT_RUNTIME: runtime_identity(args.working_directory), LIT_LOGSERVER: benchmark.file_identity(args.logserver_executable), LIT_SOURCE: source_identity(args.namesym)}
+        frozen = {LIT_BINARIES: RendererBenchmarkIdentity.binary_identity(args.executable), LIT_RUNTIME: RendererBenchmarkIdentity.runtime_identity(args.working_directory), LIT_LOGSERVER: benchmark.file_identity(args.logserver_executable), LIT_SOURCE: source_identity(args.namesym)}
         executable_identity = benchmark.file_identity(args.executable)
         symbols = benchmark.load_name_symbols(args.namesym, benchmark.KNOWN_SCOPES)
         plan = {"purpose": "native temporal recording omission and active-history control; no timing inference", LIT_EXECUTABLE_2: str(args.executable), LIT_WORKING_DIRECTORY_2: str(args.working_directory),
@@ -130,7 +80,7 @@ def run(args):
         benchmark.write_json(output / "plan.json", plan)
 
         def verify_frozen():
-            actual = {LIT_BINARIES: binary_identity(args.executable), LIT_RUNTIME: runtime_identity(args.working_directory), LIT_LOGSERVER: benchmark.file_identity(args.logserver_executable), LIT_SOURCE: source_identity(args.namesym)}
+            actual = {LIT_BINARIES: RendererBenchmarkIdentity.binary_identity(args.executable), LIT_RUNTIME: RendererBenchmarkIdentity.runtime_identity(args.working_directory), LIT_LOGSERVER: benchmark.file_identity(args.logserver_executable), LIT_SOURCE: source_identity(args.namesym)}
             if actual != frozen:
                 raise benchmark.SmokeFailure("source, executable, dependency, authored asset, symbol, or logserver identity changed")
 
@@ -144,14 +94,14 @@ def run(args):
                 trial = benchmark.run_trial(acquisition, VARIANT, 0, position, symbols, executable_identity, cleanup_status=cleanup_status)
             except benchmark.SmokeFailure as error:
                 log_path = output / f"block_00_{position:02d}_{VARIANT.name}" / "runtime.log"
-                if hardware_skip_is_proven(error, log_path, cleanup_status):
+                if ReflectionTemporalOmissionEvidence.hardware_skip_is_proven(error, log_path, cleanup_status):
                     verify_frozen()
                     raise benchmark.SmokeSkip("hardware ray queries are unavailable; temporal omission requires the hardware route") from error
                 raise
             verify_frozen()
             trials.append(trial)
             benchmark.write_json(output / "trials.json", trials)
-            evidence.append(validate_recording_evidence(trial, cap, symbols))
+            evidence.append(ReflectionTemporalOmissionEvidence.validate_recording_evidence(trial, cap, symbols))
         benchmark.write_json(output / LIT_REPORT_JSON, {"passed": True, "plan": plan, "evidence": evidence, LIT_COMPLETED_GPU_FRAMES: sum(item[LIT_COMPLETED_GPU_FRAMES] for item in evidence),
             "interpretation": "Cap one omitted all completed temporal ranges; cap sixteen retained expected coverage after warm-up. No speed comparison was performed."})
         benchmark.write_status("Temporal omission proof passed: " + str(output / LIT_REPORT_JSON))

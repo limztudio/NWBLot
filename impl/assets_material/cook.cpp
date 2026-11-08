@@ -11,6 +11,9 @@
 #include "cook.h"
 #include "cook_private.h"
 
+#include <impl/assets_material/layout_validation.adhd.h>
+#include <impl/assets_material/material_binary_writer.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -101,7 +104,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     const Material& material = static_cast<const Material&>(asset);
     if(!material.validatePayload(s_SerializeFailureContext, s_MaterialSerializeContextText))
         return false;
-    return SerializeMaterialBinaryPayload(
+    return MaterialBinaryWriter().serialize(
         AStringView(material.shaderVariant()),
         material.materialInterface(),
         material.typedLayoutHash(),

@@ -4,6 +4,7 @@
 
 #include "material_system.h"
 
+#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
@@ -194,34 +195,7 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const ECSRend
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
 }
 
-b8 RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const Span<const MaterialPassDrawItem> drawItems, const b8 computeEmulation)noexcept{
-    if(drawItems.empty())
-        return true;
 
-    b8 ready = true;
-    for(const MaterialPassDrawItem& drawItem : drawItems){
-        if(!ready)
-            break;
-
-        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-
-        if(!computeEmulation){
-            ready = pipelineResources.meshletPipeline && mesh.valid();
-            continue;
-        }
-
-        ready = pipelineResources.computePipeline
-            && pipelineResources.emulationPipeline
-            && mesh.valid()
-            && mesh.emulationVertexBuffer
-            && mesh.emulationVertexHeapHandle.valid()
-            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-            && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
-        ;
-    }
-    return ready;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

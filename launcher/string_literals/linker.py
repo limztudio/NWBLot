@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 if __package__:
-    from .compiler import driver_response_quoting, expand_response_files, run_tool
+    from .response_file import ResponseFileTool
 else:
-    from compiler import driver_response_quoting, expand_response_files, run_tool
+    from response_file import ResponseFileTool
 
 
 MAIN_ENTRY = "__main__"
@@ -26,7 +26,7 @@ LINK_INPUT_SUFFIXES = {".o", ".obj", ".a", ".lib", ".so", ".dylib", ".bc", ".lo"
 
 
 def order_runtime_object(arguments: Sequence[str], runtime_object: Path, quoting: Optional[str] = None) -> list[str]:
-    expanded = expand_response_files(arguments, quoting)
+    expanded = ResponseFileTool.expand_response_files(arguments, quoting)
     expected = os.path.normcase(str(runtime_object.resolve()))
     matches = []
     inputs = []
@@ -69,13 +69,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise ValueError(f"Runtime object does not exist: {options.runtime_object}")
         wrapped = Path(command[0]).stem.lower() == "cmake"
         tool = command[command.index("--") + 1] if wrapped else command[0]
-        arguments = order_runtime_object(command[1:], options.runtime_object, driver_response_quoting(tool, command[1:]))
+        arguments = order_runtime_object(command[1:], options.runtime_object, ResponseFileTool.driver_response_quoting(tool, command[1:]))
         with tempfile.TemporaryDirectory(prefix="nwb_literal_link_") as temporary:
             if wrapped:
                 separator = arguments.index("--")
-                result = run_tool(arguments[separator + 1:], Path(temporary) / LINK_RESPONSE_NAME, [command[0], *arguments[:separator + 1]])
+                result = ResponseFileTool.run_tool(arguments[separator + 1:], Path(temporary) / LINK_RESPONSE_NAME, [command[0], *arguments[:separator + 1]])
                 return result.returncode
-            return run_tool([command[0], *arguments], Path(temporary) / LINK_RESPONSE_NAME).returncode
+            return ResponseFileTool.run_tool([command[0], *arguments], Path(temporary) / LINK_RESPONSE_NAME).returncode
     except (OSError, ValueError) as error:
         print(f"String-literal linker: {error}", file=sys.stderr)
         return 1

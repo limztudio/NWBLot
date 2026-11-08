@@ -6,6 +6,7 @@
 
 
 #include "text_area.h"
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd.h>
 #include <impl/ecs_ui/toolkit/context.h>
 
 

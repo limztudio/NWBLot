@@ -3,6 +3,7 @@
 
 
 #include "reflection_csg_context_probe.h"
+#include "smoke_capture_factory.h"
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/module.h>
@@ -117,9 +118,20 @@ void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
         NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
         NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
-        , sourceFrame, planGeneration, primaryGraphics.deviceGeneration, primaryGraphics.index, runtimePresent ? 1u : 0u
-        , rayCapacity, expectedSlices, hardwareNodes, indexedSlices, compiledNodes, uniquePackets.size()
-        , acceptedPackets, singleTaskPackets, graphicsPackets
+        , sourceFrame
+        , planGeneration
+        , primaryGraphics.deviceGeneration
+        , primaryGraphics.index
+        , runtimePresent ? 1u : 0u
+        , rayCapacity
+        , expectedSlices
+        , hardwareNodes
+        , indexedSlices
+        , compiledNodes
+        , uniquePackets.size()
+        , acceptedPackets
+        , singleTaskPackets
+        , graphicsPackets
     );
 }
 
@@ -149,7 +161,7 @@ b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     if(!scene)
         return false;
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
-    auto series = PrepareSmokeCaptureSeries(*output, 5u, options, m_context);
+    auto series = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).prepareSeries(*output, 5u, options);
     if(!series)
         return false;
     m_capturePaths = Move(series->paths);

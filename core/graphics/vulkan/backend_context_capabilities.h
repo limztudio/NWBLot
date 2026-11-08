@@ -53,10 +53,13 @@ struct PhysicalDeviceFeatureSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] RequiredQueueFamilySelection SelectRequiredQueueFamilies(Span<const VkQueueFamilyProperties> queueFamilies, b8 enableAsyncComputeLane, b8 enableDedicatedTransferQueue)noexcept;
-[[nodiscard]] b8 HasDeviceExtension(Span<const VkExtensionProperties> extensions, AStringView extensionName)noexcept;
-void QueryPhysicalDeviceFeatureSupport(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept;
-[[nodiscard]] AStringView FindMissingMandatoryPhysicalDeviceFeature(const PhysicalDeviceFeatureSupport& support)noexcept;
+class PhysicalDeviceCapabilities{
+public:
+    [[nodiscard]] static RequiredQueueFamilySelection selectQueueFamilies(Span<const VkQueueFamilyProperties> queueFamilies, b8 enableAsyncComputeLane, b8 enableDedicatedTransferQueue)noexcept;
+    [[nodiscard]] static b8 hasExtension(Span<const VkExtensionProperties> extensions, AStringView extensionName)noexcept;
+    static void queryFeatureSupport(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept;
+    [[nodiscard]] static AStringView findMissingFeature(const PhysicalDeviceFeatureSupport& support)noexcept;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

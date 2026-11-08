@@ -17,6 +17,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_frame PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/linux.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/linux_x11.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux_x11_keyboard.cpp"
     )
     target_link_libraries(nwb_frame PRIVATE nwb::x11)
 

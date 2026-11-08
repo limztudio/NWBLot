@@ -3,7 +3,9 @@ set(NWB_CRASH_HANDLER_OUTPUT_NAME "crash_handler")
 target_compile_definitions(nwb_crash PRIVATE NWB_CRASH_HANDLER_EXECUTABLE_NAME="${NWB_CRASH_HANDLER_OUTPUT_NAME}")
 target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/diagnostic_capture_policy.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/request.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/protocol.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/spool.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
@@ -15,10 +17,12 @@ target_sources(nwb_crash PRIVATE
 if(WIN32)
     target_sources(nwb_crash PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/platform_win32.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/platform_win32_transport.cpp"
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_sources(nwb_crash PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/platform_posix.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/posix_callstack_capture.cpp"
     )
 endif()
 target_link_libraries(nwb_crash PUBLIC nwb_alloc)

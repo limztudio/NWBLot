@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "renderer_internal.h"
+#include "image_resources.h"
 
 #include <core/common/log.h>
 
@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuImageResources::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& pages = snapshot.sdfPages();
@@ -32,17 +32,17 @@ b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     return true;
 }
 
-Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page){
-    for(usize index = 0u; index < m_sdfCache.size(); ++index){
-        const auto& existing = m_sdfCache[index];
+Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page){
+    for(usize index = 0u; index < m_imageCache.sdfs().size(); ++index){
+        const auto& existing = m_imageCache.sdfs()[index];
         if(!SameSdfAtlasPageKey(existing->m_page->binding(), page->binding()))
             continue;
         if(!(existing->m_page->binding() == page->binding()))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuSdfAtlasVersion> reused = existing;
-        m_sdfCache.erase(m_sdfCache.begin() + static_cast<isize>(index));
-        m_sdfCache.push_back(reused);
-        if(!PrepareGpuSampledImageDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
+        m_imageCache.sdfs().erase(m_imageCache.sdfs().begin() + static_cast<isize>(index));
+        m_imageCache.sdfs().push_back(reused);
+        if(!GpuSampledTextures::prepareDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -69,7 +69,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
-    if(!CreateAndUploadGpuPageTexture(
+    if(!GpuSampledTextures::createAndUploadPage(
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuSdfPageTextureName,
@@ -86,16 +86,16 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         return MakeUnexpected(Failure{});
     // Native accepted upload commands retain their destination image until the physical queue completes.
     // Frame owners retain sampled descriptors; cache eviction therefore releases neither a live image nor a live draw view.
-    if(m_sdfCache.size() + m_glyphCache.size() + m_textureCache.size() == s_PaintMaxImages)
-        evictImageCacheEntry();
-    m_sdfCache.push_back(version);
+    if(m_imageCache.sdfs().size() + m_imageCache.glyphs().size() + m_imageCache.textures().size() == s_PaintMaxImages)
+        m_imageCache.evict();
+    m_imageCache.sdfs().push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
-    if(!PrepareGpuSampledImageDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
+    if(!GpuSampledTextures::prepareDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
 
-b8 GpuRendererState::prepareSdfPages(GpuFrameData& frame){
+b8 GpuImageResources::prepareSdfPages(GpuFrameData& frame){
     const auto& pages = frame.m_snapshot.sdfPages();
     frame.m_sdfPages.reserve(pages.size());
     Core::Alloc::ScratchArena scratchArena(s_GpuSdfUploadArenaName);
@@ -108,7 +108,7 @@ b8 GpuRendererState::prepareSdfPages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuSampledGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
@@ -116,7 +116,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareSdfPages(Core::GpuTa
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        const auto texture = ImportGpuSampledTexture(
+        const auto texture = GpuSampledTextures::importTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuSdfPageReadyPrefix,
                 .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,

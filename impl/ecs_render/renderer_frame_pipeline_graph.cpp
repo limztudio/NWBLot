@@ -96,9 +96,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources = m_raytracingSystem.snapshotSurfelPersistentResources();
 
     m_deferredFrameTimingBeginTask = {};
-    resetShadowPrepareTaskState();
-    m_graphicsPrefixCsgIntervalClearFirstTask = {};
-    m_graphicsPrefixCsgIntervalClearTask = {};
+    m_shadowPrepareGraph.resetShadowPrepareTaskState();
+    m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask = {};
+    m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask = {};
     resetDeferredFrameTaskIdsAndFlags();
     resetDeferredTaskGraphRuntime();
     // Declaration runs between artifact discard and execution-time compilation.
@@ -198,7 +198,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId avboitForegroundColor = deferredGraphResources->avboitForegroundColor;
     const Core::GpuGraphResourceId avboitForegroundExtinction = deferredGraphResources->avboitForegroundExtinction;
 
-    if(!declareDeferredShadowPrepareTask(
+    const ShadowPrepareGraphContext shadowPrepareContext{
+        .graph = m_deferredLightingTaskGraph,
+        .graphics = m_graphics,
+        .mesh = m_meshSystem,
+        .rayTracing = m_raytracingSystem,
+        .persistentState = m_shadowPreparePersistentState,
+    };
+    if(!m_shadowPrepareGraph.declareDeferredShadowPrepareTask(
+        shadowPrepareContext,
         rayTracingShadowResources,
         rayTracingGraphResources,
         currentBindlessSlots,
@@ -213,7 +221,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
-    const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareAccelStructFinalizeTask.valid() ? m_deferredShadowPrepareAccelStructFinalizeTask : m_deferredShadowPrepareTask;
+    const Core::GpuTaskId shadowPrepareHandoffTask = m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask.valid() ? m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask : m_shadowPrepareGraph.m_deferredShadowPrepareTask;
 
     const MeshViewBufferUpload meshViewUpload = m_meshSystem.prepareMeshViewBufferUpload(meshViewAspectRatio);
     const MeshViewGpuData& meshViewState = meshViewUpload.viewState;
@@ -222,7 +230,19 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ReflectionSceneContentStamp reflectionContentStamp;
     reflectionContentStamp.view = ComputeFnv64Bytes(&meshViewState, sizeof(meshViewState));
     ObjectGeometryCacheGraph objectGeometry(m_deferredLightingTaskGraph, m_materialSystem, m_meshSystem, scratchArena);
-    auto graphicsPrefixResult = declareDeferredGraphicsPrefixTasks(
+    const GraphicsPrefixGraphContext graphicsPrefixContext{
+        .arena = m_arena,
+        .graphics = m_graphics,
+        .graph = m_deferredLightingTaskGraph,
+        .csg = m_csgSystem,
+        .deferred = m_deferredSystem,
+        .material = m_materialSystem,
+        .mesh = m_meshSystem,
+        .rayTracing = m_raytracingSystem,
+        .shadowVisibilityTask = m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
+    };
+    auto graphicsPrefixResult = m_graphicsPrefixGraph.declareDeferredGraphicsPrefixTasks(
+        graphicsPrefixContext,
         shadowPrepareHandoffTask,
         csgFrameState,
         frameBindings,
@@ -280,7 +300,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads(scratchArena);
     if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace || (declaresHardwareCaustics && causticOpticalReader)){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
         if(!sceneReadsResult){
             sceneReads = RayTracingSceneGraphReads(scratchArena);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared hardware optical scene reads"));
@@ -294,7 +314,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         if(declaresHardwareCaustics)
             causticOpticalScene = sceneReads.uses[LengthOf(sceneReads.uses) - 1u].resource;
         else{
-            const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
+            const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
             if(!optical){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software caustic optical scene reads"));
                 return;
@@ -340,7 +360,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
     // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
-    if(!declareDeferredShadowVisibilityTask(
+    const ShadowVisibilityGraphContext shadowGraphContext{
+        .arena = m_arena,
+        .graphics = m_graphics,
+        .graph = m_deferredLightingTaskGraph,
+        .rayTracing = m_raytracingSystem,
+        .shadowComputeState = m_shadowComputePersistentState,
+        .shadowReturnState = m_shadowVisibilityReturnState,
+        .shadowPrepared = m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
+    };
+    if(!m_shadowVisibilityGraph.declareDeferredShadowVisibilityTask(
+        shadowGraphContext,
         deferredLightingResources,
         rayTracingShadowResources,
         rayTracingGraphResources,
@@ -360,7 +390,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry),
         rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
-        m_graphicsPrefixTask,
+        m_graphicsPrefixGraph.m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending ? m_deferredLightingHistoryWriterDrainCompletion : Core::GpuExternalCompletionId{},
         scratchArena,
         deferredTargets,
@@ -374,7 +404,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         shadowVisibilityOpaqueFrameIndex
     ))
         return;
-    if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
+    const CausticsGraphContext causticsGraphContext{
+        .mesh = m_meshSystem,
+        .rayTracing = m_raytracingSystem,
+        .graph = m_deferredLightingTaskGraph,
+        .causticsComputeState = m_causticsComputePersistentState,
+        .irradianceReturnState = m_causticIrradianceReturnState,
+        .shadowVisibilityTask = m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
+        .shadowPrepared = m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
+    };
+    if(!declaresHardwareCaustics && !m_causticsGraph.declareDeferredSoftwareCausticsTask(
+        causticsGraphContext,
         declaresHardwareCaustics,
         deferredLightingResources,
         rayTracingGraphResources,
@@ -396,9 +436,18 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         causticResolveTiming
     ))
         return;
-    const Core::GpuTaskId effectsTask = declaresHardwareCaustics ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask;
+    const Core::GpuTaskId effectsTask = declaresHardwareCaustics ? m_shadowVisibilityGraph.m_deferredShadowVisibilityTask : m_causticsGraph.m_deferredSoftwareCausticsTask;
     // Declare Surfel GI before hardware/AVBOIT to keep effects -> surfel -> suffix order.
-    if(!declareDeferredSurfelGiTask(
+    const SurfelGiGraphContext surfelGraphContext{
+        .graph = m_deferredLightingTaskGraph,
+        .rayTracing = m_raytracingSystem,
+        .computeState = m_surfelGiComputePersistentState,
+        .counterState = m_surfelGiCounterPersistentState,
+        .irradianceReturnState = m_surfelIrradianceReturnState,
+        .frameTimingEndTask = m_deferredFrameTimingEndTask,
+    };
+    if(!m_surfelGiGraph.declareDeferredSurfelGiTask(
+        surfelGraphContext,
         deferredLightingResources,
         rayTracingGraphResources,
         rayTracingSurfelResources,
@@ -445,12 +494,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .hardwareTraceGeometrySet = causticTraceGeometrySet,
                 .hardwareTraceGeometryResources = causticTraceGeometryResources,
                 .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
-                .graphicsPrefixTask = m_graphicsPrefixTask,
-                .shadowPreparationReady = m_shadowPreparationOutcome.ready,
+                .graphicsPrefixTask = m_graphicsPrefixGraph.m_graphicsPrefixTask,
+                .shadowPreparationReady = m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
                 .historyWriterDrainCompletion = m_deferredLightingHistoryWriterDrainCompletion,
                 .accumulatorPersistentState = m_hardwareCausticAccumulatorPersistentState,
                 .declaresHardwareCaustics = declaresHardwareCaustics,
-                .producerDispatched = m_deferredCausticProducerDispatched,
+                .producerDispatched = m_causticsGraph.m_deferredCausticProducerDispatched,
                 .timingTicket = hardwareCausticsTimingTicket,
                 .photonTiming = causticPhotonTiming,
                 .resolveTiming = causticResolveTiming,
@@ -461,15 +510,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics stage"));
             return;
         }
-        m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult->causticIrradianceClearTask;
-        m_deferredCausticAccumulatorBootstrapClearTask = hardwareCausticsStageResult->causticAccumulatorBootstrapClearTask;
-        m_deferredCausticAccumulatorDecayTask = hardwareCausticsStageResult->causticAccumulatorDecayTask;
-        m_deferredCausticPhotonTask = hardwareCausticsStageResult->causticPhotonTask;
-        m_deferredCausticGeometryTask = hardwareCausticsStageResult->causticGeometryTask;
-        m_deferredCausticResolvePrepareTask = hardwareCausticsStageResult->causticResolvePrepareTask;
-        m_deferredCausticResolveWaveletTasks = hardwareCausticsStageResult->causticResolveWaveletTasks;
-        m_deferredCausticResolveUpsampleTask = hardwareCausticsStageResult->causticResolveUpsampleTask;
-        m_deferredHardwareCausticsTask = hardwareCausticsStageResult->hardwareCausticsTask;
+        m_causticsGraph.m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult->causticIrradianceClearTask;
+        m_causticsGraph.m_deferredCausticAccumulatorBootstrapClearTask = hardwareCausticsStageResult->causticAccumulatorBootstrapClearTask;
+        m_causticsGraph.m_deferredCausticAccumulatorDecayTask = hardwareCausticsStageResult->causticAccumulatorDecayTask;
+        m_causticsGraph.m_deferredCausticPhotonTask = hardwareCausticsStageResult->causticPhotonTask;
+        m_causticsGraph.m_deferredCausticGeometryTask = hardwareCausticsStageResult->causticGeometryTask;
+        m_causticsGraph.m_deferredCausticResolvePrepareTask = hardwareCausticsStageResult->causticResolvePrepareTask;
+        m_causticsGraph.m_deferredCausticResolveWaveletTasks = hardwareCausticsStageResult->causticResolveWaveletTasks;
+        m_causticsGraph.m_deferredCausticResolveUpsampleTask = hardwareCausticsStageResult->causticResolveUpsampleTask;
+        m_causticsGraph.m_deferredHardwareCausticsTask = hardwareCausticsStageResult->hardwareCausticsTask;
     }
 
     const b8 opticalCaptureRequested = hasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
@@ -485,7 +534,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .frameBindings = frameBindings,
             .csgResources = csgResources,
             .meshViewState = meshViewState,
-            .prefixTask = m_graphicsPrefixTask,
+            .prefixTask = m_graphicsPrefixGraph.m_graphicsPrefixTask,
             .hasTransparentRenderers = hasTransparentRenderers,
             .clearTargets = clearAvboitTargets,
             .refractionCaptureEnabled = refractionActive && refractionResources.valid(),
@@ -524,12 +573,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .lights = lights,
             .bindlessSlots = bindlessSlots,
             .opaqueColor = opaqueColor,
-            .graphicsPrefixTask = m_graphicsPrefixTask,
-            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
-            .surfelGiTask = m_deferredSurfelGiTask,
+            .graphicsPrefixTask = m_graphicsPrefixGraph.m_graphicsPrefixTask,
+            .shadowVisibilityTask = m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
+            .surfelGiTask = m_surfelGiGraph.m_deferredSurfelGiTask,
             .avboitFinalTask = avboitFinalTask,
-            .hardwareCausticsTask = m_deferredHardwareCausticsTask,
-            .softwareCausticsTask = m_deferredSoftwareCausticsTask,
+            .hardwareCausticsTask = m_causticsGraph.m_deferredHardwareCausticsTask,
+            .softwareCausticsTask = m_causticsGraph.m_deferredSoftwareCausticsTask,
             .historyReadReadyCompletion = m_deferredLightingHistoryReadReadyCompletion,
             .history = history,
             .useLaggedLightingHistory = useLaggedLightingHistory,
@@ -571,9 +620,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .lights = lights,
             .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
             .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
-            .traceContextUploadTask = m_rayTraceMaterialContextSlotsUploadTask,
+            .traceContextUploadTask = m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask,
             .lightingTask = m_deferredLightingTask,
-            .hardwarePreparationReady = m_shadowPreparationOutcome.ready,
+            .hardwarePreparationReady = m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
             .hardwareDispatchLogged = m_reflectionHardwareLogged,
             .fallbackDispatchLogged = m_reflectionFallbackLogged,
         },
@@ -614,11 +663,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .avboitForegroundExtinction = avboitForegroundExtinction,
             .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
             .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
-            .traceContextUploadTask = m_rayTraceMaterialContextSlotsUploadTask,
+            .traceContextUploadTask = m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask,
             .reflectionCompletionTask = reflectionGraph.completion,
             .avboitFinalTask = avboitFinalTask,
-            .surfelGiTask = m_deferredSurfelGiTask,
-            .hardwarePreparationReady = m_shadowPreparationOutcome.ready,
+            .surfelGiTask = m_surfelGiGraph.m_deferredSurfelGiTask,
+            .hardwarePreparationReady = m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
             .refractionHardwareLogged = m_refractionHardwareLogged,
             .refractionScreenLogged = m_refractionScreenLogged,
         },
@@ -649,12 +698,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .lightingTask = m_deferredLightingTask,
             .avboitFinalTask = avboitFinalTask,
             .refractionResolveTask = refractionResolveTask,
-            .surfelGiTask = m_deferredSurfelGiTask,
-            .hardwareCausticsTask = declaresHardwareCaustics ? m_deferredHardwareCausticsTask : Core::GpuTaskId{},
+            .surfelGiTask = m_surfelGiGraph.m_deferredSurfelGiTask,
+            .hardwareCausticsTask = declaresHardwareCaustics ? m_causticsGraph.m_deferredHardwareCausticsTask : Core::GpuTaskId{},
             .presentationFrame = presentationFrame,
             .presentationFramebufferDesc = presentationFramebufferDesc,
         },
-        m_deferredShadowVisibilityTask,
+        m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
         compositeTimingTicket,
         presentTimingTicket,
         asyncFinalTiming,
@@ -668,7 +717,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredPresentTask = suffixResult->presentTask;
     m_deferredFrameTimingEndTask = suffixResult->frameTimingEndTask;
 
-    declareDeferredSurfelCountReadbackTask(rayTracingSurfelResources);
+    m_surfelGiGraph.declareDeferredSurfelCountReadbackTask(surfelGraphContext, rayTracingSurfelResources);
 
     DeferredFrameTailBuilder deferredFrameTailBuilder(m_deferredLightingTaskGraph);
     auto deferredFrameTailResult = deferredFrameTailBuilder.declare(

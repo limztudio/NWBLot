@@ -5,6 +5,7 @@
 #include "layout.h"
 
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
 
 #include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>

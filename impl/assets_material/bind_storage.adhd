@@ -1,0 +1,112 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/bind_value_parser.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindStorage{
+    public void copyMaterialBindTypedLayoutDefaults(
+        in u64 layoutHash,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in Span<u8> typedBlockBytes,
+        mut u64 outLayoutHash,
+        mut Vector<MaterialTypedLayoutBlock> outBlocks,
+        mut Vector<MaterialTypedLayoutField> outFields,
+        mut Vector<u8> outBlockBytes
+    ){
+        outLayoutHash = layoutHash;
+        outBlocks.clear();
+        outBlocks.reserve(typedLayoutBlocks.size());
+        for(in MaterialTypedLayoutBlock block : typedLayoutBlocks)
+            outBlocks.push_back(block);
+        outFields.clear();
+        outFields.reserve(typedLayoutFields.size());
+        for(in MaterialTypedLayoutField field : typedLayoutFields)
+            outFields.push_back(field);
+        outBlockBytes.clear();
+        outBlockBytes.reserve(typedBlockBytes.size());
+        for(in u8 byteValue : typedBlockBytes)
+            outBlockBytes.push_back(byteValue);
+    }
+
+    public Expected<MaterialBindStorageByteSizes> tryComputeMaterialBindStorageByteSizes(in Span<MaterialTypedLayoutBlock> blocks){
+        MaterialBindStorageByteSizes outSizes;
+        for(usize i = 0u; i < blocks.size(); ++i){
+            const MaterialTypedLayoutBlock block = blocks[i];
+            if(block.blockClass == MaterialBlockClass::MaterialConstant){
+                if(block.byteSize > 0xFFFFFFFFu - outSizes.constantBytes)
+                    return makeUnexpected(Failure());
+                outSizes.constantBytes += block.byteSize;
+            }
+            else if(block.blockClass == MaterialBlockClass::MaterialMutable){
+                if(block.byteSize > 0xFFFFFFFFu - outSizes.mutableBytes)
+                    return makeUnexpected(Failure());
+                outSizes.mutableBytes += block.byteSize;
+            }
+            else
+                return makeUnexpected(Failure());
+        }
+        return outSizes;
+    }
+
+    public u32 computeMaterialBindBlockStorageByteBegin(in Span<MaterialTypedLayoutBlock> blocks, in u32 blockIndex){
+        u32 byteBegin = 0u;
+        const MaterialBlockClass blockClass = blocks[cast<usize>(blockIndex)].blockClass;
+        for(u32 currentBlockIndex = 0u; currentBlockIndex < blockIndex; ++currentBlockIndex){
+            const MaterialTypedLayoutBlock block = blocks[cast<usize>(currentBlockIndex)];
+            if(block.blockClass != blockClass)
+                continue;
+            byteBegin += block.byteSize;
+        }
+        return byteBegin;
+    }
+
+    public u8 extractMaterialLayoutValueByte(in u32x4u value, in u32 byteIndex){
+        const u32 wordIndex = byteIndex / 4u;
+        const u32 shift = (byteIndex % 4u) * 8u;
+        u32 word = value.w;
+        if(wordIndex == 0u)
+            word = value.x;
+        else if(wordIndex == 1u)
+            word = value.y;
+        else if(wordIndex == 2u)
+            word = value.z;
+        return cast<u8>((word >> shift) & 0xffu);
+    }
+
+    public void appendMaterialTypedLayoutFieldBytes(in MaterialLayoutFieldType fieldType, in u32x4u value, mut Vector<u8> inOutBlockBytes){
+        const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
+        assert(byteSize != 0u && byteSize <= 16u);
+        const usize oldSize = inOutBlockBytes.size();
+        inOutBlockBytes.resize(oldSize + cast<usize>(byteSize), 0u);
+        for(u32 i = 0u; i < byteSize; ++i)
+            inOutBlockBytes[oldSize + cast<usize>(i)] = this.extractMaterialLayoutValueByte(value, i);
+    }
+
+    public void padMaterialTypedLayoutBytesTo(in usize targetByteSize, mut Vector<u8> inOutBlockBytes){
+        assert(targetByteSize >= inOutBlockBytes.size());
+        inOutBlockBytes.reserve(targetByteSize);
+        inOutBlockBytes.resize(targetByteSize, 0u);
+    }
+
+    public b8 writeMaterialTypedLayoutFieldBytes(in usize byteOffset, in MaterialLayoutFieldType fieldType, in u32x4u value, mut Vector<u8> inOutBlockBytes){
+        const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
+        if(byteSize == 0u || byteSize > 16u)
+            return false;
+        if(byteOffset > inOutBlockBytes.size() || cast<usize>(byteSize) > inOutBlockBytes.size() - byteOffset)
+            return false;
+        for(u32 i = 0u; i < byteSize; ++i)
+            inOutBlockBytes[byteOffset + cast<usize>(i)] = this.extractMaterialLayoutValueByte(value, i);
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

@@ -298,28 +298,11 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 CheckSwizzlePattern(MStringView text, u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept;
 
 [[nodiscard]] b8 IsVoidTypeRef(const TypeRef* ref)noexcept;
-[[nodiscard]] b8 AreTypeRefsEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, Span<const TemplateParamDecl> ifaceParams, Span<const TypeArg> ifaceArgs, const SymbolTable& symbols)noexcept;
-[[nodiscard]] inline b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
-    return AreTypeRefsEquivalentWithSubst(a, b, {}, {}, symbols);
-}
-[[nodiscard]] b8 AreTemplateArgListsEqual(Span<const TypeArg> a, Span<const TypeArg> b, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 DoParamListsMatch(Span<const ParamDecl> a, Span<const ParamDecl> b, const SymbolTable& symbols)noexcept;
 
-[[nodiscard]] TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 IsKnownConcreteTypeName(MStringView name, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 IsConcreteTemplateArgList(Span<const TemplateParamDecl> params, Span<const TypeArg> args, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
-[[nodiscard]] b8 TypeContainsSimdRegisterType(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
-[[nodiscard]] b8 ShouldPackSerializeClass(Span<const FieldDecl* const> fields, const SymbolTable& symbols)noexcept;
 [[nodiscard]] i32 ScoreCallableParams(const SymbolTable& symbols, Span<const ParamDecl> params, Span<const MStringView> argTypeNames, Span<const u8> argIsMut)noexcept;
 
 [[nodiscard]] b8 IsReflectedLinearContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
-[[nodiscard]] const TypeRef* UnwrapOptionalFieldType(const TypeRef* fieldType, const SymbolTable& symbols, b8& outIsOptional, MStringView& outBaseTypeName)noexcept;
-[[nodiscard]] b8 TryResolveSubsystemFieldAssetType(const FieldDecl& field, const SymbolTable& symbols, MStringView& outAssetTypeName, b8& outIsVector)noexcept;
-[[nodiscard]] b8 IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
-[[nodiscard]] const TypeRef* DeduceTemplateParamTypeRef(const TypeRef* paramType, const TypeRef* argType, MStringView tpName, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

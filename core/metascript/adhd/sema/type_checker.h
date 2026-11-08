@@ -35,13 +35,27 @@ struct ScopedVarInfo{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] MStringView ResolveScopedVarBaseType(const SymbolTable& symbols, const ScopedVarInfo& var)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TypeChecker final{
+    friend class BorrowLifetimeAnalyzer;
+    friend class LambdaCaptureAnalyzer;
+    friend class CallableTemplateDeduction;
+    friend class CallableArgumentChecker;
+    friend class ConstructorArgumentChecker;
+    friend class LambdaExpressionChecker;
+    friend class BinaryExpressionChecker;
+    friend class LocalVariableChecker;
+    friend class ReturnStatementChecker;
+
 private:
     [[nodiscard]] static const ScopedVarInfo* FindScopedVar(Span<const ScopedVarInfo> scope, MStringView name)noexcept;
     [[nodiscard]] static const TemplateParamDecl* FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, MStringView name)noexcept;
     [[nodiscard]] static b8 StatementsContainReturnOrNative(Span<const Stmt* const> stmts)noexcept;
-    static void PropagateFuncCaptureBytes(TypeRef* targetType, const Expr* rhs, Span<const ScopedVarInfo> scope, const SymbolTable& symbols)noexcept;
-    [[nodiscard]] static b8 IsEscapingMutCaptureLambda(const Expr* rhs, Span<const ScopedVarInfo> scope)noexcept;
 
 
 public:
@@ -58,7 +72,6 @@ public:
 
 
 private:
-    [[nodiscard]] b8 linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
     void buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, Span<const Expr* const> args, Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const;
     [[nodiscard]] MStringView resolveScopedVarBaseType(const ScopedVarInfo& var)const noexcept;
     [[nodiscard]] b8 isThisConstInScope(const MethodDecl& method, Span<const ScopedVarInfo> scope)const noexcept;
@@ -113,58 +126,16 @@ private:
 
     [[nodiscard]] b8 checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkStatementList(ClassDecl* ownerClass, MethodDecl& method, MVector<Stmt*>& statements, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkConstructorInitArguments(ClassDecl* ownerClass, const TypeRef* targetType, Span<const ScopedVarInfo> scope, SourceSpan errorSpan, MethodDecl& method, MVector<Expr*>& arguments, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkReturnStatement(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Stmt& stmt, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
 
     [[nodiscard]] b8 checkExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
-    [[nodiscard]] b8 applyInterfaceRefRebind(
-        const ClassDecl* ownerClass,
-        const MethodDecl& method,
-        const TypeRef* targetType,
-        ParamPassingMode::Enum targetRefMode,
-        Span<const ScopedVarInfo> scope,
-        MStringView errorMessage,
-        Expr& assignExpr,
-        MVector<ParseError>& errors,
-        b8& inOutRhsNeedsMut
-    );
-    [[nodiscard]] b8 checkBinaryExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
     [[nodiscard]] b8 isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, Span<const ScopedVarInfo> scope)const noexcept;
 
-    [[nodiscard]] b8 checkCallableArguments(
-        ClassDecl* ownerClass,
-        Span<const ScopedVarInfo> scope,
-        const MethodDecl* targetCallable,
-        const ClassDecl* targetOwnerCls,
-        const TypeRef* recvTypeRef,
-        Span<const TypeArg> callTemplateArgs,
-        const TypeRef* invokedFuncType,
-        const ScopedVarInfo* localCallable,
-        MStringView calledMemberName,
-        MethodDecl& method,
-        MVector<Expr*>& arguments,
-        MVector<ParseError>& errors
-    );
     [[nodiscard]] b8 checkCallExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkLambdaExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
 
     [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
-    [[nodiscard]] b8 isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
-    [[nodiscard]] b8 exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
-    [[nodiscard]] b8 exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, MStringView* outOwnerName = nullptr, usize* outOwnerScopeIndex = nullptr)const noexcept;
-    void deduceCallTemplateArgs(
-        const ClassDecl* ownerClass,
-        const MethodDecl* enclosingMethod,
-        const MethodDecl& targetCallable,
-        Span<const Expr* const> arguments,
-        Span<const ScopedVarInfo> scope,
-        MVector<TypeArg>& outDeducedArgs
-    )const;
-    void analyzeBlockMoveAtLastUse(Span<Stmt* const> statements, Span<const ScopedVarInfo> scope, usize savedScopeSize)const noexcept;
 
 
 private:

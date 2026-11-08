@@ -244,7 +244,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     if(!options.gpuDump.empty() && options.gpuDumpKind != GpuCrashDumpKind::RadeonGpuDetective && options.gpuDumpKind != GpuCrashDumpKind::Aftermath)
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
     const CrashRequest request = BuildCrashDumpRequest(reasonKind, reasonCode, options);
-    if(!IsCurrentCrashRequest(request))
+    if(!CrashProtocol::IsCurrentCrashRequest(request))
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
 
     // GPU report/dump ship as package files straight from caller bytes (no POD copy, no heap alloc).

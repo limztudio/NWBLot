@@ -165,4 +165,17 @@ class ContextOwnedPopup{
 }
 
 
+
+class PopupDismissRequest{
+    public PopupToken expectedTop;
+    public PopupDismissReason reason = PopupDismissReason::OutsideClick;
+    public WidgetId restoreFocus;
+    public u64 restoreDeclaration = 0u;
+    public PopupToken restorePopup;
+    public b8 requested = false;
+    public b8 replaceRestore = false;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

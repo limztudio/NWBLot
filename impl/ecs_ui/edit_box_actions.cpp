@@ -4,6 +4,7 @@
 
 #include "edit_box_host.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <global/simplemath.h>
 #include <global/termination.h>
 

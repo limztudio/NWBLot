@@ -30,9 +30,6 @@ namespace FrameGraphStatisticsCodecDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f64 s_DoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
-inline constexpr f64 s_SubmissionRoundingLimit = 0.5;
-inline constexpr f64 s_SubmissionRoundingScale = 2.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,155 +150,12 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] EncodedFrameGraphPhysicalQueueRuntimeStatistics EncodePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record)noexcept;
 [[nodiscard]] Expected<FrameGraphPhysicalQueueRuntimeStatisticsRecord> DecodePhysicalQueueRuntimeStatistics(const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encoded, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
-[[nodiscard]] b8 PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept;
 [[nodiscard]] EncodedFrameGraphPacketSubmissionStatistics EncodePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
 [[nodiscard]] Expected<FrameGraphPacketSubmissionStatisticsRecord> DecodePacketSubmissionStatistics(const EncodedFrameGraphPacketSubmissionStatistics& encoded)noexcept;
 
-struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
-    FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
-    FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
-    FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
-    u64 barrierCount = 0u;
-};
-
 [[nodiscard]] EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(const EncodedFrameGraphRuntimeStatistics& encoded)noexcept;
-[[nodiscard]] b8 PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept;
-[[nodiscard]] b8 AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept;
-[[nodiscard]] b8 ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, usize nodeCount, FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
 
-struct FrameGraphPacketSubmissionStatisticsAccumulator{
-    u64 nativeSubmissionCount = 0u;
-    u64 taskCount = 0u;
-    u64 commandListCount = 0u;
-    u64 plannedWaitTokenCount = 0u;
-    u64 sameQueueWaitElisionCount = 0u;
-    u64 timelineWaitCount = 0u;
-    u64 mergedTimelineWaitCount = 0u;
-    u64 inheritedTimelineWaitElisionCount = 0u;
-    u64 acceptedFrontierSubmissionCount = 0u;
-    u64 recoverySubmissionCount = 0u;
-    f64 submissionSeconds = 0.0;
-};
-
-[[nodiscard]] inline b8 ValidatePacketSubmissionStatisticsOwner(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    return
-        IsValidFrameGraphRuntimeStatistics(ownerStatistics)
-        && statistics.packetGeneration == ownerStatistics.planGeneration
-        && static_cast<u64>(statistics.packetIndex) < ownerStatistics.compile.packetCount
-        && statistics.queue.deviceGeneration == ownerStatistics.deviceGeneration
-        && statistics.taskCount <= ownerStatistics.compile.taskCount
-        && statistics.commandListCount <= ownerStatistics.recording.commandListCount
-    ;
-}
-
-[[nodiscard]] b8 AccumulatePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphSubmissionRuntimeStatistics& ownerStatistics, FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept;
-[[nodiscard]] b8 PacketSubmissionDurationSumsMatch(f64 lhs, f64 rhs, u64 submissionCount)noexcept;
-
-template<typename SubmissionStatistics>
-[[nodiscard]] inline b8 PacketSubmissionStatisticsAccumulatorMatches(const FrameGraphPacketSubmissionStatisticsAccumulator& total, const SubmissionStatistics& statistics)noexcept(
-    noexcept(static_cast<b8>(
-        DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().nativeSubmissionCount != DeclVal<const SubmissionStatistics&>().nativeSubmissionCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().commandListCount != DeclVal<const SubmissionStatistics&>().nativeCommandListCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().plannedWaitTokenCount != DeclVal<const SubmissionStatistics&>().plannedWaitTokenCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().sameQueueWaitElisionCount != DeclVal<const SubmissionStatistics&>().sameQueueWaitElisionCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().timelineWaitCount != DeclVal<const SubmissionStatistics&>().timelineWaitCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().mergedTimelineWaitCount != DeclVal<const SubmissionStatistics&>().mergedTimelineWaitCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().inheritedTimelineWaitElisionCount != DeclVal<const SubmissionStatistics&>().inheritedTimelineWaitElisionCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().acceptedFrontierSubmissionCount != DeclVal<const SubmissionStatistics&>().acceptedFrontierSubmissionCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().recoverySubmissionCount != DeclVal<const SubmissionStatistics&>().recoverySubmissionCount
-        || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().taskCount > DeclVal<const SubmissionStatistics&>().acceptedTaskCount
-        || !PacketSubmissionDurationSumsMatch(
-            DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().submissionSeconds,
-            DeclVal<const SubmissionStatistics&>().submissionSeconds,
-            DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().nativeSubmissionCount
-        )
-    ))
-    && noexcept(DeclVal<void (*)(u64)noexcept>()(DeclVal<const SubmissionStatistics&>().acceptedPacketCount - DeclVal<const SubmissionStatistics&>().nativeSubmissionCount))
-    && noexcept(DeclVal<void (*)(b8)noexcept>()(DeclVal<u64>() <= DeclVal<const SubmissionStatistics&>().acceptedTaskCount - DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().taskCount))
-){
-    if(
-        total.nativeSubmissionCount != statistics.nativeSubmissionCount
-        || total.commandListCount != statistics.nativeCommandListCount
-        || total.plannedWaitTokenCount != statistics.plannedWaitTokenCount
-        || total.sameQueueWaitElisionCount != statistics.sameQueueWaitElisionCount
-        || total.timelineWaitCount != statistics.timelineWaitCount
-        || total.mergedTimelineWaitCount != statistics.mergedTimelineWaitCount
-        || total.inheritedTimelineWaitElisionCount != statistics.inheritedTimelineWaitElisionCount
-        || total.acceptedFrontierSubmissionCount != statistics.acceptedFrontierSubmissionCount
-        || total.recoverySubmissionCount != statistics.recoverySubmissionCount
-        || total.taskCount > statistics.acceptedTaskCount
-        || !PacketSubmissionDurationSumsMatch(total.submissionSeconds, statistics.submissionSeconds, total.nativeSubmissionCount)
-    )
-        return false;
-
-    const u64 manualAcceptedPacketCount = statistics.acceptedPacketCount - statistics.nativeSubmissionCount;
-    return manualAcceptedPacketCount <= statistics.acceptedTaskCount - total.taskCount;
-}
-
-template<typename NodeT>
-[[nodiscard]] inline b8 ValidatePacketSubmissionStatisticsTable(
-    Alloc::ScratchArena& scratchArena,
-    const Span<const NodeT> nodes,
-    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
-){
-    for(usize statisticsIndex = 0u; statisticsIndex < packetSubmissionStatistics.size(); ++statisticsIndex){
-        const FrameGraphPacketSubmissionStatisticsRecord& statistics = packetSubmissionStatistics[statisticsIndex];
-        if(
-            statistics.ownerNodeIndex >= nodes.size()
-            || nodes[statistics.ownerNodeIndex].kind != FrameGraphNodeKind::Pass
-            || !ValidatePacketSubmissionStatisticsOwner(statistics, nodes[statistics.ownerNodeIndex].runtimeStatistics)
-            || (statisticsIndex != 0u && !PacketSubmissionStatisticsRecordLess(packetSubmissionStatistics[statisticsIndex - 1u], statistics))
-        )
-            return false;
-    }
-
-    Vector<FrameGraphPacketSubmissionStatisticsAccumulator, Alloc::ScratchArena> queueTotals(scratchArena);
-    queueTotals.resize(physicalQueueRuntimeStatistics.size());
-    usize statisticsIndex = 0u;
-    usize queueBegin = 0u;
-    for(usize nodeIndex = 0u; nodeIndex < nodes.size(); ++nodeIndex){
-        usize queueEnd = queueBegin;
-        while(queueEnd < physicalQueueRuntimeStatistics.size() && physicalQueueRuntimeStatistics[queueEnd].ownerNodeIndex == nodeIndex)
-            ++queueEnd;
-
-        FrameGraphPacketSubmissionStatisticsAccumulator total;
-        while(statisticsIndex < packetSubmissionStatistics.size() && packetSubmissionStatistics[statisticsIndex].ownerNodeIndex == nodeIndex){
-            const auto& statistics = packetSubmissionStatistics[statisticsIndex];
-            const auto& ownerSubmission = nodes[nodeIndex].runtimeStatistics.submission;
-            if(!AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, total))
-                return false;
-
-            usize first = queueBegin;
-            usize last = queueEnd;
-            while(first < last){
-                const usize middle = first + (last - first) / 2u;
-                const auto queue = physicalQueueRuntimeStatistics[middle].statistics.queue;
-                if(queue.index < statistics.queue.index || (queue.index == statistics.queue.index && queue.deviceGeneration < statistics.queue.deviceGeneration))
-                    first = middle + 1u;
-                else
-                    last = middle;
-            }
-            if(first < queueEnd && physicalQueueRuntimeStatistics[first].statistics.queue == statistics.queue){
-                if(physicalQueueRuntimeStatistics[first].statistics.queueClass != statistics.queueClass || !AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, queueTotals[first]))
-                    return false;
-            }
-            ++statisticsIndex;
-        }
-        if(nodes[nodeIndex].runtimeStatistics.present && !PacketSubmissionStatisticsAccumulatorMatches(total, nodes[nodeIndex].runtimeStatistics.submission))
-            return false;
-        queueBegin = queueEnd;
-    }
-    if(statisticsIndex != packetSubmissionStatistics.size())
-        return false;
-
-    for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
-        if(!PacketSubmissionStatisticsAccumulatorMatches(queueTotals[queueIndex], physicalQueueRuntimeStatistics[queueIndex].statistics.submission))
-            return false;
-    }
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

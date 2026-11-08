@@ -1,0 +1,201 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_OPTICAL_GEOMETRY_QUERY_SLANGI
+#define NWB_OPTICAL_GEOMETRY_QUERY_SLANGI
+
+
+#include "optical_bootstrap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbOpticalGeometryQuery{
+    // Reserve one budget unit before each receiver collection; validation/coverage may reject first. Ordinary scenes drop both lists.
+    static bool closestSurfaceHit(
+        const NwbOpticalTraceConfig config,
+        const float3 origin,
+        const float3 direction,
+        const float minimum,
+        const float maximum,
+        out NwbRayTraceSurfaceHit hit,
+#if NWB_CSG_RAY_OPTICAL_REUSE
+        out NwbRayTraceCsgBoundaryCertificate certificate,
+#endif
+        inout NwbOpticalTraceResult result
+    ){
+        hit = (NwbRayTraceSurfaceHit)0;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+        certificate = (NwbRayTraceCsgBoundaryCertificate)0;
+#endif
+        NwbRayTraceGeometryHit closest = nwbRayTraceClosestOrdinaryGeometryHit(origin, direction, minimum, maximum);
+#if NWB_RT_CSG_ENABLED
+        result.physicalQueries += closest.physicalQueries;
+#endif
+#if NWB_RT_CSG_ENABLED
+        const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
+        const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+        const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+        for(uint index = 0u; index < activeCount; ++index){
+            const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+            const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+            const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+            if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, minimum, closest.distance))
+                continue;
+            if(!nwbOpticalConsumeQuery(config, result))
+                return false;
+            const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(
+                contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, minimum, closest.distance
+#if NWB_CSG_RAY_OPTICAL_REUSE
+                , true
+#endif
+            );
+            result.physicalQueries += geometry.physicalQueries;
+            if(geometry.hit){
+                closest = geometry;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+                certificate = geometry.certificate;
+#endif
+            }
+            if(closest.failure != 0u)
+                break;
+        }
+#endif
+        hit = nwbRayTraceReconstructSurfaceHit(config.instanceMaterialHeapSlot, origin, direction, closest);
+        return true;
+    }
+
+    // Resolve ties around the nearest boundary first. One hit cannot reveal coincident volumes, so a second bounded query is needed.
+    static bool checkBoundary(
+        const NwbOpticalTraceConfig config,
+        const float3 origin,
+        const float3 direction,
+        const NwbRayTraceSurfaceHit hit,
+#if NWB_CSG_RAY_OPTICAL_REUSE
+        __constref NwbRayTraceCsgBoundaryCertificate certificate,
+#endif
+        inout NwbOpticalTraceResult result
+    ){
+        if(!nwbOpticalConsumeQuery(config, result))
+            return false;
+        const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.position));
+        RayDesc ray;
+        ray.Origin = origin;
+        ray.Direction = direction;
+        ray.TMin = max(0.0, hit.distance - tolerance);
+        ray.TMax = hit.distance + tolerance;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+#if NWB_RT_CSG_ENABLED
+        bool csgFound = false;
+        const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
+        const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+        const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+        for(uint index = 0u; index < activeCount; ++index){
+            const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+            const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+            if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u)
+                continue;
+            const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+            const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+            if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, ray.TMin, ray.TMax))
+                continue;
+            if(!nwbOpticalConsumeQuery(config, result))
+                return false;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+            const bool reuse = certificate.reusable && instance == hit.instance;
+            NwbRayTraceCsgBoundaryCheck geometry;
+            if(reuse)
+                geometry = certificate.window;
+            else{
+                const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax, false);
+                result.physicalQueries += collected.physicalQueries;
+                geometry = nwbRayTraceCsgCheckedBoundary(collected);
+            }
+#else
+            const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, ray.TMin, ray.TMax);
+            result.physicalQueries += geometry.physicalQueries;
+#endif
+            if(geometry.failure != 0u || (geometry.hit && (instance != hit.instance || geometry.primitive != hit.primitive || geometry.cutter != hit.cutter))){
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+            if(geometry.hit){
+                csgFound = true;
+                if(!nwbOpticalConsumeQuery(config, result))
+                    return false;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+                NwbRayTraceCsgBoundaryCheck next;
+                if(reuse)
+                    next = certificate.next;
+                else{
+                    const NwbRayTraceGeometryHit collected = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax, false);
+                    result.physicalQueries += collected.physicalQueries;
+                    next = nwbRayTraceCsgCheckedBoundary(collected);
+                }
+#else
+                const NwbRayTraceGeometryHit next = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, geometry.distance, ray.TMax);
+                result.physicalQueries += next.physicalQueries;
+#endif
+                if(next.failure != 0u || next.hit){
+                    result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                    return false;
+                }
+            }
+        }
+        query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK, ray);
+        ++result.physicalQueries;
+        bool found = csgFound;
+#else
+        query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+        bool found = false;
+#endif
+        [loop] for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+            if(!query.Proceed()){
+                if(!found)
+                    result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return found;
+            }
+            if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != hit.instance){
+                query.Abort();
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+#if NWB_RT_CSG_ENABLED
+            if(csgFound){
+                query.Abort();
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+#endif
+            if(query.CandidatePrimitiveIndex() == hit.primitive){
+                // The already reconstructed primitive is the common case; only another triangle needs seam geometry.
+                found = true;
+                continue;
+            }
+            const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
+            const float3 normal = nwbRayTraceTriangleGeometricNormal(material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4());
+            const float facing = dot(direction, normal);
+            if(!isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON || facing * dot(direction, hit.geometricNormal) <= 0.0 || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())){
+                query.Abort();
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+            found = true;
+        }
+        query.Abort();
+        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+        return false;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -4,6 +4,7 @@
 
 #include "avboit_integration_probe.h"
 #include "refraction_tile_probe.h"
+#include "avboit_depth_warp_oracle.h"
 
 #include <loader/project_entry.h>
 
@@ -28,168 +29,28 @@ namespace __hidden_avboit_depth_warp_probe{
 
 
 using namespace NWB;
+using namespace NWB::Tests::Smoke;
 
-inline constexpr u32 s_MaxVirtualCount = 257u;
-inline constexpr u32 s_CoverageWords = (s_MaxVirtualCount + 31u) / 32u;
+inline constexpr u32 s_MaxVirtualCount = AvboitDepthWarpOracle::s_MaxVirtualCount;
+inline constexpr u32 s_CoverageWords = AvboitDepthWarpOracle::s_CoverageWords;
 inline constexpr u32 s_GuardWords = 4u;
 inline constexpr u32 s_WarpWords = s_MaxVirtualCount + s_GuardWords;
 inline constexpr u32 s_ControlWords = NWB_AVBOIT_CONTROL_WORD_COUNT + s_GuardWords;
 inline constexpr u32 s_ResultWords = s_WarpWords + s_ControlWords;
 inline constexpr u32 s_BatchSize = 64u;
 inline constexpr u32 s_Sentinel = 0xa5f07c39u;
-inline constexpr u32 s_BoundaryCaseCount = 1050u;
-inline constexpr u32 s_ExhaustiveCaseCount = 2550u;
-inline constexpr u32 s_RandomCaseCount = 512u;
-inline constexpr u32 s_TotalCaseCount = s_BoundaryCaseCount + s_ExhaustiveCaseCount + s_RandomCaseCount;
+inline constexpr u32 s_BoundaryCaseCount = AvboitDepthWarpOracle::s_BoundaryCaseCount;
+inline constexpr u32 s_ExhaustiveCaseCount = AvboitDepthWarpOracle::s_ExhaustiveCaseCount;
+inline constexpr u32 s_RandomCaseCount = AvboitDepthWarpOracle::s_RandomCaseCount;
+inline constexpr u32 s_TotalCaseCount = AvboitDepthWarpOracle::s_TotalCaseCount;
 inline constexpr Name s_ProbeName("AvboitDepthWarpProbe");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ProbeCase{
-    Array<u32, s_CoverageWords> coverage{};
-    u32 virtualCount = 1u;
-    u32 physicalCount = 1u;
-    u32 scenario = 0u;
-};
+using ProbeCase = AvboitDepthWarpOracle::Case;
 
-struct ProbeOracle{
-    Array<u32, s_MaxVirtualCount> warp{};
-    Array<u32, NWB_AVBOIT_CONTROL_WORD_COUNT> control{};
-};
-
-[[nodiscard]] static b8 Occupied(const ProbeCase& probe, const u32 slice)noexcept{
-    return (probe.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
-}
-
-static void SetOccupied(const u32 slice, ProbeCase& probe)noexcept{
-    if(slice < probe.virtualCount)
-        probe.coverage[slice / 32u] |= 1u << (slice % 32u);
-}
-
-static void PoisonUnusedCoverage(ProbeCase& probe)noexcept{
-    // Occupied invalid tail bits must not add a coarse bin.
-    for(u32 slice = probe.virtualCount; slice < s_CoverageWords * 32u; ++slice)
-        probe.coverage[slice / 32u] |= 1u << (slice % 32u);
-}
-
-[[nodiscard]] static Impl::RendererAvboitPushConstants BuildPush(const ProbeCase& probe, const u32 ordinal, const u32 slots)noexcept{
-    Impl::RendererAvboitPushConstants push;
-    push.frame[0] = 1000u + ordinal % 997u;
-    push.frame[1] = 300u + ordinal % 251u;
-    push.frame[2] = (push.frame[0] + 2u) / 3u;
-    push.frame[3] = (push.frame[1] + 3u) / 4u;
-    push.volume[0] = probe.virtualCount;
-    push.volume[1] = probe.physicalCount;
-    push.volume[3] = (probe.virtualCount + 31u) / 32u;
-    push.heapSlots[0] = slots;
-    return push;
-}
-
-[[nodiscard]] static ProbeOracle BuildOracle(const ProbeCase& probe, const Impl::RendererAvboitPushConstants& push)noexcept{
-    // The reference uses sorted occupied slice positions, independently of the shader's coverage-word algorithm.
-    Array<u32, s_MaxVirtualCount> occupiedSlices{};
-    u32 occupiedCount = 0u;
-    for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
-        if(Occupied(probe, slice))
-            occupiedSlices[occupiedCount++] = slice;
-    }
-
-    Array<u32, s_MaxVirtualCount> distinctBins{};
-    u32 binWidth = 1u;
-    u32 shift = 0u;
-    u32 distinctCount = 0u;
-    for(;;){
-        distinctCount = 0u;
-        for(u32 index = 0u; index < occupiedCount; ++index){
-            const u32 bin = occupiedSlices[index] / binWidth;
-            if(distinctCount == 0u || distinctBins[distinctCount - 1u] != bin)
-                distinctBins[distinctCount++] = bin;
-        }
-        if(distinctCount <= probe.physicalCount)
-            break;
-        binWidth *= 2u;
-        ++shift;
-    }
-
-    ProbeOracle oracle;
-    u32 nextBin = 0u;
-    u32 precedingRank = 0u;
-    for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
-        while(nextBin < distinctCount && distinctBins[nextBin] <= slice / binWidth)
-            precedingRank = nextBin++;
-        oracle.warp[slice] = precedingRank;
-    }
-    oracle.control = { distinctCount == 0u ? 1u : distinctCount, shift, probe.virtualCount, probe.physicalCount, push.frame[2], push.frame[3], push.frame[0], push.frame[1], };
-    return oracle;
-}
-
-static void BuildCases(Vector<ProbeCase, Core::Alloc::GlobalArena>& cases){
-    constexpr Array<u32, 21u> s_VirtualCounts{ 1u, 2u, 3u, 7u, 8u, 9u, 31u, 32u, 33u, 63u, 64u, 65u, 95u, 96u, 97u, 127u, 128u, 129u, 255u, 256u, 257u };
-    constexpr Array<u32, 5u> s_PhysicalCounts{ 1u, 2u, 31u, 32u, 64u };
-    cases.reserve(s_TotalCaseCount);
-    for(const u32 virtualCount : s_VirtualCounts){
-        for(const u32 physicalCount : s_PhysicalCounts){
-            for(u32 pattern = 0u; pattern < 10u; ++pattern){
-                ProbeCase probe;
-                probe.virtualCount = virtualCount;
-                probe.physicalCount = physicalCount;
-                probe.scenario = pattern;
-                for(u32 slice = 0u; slice < virtualCount; ++slice){
-                    const b8 occupied = pattern == 1u
-                        || (pattern == 2u && slice + 1u == virtualCount)
-                        || (pattern == 3u && slice >= virtualCount / 2u && slice < virtualCount / 2u + 3u)
-                        || (pattern == 4u && slice % 2u == 1u)
-                        || (pattern == 5u && (slice % 32u == 0u || slice % 32u == 31u))
-                        || (pattern == 6u && slice < 64u)
-                        || (pattern == 7u && slice < 65u)
-                        || (pattern == 8u && slice + 64u >= virtualCount)
-                        || (pattern == 9u && slice == 0u);
-                    if(occupied)
-                        SetOccupied(slice, probe);
-                }
-                PoisonUnusedCoverage(probe);
-                cases.push_back(probe);
-            }
-        }
-    }
-    for(u32 virtualCount = 1u; virtualCount <= 8u; ++virtualCount){
-        for(u32 mask = 0u; mask < (1u << virtualCount); ++mask){
-            for(const u32 physicalCount : s_PhysicalCounts){
-                ProbeCase probe;
-                probe.virtualCount = virtualCount;
-                probe.physicalCount = physicalCount;
-                probe.scenario = 10u;
-                probe.coverage[0] = mask;
-                PoisonUnusedCoverage(probe);
-                cases.push_back(probe);
-            }
-        }
-    }
-    constexpr u32 s_RandomCaseInitialSeed = 0x6b47c2d1u;
-    constexpr u32 s_RandomVirtualCountStride = 73u;
-    constexpr u32 s_RandomScenarioId = 11u;
-    constexpr u32 s_XorShift1 = 13u;
-    constexpr u32 s_XorShift2 = 17u;
-    constexpr u32 s_XorShift3 = 5u;
-    u32 random = s_RandomCaseInitialSeed;
-    for(u32 index = 0u; index < s_RandomCaseCount; ++index){
-        ProbeCase probe;
-        probe.virtualCount = 1u + index * s_RandomVirtualCountStride % s_MaxVirtualCount;
-        probe.physicalCount = s_PhysicalCounts[index % s_PhysicalCounts.size()];
-        probe.scenario = s_RandomScenarioId;
-        for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
-            random ^= random << s_XorShift1;
-            random ^= random >> s_XorShift2;
-            random ^= random << s_XorShift3;
-            if(random % 8u < 1u + index % 7u)
-                SetOccupied(slice, probe);
-        }
-        PoisonUnusedCoverage(probe);
-        cases.push_back(probe);
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -239,7 +100,7 @@ public:
             state.setPipeline(payload.pipeline.get());
             commandList.setComputeState(state);
             payload.heap.bindCompute(commandList, *payload.pipeline);
-            const auto push = BuildPush(probe, payload.firstCase + index, payload.slotsIndex);
+            const auto push = AvboitDepthWarpOracle::BuildPush(probe, payload.firstCase + index, payload.slotsIndex);
             commandList.setPushConstants(&push, sizeof(push));
             commandList.dispatch(NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, 1u, 1u);
 
@@ -315,6 +176,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class DepthWarpUnfocusedPass final : public Core::IRenderPass{
+public:
+    explicit DepthWarpUnfocusedPass(Core::GraphicsRuntime& graphics)noexcept : IRenderPass(graphics){}
+
+
+public:
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class DepthWarpProbeProject final : public IProjectEntryCallbacks{
 private:
     [[nodiscard]] static Expected<Core::BufferHandle> CreateBuffer(const Name& name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
@@ -329,12 +203,13 @@ public:
         : m_sceneSubsystems(context.objectArena)
         , m_cases(context.objectArena)
         , m_context(context)
+        , m_unfocusedPass(context.graphics)
     {}
 
 
 public:
     virtual b8 onStartup()override{
-        BuildCases(m_cases);
+        AvboitDepthWarpOracle::BuildCases(m_cases);
         if(m_cases.size() != s_TotalCaseCount){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: case manifest count mismatch {}"), m_cases.size());
             return false;
@@ -420,12 +295,12 @@ public:
         slots.avboitCoverage = m_descriptors[0].slot();
         slots.avboitDepthWarp = m_descriptors[1].slot();
         slots.avboitControl = m_descriptors[2].slot();
-        Core::GraphicsRuntime::BufferSetupDesc slotsDesc;
+        Core::GraphicsStandaloneService::BufferSetupDesc slotsDesc;
         slotsDesc.bufferDesc.setDebugName(Name("DepthWarpProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
         slotsDesc.data = &slots;
         slotsDesc.dataSize = sizeof(slots);
         slotsDesc.queue = Core::CommandQueue::Graphics;
-        auto slotsResult = graphics.setupBuffer(slotsDesc);
+        auto slotsResult = graphics.standaloneGraph().setupBuffer(slotsDesc);
         if(slotsResult)
             m_slots = Move(*slotsResult);
         else
@@ -438,6 +313,8 @@ public:
             return false;
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: manifest boundary={} exhaustive={} randomized={} total={} seed=0x6b47c2d1"), s_BoundaryCaseCount, s_ExhaustiveCaseCount, s_RandomCaseCount, s_TotalCaseCount);
+        m_context.graphics.addRenderPassToBack(m_unfocusedPass);
+        m_unfocusedPassRegistered = true;
         return true;
     }
 
@@ -449,7 +326,7 @@ public:
             payload.cases = m_cases.data() + firstCase;
             payload.firstCase = firstCase;
             payload.caseCount = Min(s_BatchSize, static_cast<u32>(m_cases.size()) - firstCase);
-            const auto token = m_context.graphics.submitStandaloneTaskGraph(&payload, DeclareBatch);
+            const auto token = m_context.graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareBatch);
             if(!token){
                 NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: batch submission failed at case {}"), firstCase);
                 return false;
@@ -472,6 +349,10 @@ public:
     }
 
     virtual void onShutdown()override{
+        if(m_unfocusedPassRegistered){
+            m_context.graphics.removeRenderPass(m_unfocusedPass);
+            m_unfocusedPassRegistered = false;
+        }
         if(!m_context.graphics.waitForIdle())
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: shutdown completion wait failed"));
         auto& heap = m_context.graphics.getDevice().getDescriptorHeap();
@@ -498,7 +379,7 @@ private:
         for(u32 index = 0u; passed && index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];
             const u32 ordinal = payload.firstCase + index;
-            const auto oracle = BuildOracle(probe, BuildPush(probe, ordinal, payload.slotsIndex));
+            const auto oracle = AvboitDepthWarpOracle::BuildOracle(probe, AvboitDepthWarpOracle::BuildPush(probe, ordinal, payload.slotsIndex));
             const auto result = MakeNotNull(mapped.get() + index * s_ResultWords);
             for(u32 word = 0u; word < s_ResultWords; ++word){
                 const u32 expected = word < probe.virtualCount ? oracle.warp[word] : word >= s_WarpWords && word < s_WarpWords + NWB_AVBOIT_CONTROL_WORD_COUNT ? oracle.control[word - s_WarpWords] : s_Sentinel;
@@ -527,6 +408,8 @@ private:
     Core::BufferHandle m_slots;
     Core::BufferHandle m_readback;
     ProjectRuntimeContext& m_context;
+    DepthWarpUnfocusedPass m_unfocusedPass;
+    b8 m_unfocusedPassRegistered = false;
     b8 m_completed = false;
 };
 

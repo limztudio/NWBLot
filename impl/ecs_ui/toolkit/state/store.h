@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/state/widget_state_index_policy.adhd.h>
 
 #include <impl/ecs_ui/toolkit/id.adhd.h>
 
@@ -42,7 +43,7 @@ public:
 public:
     [[nodiscard]] Expected<NotNull<WidgetState*>> touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
         b8 invariantFailed = false;
-        const Expected<usize> index = TryTouchWidgetStateEntry(
+        const Expected<usize> index = WidgetStateIndexPolicy().touch(
             id,
             root,
             kind,
@@ -73,14 +74,14 @@ public:
     [[nodiscard]] const PaintVector<WidgetState>& entries()const noexcept{ return m_entries; }
 
     void erase(const usize index)noexcept{
-        EraseWidgetStateEntryAt(index, m_entries, m_indexDirty);
+        WidgetStateIndexPolicy().eraseAt(index, m_entries, m_indexDirty);
     }
 
 
 private:
     [[nodiscard]] usize findIndex(const WidgetId id)const noexcept{
         b8 invariantFailed = false;
-        const Expected<usize> index = FindWidgetStateEntryIndex(m_entries, id, m_index, m_indexDirty, invariantFailed);
+        const Expected<usize> index = WidgetStateIndexPolicy().findIndex(m_entries, id, m_index, m_indexDirty, invariantFailed);
         if(invariantFailed)
             TerminateInvariant();
         return index.value_or(m_entries.size());

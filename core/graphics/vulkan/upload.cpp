@@ -16,6 +16,21 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer& chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept
+    : RefCounter<GraphicsResource>(pool)
+    , buffer(Move(buf))
+    , owner(&chunkOwner)
+    , previousActiveChunk(nullptr)
+    , nextActiveChunk(nullptr)
+    , nativeRecordingID(chunkNativeRecordingID)
+    , size(sz)
+    , allocated(0)
+    , version(0)
+    , physicalQueue(queue)
+{}
+
+UploadManager::BufferChunk::~BufferChunk()noexcept = default;
+
 UploadManager::UploadManager(Device& parent, u64 defaultChunkSize, u64 memoryLimit, const ChunkKind::Enum chunkKind)
     : m_device(parent)
     , m_defaultChunkSize(defaultChunkSize)

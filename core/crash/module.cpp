@@ -3,9 +3,11 @@
 
 
 #include "module.h"
+#include "diagnostic_capture_policy.h"
 #include "internal.h"
 #include "arena_names.h"
 
+#include <global/filesystem/executable_paths.h>
 #include <global/diagnostics.h>
 #include <global/scope_exit.h>
 #include <global/text_utils.h>
@@ -58,83 +60,6 @@ static void StoreBreadcrumb(const AStringView category, const AStringView messag
     CrashDetail::PublishCrashStateSnapshot();
 }
 
-static b8 CapturePolicyAllows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
-    if(category == DiagnosticEventCategory::s_Assert)
-        return policy.captureAssertions;
-    if(category == DiagnosticEventCategory::s_FatalAssert)
-        return policy.captureFatalAssertions;
-    if(event == DiagnosticEventName::s_Error)
-        return policy.captureLoggerErrors;
-    if(event == DiagnosticEventName::s_Fatal)
-        return policy.captureLoggerFatals;
-
-    return true;
-}
-
-static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
-    u64 hash = s_Fnv64OffsetBasis;
-    if(!record.event.empty())
-        hash = UpdateFnv64TextExact(hash, record.event);
-    if(!record.category.empty())
-        hash = UpdateFnv64TextExact(hash, record.category);
-    if(!record.expression.empty())
-        hash = UpdateFnv64TextExact(hash, record.expression);
-    if(!record.message.empty())
-        hash = UpdateFnv64TextExact(hash, record.message);
-    if(!record.file.empty())
-        hash = UpdateFnv64TextExact(hash, record.file);
-    hash = UpdateFnv64(hash, Span<const u8>(reinterpret_cast<const u8*>(&record.line), sizeof(record.line)));
-    return hash;
-}
-
-static b8 DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
-    return result.requestAccepted() && result.status != CrashDumpStatus::PackageWriteFailed;
-}
-
-static b8 ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
-    NothrowScopedLock lock(CrashDetail::g_State.mutex);
-    if(!CrashDetail::g_State.installed)
-        return false;
-    if(!CapturePolicyAllows(CrashDetail::g_State.capturePolicy, event, category))
-        return false;
-
-    const CrashCapturePolicy& policy = CrashDetail::g_State.capturePolicy;
-    if(policy.maxDiagnosticDumpsPerProcess != 0u && CrashDetail::g_State.diagnosticCaptureCount >= policy.maxDiagnosticDumpsPerProcess)
-        return false;
-
-    CrashDetail::FixedDiagnosticSite* freeSite = nullptr;
-    CrashDetail::FixedDiagnosticSite* matchingSite = nullptr;
-    const u64 siteHash = DiagnosticSiteHash(record);
-    for(usize i = 0u; i < CrashDetail::s_MaxDiagnosticSites; ++i){
-        CrashDetail::FixedDiagnosticSite& site = CrashDetail::g_State.diagnosticSites[i];
-        if(site.used && site.hash == siteHash){
-            matchingSite = &site;
-            break;
-        }
-
-        if(!site.used && !freeSite)
-            freeSite = &site;
-    }
-
-    if(policy.maxDiagnosticDumpsPerSite != 0u){
-        if(matchingSite && matchingSite->captureCount >= policy.maxDiagnosticDumpsPerSite)
-            return false;
-        if(!matchingSite && !freeSite)
-            return false;
-    }
-
-    if(!matchingSite && freeSite){
-        freeSite->used = 1u;
-        freeSite->hash = siteHash;
-        matchingSite = freeSite;
-    }
-
-    ++CrashDetail::g_State.diagnosticCaptureCount;
-    if(matchingSite)
-        ++matchingSite->captureCount;
-    return true;
-}
-
 NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const CrashDetail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, CrashDetail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(CrashDetail::s_ManualDumpCategory) : category;
 
@@ -170,10 +95,10 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
     options.triggerInstructionPointer = record.instructionPointer;
     options.triggerLine = record.line;
     options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
-    if(!ReserveDiagnosticCapture(record, options.event, options.triggerCategory))
+    if(!DiagnosticCapturePolicy::reserve(record, options.event, options.triggerCategory))
         return;
     const CrashDumpResult result = CaptureCrashDumpForReason(CrashDetail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
-    if(record.terminatesProcess && DiagnosticResultCanSuppressDuplicatePlatformCrash(result))
+    if(record.terminatesProcess && DiagnosticCapturePolicy::canSuppressDuplicate(result))
         CrashDetail::SuppressNextPlatformCrashCapture();
 }
 
@@ -239,7 +164,7 @@ void CrashDetail::PlatformCleanupObservations::recordPrimary(const PlatformFailu
 
 template<typename ArenaT>
 ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
+    const auto executableDirectory = ExecutablePaths(arena).directory();
     if(executableDirectory)
         return *executableDirectory / PackageNames::s_DefaultRootDirectoryName;
 
@@ -252,7 +177,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
+    const auto executableDirectory = ExecutablePaths(arena).directory();
     if(!executableDirectory)
         return ::Path<ArenaT>(arena);
 

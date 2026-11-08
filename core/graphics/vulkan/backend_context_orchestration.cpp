@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "swap_chain_lifecycle.h"
 
 #include <global/atomic_identity.h>
 
@@ -19,16 +20,16 @@ NWB_VULKAN_BEGIN
 
 b8 BackendContext::createInstance(){
     {
-        ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-        if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
+        ScopedLock lifecycleLock(m_swapChainLifecycle.m_swapChainLifecycleMutex);
+        if(m_swapChainLifecycle.m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
             if(m_vulkanInstance || m_vulkanDevice || m_swapChain || m_rhiDevice)
                 return false;
-            m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-            m_lifecycleDrainActive = false;
-            ScopedLock presentationLock(m_framePresentationMutex);
-            m_framePresentationClaimsEnabled = true;
+            m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
+            m_swapChainLifecycle.m_lifecycleDrainActive = false;
+            ScopedLock presentationLock(m_framePresentation.m_framePresentationMutex);
+            m_framePresentation.m_framePresentationClaimsEnabled = true;
         }
-        else if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready){
+        else if(m_swapChainLifecycle.m_swapChainLifecycleState != SwapChainLifecycleState::Ready){
             return false;
         }
     }
@@ -282,315 +283,25 @@ b8 BackendContext::createDevice(){
 }
 
 b8 BackendContext::createSwapChain(){
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_swapChain || !m_swapChainImages.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
-        return false;
-    }
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
-
-    if(createSwapChainResources(scratchArena))
-        return true;
-
-    if(m_rhiDevice && !m_lifecycleDrainActive){
-        m_lifecycleDrainActive = m_rhiDevice->beginLifecycleDrain();
-        if(!m_lifecycleDrainActive)
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close submissions after swapchain creation failure."));
-    }
-    {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        m_framePresentationClaimsEnabled = false;
-    }
-    m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-    return false;
+    return m_swapChainLifecycle.createSwapChain();
 }
 
 b8 BackendContext::destroy(){
-    {
-        ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-        if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed)
-            return true;
-    }
-
-    auto ticket = prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
-    if(!ticket)
-        return false;
-    return commitDestroy(Move(*ticket));
+    return m_swapChainLifecycle.destroy();
 }
 
 Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(const SwapChainTransitionKind::Enum kind){
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    SwapChainTransitionTicket ticket;
-    if(kind >= SwapChainTransitionKind::Count)
-        return MakeUnexpected(Failure{});
-    if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
-        if(kind != SwapChainTransitionKind::Destroy || m_swapChainLifecycleEpoch == 0u)
-            return MakeUnexpected(Failure{});
-        ticket.owner = this;
-        ticket.epoch = m_swapChainLifecycleEpoch;
-        ticket.kind = kind;
-        return ticket;
-    }
-    if(m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize || m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy){
-        const b8 preparedForRequestedKind =
-            (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize && kind == SwapChainTransitionKind::Resize)
-            || (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy && kind == SwapChainTransitionKind::Destroy)
-        ;
-        if(preparedForRequestedKind){
-            ticket.owner = this;
-            ticket.epoch = m_swapChainLifecycleEpoch;
-            ticket.kind = kind;
-            return ticket;
-        }
-        if(m_swapChainLifecycleState != SwapChainLifecycleState::PreparedResize || kind != SwapChainTransitionKind::Destroy)
-            return MakeUnexpected(Failure{});
-        m_swapChainLifecycleState = SwapChainLifecycleState::Preparing;
-        DeviceHandle device = m_rhiDevice;
-        if(device){
-            lifecycleLock.unlock();
-            device->prepareForDestructionAfterIdleOrLoss();
-            lifecycleLock.lock();
-        }
-        if(m_rhiDevice && !m_rhiDevice->sealLifecycleDrainForDestruction()){
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
-            return MakeUnexpected(Failure{});
-        }
-
-        AdvanceWrappingNonzero(m_swapChainLifecycleEpoch);
-        m_swapChainLifecycleState = SwapChainLifecycleState::PreparedDestroy;
-        ticket.owner = this;
-        ticket.epoch = m_swapChainLifecycleEpoch;
-        ticket.kind = kind;
-        return ticket;
-    }
-    if(
-        m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation
-        || m_swapChainLifecycleState == SwapChainLifecycleState::Preparing
-        || (m_swapChainLifecycleState == SwapChainLifecycleState::NeedsDestroy && kind != SwapChainTransitionKind::Destroy)
-    )
-        return MakeUnexpected(Failure{});
-
-    if(m_rhiDevice && !m_lifecycleDrainActive){
-        if(m_rhiDevice->submissionOperationActiveOnCurrentThread()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
-            return MakeUnexpected(Failure{});
-        }
-        if(!m_rhiDevice->beginLifecycleDrain()){
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
-            return MakeUnexpected(Failure{});
-        }
-        m_lifecycleDrainActive = true;
-    }
-    {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        m_framePresentationClaimsEnabled = false;
-    }
-    m_swapChainLifecycleState = SwapChainLifecycleState::Preparing;
-
-    if(!prepareSwapChainImageRevocation()){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return MakeUnexpected(Failure{});
-    }
-
-    const b8 acquireProofsComplete = waitAcquireSyncSlotsForLifecycle();
-    if(!acquireProofsComplete && (!m_rhiDevice || !m_rhiDevice->isDeviceLost())){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
-        return MakeUnexpected(Failure{});
-    }
-    if(!acquireProofsComplete && m_rhiDevice && m_rhiDevice->isDeviceLost()){
-        DeviceHandle device = m_rhiDevice;
-        lifecycleLock.unlock();
-        device->captureDeviceLoss("acquire lifecycle fence wait");
-        lifecycleLock.lock();
-    }
-
-    if(m_rhiDevice){
-        const VkResult idleResult = m_rhiDevice->waitForNativeIdle();
-        if(idleResult == VK_ERROR_DEVICE_LOST)
-            m_rhiDevice->markDeviceLost();
-        if(idleResult == VK_ERROR_DEVICE_LOST){
-            DeviceHandle device = m_rhiDevice;
-            lifecycleLock.unlock();
-            device->captureDeviceLoss("swapchain lifecycle idle");
-            lifecycleLock.lock();
-        }
-        if(idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()){
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove device idle."));
-            return MakeUnexpected(Failure{});
-        }
-        if(kind == SwapChainTransitionKind::Resize && m_rhiDevice->requiresRecreation()){
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            return MakeUnexpected(Failure{});
-        }
-        if(kind == SwapChainTransitionKind::Destroy){
-            DeviceHandle device = m_rhiDevice;
-            lifecycleLock.unlock();
-            device->prepareForDestructionAfterIdleOrLoss();
-            lifecycleLock.lock();
-            if(!m_rhiDevice->sealLifecycleDrainForDestruction()){
-                m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
-                return MakeUnexpected(Failure{});
-            }
-        }
-    }
-
-    AdvanceWrappingNonzero(m_swapChainLifecycleEpoch);
-    m_swapChainLifecycleState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
-    ticket.epoch = m_swapChainLifecycleEpoch;
-    ticket.owner = this;
-    ticket.kind = kind;
-    return ticket;
+    return m_swapChainLifecycle.prepareSwapChainTransition(kind);
 }
 
 b8 BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-    if(!validPreparedTicket(ticket, SwapChainTransitionKind::Resize))
-        return false;
-
-    commitPreparedSwapChainDestruction();
-    while(!m_framesInFlight.empty())
-        m_framesInFlight.pop();
-    m_queryPool.clear();
-    clearSemaphores(m_presentSemaphores);
-    clearAcquireSyncSlots();
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
-
-    if(!createSwapChainResources(scratchArena)){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return false;
-    }
-
-    NWB_ASSERT(m_rhiDevice && m_lifecycleDrainActive);
-    m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        m_framePresentationClaimsEnabled = true;
-    }
-    m_rhiDevice->endLifecycleDrain();
-    m_lifecycleDrainActive = false;
-    ticket = {};
-    return true;
+    return m_swapChainLifecycle.commitSwapChainResize(Move(ticket));
 }
 
 b8 BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
-    NothrowScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-    if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
-        const b8 validNoOpTicket = ticket.valid() && ticket.owner == this && ticket.kind == SwapChainTransitionKind::Destroy && ticket.epoch == m_swapChainLifecycleEpoch;
-        ticket = {};
-        return validNoOpTicket;
-    }
-    if(!validPreparedTicket(ticket, SwapChainTransitionKind::Destroy))
-        return false;
-
-    commitPreparedSwapChainDestruction();
-
-    while(!m_framesInFlight.empty())
-        m_framesInFlight.pop();
-    m_queryPool.clear();
-
-    clearSemaphores(m_presentSemaphores);
-    clearAcquireSyncSlots();
-
-    m_rhiDevice = nullptr;
-    m_lifecycleDrainActive = false;
-    m_sameClassQueues.clear();
-    m_nativeQueues.clear();
-    m_presentNativeQueueIndex = Limit<u32>::s_Max;
-    m_rendererString.clear();
-
-    if(m_vulkanDevice){
-        m_deviceDispatch.vkDestroyDevice(m_vulkanDevice, nullptr);
-        m_vulkanDevice = VK_NULL_HANDLE;
-    }
-
-    if(m_windowSurface && m_vulkanInstance){
-        m_instanceDispatch.vkDestroySurfaceKHR(m_vulkanInstance, m_windowSurface, nullptr);
-        m_windowSurface = VK_NULL_HANDLE;
-    }
-
-    if(m_debugUtilsMessenger){
-        if(m_instanceDispatch.vkDestroyDebugUtilsMessengerEXT)
-            m_instanceDispatch.vkDestroyDebugUtilsMessengerEXT(m_vulkanInstance, m_debugUtilsMessenger, nullptr);
-        m_debugUtilsMessenger = VK_NULL_HANDLE;
-    }
-
-    if(m_vulkanInstance){
-        m_instanceDispatch.vkDestroyInstance(m_vulkanInstance, nullptr);
-        m_vulkanInstance = VK_NULL_HANDLE;
-    }
-
-    Aftermath::Shutdown();
-    m_swapChainLifecycleState = SwapChainLifecycleState::Destroyed;
-    ticket = {};
-    return true;
+    return m_swapChainLifecycle.commitDestroy(Move(ticket));
 }
 
-b8 BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena){
-    if(!createVulkanSwapChain(scratchArena))
-        return false;
-
-    usize const numPresentSemaphores = m_swapChainImages.size();
-    if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
-        return false;
-    }
-
-    const usize numAcquireSyncSlots = Max(static_cast<usize>(m_maxFramesInFlight), m_swapChainImages.size());
-    if(!recreateAcquireSyncSlots(numAcquireSyncSlots)){
-        clearSemaphores(m_presentSemaphores);
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
-        return false;
-    }
-
-    if(!createFrameSyncQueries()){
-        clearSemaphores(m_presentSemaphores);
-        clearAcquireSyncSlots();
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
-        return false;
-    }
-
-    // Direct presentation list is swap-chain lifetime state; create it here so present() only reopens it.
-    resetDirectPresentCommandList();
-    {
-        const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-        if(!primaryGraphicsQueue.valid() || !ensureDirectPresentCommandList(primaryGraphicsQueue)){
-            clearSemaphores(m_presentSemaphores);
-            clearAcquireSyncSlots();
-            resetDirectPresentCommandList();
-            if(!destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
-            return false;
-        }
-    }
-
-    m_swapChainIndex = Limit<u32>::s_Max;
-    m_acquireSyncSlotIndex = 0u;
-    {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        resetFramePresentationSignal();
-        m_framePresentationClaimsEnabled = true;
-    }
-    m_frameAcquired = false;
-    m_frameAbandonmentComplete = false;
-
-    return true;
-}
-
-b8 BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
-    const SwapChainLifecycleState::Enum requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
-    return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

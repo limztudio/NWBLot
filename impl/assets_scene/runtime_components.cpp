@@ -3,6 +3,8 @@
 
 
 #include "asset.h"
+#include <core/assets/polymorphic_asset_codec.h>
+#include <impl/assets_scene/component_asset_binary_codec.adhd.h>
 
 #include <impl/ecs_scene/camera.h>
 
@@ -56,7 +58,7 @@ namespace ComponentAssetRuntime{
 
 
 b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
-    const auto payload = UnpackComponentAssetEnvelope(binary, outComponent.assetType());
+    const auto payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, outComponent.assetType());
     if(!payload)
         return false;
     if(!outComponent.loadComponentPayload(*payload))
@@ -75,7 +77,7 @@ b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
 
 
 Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
-    return PolymorphicAssetCodecDetail::DeserializePolymorphicAsset<IComponent, ComponentHeaderBinary, &ComponentHeaderBinary::componentTypeHash>(
+    return Core::Assets::PolymorphicAssetCodec::DeserializePolymorphicAsset<IComponent, ComponentHeaderBinary, &ComponentHeaderBinary::componentTypeHash>(
         virtualPath,
         binary,
         s_ComponentMagic,
@@ -91,7 +93,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const
 
 
 b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeTransformComponentPayload(payload, component);
+    return ComponentAssetBinaryCodec().deserializeTransform(payload, component);
 }
 
 b8 TransformComponentAsset::validatePayload()const{
@@ -105,7 +107,7 @@ b8 TransformComponentAsset::validatePayload()const{
 
 
 b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeCameraComponentPayload(payload, component);
+    return ComponentAssetBinaryCodec().deserializeCamera(payload, component);
 }
 
 b8 CameraComponentAsset::validatePayload()const{
@@ -119,7 +121,7 @@ b8 CameraComponentAsset::validatePayload()const{
 
 
 b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return DeserializeLightComponentPayload(payload, component);
+    return ComponentAssetBinaryCodec().deserializeLight(payload, component);
 }
 
 b8 LightComponentAsset::validatePayload()const{

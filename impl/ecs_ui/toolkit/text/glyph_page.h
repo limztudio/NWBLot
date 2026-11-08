@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_ui/toolkit/global.h>
-#include <impl/ecs_ui/toolkit/text/types.adhd.h>
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd.h>
 #include <impl/assets_font/asset.h>
 
 #include <core/assets/ref.h>

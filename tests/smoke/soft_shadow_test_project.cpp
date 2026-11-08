@@ -3,6 +3,7 @@
 
 
 #include "arrow_yaw_input_handler.h"
+#include "soft_shadow_scene.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
 #include "avboit_timing_render_pass.h"
@@ -24,6 +25,7 @@
 
 #include <core/common/log.h>
 #include <core/ecs/module.h>
+#include <core/input/module.h>
 #include <core/graphics/runtime/runtime.h>
 
 #include <global/simd/frame.h>
@@ -41,57 +43,21 @@ namespace __hidden_soft_shadow_test_smoke{
 constexpr TStringView s_ProjectName = NWB_TEXT("SoftShadowTestSmokeProject");
 
 using NWB::Tests::Smoke::ArrowYawInputHandler;
-using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
-using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
-using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
 using NWB::Tests::Smoke::TickSmokeWorld;
-using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
-using SoftShadowModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
-using SoftShadowMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
-using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque and glass casters under directional, point, and spot soft shadows.
-static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
-static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
-static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
-static constexpr SoftShadowMaterialRef s_TimingOpaqueMaterial{"project/smoke/soft_shadow/materials/timing_opaque"};
-static constexpr SoftShadowMaterialRef s_TimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
-static constexpr SoftShadowMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-
-static constexpr f32 s_GroundScale = 8.0f;
-
-static constexpr f32 s_CameraDistance = 3.2f;
-static constexpr f32 s_CameraHeight = 1.5f;
-static constexpr f32 s_CameraPitch = 0.30f;
-
-// Low sun angle casts long shadows that soften with distance.
-static constexpr f32 s_DirectionalLightPitch = 0.65f;
-static constexpr f32 s_DirectionalLightYaw = 1.4f;
-static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 static constexpr f32 s_DefaultAngularRadius = 0.03f;
 static constexpr f32 s_DefaultSourceRadius = 0.15f;
-
-// Different light colors and directions separate their overlapping penumbras.
-static constexpr f32 s_PointLightIntensity = 10.0f;
-static constexpr f32 s_PointLightRange = 14.0f;
-static constexpr f32 s_SpotLightIntensity = 13.0f;
-static constexpr f32 s_SpotLightRange = 16.0f;
-static constexpr f32 s_SpotLightPitch = 1.5f;
-static constexpr f32 s_SpotLightYaw = 0.0f;
-static constexpr f32 s_SpotInnerConeCos = 0.85f;
-static constexpr f32 s_SpotOuterConeCos = 0.55f;
 
 static constexpr f32 s_SpinSpeed = 0.5f;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
@@ -154,74 +120,10 @@ public:
         // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_CameraHeight, s_CameraDistance, s_CameraPitch, *m_world);
-
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_DirectionalLightIntensity);
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
-            light->angularRadius = ConfiguredAngularRadius();
-            light->enableCaustics = false;
-        }
-
-        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(1.5f, 2.2f, 0.3f, 0.0f), Float4(1.00f, 0.35f, 0.30f), s_PointLightIntensity, s_PointLightRange);
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight)){
-            light->sourceRadius = ConfiguredSourceRadius();
-            light->enableCaustics = false;
-        }
-
-        const NWB::Core::ECS::EntityID spotLight = NWB::Impl::Scene::CreateSpotLightEntity(
-            *m_world,
-            Float4(0.4f, 3.0f, 0.4f, 0.0f),
-            s_SpotLightPitch,
-            s_SpotLightYaw,
-            0.0f,
-            Float4(0.35f, 0.55f, 1.00f),
-            s_SpotLightIntensity,
-            s_SpotLightRange,
-            s_SpotInnerConeCos,
-            s_SpotOuterConeCos
-        );
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight)){
-            light->sourceRadius = ConfiguredSourceRadius();
-            light->enableCaustics = false;
-        }
-
-        // Timing materials omit stochastic surfel GI while keeping direct shadows.
-        const auto& opaqueMaterial = m_timingEnabled ? s_TimingOpaqueMaterial : s_OpaqueMaterial;
-        const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
-        m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), *m_world);
-
-        // The opaque caster provides the contact-hardening reference.
-        const auto characterModel = CreateTintedModelEntity(s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), *m_world);
-        m_characterOwner = characterModel.entity;
-        if(!characterModel.tintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
-
-        // The glass caster must preserve tint while its penumbra widens with receiver distance.
-        const auto glassModel = CreateTintedModelEntity(
-            s_Model,
-            transparentMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            // Glass caster tint and density for Beer-Lambert shadow absorption.
-            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            *m_world
-        );
-        m_glassOwner = glassModel.entity;
-        if(!glassModel.tintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
-
-        SyncSmokeModelRuntimes(*m_world);
-
-        NWB_FATAL_ASSERT_MSG(activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(), NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
+        if(!m_scene.create(*m_world, m_timingEnabled, ConfiguredAngularRadius(), ConfiguredSourceRadius()))
+            return false;
 
         if(m_timingEnabled){
-            const Array<NWB::Core::ECS::EntityID, 3> lights = { directionalLight, pointLight, spotLight };
-            for(const auto lightEntity : lights){
-                const auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity);
-                if(!light || light->enableCaustics){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShadowTimingProbe: timing light policy unavailable"));
-                    return false;
-                }
-            }
             const b8 hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
@@ -260,7 +162,7 @@ public:
         // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
-        spinCasters();
+        m_scene.spinCasters(*m_world, m_yaw.yaw());
         updateWindowTitle();
         if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
@@ -272,14 +174,6 @@ public:
 private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
-    }
-
-    void spinCasters()noexcept{
-        for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
-            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
-            if(transform)
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
-        }
     }
 
     void updateWindowTitle(){
@@ -308,9 +202,7 @@ private:
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     ArrowYawInputHandler m_arrowYawInput;
-    NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Tests::Smoke::SoftShadowScene m_scene;
     NWB::Tests::Smoke::YawSpinController m_yaw;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     b8 m_timingEnabled = false;

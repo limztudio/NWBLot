@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_model/model_binary_codec.adhd.h>
+
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
@@ -46,7 +48,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 b8 Model::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
     Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
-    if(!DeserializeModelAssetBinary(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
+    if(!ModelBinaryCodec().deserialize(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;

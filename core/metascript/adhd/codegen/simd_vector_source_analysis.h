@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../sema/type_utils.h"
+
+
+NWB_ADHD_BEGIN
+
+
+class SimdVectorSourceAnalysis final{
+public:
+    [[nodiscard]] static b8 TryGetStorageVectorLoadInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outLoadFn, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 TryGetFloatVectorSourceInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept;
+    [[nodiscard]] static b8 TryGetAnyFloatVectorSourceInfo(const Expr& srcExpr, b8& outIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept;
+};
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

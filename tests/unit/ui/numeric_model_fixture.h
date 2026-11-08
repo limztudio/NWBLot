@@ -7,6 +7,7 @@
 
 #include "multiline_fixture.h"
 
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/float_model.h>
 #include <impl/ecs_ui/toolkit/edit/integer_model.h>
 

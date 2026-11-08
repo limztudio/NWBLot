@@ -20,6 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 class ContextMenuState final : NoCopy{
     friend class Builder;
+    friend class ContextMenuCoordinator;
 
 
 public:

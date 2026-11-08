@@ -9,8 +9,10 @@
 
 
 #include "skin_cook.h"
+
+#include <impl/assets_mesh/skin_binary_codec.adhd.h>
 #include "cook_metadata.h"
-#include "cook_source_streams.h"
+#include "skin_influence_metadata_parser.h"
 
 #include <impl/assets_skeleton/cook_matrix.h>
 
@@ -37,7 +39,7 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!skin.validatePayload())
         return false;
 
-    return SerializeSkinAssetBinary(
+    return SkinBinaryCodec().serialize(
         skin.mesh().name().hash(),
         skin.skeleton().name().hash(),
         skin.influences(),
@@ -139,7 +141,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    if(!MeshCookSourceStreams::ParseSourceSkinInfluencesInto(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
+    if(!SkinInfluenceMetadataParser::parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
     auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
     if(!inverseBindMatricesResult)

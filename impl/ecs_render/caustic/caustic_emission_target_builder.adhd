@@ -1,0 +1,94 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/caustic/settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CausticEmissionTargetBuilder{
+    public void resolveLocalBounds(
+        in b8 isRuntime,
+        mut VectorSingle inOutLocalMin,
+        mut VectorSingle inOutLocalMax
+    )const{
+        if(!isRuntime)
+            return;
+        const VectorSingle center = (inOutLocalMin + inOutLocalMax) * VectorSingle(s_CausticBoundsMidpointWeight);
+        const VectorSingle half = (inOutLocalMax - inOutLocalMin) * VectorSingle(s_CausticBoundsMidpointWeight * s_CausticRuntimeBoundsInflation);
+        inOutLocalMin = center - half;
+        inOutLocalMax = center + half;
+    }
+
+    public NwbCausticEmissionTargetGpu makeTarget(
+        in VectorSingle worldMin,
+        in VectorSingle worldMax,
+        mut VectorSingle inOutCombinedMin,
+        mut VectorSingle inOutCombinedMax
+    )const{
+        inOutCombinedMin = min(inOutCombinedMin, worldMin);
+        inOutCombinedMax = max(inOutCombinedMax, worldMax);
+        NwbCausticEmissionTargetGpu target;
+        target.aabbMin = f32x4(worldMin, 0.0f);
+        target.aabbMax = f32x4(worldMax, 0.0f);
+        return target;
+    }
+
+    public void recordUnsupportedVolume(
+        in u32 entityId,
+        in OpticalBoundaryMode boundaryMode,
+        mut u32 inOutFirstEntity,
+        mut u32 inOutCount,
+        mut u64 inOutHash
+    )const{
+        if(boundaryMode == OpticalBoundaryMode::ClosedNested || boundaryMode == OpticalBoundaryMode::ClosedPriority)
+            return;
+        if(inOutCount == 0u)
+            inOutFirstEntity = entityId;
+        ++inOutCount;
+        inOutHash = updateFnv64U32(inOutHash, entityId);
+        inOutHash = updateFnv64Byte(inOutHash, cast<u8>(boundaryMode));
+    }
+
+    public b8 validateUpload(
+        in u32 targetCount,
+        in usize preparedByteSize,
+        in b8 hasBuffer,
+        in u32 capacity,
+        in b8 heapHandleValid,
+        in b8 isStorageBufferClass,
+        mut usize outTargetByteCount
+    )const{
+        const usize targetByteCount = cast<usize>(targetCount) * s_CausticEmissionTargetGpuBytes;
+        if(
+            preparedByteSize != targetByteCount
+            || !hasBuffer
+            || capacity < targetCount
+            || !heapHandleValid
+            || !isStorageBufferClass
+        ){
+            error("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage");
+            return false;
+        }
+        outTargetByteCount = targetByteCount;
+        return true;
+    }
+
+    public void captureBytes(
+        in Span<NwbCausticEmissionTargetGpu> targets,
+        mut Vector<u8> outPreparedBytes,
+        mut u32 outRefractiveInstanceCount
+    )const{
+        const usize targetByteCount = targets.size() * s_CausticEmissionTargetGpuBytes;
+        outPreparedBytes.clear();
+        outPreparedBytes.reserve(targetByteCount);
+        for(in NwbCausticEmissionTargetGpu target : targets)
+            AppendPOD(outPreparedBytes, target);
+        outRefractiveInstanceCount = cast<u32>(targets.size());
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

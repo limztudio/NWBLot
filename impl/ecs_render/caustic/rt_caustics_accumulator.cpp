@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_pipeline_set.h>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -97,9 +99,9 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
 
 
 b8 RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8 hardware, DeferredFrameTargets& targets){
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargets.heapHandle.valid())
         return true;
-    if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
+    if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargets.heapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
         return false;
     }
@@ -111,10 +113,11 @@ b8 RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::Mesh
         return false;
     }
 
-    const b8 producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
+    CausticPipelineSet pipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState, m_lightSpaceShadow.m_csg.snapshot.hasCsg);
+    const b8 producerReady = RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? pipelines.ensureCausticRtPipeline() : pipelines.ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
-    const b8 resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
-    const b8 temporalReady = ensureCausticAccumulatorDecayPipeline();
+    const b8 resolveReady = pipelines.ensureCausticGeometryDownsamplePipeline() && pipelines.ensureCausticResolvePipeline();
+    const b8 temporalReady = pipelines.ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 

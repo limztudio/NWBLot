@@ -3,6 +3,7 @@
 
 
 #include "project.h"
+#include "../smoke_capture_factory.h"
 #include "world.h"
 #include "../framebuffer_capture.h"
 
@@ -98,7 +99,7 @@ b8 UiLayerSmokeProject::onStartup(){
         captureOptions.requiredHeight = 600u;
     }
     constexpr u32 s_DefaultCaptureFrameCount = 60u;
-    auto capture = ConfigureSmokeFramebufferCapture(NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions, m_context);
+    auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions);
     if(!capture)
         return false;
     m_framebufferCapture = Move(*capture);

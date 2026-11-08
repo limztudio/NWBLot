@@ -20,6 +20,7 @@ NWB_VULKAN_BEGIN
 class Framebuffer final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
+    friend class FramebufferRenderingPreparation;
 
 
 public:

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "parallel_statement_emitter.h"
 #include "source_emitter.h"
 
 #include "reflection_emitter.h"
@@ -145,7 +146,7 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     if(method.usesScratchArena)
         emitScratchArenaPrologue(out, indent, method.name);
     if(method.usesTaskScope)
-        emitTaskScopePrologue(out, indent);
+        ParallelStatementEmitter(*this).emitTaskScopePrologue(out, indent);
 
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeSwitchBreakLabelLine = 0u;
@@ -185,96 +186,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         m_skippedCtorAssignExprs = skipped;
 }
 
-void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeName, const Span<const Expr* const> arguments, const MStringView injectedArenaName, const b8 useBracesForList, const b8 emptyUsesBraces)const{
-    if(!baseTypeName.empty() && SymbolTable::IsSimdMatrixType(baseTypeName)){
-        b8 allZeroArgs = true;
-        for(const Expr* arg : arguments){
-            if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
-                allZeroArgs = false;
-                break;
-            }
-        }
-        if(arguments.empty() || allZeroArgs){
-            out.append("{}");
-        }
-        else if(!useBracesForList && arguments.size() == 1u && arguments[0] && SymbolTable::IsSimdMatrixType(arguments[0]->resolvedSimdType)){
-            out.push_back('(');
-            emitExpr(out, *arguments[0]);
-            out.push_back(')');
-        }
-        else if(arguments.size() == 1u && arguments[0] && arguments[0]->resolvedSimdType.empty()){
-            const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(baseTypeName);
-            const u32 elemCount = matInfo ? matInfo->elemCount : 16u;
-            out.append("{ .raw = { ");
-            for(u32 i = 0u; i < elemCount; ++i){
-                if(i > 0u)
-                    out.append(", ");
-                emitExpr(out, *arguments[0]);
-            }
-            out.append(" } }");
-        }
-        else{
-            out.append("{ .raw = { ");
-            for(usize i = 0u; i < arguments.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                if(arguments[i])
-                    emitExpr(out, *arguments[i]);
-            }
-            out.append(" } }");
-        }
-        return;
-    }
 
-    if(arguments.empty() && injectedArenaName.empty() && emptyUsesBraces){
-        out.append("{}");
-        return;
-    }
-
-    u32 ctorVecLanes = 0u;
-    const b8 isStorageOrUnalignedVecCtor = !baseTypeName.empty()
-        && (SymbolTable::IsSimdStorageVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes));
-    if(isStorageOrUnalignedVecCtor){
-        b8 allZeroVecArgs = true;
-        for(const Expr* arg : arguments){
-            if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
-                allZeroVecArgs = false;
-                break;
-            }
-        }
-        if(arguments.empty() || allZeroVecArgs){
-            out.append("{}");
-            return;
-        }
-    }
-
-    out.push_back(useBracesForList ? '{' : '(');
-    const b8 isScalarSplatCtor = !baseTypeName.empty()
-        && (SymbolTable::IsSimdVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes))
-        && arguments.size() == 1u && arguments[0]
-        && arguments[0]->resolvedSimdType.empty();
-    if(isScalarSplatCtor){
-        for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-            if(lane > 0u)
-                out.append(", ");
-            emitExpr(out, *arguments[0]);
-        }
-    }
-    else{
-        for(usize i = 0u; i < arguments.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
-            if(arguments[i])
-                emitExpr(out, *arguments[i]);
-        }
-        if(!injectedArenaName.empty()){
-            if(!arguments.empty())
-                out.append(", ");
-            out.append(injectedArenaName.data(), injectedArenaName.size());
-        }
-    }
-    out.push_back(useBracesForList ? '}' : ')');
-}
 
 
 void SourceEmitter::emitIndent(MString& out, const u32 indent)const{

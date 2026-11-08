@@ -18,6 +18,8 @@ NWB_IMPL_BEGIN
 
 namespace __hidden_font_atlas_binary{
 
+static_assert(s_NameHashLaneCount == s_FontAtlasIdentityLaneCount);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,10 +28,10 @@ namespace __hidden_font_atlas_binary{
     usize cursor = 0u;
     FontAtlasPayload payload(arena);
     NameHash identity;
-    Array<u64, 4u> identityQwords{};
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords{};
     if(!TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor, identityQwords))
         return MakeUnexpected(Failure{});
-    for(usize lane = 0u; lane < 4u; ++lane)
+    for(usize lane = 0u; lane < s_NameHashLaneCount; ++lane)
         identity.qwords[lane] = identityQwords[lane];
     payload.font.virtualPath = Name(identity);
     if(!ReadBytes(bytes, sizeof(payload.fontSha256.bytes), cursor, payload.fontSha256.bytes))
@@ -108,8 +110,8 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     for(const FontAtlasPositioningTable& table : payload.positioningTables)
         size += s_FontAtlasBinaryTableHeaderBytes + table.bytes.size();
     binary.reserve(size);
-    Array<u64, 4u> identityQwords{};
-    for(usize lane = 0u; lane < 4u; ++lane)
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords{};
+    for(usize lane = 0u; lane < s_NameHashLaneCount; ++lane)
         identityQwords[lane] = payload.font.name().hash().qwords[lane];
     AppendFontAtlasBinaryPreambleAndIdentity(identityQwords, binary);
     binary.insert(binary.end(), payload.fontSha256.bytes, payload.fontSha256.bytes + sizeof(payload.fontSha256.bytes));

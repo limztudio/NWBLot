@@ -10,8 +10,9 @@ from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS, admit_fixture_processes, prepare_fixture_launch
 from window_capture_image import read_bmp_24_rows
 from window_capture_logs import wait_for_log_message
+from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+    require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_expected_log_text
 
 LIT_IMAGE = "image"
@@ -101,7 +102,7 @@ def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, l
     finally:
         try:
             if launch.application is not None:
-                exit_code, tail = terminate_process(launch.application, f"UI {fixture_label} fixture", launch.handle)
+                exit_code, tail = CaptureProcessTermination.terminate_process(launch.application, f"UI {fixture_label} fixture", launch.handle)
                 require_normal_process_exit(exit_code, tail, f"UI {fixture_label} fixture")
         finally:
             try:
@@ -113,7 +114,7 @@ def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, l
             finally:
                 try:
                     if launch.logserver is not None:
-                        terminate_process(launch.logserver, f"UI {fixture_label} logserver")
+                        CaptureProcessTermination.terminate_process(launch.logserver, f"UI {fixture_label} logserver")
                 finally:
                     try:
                         if driver is not None:

@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import caustic_quality_smoke as quality
 import caustic_optical_smoke as optical
 import stress_timing_smoke as stress
+from stress_launch_environment import StressLaunchEnvironment
+from caustic_optical_image_evidence import VARIANTS
 
 LIT_HARDWARE = "hardware"
 LIT_N = "\n"
@@ -47,7 +49,7 @@ class CausticQualitySmokeTests(unittest.TestCase):
     def test_stress_launch_strips_inherited_budget_and_uses_explicit_divisor(self):
         for divisor in (1, 2, 4):
             args = stress.parse_args(self.stress_args + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, str(divisor)])
-            env = stress.launch_environment({LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "8", LIT_NWB_CAUSTIC_SMOKE_ENABLED: "0"}, args, self.output)
+            env = StressLaunchEnvironment.launch_environment({LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "8", LIT_NWB_CAUSTIC_SMOKE_ENABLED: "0"}, args, self.output)
             self.assertEqual(env[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], str(divisor))
             self.assertNotIn(LIT_NWB_CAUSTIC_SMOKE_ENABLED, env)
 
@@ -55,7 +57,7 @@ class CausticQualitySmokeTests(unittest.TestCase):
         with patch.dict(optical.os.environ, {LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "8"}):
             for software in (False, True):
                 for divisor in (1, 2, 4):
-                    for variant in optical.VARIANTS:
+                    for variant in VARIANTS:
                         env = optical.capture_environment(variant, software, divisor)
                         self.assertEqual(env[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], str(divisor))
 

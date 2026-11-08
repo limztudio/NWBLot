@@ -9,6 +9,7 @@
 
 #include "backend.h"
 #include "command_validation.h"
+#include "vulkan_viewport_policy.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,9 +27,9 @@ NWB_VULKAN_BEGIN
 
 [[nodiscard]] inline VertexInputBinding GetVertexInputBinding(const InputLayout& layout, const u32 index)noexcept{ return BuildVertexInputBinding(layout.getBindingDescription(index)); }
 
-[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const Device& device)noexcept{ return VulkanDetail::IsViewportValid(viewport, device.getPhysicalDeviceLimits()); }
+[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const Device& device)noexcept{ return VulkanViewportPolicy::isViewportValid(viewport, device.getPhysicalDeviceLimits()); }
 
-using VulkanDetail::IsImplicitScissorValid;
+[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanViewportPolicy::isImplicitScissorValid(viewport); }
 using VulkanDetail::IsFramebufferAttachmentSubresourceSetValid;
 using VulkanDetail::GetIndexElementByteSize;
 using VulkanDetail::IsIndexDrawRangeValid;

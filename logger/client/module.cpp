@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include <logger/message_payload_codec.h>
 
 #include <global/diagnostics.h>
 #include <global/text_utils.h>
@@ -25,8 +26,6 @@ namespace __hidden_logger_client{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr long s_ConnectTimeoutMs = 1000L;
-static constexpr long s_RequestTimeoutMs = 2000L;
 static constexpr u32 s_RetrySleepMs = 100u;
 static constexpr u32 s_MaxRetrySleepMs = 5000u;
 static constexpr long s_HttpBadRequestCode = 400L;
@@ -39,10 +38,7 @@ static constexpr long s_HttpSuccessRangeMax = 300L;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CaptureInitializationFailure(const AStringView operation, const CURLcode code)noexcept{
-    const DiagnosticEventText detail = MakeDiagnosticEventText("{}: native_category=curl native_code={} detail={}", operation, code, curl_easy_strerror(code));
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = "logger_client_initialization", .message = detail.view(), .file = __FILE__, .line = __LINE__, });
-}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,21 +50,10 @@ static void CaptureInitializationFailure(const AStringView operation, const CURL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Client::GlobalInit()noexcept{
-    CURLcode curlResult;
-
-    curlResult = curl_global_init(CURL_GLOBAL_ALL);
-    if(curlResult != CURLE_OK){
-        __hidden_logger_client::CaptureInitializationFailure("curl_global_init", curlResult);
-        return false;
-    }
-
-    return true;
-}
+b8 Client::GlobalInit()noexcept{ return LogHttpTransport::globalInit(); }
 
 Client::Client()
     : ClientBaseType("NWB::Log::Client")
-    , m_curl(nullptr)
     , m_pendingPayload(BaseType::arena())
     , m_messageUrl(BaseType::arena())
     , m_telemetryUrl(BaseType::arena())
@@ -87,10 +72,7 @@ Client::Client()
 Client::~Client()noexcept{
     stopWorker();
 
-    if(m_curl){
-        curl_easy_cleanup(static_cast<CURL*>(m_curl));
-        m_curl = nullptr;
-    }
+
 }
 
 b8 Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
@@ -112,40 +94,7 @@ b8 Client::internalInit(const AStringView url){
     m_messageUrl = url;
     m_telemetryUrl = JoinWithSingleSlash(BaseType::arena(), url, s_TelemetryUploadEndpoint);
 
-    m_curl = curl_easy_init();
-    if(!m_curl){
-        __hidden_logger_client::CaptureInitializationFailure("curl_easy_init", CURLE_FAILED_INIT);
-        return false;
-    }
-
-    const NotNull<CURL*> curlHandle = MakeNotNull(static_cast<CURL*>(m_curl));
-    CURLcode curlResult;
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POST, 1);
-    if(curlResult != CURLE_OK){
-        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_POST", curlResult);
-        return false;
-    }
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_NOSIGNAL, 1L);
-    if(curlResult != CURLE_OK){
-        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_NOSIGNAL", curlResult);
-        return false;
-    }
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_CONNECTTIMEOUT_MS, __hidden_logger_client::s_ConnectTimeoutMs);
-    if(curlResult != CURLE_OK){
-        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_CONNECTTIMEOUT_MS", curlResult);
-        return false;
-    }
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_TIMEOUT_MS, __hidden_logger_client::s_RequestTimeoutMs);
-    if(curlResult != CURLE_OK){
-        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_TIMEOUT_MS", curlResult);
-        return false;
-    }
-
-    return true;
+    return m_transport.init();
 }
 
 b8 Client::internalUpdate(){
@@ -176,14 +125,14 @@ b8 Client::internalUpdate(){
                     NWB_CERR << "[ERROR] Log client: message exceeded the server upload limit.\n";
                     msg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena()));
                 }
-                const auto builtPayload = BuildMessagePayload(msg, m_pendingPayload);
+                const auto builtPayload = MessagePayloadCodec::build(msg, m_pendingPayload);
                 if(!builtPayload){
                     const DiagnosticEventText detail = MakeDiagnosticEventText("Message payload admission failed: domain=MessagePayloadError code={}", builtPayload.error());
                     CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);
                     m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
                     NWB_CERR << "[ERROR] Log client: message payload could not be encoded.\n";
                     const MessageType fallbackMsg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an invalid message payload"), BaseType::arena()));
-                    if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
+                    if(!MessagePayloadCodec::build(fallbackMsg, m_pendingPayload))
                         return true;
                 }
                 m_pendingPayloadKind = ClientPayloadKind::Message;
@@ -229,8 +178,6 @@ b8 Client::internalUpdate(){
         return scheduleRetry();
     };
 
-    const NotNull<CURL*> curlHandle = MakeNotNull(static_cast<CURL*>(m_curl));
-    CURLcode curlResult;
     if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
         CaptureDiagnosticEvent("logger_client_payload", "Payload exceeds curl's size limit", __FILE__, __LINE__);
         m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
@@ -242,28 +189,13 @@ b8 Client::internalUpdate(){
         return true;
     }
 
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_URL, m_pendingPayloadKind == ClientPayloadKind::Telemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str());
-    if(curlResult != CURLE_OK)
-        return retryCurlFailure(curlResult, "setting URL");
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
-    if(curlResult != CURLE_OK)
-        return retryCurlFailure(curlResult, "setting payload");
-
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
-    if(curlResult != CURLE_OK)
-        return retryCurlFailure(curlResult, "setting payload size");
-
-    curlResult = curl_easy_perform(curlHandle.get());
-    if(curlResult != CURLE_OK)
-        return retryCurlFailure(curlResult, "sending payload");
+    const auto result = m_transport.send(m_pendingPayloadKind == ClientPayloadKind::Telemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str(), m_pendingPayload.data(), m_pendingPayload.size());
+    if(result.transferCompleted)
+        m_lastCurlFailureCode = 0;
+    if(result.code != 0)
+        return retryCurlFailure(static_cast<CURLcode>(result.code), result.operation);
     m_lastCurlFailureCode = 0;
-
-    long responseCode = 0;
-    curlResult = curl_easy_getinfo(curlHandle.get(), CURLINFO_RESPONSE_CODE, &responseCode);
-    if(curlResult != CURLE_OK)
-        return retryCurlFailure(curlResult, "reading HTTP status");
-    m_lastCurlFailureCode = 0;
+    const long responseCode = result.responseCode;
     if(responseCode == __hidden_logger_client::s_HttpBadRequestCode || responseCode == __hidden_logger_client::s_HttpPayloadTooLargeCode || responseCode == __hidden_logger_client::s_HttpUnprocessableContentCode){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Server rejected a logger payload with HTTP status {}", responseCode);
         CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);

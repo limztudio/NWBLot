@@ -3,6 +3,7 @@
 
 
 #include "backend_context.h"
+#include "swap_chain_surface_policy.h"
 #include "arena_names.h"
 
 
@@ -16,24 +17,24 @@ NWB_VULKAN_BEGIN
 
 
 BeginFrameResult BackendContext::beginFrame(){
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycle.m_swapChainLifecycleMutex);
     BeginFrameResult result;
     const auto captureDeviceLossAfterUnlock = [&](const AStringView context){
         DeviceHandle device = m_rhiDevice;
         if(!device || !device->isDeviceLost())
             return;
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         lifecycleLock.unlock();
         device->captureDeviceLoss(context);
     };
 
-    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_frameAcquired){
+    if(m_swapChainLifecycle.m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_frameAcquired){
         NWB_LOGGER_ERROR(NWB_TEXT("Cannot begin a Vulkan frame while the previous acquired swap-chain image remains unresolved"));
         return result;
     }
 
     if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         if(m_rhiDevice && m_rhiDevice->isDeviceLost())
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentationSignalCancellationContext);
         return result;
@@ -51,7 +52,7 @@ BeginFrameResult BackendContext::beginFrame(){
     AcquireSyncSlot& slot = m_acquireSyncSlots[m_acquireSyncSlotIndex];
     if(!prepareAcquireSyncSlot(slot)){
         m_rhiDevice->quarantineDevice();
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         if(m_rhiDevice->isDeviceLost()){
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_AcquireSlotReuseContext);
             return result;
@@ -69,7 +70,7 @@ BeginFrameResult BackendContext::beginFrame(){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities for a requested resize. {}"), ResultToString(capabilitiesResult));
             return result;
         }
-        const VkExtent2D extent = VulkanDetail::ResolveSwapChainSurfaceExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+        const VkExtent2D extent = SwapChainSurfacePolicy::resolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
         result.suggestedWidth = extent.width;
         result.suggestedHeight = extent.height;
         result.status = BeginFrameStatus::ResizeRequired;
@@ -93,7 +94,7 @@ BeginFrameResult BackendContext::beginFrame(){
         slot.consumerToken = {};
         slot.state = AcquireSyncSlotState::Unconsumed;
         m_rhiDevice->quarantineDevice();
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         if(m_rhiDevice->isDeviceLost()){
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_AcquiredImageSemaphoreBridgeContext);
             return result;
@@ -107,7 +108,7 @@ BeginFrameResult BackendContext::beginFrame(){
     if(acquiredIndex >= m_swapChainImages.size() || !m_swapChainImages[acquiredIndex].rhiHandle){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Acquired swap-chain image index does not identify a live back buffer."));
         m_rhiDevice->quarantineDevice();
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         return result;
     }
 
@@ -125,18 +126,18 @@ BeginFrameResult BackendContext::beginFrame(){
 }
 
 b8 BackendContext::abandonAcquiredFrame(){
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycle.m_swapChainLifecycleMutex);
+    if(m_swapChainLifecycle.m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
         return false;
-    UniqueLock<Futex> presentationLock(m_framePresentationMutex);
-    m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
-        return m_framePresentationSignalState != FramePresentationSignalState::Queued;
+    UniqueLock<Futex> presentationLock(m_framePresentation.m_framePresentationMutex);
+    m_framePresentation.m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
+        return m_framePresentation.m_framePresentationSignalState != FramePresentationSignalState::Queued;
     });
     if(!m_frameAcquired)
         return true;
     if(m_frameAbandonmentComplete){
         NWB_ASSERT(m_swapChainIndex == Limit<u32>::s_Max);
-        NWB_ASSERT(m_framePresentationSignalState == FramePresentationSignalState::Idle);
+        NWB_ASSERT(m_framePresentation.m_framePresentationSignalState == FramePresentationSignalState::Idle);
         return true;
     }
     if(!m_rhiDevice){
@@ -147,17 +148,17 @@ b8 BackendContext::abandonAcquiredFrame(){
     }
     if(m_rhiDevice->requiresRecreation()){
         m_swapChainIndex = Limit<u32>::s_Max;
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         return false;
     }
 
     const b8 currentImageReady = m_swapChain && m_swapChainIndex < m_swapChainImages.size() && m_swapChainIndex < m_presentSemaphores.size() && m_swapChainImages[m_swapChainIndex].rhiHandle && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE;
-    const b8 presentationSignalIdle = m_framePresentationSignalState == FramePresentationSignalState::Idle && m_framePresentationSemaphore == VK_NULL_HANDLE && !m_framePresentationQueue.valid() && m_framePresentationSwapChainIndex == Limit<u32>::s_Max;
+    const b8 presentationSignalIdle = m_framePresentation.m_framePresentationSignalState == FramePresentationSignalState::Idle && m_framePresentation.m_framePresentationSemaphore == VK_NULL_HANDLE && !m_framePresentation.m_framePresentationQueue.valid() && m_framePresentation.m_framePresentationSwapChainIndex == Limit<u32>::s_Max;
     const b8 presentationSignalTracked =
         currentImageReady
-        && m_framePresentationSignalState != FramePresentationSignalState::Idle
-        && m_framePresentationSemaphore == m_presentSemaphores[m_swapChainIndex]
-        && m_framePresentationSwapChainIndex == m_swapChainIndex
+        && m_framePresentation.m_framePresentationSignalState != FramePresentationSignalState::Idle
+        && m_framePresentation.m_framePresentationSemaphore == m_presentSemaphores[m_swapChainIndex]
+        && m_framePresentation.m_framePresentationSwapChainIndex == m_swapChainIndex
     ;
     const b8 abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
     // Invalidate presentation identity before touching signal state.
@@ -173,8 +174,8 @@ b8 BackendContext::abandonAcquiredFrame(){
     if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
         DeviceHandle device = m_rhiDevice;
         if(lifecycleLock.owns_lock()){
-            if(m_swapChainLifecycleState == SwapChainLifecycleState::Ready)
-                m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+            if(m_swapChainLifecycle.m_swapChainLifecycleState == SwapChainLifecycleState::Ready)
+                m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             lifecycleLock.unlock();
         }
         if(device)
@@ -191,13 +192,13 @@ b8 BackendContext::abandonAcquiredFrame(){
 
 Expected<b8, PresentationFailure> BackendContext::present(){
     b8 presentationAccepted = false;
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycle.m_swapChainLifecycleMutex);
     VkResult res = VK_SUCCESS;
     const auto captureDeviceLossAfterUnlock = [&](const AStringView context, UniqueLock<Futex>* const presentationLock = nullptr){
         DeviceHandle device = m_rhiDevice;
         if(!device || !device->isDeviceLost())
             return;
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         if(presentationLock && presentationLock->owns_lock())
             presentationLock->unlock();
         if(lifecycleLock.owns_lock())
@@ -205,7 +206,7 @@ Expected<b8, PresentationFailure> BackendContext::present(){
         device->captureDeviceLoss(context);
     };
 
-    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
+    if(m_swapChainLifecycle.m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
 
     if(!m_rhiDevice || !m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
@@ -230,8 +231,8 @@ Expected<b8, PresentationFailure> BackendContext::present(){
 
     b8 frameSignalAccepted = false;
     {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        frameSignalAccepted = m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentationSemaphore == semaphore;
+        ScopedLock presentationLock(m_framePresentation.m_framePresentationMutex);
+        frameSignalAccepted = m_framePresentation.m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentation.m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentation.m_framePresentationSemaphore == semaphore;
     }
 
     if(!frameSignalAccepted){
@@ -293,8 +294,8 @@ Expected<b8, PresentationFailure> BackendContext::present(){
         frameSignalAccepted = true;
     }
 
-    UniqueLock<Futex> presentationLock(m_framePresentationMutex);
-    frameSignalAccepted = m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentationSemaphore == semaphore;
+    UniqueLock<Futex> presentationLock(m_framePresentation.m_framePresentationMutex);
+    frameSignalAccepted = m_framePresentation.m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentation.m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentation.m_framePresentationSemaphore == semaphore;
     if(!frameSignalAccepted){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Presentation signal state changed before native present."));
         return MakeUnexpected(PresentationFailure{ presentationAccepted });

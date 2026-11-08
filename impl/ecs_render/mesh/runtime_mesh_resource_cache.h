@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
+
+
+NWB_IMPL_BEGIN
+
+
+class RendererMeshSystem;
+
+class RuntimeMeshResourceCache final : NoCopy{
+public:
+    explicit RuntimeMeshResourceCache(RendererMeshSystem& system)noexcept : m_system(system){}
+
+
+public:
+    [[nodiscard]] Expected<NotNull<MeshResources*>> create(const RuntimeMeshDesc& desc);
+    [[nodiscard]] Expected<NotNull<MeshResources*>> find(const RuntimeMeshDesc& desc)noexcept;
+
+
+private:
+    RendererMeshSystem& m_system;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

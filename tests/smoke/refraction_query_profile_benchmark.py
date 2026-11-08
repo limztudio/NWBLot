@@ -7,38 +7,24 @@ not an optimization A/B comparison. Diagnostic counter acquisition is separate.
 """
 
 import argparse
-from collections import Counter
-from datetime import datetime, timezone
-import itertools
 import math
 from pathlib import Path
-import statistics
 import subprocess
 import sys
 import time
 from types import SimpleNamespace
 
 import refraction_density_benchmark as density
-from gpu_load_telemetry import WindowsGpuTelemetry, host_inventory
+from gpu_load_telemetry import WindowsGpuTelemetry
+from refraction_profile_results import ProfileResultAnalysis
+from refraction_profile_plan import CELLS, RefractionProfilePlan
 from smoke_volume_identity import file_identity
 
-CELLS = tuple(density.Cell(extent, coverage, "hardware") for extent, coverage in itertools.product(("960x720", "1600x900"), (50, 100)))
-RUNNER_SOURCES = ("refraction_query_profile_benchmark.py", "refraction_density_benchmark.py", "gpu_load_telemetry.py", "reflection_benchmark.py", "renderer_ab_benchmark.py")
-METRICS = (density.FRAME, density.RESOLVE, *density.CONTROLS, density.COMPOSITE, *density.AVBOIT)
+RUNNER_SOURCES = ("refraction_query_profile_benchmark.py", "refraction_density_benchmark.py", "gpu_load_telemetry.py", "gpu_load_analysis.py", "gpu_load_host.py", "refraction_profile_results.py", "refraction_profile_plan.py", "window_capture_termination.py", "window_capture_frame.py", "gpu_timing_evidence.py", "reflection_benchmark.py", "reflection_workload_qualification.py", "reflection_gpu_coverage.py", "reflection_experiment_analysis.py", "renderer_ab_benchmark.py", "renderer_wall_frame_evidence.py", "renderer_workload_log_policy.py", "renderer_workload_registry.py", "renderer_trial_comparison.py", "experiment_statistics.py")
 
 
-def orders(blocks, seed):
-    return density.timing.balanced_orders(CELLS, blocks, seed)
 
 
-def order_plan(rows):
-    result, previous = [], None
-    for block, row in enumerate(rows):
-        for position, cell in enumerate(row):
-            result.append({"block": block, "position": position, "cell": cell.key, "predecessor": previous,
-                "predecessor_within_block": row[position - 1].key if position else None})
-            previous = cell.key
-    return result
 
 
 def parse_args(argv=None):
@@ -76,65 +62,10 @@ def runner_identity():
     return {name: file_identity(directory / name) for name in RUNNER_SOURCES}
 
 
-def create_plan(args, arm, frozen):
-    sequence = order_plan(orders(args.blocks, args.order_seed))
-    positions = Counter((trial["cell"], trial["position"]) for trial in sequence)
-    preceding = Counter((trial["predecessor_within_block"], trial["cell"]) for trial in sequence if trial["predecessor_within_block"] is not None)
-    inventory = host_inventory()
-    no_clock_source = not inventory["gpu_clock_counter_candidates"] and inventory["nvidia_smi"] is None
-    return {"created_utc": datetime.now(timezone.utc).isoformat(), "executable": str(arm.executable), "runtime": str(arm.runtime), "identity": frozen,
-        "host_inventory": inventory,
-        "runner_identity": runner_identity(), "cells": [{"key": cell.key, "extent": cell.extent, "coverage": cell.density, "route": cell.route} for cell in CELLS],
-        "blocks": args.blocks, "trial_count": len(sequence), "sequence": sequence, "order_seed": args.order_seed,
-        "position_counts": {f"{cell}/position_{position}": count for (cell, position), count in positions.items()},
-        "within_block_preceding_counts": {f"{before} -> {after}": count for (before, after), count in preceding.items()},
-        "sample_intervals": args.sample_intervals, "warmup_intervals": args.warmup_intervals, "warmup_minimum_frames": args.warmup_minimum_frames,
-        "warmup_minimum_seconds": args.warmup_minimum_seconds, "minimum_measured_gpu_frames": args.minimum_frames,
-        "minimum_interval_runtime_seconds": len(sequence) * (args.warmup_minimum_seconds + args.sample_intervals * .5),
-        "telemetry": {"period_seconds": 1, "provider": "persistent Windows PDH GPU Engine query", "GPU_frequency_available": False,
-            "frequency_limitation": "Host inventory found no GPU clock counter candidate or nvidia-smi. Load cannot establish clock state." if no_clock_source else "Clock candidates require separate supported instrumentation; this campaign does not collect frequency values. Load cannot establish clock state.",
-            "GPU_temperature_available": False, "temperature_limitation": "ACPI zones are not identified as GPU temperatures."},
-        "capture": False, "validation": False, "diagnostic_instrumentation": False,
-        "policy": "One frozen renderer; four workloads, eight equal-weight independent blocks. Complete Williams cycles balance position and within-block preceding treatment. Cross-block predecessor is recorded. Fixed target-only warmup, no adaptive plateau or outlier removal, selective repeats, or favorable extension. Telemetry is observational and has approximate publication alignment; no clock/DVFS causal attribution. All raw reports retained. Coverage comparisons change the optical workload, so control movement is described rather than treated as a fixed-scene optimization A/B."}
 
 
-def trial_metrics(trial):
-    frames = trial["scopes"][density.FRAME]["gpu_samples"]
-    return {**{scope: trial["scopes"][scope]["mean_ms"] for scope in METRICS},
-        "effect_work_per_frame_ms": trial["total_effect_work_per_frame_ms"],
-        "resolve_ms_per_million_admitted_pixels": trial["scopes"][density.RESOLVE]["total_ms"] / frames / trial["runtime_signature"]["fixture"]["admitted_pixels"] * 1e6}
 
 
-def summarize(trials, plan):
-    expected = {(row["block"], row["position"], row["cell"]) for row in plan["sequence"]}
-    seen = [(trial["block"], trial["position"], trial["cell"]) for trial in trials]
-    if len(seen) != len(set(seen)) or set(seen) != expected:
-        raise density.SmokeFailure("workload profiling requires every planned trial exactly once")
-    cells = {}
-    for cell in CELLS:
-        selected = [trial for trial in trials if trial["cell"] == cell.key]
-        signature = selected[0]["runtime_signature"]
-        if any(trial["runtime_signature"] != signature for trial in selected):
-            raise density.SmokeFailure("profile cell device, material, coverage, or tracing route changed")
-        metrics = [trial_metrics(trial) for trial in selected]
-        cells[cell.key] = {"runtime_signature": signature, "blocks": len(selected), "metrics": {name: {
-            "mean": statistics.fmean(row[name] for row in metrics), "minimum": min(row[name] for row in metrics), "maximum": max(row[name] for row in metrics),
-            "block_values": [row[name] for row in metrics]} for name in metrics[0]},
-            "telemetry_eligible": all(trial["telemetry"]["eligible"] for trial in selected), "wall_eligible": all(trial["wall_frame"]["eligible"] for trial in selected)}
-    scaling = {}
-    for extent in ("960x720", "1600x900"):
-        pairs = {block: {trial["runtime_signature"]["fixture"]["requested_percent"]: trial for trial in trials
-            if trial["block"] == block and trial["cell"].startswith(extent + "_")} for block in range(plan["blocks"])}
-        scaling[extent] = {name: density.timing.paired_statistics([trial_metrics(pairs[block][100])[name] - trial_metrics(pairs[block][50])[name]
-            for block in range(plan["blocks"])]) for name in trial_metrics(pairs[0][50])}
-    by_position = {}
-    for cell in CELLS:
-        by_position[cell.key] = {str(position): {name: statistics.fmean(trial_metrics(trial)[name] for trial in trials if trial["cell"] == cell.key and trial["position"] == position)
-            for name in (density.FRAME, density.RESOLVE, *density.CONTROLS)} for position in range(len(CELLS))}
-    return {"acquisition_passed": True, "telemetry_eligible": all(trial["telemetry"]["eligible"] for trial in trials),
-        "wall_eligible": all(trial["wall_frame"]["eligible"] for trial in trials), "cells": cells, "coverage_100_minus_50_paired_statistics": scaling,
-        "position_means_ms": by_position, "plan": plan, "trials": trials,
-        "interpretation": "Equal-weight block-level workload comparisons, not a renderer speedup. Individual 95% bootstrap intervals are not simultaneous family-wise intervals. Position/load associations are observational; the host provides no GPU clock telemetry."}
 
 
 def run(args):
@@ -144,7 +75,7 @@ def run(args):
     if any(not any(path.replace("\\", "/").endswith("/source/" + required) for path in sources) for required in density.FIXTURE_SOURCE_FILES):
         raise density.SmokeFailure("profile manifest lacks both compiled fixture source files")
     args.output_directory.mkdir(parents=True, exist_ok=False)
-    plan = create_plan(args, arm, frozen)
+    plan = RefractionProfilePlan.create_plan(args, arm, frozen, runner_identity)
     density.write(args.output_directory / "plan.json", plan)
     print(f"Plan: {plan['trial_count']} trials, >= {plan['minimum_interval_runtime_seconds'] / 60:.1f} minutes of target-only warmup and report intervals plus startup", flush=True)
     if args.plan_only:
@@ -165,7 +96,7 @@ def run(args):
                 raise density.SmokeFailure("frozen profile renderer or acquisition source changed during trial")
             if not trial["telemetry"]["eligible"]:
                 raise density.SmokeFailure("profile timing saved but passive GPU telemetry is incomplete")
-        report = summarize(trials, plan)
+        report = ProfileResultAnalysis.summarize(trials, plan, CELLS)
         density.write(args.output_directory / "report.json", report)
         print("Completed: " + str(args.output_directory / "report.json"), flush=True)
         return 0

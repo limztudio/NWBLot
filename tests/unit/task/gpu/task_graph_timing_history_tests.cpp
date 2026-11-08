@@ -3,6 +3,7 @@
 
 
 #include <core/task/gpu/timing_feedback.h>
+#include <core/task/gpu/timing_decision.h>
 
 #include <tests/common/test_context.h>
 
@@ -151,14 +152,14 @@ TEST(GpuTaskTimingHistory, PreservesAbsoluteAndRelativeHysteresisThresholds){
     GpuTaskTimingFeedbackPolicy policy;
     policy.minimumAbsoluteBenefitSeconds = 2.0;
     policy.minimumRelativeBenefit = 0.25;
-    EXPECT_TRUE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
+    EXPECT_TRUE(GpuTaskTimingDecision::benefitExceedsHysteresis(incumbent, candidate, policy));
     policy.minimumAbsoluteBenefitSeconds = 2.0000000000000004;
-    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
+    EXPECT_FALSE(GpuTaskTimingDecision::benefitExceedsHysteresis(incumbent, candidate, policy));
     policy.minimumAbsoluteBenefitSeconds = 2.0;
     policy.minimumRelativeBenefit = 0.25000000000000006;
-    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
-    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(candidate, incumbent, policy));
-    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, incumbent, policy));
+    EXPECT_FALSE(GpuTaskTimingDecision::benefitExceedsHysteresis(incumbent, candidate, policy));
+    EXPECT_FALSE(GpuTaskTimingDecision::benefitExceedsHysteresis(candidate, incumbent, policy));
+    EXPECT_FALSE(GpuTaskTimingDecision::benefitExceedsHysteresis(incumbent, incumbent, policy));
 }
 
 TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherArena){

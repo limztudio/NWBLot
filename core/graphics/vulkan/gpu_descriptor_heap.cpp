@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "descriptor_buffer_writer.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
@@ -306,7 +307,7 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
 
     // Carve persistent mapped resource and sampler blocks once.
-    if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
+    if(!DescriptorBufferWriter(*this).initialize(offsetAlignmentBytes))
         return failInitialization();
 
     auto& manager = *MakeNotNull(m_context.descriptorBufferManager);

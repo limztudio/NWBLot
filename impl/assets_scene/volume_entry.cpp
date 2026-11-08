@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "cook_component_metadata.h"
 
 #include <impl/assets_scene/component_assets.adhd.h>
 
@@ -36,7 +37,7 @@ static b8 RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& r
     return RegisterComponentCookEntry<
         TransformComponentCookEntry,
         TransformComponentAsset,
-        &ParseTransformComponentCookMetadata,
+        &SceneComponentMetadataParser::parseTransform,
         s_TransformDiagnosticPrefix
     >(registry);
 }
@@ -45,7 +46,7 @@ static b8 RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& regi
     return RegisterComponentCookEntry<
         CameraComponentCookEntry,
         CameraComponentAsset,
-        &ParseCameraComponentCookMetadata,
+        &SceneComponentMetadataParser::parseCamera,
         s_CameraDiagnosticPrefix
     >(registry);
 }
@@ -54,7 +55,7 @@ static b8 RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& regis
     return RegisterComponentCookEntry<
         LightComponentCookEntry,
         LightComponentAsset,
-        &ParseLightComponentCookMetadata,
+        &SceneComponentMetadataParser::parseLight,
         s_LightDiagnosticPrefix
     >(registry);
 }
@@ -169,9 +170,9 @@ static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
 static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     return
         registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
-        && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())
-        && registry.registerType(CameraComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>, IComponent::AssetTypeName())
-        && registry.registerType(LightComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &SceneComponentMetadataParser::parseTransform, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(CameraComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<CameraComponentCookEntry, &SceneComponentMetadataParser::parseCamera, s_CameraDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(LightComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<LightComponentCookEntry, &SceneComponentMetadataParser::parseLight, s_LightDiagnosticPrefix>, IComponent::AssetTypeName())
         && registry.registerType(EntityAsset::AssetTypeName(), &ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
         && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)

@@ -92,9 +92,6 @@ struct TextureCreateMetadata{
     return states == ResourceStates::Unknown || IsTextureResourceStateMaskValid(states);
 }
 
-[[nodiscard]] VkImageUsageFlags RequiredImageUsageForResourceStates(ResourceStates::Mask states)noexcept;
-[[nodiscard]] u32 GetMaxMipLevels(const TextureDesc& desc)noexcept;
-[[nodiscard]] b8 IsTextureDescShapeValid(const TextureDesc& desc)noexcept;
 
 [[nodiscard]] constexpr VkImageType GetTextureImageType(const TextureDimension::Enum dimension)noexcept{
     switch(dimension){
@@ -122,13 +119,7 @@ struct TextureCreateMetadata{
     return imageType;
 }
 
-[[nodiscard]] VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension)noexcept;
-[[nodiscard]] VkImageUsageFlags PickImageUsage(const TextureDesc& desc, VkImageAspectFlags aspectMask)noexcept;
-[[nodiscard]] VkImageCreateFlags PickImageFlags(const TextureDesc& desc)noexcept;
-[[nodiscard]] VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, const TextureCreateMetadata& metadata)noexcept;
-[[nodiscard]] b8 IsTextureImageInfoConsistent(const TextureDesc& desc, const VkImageCreateInfo& imageInfo, VkImageUsageFlags requiredUsage = 0u)noexcept;
 // Creation copies the cached aspect and block layout from the creation format.
-[[nodiscard]] b8 TextureFormatMetadataMatches(Format::Enum format, VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept;
 
 [[nodiscard]] inline b8 IsTextureImageWithinFormatLimits(const VkImageCreateInfo& imageInfo, const VkImageFormatProperties& formatProperties)noexcept{
     return
@@ -141,9 +132,6 @@ struct TextureCreateMetadata{
     ;
 }
 
-[[nodiscard]] b8 ValidateTextureViewShape(TextureDimension::Enum dimension, const TextureSubresourceSet& subresources);
-[[nodiscard]] Unexpected<Failure> ReportTextureCreateDescError(TStringView operationName, TStringView message, b8 assertFailure);
-[[nodiscard]] Expected<TextureCreateMetadata> ValidateTextureCreateDesc(const TextureDesc& desc, TStringView operationName, b8 assertFailure);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SearchComboSourceSnapshot{
+    public SearchComboSourceSnapshot(){
+        this.generation = 0u;
+        this.revision = 0u;
+        this.count = 0u;
+    }
+
+    public SearchComboSourceSnapshot(in u64 inGeneration, in u64 inRevision, in u64 inCount){
+        this.generation = inGeneration;
+        this.revision = inRevision;
+        this.count = inCount;
+    }
+
+    public u64 generation;
+    public u64 revision;
+    public u64 count;
+}
+
+class SearchComboFilterRules{
+    public b8 evaluateSearchComboRebuildNeed(
+        in b8 filterValid,
+        in u64 stateSourceGeneration,
+        in u64 stateSourceRevision,
+        in u64 stateSourceCount,
+        in SearchComboSourceSnapshot full,
+        in u64 stateViewGeneration,
+        in u64 stateViewRevision,
+        in u64 stateViewCount,
+        in SearchComboSourceSnapshot previous,
+        in StringView cachedQuery,
+        in StringView currentQuery
+    ){
+        const b8 fullChanged = !filterValid || stateSourceGeneration != full.generation || stateSourceRevision != full.revision || stateSourceCount != full.count;
+        const b8 viewChanged = !filterValid || stateViewGeneration != previous.generation || stateViewRevision != previous.revision || stateViewCount != previous.count;
+        const b8 queryChanged = !filterValid || cachedQuery != currentQuery;
+        return fullChanged || viewChanged || queryChanged;
+    }
+
+    public b8 validateSearchComboFilteredSnapshot(in SearchComboSourceSnapshot full, in SearchComboSourceSnapshot filtered){
+        return filtered.generation != 0u && filtered.revision != 0u && filtered.count <= full.count;
+    }
+
+    public b8 shouldResetSearchComboPreviewOnFilter(
+        in b8 rebuild,
+        in b8 filterValid,
+        in u64 stateQueryGeneration,
+        in u64 stateQueryExternalRevision,
+        in TextAreaModelStamp query
+    ){
+        const b8 externalQueryChange = filterValid && (stateQueryGeneration != query.instanceGeneration || stateQueryExternalRevision != query.externalRevision);
+        return rebuild || externalQueryChange;
+    }
+
+    public void commitSearchComboFilterState(
+        in b8 rebuild,
+        in StringView candidate,
+        in SearchComboSourceSnapshot full,
+        in SearchComboSourceSnapshot filtered,
+        in TextAreaModelStamp query,
+        mut String inOutFilteredQuery,
+        mut u64 outSourceGeneration,
+        mut u64 outSourceRevision,
+        mut u64 outSourceCount,
+        mut u64 outViewGeneration,
+        mut u64 outViewRevision,
+        mut u64 outViewCount,
+        mut u64 outQueryGeneration,
+        mut u64 outQueryExternalRevision,
+        mut b8 outFilterValid
+    ){
+        if(rebuild)
+            inOutFilteredQuery.assign(candidate);
+        outSourceGeneration = full.generation;
+        outSourceRevision = full.revision;
+        outSourceCount = full.count;
+        outViewGeneration = filtered.generation;
+        outViewRevision = filtered.revision;
+        outViewCount = filtered.count;
+        outQueryGeneration = query.instanceGeneration;
+        outQueryExternalRevision = query.externalRevision;
+        outFilterValid = true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

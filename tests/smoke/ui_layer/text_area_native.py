@@ -10,11 +10,11 @@ import math
 import time
 
 from edit_native import POINTER_SETTLE_SECONDS
-from interaction_smoke import WIN32_WORD_MASK
+from native_input import WIN32_WORD_MASK
 from list_native import WIN32_WHEEL_DELTA
 from numeric_edit_native import NumericEditNativeInput
 from window_capture_smoke import SmokeFailure
-from window_capture_x11 import LinuxXEvent
+from window_capture_x11_input import LinuxXEvent
 
 LIT_DOWN = "Down"
 

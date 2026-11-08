@@ -19,8 +19,9 @@ b8 RouteRouterPrimary(
     in u64 layoutGeneration,
     in InputSource activePointerSource,
     in Point interactionPosition,
-    mut Vector<PopupRecord> popups,
-    mut Vector<PopupDismissal> popupDismissals,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut PopupDismissRequest popupDismissRequest,
     mut Vector<CommandSource> commandSources,
     mut Vector<InputAction> actions,
     mut Vector<ControlAction> controlActions,
@@ -77,7 +78,10 @@ b8 RouteRouterPrimary(
             return true;
         }
         if(!popups.empty() && !hasHit){
-            outDismissedPopup = TryDismissRouterPopup(PopupDismissReason::OutsideClick, popups, popupDismissals);
+            const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+            outDismissedPopup = dismissal.has_value();
+            if(outDismissedPopup)
+                popupDismissRequest = dismissal.value();
             inOutCapture = WidgetId();
             inOutCapturePopup = PopupToken();
             inOutCaptureDeclaration = 0u;
@@ -174,3 +178,4 @@ b8 RouteRouterPrimary(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/optics/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_RayTracingOpticalSceneHeaderBytes = 32u;
+const usize s_RayTracingOpticalInstanceBytes = 16u;
+
+
+class OpticalSceneBinaryCodec{
+    public b8 computeByteSize(in usize instanceCount, mut usize outInstanceBytes, mut usize outByteCount)const{
+        if(instanceCount > (cast<usize>(u32.max) - s_RayTracingOpticalSceneHeaderBytes) / s_RayTracingOpticalInstanceBytes){
+            error("Ray optical scene: instance table exceeds the shader address range");
+            return false;
+        }
+        outInstanceBytes = instanceCount * s_RayTracingOpticalInstanceBytes;
+        outByteCount = s_RayTracingOpticalSceneHeaderBytes + outInstanceBytes;
+        return true;
+    }
+
+    public void serialize(
+        in RayTracingOpticalSceneHeaderGpu header,
+        in Span<RayTracingOpticalInstanceGpu> instances,
+        mut Vector<u8> outBytes,
+        mut u32 outInstanceCount
+    )const{
+        const usize byteCount = s_RayTracingOpticalSceneHeaderBytes + instances.size() * s_RayTracingOpticalInstanceBytes;
+        outBytes.clear();
+        outBytes.reserve(byteCount);
+        AppendPOD(outBytes, header);
+        for(in RayTracingOpticalInstanceGpu instance : instances)
+            AppendPOD(outBytes, instance);
+        outInstanceCount = cast<u32>(instances.size());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "texture_image_policy.h"
 #include "backend.h"
+#include "texture_transfer_layout.h"
 #include "texture_resource_detail.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
@@ -35,7 +37,7 @@ static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and de
     const u64 stagingTotalByteSize,
     const u32 requiredOffsetAlignment
 )noexcept{
-    const auto range = VulkanDetail::BuildStagingTextureRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
+    const auto range = VulkanDetail::TextureTransferLayout::buildStagingRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
     if(!range)
         return MakeUnexpected(Failure{});
     // The required alignment is the common multiple of both copy alignments.
@@ -224,10 +226,10 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
         return MakeUnexpected(Failure{});
     if(textureDesc.format != stagingDesc.format)
         return MakeUnexpected(Failure{});
-    NWB_ASSERT(VulkanTextureDetail::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo));
+    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo));
     NWB_ASSERT(
-        VulkanTextureDetail::TextureFormatMetadataMatches(stagingDesc.format, stagingResource.m_aspectMask, stagingResource.m_formatLayout)
-        && VulkanTextureDetail::TextureFormatMetadataMatches(textureDesc.format, textureResource.m_aspectMask, textureResource.m_formatLayout)
+        VulkanTextureDetail::TextureImagePolicy::textureFormatMetadataMatches(stagingDesc.format, stagingResource.m_aspectMask, stagingResource.m_formatLayout)
+        && VulkanTextureDetail::TextureImagePolicy::textureFormatMetadataMatches(textureDesc.format, textureResource.m_aspectMask, textureResource.m_formatLayout)
         && stagingResource.m_creationQueueSharing == stagingDesc.queueSharing
         && stagingResource.m_totalByteSize != 0u
         && stagingResource.m_arrayByteSize != 0u
@@ -236,8 +238,8 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
     if(!VulkanDetail::IsBufferImageCopyAspectMaskSupported(stagingResource.m_aspectMask))
         return MakeUnexpected(Failure{});
 
-    const auto resolvedStaging = VulkanDetail::ResolveTextureSlice(stagingDesc, stagingSlice, stagingResource.m_formatLayout);
-    const auto resolvedTexture = VulkanDetail::ResolveTextureSlice(textureDesc, textureSlice, textureResource.m_formatLayout);
+    const auto resolvedStaging = VulkanDetail::TextureTransferLayout::resolveSlice(stagingDesc, stagingSlice, stagingResource.m_formatLayout);
+    const auto resolvedTexture = VulkanDetail::TextureTransferLayout::resolveSlice(textureDesc, textureSlice, textureResource.m_formatLayout);
     if(!resolvedStaging || !resolvedTexture)
         return MakeUnexpected(Failure{});
 

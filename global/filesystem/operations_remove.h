@@ -206,30 +206,6 @@ template<typename ArenaT>
     return destination;
 }
 
-template<typename TempArenaT, typename PathArenaT>
-[[nodiscard]] inline StagedDirectoryPaths<PathArenaT> BuildStagedDirectoryPaths(TempArenaT& tempArena, const Path<PathArenaT>& outputDirectory, const AStringView stageToken){
-    PathArenaT& pathArena = outputDirectory.arena();
-    const Path<PathArenaT> outputParentDirectory = outputDirectory.parentPath();
-    const Path<PathArenaT> stageBaseDirectory = outputParentDirectory.empty() ? outputDirectory : outputParentDirectory;
-
-    StagedDirectoryPaths<PathArenaT> output(pathArena);
-
-    AString<TempArenaT> stageDirectoryName{tempArena};
-    stageDirectoryName.reserve(stageToken.size() + GlobalFilesystemDetail::s_StageDirectoryNameExtraCharacters);
-    stageDirectoryName += GlobalFilesystemDetail::s_StagedDirectoryPrefix;
-    stageDirectoryName += stageToken;
-    stageDirectoryName += GlobalFilesystemDetail::s_StageDirectorySuffix;
-    output.stageDirectory = stageBaseDirectory / stageDirectoryName;
-
-    AString<TempArenaT> backupDirectoryName{tempArena};
-    backupDirectoryName.reserve(stageToken.size() + GlobalFilesystemDetail::s_BackupDirectoryNameExtraCharacters);
-    backupDirectoryName += GlobalFilesystemDetail::s_StagedDirectoryPrefix;
-    backupDirectoryName += stageToken;
-    backupDirectoryName += GlobalFilesystemDetail::s_BackupDirectorySuffix;
-    output.backupDirectory = stageBaseDirectory / backupDirectoryName;
-    return output;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

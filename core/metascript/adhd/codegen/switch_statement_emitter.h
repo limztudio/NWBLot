@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "source_emitter.h"
+
+
+NWB_ADHD_BEGIN
+
+
+class SwitchStatementEmitter final{
+public:
+    explicit SwitchStatementEmitter(const SourceEmitter& emitter)noexcept : m_emitter(emitter){}
+    void emit(MString& out, const Stmt& stmt, u32 indent)const;
+
+private:
+    void emitIfChainStatements(MString& out, Span<const Stmt* const> statements, u32 indent)const;
+    const SourceEmitter& m_emitter;
+};
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 
 
 #include <global/scope_exit.h>
@@ -67,7 +68,7 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
 b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!sliderMatches(frame) || !m_skin)
         return false;
-    if(!TryResolveSliderStyleMetrics(*m_skin, frame.m_options, frame.m_style, frame.m_metrics))
+    if(!ControlStyleMetrics().sliderMetrics(*m_skin, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
     return sliderMatches(frame);
 }

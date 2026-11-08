@@ -3,139 +3,12 @@
 
 
 #include "edit_click_tracker.adhd"
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-i32x4 ResolveUiEditNativeCaretBounds(in Rect caret, in DisplayMetrics display){
-    const VectorSingle physical = VectorSingle(caret.x, caret.y, caret.width, caret.height) * VectorSingle(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
-    const VectorSingle origin = floor(VectorSingle(physical.x, physical.y, 0.0f, 0.0f));
-    const VectorSingle size = ceil(VectorSingle(physical.z, physical.w, 0.0f, 0.0f));
-    const f64 minI32 = cast<f64>(i32.min);
-    const f64 maxI32 = cast<f64>(i32.max);
-    const VectorDouble coordinate = clamp(VectorDouble(cast<f64>(origin.x), cast<f64>(origin.y), cast<f64>(size.x), cast<f64>(size.y)), minI32, maxI32);
-    return i32x4(cast<i32>(coordinate.x), cast<i32>(coordinate.y), max(1, cast<i32>(coordinate.z)), max(1, cast<i32>(coordinate.w)));
-}
-
-Expected<Point> ResolveLocalUiEditTextPosition(
-    in u64 generation,
-    in Span<EditBoxCaretStop> stops,
-    in Span<EditCaretLine> lines,
-    in u64 geometryModelGeneration,
-    in PopupToken geometryPopup,
-    in EditTextMode textMode,
-    in EditBoxPlacement placement,
-    in UiTextEditOwner owner,
-    in PopupToken popup,
-    in Point position
-){
-    if(
-        generation == 0u || stops.empty() || lines.empty()
-        || geometryModelGeneration != owner.modelGeneration || geometryPopup != popup
-        || (textMode != EditTextMode::SingleLine && textMode != EditTextMode::Multiline)
-        || (textMode == EditTextMode::SingleLine && lines.size() != 1u)
-    )
-        return makeUnexpected(Failure());
-    return Point(position.x - placement.textOrigin.x, position.y - placement.textOrigin.y);
-}
-
-Expected<usize> HitUiEditBoxGeometry(
-    in UiEditBoxGeometry geometry,
-    in UiTextEditOwner owner,
-    in PopupToken popup,
-    in Point position
-){
-    const Expected<Point> local = ResolveLocalUiEditTextPosition(
-        geometry.generation,
-        geometry.stops,
-        geometry.lines,
-        geometry.modelGeneration,
-        geometry.popup,
-        geometry.textMode,
-        geometry.placement,
-        owner,
-        popup,
-        position
-    );
-    if(!local.has_value())
-        return makeUnexpected(Failure());
-    return HitEditCaretGeometry(geometry.lines, geometry.stops, local.value());
-}
-
-Expected<usize> HitUiEditBoxWordGeometry(
-    in UiEditBoxGeometry geometry,
-    in UiTextEditOwner owner,
-    in PopupToken popup,
-    in Point position
-){
-    const Expected<Point> local = ResolveLocalUiEditTextPosition(
-        geometry.generation,
-        geometry.stops,
-        geometry.lines,
-        geometry.modelGeneration,
-        geometry.popup,
-        geometry.textMode,
-        geometry.placement,
-        owner,
-        popup,
-        position
-    );
-    if(!local.has_value())
-        return makeUnexpected(Failure());
-    return TryHitEditWordCaretGeometry(geometry.lines, geometry.stops, local.value());
-}
-
-void PublishUiEditBoxGeometry(
-    in PopupToken popup,
-    in EditBoxPlacement placement,
-    in Span<EditBoxCaretStop> stops,
-    in Span<EditCaretLine> lines,
-    in EditTextMode textMode,
-    in EditBoxOptions options,
-    in u64 generation,
-    in u64 revision,
-    in u64 externalRevision,
-    in u64 modelGeneration,
-    mut UiEditBoxGeometry outCandidate
-){
-    outCandidate.popup = popup;
-    outCandidate.placement = placement;
-    outCandidate.stops.clear();
-    outCandidate.stops.reserve(stops.size());
-    for(in EditBoxCaretStop stop : stops)
-        outCandidate.stops.push_back(stop);
-    outCandidate.lines.clear();
-    outCandidate.lines.reserve(lines.size());
-    for(in EditCaretLine line : lines)
-        outCandidate.lines.push_back(line);
-    outCandidate.textMode = textMode;
-    outCandidate.options = options;
-    outCandidate.generation = generation;
-    outCandidate.revision = revision;
-    outCandidate.externalRevision = externalRevision;
-    outCandidate.modelGeneration = modelGeneration;
-}
-
-void CommitUiEditBoxCandidateGeometry(in u64 generation, mut UiEditBoxGeometry inOutCandidate, mut UiEditBoxGeometry inOutDisplayed){
-    if(inOutCandidate.generation == generation){
-        inOutDisplayed = inOutCandidate;
-        inOutCandidate.generation = 0u;
-    }
-}
-
-b8 IsFocusedUiEditBoxEntryDisplayedReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup){
-    return displayed.generation != 0u
-        && displayed.options.enabled
-        && displayed.modelGeneration == owner.modelGeneration
-        && displayed.popup == popup;
-}
-
-b8 IsUiEditBoxEntrySessionDisplayReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup){
-    return displayed.generation != 0u
-        && displayed.modelGeneration == owner.modelGeneration
-        && displayed.popup == popup;
-}
 
 usize ComputeUiTextEditRetainedBytes(in EditCompositionView composition, in usize textLength, in usize selectionStart, in usize selectionEnd){
     usize replaced = selectionEnd - selectionStart;
@@ -150,28 +23,6 @@ b8 ValidateUiTextEditSurroundingDeleteRange(in usize deleteBeforeBytes, in usize
 
 b8 ValidateUiTextEditPollSequence(in u64 eventSequence, in u64 lastSequence, in usize eventIndex, in usize maxEvents){
     return eventSequence > lastSequence && eventIndex < maxEvents;
-}
-
-Expected<b8, UiEditClipboardStatus> ValidateUiEditClipboardActionMode(
-    in EditClipboardAction action,
-    in b8 validChannel,
-    in b8 readOnly,
-    in b8 compositionActive,
-    in b8 hasSelection
-){
-    if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection))
-        return makeUnexpected(UiEditClipboardStatus::InvalidAction);
-    if(!validChannel)
-        return makeUnexpected(UiEditClipboardStatus::Unsupported);
-    const b8 reads = action == EditClipboardAction::Paste;
-    const b8 mutates = reads || action == EditClipboardAction::Cut;
-    if(readOnly && mutates)
-        return makeUnexpected(UiEditClipboardStatus::ReadOnly);
-    if(compositionActive)
-        return makeUnexpected(UiEditClipboardStatus::CompositionActive);
-    if(!reads && !hasSelection)
-        return makeUnexpected(UiEditClipboardStatus::NoSelection);
-    return reads;
 }
 
 EditWordRange ResolveUiEditWordDragSelection(
@@ -238,43 +89,6 @@ b8 CanAppendUiEditBoxEvent(
     in usize maxQueuedTextBytes
 ){
     return currentEventCount < maxEvents && eventTextSize <= maxQueuedTextBytes - queuedTextBytes;
-}
-
-UiEditClipboardStatus PrepareUiEditClipboardInsertText(
-    in EditClipboardAction action,
-    in b8 readOnly,
-    in EditTextMode textMode,
-    in usize textLength,
-    in usize selectionStart,
-    in usize selectionEnd,
-    in usize maxModelBytes,
-    in StringView completionText,
-    mut String inOutInsertText
-){
-    if(action != EditClipboardAction::Paste && action != EditClipboardAction::Cut)
-        return UiEditClipboardStatus::Published;
-    if(readOnly)
-        return UiEditClipboardStatus::ReadOnly;
-    inOutInsertText.clear();
-    if(action == EditClipboardAction::Paste){
-        const usize retainedBytes = textLength - (selectionEnd - selectionStart);
-        if(retainedBytes > maxModelBytes)
-            return UiEditClipboardStatus::TooLarge;
-        const usize maxBytes = maxModelBytes - retainedBytes;
-        Expected<usize, EditTextStatus> normalized = makeUnexpected(EditTextStatus::InvalidText);
-        if(textMode == EditTextMode::Multiline)
-            normalized = NormalizeMultilineTextInto(completionText, maxBytes, inOutInsertText);
-        else
-            normalized = NormalizeSingleLineTextInto(completionText, maxBytes, inOutInsertText);
-        if(!normalized.has_value()){
-            if(normalized.error() == EditTextStatus::TooLarge)
-                return UiEditClipboardStatus::TooLarge;
-            return UiEditClipboardStatus::InvalidText;
-        }
-        if(inOutInsertText.empty())
-            return UiEditClipboardStatus::Applied;
-    }
-    return UiEditClipboardStatus::Pending;
 }
 
 b8 IsCommittedByteOnGraphemeBoundary(in Span<usize> boundaries, in usize committedByte){

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -36,43 +37,43 @@ TEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAc
     mesh.runtimeGeometryContentRevision = 0u;
     mesh.blasGeometryContentRevision = 0u;
     mesh.swBvhGeometryContentRevision = 0u;
-    EXPECT_TRUE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
 }
 
 TEST(MeshAccelerationUpdateTests, EachBackendTracksItsOwnAcceptedContentRevision){
     auto mesh = AcceptedRuntimeGeometry();
     ++mesh.runtimeGeometryContentRevision;
-    EXPECT_TRUE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
     mesh.blasGeometryContentRevision = mesh.runtimeGeometryContentRevision;
-    EXPECT_FALSE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
     mesh.swBvhGeometryContentRevision = mesh.runtimeGeometryContentRevision;
-    EXPECT_FALSE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
 }
 
 TEST(MeshAccelerationUpdateTests, DirtyStorageAndMissingTopologyOverrideMatchingContents){
     auto mesh = AcceptedRuntimeGeometry();
     mesh.blasBuildPending = true;
     mesh.swBvhBuildPending = true;
-    EXPECT_TRUE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
     mesh.swBvhBuildPending = false;
     mesh.swBvhTopologyBuilt = false;
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
 }
 
 TEST(MeshAccelerationUpdateTests, ImmutableStaticGeometryNeedsAcceptanceButNoRuntimeRevision){
     auto mesh = AcceptedRuntimeGeometry();
     mesh.runtimeMesh = false;
     mesh.runtimeGeometryContentRevision = 0u;
-    EXPECT_FALSE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_FALSE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
     mesh.blasBuildAccepted = false;
     mesh.swBvhBuildAccepted = false;
-    EXPECT_TRUE(RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
 }
 
 

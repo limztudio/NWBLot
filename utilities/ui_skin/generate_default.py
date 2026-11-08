@@ -6,18 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 from pathlib import Path
-import stat
 import struct
-import subprocess
 import sys
-import tempfile
 from typing import Optional, Sequence
 import zlib
 
 
 REPO = Path(__file__).resolve().parents[2]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+from utilities.ui_skin.skin_publisher import SOURCE_IMAGE_NAME, SkinPublisher
 DEFAULT_DIRECTORY = REPO / "impl/assets/ui/skins/default"
 ATLAS_SIZE = 256
 TILE_SIZE = 32
@@ -56,10 +55,6 @@ PNG_COLOR_TYPE_RGBA = 6
 PNG_COMPRESSION_LEVEL = 9
 PNG_UINT32_FORMAT = ">I"
 ATLAS_LINE_BREAK = "\r\n"
-SOURCE_IMAGE_NAME = "source.png"
-TEXTURE_OUTPUT_NAME = "texture"
-TEX_CONV_OUTPUT_FLAG = "--output"
-TEX_CONV_FORCE_FLAG = "--force"
 
 FIELD_NAME = "name"
 FIELD_RGBA = "rgba"
@@ -211,96 +206,8 @@ def _generate_into(directory: Path) -> None:
     (directory / "atlas.nwb").write_bytes(ATLAS_LINE_BREAK.join(lines).encode("utf-8"))
 
 
-def inspect_file(path: Path) -> bool:
-    try:
-        info = path.lstat()
-    except FileNotFoundError:
-        return False
-    if not stat.S_ISREG(info.st_mode):
-        raise RuntimeError(f"not a regular file: {path}")
-    return True
-
-
-def report_cleanup(message: str, active_error: Optional[BaseException]) -> None:
-    try:
-        print(message, file=sys.stderr)
-    except (OSError, ValueError):
-        if active_error is None:
-            raise
-        try:
-            add_note = getattr(active_error, "add_note", None)
-            if add_note is not None:
-                add_note(message)
-            else:
-                active_error.args += (message,)
-        except Exception:
-            pass
-
-
-def generate_and_publish(directory: Path, converter: Optional[Path]) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    stage = Path(tempfile.mkdtemp(prefix=".ui_skin_", dir=directory))
-    names = [SOURCE_IMAGE_NAME, "atlas.nwb"]
-    if converter:
-        names.extend(["texture.nwb", "texture.tex"])
-    known_names = set(names) | {name + ".previous" for name in names}
-    records = []
-    preserve = False
-    try:
-        _generate_into(stage)
-        if converter:
-            subprocess.run([str(converter.resolve()), str(stage / SOURCE_IMAGE_NAME), TEX_CONV_OUTPUT_FLAG, str(stage / TEXTURE_OUTPUT_NAME), TEX_CONV_FORCE_FLAG], check=True)
-        for name in names:
-            source = stage / name
-            target = directory / name
-            if not inspect_file(source):
-                raise RuntimeError(f"missing generated file: {source}")
-            if inspect_file(target) and os.name == "posix":
-                target_info = target.lstat()
-                source_info = source.lstat()
-                if (source_info.st_uid, source_info.st_gid) != (target_info.st_uid, target_info.st_gid):
-                    os.chown(source, target_info.st_uid, target_info.st_gid)
-                os.chmod(source, stat.S_IMODE(target_info.st_mode))
-        for name in names:
-            source = stage / name
-            target = directory / name
-            previous = stage / (name + ".previous")
-            had_previous = inspect_file(target)
-            records.append((source, target, previous, had_previous))
-            if had_previous:
-                os.replace(target, previous)
-            os.replace(source, target)
-    except BaseException as error:
-        preserve = True
-        failures = []
-        for source, target, previous, had_previous in reversed(records):
-            try:
-                if inspect_file(previous):
-                    os.replace(previous, target)
-                elif not had_previous and not inspect_file(source) and inspect_file(target):
-                    target.unlink()
-            except (OSError, RuntimeError) as rollback_error:
-                failures.append(f"{target}: {rollback_error}")
-        if failures:
-            raise RuntimeError(f"UI skin rollback failed; recovery files remain in {stage}: {'; '.join(failures)}") from error
-        preserve = False
-        raise
-    finally:
-        active_error = sys.exc_info()[1]
-        if preserve:
-            report_cleanup(f"UI skin recovery files remain in {stage}", active_error)
-        else:
-            try:
-                for item in stage.iterdir():
-                    if item.name in known_names and item.is_file() and not item.is_symlink():
-                        item.unlink()
-                stage.rmdir()
-            except OSError as cleanup_error:
-                report_cleanup(f"UI skin temporary files remain in {stage}: {cleanup_error}", active_error)
-
-
 def generate(directory: Path) -> None:
-    generate_and_publish(directory, None)
+    SkinPublisher(directory, None, _generate_into).publish()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -309,7 +216,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--tex-conv", type=Path, help="Also regenerate texture.nwb/.tex using the built tex_conv executable.")
     args = parser.parse_args(argv)
     directory = args.directory.resolve()
-    generate_and_publish(directory, args.tex_conv)
+    SkinPublisher(directory, args.tex_conv, _generate_into).publish()
     return 0
 
 

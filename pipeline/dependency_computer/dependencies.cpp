@@ -3,6 +3,7 @@
 
 
 #include "provider_catalog.h"
+#include "dependency_path_hints.h"
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -19,79 +20,7 @@ NWB_DEPENDENCY_COMPUTER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_dependency_computer_dependencies{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Assets = Core::Assets;
-
-using KnownVirtualPathTextMap = HashMap<Name, Assets::AssetString, Assets::ScratchArena, Hasher<Name>, EqualTo<Name>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void RecordVirtualPathText(const AStringView rawText, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){
-    const Expected<AStringView> trimmed = TryTrimVirtualPathText(rawText);
-    if(!trimmed)
-        return;
-
-    const auto name = Name::FromText(*trimmed);
-    if(!name || !*name)
-        return;
-
-    if(outMap.find(*name) == outMap.end())
-        outMap.emplace(*name, Assets::AssetString(*trimmed, arena));
-}
-
-static void CollectValueVirtualPathTexts(const Core::Metascript::Value& value, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){
-    if(value.isString()){
-        const Core::Metascript::MStringView str = value.asString();
-        RecordVirtualPathText(AStringView(str.data(), str.size()), arena, outMap);
-        return;
-    }
-    if(value.isList()){
-        for(const Core::Metascript::Value& item : value.asList())
-            CollectValueVirtualPathTexts(item, arena, outMap);
-        return;
-    }
-    if(value.isMap()){
-        for(const auto& [key, fieldValue] : value.asMap()){
-            RecordVirtualPathText(AStringView(key.data(), key.size()), arena, outMap);
-            CollectValueVirtualPathTexts(fieldValue, arena, outMap);
-        }
-    }
-}
-
-static void CollectDocumentVirtualPathTexts(const Core::Metascript::Document& doc, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        const Core::Metascript::MStringView varView(declaration.variable.data(), declaration.variable.size());
-        if(const Core::Metascript::Value* value = doc.findVariable(varView))
-            CollectValueVirtualPathTexts(*value, arena, outMap);
-    }
-}
-
-[[nodiscard]] static AStringView LookupVirtualPathTextHint(const Name& virtualPath, const KnownVirtualPathTextMap& knownTexts)noexcept{
-    const auto found = knownTexts.find(virtualPath);
-    if(found != knownTexts.end())
-        return AStringView(found.value());
-    return virtualPath.resolvedText();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_dependency_computer_dependencies;
     namespace Assets = Core::Assets;
 
     Assets::CookDependencyRegistry dependencyRegistry(arena);
@@ -122,13 +51,13 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
     Vector<u8, Assets::ScratchArena> processed(files.size(), u8(0), scratchArena);
     Vector<usize, Assets::ScratchArena> fileQueue(selection->order, scratchArena);
     fileQueue.reserve(files.size());
-    KnownVirtualPathTextMap knownVirtualPathTexts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
+    DependencyPathHints knownVirtualPathTexts(arena, scratchArena);
     knownVirtualPathTexts.reserve(files.size());
 
     const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{
         if(!depVirtualPath)
             return false;
-        const AStringView hint = LookupVirtualPathTextHint(depVirtualPath, knownVirtualPathTexts);
+        const AStringView hint = knownVirtualPathTexts.lookup(depVirtualPath);
         const auto provider = catalog.resolve(depVirtualPath, expectedAssetType, hint, &dependencyRegistry, scratchArena);
         if(!provider)
             return false;
@@ -192,14 +121,14 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
         const auto document = catalog.read(fileIndex, scratchArena);
         if(!document)
             return MakeUnexpected(Failure{});
-        CollectDocumentVirtualPathTexts(*document, arena, knownVirtualPathTexts);
+        knownVirtualPathTexts.collect(*document);
 
         const auto expandedAssets = TryExpandBunchOrCompositeDocument(files[fileIndex], *document, scratchArena);
         if(!expandedAssets)
             return MakeUnexpected(Failure{});
         if(*expandedAssets){
             for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets)
-                CollectValueVirtualPathTexts(expanded.value, arena, knownVirtualPathTexts);
+                knownVirtualPathTexts.collect(expanded.value);
             for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets){
                 if(!processAssetItem(fileIndex, expanded.assetType, expanded.virtualPath, expanded.value, nullptr))
                     return MakeUnexpected(Failure{});

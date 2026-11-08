@@ -6,6 +6,8 @@
 
 
 #include <logger/common.h>
+#include "http_log_transport.h"
+#include <logger/processed_message_file.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,7 +96,7 @@ protected:
 
 
 private:
-    void* m_curl;
+    LogHttpTransport m_transport;
     Vector<u8, LogArena> m_pendingPayload;
     AString<LogArena> m_messageUrl;
     AString<LogArena> m_telemetryUrl;

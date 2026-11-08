@@ -4,29 +4,22 @@
 from __future__ import annotations
 
 
-import struct
 import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from baseline_image_comparison import BaselineImageComparison
+from baseline_warmup_checks import BaselineWarmupChecks, LIT_CAPTURE_SOURCE_FRAME, LIT_INF, LIT_NAN, LIT_SURFEL_GI_COMPLEX
 from harness_test_support import make_abnormal_exit_terminator
 
 
-LIT_F = "f"
-LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "NWB_GI_SMOKE_MIN_SETTLE_SECONDS"
-LIT_CAPTURE_SOURCE_FRAME = "capture_source_frame"
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 LIT_SETTLE_SECONDS_2 = "--settle-seconds"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
 LIT_MAXIMUM_MEAN_ABS_2 = "--maximum-mean-abs"
-LIT_SURFEL_GI_COMPLEX = "surfel-gi-complex"
-LIT_GRAPHICS_SOURCE_FRAME_902 = "graphics source frame 902"
-LIT_GRAPHICS_SOURCE_FRAME_900 = "graphics source frame 900"
-LIT_NAN = "nan"
-LIT_INF = "inf"
 LIT_TEST_SOURCE = "test-source"
 LIT_SETTLED = "settled"
 LIT_RENDERER_BASELINE_CAPTURE = "renderer baseline capture"
@@ -99,61 +92,7 @@ LIT_TEST_REFERENCE = "test-reference"
 
 
 def run_self_test(harness) -> int:
-    complex_profile = harness.get_profile(LIT_SURFEL_GI_COMPLEX)
-    complex_environment = dict(complex_profile.frozen_environment)
-    complex_evidence = (
-        "GiTestSmokeProject: complex GI live warmup start graphics_frame=361 presentations=360 required_presentations=360 required_seconds=30\n"
-        "GiTestSmokeProject: complex GI live warmup end graphics_frame=901 presentations=900 elapsed_seconds=30.125\n"
-        "FramebufferCapture: capture ready\n"
-        "FramebufferCapture: graphics source frame 902\n"
-        "GiTestSmokeProject: complex GI capture source_frame=902\n"
-    )
-    assert harness.validate_complex_gi_warmup(complex_evidence, complex_profile, complex_environment)[LIT_CAPTURE_SOURCE_FRAME] == 902
-    for old, replacement in (
-        ("start graphics_frame=361 presentations=360", "start graphics_frame=361 presentations=359"),
-        ("elapsed_seconds=30.125", "elapsed_seconds=29.999999"),
-        ("elapsed_seconds=30.125", "elapsed_seconds=nan"),
-        ("elapsed_seconds=30.125", "elapsed_seconds=invalid"),
-        ("elapsed_seconds=30.125", "elapsed_seconds=3_0.125"),
-        ("required_seconds=30", "required_seconds=10"),
-        ("end graphics_frame=901 presentations=900", "end graphics_frame=361 presentations=900"),
-        ("end graphics_frame=901 presentations=900", "end graphics_frame=901 presentations=360"),
-        ("capture source_frame=902", "capture source_frame=901"),
-        (LIT_GRAPHICS_SOURCE_FRAME_902, LIT_GRAPHICS_SOURCE_FRAME_900),
-    ):
-        try:
-            harness.validate_complex_gi_warmup(complex_evidence.replace(old, replacement), complex_profile, complex_environment)
-        except harness.SmokeFailure:
-            pass
-        else:
-            raise AssertionError(f"complex GI accepted invalid live warmup evidence: {replacement}")
-    for line in complex_evidence.splitlines(keepends=True):
-        if "capture ready" in line:
-            continue
-        for altered in (complex_evidence.replace(line, ""), complex_evidence + line):
-            try:
-                harness.validate_complex_gi_warmup(altered, complex_profile, complex_environment)
-            except harness.SmokeFailure:
-                pass
-            else:
-                raise AssertionError("complex GI accepted missing or repeated live warmup evidence")
-    for value in ("10", LIT_NAN, LIT_INF, "invalid", "1e300"):
-        try:
-            harness.validate_complex_gi_warmup(complex_evidence, complex_profile, {**complex_environment, LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS: value})
-        except harness.SmokeFailure:
-            pass
-        else:
-            raise AssertionError("complex GI accepted an invalid configured live warmup")
-    rounded_requirement = struct.unpack(LIT_F, struct.pack(LIT_F, 30.00002))[0]
-    rounded_evidence = complex_evidence.replace("required_seconds=30", f"required_seconds={rounded_requirement!r}").replace("elapsed_seconds=30.125", f"elapsed_seconds={rounded_requirement!r}")
-    harness.validate_complex_gi_warmup(rounded_evidence, complex_profile, {**complex_environment, LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS: "30.00002"})
-    for altered in ("".join(reversed(complex_evidence.splitlines(keepends=True))), complex_evidence.replace(LIT_GRAPHICS_SOURCE_FRAME_902, LIT_GRAPHICS_SOURCE_FRAME_900).replace("capture source_frame=902", "capture source_frame=900")):
-        try:
-            harness.validate_complex_gi_warmup(altered, complex_profile, complex_environment)
-        except harness.SmokeFailure:
-            pass
-        else:
-            raise AssertionError("complex GI accepted reordered or stale readback evidence")
+    complex_profile, complex_environment, complex_evidence = BaselineWarmupChecks.verify(harness)
     numeric_arguments = [LIT_PROFILE_2, LIT_OPAQUE_TEXTURE, LIT_EXECUTABLE, "renderer", LIT_RUNTIME_DIR, "runtime", LIT_OUTPUT_DIR, "output"]
     for option in (LIT_STARTUP_TIMEOUT, LIT_SETTLE_SECONDS_2, LIT_MAXIMUM_MEAN_ABS_2):
         for value in (LIT_NAN, LIT_INF, "-inf"):
@@ -210,7 +149,7 @@ def run_self_test(harness) -> int:
              mock.patch.object(module, LIT_CREATE_CAPTURE_BACKEND, return_value=backend), \
              mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
              mock.patch.object(module, LIT_LAUNCH_TESTBED, return_value=app), \
-             mock.patch.object(module, LIT_TERMINATE_PROCESS, side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module.CaptureProcessTermination, LIT_TERMINATE_PROCESS, side_effect=terminate) as terminate_mock, \
              mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown):
             try:
                 harness.capture_scene(orchestration_args, harness.get_profile(LIT_OPAQUE_TEXTURE), capture_path, runtime_log_path, {})
@@ -244,7 +183,7 @@ def run_self_test(harness) -> int:
              mock.patch.object(module, LIT_LAUNCH_TESTBED, return_value=app), \
              mock.patch.object(module, "wait_for_log_message", side_effect=lambda *args: raw_events.append((LIT_READY,))), \
              mock.patch.object(time, "sleep", side_effect=lambda delay: raw_events.append((LIT_SETTLE, delay))), \
-             mock.patch.object(module, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
+             mock.patch.object(module.CaptureProcessTermination, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
              mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_CAPTURED_RUNTIME_EVIDENCE), \
              mock.patch.object(module, "validate_runtime_log", return_value=()), \
              mock.patch.object(module, LIT_SOURCE_REVISION, return_value=LIT_TEST_SOURCE), \
@@ -266,7 +205,7 @@ def run_self_test(harness) -> int:
             return app
 
         def complete_complex(_app, output_path, _timeout):
-            harness.write_bmp_rgb(output_path, 2, 1, bytes((0, 0, 0, 255, 0, 255)))
+            BaselineImageComparison.write_bmp_rgb(output_path, 2, 1, bytes((0, 0, 0, 255, 0, 255)))
             return 0, True
 
         with mock.patch.object(module, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
@@ -274,7 +213,7 @@ def run_self_test(harness) -> int:
              mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
              mock.patch.object(module, LIT_LAUNCH_TESTBED, side_effect=launch_complex), \
              mock.patch.object(module, "wait_for_application_capture_exit", side_effect=complete_complex), \
-             mock.patch.object(module, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
+             mock.patch.object(module.CaptureProcessTermination, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
              mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=complex_evidence), \
              mock.patch.object(module, LIT_SOURCE_REVISION, return_value=LIT_TEST_SOURCE), \
              mock.patch.object(module, LIT_SOURCE_WORKTREE_CLEAN, return_value=True):
@@ -287,8 +226,8 @@ def run_self_test(harness) -> int:
         reference_directory.mkdir(parents=True)
         reference_image = reference_directory / LIT_BASELINE_BMP
         candidate_image = root / LIT_CANDIDATE_BMP
-        harness.write_bmp_rgb(reference_image, 2, 1, bytes((8, 16, 24, 32, 40, 48)))
-        harness.write_bmp_rgb(candidate_image, 2, 1, bytes((8, 16, 24, 35, 40, 50)))
+        BaselineImageComparison.write_bmp_rgb(reference_image, 2, 1, bytes((8, 16, 24, 32, 40, 48)))
+        BaselineImageComparison.write_bmp_rgb(candidate_image, 2, 1, bytes((8, 16, 24, 35, 40, 50)))
         manifest = { LIT_SCHEMA: harness.SCHEMA, LIT_CAPTURE_KIND: LIT_BASELINE, LIT_PROFILE: LIT_OPAQUE_TEXTURE, LIT_CAPTURE_FILE: LIT_BASELINE_BMP, LIT_CAPTURE_SHA256: harness.sha256_file(reference_image), LIT_FROZEN_ENVIRONMENT: {}, LIT_GPU_VALIDATION: False,
             LIT_SETTLE_SECONDS: 4.0, LIT_CAPTURE_MODE: LIT_SETTLED, LIT_CAPTURE_FREEZE_FRAME: 0, LIT_FIXED_DELTA_SECONDS: 0.0, LIT_SOURCE_REVISION: LIT_TEST_REFERENCE, }
         harness.write_json(reference_directory / LIT_MANIFEST_JSON, manifest)
@@ -335,10 +274,10 @@ def run_self_test(harness) -> int:
             pass
         else:
             raise AssertionError("corpus comparison limits must not be relaxed")
-        difference = harness.compare_bmp_rgb(reference_image, candidate_image, root / LIT_DIFFERENCE_BMP)
+        difference = BaselineImageComparison.compare_bmp_rgb(reference_image, candidate_image, root / LIT_DIFFERENCE_BMP)
         args = SimpleNamespace(require_exact=False, maximum_max_abs=2, maximum_mean_abs=None, maximum_changed_fraction=None)
-        assert harness.difference_failures(args, difference) == ["max abs 3 exceeds 2"]
+        assert BaselineImageComparison.difference_failures(args, difference) == ["max abs 3 exceeds 2"]
         args.require_exact = True
-        assert harness.difference_failures(args, difference)
+        assert BaselineImageComparison.difference_failures(args, difference)
     print("renderer-baseline runner self-test passed")
     return 0

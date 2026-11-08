@@ -12,6 +12,7 @@
 
 
 #include "asset.h"
+#include <impl/assets_material/bind_storage.adhd.h>
 #include <impl/assets_material/bind_typed_layout.adhd.h>
 
 #include <core/alloc/global.h>
@@ -144,7 +145,7 @@ public:
 [[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
 inline void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
-    CopyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, outLayoutHash, outBlocks, outFields, outBlockBytes);
+    MaterialBindStorage{}.copyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, outLayoutHash, outBlocks, outFields, outBlockBytes);
 }
 [[nodiscard]] b8 ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,

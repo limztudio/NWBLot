@@ -44,23 +44,7 @@ const Name s_TextPaintCandidatesArena = "impl/ecs_ui/toolkit/text/paint_candidat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GlyphAtlasPlacement{
-    public GlyphAtlasPlacement(){
-        this.x = 0u;
-        this.y = 0u;
-        this.rowHeight = 0u;
-    }
 
-    public GlyphAtlasPlacement(in u32 inX, in u32 inY, in u32 inRowHeight){
-        this.x = inX;
-        this.y = inY;
-        this.rowHeight = inRowHeight;
-    }
-
-    public u32 x;
-    public u32 y;
-    public u32 rowHeight;
-}
 
 class GlyphPageBindingRecord<TFont>{
     public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
@@ -129,18 +113,7 @@ class SdfAtlasPageBindingRecord<TFont>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GlyphAtlasPlacement> TryPlaceGlyphInAtlasPage(in u32 cursorX, in u32 cursorY, in u32 rowHeight, in u32 width, in u32 height){
-    GlyphAtlasPlacement outPlacement(cursorX, cursorY, rowHeight);
-    if(outPlacement.x + width > s_GlyphAtlasPageExtent){
-        outPlacement.x = 0u;
-        outPlacement.y += outPlacement.rowHeight;
-        outPlacement.rowHeight = 0u;
-    }
-    if(outPlacement.y + height > s_GlyphAtlasPageExtent)
-        return makeUnexpected(Failure());
-    outPlacement.rowHeight = max(outPlacement.rowHeight, height);
-    return outPlacement;
-}
+
 
 b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
     return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
@@ -263,3 +236,4 @@ void CopyGlyphBitmapToAtlasPage(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

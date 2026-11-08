@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "fly_camera_input.h"
 #include "ui_skin_preview.h"
 
 #include <loader/project_entry.h>
@@ -35,7 +36,6 @@ inline constexpr TStringView s_WindowTitle = NWB_TEXT(TESTBED_WINDOW_TITLE);
 
 class Project final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
-    static constexpr usize s_KeyStateCount = static_cast<usize>(NWB::Core::Key::Menu) + 1u;
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
 
 
@@ -70,9 +70,6 @@ private:
     [[nodiscard]] b8 createDefaultScene();
     void registerInputHandler();
     void unregisterInputHandler()noexcept;
-    void clearInputState()noexcept;
-    void setKeyState(i32 key, b8 pressed)noexcept;
-    [[nodiscard]] b8 keyPressed(i32 key)const noexcept;
     void updateMainCamera(f32 delta)noexcept;
     void destroyWorld()noexcept;
     void drawUiControls(NWB::Impl::UiPaintContext& context);
@@ -84,14 +81,8 @@ private:
     NWB::Impl::ActiveSceneSubsystems m_sceneSubsystems;
     UiSkinPreview m_uiPreview;
     NWB::Impl::Ui::WindowState m_uiWindow;
-    f64 m_lastMouseX = 0.0;
-    f64 m_lastMouseY = 0.0;
-    f32 m_pendingMouseDeltaX = 0.0f;
-    f32 m_pendingMouseDeltaY = 0.0f;
+    FlyCameraInput m_cameraInput;
     b8 m_inputRegistered = false;
-    b8 m_mouseLookActive = false;
-    b8 m_mousePositionValid = false;
-    Array<b8, s_KeyStateCount> m_keyPressed = {};
 };
 
 Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialProjectWorld(NWB::ProjectRuntimeContext& context);

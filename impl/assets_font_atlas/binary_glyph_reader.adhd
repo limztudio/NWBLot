@@ -186,7 +186,7 @@ class FontAtlasBinaryDecodedHeader{
 b8 TryReadFontAtlasBinaryPreambleAndIdentity(
     in Span<u8> bytes,
     mut usize cursor,
-    mut Array<u64, 4u> outIdentityQwords
+    mut Array<u64, s_FontAtlasIdentityLaneCount> outIdentityQwords
 ){
     const Expected<u32> magic = ReadU32LittleEndian(bytes, cursor);
     if(!magic.has_value())
@@ -202,7 +202,7 @@ b8 TryReadFontAtlasBinaryPreambleAndIdentity(
         return false;
     if(!IsValidFontAtlasBinaryPreamble(magic.value(), version.value(), encoding.value(), reserved.value()))
         return false;
-    for(usize lane = 0u; lane < 4u; ++lane){
+    for(usize lane = 0u; lane < s_FontAtlasIdentityLaneCount; ++lane){
         const Expected<u32> low = ReadU32LittleEndian(bytes, cursor);
         if(!low.has_value())
             return false;
@@ -307,14 +307,14 @@ b8 ValidateFontAtlasBinaryTableChunk(
 }
 
 void AppendFontAtlasBinaryPreambleAndIdentity(
-    in Array<u64, 4u> fontIdentityQwords,
+    in Array<u64, s_FontAtlasIdentityLaneCount> fontIdentityQwords,
     mut Vector<u8> outBinary
 ){
     AppendU32LittleEndian(outBinary, s_FontAtlasBinaryMagic);
     AppendU32LittleEndian(outBinary, s_FontAtlasBinaryVersion);
     AppendU32LittleEndian(outBinary, s_FontAtlasDistanceEncoding);
     AppendU32LittleEndian(outBinary, 0u);
-    for(usize lane = 0u; lane < 4u; ++lane){
+    for(usize lane = 0u; lane < s_FontAtlasIdentityLaneCount; ++lane){
         AppendU32LittleEndian(outBinary, UnpackFontAtlasLowWord(fontIdentityQwords[lane]));
         AppendU32LittleEndian(outBinary, UnpackFontAtlasHighWord(fontIdentityQwords[lane]));
     }

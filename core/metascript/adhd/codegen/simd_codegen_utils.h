@@ -6,6 +6,10 @@
 
 
 #include "../sema/type_utils.h"
+#include "simd_expression_analysis.h"
+#include "simd_constant_analysis.h"
+#include "simd_lane_zero_analysis.h"
+#include "simd_vector_source_analysis.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,22 +33,6 @@ NWB_ADHD_BEGIN
 [[nodiscard]] MStringView SimdInPlaceSignFlipMaskConstant(u8 negMask, b8 isDouble)noexcept;
 [[nodiscard]] MStringView SimdComponentMaskConstant(u8 laneMask, b8 isDouble)noexcept;
 void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 isDouble, MStringView laneType);
-[[nodiscard]] const Stmt* FindLocalConstVarDecl(MStringView name, Span<const Stmt* const> localVarDecls)noexcept;
-[[nodiscard]] u32 InferSimdRegZeroedAboveLane(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr, Span<const Stmt* const> localVarDecls = {})noexcept;
-[[nodiscard]] b8 TryMatchIdentityRowIndex(const Expr& expr, const SymbolTable& symbols, u32& outRowIndex, Span<const Stmt* const> localVarDecls = {})noexcept;
-[[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] const Expr& UnwrapConstScalarExpr(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsNegativeUnitFloatLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsHalfFloatLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] MStringView TryMatchKnownSimdFloatVectorConstant(Span<const Expr* const> arguments, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsSimdZeroFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsSimdUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsIdentityMatrixCtorArgs(Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 TryGetStorageVectorLoadInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outLoadFn, u32& outLanes)noexcept;
-[[nodiscard]] b8 TryGetFloatVectorSourceInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept;
-[[nodiscard]] b8 TryGetAnyFloatVectorSourceInfo(const Expr& srcExpr, b8& outIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept;
 [[nodiscard]] MStringView SimdRegisterCppType(MStringView simdType)noexcept;
 [[nodiscard]] MStringView SimdLoadFunctionCpp(MStringView simdType)noexcept;
 [[nodiscard]] MStringView SimdStoreFunctionCpp(MStringView simdType)noexcept;
@@ -65,21 +53,6 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes,
     u32 lane = 3u;
     return TryMapSwizzleCharToLane(c, lane) ? lane : 3u;
 }
-[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] const Expr* TryUnwrapSimdSplatScalarArg(const Expr& expr, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 IsZeroScalarLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
-[[nodiscard]] b8 IsPureSimdAddressExpr(const Expr& expr)noexcept;
-[[nodiscard]] b8 AreSamePureSimdExpr(const Expr& a, const Expr& b)noexcept;
-[[nodiscard]] b8 TryMatchConstLaneIndex(const Expr& indexExpr, u32& outLane)noexcept;
-[[nodiscard]] b8 TryMatchSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept;
-[[nodiscard]] b8 TryMatchNegatedSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept;
-[[nodiscard]] b8 TryMatchCastSingleLaneAccess(const Expr* expr, MStringView expectedScalarType, const SymbolTable& symbols, const Expr*& outBase, u32& outLane)noexcept;
-[[nodiscard]] b8 TryMatchSimdMaxComponentReduction(const Expr& expr, const Expr*& outBaseVec, b8& outIsDouble, u32& outLanes, b8& outIsAbs)noexcept;
-[[nodiscard]] const Expr* TryMatchSimdLengthSqVecArg(const Expr* expr, b8 isDouble, const SymbolTable& symbols)noexcept;
-[[nodiscard]] const Expr* TryMatchSimdLengthVecArg(const Expr* expr, b8 isDouble, const SymbolTable& symbols)noexcept;
-[[nodiscard]] b8 CanEmitScalarAsSimdVectorWithoutReplicate(const Expr& scalarExpr, MStringView simdType, const SymbolTable& symbols)noexcept;
-[[nodiscard]] const Expr* TryUnwrapSimdNegatedVecExpr(const Expr& expr, MStringView simdType, const SymbolTable& symbols)noexcept;
-[[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

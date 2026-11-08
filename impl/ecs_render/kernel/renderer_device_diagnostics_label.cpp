@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "renderer_device_diagnostics_label.h"
+
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
+#include <core/graphics/backend_selection.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+void RendererDeviceDiagnosticsLabel::append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label){
+    Core::Device& device = graphics.getDevice();
+    const Core::GpuTimingRecorderStatistics gpuTimingStatistics = graphics.gpuTiming().statistics(device);
+    StringAppendFormat(
+        label,
+        "\nGPU timing (device-wide cumulative since query reset): generation={} query collection={} timing sink={} feedback={} active={} comparable timestamps={} prepared scopes={} requested/materialized queries={}/{} materialization failures={}"
+        "\nGPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={} discarded before acceptance={} quarantined={} begin failures={} "
+        "skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}",
+        gpuTimingStatistics.deviceGeneration,
+        gpuTimingStatistics.queryCollectionEnabled,
+        gpuTimingStatistics.timingSinkEnabled,
+        gpuTimingStatistics.feedbackCollectionEnabled,
+        gpuTimingStatistics.collectionActive,
+        gpuTimingStatistics.comparableTimestampsSupported,
+        gpuTimingStatistics.preparedScopeCount,
+        gpuTimingStatistics.requestedQueryCount,
+        gpuTimingStatistics.materializedQueryCount,
+        gpuTimingStatistics.queryMaterializationFailureCount,
+        gpuTimingStatistics.scopeAttemptCount,
+        gpuTimingStatistics.recordedScopeCount,
+        gpuTimingStatistics.acceptedScopeCount,
+        gpuTimingStatistics.publishedSampleCount,
+        gpuTimingStatistics.unpublishedSampleCount,
+        gpuTimingStatistics.discardedScopeCount,
+        gpuTimingStatistics.quarantinedScopeCount,
+        gpuTimingStatistics.beginFailureCount,
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::CollectionInactive],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ScopeNotPrepared],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueryCapacityUnavailable],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::RecordingPositionUnavailable]
+    );
+
+    const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology = device.getPhysicalQueueTopology();
+    for(usize queueIndex = 0u; queueIndex < gpuTimingQueueTopology.queueCount; ++queueIndex){
+        const Core::GpuPhysicalQueueInfo& queueInfo = gpuTimingQueueTopology.queues[queueIndex];
+        StringAppendFormat(
+            label,
+            "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
+            queueInfo.id.index,
+            queueInfo.id.deviceGeneration,
+            ResolveTelemetryPhysicalQueueClassLabel(static_cast<u8>(queueInfo.queueClass)),
+            queueInfo.familyIndex,
+            queueInfo.queueIndex,
+            static_cast<u32>(queueInfo.capabilities),
+            queueInfo.timestampValidBits,
+            queueInfo.timestampValidBits != 0u,
+            device.supportsComparableGpuTimestamps(queueInfo.id)
+        );
+    }
+
+    const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics = device.getDescriptorHeap().lifecycleStatistics();
+    StringAppendFormat(
+        label,
+        "\nDescriptor heap lifecycle (device-wide current): initialized={} "
+        "resource live/capacity={}/{} sampler live/capacity={}/{} "
+        "acceleration structure live/capacity={}/{} pending retired slots={} "
+        "accepted heap uses={} unsubmitted heap uses={} abandoned heap uses={}",
+        descriptorHeapLifecycleStatistics.initialized,
+        descriptorHeapLifecycleStatistics.resourceLiveSlotCount,
+        descriptorHeapLifecycleStatistics.resourceCapacity,
+        descriptorHeapLifecycleStatistics.samplerLiveSlotCount,
+        descriptorHeapLifecycleStatistics.samplerCapacity,
+        descriptorHeapLifecycleStatistics.accelStructLiveSlotCount,
+        descriptorHeapLifecycleStatistics.accelStructCapacity,
+        descriptorHeapLifecycleStatistics.pendingRetiredSlotCount,
+        descriptorHeapLifecycleStatistics.acceptedHeapUseCount,
+        descriptorHeapLifecycleStatistics.unsubmittedHeapUseCount,
+        descriptorHeapLifecycleStatistics.abandonedHeapUseCount
+    );
+
+}
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

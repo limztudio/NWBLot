@@ -1,0 +1,337 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/input/event_types.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_navigation.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_geometry.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class HitTargetFactory{
+    public HitTarget makeBarrierHitTarget(in Rect rectangle, in Rect clip){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        return target;
+    }
+
+    public HitTarget makeAnnotatedClipHitTarget(in Rect bounds, in Rect clip, in b8 contextMenu){
+        HitTarget target;
+        target.rectangle = bounds;
+        target.clip = clip;
+        target.focusable = false;
+        target.activatable = false;
+        target.contextMenu = contextMenu;
+        return target;
+    }
+
+    public HitTarget makeBasicControlHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 interactive, in b8 contextMenu){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled && interactive;
+        target.activatable = enabled && interactive;
+        target.contextMenu = contextMenu;
+        return target;
+    }
+
+    public HitTarget makeEditBoxHitTarget(in HitTarget baseTarget, in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu){
+        HitTarget target = baseTarget;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled;
+        target.textEditable = enabled;
+        target.contextMenu = contextMenu;
+        return target;
+    }
+
+    public HitTarget makeTextAreaHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in Point step,
+        in ScrollViewportPlacement scrollbars
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled;
+        target.textEditable = enabled;
+        target.contextMenu = contextMenu;
+        target.control = token;
+        target.scrollable = enabled;
+        target.scrollStep = cast<f64>(step.y);
+        target.scrollStepX = cast<f64>(step.x);
+        target.gestureMaximum = scrollbars.vertical.maximum;
+        target.gestureMaximumX = scrollbars.horizontal.maximum;
+        return target;
+    }
+
+    public HitTarget makeComboFieldHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in b8 focusOnCommit
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled;
+        target.activatable = enabled;
+        target.contextMenu = contextMenu;
+        target.navigable = enabled;
+        target.control = token;
+        target.focusOnCommit = focusOnCommit;
+        return target;
+    }
+
+    public HitTarget makeListHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in f32 rowHeight,
+        in f32 wheelRows,
+        in ScrollPlacement placement,
+        in u64 rowCount,
+        in b8 focusOnCommit
+    ){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.navigable = enabled;
+        host.scrollable = enabled;
+        host.scrollStep = cast<f64>(rowHeight) * cast<f64>(wheelRows);
+        host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, rowCount);
+        host.gestureMaximum = placement.maxOffset;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeListRowHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 key){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = key;
+        return target;
+    }
+
+    public HitTarget makeRadioGroupHostHitTarget(
+        in RadioGroupPlacement placement,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in b8 focusOnCommit
+    ){
+        HitTarget host;
+        host.rectangle = placement.bounds;
+        host.clip = placement.clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeRadioGroupChoiceHitTarget(in RadioGroupChoicePlacement row, in b8 enabled, in ControlToken token){
+        HitTarget target;
+        target.rectangle = row.rectangle;
+        target.clip = row.clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = row.key;
+        return target;
+    }
+
+    public HitTarget makeSliderHostHitTarget(
+        in SliderPlacement placement,
+        in b8 interactive,
+        in b8 contextMenu,
+        in ControlToken token,
+        in b8 focusOnCommit
+    ){
+        HitTarget host;
+        host.rectangle = placement.bounds;
+        host.clip = placement.clip;
+        host.enabled = interactive;
+        host.focusable = interactive;
+        host.navigable = interactive;
+        host.horizontalNavigation = interactive;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeSliderTrackHitTarget(in SliderPlacement placement, in ControlToken token){
+        HitTarget trackTarget;
+        trackTarget.rectangle = placement.track;
+        trackTarget.clip = placement.clip;
+        trackTarget.pointerGesture = true;
+        trackTarget.gestureReference = placement.centerTravel;
+        trackTarget.control = token;
+        return trackTarget;
+    }
+
+    public HitTarget makeSliderThumbHitTarget(in SliderPlacement placement, in ControlToken token, in f64 value){
+        HitTarget thumbTarget;
+        thumbTarget.rectangle = placement.thumb;
+        thumbTarget.clip = placement.clip;
+        thumbTarget.pointerGesture = true;
+        thumbTarget.gestureReference = placement.travelBounds;
+        thumbTarget.control = token;
+        thumbTarget.value = BitCast<u64>(value);
+        return thumbTarget;
+    }
+
+    public HitTarget makeWindowTitleHitTarget(in Rect header, in Rect clip, in Rect windowBounds, in b8 movable){
+        HitTarget title;
+        title.rectangle = header;
+        title.clip = clip;
+        title.gestureReference = windowBounds;
+        title.pointerGesture = movable;
+        return title;
+    }
+
+    public HitTarget makeWindowCollapseHitTarget(in WindowState state, in WindowMetrics metrics, in Rect clip){
+        HitTarget collapse;
+        collapse.rectangle = ResolveWindowCollapseBounds(state, metrics);
+        collapse.clip = clip;
+        collapse.focusable = true;
+        collapse.activatable = true;
+        return collapse;
+    }
+
+    public HitTarget makeWindowResizeHitTarget(in Rect corner, in Rect clip, in Rect windowBounds){
+        HitTarget target;
+        target.rectangle = corner;
+        target.clip = clip;
+        target.gestureReference = windowBounds;
+        target.pointerGesture = true;
+        return target;
+    }
+
+    public HitTarget makeScrollbarTrackActionHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in ControlToken token,
+        in u32 actionValue
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.control = token;
+        target.activatable = true;
+        target.value = cast<u64>(actionValue);
+        return target;
+    }
+
+    public HitTarget makeScrollbarThumbHitTarget(
+        in ScrollbarPlacement bar,
+        in Rect clip,
+        in ControlToken token,
+        in b8 horizontal
+    ){
+        f32 trackExtent = bar.track.height;
+        f32 thumbExtent = bar.thumb.height;
+        if(horizontal){
+            trackExtent = bar.track.width;
+            thumbExtent = bar.thumb.width;
+        }
+        HitTarget target;
+        target.rectangle = bar.thumb;
+        target.clip = clip;
+        target.control = token;
+        target.activatable = false;
+        target.value = 0u;
+        target.pointerGesture = trackExtent > thumbExtent;
+        target.gestureReference = bar.track;
+        target.gestureMaximum = bar.maximum;
+        return target;
+    }
+
+    public HitTarget makeScrollbarCornerHitTarget(
+        in Rect corner,
+        in Rect clip,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = corner;
+        target.clip = clip;
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeListScrollbarTrackHitTarget(
+        in ScrollPlacement placement,
+        in Rect clip,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = placement.track;
+        target.clip = clip;
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeListScrollbarThumbHitTarget(
+        in ScrollPlacement placement,
+        in Rect clip,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = placement.thumb;
+        target.clip = clip;
+        target.control = token;
+        target.pointerGesture = placement.track.height > placement.thumb.height;
+        target.gestureReference = placement.track;
+        target.gestureMaximum = placement.maxOffset;
+        return target;
+    }
+
+    public HitTarget makeComboQueryNavigationTarget(
+        in b8 enabled,
+        in b8 composing,
+        in WidgetId commandOwner,
+        in u64 commandOwnerDeclarationGeneration,
+        in ControlToken commandControl
+    ){
+        HitTarget navigation;
+        if(enabled && !composing){
+            navigation.commandOwner = commandOwner;
+            navigation.commandOwnerDeclarationGeneration = commandOwnerDeclarationGeneration;
+            navigation.commandControl = commandControl;
+        }
+        return navigation;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

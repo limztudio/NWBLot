@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
+
 #include "renderer_frame_pipeline.h"
 
 #include <impl/ecs_render/shared/frame_types.adhd.h>
@@ -165,7 +167,7 @@ void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
 }
 
 void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport::Enum report, const u64 targetGeneration){
-    ReportLaggedLightingTransitionIfNeeded(report, targetGeneration, m_laggedLightingReport, m_laggedLightingReportGeneration);
+    DeferredFrameDiagnostics{}.reportLaggedLightingTransitionIfNeeded(report, targetGeneration, m_laggedLightingReport, m_laggedLightingReportGeneration);
 }
 
 

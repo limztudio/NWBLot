@@ -9,6 +9,8 @@
 #include "backend_core_context.h"
 #include "backend_command_tracking.h"
 #include "backend_queue.h"
+#include "vulkan_allocator.h"
+#include "upload_manager.h"
 #include "backend_memory_upload.h"
 #include "backend_heap.h"
 #include "backend_sampler.h"
@@ -19,6 +21,7 @@
 #include "backend_pipeline_state.h"
 #include "backend_raytracing_pipeline.h"
 #include "backend_resource_management.h"
+#include "backend_query.h"
 #include "backend_command_list.h"
 #include "backend_device.h"
 

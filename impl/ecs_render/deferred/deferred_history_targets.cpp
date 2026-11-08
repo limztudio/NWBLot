@@ -4,6 +4,8 @@
 
 #include "deferred_system.h"
 
+#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd.h>
+
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/shadow/rt_shadow_state.h>
@@ -144,7 +146,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-    history.slots = BuildLaggedLightingHistorySlots(
+    history.slots = DeferredBindlessSlotsBuilder{}.buildHistory(
         targets.bindless.slots,
         history.shadowVisibilityDescriptor.slot(),
         history.causticIrradianceDescriptor.slot(),

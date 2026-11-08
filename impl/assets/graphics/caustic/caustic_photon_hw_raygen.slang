@@ -153,19 +153,19 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
     // Hash target selection to decorrelate it from the photon grid.
-    const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticHwPushConstants.emissionTargetCount;
+    const uint targetIndex = NwbCausticPhotonEmission.hashU32(photonIndex) % g_NwbCausticHwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticHwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredTemporalCell(photonIndex, g_NwbCausticHwPushConstants.gridSide, g_NwbCausticHwPushConstants.frameIndex, g_NwbCausticHwPushConstants.temporalPhaseCount);
+    const float2 cell = NwbCausticPhotonEmission.temporalCell(photonIndex, g_NwbCausticHwPushConstants.gridSide, g_NwbCausticHwPushConstants.frameIndex, g_NwbCausticHwPushConstants.temporalPhaseCount);
 
-    const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
+    const NwbCausticEmission emission = NwbCausticPhotonEmission.emitAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
-        emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticHwPushConstants.emissionTargetCount,
+    const NwbCausticPhoton photon = NwbCausticPhotonEmission.createPhoton(
+        emission, NwbCausticPhotonEmission.lightColor(light.colorIntensity), g_NwbCausticHwPushConstants.emissionTargetCount,
         g_NwbCausticHwPushConstants.photonCount, light.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX, light.position.xyz
     );
 

@@ -5,7 +5,10 @@
 #pragma once
 
 
-#include "bounding_shape_decls.h"
+#include "bounding_sphere_types.h"
+#include "bounding_box_types.h"
+#include "bounding_oriented_box_types.h"
+#include "bounding_frustum_types.h"
 #include "bounding_corners.h"
 #include "bounding_sphere.h"
 #include "bounding_box.h"

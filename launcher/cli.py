@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from launcher.models import RepoLauncher
 from launcher.build import BuildController
 from launcher.discovery import LauncherDiscovery
+from launcher.commands import LauncherCommands
 from launcher.dispatch import DispatchRouter
 from launcher.host import HostProbe
 from launcher.constants import (ARG_ARCH, ARG_BUILD_DIR, ARG_BUILD_ONLY, ARG_CMAKE, ARG_COMMAND, ARG_CONFIGURE, ARG_CONFIGURE_PRESET, ARG_DEFINE_DEST, ARG_DEFINE_LONG, ARG_DEFINE_SHORT, ARG_DETACH, ARG_DOMAIN, ARG_DRY_RUN, ARG_EXECUTABLE, ARG_EXECUTABLE_NAME,
@@ -92,7 +93,7 @@ class LauncherCli:
             subparsers.add_parser(launcher.command, help=MSG_FORWARD_THROUGH.format(route=route))
 
         profiles_parser = subparsers.add_parser(COMMAND_PROFILES, help=MSG_PROFILES_HELP)
-        profiles_parser.set_defaults(handler=LauncherDiscovery.list_profiles_command, repo_launchers=repo_launchers)
+        profiles_parser.set_defaults(handler=LauncherCommands.list_profiles_command, repo_launchers=repo_launchers)
 
         return parser
 
@@ -109,7 +110,7 @@ class LauncherCli:
         repo_launchers = LauncherDiscovery.discover_repo_launchers()
         if argv and argv[0] in repo_launchers:
             launcher = repo_launchers[argv[0]]
-            return LauncherDiscovery.run_discovered_launcher(launcher, argv[1:], echo=not DispatchRouter.is_help_request(argv[1:]))
+            return LauncherCommands.run_discovered_launcher(launcher, argv[1:], echo=not DispatchRouter.is_help_request(argv[1:]))
 
         parser_args, application_args = LauncherCli.split_application_args(argv)
         parser = LauncherCli.make_parser(repo_launchers)

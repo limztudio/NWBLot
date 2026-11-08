@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include <impl/assets_texture/texture_binary_codec.adhd.h>
+
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 
@@ -88,7 +90,7 @@ b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!texture.validatePayload())
         return false;
 
-    return SerializeTextureBinaryPayload(
+    return TextureBinaryCodec().serialize(
         static_cast<u8>(texture.dimension()),
         texture.width(),
         texture.height(),

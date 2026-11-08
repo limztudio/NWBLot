@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <tests/common/test_context.h>
@@ -45,6 +46,24 @@ TEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting){
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);
     EXPECT_EQ(view.resourceSetCount(), 0u);
+}
+
+
+TEST(AvboitComputeEmulationValidator, RejectsStrayAndOversizedSharedPhases){
+    TestArena testArena;
+    Core::GpuCompiledGraph graph(testArena.arena);
+    const Core::GpuCompiledGraph::ReadView plan(graph);
+    const AvboitComputeEmulationValidator validator(plan);
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> tasks = {};
+    EXPECT_TRUE(validator.sharedComputeEmulationChainValid(tasks, 0u, {}, {}, {}, nullptr, nullptr));
+    tasks[0u] = Core::GpuTaskId{ .generation = 1u, .index = 0u };
+    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(tasks, 0u, {}, {}, {}, nullptr, nullptr));
+    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(tasks, tasks.size() + 1u, {}, {}, {}, nullptr, nullptr));
+    Core::GpuPhysicalQueueInfo graphicsQueue{};
+    graphicsQueue.queueClass = Core::CommandQueue::Graphics;
+    const Array<Core::GpuTaskId, 1> shortTasks = { tasks[0u] };
+    const usize supportedPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(shortTasks, supportedPhaseCount, {}, tasks[0u], tasks[0u], &graphicsQueue, &graphicsQueue));
 }
 
 

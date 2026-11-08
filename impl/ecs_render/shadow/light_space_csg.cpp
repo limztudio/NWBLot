@@ -4,6 +4,12 @@
 
 #include "light_space_csg.h"
 
+#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
+
+#include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd.h>
+
+#include <impl/ecs_render/shadow/light_space_csg_context_packer.adhd.h>
+
 #include <impl/ecs_render/mesh/mesh_system.h>
 
 #include <core/common/log.h>
@@ -29,7 +35,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const Span<const Core::TextureHandle> textures
 )noexcept{
     NWB_ASSERT(materials.size() == instances.size());
-    u64 identity = BuildLightSpaceCsgBaseCaptureIdentity(
+    u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
         state.captureGeometryIdentity,
         state.snapshot.contentIdentity,
         materials,
@@ -77,7 +83,7 @@ void AppendLightSpaceCsgReceiver(
 ){
     if(!state.gathering)
         return;
-    UpdateLightSpaceCsgReceiverCaptureGeometryIdentity(
+    LightSpaceCaptureIdentityBuilder().updateReceiverGeometry(
         entity,
         transparent,
         mesh.meshName,
@@ -147,7 +153,7 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
         return true;
     static_assert(sizeof(LightSpaceCsgContextHeader) == NWB_CSG_RAY_CONTEXT_BYTES);
     static_assert(sizeof(u32) == NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES);
-    if(!PackLightSpaceCsgContextBytes(
+    if(!LightSpaceCsgContextPacker().pack(
         Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
         Span<const CsgCutterGpuData>(state.snapshot.cutters.data(), state.snapshot.cutters.size()),
         Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
@@ -155,11 +161,11 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
         state.bytes
     ))
         return false;
-    UpdateLightSpaceCsgInstancesIdentity(
+    LightSpaceCaptureIdentityBuilder().updateCsgInstances(
         Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
         state.snapshot.identity
     );
-    LogLightSpaceCsgUnsupportedLimitationsIfNeeded(
+    LightSpaceShadowLogReporter{}.reportUnsupportedLimitations(
         Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
         state.limitationLogged
     );

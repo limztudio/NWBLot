@@ -15,7 +15,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
 from window_capture_logs import collect_log_delta
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, create_capture_backend, launch_logserver, require_normal_process_exit, terminate_process
+from window_capture_termination import CaptureProcessTermination
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, create_capture_backend, launch_logserver, require_normal_process_exit
 
 
 def post(port, path, body):
@@ -74,7 +75,7 @@ def run_case(executable, root, block_storage):
             raise SmokeFailure("accepted telemetry did not retain its raw stream")
     finally:
         if process is not None:
-            exit_code, tail = terminate_process(process, "logger HTTP test", preserve_capture=True)
+            exit_code, tail = CaptureProcessTermination.terminate_process(process, "logger HTTP test", preserve_capture=True)
             if capture is not None and capture.path.exists():
                 shutil.copy2(capture.path, runtime / "process_output.log")
             require_normal_process_exit(exit_code, tail, "logger HTTP test")

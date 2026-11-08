@@ -118,14 +118,14 @@ struct Context{
 
 b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Span<const Core::BufferHandle> counterBuffers){
     RendererFramePipeline& renderer = m_renderer;
-    if(!renderer.m_deferredSurfelGiCounterReadbackTask.valid())
+    if(!renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid())
         return true;
 
     // No normal-frame consumer; record only after Present.
     const b8 readbackTailAvailable =
         m_finalPresentationSubmissionToken.valid()
         && renderer.m_deferredLightingTaskGraphScheduled
-        && m_compiledPlan.findTask(renderer.m_deferredSurfelGiCounterReadbackTask).valid()
+        && m_compiledPlan.findTask(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid()
         && readbackQueue
         && (static_cast<u8>(readbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
     ;
@@ -133,7 +133,7 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
         renderer.m_deferredLightingSubmissionTransaction.rejectTask(
             renderer.m_deferredLightingTaskGraph,
             renderer.m_deferredLightingCompiledGraph,
-            renderer.m_deferredSurfelGiCounterReadbackTask,
+            renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask,
             renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()
         );
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
@@ -148,12 +148,12 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
             .candidate = MakeNotNull(&readbackCounterStateCandidate),
             .buffers = counterBuffers,
         };
-        const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
-        const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
+        const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
+        const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
         const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
         const b8 readbackAccepted = scheduler.executeTask(
             renderer.m_deferredLightingCompiledGraph,
-            renderer.m_deferredSurfelGiCounterReadbackTask,
+            renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask,
             &readbackRecordedCallback,
             &readbackAcceptedCallback,
             m_scratchArena,
@@ -163,7 +163,7 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
             &renderer.m_graphics.gpuTiming(),
             nullptr
         );
-        const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_deferredSurfelGiCounterReadbackTask);
+        const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
         if(!readbackSubmissionToken.valid())
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
         else if(!readbackAccepted || !readbackContext.acceptedStateReady){

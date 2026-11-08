@@ -3,6 +3,7 @@
 
 
 #include "hardware_transparent_shadow_state.h"
+#include "hardware_transparent_shadow_resources.h"
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
@@ -25,8 +26,8 @@ static_assert(offsetof(HardwareTransparentShadowPushConstants, receiverFactor) =
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets){
-    auto& state = m_rayTracingState.m_hardwareTransparentShadow;
+b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets){
+    auto& state = m_state;
     state.m_ready = false;
     if(state.m_pipelineFailed)
         return false;
@@ -119,8 +120,8 @@ b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredF
     return true;
 }
 
-void RendererRayTracingSystem::releaseHardwareTransparentShadowResources(){
-    auto& state = m_rayTracingState.m_hardwareTransparentShadow;
+void HardwareTransparentShadowResources::releaseHardwareTransparentShadowResources(){
+    auto& state = m_state;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
     RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);

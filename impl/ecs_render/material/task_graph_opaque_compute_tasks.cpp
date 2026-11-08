@@ -40,9 +40,9 @@ b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::
     if(!payload.plan.matches())
         return false;
     const b8 drawResourcesReady =
-        materialSystem.meshMaterialPassDrawResourcesReady(payload.plan.meshDrawItems, payload.frameBindings)
-        && materialSystem.indexedMaterialPassDrawResourcesReady(payload.plan.indexedDrawItems, payload.frameBindings)
-        && materialSystem.computeMaterialPassDrawResourcesReady(payload.plan.drawItems, payload.frameBindings)
+        materialSystem.drawRecorder().meshMaterialPassDrawResourcesReady(payload.plan.meshDrawItems, payload.frameBindings)
+        && materialSystem.drawRecorder().indexedMaterialPassDrawResourcesReady(payload.plan.indexedDrawItems, payload.frameBindings)
+        && materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(payload.plan.drawItems, payload.frameBindings)
     ;
     if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !drawResourcesReady)
         return true;
@@ -50,7 +50,7 @@ b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext drawContext{ commandList, nullptr, nullptr, deferredViewportState, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, payload.materialFrameStatesGraphOwned, payload.materialGeometryStatesGraphOwned, true };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, payload.plan.drawItems);
+    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, payload.plan.drawItems);
     return true;
 }
 
@@ -76,7 +76,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
         return false;
 
     const Span<const MaterialPassDrawItem> drawItems(&payload.plan.drawItems[payload.drawIndex], 1u);
-    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)){
+    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
         if(payload.phase == SharedComputeEmulationPhase::Raster)
             commandList.endRenderPass();
@@ -98,9 +98,9 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
         true
     };
     if(payload.phase == SharedComputeEmulationPhase::Generate)
-        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
+        materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
+        materialSystem.drawRecorder().renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         if(payload.finishTiming){
             payload.opaqueRegularTiming.value().finishTiming(commandList);
             payload.opaqueRegularTiming.reset();

@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_material/material_binary_reader.adhd.h>
+
 #include <core/assets/auto_registration.h>
 
 
@@ -41,7 +43,7 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
 
     Material candidate(m_shaderVariant.get_allocator().arena(), virtualPath());
-    if(!DeserializeMaterialBinaryPayload(
+    if(!MaterialBinaryReader().deserialize(
         binary,
         candidate.m_shaderVariant,
         candidate.m_materialInterface,

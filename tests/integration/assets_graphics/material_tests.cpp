@@ -3,6 +3,7 @@
 
 
 #include "assets_graphics_fixture.h"
+#include "assets_graphics_material_bind_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -75,7 +76,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
         return MakeUnexpected(bindRootResult.error());
     Path bindRoot = Move(*bindRootResult);
     Expected<NWB::Impl::Material> built = MakeUnexpected(Failure{});
-    auto bindEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(bindText, bindRoot, testArena, scratchArena);
+    auto bindEntryResult = AssetsGraphicsFixture::MaterialBindFixture::ParseMaterialBindFromText(bindText, bindRoot, testArena, scratchArena);
     if(bindEntryResult){
         NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
         bindEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;

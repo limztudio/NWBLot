@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "renderer_internal.h"
+#include "image_resources.h"
 
 #include <core/common/log.h>
 #include <core/graphics/rhi/format.h>
@@ -72,7 +72,7 @@ static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuImageResources::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& images = snapshot.textureImages();
@@ -87,18 +87,18 @@ b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept
     return ValidateDrawCommandImageBindings(snapshot.commands(), images.size());
 }
 
-Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureImage(const SharedImageSource& source){
+Expected<GpuVersion<GpuTextureImageVersion>> GpuImageResources::prepareTextureImage(const SharedImageSource& source){
     if(!source || !ValidUiTextureImageSource(*source))
         return MakeUnexpected(Failure{});
-    for(usize index = 0u; index < m_textureCache.size(); ++index){
-        const auto& existing = m_textureCache[index];
+    for(usize index = 0u; index < m_imageCache.textures().size(); ++index){
+        const auto& existing = m_imageCache.textures()[index];
         if(existing->m_source->generation() != source->generation())
             continue;
         if(!SameTextureImageKey(*existing->m_source, *source) || !__hidden_ui_gpu_texture_resources::ValidVersion(*existing))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuTextureImageVersion> reused = existing;
-        m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
-        m_textureCache.push_back(reused);
+        m_imageCache.textures().erase(m_imageCache.textures().begin() + static_cast<isize>(index));
+        m_imageCache.textures().push_back(reused);
         return Move(reused);
     }
     // The source factory owns structural payload validation; immutable cache insertion keeps a debug-only invariant.
@@ -113,14 +113,14 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureIma
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
         return MakeUnexpected(Failure{});
     }
-    if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() == s_PaintMaxImages)
-        evictImageCacheEntry();
+    if(m_imageCache.glyphs().size() + m_imageCache.sdfs().size() + m_imageCache.textures().size() == s_PaintMaxImages)
+        m_imageCache.evict();
     // Retain each successful immutable upload before a later image or frame preparation can fail.
-    m_textureCache.push_back(version);
+    m_imageCache.textures().push_back(version);
     return Move(version);
 }
 
-b8 GpuRendererState::prepareTextureImages(GpuFrameData& frame){
+b8 GpuImageResources::prepareTextureImages(GpuFrameData& frame){
     const auto& images = frame.m_snapshot.textureImages();
     frame.m_textureImages.reserve(images.size());
     while(frame.m_textureImages.size() < images.size()){
@@ -132,7 +132,7 @@ b8 GpuRendererState::prepareTextureImages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuSampledGraphResources> GpuRendererState::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
@@ -143,7 +143,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareTextureImages(Core::
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || !SameTextureImageKey(*image->m_source, *source) || !__hidden_ui_gpu_texture_resources::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        const auto texture = ImportGpuSampledTexture(
+        const auto texture = GpuSampledTextures::importTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuTextureImageReadyPrefix,
                 .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,

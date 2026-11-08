@@ -3,6 +3,9 @@
 
 
 #include "asset.h"
+#include <core/assets/polymorphic_asset_codec.h>
+
+#include <impl/assets_subsystem/subsystem_binary_codec.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/binary_payload_io.h>
@@ -93,7 +96,7 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    if(!ReadSubsystemBinaryStreams(
+    if(!SubsystemBinaryCodec().read(
         binary,
         outSubsystem.assetType(),
         expectedFieldCount,
@@ -134,7 +137,7 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
 
 
 Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
-    return PolymorphicAssetCodecDetail::DeserializePolymorphicAsset<ISubsystem, SubsystemHeaderBinary, &SubsystemHeaderBinary::subsystemTypeHash>(
+    return Core::Assets::PolymorphicAssetCodec::DeserializePolymorphicAsset<ISubsystem, SubsystemHeaderBinary, &SubsystemHeaderBinary::subsystemTypeHash>(
         virtualPath,
         binary,
         s_SubsystemMagic,

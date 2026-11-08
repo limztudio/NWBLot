@@ -91,44 +91,6 @@ class MaterialTypedByteContentLookup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SplitMaterialTypedBlockBytesByClass(
-    in Span<MaterialTypedLayoutBlock> blocks,
-    in Span<u8> packedTypedBytes,
-    mut Vector<u8> outConstantTypedBytes,
-    mut Vector<u8> outMutableDefaultTypedBytes
-){
-    outConstantTypedBytes.clear();
-    outMutableDefaultTypedBytes.clear();
-
-    usize constantByteSize = 0u;
-    usize mutableByteSize = 0u;
-    for(in MaterialTypedLayoutBlock block : blocks){
-        if(block.blockClass == MaterialBlockClass::MaterialConstant)
-            constantByteSize += cast<usize>(block.byteSize);
-        else
-            mutableByteSize += cast<usize>(block.byteSize);
-    }
-    outConstantTypedBytes.reserve(constantByteSize);
-    outMutableDefaultTypedBytes.reserve(mutableByteSize);
-    usize sourceByteOffset = 0u;
-    for(in MaterialTypedLayoutBlock block : blocks){
-        assert(IsValidMaterialBlockClass(block.blockClass));
-        assert((block.byteSize & 3u) == 0u);
-        const usize blockByteCount = cast<usize>(block.byteSize);
-        assert(sourceByteOffset <= packedTypedBytes.size() && blockByteCount <= packedTypedBytes.size() - sourceByteOffset);
-        if(block.blockClass == MaterialBlockClass::MaterialConstant){
-            for(usize i = 0u; i < blockByteCount; ++i)
-                outConstantTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
-        }
-        else{
-            for(usize i = 0u; i < blockByteCount; ++i)
-                outMutableDefaultTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
-        }
-        sourceByteOffset += blockByteCount;
-    }
-    assert(sourceByteOffset == packedTypedBytes.size());
-}
-
 b8 MaterialInstanceMutableCacheEntryMatches(
     in Name cacheMaterialName,
     in Name cacheMaterialInterface,
@@ -261,87 +223,6 @@ void ValidateMaterialTypedUploadRanges(in Span<MaterialTypedInstanceRanges> inst
     const usize uploadByteCount = ResolveMaterialTypedUploadByteCount(materialTypedBytes);
     for(in MaterialTypedInstanceRanges ranges : instanceRanges)
         ValidateMaterialTypedInstanceRange(ranges, uploadByteCount);
-}
-
-void CopyMaterialTypedByteSpan(in Span<u8> sourceBytes, mut Vector<u8> outBytes){
-    outBytes.clear();
-    outBytes.reserve(sourceBytes.size());
-    for(in u8 b : sourceBytes)
-        outBytes.push_back(b);
-}
-
-b8 PopulateMaterialSurfaceInfoFromAsset(
-    in Name materialPath,
-    in StringView shaderVariant,
-    in b8 hasMeshShader,
-    in b8 hasPixelShader,
-    in b8 transparent,
-    in Name materialInterface,
-    in u64 typedLayoutHash,
-    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
-    in Span<MaterialTypedLayoutField> typedLayoutFields,
-    in Span<u8> typedBlockBytes,
-    in Span<MaterialResourceReference> resourceReferences,
-    in u32 shadingModelId,
-    in u32 surfaceDispatchId,
-    in b8 twoSided,
-    in b8 refractive,
-    mut Name outMaterialName,
-    mut String outShaderVariant,
-    mut Name outMaterialInterface,
-    mut u64 outTypedLayoutHash,
-    mut Vector<MaterialTypedLayoutBlock> outTypedLayoutBlocks,
-    mut Vector<MaterialTypedLayoutField> outTypedLayoutFields,
-    mut Vector<MaterialResourceReference> outResourceReferences,
-    mut Vector<u8> outConstantTypedBytes,
-    mut Vector<u8> outMutableDefaultTypedBytes,
-    mut Vector<u8> outUnpatchedConstantTypedBytes,
-    mut u32 outShadingModelId,
-    mut u32 outSurfaceDispatchId,
-    mut b8 outCsgCapSurfaceDispatchAvailable,
-    mut b8 outTransparent,
-    mut b8 outTwoSided,
-    mut b8 outRefractive
-){
-    if(!hasMeshShader){
-        error("RendererSystem: material '{}' is missing required mesh shader", materialPath.resolvedText());
-        return false;
-    }
-    if(!hasPixelShader && !transparent){
-        error("RendererSystem: opaque material '{}' is missing required pixel shader", materialPath.resolvedText());
-        return false;
-    }
-
-    outMaterialName = materialPath;
-    outShaderVariant = shaderVariant;
-    outMaterialInterface = materialInterface;
-    outTypedLayoutHash = typedLayoutHash;
-
-    outTypedLayoutBlocks.clear();
-    outTypedLayoutBlocks.reserve(typedLayoutBlocks.size());
-    for(in MaterialTypedLayoutBlock block : typedLayoutBlocks)
-        outTypedLayoutBlocks.push_back(block);
-
-    outTypedLayoutFields.clear();
-    outTypedLayoutFields.reserve(typedLayoutFields.size());
-    for(in MaterialTypedLayoutField field : typedLayoutFields)
-        outTypedLayoutFields.push_back(field);
-
-    outResourceReferences.clear();
-    outResourceReferences.reserve(resourceReferences.size());
-    for(in MaterialResourceReference ref : resourceReferences)
-        outResourceReferences.push_back(ref);
-
-    SplitMaterialTypedBlockBytesByClass(typedLayoutBlocks, typedBlockBytes, outConstantTypedBytes, outMutableDefaultTypedBytes);
-    CopyMaterialTypedByteSpan(outConstantTypedBytes, outUnpatchedConstantTypedBytes);
-
-    outShadingModelId = shadingModelId;
-    outSurfaceDispatchId = surfaceDispatchId;
-    outCsgCapSurfaceDispatchAvailable = surfaceDispatchId != u32.max;
-    outTransparent = transparent;
-    outTwoSided = twoSided;
-    outRefractive = refractive;
-    return true;
 }
 
 b8 IsMaterialPassDrawBuffersReady(

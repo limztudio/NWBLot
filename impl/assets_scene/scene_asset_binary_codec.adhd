@@ -1,0 +1,279 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_scene/scene_assets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/alloc/scratch.h>
+
+namespace NWB::Impl{
+using SceneScratchNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
+using SceneScratchAssetEntryBinaryVector = Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SceneAssetBinaryCodec{
+    private ProjectHeaderBinary makeProjectHeader(in NameHash startSceneHash)const{
+        ProjectHeaderBinary header;
+        header.startSceneHash = startSceneHash;
+        return header;
+    }
+
+    private EntityHeaderBinary makeEntityHeader(in u64 componentCount)const{
+        EntityHeaderBinary header;
+        header.componentCount = componentCount;
+        return header;
+    }
+
+    private SceneHeaderBinary makeSceneHeader(in u64 subsystemCount, in u64 entityCount, in u64 assetCount)const{
+        SceneHeaderBinary header;
+        header.subsystemCount = subsystemCount;
+        header.entityCount = entityCount;
+        header.assetCount = assetCount;
+        return header;
+    }
+
+    private b8 validateEntityHeader(in EntityHeaderBinary header)const{
+        if(header.version == s_EntityVersion)
+            return true;
+
+        error("EntityAsset::loadBinary failed: unsupported version {}", header.version);
+        return false;
+    }
+
+    private b8 validateProjectHeader(in ProjectHeaderBinary header)const{
+        if(header.version == s_ProjectVersion)
+            return true;
+
+        error("ProjectAsset::loadBinary failed: unsupported version {}", header.version);
+        return false;
+    }
+
+    private b8 validateSceneHeader(in SceneHeaderBinary header)const{
+        if(header.version == s_SceneVersion)
+            return true;
+
+        error("SceneAsset::loadBinary failed: unsupported version {}", header.version);
+        return false;
+    }
+
+    private void collectSortedAssetEntries<TAsset>(
+        in HashMap<Name, AssetRef<TAsset>> assets,
+        mut SceneScratchAssetEntryBinaryVector outEntries
+    )const{
+        outEntries.clear();
+        outEntries.reserve(assets.size());
+        for(in auto entry : assets)
+            outEntries.push_back(SceneAssetEntryBinary(entry.first.hash(), entry.second.name().hash()));
+        native(mut outEntries){
+            Sort(outEntries.begin(), outEntries.end(), LessSceneAssetEntryBinary);
+        }
+    }
+
+    public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary)const{
+        usize reserveBytes = s_EntityHeaderBinaryBytes;
+        if(!AddBinaryRepeatedReserveBytes(reserveBytes, components.size(), s_NameHashBinaryBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
+            error("EntityAssetCodec::serialize failed: 'components' payload byte size overflows");
+            return false;
+        }
+        outBinary.clear();
+        outBinary.reserve(reserveBytes);
+        AppendPOD(outBinary, this.makeEntityHeader(cast<u64>(components.size())));
+        for(in AssetRef<TComponent> component : components)
+            AppendPOD(outBinary, component.name().hash());
+        return true;
+    }
+
+    public b8 serializeProject(in NameHash startSceneHash, mut Vector<u8> outBinary)const{
+        const ProjectHeaderBinary header = this.makeProjectHeader(startSceneHash);
+        outBinary.clear();
+        outBinary.reserve(s_ProjectHeaderBinaryBytes);
+        AppendPOD(outBinary, header);
+        return true;
+    }
+
+    public b8 serializeScene<TSubsystem, TEntity, TAsset>(
+        in Span<AssetRef<TSubsystem>> subsystems,
+        in Span<AssetRef<TEntity>> entities,
+        in HashMap<Name, AssetRef<TAsset>> assets,
+        mut SceneScratchAssetEntryBinaryVector scratchAssetEntries,
+        mut Vector<u8> outBinary
+    )const{
+        this.collectSortedAssetEntries(assets, scratchAssetEntries);
+        usize reserveBytes = s_SceneHeaderBinaryBytes;
+        const b8 canReserve =
+            AddBinaryRepeatedReserveBytes(reserveBytes, subsystems.size(), s_NameHashBinaryBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, entities.size(), s_NameHashBinaryBytes)
+            && AddBinaryRepeatedReserveBytes(reserveBytes, scratchAssetEntries.size(), s_SceneAssetEntryBinaryBytes)
+            && CanStoreValueCount(outBinary, reserveBytes)
+        ;
+        if(!canReserve){
+            error("SceneAssetCodec::serialize failed: scene payload byte size overflows");
+            return false;
+        }
+        outBinary.clear();
+        outBinary.reserve(reserveBytes);
+        AppendPOD(outBinary, this.makeSceneHeader(cast<u64>(subsystems.size()), cast<u64>(entities.size()), cast<u64>(scratchAssetEntries.size())));
+        for(in AssetRef<TSubsystem> subsystem : subsystems)
+            AppendPOD(outBinary, subsystem.name().hash());
+        for(in AssetRef<TEntity> entity : entities)
+            AppendPOD(outBinary, entity.name().hash());
+        for(in SceneAssetEntryBinary entry : scratchAssetEntries)
+            AppendPOD(outBinary, entry);
+        return true;
+    }
+
+    public b8 deserializeProject(in Span<u8> binary, mut Name outStartScene)const{
+        usize cursor = 0u;
+        const Expected<ProjectHeaderBinary> headerResult = ReadPOD<ProjectHeaderBinary>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("ProjectAsset::loadBinary failed: malformed header");
+            return false;
+        }
+        const ProjectHeaderBinary header = headerResult.value();
+        if(header.magic != s_ProjectMagic){
+            error("ProjectAsset::loadBinary failed: invalid project asset format; recook required");
+            return false;
+        }
+        if(!this.validateProjectHeader(header))
+            return false;
+        if(cursor != binary.size()){
+            error("ProjectAsset::loadBinary failed: trailing bytes detected");
+            return false;
+        }
+        outStartScene = Name(header.startSceneHash);
+        return true;
+    }
+
+    private b8 readNameHashes(
+        in Span<u8> binary,
+        in u64 count64,
+        in StringView failureContext,
+        in StringView label,
+        mut usize inOutCursor,
+        mut SceneScratchNameHashVector outHashes
+    )const{
+        outHashes.clear();
+        if(count64 > cast<u64>(usize.max / s_NameHashBinaryBytes)){
+            error("{} failed: '{}' payload byte size overflows", failureContext, label);
+            return false;
+        }
+        const usize count = cast<usize>(count64);
+        const usize byteCount = count * s_NameHashBinaryBytes;
+        if(!CanReadBytes(binary, inOutCursor, byteCount) || !CanStoreValueCount(outHashes, count)){
+            error("{} failed: malformed '{}' payload", failureContext, label);
+            return false;
+        }
+        outHashes.reserve(count);
+        for(usize i = 0u; i < count; ++i){
+            const Expected<NameHash> itemResult = ReadPOD<NameHash>(binary, inOutCursor);
+            if(!itemResult.has_value()){
+                error("{} failed: malformed '{}' payload", failureContext, label);
+                return false;
+            }
+            outHashes.push_back(itemResult.value());
+        }
+        return true;
+    }
+
+    private b8 readAssetEntries(
+        in Span<u8> binary,
+        in u64 count64,
+        mut usize inOutCursor,
+        mut SceneScratchAssetEntryBinaryVector outEntries
+    )const{
+        outEntries.clear();
+        if(count64 > cast<u64>(usize.max / s_SceneAssetEntryBinaryBytes)){
+            error("SceneAsset::loadBinary failed: 'assets' payload byte size overflows");
+            return false;
+        }
+        const usize count = cast<usize>(count64);
+        const usize byteCount = count * s_SceneAssetEntryBinaryBytes;
+        if(!CanReadBytes(binary, inOutCursor, byteCount) || !CanStoreValueCount(outEntries, count)){
+            error("SceneAsset::loadBinary failed: malformed 'assets' payload");
+            return false;
+        }
+        outEntries.reserve(count);
+        for(usize i = 0u; i < count; ++i){
+            const Expected<SceneAssetEntryBinary> itemResult = ReadPOD<SceneAssetEntryBinary>(binary, inOutCursor);
+            if(!itemResult.has_value()){
+                error("SceneAsset::loadBinary failed: malformed 'assets' payload");
+                return false;
+            }
+            outEntries.push_back(itemResult.value());
+        }
+        return true;
+    }
+
+    public b8 deserializeEntity(
+        in Span<u8> binary,
+        mut SceneScratchNameHashVector outComponentHashes
+    )const{
+        usize cursor = 0u;
+        const Expected<EntityHeaderBinary> headerResult = ReadPOD<EntityHeaderBinary>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("EntityAsset::loadBinary failed: malformed header");
+            return false;
+        }
+        const EntityHeaderBinary header = headerResult.value();
+        if(header.magic != s_EntityMagic){
+            error("EntityAsset::loadBinary failed: invalid entity asset format; recook required");
+            return false;
+        }
+        if(!this.validateEntityHeader(header))
+            return false;
+        if(!this.readNameHashes(binary, header.componentCount, "EntityAsset::loadBinary", "components", cursor, outComponentHashes))
+            return false;
+        if(cursor != binary.size()){
+            error("EntityAsset::loadBinary failed: trailing bytes detected");
+            return false;
+        }
+        return true;
+    }
+
+    public b8 deserializeScene(
+        in Span<u8> binary,
+        mut SceneScratchNameHashVector outSubsystemHashes,
+        mut SceneScratchNameHashVector outEntityHashes,
+        mut SceneScratchAssetEntryBinaryVector outAssetEntries
+    )const{
+        usize cursor = 0u;
+        const Expected<SceneHeaderBinary> headerResult = ReadPOD<SceneHeaderBinary>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("SceneAsset::loadBinary failed: malformed header");
+            return false;
+        }
+        const SceneHeaderBinary header = headerResult.value();
+        if(header.magic != s_SceneMagic){
+            error("SceneAsset::loadBinary failed: invalid scene asset format; recook required");
+            return false;
+        }
+        if(!this.validateSceneHeader(header))
+            return false;
+        if(!this.readNameHashes(binary, header.subsystemCount, "SceneAsset::loadBinary", "subsystems", cursor, outSubsystemHashes))
+            return false;
+        if(!this.readNameHashes(binary, header.entityCount, "SceneAsset::loadBinary", "entities", cursor, outEntityHashes))
+            return false;
+        if(!this.readAssetEntries(binary, header.assetCount, cursor, outAssetEntries))
+            return false;
+        if(cursor != binary.size()){
+            error("SceneAsset::loadBinary failed: trailing bytes detected");
+            return false;
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

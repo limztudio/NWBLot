@@ -3,6 +3,7 @@
 
 
 #include "internal.h"
+#include "platform_win32_transport.h"
 
 #include <global/blocking_io.h>
 #include <global/scope_exit.h>
@@ -26,7 +27,6 @@ namespace __hidden_crash_win32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,22 +87,6 @@ static void WaitForOwnedProcess(const HANDLE process, const b8 terminateImmediat
         observations.record({ CrashDetail::PlatformOperation::WaitProcess, CrashDetail::PlatformErrorDomain::ExitCode, static_cast<u64>(exitCode) });
 }
 
-static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
-    if(ackReadHandle == INVALID_HANDLE_VALUE)
-        return;
-
-    for(;;){
-        DWORD availableBytes = 0u;
-        if(!PeekNamedPipe(ackReadHandle, nullptr, 0u, nullptr, &availableBytes, nullptr))
-            return;
-        if(availableBytes < sizeof(CrashDetail::CrashAck))
-            return;
-
-        CrashDetail::CrashAck ignoredAck;
-        if(!ReadAllWin32Handle(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
-            return;
-    }
-}
 
 static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
     const u32 exceptionCode = exceptionInfo && exceptionInfo->ExceptionRecord ? static_cast<u32>(exceptionInfo->ExceptionRecord->ExceptionCode) : 0u;
@@ -200,69 +184,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
-    if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
-        return CrashDumpTransportStatus::Failed;
-
-    // Re-entrancy guard: a fault inside the transport (e.g. the SEH filter faulting) must not re-enter or self-deadlock.
-    static thread_local b8 s_InTransport = false;
-    if(s_InTransport)
-        return CrashDumpTransportStatus::Failed;
-    s_InTransport = true;
-
-    // One writer owns the request pipe and ack event; other requests are not sent.
-    // One async-safe CAS, never blocks.
-    u32 expected = 0u;
-    if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        s_InTransport = false;
-        return CrashDumpTransportStatus::Failed;
-    }
-
-    CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
-    do{
-        __hidden_crash_win32::DrainPendingAcks(g_State.ackReadHandle);
-
-        if(g_State.crashHandledEvent)
-            ResetEvent(g_State.crashHandledEvent);
-
-        if(!WriteAllWin32Handle(g_State.requestWriteHandle, &request, sizeof(request))){
-            status = CrashDumpTransportStatus::Failed;
-            break;
-        }
-
-        if(!g_State.crashHandledEvent || g_State.ackReadHandle == INVALID_HANDLE_VALUE || waitMilliseconds == 0u){
-            status = CrashDumpTransportStatus::Sent;
-            break;
-        }
-
-        // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full timeout.
-        // Falls back to a single-object wait if the handler process handle is unavailable.
-        Array<HANDLE, __hidden_crash_win32::s_CrashWaitHandleCount> waitHandles = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
-        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? __hidden_crash_win32::s_CrashWaitHandleCount : 1u;
-        const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles.data(), FALSE, waitMilliseconds);
-        if(waitResult == WAIT_OBJECT_0){
-            CrashAck ack;
-            if(!ReadAllWin32Handle(g_State.ackReadHandle, &ack, sizeof(ack))){
-                status = CrashDumpTransportStatus::Failed;
-                break;
-            }
-            if(!CrashAckMatchesRequest(ack, request)){
-                status = CrashDumpTransportStatus::Failed;
-                break;
-            }
-            status = ack.packageWritten ? CrashDumpTransportStatus::PackageWritten : CrashDumpTransportStatus::PackageWriteFailed;
-            break;
-        }
-        if(waitResult == WAIT_TIMEOUT){
-            status = CrashDumpTransportStatus::TimedOut;
-            break;
-        }
-        // WAIT_OBJECT_0 + 1 (handler process exited) or WAIT_FAILED: treat as a failed transport.
-        status = CrashDumpTransportStatus::Failed;
-    }while(false);
-
-    g_State.transportInFlight.store(0u, MemoryOrder::release);
-    s_InTransport = false;
-    return status;
+    return WindowsCrashTransport::request(g_State, request, waitMilliseconds);
 }
 
 template<typename ArenaT>

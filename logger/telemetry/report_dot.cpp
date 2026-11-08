@@ -4,6 +4,7 @@
 
 #include "report_dot.h"
 
+#include <global/name_hash_text.h>
 #include <global/dot_text.h>
 #include <global/hash_utils.h>
 
@@ -301,7 +302,7 @@ void AppendTimedGraphDot(const FrameGraphReportRecord& record, const usize graph
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Core::Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
-        Array<char, s_DebugHashTextLength + 1u> identityText;
+        Array<char, NameHashTextCodec::s_TextLength + 1u> identityText;
         const AStringView identity = FormatNameIdentityText(node.name, identityText);
 
         const GraphTimingKey timingKey{ graph.frameIndex, node.name };

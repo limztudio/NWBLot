@@ -16,6 +16,11 @@
 #include "binary_payload_io.h"
 #include "meshlet_triangle_indices.h"
 
+#include <impl/assets_mesh/payload_validation.adhd.h>
+#include <impl/assets_mesh/mesh_binary_codec.adhd.h>
+#include <impl/assets_mesh/cook_stream_reorder.adhd.h>
+#include <impl/assets_mesh/cook_solid_topology.adhd.h>
+
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 
@@ -164,7 +169,7 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!mesh.validatePayload(scratchArena))
         return false;
 
-    return SerializeMeshAssetBinary(
+    return MeshBinaryCodec().serialize(
         mesh.positionStream(),
         mesh.normalStream(),
         mesh.tangentStream(),

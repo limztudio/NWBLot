@@ -3,8 +3,10 @@
 
 
 #include "backend.h"
+#include "framebuffer_rendering_preparation.h"
 #include "arena_names.h"
 #include "command_validation.h"
+#include "vulkan_viewport_policy.h"
 
 #include <core/common/log.h>
 
@@ -73,9 +75,9 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
     constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
+    if(!FramebufferRenderingPreparation(*this).validateRenderPassBegin(framebuffer, params, s_OperationName))
         return;
-    if(!prepareFramebufferForRendering(&framebuffer, s_OperationName))
+    if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(&framebuffer, s_OperationName))
         return;
 
     // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
@@ -120,7 +122,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         return;
     if(!validateGraphicsState(state))
         return;
-    if(!prepareFramebufferForRendering(state.framebuffer, s_SetGraphicsStateOperation))
+    if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetGraphicsStateOperation))
         return;
 
     setResourceStatesForGraphicsBuffers(state);
@@ -231,7 +233,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
     else if(!viewportState.viewports.empty()){
-        const auto scissor = VulkanDetail::BuildImplicitScissor(viewportState.viewports[0u]);
+        const auto scissor = VulkanViewportPolicy::buildImplicitScissor(viewportState.viewports[0u]);
         if(!scissor)
             return;
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &*scissor);

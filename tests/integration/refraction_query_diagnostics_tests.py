@@ -8,10 +8,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_density_benchmark import Cell  # noqa: E402
-from refraction_density_capture_smoke import projected_bounds  # noqa: E402
-from refraction_query_diagnostics_smoke import (  # noqa: E402
-    COUNTER_FIELDS, parse_completed_statistics, validate_statistics,
-)
+from refraction_density_image_evidence import RefractionDensityImageEvidence  # noqa: E402
+from refraction_query_evidence import COUNTER_FIELDS, RefractionQueryEvidence  # noqa: E402
 from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
@@ -20,7 +18,7 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
 
     def profile(self, cell=None):
         cell = cell or self.cell
-        left, top, right, bottom = projected_bounds(cell.width, cell.height, cell.density)
+        left, top, right, bottom = RefractionDensityImageEvidence.projected_bounds(cell.width, cell.height, cell.density)
         pixels = (right - left) * (bottom - top)
         counters = dict.fromkeys(COUNTER_FIELDS, 0)
         for name in ("hardwarePixels", "associatedEntries", "exitQueries", "volumeExits", "backgroundQueries", "cachedOpaqueReturns", "cachedHitAttempts"):
@@ -42,42 +40,42 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
         return "\n".join(lines) + "\n"
 
     def assert_rejected(self, profile, expression):
-        validate_statistics(self.profile(), self.cell)
+        RefractionQueryEvidence.validate_statistics(self.profile(), self.cell)
         with self.assertRaisesRegex(SmokeFailure, expression):
-            validate_statistics(profile, self.cell)
+            RefractionQueryEvidence.validate_statistics(profile, self.cell)
 
     def test_missing_counter_and_completion_cannot_publish_partial_frame(self):
         text = self.text()
-        parsed = parse_completed_statistics(text)
-        validate_statistics(parsed, self.cell)
+        parsed = RefractionQueryEvidence.parse_completed_statistics(text)
+        RefractionQueryEvidence.validate_statistics(parsed, self.cell)
         with self.assertRaisesRegex(SmokeFailure, "incomplete"):
-            parse_completed_statistics(text.replace(next(line for line in text.splitlines(True) if "name=exitQueries " in line), ""))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace(next(line for line in text.splitlines(True) if "name=exitQueries " in line), ""))
         with self.assertRaisesRegex(SmokeFailure, "one completed"):
-            parse_completed_statistics(text.replace(next(line for line in text.splitlines(True) if ": complete " in line), ""))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace(next(line for line in text.splitlines(True) if ": complete " in line), ""))
 
     def test_duplicate_counter_and_wrong_reservation_identity_are_rejected(self):
         text = self.text()
         record = next(line for line in text.splitlines(True) if "name=exitQueries " in line)
         with self.assertRaisesRegex(SmokeFailure, "duplicated"):
-            parse_completed_statistics(text.replace(record, record + record))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace(record, record + record))
         with self.assertRaisesRegex(SmokeFailure, "does not belong"):
-            parse_completed_statistics(text.replace(record, record.replace("sequence=5", "sequence=6")))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace(record, record.replace("sequence=5", "sequence=6")))
 
     def test_malformed_or_unrecognized_record_cannot_be_silently_ignored(self):
         text = self.text()
         with self.assertRaisesRegex(SmokeFailure, "malformed"):
-            parse_completed_statistics(text + "RefractionQueryCounter: corrupt\n")
+            RefractionQueryEvidence.parse_completed_statistics(text + "RefractionQueryCounter: corrupt\n")
         with self.assertRaisesRegex(SmokeFailure, "unknown"):
-            parse_completed_statistics(text.replace("name=exitQueries", "name=inventedCounter"))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace("name=exitQueries", "name=inventedCounter"))
         with self.assertRaisesRegex(SmokeFailure, "metadata"):
-            parse_completed_statistics(text.replace("frame_index=0", "frame_index=0 frame_index=0"))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace("frame_index=0", "frame_index=0 frame_index=0"))
 
     def test_capture_must_follow_the_complete_counter_block(self):
         text = self.text()
         with self.assertRaisesRegex(SmokeFailure, "before framebuffer"):
-            parse_completed_statistics("FramebufferCapture: capture ready\n" + text.replace("FramebufferCapture: capture ready\n", ""))
+            RefractionQueryEvidence.parse_completed_statistics("FramebufferCapture: capture ready\n" + text.replace("FramebufferCapture: capture ready\n", ""))
         with self.assertRaisesRegex(SmokeFailure, "source must follow"):
-            parse_completed_statistics(text.replace("graphics source frame 33", "graphics source frame 30"))
+            RefractionQueryEvidence.parse_completed_statistics(text.replace("graphics source frame 33", "graphics source frame 30"))
 
     def test_hardware_fallback_and_unidentified_completion_are_rejected(self):
         for field, value in (("hardware_ready", 0), ("token_valid", 0), ("physical_valid", 0), ("token_value", 0),
@@ -125,7 +123,7 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
             backgroundQueries=pixels + 1, transparentHits=3, backgroundLayerCapPixels=1,
             cachedOpaqueReturns=pixels - 2, cachedHitAttempts=pixels - 2, exitStraightFallbackPixels=1, materialShadeCalls=3)
         c["physicalQueries"] = c["queryBudgetUnits"] = c["entryQueries"] + c["exitQueries"] + c["backgroundQueries"]
-        validate_statistics(profile, self.cell)
+        RefractionQueryEvidence.validate_statistics(profile, self.cell)
         for field in ("tirEvents", "transparentHits", "tirCappedPixels", "backgroundLayerCapPixels"):
             with self.subTest(field=field):
                 changed = copy.deepcopy(profile)
@@ -152,12 +150,12 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
     def test_empty_density_requires_completed_zero_work_instead_of_no_sample(self):
         cell = Cell("960x720", 0, "hardware")
         profile = self.profile(cell)
-        validate_statistics(profile, cell)
+        RefractionQueryEvidence.validate_statistics(profile, cell)
         profile["counters"]["entryQueries"] = 1
         with self.assertRaisesRegex(SmokeFailure, "conservation"):
-            validate_statistics(profile, cell)
+            RefractionQueryEvidence.validate_statistics(profile, cell)
         with self.assertRaisesRegex(SmokeFailure, "one completed"):
-            parse_completed_statistics("FramebufferCapture: capture ready\n")
+            RefractionQueryEvidence.parse_completed_statistics("FramebufferCapture: capture ready\n")
 
 
 if __name__ == "__main__":

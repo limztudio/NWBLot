@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "renderer_draw_types.h"
+
+#include <core/ecs/world.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialInstanceMutableCache final : NoCopy{
+public:
+    explicit MaterialInstanceMutableCache(Core::Alloc::GlobalArena& arena)
+        : m_arena(arena)
+        , m_entries(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
+    {}
+
+    [[nodiscard]] Expected<Span<const u8>> prepare(Core::ECS::World& world, Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
+    [[nodiscard]] Expected<Span<const u8>> find(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
+    void prune(Core::ECS::World& world)noexcept;
+    void clear()noexcept{ m_entries.clear(); m_componentMutationVersion = 0u; }
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_entries;
+    u64 m_componentMutationVersion = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

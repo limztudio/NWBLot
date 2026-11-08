@@ -5,6 +5,8 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from window_capture_arguments import WindowCaptureArguments
+from window_capture_termination import CaptureProcessTermination
 import window_capture_smoke  # noqa: E402
 import window_capture_validation  # noqa: E402
 
@@ -49,7 +51,7 @@ def _capture_after_resize(args, target):
             raise smoke.SmokeFailure(f"window already has target client extent {target}")
         backend.resize_client(handle, *target)
         smoke.wait_for_application_capture_exit(application, args.output, args.timeout)
-        exit_code, tail = smoke.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
+        exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
         application = None
         smoke.require_normal_process_exit(exit_code, tail, LIT_UI_RESIZE_FIXTURE)
         log_text = smoke.shutdown_logserver_and_collect(logserver, log_directory, baseline, pattern)
@@ -78,9 +80,9 @@ def _capture_after_resize(args, target):
         return 1
     finally:
         if application is not None:
-            smoke.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
+            CaptureProcessTermination.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
         if logserver is not None:
-            smoke.terminate_process(logserver, "UI resize logserver")
+            CaptureProcessTermination.terminate_process(logserver, "UI resize logserver")
         if backend is not None:
             backend.close()
 
@@ -92,7 +94,7 @@ def main(argv):
         window_capture_smoke.write_status(f"FAIL: {error}")
         return 1
     if resize is not None:
-        args = window_capture_smoke.parse_args(argv)
+        args = WindowCaptureArguments(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES).parse_args(argv)
         if not args.application_capture:
             window_capture_smoke.write_status("FAIL: --resize-before-capture requires --application-capture")
             return 1

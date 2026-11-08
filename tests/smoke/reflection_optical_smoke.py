@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual framebuffer optical-transport regression with independent geometric/radiometric oracles."""
 
+
 import argparse
 import base64
 from dataclasses import asdict, dataclass
@@ -9,52 +10,27 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
 
-from reflection_optical_reference import DENSE_CASES, decode_radiance, pixel_reference
-from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics, validate_frame, validate_statistics
-from refraction_gallery_smoke import png_rgb_bytes
+from reflection_optical_reference import DENSE_CASES
+from reflection_image_analysis import ReflectionImageAnalysis
+from reflection_optical_image_evidence import ReflectionOpticalImageEvidence
+from reflection_optical_evidence import (ReflectionOpticalEvidence,
+    LIT_HARDWARE, LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_DENSE, LIT_OPTICAL_CSG_GROUP_ENTRY,
+    LIT_OPTICAL_CSG_GROUP_GAP, LIT_OPTICAL_CSG_GROUP_GAP_SUB_ULP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_CSG_REFERENCE,
+    LIT_OPTICAL_CSG_SLIVER, LIT_OPTICAL_CSG_SUB_ULP, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, LIT_OPTICAL_GROUP_ENTRY,
+    LIT_OPTICAL_GROUP_GAP, LIT_OPTICAL_GROUP_GAP_SUB_ULP, LIT_OPTICAL_QUERY_LIMIT, LIT_OPTICAL_SLIVER,
+    LIT_OPTICAL_SUB_ULP, LIT_OPTICAL_TIR, LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_UNSPECIFIED_REFERENCE,
+    LIT_QUEUE_COVERAGE, LIT_REFLECTIONSMOKEOPTICS, LIT_STATISTICS)
+from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment
+from framebuffer_png_encoder import FramebufferPngEncoder
 from window_capture_image import read_bmp_24_rows
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 
-LIT_OPTICAL_GROUP_ENTRY = "optical_group_entry"
-LIT_OPTICAL_CSG_GROUP_ENTRY = "optical_csg_group_entry"
-LIT_OPTICAL_CSG_CAP = "optical_csg_cap"
-LIT_OPTICAL_UNSPECIFIED_REFERENCE = "optical_unspecified_reference"
-LIT_OPTICAL_CSG_UNSPECIFIED_CAP = "optical_csg_unspecified_cap"
-LIT_SINGLE_TASK_PACKETS = "single_task_packets"
-LIT_GRAPHICS_PACKETS = "graphics_packets"
-LIT_OPTICAL_CSG_OPEN_TAIL = "optical_csg_open_tail"
-LIT_FRAME = "frame"
-LIT_CANDIDATES = "candidates"
-LIT_EFFECTIVE_BUDGET = "effective_budget"
-LIT_HARDWARE_RAYS = "hardware_rays"
-LIT_COMPLETED_FRAMES = "completed_frames"
-LIT_CONTRACT = "contract"
-LIT_OPTICAL_CSG_REFERENCE = "optical_csg_reference"
-LIT_REFLECTIONSMOKESLICEPACKETS = "ReflectionSmokeSlicePackets:"
-LIT_SOURCE_FRAME = "source_frame"
-LIT_DEVICE_GENERATION = "device_generation"
-LIT_OPTICAL_CSG_DENSE = "optical_csg_dense"
-LIT_HARDWARE_HITS = "hardware_hits"
-LIT_OPAQUE_PIXELS = "opaque_pixels"
-LIT_GLASS_PIXELS = "glass_pixels"
-LIT_FALLBACK_PIXELS = "fallback_pixels"
-LIT_OPTICAL_SLIVER = "optical_sliver"
-LIT_OPTICAL_CSG_SLIVER = "optical_csg_sliver"
-LIT_OPTICAL_SUB_ULP = "optical_sub_ulp"
-LIT_OPTICAL_CSG_SUB_ULP = "optical_csg_sub_ulp"
-LIT_OPTICAL_GROUP_GAP = "optical_group_gap"
-LIT_OPTICAL_CSG_GROUP_GAP = "optical_csg_group_gap"
-LIT_OPTICAL_GROUP_GAP_SUB_ULP = "optical_group_gap_sub_ulp"
-LIT_OPTICAL_CSG_GROUP_GAP_SUB_ULP = "optical_csg_group_gap_sub_ulp"
-LIT_OPTICS = "optics"
-LIT_QUEUE_COVERAGE = "queue_coverage"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
@@ -68,34 +44,10 @@ LIT_DUPLICATE_GROUP = "duplicate_group"
 LIT_DUPLICATE_REVERSE = "duplicate_reverse"
 LIT_MIRRORED = "mirrored"
 LIT_OPTICAL = "optical_"
-LIT_OPTICAL_QUERY_LIMIT = "optical_query_limit"
-LIT_OPTICAL_TIR_LIMIT = "optical_tir_limit"
-LIT_OPTICAL_TIR = "optical_tir"
-LIT_SEQUENCE = "sequence"
-LIT_GENERATION = "generation"
-LIT_MAX_QUERIES = "max_queries"
-LIT_QUERY_BUDGET_UNITS = "query_budget_units"
-LIT_PHYSICAL_QUERIES = "physical_queries"
-LIT_BOOTSTRAP_EVENTS = "bootstrap_events"
-LIT_TRANSPARENT_PATHS = "transparent_paths"
-LIT_UNSUPPORTED_PATHS = "unsupported_paths"
-LIT_LIMITED_PATHS = "limited_paths"
-LIT_AMBIGUOUS_PATHS = "ambiguous_paths"
-LIT_TIR_EVENTS = "tir_events"
-LIT_MEDIUM_OVERFLOW_PATHS = "medium_overflow_paths"
-LIT_TRANSPORT_ENABLED = "transport_enabled"
-LIT_REFLECTIONSMOKEOPTICS = "ReflectionSmokeOptics:"
-LIT_HARDWARE = "hardware"
-LIT_OPTICAL_REFERENCE = "optical_reference"
-LIT_STATISTICS = "statistics"
 LIT_BMP = ".bmp"
 LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_LOG = ".log"
 LIT_UTF_8 = "utf-8"
-LIT_OPTICAL_TORUS = "optical_torus"
-LIT_REASON = "reason"
-LIT_CHART = "chart"
-LIT_CROSSINGS = "crossings"
 
 
 @dataclass(frozen=True)
@@ -111,8 +63,6 @@ CASES = ("reference", "clear", "tinted", "tilted", "nested2", "nested3", "priori
     "csg_reference", "csg_cap", "csg_cavity", "csg_open_tail", "unspecified_reference", "csg_unspecified_cap", "sliver", "csg_sliver", "sub_ulp", "csg_sub_ulp", "group_gap", "csg_group_gap",
     "group_gap_sub_ulp", "csg_group_gap_sub_ulp", "group_entry", "csg_group_entry")
 CAPTURES = tuple(OpticalCapture(LIT_OPTICAL + name, LIT_OPTICAL + name) for name in CASES) + (OpticalCapture(LIT_OPTICAL_QUERY_LIMIT, "optical_clear", 1), OpticalCapture(LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_TIR, 3))
-AMBIGUOUS_VOLUME_CASES = ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
-    LIT_OPTICAL_GROUP_ENTRY, LIT_OPTICAL_CSG_GROUP_ENTRY)
 # Query budgets straddling 64-thread groups and the 8192-ray dispatch limit.
 QUEUE_BOUNDARY_BUDGETS = (0, 1, 63, 64, 65, 8191, 8192, 8193, DEFAULT_RAY_BUDGET)
 QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_reference"),) + tuple(OpticalCapture("optical_csg_cap" if budget == DEFAULT_RAY_BUDGET else f"optical_csg_cap_budget_{budget}",
@@ -120,186 +70,15 @@ QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_
 DENSE_RECEIVER_CAPTURES = tuple(OpticalCapture(case, case) for case in DENSE_CASES)
 CSG_REUSE_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_reference"), OpticalCapture("optical_csg_cap", "optical_csg_cap"), OpticalCapture("optical_csg_open_tail", "optical_csg_open_tail"),
     OpticalCapture("optical_csg_cap_query_limit", LIT_OPTICAL_CSG_CAP, 8), OpticalCapture(LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_UNSPECIFIED_REFERENCE), OpticalCapture(LIT_OPTICAL_CSG_UNSPECIFIED_CAP, LIT_OPTICAL_CSG_UNSPECIFIED_CAP),)
-DENSE_RECEIVER_CROSSINGS = 18
-CSG_TRACE_SLICE_RAYS = 8192
-SLICE_PACKET_FIELDS = ("source_frame", "plan_generation", "device_generation", "graphics_queue", "runtime_present", "ray_capacity", "expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets",
-    LIT_SINGLE_TASK_PACKETS, LIT_GRAPHICS_PACKETS)
-OPTICS_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_MAX_QUERIES, LIT_QUERY_BUDGET_UNITS, LIT_PHYSICAL_QUERIES, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS,
-    LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS, LIT_TRANSPORT_ENABLED)
 LIMITATIONS = ("Actual renderer framebuffer pixels; independent float64 plane/box/triangle intersections, exact dielectric Fresnel, "
     "Snell refraction and world-distance Beer absorption predict stripe positions and RGB energy. The model follows one deterministic " "transmitted secondary path and continues total internal reflection; secondary non-TIR reflected branches are omitted. "
     "ClosedNested and ClosedPriority are explicit authored volume contracts. Unsupported, ambiguous and exhausted residual paths " "are conservatively black. These comparisons do not establish complete path tracing or a GPU speed improvement.")
 
 
-def parse_optics(log_text):
-    samples = []
-    for line in log_text.splitlines():
-        if LIT_REFLECTIONSMOKEOPTICS not in line:
-            continue
-        pairs = re.findall(r"([a-z_]+)=(\d+)", line.split(LIT_REFLECTIONSMOKEOPTICS, 1)[1])
-        if len(pairs) != len(OPTICS_FIELDS) or {name for name, _ in pairs} != set(OPTICS_FIELDS):
-            raise SmokeFailure("malformed completed optical statistics")
-        samples.append({name: int(value) for name, value in pairs})
-    if not samples:
-        raise SmokeFailure("no completed optical statistics")
-    return samples
-
-
-def validate_queue_coverage(statistics, spec):
-    # Optical query limits apply after hardware admission on mixed opaque and glass queues.
-    if spec.case not in ("optical_inside", "optical_inside_nested", LIT_OPTICAL_TIR, LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, *DENSE_CASES):
-        return None
-    completed = []
-    for sample in statistics:
-        if sample[LIT_FRAME] < 3:
-            continue
-        admitted = min(sample[LIT_CANDIDATES], sample[LIT_EFFECTIVE_BUDGET])
-        if sample[LIT_HARDWARE_RAYS] != admitted:
-            raise SmokeFailure("CSG reflection must execute every admitted queue entry exactly once in each stable frame")
-        completed.append({name: sample[name] for name in (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_CANDIDATES, LIT_EFFECTIVE_BUDGET, LIT_HARDWARE_RAYS)})
-    if not completed:
-        raise SmokeFailure("CSG queue coverage lacks a stable accepted frame")
-    return {"requested_ray_budget": spec.ray_budget, LIT_COMPLETED_FRAMES: completed, LIT_CONTRACT: "hardware_rays equals min(candidates, effective_budget) in every stable accepted snapshot"}
-
-
-def validate_slice_packets(log_text, statistics, spec):
-    if not spec.case.startswith("optical_csg_") or spec.case == LIT_OPTICAL_CSG_REFERENCE:
-        return None
-    from reflection_roughness_smoke import parse_history
-    history = parse_history(log_text)
-    by_key = {}
-    for sample in history:
-        key = (sample[LIT_SEQUENCE], sample[LIT_GENERATION])
-        if key in by_key:
-            raise SmokeFailure("duplicate completed source-frame identity for CSG slice packets")
-        by_key[key] = sample
-    observations = {}
-    for line in log_text.splitlines():
-        if LIT_REFLECTIONSMOKESLICEPACKETS not in line:
-            continue
-        record = {}
-        for field in line.split(LIT_REFLECTIONSMOKESLICEPACKETS, 1)[1].strip().split():
-            match = re.fullmatch(r"([a-z_]+)=([0-9]+)", field)
-            if not match or match[1] in record:
-                raise SmokeFailure("malformed accepted CSG slice-packet observation")
-            record[match[1]] = int(match[2])
-        if set(record) != set(SLICE_PACKET_FIELDS):
-            raise SmokeFailure("accepted CSG slice-packet observation lacks exact fields")
-        if record[LIT_SOURCE_FRAME] in observations:
-            raise SmokeFailure("duplicate accepted CSG slice-packet source frame")
-        observations[record[LIT_SOURCE_FRAME]] = record
-    completed = []
-    for sample in statistics:
-        if sample[LIT_FRAME] < 3:
-            continue
-        source = by_key.get((sample[LIT_SEQUENCE], sample[LIT_GENERATION]))
-        record = observations.get(source["graphics_frame"]) if source is not None else None
-        if record is None:
-            raise SmokeFailure("completed CSG snapshot lacks accepted slice-packet evidence for its exact source frame")
-        capacity = min(sample[LIT_EFFECTIVE_BUDGET], sample["queue_capacity"])
-        expected = (capacity + CSG_TRACE_SLICE_RAYS - 1) // CSG_TRACE_SLICE_RAYS
-        if (record["runtime_present"] != 1 or record["plan_generation"] == 0 or record[LIT_DEVICE_GENERATION] != sample[LIT_DEVICE_GENERATION] or record[LIT_DEVICE_GENERATION] == 0 or record["graphics_queue"] >= 65535):
-            raise SmokeFailure("CSG slice packets lack current accepted plan and primary Graphics queue identity")
-        if record["ray_capacity"] != capacity or record["expected_slices"] != expected:
-            raise SmokeFailure("CSG slice-packet count describes a different frozen queue capacity")
-        counts = ("hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets", LIT_SINGLE_TASK_PACKETS, LIT_GRAPHICS_PACKETS)
-        if any(record[name] != expected for name in counts):
-            raise SmokeFailure("every CSG hardware slice must accept as a distinct single-task primary Graphics packet")
-        completed.append({LIT_SEQUENCE: sample[LIT_SEQUENCE], LIT_GENERATION: sample[LIT_GENERATION], **record})
-    if not completed:
-        raise SmokeFailure("CSG slice packets lack a stable completed frame")
-    return {"slice_ray_limit": CSG_TRACE_SLICE_RAYS, LIT_COMPLETED_FRAMES: completed, LIT_CONTRACT: "Each frozen CSG hardware slice has a distinct accepted single-task primary Graphics packet; zero budget has none. "
-            "One complete hardware timing range still spans all slices per frame."}
-
-
-def validate_optics(log_text, spec):
-    statistics = parse_statistics(log_text)
-    validate_statistics(statistics, spec.case, LIT_HARDWARE, budget=spec.ray_budget)
-    queue_coverage = validate_queue_coverage(statistics, spec)
-    slice_packets = validate_slice_packets(log_text, statistics, spec)
-    by_key = {(sample[LIT_SEQUENCE], sample[LIT_GENERATION]): sample for sample in statistics}
-    samples = parse_optics(log_text)
-    stable = []
-    for optical in samples:
-        sample = by_key.get((optical[LIT_SEQUENCE], optical[LIT_GENERATION]))
-        if sample is None:
-            raise SmokeFailure("optical counters lack matching accepted-token source metadata")
-        if optical[LIT_MAX_QUERIES] != spec.queries:
-            raise SmokeFailure("optical counters describe a different frozen query budget")
-        rays, queries = sample[LIT_HARDWARE_RAYS], optical[LIT_QUERY_BUDGET_UNITS]
-        if not rays <= queries <= rays * spec.queries:
-            raise SmokeFailure("reserved traversal units violate the per-path query bound")
-        physical_queries = optical[LIT_PHYSICAL_QUERIES]
-        if physical_queries > queries:
-            raise SmokeFailure("physical hardware queries exceed reserved traversal units")
-        for field in (LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_MEDIUM_OVERFLOW_PATHS):
-            if optical[field] > rays:
-                raise SmokeFailure("optical path counter exceeds admitted primary paths: " + field)
-        if optical[LIT_TIR_EVENTS] > queries or optical[LIT_BOOTSTRAP_EVENTS] > rays * 32:
-            raise SmokeFailure("optical event counters exceed their bounded traversal capacity")
-        if sample[LIT_FRAME] >= 3:
-            if spec.case in DENSE_CASES:
-                expected_queries = rays * (2 if spec.case == LIT_OPTICAL_CSG_DENSE else 1)
-                if (not rays or rays != min(sample[LIT_CANDIDATES], sample[LIT_EFFECTIVE_BUDGET]) or sample[LIT_HARDWARE_HITS] != rays or sample[LIT_OPAQUE_PIXELS] != rays or sample[LIT_GLASS_PIXELS] or sample[LIT_FALLBACK_PIXELS]
-                    or queries != expected_queries or physical_queries != expected_queries):
-                    raise SmokeFailure("dense opaque receiver lost an admitted surface hit or replayed its hardware query")
-                if optical[LIT_TRANSPORT_ENABLED] or any(optical[field] for field in (LIT_TRANSPARENT_PATHS, LIT_BOOTSTRAP_EVENTS, LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS)):
-                    raise SmokeFailure("dense opaque receiver used optical transport or reported an unresolved path")
-            if spec.case in AMBIGUOUS_VOLUME_CASES and optical[LIT_AMBIGUOUS_PATHS] != rays:
-                raise SmokeFailure("negative optical fixture did not report ambiguity for every admitted hardware ray")
-            stable.append((sample, optical))
-    if not stable:
-        raise SmokeFailure("no stable completed optical frame")
-    sample, optical = stable[-1]
-    if optical[LIT_TRANSPORT_ENABLED] != int(spec.case not in (LIT_OPTICAL_REFERENCE, *DENSE_CASES) and sample["hardware_ready"]):
-        raise SmokeFailure("completed snapshot used the wrong plain/optical hardware kernel")
-    if spec.ray_budget == DEFAULT_RAY_BUDGET and spec.case not in (LIT_OPTICAL_REFERENCE, *DENSE_CASES) and spec.case not in AMBIGUOUS_VOLUME_CASES and optical[LIT_TRANSPARENT_PATHS] == 0:
-        raise SmokeFailure("authored optical scene produced no transparent reflected paths")
-    required = {"optical_unspecified": LIT_UNSUPPORTED_PATHS, "optical_mixed": LIT_AMBIGUOUS_PATHS, "optical_overflow": LIT_MEDIUM_OVERFLOW_PATHS, LIT_OPTICAL_QUERY_LIMIT: LIT_LIMITED_PATHS,
-        LIT_OPTICAL_TIR_LIMIT: LIT_LIMITED_PATHS, "optical_coincident_independent": LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_SLIVER: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_CSG_SLIVER: LIT_AMBIGUOUS_PATHS,
-        LIT_OPTICAL_SUB_ULP: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_CSG_SUB_ULP: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_GROUP_GAP: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_CSG_GROUP_GAP: LIT_AMBIGUOUS_PATHS,
-        LIT_OPTICAL_GROUP_GAP_SUB_ULP: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_CSG_GROUP_GAP_SUB_ULP: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_GROUP_ENTRY: LIT_AMBIGUOUS_PATHS, LIT_OPTICAL_CSG_GROUP_ENTRY: LIT_AMBIGUOUS_PATHS}.get(spec.name)
-    if required and optical[required] == 0:
-        raise SmokeFailure("negative optical fixture did not exercise " + required)
-    if spec.case.startswith("optical_inside") and optical[LIT_BOOTSTRAP_EVENTS] == 0:
-        raise SmokeFailure("inside-origin fixture did not exercise membership bootstrap")
-    if spec.case == LIT_OPTICAL_TIR and optical[LIT_TIR_EVENTS] == 0:
-        raise SmokeFailure("prism fixture did not exercise total internal reflection")
-    return {LIT_STATISTICS: statistics, LIT_OPTICS: samples, "stable_optics": optical, LIT_QUEUE_COVERAGE: queue_coverage, "slice_packets": slice_packets}
 
 
 
-def validate_collection_reuse(evidence, spec):
-    if spec.case == LIT_OPTICAL_CSG_OPEN_TAIL:
-        expected_units, expected_physical, limited = 12, 12, False
-    elif spec.case == LIT_OPTICAL_CSG_CAP and spec.queries == 8:
-        expected_units, expected_physical, limited = 8, 5, True
-    elif spec.case in (LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_UNSPECIFIED_CAP) and spec.queries == 16:
-        expected_units, expected_physical, limited = 11, 7, False
-    elif spec.case == LIT_OPTICAL_UNSPECIFIED_REFERENCE and spec.queries == 16:
-        expected_units, expected_physical, limited = 5, 5, False
-    else:
-        raise SmokeFailure("collection reuse evidence requires its declared closed, open or query-limit control")
-    by_key = {(sample[LIT_SEQUENCE], sample[LIT_GENERATION]): sample for sample in evidence[LIT_OPTICS]}
-    completed = []
-    for sample in evidence[LIT_STATISTICS]:
-        if sample[LIT_FRAME] < 3:
-            continue
-        optical = by_key.get((sample[LIT_SEQUENCE], sample[LIT_GENERATION]))
-        rays = sample[LIT_HARDWARE_RAYS]
-        if (optical is None or not rays or rays != min(sample[LIT_CANDIDATES], sample[LIT_EFFECTIVE_BUDGET]) or sample[LIT_HARDWARE_HITS] != rays or sample[LIT_OPAQUE_PIXELS] != rays or sample[LIT_GLASS_PIXELS] or sample[LIT_FALLBACK_PIXELS]):
-            raise SmokeFailure("collection reuse control lost an admitted retained-slab path")
-        if (optical[LIT_MAX_QUERIES] != spec.queries or optical[LIT_TRANSPORT_ENABLED] != 1 or optical[LIT_QUERY_BUDGET_UNITS] != expected_units * rays or optical[LIT_PHYSICAL_QUERIES] != expected_physical * rays or optical[LIT_TRANSPARENT_PATHS] != rays
-            or optical[LIT_LIMITED_PATHS] != (rays if limited else 0) or any(optical[field] for field in (LIT_BOOTSTRAP_EVENTS, LIT_UNSUPPORTED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS))):
-            raise SmokeFailure("collection reuse control changed reserved work, physical queries or conservative termination")
-        completed.append({LIT_SEQUENCE: sample[LIT_SEQUENCE], LIT_GENERATION: sample[LIT_GENERATION], LIT_FRAME: sample[LIT_FRAME], LIT_HARDWARE_RAYS: rays, LIT_QUERY_BUDGET_UNITS: optical[LIT_QUERY_BUDGET_UNITS],
-            LIT_PHYSICAL_QUERIES: optical[LIT_PHYSICAL_QUERIES]})
-    if not completed:
-        raise SmokeFailure("collection reuse control lacks a stable completed source frame")
-    return {"reserved_units_per_ray": expected_units, "physical_queries_per_ray": expected_physical, "query_limit_termination": limited, LIT_COMPLETED_FRAMES: completed,
-        LIT_CONTRACT: "Closed receivers reuse exact tie certificates; a positive open event beyond the nearest chart disables reuse. "
-            "The extended open root also requires one terminal no-hit collection. Query exhaustion preserves reserved work and black residual radiance. "
-            "Valid-air controls author the sole transparent receiver as Unspecified, selecting the normal all-Unspecified optical kernel."}
+
 
 
 def capture(args, spec):
@@ -324,99 +103,26 @@ def capture(args, spec):
     if result.returncode:
         raise SmokeFailure(f"{spec.name} capture failed with exit {result.returncode}")
     frame = read_bmp_24_rows(output)
-    validate_frame(frame)
+    ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != (960, 720):
         raise SmokeFailure("optical capture is not the actual 960x720 framebuffer")
-    from reflection_roughness_smoke import CaptureSpec, validate_history
+    from reflection_roughness_smoke import CaptureSpec
+    from reflection_history_evidence import ReflectionHistoryEvidence
     log_text = output.with_suffix(LIT_LOG).read_text(encoding=LIT_UTF_8)
-    evidence = validate_optics(log_text, spec)
-    evidence["capture_source"] = validate_history(log_text, evidence[LIT_STATISTICS], CaptureSpec(spec.name, case=spec.case, roughness=0, samples=16, temporal=False))
+    evidence = ReflectionOpticalEvidence.validate_optics(log_text, spec)
+    evidence["capture_source"] = ReflectionHistoryEvidence.validate_history(log_text, evidence[LIT_STATISTICS], CaptureSpec(spec.name, case=spec.case, roughness=0, samples=16, temporal=False))
     if spec in CSG_REUSE_CAPTURES[1:]:
-        evidence["collection_reuse"] = validate_collection_reuse(evidence, spec)
+        evidence["collection_reuse"] = ReflectionOpticalEvidence.validate_collection_reuse(evidence, spec)
     return evidence
 
 
-def reference_points(spec):
-    if spec.case in DENSE_CASES:
-        # Central rays remain inside every receiver slab through z=-25, beyond the ordinary chart at z=-14.
-        return ((x, y) for y in range(280, 441, 8) for x in range(352, 609, 8))
-    if spec.case == LIT_OPTICAL_TORUS:
-        return ((x, y) for y in range(332, 389, 4) for x in range(400, 561, 4))
-    if spec.case == LIT_OPTICAL_TIR:
-        return ((x, y) for y in range(332, 389, 4) for x in range(448, 513, 4))
-    return ((x, y) for y in range(200, 521, 16) for x in range(208, 753, 12))
 
-
-def analyze_image(frame, spec):
-    width, height, rows = validate_frame(frame)
-    if (width, height) != (960, 720):
-        raise SmokeFailure("optical geometry oracle requires the fixture's 960x720 camera")
-    errors, actual_sum, expected_sum, reasons = [], [0.0] * 3, [0.0] * 3, {}
-    channel_deviations, stable_points, rejected_edges, transmitted_chart, reentered_chart = [], 0, 0, 0, 0
-    dense_crossings = []
-    for x, y in reference_points(spec):
-        expected, path = pixel_reference(spec.case, x + 0.5, y + 0.5, max_queries=spec.queries)
-        if spec.case in DENSE_CASES:
-            if path[LIT_REASON] != "opaque_dense" or path[LIT_CROSSINGS] != DENSE_RECEIVER_CROSSINGS or min(expected) <= 0.:
-                raise SmokeFailure("dense receiver oracle lacks eighteen distinct closed crossings and a positive opaque hit")
-            dense_crossings.append(path[LIT_CROSSINGS])
-        # Exclude a one-pixel margin around analytic discontinuities.
-        neighbors = [pixel_reference(spec.case, x + dx + 0.5, y + dy + 0.5, max_queries=spec.queries)[0] for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))]
-        if any(max(abs(a - b) for a, b in zip(expected, neighbor)) > 0.025 for neighbor in neighbors):
-            rejected_edges += 1
-            continue
-        actual = tuple(decode_radiance(value) for value in rows[y][x])
-        if not all(math.isfinite(value) for value in actual):
-            raise SmokeFailure("optical capture contains clipped or nonfinite decoded radiance")
-        errors.extend(abs(a - b) for a, b in zip(actual, expected))
-        channel_deviations.append([abs(a - b) for a, b in zip(actual, expected)])
-        for channel in range(3):
-            actual_sum[channel] += actual[channel]
-            expected_sum[channel] += expected[channel]
-        reasons[path[LIT_REASON]] = reasons.get(path[LIT_REASON], 0) + 1
-        transmitted_chart += path[LIT_REASON] == LIT_CHART and path[LIT_CROSSINGS] >= 2
-        reentered_chart += path[LIT_REASON] == LIT_CHART and path[LIT_CROSSINGS] >= 4
-        stable_points += 1
-    if stable_points < (60 if spec.case == LIT_OPTICAL_TORUS else 150):
-        raise SmokeFailure("too few geometrically stable optical reference samples")
-    if spec.case == LIT_OPTICAL_TORUS and (transmitted_chart < 60 or reentered_chart < 16):
-        raise SmokeFailure("torus oracle lacks stable transmitted chart samples and actual re-entry coverage")
-    mae = sum(errors) / len(errors)
-    percentile = sorted(errors)[math.floor(0.95 * (len(errors) - 1))]
-    reference_mean = sum(expected_sum) / (3 * stable_points)
-    # Trim at most 5% near-critical mesh discretization outliers.
-    ordered_errors = sorted(errors)
-    kept_errors = ordered_errors[:max(len(ordered_errors) - math.ceil(len(ordered_errors) * 0.05), 1)]
-    trimmed_mae = sum(kept_errors) / len(kept_errors)
-    if trimmed_mae > 0.025 + reference_mean * 0.02 or percentile > 0.065 + reference_mean * 0.035:
-        raise SmokeFailure(f"{spec.name}: reflected stripe transport disagrees with the independent reference " f"(linear RGB MAE {mae:.6f}, p95 {percentile:.6f}, expected mean {reference_mean:.6f})")
-    for channel, (actual, expected) in enumerate(zip(actual_sum, expected_sum)):
-        # Trim at most 5% FP32 mesh-discretization outliers near the critical angle.
-        ordered = sorted(deviation[channel] for deviation in channel_deviations)
-        kept = ordered[:max(stable_points - math.ceil(stable_points * 0.05), 1)]
-        trimmed = sum(kept) / len(kept)
-        if trimmed > 0.018 + 0.035 * expected / stable_points:
-            raise SmokeFailure(spec.name + ": integrated reflected channel energy is outside its analytic bound")
-    return {"stable_reference_pixels": stable_points, "omitted_discontinuity_pixels": rejected_edges, "linear_rgb_mae": mae, "linear_rgb_p95_error": percentile, "actual_mean_rgb": [value / stable_points for value in actual_sum],
-        "expected_mean_rgb": [value / stable_points for value in expected_sum], "reference_termination": reasons, "transmitted_chart_samples": transmitted_chart, "reentered_chart_samples": reentered_chart,
-        "dense_receiver_crossings": {"minimum": min(dense_crossings), "maximum": max(dense_crossings), "samples": len(dense_crossings)} if dense_crossings else None}
-
-
-def compare_invariant(first, second):
-    if first[:2] != second[:2]:
-        raise SmokeFailure("optical invariance captures have different dimensions")
-    errors = [abs(a - b) for y in range(185, 535) for x in range(195, 765) for a, b in zip(first[2][y][x], second[2][y][x])]
-    mae = sum(errors) / len(errors)
-    changed = sum(error > 2 for error in errors)
-    if mae > 0.2 or changed > len(errors) * 0.005:
-        raise SmokeFailure("equivalent optical volume arrangement changed reflected transport")
-    return {"mirror_byte_mae": mae, "channels_differing_by_more_than_two": changed}
 
 
 def analyze_suite(directory, specs=CAPTURES):
     metrics = {}
     for spec in specs:
-        metrics[spec.name] = analyze_image(read_bmp_24_rows(directory / (spec.name + LIT_BMP)), spec)
+        metrics[spec.name] = ReflectionOpticalImageEvidence.analyze_image(read_bmp_24_rows(directory / (spec.name + LIT_BMP)), spec)
     available = {spec.name for spec in specs}
     pairs = [("optical_tinted", LIT_OPTICAL + name) for name in (LIT_DUPLICATE_IDENTICAL, LIT_DUPLICATE_GROUP, LIT_DUPLICATE_REVERSE, LIT_MIRRORED)]
     pairs.append(("optical_disconnected", "optical_same_mesh"))
@@ -426,7 +132,7 @@ def analyze_suite(directory, specs=CAPTURES):
         (LIT_OPTICAL_GROUP_ENTRY, LIT_OPTICAL_CSG_GROUP_ENTRY), ("optical_dense", LIT_OPTICAL_CSG_DENSE)))
     for first, second in pairs:
         if first in available and second in available:
-            metrics[first + "_equals_" + second] = compare_invariant(read_bmp_24_rows(directory / (first + LIT_BMP)), read_bmp_24_rows(directory / (second + LIT_BMP)))
+            metrics[first + "_equals_" + second] = ReflectionOpticalImageEvidence.compare_invariant(read_bmp_24_rows(directory / (first + LIT_BMP)), read_bmp_24_rows(directory / (second + LIT_BMP)))
     return metrics
 
 
@@ -434,12 +140,16 @@ def write_report(args, completed, evidence, metrics=None):
     metadata = {"frame_source": "actual application framebuffer readback", "size": [960, 720], "presentation": {"exposure": 1, "reinhard_shoulder": 1}, "temporal": False, "spatial_filter": False,
         "captures": [asdict(spec) for spec in completed], "completed_frame_evidence": evidence,
         "reference_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_reference.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "analyzer_source_sha256_lf": hashlib.sha256(Path(__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(), "metrics": metrics, "limitations": LIMITATIONS}
+        "geometry_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_geometry.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
+        "analyzer_source_sha256_lf": hashlib.sha256(Path(__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
+        "evidence_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_evidence.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
+        "png_encoder_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("framebuffer_png_encoder.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
+        "image_evidence_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_image_evidence.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(), "metrics": metrics, "limitations": LIMITATIONS}
     (args.output_directory / "reflection_optical_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
     cards = []
     for spec in completed:
         path = args.output_directory / (spec.name + LIT_BMP)
-        png = png_rgb_bytes(read_bmp_24_rows(path))
+        png = FramebufferPngEncoder.encode(read_bmp_24_rows(path))
         path.with_suffix(".png").write_bytes(png)
         cards.append(f'<article><h2>{html.escape(spec.name)} / {spec.queries} queries / ray budget {spec.ray_budget}</h2>' f'<a href="{spec.name}.bmp">Raw BMP</a> / <a href="{spec.name}.log">Completed-frame log</a>'
             f'<img alt="Actual {html.escape(spec.name)} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')

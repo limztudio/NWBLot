@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/rhi/device.h>
+#include <core/graphics/rhi/gpu_crash_diagnostics.h>
 
 #include <global/sync.h>
 #include <global/thread.h>

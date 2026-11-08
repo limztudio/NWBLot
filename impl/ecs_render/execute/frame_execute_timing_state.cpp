@@ -131,7 +131,7 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
         tickets[ticketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
         return true;
     };
-    b8 ready = appendTicket(renderer.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
+    b8 ready = appendTicket(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
     for(usize prefixTaskIndex = 0u; ready && prefixTaskIndex < s_GraphicsPrefixTimingTaskCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         b8 packetAlreadyTimed = false;
@@ -151,9 +151,9 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
     }
     ready = ready
         && ticketCount == 1u + graphicsPrefixUniquePacketCount
-        && appendTicket(renderer.m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)
-        && appendTicket(hardwareShadowSupported ? renderer.m_deferredHardwareCausticsTask : renderer.m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
-        && appendTicket(renderer.m_deferredSurfelGiTask, surfelGiTimingTicket)
+        && appendTicket(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)
+        && appendTicket(hardwareShadowSupported ? renderer.m_causticsGraph.m_deferredHardwareCausticsTask : renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
+        && appendTicket(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, surfelGiTimingTicket)
     ;
     RendererAvboitTaskGraphTimingTickets avboitTimingTickets{
         .m_pre = avboitPreTimingTicket,

@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "source_emitter.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+class ParallelStatementEmitter final{
+public:
+    explicit ParallelStatementEmitter(const SourceEmitter& emitter)noexcept : m_emitter(emitter){}
+    void emitTaskScopePrologue(MString& out, u32 indent)const;
+    [[nodiscard]] b8 tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    void emitParallelStmt(MString& out, const Stmt& stmt, u32 indent)const;
+
+private:
+    const SourceEmitter& m_emitter;
+};
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,134 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/bind_typed_layout.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LessMaterialResourceReferenceOffset(in MaterialResourceReference lhs, in MaterialResourceReference rhs){
+    return lhs.constantByteOffset < rhs.constantByteOffset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindParameterApplication{
+    public Expected<u32x4u> tryParseMaterialTypedLayoutParameterValue(
+        in Name materialName,
+        in StringView parameterName,
+        in StringView parameterValue,
+        in MaterialTypedLayoutField field
+    ){
+        const Expected<MaterialTypedValueData> parameter = ParseMaterialTypedValue(parameterName, parameterValue);
+        if(!parameter.has_value()){
+            error("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'", parameterName, materialName.resolvedText(), parameterValue);
+            return makeUnexpected(Failure());
+        }
+
+        const MaterialLayoutFieldType parameterFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(parameter.value().meta.z), parameter.value().meta.w);
+        if(parameterFieldType != field.fieldType){
+            error("Material bind typed layout: parameter '{}' for '{}' does not match interface field type", parameterName, materialName.resolvedText());
+            return makeUnexpected(Failure());
+        }
+
+        return MaterialTypedValueToLayoutValue(parameter.value());
+    }
+
+    public b8 applyMaterialBindTypedLayoutParameterValueToStorage(
+        in StringView interfacePath,
+        in HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> parameterLookup,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in Name materialName,
+        in CompactString parameterName,
+        in StringView parameterValue,
+        mut Vector<MaterialResourceReference> outResourceReferences,
+        mut Vector<u8> inOutBlockBytes
+    ){
+        if(!parameterLookup.contains(parameterName)){
+            error(
+                "Material bind typed layout: typed parameter '{}' is not declared by interface '{}' for '{}'"
+                , parameterName.view()
+                , interfacePath
+                , materialName.resolvedText()
+            );
+            return false;
+        }
+        const MaterialBindTypedLayoutParameterLookupEntry parameterEntry = parameterLookup.at(parameterName);
+        assert(cast<usize>(parameterEntry.fieldIndex) < typedLayoutFields.size());
+
+        const MaterialTypedLayoutField field = typedLayoutFields[cast<usize>(parameterEntry.fieldIndex)];
+        if(IsMaterialLayoutResourceFieldType(field.fieldType)){
+            const MaterialResourceKind resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
+            const StringView resourcePath = trimView(parameterValue);
+            const Expected<Name> resourceName = TryParseMaterialBindName(resourcePath);
+            assert(parameterEntry.blockName != s_NameNone && field.fieldName != s_NameNone);
+            if(!resourceName.has_value() || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){
+                error("Material bind typed layout: resource parameter '{}' for '{}' must be an engine or project asset path", parameterName.view(), materialName.resolvedText());
+                return false;
+            }
+
+            MaterialResourceReference resourceReference;
+            resourceReference.blockName = parameterEntry.blockName;
+            resourceReference.fieldName = field.fieldName;
+            resourceReference.resourceKind = resourceKind;
+            resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
+            if(!TryAssignMaterialResourceReferenceAsset(resourceKind, resourceName.value(), resourceReference)){
+                assert(false);
+                return false;
+            }
+            outResourceReferences.push_back(resourceReference);
+            return true;
+        }
+
+        const Expected<u32x4u> typedValue = this.tryParseMaterialTypedLayoutParameterValue(materialName, parameterName.view(), parameterValue, field);
+        if(!typedValue.has_value())
+            return false;
+
+        MaterialBindStorage storage = MaterialBindStorage();
+        if(!storage.writeMaterialTypedLayoutFieldBytes(cast<usize>(parameterEntry.byteOffset), field.fieldType, typedValue.value(), inOutBlockBytes)){
+            error("Material bind typed layout: parameter '{}' write exceeds packed layout bytes for '{}'", parameterName.view(), materialName.resolvedText());
+            return false;
+        }
+
+        return true;
+    }
+
+    public b8 applyMaterialBindTypedLayoutParametersToStorage(
+        in StringView interfacePath,
+        in HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> parameterLookup,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in Name materialName,
+        in HashMap<CompactString, CompactString> parameters,
+        mut Vector<u8> inOutBlockBytes,
+        mut Vector<MaterialResourceReference> outResourceReferences
+    ){
+        outResourceReferences.clear();
+        for(in auto entry : parameters){
+            if(!this.applyMaterialBindTypedLayoutParameterValueToStorage(
+                interfacePath,
+                parameterLookup,
+                typedLayoutFields,
+                materialName,
+                entry.first,
+                entry.second.view(),
+                outResourceReferences,
+                inOutBlockBytes
+            ))
+                return false;
+        }
+
+        native(mut outResourceReferences){
+            ::Sort(outResourceReferences.begin(), outResourceReferences.end(), LessMaterialResourceReferenceOffset);
+        }
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

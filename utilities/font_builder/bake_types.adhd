@@ -47,47 +47,13 @@ const StringView s_ExtentOptionFlag = "--extent";
 const StringView s_MaxGroupsOptionFlag = "--max-groups";
 const StringView s_RendererOptionFlag = "--renderer";
 const StringView s_OverwriteOptionFlag = "--overwrite";
-const usize s_MaxBakeShelfPages = s_FontAtlasMaxGroupCount * s_FontAtlasMaxChannelCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Shelf{
-    public u32 x = 0u;
-    public u32 y = 0u;
-    public u32 height = 0u;
-}
-
-class ShelfPlacement{
-    public u32 page = 0u;
-    public u32 group = 0u;
-    public u32 channel = 0u;
-    public u32 x = 0u;
-    public u32 y = 0u;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 TryPlaceGlyphOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf inOutShelf, mut u32 outX, mut u32 outY){
-    Shelf next = inOutShelf;
-    if(next.x + width > extent){
-        next.x = 0u;
-        next.y += next.height;
-        next.height = 0u;
-    }
-    if(next.y + height > extent)
-        return false;
-    outX = next.x + 1u;
-    outY = next.y + 1u;
-    next.x += width;
-    if(height > next.height)
-        next.height = height;
-    inOutShelf = next;
-    return true;
-}
 
 b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 maxGroups){
     return
@@ -120,75 +86,6 @@ StringView ResolveBakeFreeTypeSdfModule(in b8 outline){
 
 f32 ComputeBakeFontLineGapUnits(in i32 height, in i32 ascender, in i32 descender){
     return cast<f32>(height - ascender + descender);
-}
-
-b8 IsFontAtlasGlyphPackOrderBefore(in FontAtlasGlyph lhs, in FontAtlasGlyph rhs){
-    if(lhs.height != rhs.height)
-        return lhs.height > rhs.height;
-    if(lhs.width != rhs.width)
-        return lhs.width > rhs.width;
-    return lhs.glyphId < rhs.glyphId;
-}
-
-Expected<ShelfPlacement> TryPlaceGlyphInShelves(
-    in u32 width,
-    in u32 height,
-    in u32 extent,
-    in u32 maxGroups,
-    mut Array<Shelf, s_MaxBakeShelfPages> inOutShelves
-){
-    const u32 pageCount = maxGroups * s_FontAtlasMaxChannelCount;
-    for(u32 page = 0u; page < pageCount; ++page){
-        u32 placedX = 0u;
-        u32 placedY = 0u;
-        if(!TryPlaceGlyphOnShelf(width, height, extent, inOutShelves[cast<usize>(page)], placedX, placedY))
-            continue;
-        ShelfPlacement placement;
-        placement.page = page;
-        placement.group = page / s_FontAtlasMaxChannelCount;
-        placement.channel = page % s_FontAtlasMaxChannelCount;
-        placement.x = placedX;
-        placement.y = placedY;
-        return placement;
-    }
-    return makeUnexpected(Failure());
-}
-
-void CopyGlyphToAtlasGroup(
-    in Span<u8> glyphPixels,
-    in u32 extent,
-    in ShelfPlacement placement,
-    mut FontAtlasGlyph inOutRecord,
-    mut Vector<u8> inOutGroupPixels
-){
-    inOutRecord.group = placement.group;
-    inOutRecord.channel = placement.channel;
-    inOutRecord.x = placement.x;
-    inOutRecord.y = placement.y;
-    for(u32 y = 0u; y < inOutRecord.height; ++y){
-        for(u32 x = 0u; x < inOutRecord.width; ++x){
-            const usize destination = (cast<usize>(inOutRecord.y + y) * cast<usize>(extent) + cast<usize>(inOutRecord.x + x)) * cast<usize>(s_FontAtlasMaxChannelCount) + cast<usize>(inOutRecord.channel);
-            inOutGroupPixels[destination] = glyphPixels[cast<usize>(y) * cast<usize>(inOutRecord.width) + cast<usize>(x)];
-        }
-    }
-}
-
-void CompactFontAtlasGroupPixels(
-    in FontAtlasGroupCompactBounds bounds,
-    in u32 groupWidth,
-    in u32 groupChannelCount,
-    in Span<u8> groupPixels,
-    mut Vector<u8> outCompactPixels
-){
-    outCompactPixels.resize(cast<usize>(bounds.width) * cast<usize>(bounds.height) * cast<usize>(bounds.channelCount), 0u);
-    for(u32 y = 0u; y < bounds.height; ++y){
-        for(u32 x = 0u; x < bounds.width; ++x){
-            const usize source = (cast<usize>(bounds.firstY + y) * cast<usize>(groupWidth) + cast<usize>(bounds.firstX + x)) * cast<usize>(groupChannelCount);
-            const usize destination = (cast<usize>(y) * cast<usize>(bounds.width) + cast<usize>(x)) * cast<usize>(bounds.channelCount);
-            for(u32 channel = 0u; channel < bounds.channelCount; ++channel)
-                outCompactPixels[destination + cast<usize>(channel)] = groupPixels[source + cast<usize>(channel)];
-        }
-    }
 }
 
 b8 IsValidBakeFontFaceMetrics(in i64 numGlyphs, in u16 unitsPerEm){

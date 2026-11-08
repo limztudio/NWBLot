@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/literal_decoder.h>
+
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 #include "const_eval.h"
 
 #include <global/source_text.h>
@@ -28,7 +36,7 @@ constexpr i64 s_I64ShiftOperandMax = 64;
 
 [[nodiscard]] constexpr b8 TryEvaluateIntegerScalarLimit(const MStringView scalarType, const MStringView member, i64& outVal)noexcept{
     b8 isMin = false;
-    if(!TryMapScalarLimitMember(member, nullptr, &isMin))
+    if(!BuiltinTypeSemantics::TryMapScalarLimitMember(member, nullptr, &isMin))
         return false;
 #define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, cppType, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if constexpr(isInteger){ \
@@ -46,7 +54,7 @@ constexpr i64 s_I64ShiftOperandMax = 64;
     if(!globalConst || !globalConst->varType)
         return false;
     const MStringView baseName = symbols.resolveBaseTypeName(globalConst->varType->name);
-    return IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
+    return BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
 }
 
 
@@ -197,7 +205,7 @@ b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, const u
     case ExprKind::Identifier:
         return TryEvaluateTextConstant(expr->text, symbols, depth + 1u, contextEnum, outVal);
     case ExprKind::BoolLiteral:
-        return TryParseBoolLiteral(expr->text, &outVal);
+        return KeywordSemantics::TryParseBoolLiteral(expr->text, &outVal);
     case ExprKind::MemberAccess:{
         if(!expr->lhs || expr->lhs->kind != ExprKind::Identifier || !expr->lhs->callTemplateArgs.empty() || symbols.findGlobalConstant(expr->lhs->text))
             return false;
@@ -326,23 +334,23 @@ b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, const u
     }};
     for(const auto& level : s_ConstBinaryPrecedenceLevels){
         if(findTopLevelBinary(level[0], level[1], opPos, opLen))
-            return evalBinaryOp(opPos, opLen, MapOperatorSymbolToTokenType(text.substr(opPos, opLen)));
+            return evalBinaryOp(opPos, opLen, OperatorSemantics::MapOperatorSymbolToTokenType(text.substr(opPos, opLen)));
     }
 
-    const TokenType::Enum leadingUnaryOp = MapOperatorSymbolToTokenType(text.substr(0u, 1u));
-    if(IsPrefixUnaryOperatorToken(leadingUnaryOp) && !IsIncrementOrDecrementOperatorToken(leadingUnaryOp)){
+    const TokenType::Enum leadingUnaryOp = OperatorSemantics::MapOperatorSymbolToTokenType(text.substr(0u, 1u));
+    if(OperatorSemantics::IsPrefixUnaryOperatorToken(leadingUnaryOp) && !OperatorSemantics::IsIncrementOrDecrementOperatorToken(leadingUnaryOp)){
         i64 inner = 0;
         if(!TryEvaluateTextConstant(text.substr(1u), symbols, depth + 1u, contextEnum, inner))
             return false;
         return __hidden_adhd_const_eval::TryApplyUnaryConstantOp(leadingUnaryOp, inner, outVal);
     }
 
-    if(TryParseBoolLiteral(text, &outVal))
+    if(KeywordSemantics::TryParseBoolLiteral(text, &outVal))
         return true;
 
     if((text.size() >= 3u && text.front() == '\'' && text.back() == '\'') || IsAsciiDigit(text[0])){
         u64 parsedVal = 0u;
-        if(!TryParseUnsignedIntegerLiteral(text, parsedVal))
+        if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(text, parsedVal))
             return false;
         outVal = static_cast<i64>(parsedVal);
         return true;
@@ -393,7 +401,7 @@ b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, c
         return true;
     if(a.empty() || b.empty())
         return false;
-    if(IsBoolLiteralText(a) != IsBoolLiteralText(b))
+    if(KeywordSemantics::IsBoolLiteralText(a) != KeywordSemantics::IsBoolLiteralText(b))
         return false;
     i64 valA = 0;
     i64 valB = 0;
@@ -427,7 +435,7 @@ b8 NormalizeConstantTemplateArg(TypeArg& arg, const ClassDecl* enclosingClass, c
     if(!arg.type || arg.type->refMode != ParamPassingMode::None || !arg.type->templateArgs.empty() || arg.type->isFuncType)
         return false;
     const MStringView name = arg.type->name;
-    if(IsBoolLiteralText(name) || IsConcreteConstTemplateArgText(name, symbols) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name)){
+    if(KeywordSemantics::IsBoolLiteralText(name) || IsConcreteConstTemplateArgText(name, symbols) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name)){
         arg.constantText = name;
         arg.type = nullptr;
         return true;

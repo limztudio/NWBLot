@@ -6,6 +6,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
+from renderer_workload_registry import RendererWorkloadRegistry, FRAME
+from experiment_statistics import PairedExperimentAnalysis
 
 
 LIT_A = "a"
@@ -24,14 +26,14 @@ LIT_SCOPES = "scopes"
 
 
 def scopes(workload, frames=200, frame_ms=5.0):
-    return {name: {LIT_TOTAL_MS: (frame_ms if name == benchmark.FRAME else .5) * frames * multiplier, LIT_GPU_SAMPLES: frames * multiplier, LIT_REPORTS: 6, LIT_MEAN_MS: frame_ms if name == benchmark.FRAME else .5}
+    return {name: {LIT_TOTAL_MS: (frame_ms if name == FRAME else .5) * frames * multiplier, LIT_GPU_SAMPLES: frames * multiplier, LIT_REPORTS: 6, LIT_MEAN_MS: frame_ms if name == FRAME else .5}
         for name, multiplier in workload.scope_multipliers}
 
 
 def trial_matrix(frame_delta=-.5):
-    workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
+    workload = RendererWorkloadRegistry.workloads()[LIT_TRANSPARENT_MULTI]
     arms = (benchmark.Arm(LIT_BASELINE, Path(LIT_A), Path("a_runtime"), Path("a.json")), benchmark.Arm(LIT_CANDIDATE, Path(LIT_B), Path("b_runtime"), Path("b.json")))
-    orders = [[arm.name for arm in row] for row in benchmark.balanced_orders(arms, 8, 0)]
+    orders = [[arm.name for arm in row] for row in PairedExperimentAnalysis(0).balanced_orders(arms, 8)]
     trials = []
     for block, row in enumerate(orders):
         for position, arm in enumerate(row):

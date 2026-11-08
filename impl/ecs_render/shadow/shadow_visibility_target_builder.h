@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+
+
+NWB_CORE_BEGIN
+class GraphicsRuntime;
+NWB_CORE_END
+
+
+NWB_IMPL_BEGIN
+
+
+class RendererRayTracingState;
+struct DeferredFrameTargets;
+
+class ShadowVisibilityTargetBuilder final{
+public:
+    ShadowVisibilityTargetBuilder(Core::GraphicsRuntime& graphics, RendererRayTracingState& rayTracingState)noexcept : m_graphics(graphics), m_rayTracingState(rayTracingState){}
+    [[nodiscard]] b8 build(DeferredFrameTargets& targets);
+
+private:
+    Core::GraphicsRuntime& m_graphics;
+    RendererRayTracingState& m_rayTracingState;
+};
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

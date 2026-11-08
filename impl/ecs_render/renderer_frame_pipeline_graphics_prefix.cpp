@@ -2,9 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/deferred/graphics_prefix_graph_coordinator.h>
+#include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/deferred/deferred_system.h>
+#include <impl/ecs_render/execute/types.adhd.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-#include <impl/ecs_render/deferred/task_graph_post_gbuffer_normalize_task.h>
+#include <impl/ecs_render/deferred/post_gbuffer_normalize_builder.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
@@ -15,6 +21,9 @@
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
 #include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.h>
+#include <impl/ecs_render/deferred/opaque_gbuffer_material_resources.h>
+#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.h>
+#include <impl/ecs_render/deferred/opaque_compute_emulation_planner.h>
 #include <impl/ecs_render/deferred/opaque_compute_emulation_producers.h>
 #include <impl/ecs_render/csg/opaque_csg_interval_stage.h>
 #include <impl/ecs_render/deferred/opaque_shared_compute_emulation_chain.h>
@@ -22,7 +31,6 @@
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
@@ -44,7 +52,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
+Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks(
+    const GraphicsPrefixGraphContext& context,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -79,8 +88,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
 
-    const b8 shadowTraceGeometryStatesGraphOwned = shadowTraceGeometrySet.valid();
-    const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
+    const DeferredLightingGraphResources deferredLightingResources = context.deferred.lightingGraphResources();
 
     if(
         !deferredTargets.valid()
@@ -126,13 +134,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::TextureSubresourceSet csgPeelSubresources(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
     const Core::TextureSubresourceSet csgReceiverEventDataSubresources(0u, 1u, 0u, deferredTargets.csgReceiverEventLayerCount);
     const Core::TextureSubresourceSet csgReceiverEventCountSubresources(0u, 1u, 0u, 1u);
-    const Core::TextureSubresourceSet csgReceiverSpanDataSubresources(0u, 1u, 0u, deferredTargets.csgReceiverSpanLayerCount);
-    const Core::TextureSubresourceSet csgReceiverSpanCountSubresources(0u, 1u, 0u, 1u);
     const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0u, 1u, 0u, deferredTargets.csgRemovedIntervalLayerCount);
     const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources(0u, 1u, 0u, 1u);
 
-    const RayTracingLightingClassificationInput rayTracingLightingInput = m_raytracingSystem.snapshotLightingClassificationInput();
-    PrefixSceneUploadBuilder prefixSceneUploadBuilder(m_deferredLightingTaskGraph, m_deferredSystem, m_meshSystem, m_graphics);
+    const RayTracingLightingClassificationInput rayTracingLightingInput = context.rayTracing.snapshotLightingClassificationInput();
+    PrefixSceneUploadBuilder prefixSceneUploadBuilder(context.graph, context.deferred, context.mesh, context.graphics);
     auto prefixSceneUploadResult = prefixSceneUploadBuilder.declare(
         PrefixSceneUploadInputs{
             .rayTracingLightingInput = rayTracingLightingInput,
@@ -147,7 +153,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .meshViewSetupTimingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::MeshViewSetup),
             .sceneShadingSetupTimingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::SceneShadingSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
-            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
+            .shadowVisibilityTask = context.shadowVisibilityTask,
             .meshViewSetupReady = m_graphicsPrefixMeshViewSetupReady,
             .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
         }
@@ -176,7 +182,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueColorClearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
     opaqueColorClearDesc.floatValue = ECSRenderDetail::s_ClearColor;
     opaqueColorClearDesc.recordHooks = deferredClearHooks;
-    const auto graphicsPrefixDeferredClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
+    const auto graphicsPrefixDeferredClearTaskResult = context.graph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
     if(!graphicsPrefixDeferredClearTaskResult){
         m_graphicsPrefixDeferredClearTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
@@ -193,7 +199,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ scratchArena };
 #endif
     MaterialTypedByteDataVector materialTypedBytes{ scratchArena };
-    m_materialSystem.gatherMaterialPassDrawItems(
+    context.material.gatherMaterialPassDrawItems(
         deferredTargets.framebuffer.get(),
         MaterialPipelinePass::Opaque,
         false,
@@ -210,10 +216,10 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
 
     ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{
-        m_arena,
-        m_graphics,
-        m_materialSystem,
-        m_csgSystem,
+        context.arena,
+        context.graphics,
+        context.material,
+        context.csg,
         deferredTargets,
         *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
         m_graphicsPrefixMeshViewSetupReady,
@@ -225,7 +231,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const b8 hasOpaqueDrawItems = !opaqueDrawItems.empty();
     // G-buffer and the opaque CSG follow-up declare the shared material entry batch. The source-geometry batch is retained below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
-    OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
+    OpaqueUploadChainBuilder opaqueUploadChainBuilder(context.graph, context.material, context.csg);
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
         OpaqueUploadChainInputs{
             .targets = deferredTargets,
@@ -258,11 +264,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     gbufferPayload.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
     OpaqueCsgIntervalStage opaqueCsgIntervalStage(
-        m_deferredLightingTaskGraph,
-        m_arena,
-        m_graphics,
-        m_materialSystem,
-        m_csgSystem,
+        context.graph,
+        context.arena,
+        context.graphics,
+        context.material,
+        context.csg,
         deferredTargets,
         *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgReceiverSpanBuild),
         *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgIntervalCombine),
@@ -289,7 +295,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     // The semantic opaque-CSG flag admits this clear before native readiness checks.
     // The graph owns both CopyDest writes and their following UAV handoff.
-    OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(m_deferredLightingTaskGraph);
+    OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(context.graph);
     auto opaqueCsgIntervalClearResult = opaqueCsgIntervalClearBuilder.declare(
         OpaqueCsgIntervalClearInputs{
             .targets = deferredTargets,
@@ -318,186 +324,61 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::BufferRange csgCutterRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    Array<Core::GpuTaskResourceUse, s_CsgReceiverSpanResourceUseCapacity> csgReceiverSpanResourceUses = {};
-    usize csgReceiverSpanResourceUseCount = 0u;
-    Array<Core::GpuTaskResourceUse, s_CsgIntervalCombineResourceUseCapacity> csgIntervalCombineResourceUses = {};
-    usize csgIntervalCombineResourceUseCount = 0u;
-    Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
-    Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
-    Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
-    Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput;
-    Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet;
-    const Array<MaterialPassDrawItemsView, 2> gbufferMaterialGeometryDrawSets = { opaqueDrawItems.regular, opaqueDrawItems.csgReceiverSurface, };
-    const b8 gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
-    gbufferPayload.materialGeometryStatesGraphOwned = false;
-    if(gbufferUsesMaterialGeometry){
-        const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(gbufferMaterialGeometryDrawSets, Name("render.graphics_prefix.gbuffer.material_geometry"), "Opaque Material Geometry", m_deferredLightingTaskGraph, scratchArena);
-        gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialGeometrySetResult.has_value();
-        if(gbufferMaterialGeometrySetResult)
-            gbufferMaterialGeometrySet = *gbufferMaterialGeometrySetResult;
-    }
-    if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
-        // Frozen heap slots require a complete graph declaration before this material callback can record.
+    OpaqueGbufferMaterialResourceCollector gbufferMaterialResourceCollector(context.graph, context.material, scratchArena);
+    const auto gbufferMaterialResources = gbufferMaterialResourceCollector.gather(opaqueDrawItems);
+    if(!gbufferMaterialResources)
         return MakeUnexpected(Failure{});
-    }
-    b8 gbufferMaterialSampledTexturesCollected = false;
-    if(gbufferUsesMaterialGeometry){
-        const auto gbufferMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
-            m_materialSystem,
-            gbufferMaterialGeometryDrawSets,
-            Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
-            "Opaque Material Sampled Textures",
-            m_deferredLightingTaskGraph,
-            scratchArena
-        );
-        gbufferMaterialSampledTexturesCollected = gbufferMaterialSampledTextureSetResult.has_value();
-        if(gbufferMaterialSampledTextureSetResult)
-            gbufferMaterialSampledTextureSet = *gbufferMaterialSampledTextureSetResult;
-    }
-    if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
-        return MakeUnexpected(Failure{});
-    }
+    gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialResources->geometryStatesGraphOwned;
+    const Core::GpuGraphResourceSetId gbufferMaterialGeometrySet = gbufferMaterialResources->geometrySet;
+    const Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet = gbufferMaterialResources->sampledTextureSet;
+    const b8 gbufferMaterialSampledTexturesCollected = gbufferMaterialResources->sampledTexturesCollected;
 
-    // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
-    ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{
-        m_arena,
-        m_materialSystem,
+    OpaqueComputeEmulationPlanner opaqueComputeEmulationPlanner(
+        context.arena,
+        context.material,
         deferredTargets,
         *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
         m_graphicsPrefixMeshViewSetupReady,
-        m_graphicsPrefixSceneShadingSetupReady,
-    };
-    opaqueComputeEmulationPayload.frameBindings = frameBindings;
-    const b8 opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
-        && gbufferPayload.materialGeometryStatesGraphOwned
-        && gbufferMaterialSampledTexturesCollected
-        && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular, scratchArena)
-    ;
-    b8 opaqueComputeEmulationOutputStatesGraphOwned = false;
-    if(opaqueComputeEmulationPlanCaptured){
-        const auto opaqueComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-            m_deferredLightingTaskGraph,
-            opaqueComputeEmulationPayload.plan,
-            scratchArena,
-            Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
-            "Opaque Compute Emulation Outputs"
-        );
-        opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputSetResult.has_value();
-        if(opaqueComputeEmulationOutputSetResult)
-            opaqueComputeEmulationOutputSet = *opaqueComputeEmulationOutputSetResult;
-    }
-    if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque compute-emulation output states"));
-    gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
+        m_graphicsPrefixSceneShadingSetupReady
+    );
+    opaqueComputeEmulationPlanner.capture(
+        context.graph,
+        scratchArena,
+        opaqueDrawItems,
+        csgFrameData,
+        frameBindings,
+        hasOpaqueCsgFrameWork,
+        hasCsgFrameGpuWork,
+        gbufferMaterialSampledTexturesCollected,
+        gbufferPayload,
+        opaqueRegularSharedComputeEmulationTiming
+    );
+    auto& opaqueComputeEmulationPayload = opaqueComputeEmulationPlanner.regularPayload();
+    auto& opaqueCsgReceiverComputeEmulationPayload = opaqueComputeEmulationPlanner.csgPayload();
+    const auto& opaqueSharedComputeEmulationPlan = opaqueComputeEmulationPlanner.sharedPlan();
+    const Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet = opaqueComputeEmulationPlanner.regularOutputSet();
+    const Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet = opaqueComputeEmulationPlanner.csgOutputSet();
+    const Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput = opaqueComputeEmulationPlanner.sharedOutput();
+    const b8 opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanner.regularOutputOwned();
+    const b8 opaqueSharedComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanner.sharedOutputOwned();
+    const b8 opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanner.csgOutputOwned();
 
-    // A persistent generated-vertex buffer is normally a local dispatch/raster bridge.
-    // Handle the small alias classes explicitly: two through five regular opaque compute items sharing one frozen output and heap slot.
-    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
-    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
-    const b8 opaqueSharedComputeEmulationPlanCaptured =
-        !hasOpaqueCsgFrameWork
-        && !opaqueComputeEmulationOutputStatesGraphOwned
-        && gbufferPayload.materialFrameStatesGraphOwned
-        && gbufferPayload.materialGeometryStatesGraphOwned
-        && gbufferMaterialSampledTexturesCollected
-        && opaqueSharedComputeEmulationPlan.capture(opaqueDrawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
-    ;
-    b8 opaqueSharedComputeEmulationOutputStatesGraphOwned = false;
-    if(opaqueSharedComputeEmulationPlanCaptured){
-        const auto opaqueSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(m_deferredLightingTaskGraph, opaqueSharedComputeEmulationPlan, "Opaque Shared Compute Emulation Output");
-        opaqueSharedComputeEmulationOutputStatesGraphOwned = opaqueSharedComputeEmulationOutputResult.has_value();
-        if(opaqueSharedComputeEmulationOutputResult)
-            opaqueSharedComputeEmulationOutput = *opaqueSharedComputeEmulationOutputResult;
-    }
-    if(opaqueSharedComputeEmulationPlanCaptured && !opaqueSharedComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned shared opaque compute-emulation output state"));
-    gbufferPayload.regularSharedComputeEmulationDrawsGraphOwned = opaqueSharedComputeEmulationOutputStatesGraphOwned;
-    gbufferPayload.regularSharedComputeEmulationTiming = opaqueSharedComputeEmulationOutputStatesGraphOwned ? &opaqueRegularSharedComputeEmulationTiming : nullptr;
-
-    ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload opaqueCsgReceiverComputeEmulationPayload{
-        m_arena,
-        m_materialSystem,
-        deferredTargets,
-        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
-        m_graphicsPrefixMeshViewSetupReady,
-        m_graphicsPrefixSceneShadingSetupReady,
-    };
-    opaqueCsgReceiverComputeEmulationPayload.frameBindings = frameBindings;
-    const b8 opaqueCsgReceiverComputeEmulationPlanCaptured = hasOpaqueCsgFrameWork
-        && hasCsgFrameGpuWork
-        && gbufferPayload.materialFrameStatesGraphOwned
-        && gbufferPayload.materialGeometryStatesGraphOwned
-        && gbufferMaterialSampledTexturesCollected
-        && opaqueCsgReceiverComputeEmulationPayload.plan.capture(opaqueDrawItems.csgReceiverSurface, opaqueDrawItems.regular, csgFrameData, scratchArena)
-    ;
-    b8 opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = false;
-    if(opaqueCsgReceiverComputeEmulationPlanCaptured){
-        const auto opaqueCsgReceiverComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-            m_deferredLightingTaskGraph,
-            opaqueCsgReceiverComputeEmulationPayload.plan,
-            scratchArena,
-            Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
-            "Opaque CSG Receiver Compute Emulation Outputs"
-        );
-        opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputSetResult.has_value();
-        if(opaqueCsgReceiverComputeEmulationOutputSetResult)
-            opaqueCsgReceiverComputeEmulationOutputSet = *opaqueCsgReceiverComputeEmulationOutputSetResult;
-    }
-    if(opaqueCsgReceiverComputeEmulationPlanCaptured && !opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
-    gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
-
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? s_OpaqueCsgFrameResourceUseCount : 0u) + (hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
-    gbufferResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
-    if(hasOpaqueDrawItems){
-        gbufferResourceUses.push_back(ReadBufferUse(resources.materialInstances, materialInstanceRange));
-        gbufferResourceUses.push_back(ReadBufferUse(resources.materialTyped, materialTypedRange));
-    }
-    if(hasCsgFrameGpuWork){
-        gbufferResourceUses.push_back(ReadBufferUse(resources.csgReceiverRanges, csgReceiverRange));
-        gbufferResourceUses.push_back(ReadBufferUse(resources.csgCutters, csgCutterRange));
-        gbufferResourceUses.push_back(ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-        gbufferResourceUses.push_back(ReadUse(resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-        // CSG resolves target-specific images through the deferred bindless-slot buffer selected in its context.
-        gbufferResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    }
-    if(hasOpaqueCsgFrameWork){
-        // Payloads and events never load priors. Interval ID + event count keep sparse-write validity after clears; only they need ReadWrite.
-        // Keeping the payloads write-only also permits their first graph use to begin at a fresh texture's native Unknown state.
-        gbufferResourceUses.push_back(WriteTextureUse(resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        gbufferResourceUses.push_back(WriteTextureUse(resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        gbufferResourceUses.push_back(ReadWriteTextureUse(resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        gbufferResourceUses.push_back(WriteTextureUse(resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess));
-        gbufferResourceUses.push_back(ReadWriteTextureUse(resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess));
-        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess);
-        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess);
-        if(hasCsgFrameGpuWork){
-            csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
-            csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
-        }
-        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
-        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
-        if(hasCsgFrameGpuWork){
-            csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
-            csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
-        }
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalDepth, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalCapNormal, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalData, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
-        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalCount, csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-    gbufferResourceUses.push_back(WriteUse(resources.albedo, Core::ResourceStates::RenderTarget));
-    gbufferResourceUses.push_back(WriteUse(resources.normal, Core::ResourceStates::RenderTarget));
-    gbufferResourceUses.push_back(WriteUse(resources.worldPosition, Core::ResourceStates::RenderTarget));
-    gbufferResourceUses.push_back(WriteUse(resources.specularRoughness, Core::ResourceStates::RenderTarget));
-    gbufferResourceUses.push_back(WriteUse(resources.depth, Core::ResourceStates::DepthWrite));
+    OpaqueGbufferResourceUseBuilder::Append(
+        OpaqueGbufferResourceUseInputs{
+            .resources = resources,
+            .materialInstanceRange = materialInstanceRange,
+            .materialTypedRange = materialTypedRange,
+            .csgReceiverRange = csgReceiverRange,
+            .csgCutterRange = csgCutterRange,
+            .csgPeelSubresources = csgPeelSubresources,
+            .csgReceiverEventDataSubresources = csgReceiverEventDataSubresources,
+            .csgReceiverEventCountSubresources = csgReceiverEventCountSubresources,
+            .hasOpaqueDrawItems = hasOpaqueDrawItems,
+            .hasCsgFrameGpuWork = hasCsgFrameGpuWork,
+            .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
+        },
+        gbufferResourceUses
+    );
     const Core::GpuTaskResourceSetUse gbufferMaterialGeometrySetUse{ .resourceSet = gbufferMaterialGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse gbufferMaterialSampledTextureSetUse{ .resourceSet = gbufferMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputUavSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
@@ -554,7 +435,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .materialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned,
         .materialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned,
     };
-    OpaqueComputeEmulationProducerBuilder computeEmulationProducerBuilder(m_deferredLightingTaskGraph);
+    OpaqueComputeEmulationProducerBuilder computeEmulationProducerBuilder(context.graph);
     if(opaqueComputeEmulationOutputStatesGraphOwned){
         const auto producerTask = computeEmulationProducerBuilder.declareRegular(computeEmulationProducerInputs, opaqueComputeEmulationOutputUavSetUse, gbufferDependency, opaqueComputeEmulationPayload);
         if(!producerTask)
@@ -590,7 +471,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const b8 opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const b8 opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
     const b8 opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
-    const auto graphicsPrefixGbufferTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
+    const auto graphicsPrefixGbufferTaskResult = context.graph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
     if(!graphicsPrefixGbufferTaskResult){
         m_graphicsPrefixGbufferTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
@@ -600,7 +481,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
-        OpaqueSharedComputeEmulationChainBuilder sharedComputeEmulationChainBuilder(m_deferredLightingTaskGraph, m_materialSystem);
+        OpaqueSharedComputeEmulationChainBuilder sharedComputeEmulationChainBuilder(context.graph, context.material);
         const auto sharedComputeEmulationChain = sharedComputeEmulationChainBuilder.declare(
             OpaqueSharedComputeEmulationChainInputs{
                 .targets = deferredTargets,
@@ -641,8 +522,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .csgResources = csgResources,
                 .opaqueDrawItems = opaqueDrawItems,
                 .csgFrameData = csgFrameData,
-                .receiverSpanResourceUses = { csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUseCount },
-                .intervalCombineResourceUses = { csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUseCount },
                 .intervalSampleTimingTicket = timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgIntervalSample),
                 .removedIntervalSubresources = csgRemovedIntervalSubresources,
                 .removedIntervalCountSubresources = csgRemovedIntervalCountSubresources,
@@ -668,56 +547,42 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferCompletionTask = m_graphicsPrefixCsgIntervalSampleTask;
     }
 
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ scratchArena };
-    normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResources.size()));
-    normalizeResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
-    normalizeResourceUses.push_back(ReadUse(resources.normal, Core::ResourceStates::ShaderResource));
-    normalizeResourceUses.push_back(ReadUse(resources.worldPosition, Core::ResourceStates::ShaderResource));
-    normalizeResourceUses.push_back(ReadUse(resources.specularRoughness, Core::ResourceStates::ShaderResource));
-    normalizeResourceUses.push_back(ReadUse(resources.depth, Core::ResourceStates::ShaderResource));
-    normalizeResourceUses.push_back(ReadUse(resources.sceneShading, Core::ResourceStates::ConstantBuffer));
-    normalizeResourceUses.push_back(ReadUse(resources.lights, Core::ResourceStates::ShaderResource));
-    normalizeResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    normalizeResourceUses.push_back(ReadUse(resources.materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    for(const Core::GpuGraphResourceId resource : shadowTraceGeometryResources){
-        if(!resource.valid())
-            return MakeUnexpected(Failure{});
-        if(!shadowTraceGeometryStatesGraphOwned)
-            normalizeResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
-    }
-    const Core::GpuTaskResourceSetUse shadowTraceGeometrySetUse{ .resourceSet = shadowTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    Core::GpuTaskSchedulingHint normalizeScheduling;
-    normalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    normalizeScheduling.forceSubmissionBoundary = false;
-    normalizeScheduling.allowPacketMerge = true;
-    normalizeScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc normalizeDesc;
-    normalizeDesc
-        .setIdentity(Name("render.graphics_prefix.normalize"))
-        .setMarkerLabel("Post-G-Buffer Normalize")
-        .setScheduling(normalizeScheduling)
-        .setDependencies({ &gbufferCompletionTask, 1u })
-        .setResourceUses(normalizeResourceUses)
-        .setResourceSetUses({ shadowTraceGeometryStatesGraphOwned ? &shadowTraceGeometrySetUse : nullptr, shadowTraceGeometryStatesGraphOwned ? 1u : 0u })
-    ;
-    const auto graphicsPrefixTaskResult = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
-        normalizeDesc,
-        PostGbufferNormalizeGraphTask::Payload{
-            .raytracingSystem = m_raytracingSystem,
-            .asyncPrefixTiming = &asyncPrefixTiming,
+    PostGbufferNormalizeBuilder normalizeBuilder(context.graph, context.rayTracing);
+    const auto graphicsPrefixTaskResult = normalizeBuilder.declare(
+        PostGbufferNormalizeInputs{
+            .resources = resources,
+            .shadowTraceGeometryResources = shadowTraceGeometryResources,
+            .shadowTraceGeometrySet = shadowTraceGeometrySet,
+            .gbufferCompletionTask = gbufferCompletionTask,
+            .shadowVisibilityTask = context.shadowVisibilityTask,
+            .asyncPrefixTiming = asyncPrefixTiming,
             .timingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Normalize),
-            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
-        }
+        },
+        scratchArena
     );
     if(!graphicsPrefixTaskResult){
         m_graphicsPrefixTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixTask = *graphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const SceneLightGpuData>(prefixSceneUploadResult->lightData.data(), sceneLightCount));
+    context.rayTracing.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const SceneLightGpuData>(prefixSceneUploadResult->lightData.data(), sceneLightCount));
     return prefixSceneUploadResult->sceneLightingContentHash;
+}
+
+
+void GraphicsPrefixGraphCoordinator::resetGraphicsPrefixTaskState()noexcept{
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
+    m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
+    m_graphicsPrefixCsgIntervalCombineTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
+    m_graphicsPrefixTask = {};
 }
 
 

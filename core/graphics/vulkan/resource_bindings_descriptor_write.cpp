@@ -77,20 +77,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         return false;
     }
     // Validate full live-allocation identity to reject stale recycled ranges.
-    const auto firstAfter = UpperBound(storage.liveAllocations.begin(), storage.liveAllocations.end(), dstOffsetBytes, [](const u32 value, const DescriptorBufferSegment& item)noexcept{
-        return value < item.offsetBytes;
-    });
-
-    b8 ownsLiveAllocation = false;
-    if(firstAfter != storage.liveAllocations.begin()){
-        const DescriptorBufferSegment& liveAllocation = *(firstAfter - 1u);
-        ownsLiveAllocation = liveAllocation.kind == allocation.kind
-            && liveAllocation.offsetBytes == allocation.offsetBytes
-            && liveAllocation.sizeBytes == allocation.sizeBytes
-            && liveAllocation.storageIdentity == allocation.storageIdentity
-            && liveAllocation.allocationSerial == allocation.allocationSerial
-        ;
-    }
+    const b8 ownsLiveAllocation = storage.allocations.ownsAt(allocation, dstOffsetBytes);
     if(!ownsLiveAllocation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation is not live for offset {}."), dstOffsetBytes);
         return false;

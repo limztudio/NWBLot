@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cluster_operation_input.h"
+
 #include "raytracing_internal.h"
 #include "arena_names.h"
 
@@ -108,7 +110,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
 
-    auto input = VulkanDetail::BuildClusterOperationInputInfo(opDesc.params, s_OperationName);
+    auto input = VulkanDetail::ClusterOperationInput::build(opDesc.params, s_OperationName);
     if(!input){
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation parameters are invalid"));
         return;

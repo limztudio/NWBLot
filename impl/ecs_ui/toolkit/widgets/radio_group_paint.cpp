@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -26,7 +28,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     const auto placement = PlaceRadioGroup(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics);
     if(!placement)
         return false;
-    const HitTarget host = MakeRadioGroupHostHitTarget(*placement, item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
+    const HitTarget host = HitTargetFactory().makeRadioGroupHostHitTarget(*placement, item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
     if(!m_context.addTarget(item.state, host))
         return false;
     const auto choices = TryMakeWidgetId(item.state.id, s_WidgetPartChoices);
@@ -44,7 +46,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const b8 hover = input.hover() == *part;
         const b8 pressed = input.pressed(*part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
         const b8 focused = enabled && input.focus() == item.state.id && frame.m_snapshot.cursorKey == row.key;
-        if(!mark || !PaintRadioGroupChoiceRow(
+        if(!mark || !ControlVisualPainter().paintRadioGroupChoiceRow(
             m_paint,
             m_text,
             *m_skin,
@@ -63,7 +65,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         ))
             return false;
         if(item.enabled){
-            const HitTarget target = MakeRadioGroupChoiceHitTarget(row, enabled, frame.m_token);
+            const HitTarget target = HitTargetFactory().makeRadioGroupChoiceHitTarget(row, enabled, frame.m_token);
             if(!m_context.addPartTarget(item.state, *part, target))
                 return false;
         }

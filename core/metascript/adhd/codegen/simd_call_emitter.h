@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "source_emitter.h"
+
+
+NWB_ADHD_BEGIN
+
+
+class SimdCallEmitter final{
+public:
+    explicit SimdCallEmitter(const SourceEmitter& emitter)noexcept : m_emitter(emitter){}
+    [[nodiscard]] b8 tryEmit(MString& out, const Expr& expr, MStringView simdType)const;
+
+private:
+    const SourceEmitter& m_emitter;
+};
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

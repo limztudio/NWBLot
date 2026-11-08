@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 import re
 
-from reflection_optical_reference import add, cross, dot, half, normalized, scale
+from reflection_optical_geometry import add, cross, dot, half, normalized, scale
 
 LIT_UTF_8 = "utf-8"
 

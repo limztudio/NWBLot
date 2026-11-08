@@ -3,6 +3,9 @@
 
 
 #include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd.h>
+#include <impl/ecs_render/caustic/caustic_light_selector.adhd.h>
+#include <impl/ecs_render/caustic/caustic_activity_resources.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -26,7 +29,7 @@ namespace ECSRenderDetail{
 
 
 u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refractiveInstanceCount, Span<SceneLightGpuData> lights)noexcept{
-    return AssignCausticLightSlots(causticImportance, refractiveInstanceCount, lights);
+    return CausticLightSelector().assignSlots(causticImportance, refractiveInstanceCount, lights);
 }
 
 
@@ -40,14 +43,7 @@ u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refr
 
 
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
-    if(!m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
-        return;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized())
-        heap.free(m_rayTracingState.m_causticEmissionTargetHeapHandle);
-    m_rayTracingState.m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_causticEmissionTargets.releaseDescriptor(m_graphics);
 }
 
 b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
@@ -138,7 +134,8 @@ b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets)
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
         return false;
     }
-    if(!prepareCausticResolveActivity(halfWidth, halfHeight))
+    CausticActivityResources activity(m_graphics, m_rayTracingState.m_causticResolve.m_activity);
+    if(!activity.prepareCausticResolveActivity(halfWidth, halfHeight))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
     return true;
 }
@@ -152,13 +149,13 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
     }
 
     usize targetByteCount = 0u;
-    if(!ValidatePreparedCausticEmissionTargetUploadState(
+    if(!CausticEmissionTargetBuilder().validateUpload(
         targetCount,
         m_preparedCausticEmissionTargetBytes.size(),
-        static_cast<b8>(m_rayTracingState.m_causticEmissionTargetBuffer),
-        m_rayTracingState.m_causticEmissionTargetCapacity,
-        m_rayTracingState.m_causticEmissionTargetHeapHandle.valid(),
-        m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
+        static_cast<b8>(m_rayTracingState.m_causticEmissionTargets.buffer),
+        m_rayTracingState.m_causticEmissionTargets.capacity,
+        m_rayTracingState.m_causticEmissionTargets.heapHandle.valid(),
+        m_rayTracingState.m_causticEmissionTargets.heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
         targetByteCount
     ))
         return MakeUnexpected(Failure{});
@@ -203,7 +200,7 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
         const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
         if(!meshResult)
             continue;
-        RecordUnsupportedCausticVolume(entity.id, renderer.opticalBoundaryMode, m_firstUnsupportedCausticVolumeEntity, m_unsupportedCausticVolumeCount, m_unsupportedCausticVolumeHash);
+        CausticEmissionTargetBuilder().recordUnsupportedVolume(entity.id, renderer.opticalBoundaryMode, m_firstUnsupportedCausticVolumeEntity, m_unsupportedCausticVolumeCount, m_unsupportedCausticVolumeHash);
         if(!meshResult->meshResources.csgLocalBounds.valid())
             continue;
 
@@ -212,11 +209,11 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
 
         SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
-        ResolveCausticLocalBounds(meshResult->resolvedMesh.runtime, localMin, localMax);
+        CausticEmissionTargetBuilder().resolveLocalBounds(meshResult->resolvedMesh.runtime, localMin, localMax);
         const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
         if(!worldBounds)
             continue;
-        targets.push_back(MakeCausticEmissionTarget(worldBounds->minBounds, worldBounds->maxBounds, combinedMin, combinedMax));
+        targets.push_back(CausticEmissionTargetBuilder().makeTarget(worldBounds->minBounds, worldBounds->maxBounds, combinedMin, combinedMax));
     }
 
     const u32 targetCount = static_cast<u32>(targets.size());
@@ -227,10 +224,10 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
         return true;
     }
 
-    if(!ensureCausticEmissionTargetBuffer(targetCount))
+    if(!m_rayTracingState.m_causticEmissionTargets.ensure(m_graphics, targetCount))
         return false;
 
-    CaptureCausticEmissionTargetsBytes(
+    CausticEmissionTargetBuilder().captureBytes(
         Span<const NwbCausticEmissionTargetGpu>(targets.data(), targets.size()),
         m_preparedCausticEmissionTargetBytes,
         m_rayTracingState.m_causticRefractiveInstanceCount

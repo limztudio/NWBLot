@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_texture/texture_binary_codec.adhd.h>
+
 #include <core/assets/auto_registration.h>
 
 
@@ -67,7 +69,7 @@ b8 Texture::loadBinary(const Span<const u8> binary){
     u8 payloadFormatValue = 0u;
     u8 alphaModeValue = 0u;
     u8 alphaConstantUnorm8 = 0u;
-    if(!DeserializeTextureBinaryPayload(
+    if(!TextureBinaryCodec().deserialize(
         binary,
         width,
         height,

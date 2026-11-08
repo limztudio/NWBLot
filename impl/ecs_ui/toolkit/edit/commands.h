@@ -7,6 +7,8 @@
 
 #include "model.h"
 
+#include <impl/ecs_ui/toolkit/edit/edit_command_mapping.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,13 +53,14 @@ NWB_IMPL_UI_BEGIN
     }
     if(readOnly && IsMutatingEditCommand(request.command))
         return result;
-    if(const auto passiveResult = TryMapEditCommandToPassiveResult(request.command))
+    EditCommandMapping mapping;
+    if(const auto passiveResult = mapping.passiveResult(request.command))
         return *passiveResult;
     const u64 revision = model.revision();
     const usize anchor = model.anchor();
     const usize caret = model.caret();
     b8 applied = true;
-    if(const auto movement = TryMapEditCommandToMove(request.command)){
+    if(const auto movement = mapping.movement(request.command)){
         applied = model.move(*movement, request.extend);
     }
     else{

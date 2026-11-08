@@ -3,6 +3,7 @@
 
 
 #include "renderer_internal.h"
+#include "image_resources.h"
 #include "renderer_frame_timing_task.h"
 
 #include <core/common/log.h>
@@ -99,13 +100,9 @@ GpuRendererState::GpuRendererState(Core::Alloc::GlobalArena& arena, Core::Graphi
     , m_graphics(graphics)
     , m_assets(assets)
     , m_resolver(Move(resolver))
-    , m_glyphCache(arena)
-    , m_sdfCache(arena)
-    , m_textureCache(arena)
+    , m_imageCache(arena)
 {
-    m_glyphCache.reserve(s_PaintMaxImages);
-    m_sdfCache.reserve(s_PaintMaxImages);
-    m_textureCache.reserve(s_PaintMaxImages);
+    m_imageCache.reserve();
 }
 
 
@@ -170,9 +167,7 @@ void GpuRenderer::invalidateResources()noexcept{
     for(auto& frame : m_state->m_frames)
         frame.reset();
     m_state->m_skin.reset();
-    m_state->m_glyphCache.clear();
-    m_state->m_sdfCache.clear();
-    m_state->m_textureCache.clear();
+    m_state->m_imageCache.clear();
     m_state->m_resources.reset();
     m_state->m_width = 0u;
     m_state->m_height = 0u;
@@ -220,7 +215,7 @@ b8 GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
         return false;
     if(!IsValidDisplayMetricsForGpuSubmit(snapshot.displayMetrics()))
         return false;
-    if(!GpuRendererState::ValidateGlyphPages(snapshot) || !GpuRendererState::ValidateSdfPages(snapshot) || !GpuRendererState::ValidateTextureImages(snapshot))
+    if(!GpuImageResources::ValidateGlyphPages(snapshot) || !GpuImageResources::ValidateSdfPages(snapshot) || !GpuImageResources::ValidateTextureImages(snapshot))
         return false;
     Core::Device& device = m_state->m_graphics.getDevice();
     for(auto& slot : m_state->m_slots){

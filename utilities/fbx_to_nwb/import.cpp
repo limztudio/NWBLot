@@ -4,6 +4,7 @@
 
 #include "module.h"
 #include "mesh_build.h"
+#include "mesh_stream_canonicalizer.h"
 #include "source_mesh_streams.h"
 #include "skin.h"
 
@@ -98,7 +99,7 @@ Expected<MeshBuildResult> BuildMesh(
         result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    if(!CanonicalizeSourceMeshStreams(cpuScheduler, scratchArena, result.mesh))
+    if(!SourceMeshCanonicalizer::canonicalize(cpuScheduler, scratchArena, result.mesh))
         return MakeUnexpected(Failure{});
     return result;
 }

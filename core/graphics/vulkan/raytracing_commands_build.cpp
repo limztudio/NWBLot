@@ -3,6 +3,7 @@
 
 
 #include "raytracing_internal.h"
+#include "blas_opacity_micromap_policy.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
@@ -78,7 +79,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     AccelStructGeometryBuildSignatureVector geometrySignatures(numGeometries, scratchArena);
 
     b8 hasOpacityMicromap = false;
-    if(!VulkanDetail::PrepareBlasOpacityMicromapUsageOffsets(m_context, geometries, numGeometries, s_BuildBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
+    if(!VulkanDetail::BlasOpacityMicromapPolicy::prepareBlasOpacityMicromapUsageOffsets(m_context, geometries, numGeometries, s_BuildBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
         return;
 
     const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> b8{
@@ -137,7 +138,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 return;
             }
 
-            const auto ommIndexFormat = VulkanDetail::ResolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_BuildBlasOperation);
+            const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::resolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_BuildBlasOperation);
             if(!ommIndexFormat)
                 return;
             const VkIndexType ommIndexType = ommIndexFormat->indexType;
@@ -180,7 +181,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 }
             }
 
-            if(!VulkanDetail::ValidateOpacityMicromapStorageAndFillUsages(
+            if(!VulkanDetail::BlasOpacityMicromapPolicy::validateOpacityMicromapStorageAndFillUsages(
                 triangles,
                 ommIndexType,
                 ommIndexStride,
@@ -223,7 +224,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     const b8 hasPriorBuild = *hasPriorBuildResult;
 
-    VulkanDetail::AttachBlasOpacityMicromapGeometries(geometries, numGeometries, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
+    VulkanDetail::BlasOpacityMicromapPolicy::attachBlasOpacityMicromapGeometries(geometries, numGeometries, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
 
     VkDeviceAddress transformBaseAddress = 0;
     if(transformCount > 0){

@@ -3,6 +3,8 @@
 
 
 #include "backend.h"
+#include "queue_submission_validator.h"
+#include "queue_descriptor_submission.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
@@ -30,10 +32,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     const b8 forceNativeSubmission
 ){
     ScopedLock lock(m_mutex);
-    DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
-    GpuDescriptorHeap* submissionDescriptorHeap = nullptr;
-    UniqueLock<Futex> descriptorHeapLock;
-    UniqueLock<Futex> descriptorBufferLifecycleLock;
+    DescriptorSubmission descriptorSubmission(*this);
     static_assert(IsTriviallyCopyable_V<DescriptorHeapUseCommitTicket>, "accepted descriptor-use tickets must remain scalar-only");
     static_assert(IsTriviallyCopyable_V<SubmissionCommandListIdentity>, "accepted submission identities must remain scalar-only");
     auto& descriptorHeapUseCommitTickets = m_submitDescriptorHeapUseCommitTickets;
@@ -89,58 +88,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
-    if(hasCommands){
-        for(usize i = 0u; i < numCmd; ++i){
-            auto* cmdList = ppCmd[i];
-            const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
-            for(usize previous = 0u; previous < i; ++previous){
-                if(ppCmd[previous] == cmdList){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
-                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-                }
-            }
-            if(!cmdList || &cmdList->m_device != &m_device){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(!cmdList->matchesSubmissionLease(m_physicalQueue, m_queueID, expected.graphSubmissionAuthorized)){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(!cmdList->m_currentCmdBuf || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(cmdList->m_commandRecordingFailed){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(cmdList->m_isRecording){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(
-                !expected.owner
-                || expected.owner != cmdList->m_currentCmdBuf.get()
-                || expected.recordingLeaseSerial == 0u
-                || expected.recordingLeaseSerial != cmdList->m_recordingLeaseSerial
-                || expected.nativeRecordingID == 0u
-                || expected.nativeRecordingID != cmdList->m_nativeRecordingID
-                || expected.nativeRecordingID != cmdList->m_currentCmdBuf->m_recordingID
-                || expected.recordingWorkerDomain != cmdList->m_creationDesc.recordingWorkerDomain
-                || expected.recordingWorkerDomain != cmdList->m_currentCmdBuf->m_recordingWorkerDomain
-                || expected.graphRecordingOwnershipSerial
-                    != cmdList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
-                || expected.recordingWorkerIndex != cmdList->m_creationDesc.recordingWorkerIndex
-                || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
-            ){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-            if(!cmdList->validateTrackedResourcesReadyForSubmission())
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-        }
-    }
+    if(hasCommands && !SubmissionValidator(*this).validate(ppCmd, numCmd, expectedCommandLists))
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
 
     if(hasCommands){
         validatedTimerQueryCommandBuffers.reserve(numCmd);
@@ -158,53 +107,9 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         }
     }
 
-    b8 requiresDescriptorBufferLifecycle = false;
-    if(hasCommands){
-        for(usize i = 0u; i < numCmd; ++i){
-            auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
-            requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
-            for(const auto heap : tracked.m_referencedDescriptorHeaps){
+    if(!descriptorSubmission.prepare(ppCmd, numCmd))
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
 
-                if(heap.get() != &m_device.m_gpuDescriptorHeap){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
-                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-                }
-                submissionDescriptorHeap = heap.get();
-            }
-        }
-    }
-
-    // Global hierarchy: queue -> descriptor heap -> descriptor-buffer lifecycle.
-    if(submissionDescriptorHeap)
-        descriptorHeapLock = UniqueLock<Futex>(submissionDescriptorHeap->m_mutex);
-    if(requiresDescriptorBufferLifecycle && descriptorBufferManager)
-        descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
-
-    if(hasCommands){
-        for(usize i = 0u; i < numCmd; ++i){
-            auto& cmdList = *MakeNotNull(ppCmd[i]);
-            auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
-            if(
-                (cmdList.m_descriptorBuffersBound && !tracked.m_descriptorBufferManager)
-                || (!tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration != 0u)
-                || (tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration == 0u)
-                || (
-                    tracked.m_descriptorBufferManager
-                    && (
-                        tracked.m_descriptorBufferManager != descriptorBufferManager
-                        || descriptorBufferManager != &m_device.m_descriptorBufferManager
-                        || !descriptorBufferManager->m_enabled
-                        || descriptorBufferManager->m_lifecycleTransitioning
-                        || descriptorBufferManager->m_bindingGeneration == 0u
-                        || tracked.m_descriptorBufferGeneration != descriptorBufferManager->m_bindingGeneration
-                    )
-                )
-            ){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            }
-        }
-    }
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
@@ -300,24 +205,14 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
-        if(!tracked.m_referencedTopLevelAccelStructs.empty()){
+        if(tracked.hasRetainedTopLevelAccelStructs()){
             // Trace packets retain the selected BLAS sets until their own queue completion.
             tracked.retainAcceptedTopLevelAccelStructReferences();
             for(usize buildIndex = 0u; buildIndex < numCmd; ++buildIndex)
                 tracked.retainPendingTopLevelAccelStructReferences(*ppCmd[buildIndex]->m_currentCmdBuf);
         }
-        for(const auto heap : tracked.m_referencedDescriptorHeaps){
-            const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(tracked, submissionToken);
-            if(!heapUseIndex)
-                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-            for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
-                if(ticket.heap == heap && ticket.heapUseIndex == *heapUseIndex){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
-                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-                }
-            }
-            descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = MakeNotNull(&tracked), .heapUseIndex = *heapUseIndex, });
-        }
+        if(!descriptorSubmission.validateHeapUses(tracked, submissionToken))
+            return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
     auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
@@ -340,21 +235,6 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                 commandList->m_stateTracker.rollbackRecordingAttempt();
         }
     };
-    const auto releaseDescriptorBufferLifecycle = [&]()noexcept{
-        if(!descriptorBufferLifecycleLock.owns_lock())
-            return;
-
-        auto& lifecycleMutex = *MakeNotNull(descriptorBufferLifecycleLock.release());
-        lifecycleMutex.unlock();
-    };
-    const auto releaseDescriptorHeap = [&]()noexcept{
-        if(!descriptorHeapLock.owns_lock())
-            return;
-
-        auto& heapMutex = *MakeNotNull(descriptorHeapLock.release());
-        heapMutex.unlock();
-    };
-
     auto submittedBatchBegin = m_commandBuffersInFlight.end();
     if(hasCommands){
         for(usize i = 0u; i < numCmd; ++i)
@@ -381,8 +261,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     }
 
     if(submissionSuppressed || res != VK_SUCCESS){
-        releaseDescriptorBufferLifecycle();
-        releaseDescriptorHeap();
+        descriptorSubmission.releaseLocks();
         if(res == VK_ERROR_DEVICE_LOST)
             m_device.markDeviceLost();
         finalizeDetachedRecordingAttempts(false);
@@ -416,10 +295,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         }
     }
 
-    for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets)
-        ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, submissionToken, ticket.heapUseIndex);
-    releaseDescriptorBufferLifecycle();
-    releaseDescriptorHeap();
+    descriptorSubmission.commitAndRelease(submissionToken);
     finalizeDetachedRecordingAttempts(true);
 
     auto acceptedCommandBuffer = submittedBatchBegin;

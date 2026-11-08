@@ -196,41 +196,7 @@ Expected<u64> ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned,
 
 [[nodiscard]] Expected<u64> ComputeShaderTableAlignedOffset(u64 deviceAddress, u64 allocationByteSize, u64 recordByteSize, u32 baseAlignment)noexcept;
 
-struct OpacityMicromapIndexFormatInfo{
-    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
-    u64 indexStride = 0u;
-};
-
 Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, b8 requireBuffers);
-[[nodiscard]] b8 PrepareBlasOpacityMicromapUsageOffsets(
-    const VulkanContext& context,
-    const RayTracingGeometryDesc* geometries,
-    usize geometryCount,
-    TStringView operation,
-    OpacityMicromapUsageOffsetVector& outUsageOffsets,
-    OpacityMicromapUsageVector& outUsageCounts,
-    b8& outHasOpacityMicromap
-);
-[[nodiscard]] Expected<OpacityMicromapIndexFormatInfo> ResolveOpacityMicromapIndexFormat(Format::Enum format, TStringView operation);
-[[nodiscard]] b8 ValidateOpacityMicromapStorageAndFillUsages(
-    const RayTracingGeometryTriangles& triangles,
-    VkIndexType ommIndexType,
-    u64 ommIndexStride,
-    VkDeviceAddress ommIndexAddress,
-    usize usageOffset,
-    TStringView operation,
-    OpacityMicromapUsageVector& inOutUsageCounts,
-    VkAccelerationStructureTrianglesOpacityMicromapEXT& outOmmGeometry
-);
-void AttachBlasOpacityMicromapGeometries(
-    const RayTracingGeometryDesc* geometries,
-    usize geometryCount,
-    const OpacityMicromapUsageOffsetVector& opacityMicromapUsageOffsets,
-    const OpacityMicromapUsageVector& opacityMicromapUsageCounts,
-    OpacityMicromapGeometryVector& inOutOpacityMicromapGeometries,
-    BlasGeometryScratch& inOutBlasScratch
-)noexcept;
-
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 
 inline constexpr TStringView s_RetainBuildSignatureFailedReason = NWB_TEXT("failed to retain acceleration-structure build signature");

@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditCommandMapping{
+    public Expected<EditMove> movement(in EditCommand command){
+        switch(command){
+        case EditCommand::Left: return EditMove::Left;
+        case EditCommand::Right: return EditMove::Right;
+        case EditCommand::Home: return EditMove::Home;
+        case EditCommand::End: return EditMove::End;
+        case EditCommand::WordLeft: return EditMove::WordLeft;
+        case EditCommand::WordRight: return EditMove::WordRight;
+        case EditCommand::DocumentHome: return EditMove::DocumentHome;
+        case EditCommand::DocumentEnd: return EditMove::DocumentEnd;
+        default: return makeUnexpected(Failure());
+        }
+    }
+
+    public Expected<EditCommandResult> passiveResult(in EditCommand command){
+        EditCommandResult outResult;
+        outResult.handled = true;
+        switch(command){
+        case EditCommand::Copy: outResult.clipboard = EditClipboardAction::Copy; return outResult;
+        case EditCommand::Cut: outResult.clipboard = EditClipboardAction::Cut; return outResult;
+        case EditCommand::Paste: outResult.clipboard = EditClipboardAction::Paste; return outResult;
+        case EditCommand::Submit: outResult.submitted = true; return outResult;
+        case EditCommand::Cancel: outResult.cancelled = true; return outResult;
+        default: return makeUnexpected(Failure());
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

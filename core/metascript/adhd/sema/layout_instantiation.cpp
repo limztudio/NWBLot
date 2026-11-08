@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "template_instantiation_collector.h"
+
 #include "layout_optimizer.h"
+
+#include "concrete_type_analyzer.h"
+#include "type_comparator.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,7 +19,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
+void TemplateInstantiationCollector::collectAllTemplateInstantiations(TranslationUnit& unit){
     for(const u32 pass : { 0u, 1u }){
         const b8 wantImported = (pass == 0u);
         m_collectingImported = wantImported;
@@ -83,7 +88,7 @@ void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
     m_collectingImported = false;
 }
 
-void LayoutOptimizer::collectTemplateInstantiationsInCallable(const MethodDecl& callable, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectTemplateInstantiationsInCallable(const MethodDecl& callable, TranslationUnit& unit){
     if(callable.returnType)
         collectTemplateInstantiationsInType(*callable.returnType, unit);
     for(const ParamDecl& p : callable.params){
@@ -96,7 +101,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInCallable(const MethodDecl& 
     }
 }
 
-void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
     if(stmt.varType)
         collectTemplateInstantiationsInType(*stmt.varType, unit);
     if(stmt.inferredAutoType)
@@ -135,7 +140,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, Tran
     }
 }
 
-void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit){
     if(expr.targetType)
         collectTemplateInstantiationsInType(*expr.targetType, unit);
     for(const TypeArg& targ : expr.callTemplateArgs){
@@ -162,7 +167,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
                 }
             }
             else if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text)){
-                if(!fn->templateParams.empty() && effectiveTemplateArgs.size() == fn->templateParams.size() && IsConcreteTemplateArgList(fn->templateParams, effectiveTemplateArgs, m_symbols)){
+                if(!fn->templateParams.empty() && effectiveTemplateArgs.size() == fn->templateParams.size() && ConcreteTypeAnalyzer(m_symbols).isConcreteTemplateArgList(fn->templateParams, effectiveTemplateArgs)){
                     if(fn->returnType){
                         if(const TypeRef* subRet = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, effectiveTemplateArgs))
                             collectTemplateInstantiationsInType(*subRet, unit);
@@ -205,7 +210,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
     }
 }
 
-void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInStmt(const Stmt& stmt, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectSubstitutedTemplateInstantiationsInStmt(const Stmt& stmt, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
     if(stmt.varType){
         if(const TypeRef* sub = m_symbols.substituteTypeParams(*stmt.varType, params, args))
             collectTemplateInstantiationsInType(*sub, unit);
@@ -244,7 +249,7 @@ void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInStmt(const Stmt&
     }
 }
 
-void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInExpr(const Expr& expr, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectSubstitutedTemplateInstantiationsInExpr(const Expr& expr, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
     if(expr.targetType){
         if(const TypeRef* sub = m_symbols.substituteTypeParams(*expr.targetType, params, args))
             collectTemplateInstantiationsInType(*sub, unit);
@@ -274,7 +279,7 @@ void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInExpr(const Expr&
     }
 }
 
-void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, const u32 depth, TranslationUnit& unit){
+void TemplateInstantiationCollector::collectTemplateInstantiationsInType(const TypeRef& type, const u32 depth, TranslationUnit& unit){
     if(depth > 16u)
         return;
     if(type.isFuncType){
@@ -323,12 +328,12 @@ void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, c
     }
 }
 
-void LayoutOptimizer::instantiateClassTemplate(const ClassDecl& templateDecl, const Span<const TypeArg> templateArgs, TranslationUnit& unit){
-    if(!IsConcreteTemplateArgList(templateDecl.templateParams, templateArgs, m_symbols))
+void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& templateDecl, const Span<const TypeArg> templateArgs, TranslationUnit& unit){
+    if(!ConcreteTypeAnalyzer(m_symbols).isConcreteTemplateArgList(templateDecl.templateParams, templateArgs))
         return;
 
     for(const ClassTemplateInstantiation* existing : unit.templateInstantiations){
-        if(existing->templateDecl == &templateDecl && AreTemplateArgListsEqual(existing->templateArgs, templateArgs, m_symbols))
+        if(existing->templateDecl == &templateDecl && TypeComparator(m_symbols).areTemplateArgListsEqual(existing->templateArgs, templateArgs))
             return;
     }
 
@@ -357,12 +362,12 @@ void LayoutOptimizer::instantiateClassTemplate(const ClassDecl& templateDecl, co
 
         TypeRef* resolvedType = m_symbols.substituteTypeParams(*origField->type, templateDecl.templateParams, templateArgs);
         clonedField->type = resolvedType;
-        markFieldArenaUsage(*resolvedType, *clonedField, const_cast<ClassDecl&>(templateDecl));
+        m_optimizer.markFieldArenaUsage(*resolvedType, *clonedField, const_cast<ClassDecl&>(templateDecl));
         collectTemplateInstantiationsInType(*resolvedType, unit);
         inst->orderedFields.push_back(clonedField);
     }
 
-    finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
+    m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
 
     for(const TypeRef* implIface : templateDecl.implementedInterfaces){

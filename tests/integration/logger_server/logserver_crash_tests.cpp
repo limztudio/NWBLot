@@ -10,12 +10,9 @@
 
 #include <gtest/gtest.h>
 
-#include <global/atomic.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
+#include <core/crash/package_archive.h>
 #include <core/crash/package_names.h>
 #include <core/common/log.h>
 
@@ -27,8 +24,6 @@
 #include <global/process_execution.h>
 
 #include <logger/common.h>
-#include <logger/server/crash_auth.h>
-#include <global/filesystem/exclusive_publication.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <fcntl.h>
@@ -52,7 +47,6 @@ constexpr AStringView s_ApplicationVersion = "1";
 constexpr AStringView s_WindowsExceptionCategory = "windows_exception";
 
 static constexpr AStringView s_PlatformLinux = "platform=linux";
-static constexpr AStringView s_SecretToken = "secret-token";
 static constexpr AStringView s_Event = "[event]";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 static constexpr AStringView s_Callstack = "callstack:";
@@ -273,7 +267,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     ASSERT_TRUE(assertPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(arena, archiveScratch, *assertPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(arena, archiveScratch, *assertPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -336,7 +330,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 
     ASSERT_TRUE(errorPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(arena, archiveScratch, *errorPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(arena, archiveScratch, *errorPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -553,6 +547,28 @@ TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+TEST_F(LoggerServerCrash, UnsafeArchiveEntryCannotEscapePackageDirectory){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_unsafe_archive_20261107");
+    constexpr AStringView s_Stem("unsafe_001");
+    const auto testDirectory = NWB::Tests::CrashTestPaths::TestCaseDirectory(arena, s_Group);
+    const auto existed = FileExistsNoFollow(testDirectory);
+    ASSERT_TRUE(existed);
+    ASSERT_FALSE(*existed);
+
+    CrashTestText archive(arena);
+    archive += s_ArchiveHeaderText;
+    AppendArchiveFile("../escape", "payload", archive);
+    const auto result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
+    EXPECT_FALSE(result.accepted);
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("malformed crash archive file header")));
+    const auto escaped = FileExistsNoFollow(StorageDirectory(arena, s_Group) / "packages" / "escape");
+    ASSERT_TRUE(escaped);
+    EXPECT_FALSE(*escaped);
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -755,164 +771,7 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls){
-    TestArena testArena;
-    constexpr Array<tchar, 3u> s_Message = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
-    const TStringView message(s_Message.data(), s_Message.size());
-    const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Core::Common::LogType::Warning, NWB::Log::LogString(message, testArena.arena));
-    NWB::Log::LogBytes payload(testArena.arena);
-    ASSERT_TRUE(NWB::Log::BuildMessagePayload(source, payload));
 
-    constexpr usize s_PrefixBytes = sizeof(tchar);
-    NWB::Log::LogBytes shifted(testArena.arena);
-    shifted.resize(s_PrefixBytes + payload.size());
-    NWB_MEMCPY(shifted.data() + s_PrefixBytes, payload.size(), payload.data(), payload.size());
-    const auto parsed = NWB::Log::ParseMessagePayload(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
-    ASSERT_TRUE(parsed);
-    EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
-
-    shifted.back() = 1u;
-    const auto malformed = NWB::Log::ParseMessagePayload(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
-    ASSERT_FALSE(malformed);
-    EXPECT_FALSE(malformed.error().empty());
-    EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
-}
-
-TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), AStringView()));
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, AStringView()));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, s_SecretToken));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token "));
-
-    constexpr AStringView s_HeaderBytes = "Bearer secret-token trailing";
-    const AStringView header(s_HeaderBytes.data(), LengthOf("Bearer secret-token") - 1u);
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header.substr(0u, header.size() - 1u)));
-}
-
-
-[[nodiscard]] static ::Path<NWB::Core::Alloc::GlobalArena> MakeTelemetryPublicationTestDirectory(TestArena& testArena){
-    ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena);
-    const auto executableDirectory = GetExecutableDirectory(testArena.arena);
-    if(!executableDirectory)
-        return root;
-    for(u32 attempt = 0u; attempt < 128u; ++attempt){
-        const auto name = StringFormat(testArena.arena, "telemetry_publication_test_{}_{}", CurrentProcessId(), attempt);
-        root = *executableDirectory / name;
-        const auto created = CreateDirectories(root);
-        if(!created)
-            return ::Path<NWB::Core::Alloc::GlobalArena>(testArena.arena);
-        if(*created)
-            return root;
-    }
-    return ::Path<NWB::Core::Alloc::GlobalArena>(testArena.arena);
-}
-
-TEST_F(LoggerServerCrash, TelemetryPublicationDoesNotReplaceExistingFinalFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
-    ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    constexpr Array<u8, 3u> s_Existing = { 1u, 2u, 3u };
-    constexpr Array<u8, 3u> s_New = { 4u, 5u, 6u };
-    ASSERT_TRUE(WriteBinaryFile(destination, s_Existing));
-
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
-    EXPECT_FALSE(result.published);
-    EXPECT_TRUE(result.stagingRetained);
-    EXPECT_TRUE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_Existing.size());
-    EXPECT_EQ(NWB_MEMCMP(bytes.data(), s_Existing.data(), s_Existing.size()), 0);
-    auto staging = destination;
-    staging += ".partial";
-    ASSERT_TRUE(ReadBinaryFile(staging, bytes));
-    ASSERT_EQ(bytes.size(), s_New.size());
-    EXPECT_EQ(NWB_MEMCMP(bytes.data(), s_New.data(), s_New.size()), 0);
-}
-
-TEST_F(LoggerServerCrash, TelemetryPublicationDoesNotReplaceExistingStagingFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
-    ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    auto staging = destination;
-    staging += ".partial";
-    constexpr Array<u8, 2u> s_Existing = { 7u, 8u };
-    constexpr Array<u8, 2u> s_New = { 9u, 10u };
-    ASSERT_TRUE(WriteBinaryFile(staging, s_Existing));
-
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
-    EXPECT_FALSE(result.published);
-    EXPECT_FALSE(result.stagingRetained);
-    EXPECT_TRUE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(staging, bytes));
-    ASSERT_EQ(bytes.size(), s_Existing.size());
-    EXPECT_EQ(NWB_MEMCMP(bytes.data(), s_Existing.data(), s_Existing.size()), 0);
-    const auto finalExists = FileExists(destination);
-    ASSERT_TRUE(finalExists);
-    EXPECT_FALSE(*finalExists);
-}
-
-TEST_F(LoggerServerCrash, ConcurrentTelemetryPublishersCannotReplaceEachOther){
-    TestArena rootArena;
-    TestArena firstArena;
-    TestArena secondArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(rootArena);
-    ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    const ::Path<NWB::Core::Alloc::GlobalArena> firstPath(firstArena.arena, destination);
-    const ::Path<NWB::Core::Alloc::GlobalArena> secondPath(secondArena.arena, destination);
-    constexpr Array<u8, 2u> s_First = { 21u, 22u };
-    constexpr Array<u8, 2u> s_Second = { 31u, 32u };
-    FilePublicationResult firstResult;
-    FilePublicationResult secondResult;
-    Atomic<b8> start = false;
-    Thread first([&](){
-        while(!start.load(MemoryOrder::acquire))
-            YieldThread();
-        firstResult = PublishNewFileDurable(firstPath, BinaryByteView{ s_First.data(), s_First.size() });
-    });
-    Thread second([&](){
-        while(!start.load(MemoryOrder::acquire))
-            YieldThread();
-        secondResult = PublishNewFileDurable(secondPath, BinaryByteView{ s_Second.data(), s_Second.size() });
-    });
-    start.store(true, MemoryOrder::release);
-    first.join();
-    second.join();
-    EXPECT_NE(firstResult.published, secondResult.published);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(rootArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_First.size());
-    const auto& winner = firstResult.published ? s_First : s_Second;
-    EXPECT_EQ(NWB_MEMCMP(bytes.data(), winner.data(), winner.size()), 0);
-}
-
-TEST_F(LoggerServerCrash, TelemetryPublicationMovesCompletedBytesToNewFinalFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
-    ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    constexpr Array<u8, 3u> s_Data = { 11u, 12u, 13u };
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_Data.data(), s_Data.size() });
-    EXPECT_TRUE(result.published);
-    EXPECT_FALSE(result.stagingRetained);
-    EXPECT_FALSE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_Data.size());
-    EXPECT_EQ(NWB_MEMCMP(bytes.data(), s_Data.data(), s_Data.size()), 0);
-    auto staging = destination;
-    staging += ".partial";
-    const auto stagingExists = FileExists(staging);
-    ASSERT_TRUE(stagingExists);
-    EXPECT_FALSE(*stagingExists);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

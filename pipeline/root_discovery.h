@@ -27,6 +27,7 @@
 
 
 #include <core/alloc/scratch.h>
+#include <core/assets/cook_input_selection.h>
 #include <core/assets/cook_paths.h>
 #include <core/assets/global.h>
 #include <core/common/log.h>

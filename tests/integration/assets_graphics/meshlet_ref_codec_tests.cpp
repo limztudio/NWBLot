@@ -4,6 +4,9 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
+#include <impl/assets_mesh/cook_meshlet_refs.adhd.h>
+
 #include <gtest/gtest.h>
 
 

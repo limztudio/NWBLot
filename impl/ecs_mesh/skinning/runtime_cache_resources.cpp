@@ -4,10 +4,9 @@
 
 #include "runtime_cache.h"
 #include "local_bounds.h"
+#include "trace_geometry.h"
 
 #include <impl/ecs_mesh/runtime/types.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 #include <core/common/log.h>
@@ -325,13 +324,8 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
 
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
-        const usize indexCount = instance.meshletPrimitiveIndices.size();
-        const auto triangleIndices = BuildMeshletTriangleIndices(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size(), scratchArena);
-        if(!triangleIndices){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
-            return false;
-        }
-        if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices->size(), indexCount, instance.handle.value))
+        const auto triangleIndices = MeshSkinningTraceGeometry::BuildIndices(instance, scratchArena);
+        if(!triangleIndices)
             return false;
 
         uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
@@ -351,11 +345,9 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0, scratchArena);
-        if(!triangleAttributes){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
+        const auto triangleAttributes = MeshSkinningTraceGeometry::BuildAttributes(instance, scratchArena);
+        if(!triangleAttributes)
             return false;
-        }
 
         uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<AttribGpu>(
             instance,

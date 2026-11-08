@@ -11,7 +11,7 @@ from typing import Sequence
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from launcher.discovery import LauncherDiscovery  # noqa: E402
+from launcher.commands import LauncherCommands  # noqa: E402
 
 
 TESTS_DIR_NAME = "tests"
@@ -19,7 +19,7 @@ MAIN_ENTRY = "__main__"
 
 
 def main(argv: Sequence[str]) -> int:
-    return LauncherDiscovery.run_directory_launcher(Path(TESTS_DIR_NAME), argv)
+    return LauncherCommands.run_directory_launcher(Path(TESTS_DIR_NAME), argv)
 
 
 if __name__ == MAIN_ENTRY:

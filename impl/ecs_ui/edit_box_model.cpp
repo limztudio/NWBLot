@@ -4,6 +4,8 @@
 
 #include "edit_box_host.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/edit_geometry.adhd.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -166,7 +168,7 @@ void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const 
         model.cancelComposition();
         return;
     }
-    if(!IsUiEditBoxEntrySessionDisplayReady(entry.displayed, entry.owner, entry.popup))
+    if(!UiEditGeometry().sessionReady(entry.displayed, entry.owner, entry.popup))
         return;
     if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
         TerminateInvariant();

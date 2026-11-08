@@ -16,6 +16,7 @@
 #include "photon_push_constants.slangi"
 #include "../raytrace/optical_events.slangi"
 #include "splat_constants.slangi"
+#include "caustic_photon_emission.slangi"
 
 #ifndef NWB_RT_CSG_ENABLED
 #define NWB_RT_CSG_ENABLED 0
@@ -32,25 +33,8 @@
 #define NWB_CAUSTIC_MAX_BOUNCES 16u
 
 #define NWB_CAUSTIC_FLUX_EPSILON 1e-6
-#define NWB_CAUSTIC_MIN_EMISSION_AREA 1e-6
 #define NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM 1e-3
 #define NWB_CAUSTIC_TRACE_T_MAX 1e7
-#define NWB_CAUSTIC_DOMAIN_AREA_EXTENT_SCALE 4.0
-#define NWB_CAUSTIC_LIGHT_COLOR_MAX 1.5
-#define NWB_CAUSTIC_LIGHT_INTENSITY_MAX 2.0
-
-// lowbias32 integer hash.
-#define NWB_CAUSTIC_HASH_OUTER_SHIFT 16
-#define NWB_CAUSTIC_HASH_MIDDLE_SHIFT 15
-#define NWB_CAUSTIC_HASH_FIRST_MULTIPLIER 0x7feb352du
-#define NWB_CAUSTIC_HASH_SECOND_MULTIPLIER 0x846ca68bu
-
-// Emission jitter keeps the top 24 hash bits and maps them to [0, 1).
-#define NWB_CAUSTIC_JITTER_GOLDEN_RATIO 0x9E3779B9u
-#define NWB_CAUSTIC_JITTER_SEED_OFFSET 0x85EBCA6Bu
-#define NWB_CAUSTIC_JITTER_SECOND_SEED_SALT 0x68E31DA4u
-#define NWB_CAUSTIC_JITTER_DROPPED_BITS 8
-#define NWB_CAUSTIC_JITTER_UNIT_SCALE (1.0 / 16777216.0)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,13 +62,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct NwbCausticPhoton{
-    float3 origin;
-    float3 direction;
-    half3 flux;
-    bool finiteOrigin;
-};
 
 struct NwbCausticSplat{
     bool valid;
@@ -296,111 +273,6 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     }
     splat.termination = result.termination;
     return splat;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct NwbCausticEmission{
-    bool valid;
-    float3 origin;
-    float3 direction;
-    float domainArea;
-};
-
-void nwbCausticEmissionBasis(float3 axis, out float3 right, out float3 up){
-    const float3 reference = abs(axis.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
-    right = nwbSafeNormalize(cross(reference, axis), float3(1.0, 0.0, 0.0));
-    up = nwbSafeNormalize(cross(axis, right), float3(0.0, 1.0, 0.0));
-}
-
-float2 nwbCausticProjectAabbExtent(float3 aabbMin, float3 aabbMax, float3 right, float3 up){
-    const float3 halfExtent = (aabbMax - aabbMin) * 0.5;
-    return float2(abs(right.x) * halfExtent.x + abs(right.y) * halfExtent.y + abs(right.z) * halfExtent.z, abs(up.x) * halfExtent.x + abs(up.y) * halfExtent.y + abs(up.z) * halfExtent.z);
-}
-
-uint nwbCausticHashU32(uint x){
-    x ^= x >> NWB_CAUSTIC_HASH_OUTER_SHIFT;
-    x *= NWB_CAUSTIC_HASH_FIRST_MULTIPLIER;
-    x ^= x >> NWB_CAUSTIC_HASH_MIDDLE_SHIFT;
-    x *= NWB_CAUSTIC_HASH_SECOND_MULTIPLIER;
-    x ^= x >> NWB_CAUSTIC_HASH_OUTER_SHIFT;
-    return x;
-}
-
-// Deterministic stratified emission jitter shared by both backends.
-float2 nwbCausticEmissionJitter(uint photonIndex){
-    const uint h0 = nwbCausticHashU32(photonIndex * NWB_CAUSTIC_JITTER_GOLDEN_RATIO + NWB_CAUSTIC_JITTER_SEED_OFFSET);
-    const uint h1 = nwbCausticHashU32(h0 ^ NWB_CAUSTIC_JITTER_SECOND_SEED_SALT);
-    return float2((float)(h0 >> NWB_CAUSTIC_JITTER_DROPPED_BITS) * NWB_CAUSTIC_JITTER_UNIT_SCALE, (float)(h1 >> NWB_CAUSTIC_JITTER_DROPPED_BITS) * NWB_CAUSTIC_JITTER_UNIT_SCALE);
-}
-
-// Frame-parity checkerboards cover the full grid in two frames and retain jitter keyed to the physical full-grid cell.
-// Phase count1 is the non-temporal full-grid path.
-float2 nwbCausticJitteredTemporalCell(const uint photonIndex, const uint gridSide, const uint frameIndex, const uint temporalPhaseCount){
-    const uint fullGridSide = max(gridSide, 1u);
-    const uint phaseCount = temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_PHASE_COUNT ? NWB_CAUSTIC_TEMPORAL_PHASE_COUNT : NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
-    const uint phase = frameIndex % phaseCount;
-    uint row = 0u;
-    uint column = 0u;
-
-    if(phaseCount == NWB_CAUSTIC_TEMPORAL_PHASE_COUNT){
-        const uint halfWidth = max(fullGridSide >> 1u, 1u);
-        row = photonIndex / halfWidth;
-        const uint pair = photonIndex % halfWidth;
-        const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
-        column = parityColBase + NWB_CAUSTIC_TEMPORAL_PHASE_COUNT * pair;
-    }
-    else{
-        row = photonIndex / fullGridSide;
-        column = photonIndex % fullGridSide;
-    }
-    const float2 jitter = nwbCausticEmissionJitter(column + row * fullGridSide);
-    return (float2(column, row) + jitter) / (float)fullGridSide;
-}
-
-// Aim each photon at one refractive target's projected AABB.
-NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin, float3 aabbMax, float2 cell){
-    NwbCausticEmission emission;
-    emission.valid = false;
-    emission.origin = float3(0.0, 0.0, 0.0);
-    emission.direction = lightDir;
-    emission.domainArea = 0.0;
-
-    const float3 axis = nwbSafeNormalize(lightDir, float3(0.0, 0.0, -1.0));
-    float3 right;
-    float3 up;
-    nwbCausticEmissionBasis(axis, right, up);
-
-    const float3 center = (aabbMin + aabbMax) * 0.5;
-    const float2 extent = nwbCausticProjectAabbExtent(aabbMin, aabbMax, right, up);
-    emission.domainArea = max(NWB_CAUSTIC_DOMAIN_AREA_EXTENT_SCALE * extent.x * extent.y, NWB_CAUSTIC_MIN_EMISSION_AREA);
-
-    const float2 offset = (cell * 2.0 - 1.0) * extent;
-    const float3 target = center + right * offset.x + up * offset.y;
-
-    const float backoff = length(aabbMax - aabbMin) + 1.0;
-    emission.origin = target - axis * backoff;
-    emission.direction = axis;
-    emission.valid = true;
-    return emission;
-}
-
-half3 nwbCausticLightColor(const float4 colorIntensity){
-    return half3(clamp(colorIntensity.xyz, half3(0.0h), half3(half(NWB_CAUSTIC_LIGHT_COLOR_MAX)))) * half(min(max(colorIntensity.w, 0.0h), half(NWB_CAUSTIC_LIGHT_INTENSITY_MAX)));
-}
-
-NwbCausticPhoton nwbCausticCreatePhoton(const NwbCausticEmission emission, const half3 lightColor, const uint emissionTargetCount, const uint photonCount, const bool finiteOrigin, const float3 sourcePosition){
-    // Photon budgets exceed the finite half range; normalize energy in float before quantizing the final flux.
-    const float perPhoton = emission.domainArea * float(emissionTargetCount) / float(max(photonCount, 1u));
-
-    NwbCausticPhoton photon;
-    photon.origin = finiteOrigin ? emission.origin + emission.direction * dot(sourcePosition - emission.origin, emission.direction) : emission.origin;
-    photon.direction = emission.direction;
-    photon.flux = half3(float3(lightColor) * perPhoton);
-    photon.finiteOrigin = finiteOrigin;
-    return photon;
 }
 
 

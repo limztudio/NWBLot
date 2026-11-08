@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/material/pipeline_types.adhd.h>
+#include <impl/ecs_render/material/instance_override_fields.adhd.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>

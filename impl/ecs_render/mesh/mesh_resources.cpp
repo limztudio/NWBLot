@@ -3,6 +3,9 @@
 
 
 #include "mesh_system.h"
+#include "mesh_descriptor_transaction.h"
+#include "runtime_mesh_resource_cache.h"
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
 #include "runtime_mesh_pruning.h"
 
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
@@ -37,52 +40,6 @@ namespace __hidden_mesh_resources{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class UnpublishedMeshDescriptors final : NoCopy{
-public:
-    UnpublishedMeshDescriptors(RendererMeshSystem& meshSystem, MeshResources& mesh)noexcept
-        : m_meshSystem(meshSystem)
-        , m_mesh(mesh)
-    {}
-    ~UnpublishedMeshDescriptors()noexcept(noexcept(DeclVal<RendererMeshSystem&>().releaseMeshGeometryHeapHandles(DeclVal<MeshResources&>()))){
-        if(m_active)
-            m_meshSystem.releaseMeshGeometryHeapHandles(m_mesh);
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    RendererMeshSystem& m_meshSystem;
-    MeshResources& m_mesh;
-    b8 m_active = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
-    return
-        mesh.runtimeMeshVersion == desc.version
-        && mesh.sameBuffers(desc)
-        && mesh.triangleIndexBuffer == desc.triangleIndexBuffer
-        && mesh.attributeBuffer == desc.attributeBuffer
-        && mesh.runtimeLocalBoundsBuffer == desc.localBoundsBuffer
-        && mesh.runtimeMeshletLocalBoundsBuffer == desc.meshletLocalBoundsBuffer
-        && mesh.meshletCount == desc.meshletCount
-        && mesh.meshletPrimitiveIndexCount == desc.meshletPrimitiveIndexCount
-    ;
-}
-
-static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
-    mesh.runtimeGeometryContentRevision = desc.geometryContentRevision;
-    mesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
-    mesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
-    RefreshRuntimeMeshCsgBounds(LoadFloatInt(desc.localBounds.minBounds), LoadFloatInt(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
-}
 
 template<typename PayloadT>
 [[nodiscard]] static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupMeshBuffer(
@@ -126,11 +83,6 @@ template<typename PayloadT>
     return Move(*buffer);
 }
 
-[[nodiscard]] static b8 ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const AStringView label){
-    const Core::BufferDesc emptyDesc{};
-    const Core::BufferDesc& desc = buffer ? buffer->getCreationDescription() : emptyDesc;
-    return ValidateMeshRawBufferLogicalByteCount(buffer != nullptr, desc.structStride, desc.byteSize, logicalByteCount, meshName, label);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,7 +243,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         }
 
         createdMesh.triangleIndexBuffer = Move(*indexBuffer);
-        FinalizeMeshShadowTraceIndexBuildState(
+        MeshAccelerationStatePolicy().finalizeShadowIndices(
             meshPath,
             triangleIndices->size(),
             createdMesh.meshletPrimitiveIndexCount,
@@ -329,7 +281,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     }
 
     NWB_ASSERT(createdMesh.valid());
-    __hidden_mesh_resources::UnpublishedMeshDescriptors retireUnpublished(*this, createdMesh);
+    MeshDescriptorTransaction retireUnpublished(*this, createdMesh);
     if(!createMeshRenderBindings(createdMesh))
         return MakeUnexpected(Failure{});
 
@@ -356,89 +308,11 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Na
 }
 
 Expected<NotNull<MeshResources*>> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
-    NWB_ASSERT(desc.valid());
-
-    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
-    if(foundMesh != m_meshState.m_meshes.end()){
-        if(!foundMesh.value().runtimeMesh){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource"), ConvertString(desc.meshKey.resolvedText()));
-            return MakeUnexpected(Failure{});
-        }
-        if(!__hidden_mesh_resources::RuntimeMeshSourceMatches(foundMesh.value(), desc)){
-            releaseMeshGeometryHeapHandles(foundMesh.value());
-            m_meshState.m_meshes.erase(foundMesh);
-        }
-        else{
-            NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-            MeshResources& mesh = foundMesh.value();
-            __hidden_mesh_resources::RefreshRuntimeMeshContent(mesh, desc);
-            NWB_ASSERT(mesh.valid());
-            return MakeNotNull(&mesh);
-        }
-    }
-
-    MeshResources createdMesh;
-    createdMesh.meshName = desc.meshKey;
-    createdMesh.solidTriangleWords = Core::MakeGlobalUnique<u32[]>(m_arena, desc.solidTriangleWords.size());
-    if(!createdMesh.solidTriangleWords)
-        return MakeUnexpected(Failure{});
-    const usize solidByteCount = desc.solidTriangleWords.size_bytes();
-    NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, desc.solidTriangleWords.data(), solidByteCount);
-    createdMesh.positionBuffer = desc.positionBuffer;
-    createdMesh.normalBuffer = desc.normalBuffer;
-    createdMesh.tangentBuffer = desc.tangentBuffer;
-    createdMesh.uv0Buffer = desc.uv0Buffer;
-    createdMesh.colorBuffer = desc.colorBuffer;
-    createdMesh.meshletDescBuffer = desc.meshletDescBuffer;
-    createdMesh.meshletBoundsBuffer = desc.meshletBoundsBuffer;
-    createdMesh.meshletPositionRefDeltaBuffer = desc.meshletPositionRefDeltaBuffer;
-    createdMesh.meshletAttributeRefDeltaBuffer = desc.meshletAttributeRefDeltaBuffer;
-    createdMesh.meshletLocalVertexRefBuffer = desc.meshletLocalVertexRefBuffer;
-    createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
-    createdMesh.triangleIndexBuffer = desc.triangleIndexBuffer;
-    createdMesh.attributeBuffer = desc.attributeBuffer;
-    createdMesh.runtimeLocalBoundsBuffer = desc.localBoundsBuffer;
-    createdMesh.runtimeMeshletLocalBoundsBuffer = desc.meshletLocalBoundsBuffer;
-    createdMesh.blasBuildPending = (desc.triangleIndexBuffer != nullptr);
-    createdMesh.meshletCount = desc.meshletCount;
-    createdMesh.meshletPrimitiveIndexCount = desc.meshletPrimitiveIndexCount;
-    createdMesh.runtimeMesh = true;
-    createdMesh.runtimeMeshVersion = desc.version;
-    NWB_ASSERT(desc.localBounds.valid());
-    __hidden_mesh_resources::RefreshRuntimeMeshContent(createdMesh, desc);
-    if(!ValidateRuntimeMeshPrimitiveIndexCount(createdMesh.meshName, createdMesh.meshletPrimitiveIndexCount, s_MeshletTriangleIndexCount))
-        return MakeUnexpected(Failure{});
-    if(!__hidden_mesh_resources::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
-        return MakeUnexpected(Failure{});
-    NWB_ASSERT(createdMesh.valid());
-    __hidden_mesh_resources::UnpublishedMeshDescriptors retireUnpublished(*this, createdMesh);
-    if(!createMeshRenderBindings(createdMesh))
-        return MakeUnexpected(Failure{});
-
-    auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
-    if(result.second)
-        retireUnpublished.release();
-    auto it = result.first;
-
-    NWB_ASSERT(it.value().valid());
-    return MakeNotNull(&it.value());
+    return RuntimeMeshResourceCache(*this).create(desc);
 }
 
 Expected<NotNull<MeshResources*>> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept{
-    NWB_ASSERT(desc.valid());
-
-    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
-    if(foundMesh == m_meshState.m_meshes.end())
-        return MakeUnexpected(Failure{});
-
-    MeshResources& mesh = foundMesh.value();
-    if(!mesh.runtimeMesh || !__hidden_mesh_resources::RuntimeMeshSourceMatches(mesh, desc))
-        return MakeUnexpected(Failure{});
-
-    NWB_ASSERT(meshRenderBindingsReady(mesh));
-    __hidden_mesh_resources::RefreshRuntimeMeshContent(mesh, desc);
-    NWB_ASSERT(mesh.valid());
-    return MakeNotNull(&mesh);
+    return RuntimeMeshResourceCache(*this).find(desc);
 }
 
 void RendererMeshSystem::pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena){

@@ -3,6 +3,7 @@
 
 
 #include "csg_gi_scene.h"
+#include "smoke_capture_factory.h"
 
 #include "csg_smoke_helpers.h"
 #include "smoke_project_helpers.h"
@@ -235,7 +236,7 @@ Expected<b8> CsgGiScene::start(){
 
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
     constexpr u32 s_DefaultCaptureFrameCount = 360u;
-    auto capture = ConfigureSmokeFramebufferCapture(NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options, m_context, scratchArena);
+    auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options, scratchArena);
     if(!capture)
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);
@@ -266,7 +267,10 @@ void CsgGiScene::update(){
             m_liveWarmupStartPresentations = presentations;
             m_liveWarmupStarted = true;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}")
-                , frameIndex, presentations, m_requiredPresentations, __hidden_csg_gi_scene::s_LiveWarmupSeconds
+                , frameIndex
+                , presentations
+                , m_requiredPresentations
+                , __hidden_csg_gi_scene::s_LiveWarmupSeconds
             );
         }else{
             const f64 elapsedSeconds = DurationInSeconds<f64>(now, m_liveWarmupStartTime);

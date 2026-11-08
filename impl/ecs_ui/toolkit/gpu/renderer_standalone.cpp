@@ -154,7 +154,7 @@ b8 GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame){
     const GpuFrame pending = m_state->m_pending;
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_state->m_graphics.gpuTiming());
     __hidden_ui_gpu_standalone::StandaloneDeclarationContext declarationContext{ *m_state, frameTimingTransaction };
-    const auto submitted = m_state->m_graphics.submitStandaloneTaskGraph(&declarationContext, [](void* context, Core::GpuTaskGraph& graph){
+    const auto submitted = m_state->m_graphics.standaloneGraph().submitStandaloneTaskGraph(&declarationContext, [](void* context, Core::GpuTaskGraph& graph){
             auto& declaration = *MakeNotNull(static_cast<__hidden_ui_gpu_standalone::StandaloneDeclarationContext*>(context));
             return declaration.state.declareStandalone(graph, declaration.frameTimingTransaction);
         },

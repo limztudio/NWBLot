@@ -9,7 +9,8 @@
 #include <core/graphics/api.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/render_pass.h>
+#include <core/graphics/runtime/render_pass_collection.h>
+#include <core/graphics/runtime/standalone_service.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,10 +36,6 @@ namespace GraphicsModuleDetail{
 class GraphicsRuntime{
 public:
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
-    // A synchronous caller may declare one isolated graph through this callback.
-    // The graph owns all native recording and submission; the callback keeps only declaration-time inputs and returns its terminal task.
-    // `userData` stays caller-owned during the call.
-    using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
 
 
 private:
@@ -47,46 +44,6 @@ private:
     using StandaloneGraphWorkspacesOwner = GlobalUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool>;
 
 
-public:
-    struct BufferSetupDesc{
-        BufferDesc bufferDesc;
-        const void* data = nullptr;
-        // Upload sizes and destination offsets must be four-byte aligned.
-        usize dataSize = 0;
-        u64 destOffsetBytes = 0;
-        // Optional output written after producer submission and consumer readiness bridges.
-        QueueSubmissionToken* acceptedToken = nullptr;
-        // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
-        // The scheduler independently places the producer and submits readiness bridges for consumers.
-        CommandQueue::Enum queue = CommandQueue::kCount;
-    };
-
-    // One immutable CPU payload per subresource. Batch copies regions into graph blobs first, so callers may free decoded memory on return.
-    // A 3D mip is one region at arraySlice 0 whose depthPitch covers a single Z slice; 2D/cube uploads provide one region per array slice.
-    struct TextureUploadRegion{
-        const void* data = nullptr;
-        usize dataSize = 0u;
-        usize rowPitch = 0u;
-        usize depthPitch = 0u;
-        u32 arraySlice = 0u;
-        u32 mipLevel = 0u;
-        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
-    };
-
-    // Multi-subresource texture upload via a compiler-owned graph.
-    // Explicit `finalState` (keepInitialState: == initialState).
-    // hasPhysicalInitialState declares the native pre-upload state; explicit Unknown starts fresh images UNDEFINED.
-    struct TextureUploadBatchDesc{
-        TextureHandle destination;
-        const TextureUploadRegion* regions = nullptr;
-        usize regionCount = 0u;
-        QueueSubmissionToken* acceptedToken = nullptr;
-        ResourceStates::Mask finalState = ResourceStates::Unknown;
-        ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
-        // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
-        CommandQueue::Enum queue = CommandQueue::kCount;
-        b8 hasPhysicalInitialState = false;
-    };
 
 
 private:
@@ -213,28 +170,15 @@ public:
     [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& desc)const;
 
-    [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
-    [[nodiscard]] b8 uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
-    // Compiles, records, and submits an isolated graph synchronously.
-    // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
-    [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(
-        void* userData,
-        StandaloneTaskGraphDeclaration declareTask,
-        GpuPhysicalQueueId requiredTerminalQueue = {},
-        GpuTimingRecorder* timingRecorder = nullptr,
-        GpuTimingFrameTransaction* frameTimingTransaction = nullptr
-    )const;
+    [[nodiscard]] const GraphicsStandaloneService& standaloneGraph()const noexcept{ return m_standaloneGraph; }
 
     [[nodiscard]] Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures()const;
     [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     [[nodiscard]] Expected<SwapChainTransitionTicket> backBufferResizing();
     [[nodiscard]] b8 backBufferResized();
-    void invalidateRenderPassResources();
-    [[nodiscard]] b8 validateRenderPassResources();
     void displayScaleChanged();
 
-    void animate(f64 elapsedTime);
     // Allocation/submission work before each frame's preparation. After acquire, before render(); headless callers use it to order without beginFrame().
     [[nodiscard]] b8 prepareFramePreamble();
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render(){ return renderWithPhaseTiming(nullptr); }
@@ -278,6 +222,7 @@ private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
     // Declared after the backend so its device-bound command-list caches release before the device.
     NotNullUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool, StandaloneGraphWorkspacesOwner::deleter_type> m_standaloneGraphWorkspaces;
+    GraphicsStandaloneService m_standaloneGraph;
 
     b8 m_hasPresentedFrame = false;
     b8 m_windowVisible = false;
@@ -286,7 +231,7 @@ private:
     mutable b8 m_deviceRecreationRequested = false;
     b8 m_frameSubmissionSuspended = false;
 
-    List<NotNull<IRenderPass*>, Alloc::GlobalArena> m_renderPasses;
+    GraphicsModuleDetail::RenderPassCollection m_renderPasses;
     // Non-owning: the contributing system unregisters before its lifetime ends.
     IGpuTaskGraphPresentationContributor* m_taskGraphPresentationContributor = nullptr;
     IGpuTaskGraphOutputLayerContributor* m_taskGraphOutputLayerContributor = nullptr;

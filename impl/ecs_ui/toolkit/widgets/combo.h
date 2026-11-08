@@ -24,6 +24,7 @@ NWB_IMPL_UI_BEGIN
 // Hosts own the committed selection; the popup list keeps navigation separate until an explicit activation.
 class ComboState final : NoCopy{
     friend class Builder;
+    friend class ComboCoordinator;
     friend class ComboBehavior;
     friend class SearchComboBehavior;
 

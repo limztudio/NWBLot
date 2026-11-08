@@ -21,6 +21,7 @@ NWB_IMPL_UI_BEGIN
 // Owns copied scroll admission, separate from preferred-column navigation and the application model.
 class TextAreaScrollState final{
     friend class Builder;
+    friend class TextAreaCoordinator;
     friend class TextAreaState;
 
 
@@ -68,6 +69,7 @@ private:
 // Model and viewport remain lent through the enclosing scope; public intents retire even identical prior loans.
 class TextAreaState final : NoCopy{
     friend class Builder;
+    friend class TextAreaCoordinator;
 
 
 public:
@@ -133,3 +135,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

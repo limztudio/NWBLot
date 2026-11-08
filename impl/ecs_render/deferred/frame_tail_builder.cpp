@@ -5,6 +5,7 @@
 #include "frame_tail_builder.h"
 
 #include <impl/assets/graphics/scene/binding_slots.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/deferred/task_graph_frame_recovery_task.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 

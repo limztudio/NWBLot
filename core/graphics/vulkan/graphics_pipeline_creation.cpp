@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "graphics_pipeline_state_builder.h"
 #include "arena_names.h"
 #include "command_validation.h"
 
@@ -188,7 +189,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     tessellationState.patchControlPoints = desc.patchControlPoints;
 
     const RasterState& rasterState = desc.renderState.rasterState;
-    auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(rasterState, VulkanDetail::ConvertFillMode(rasterState.fillMode), rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
+    auto rasterizer = VulkanDetail::GraphicsPipelineStateBuilder::BuildPipelineRasterizationState(rasterState, VulkanDetail::ConvertFillMode(rasterState.fillMode), rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
     const Array<VkDynamicState, 9> dynamicStates = {{
         VK_DYNAMIC_STATE_VIEWPORT,
@@ -201,7 +202,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     }};
-    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
+    const auto fixedState = VulkanDetail::GraphicsPipelineStateBuilder::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});
 
@@ -212,7 +213,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
-    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
+    VulkanDetail::GraphicsPipelineStateBuilder::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 

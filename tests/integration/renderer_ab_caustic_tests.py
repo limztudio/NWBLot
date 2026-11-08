@@ -17,6 +17,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
+from renderer_workload_registry import RendererWorkloadRegistry, FRAME
+from caustic_footprint import CausticFootprint
+from caustic_workload import CausticWorkload, PHOTONS, RESOLVE, PRESETS
+from renderer_benchmark_identity import RendererBenchmarkIdentity
 from renderer_ab_benchmark_test_support import scopes
 
 
@@ -95,7 +99,7 @@ LIT_MAIN = "__main__"
 
 
 def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
-    distance = benchmark.caustic.PRESETS[preset]
+    distance = PRESETS[preset]
     text = "\n".join((LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED, "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware", LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
         LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1, "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
         "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED), "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false", "CausticTimingProbe: scene single-static-sphere-ground-v1",
@@ -110,9 +114,9 @@ def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
 
 class CausticMeasurementTests(unittest.TestCase):
     def test_completed_resolve_and_photon_counts_cannot_be_divided_or_missing(self):
-        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
+        workload = RendererWorkloadRegistry.workloads()[LIT_CAUSTIC_POPULATED]
         benchmark.validate_coverage(scopes(workload), workload, 6, 100)
-        for name in (benchmark.caustic.RESOLVE, benchmark.caustic.PHOTONS):
+        for name in (RESOLVE, PHOTONS):
             missing = scopes(workload)
             del missing[name]
             with self.subTest(scope=name), self.assertRaises(benchmark.SmokeFailure):
@@ -123,18 +127,18 @@ class CausticMeasurementTests(unittest.TestCase):
                 benchmark.validate_coverage(wrong, workload, 6, 100)
 
     def test_warmup_is_actual_completed_gpu_work_not_publication_count(self):
-        values = {name: {LIT_GPU_SAMPLES: 12, LIT_TOTAL_MS: 1, LIT_REPORTS: 2} for name in (benchmark.FRAME, benchmark.caustic.PHOTONS)}
-        benchmark.caustic.validate_warmup(values)
+        values = {name: {LIT_GPU_SAMPLES: 12, LIT_TOTAL_MS: 1, LIT_REPORTS: 2} for name in (FRAME, PHOTONS)}
+        CausticWorkload.validate_warmup(values)
         for name in values:
             changed = copy.deepcopy(values)
             changed[name][LIT_GPU_SAMPLES] = 11
             changed[name][LIT_REPORTS] = 1000
             with self.assertRaises(benchmark.SmokeFailure):
-                benchmark.caustic.validate_warmup(changed)
+                CausticWorkload.validate_warmup(changed)
 
     def test_actual_native_route_geometry_and_photon_budget_are_load_bearing(self):
-        for preset in benchmark.caustic.PRESETS:
-            workload = benchmark.workloads()[LIT_CAUSTIC + preset]
+        for preset in PRESETS:
+            workload = RendererWorkloadRegistry.workloads()[LIT_CAUSTIC + preset]
             text = caustic_log_text(preset)
             workload.validate_log(text, workload, True)
             for changed in (text.replace("131072 photons", "65536 photons"), text.replace("262144 full-grid", "131072 full-grid"), text.replace("1 refractive", "2 refractive"),
@@ -145,41 +149,41 @@ class CausticMeasurementTests(unittest.TestCase):
                     workload.validate_log(changed, workload, True)
 
     def test_caustic_current_route_rejects_retired_and_contradictory_routes(self):
-        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
+        workload = RendererWorkloadRegistry.workloads()[LIT_CAUSTIC_POPULATED]
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
         hardware_marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         legacy = text.replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE).replace(hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.caustic.validate_log(legacy, settings)
+            CausticWorkload().validate_log(legacy, settings)
         retired_route = next(line for line in legacy.splitlines() if LIT_NATURAL_HYBRID_SHADOW_ROUTE in line)
         for altered in (legacy, text + "\n" + retired_route):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 workload.validate_log(altered, workload, True)
         for altered in (text.replace(hardware_marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.caustic.validate_log(altered, settings)
+                CausticWorkload().validate_log(altered, settings)
 
     def test_capture_evidence_is_required_for_qualification_and_forbidden_for_timing(self):
-        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
+        workload = RendererWorkloadRegistry.workloads()[LIT_CAUSTIC_POPULATED]
         text = caustic_log_text(capture=True)
         settings = dict(workload.environment_overrides)
-        actual = benchmark.caustic.validate_log(text, settings, capture=True)
+        actual = CausticWorkload().validate_log(text, settings, capture=True)
         self.assertEqual(actual["graphics_source_frame"], 359)
         for value in (text, caustic_log_text() + "\nVK_LAYER_KHRONOS_validation"):
             with self.assertRaises(benchmark.SmokeFailure):
                 workload.validate_log(value, workload, True)
         for changed in (caustic_log_text(), text.replace("source frame 359", "source frame 7")):
             with self.assertRaises(benchmark.SmokeFailure):
-                benchmark.caustic.validate_log(changed, settings, capture=True)
-        off = benchmark.caustic.environment(LIT_POPULATED, False)
-        benchmark.caustic.validate_log(caustic_log_text(enabled=False, capture=True), off, capture=True)
+                CausticWorkload().validate_log(changed, settings, capture=True)
+        off = CausticWorkload.environment(LIT_POPULATED, False)
+        CausticWorkload().validate_log(caustic_log_text(enabled=False, capture=True), off, capture=True)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.caustic.validate_log(text, off, capture=True)
+            CausticWorkload().validate_log(text, off, capture=True)
 
     def test_receiver_mask_excludes_sphere_and_image_background(self):
         width, height = 160, 120
-        points = list(benchmark.caustic.receiver_pixels(width, height, 2.2))
+        points = list(CausticFootprint(benchmark.caustic.POLICY, PRESETS).receiver_pixels(width, height, 2.2))
         self.assertGreater(len(points), 100)
         self.assertNotIn((width // 2, height // 2), points)
         self.assertTrue(all(y > height // 2 for _, y in points))
@@ -189,20 +193,20 @@ class CausticMeasurementTests(unittest.TestCase):
             rows[y][x] = (70, 70, 70)
         for x in range(width):
             rows[0][x] = (255, 255, 255)
-        result = benchmark.caustic.footprint((width, height, rows), off, 2.2)
+        result = CausticFootprint(benchmark.caustic.POLICY, PRESETS).footprint((width, height, rows), off, 2.2)
         self.assertEqual(result[LIT_POSITIVE_PIXELS], 20)
-        self.assertEqual(benchmark.caustic.footprint(off, off, 2.2)[LIT_POSITIVE_PIXELS], 0)
+        self.assertEqual(CausticFootprint(benchmark.caustic.POLICY, PRESETS).footprint(off, off, 2.2)[LIT_POSITIVE_PIXELS], 0)
 
     def test_visible_pixel_and_tile_reduction_are_independent_qualification_gates(self):
         good = {LIT_POPULATED: {LIT_POSITIVE_PIXELS: 1000, LIT_POSITIVE_TILES: 100, LIT_POSITIVE_CHANNEL_GAIN: 60000}, LIT_SPARSE: {LIT_POSITIVE_PIXELS: 250, LIT_POSITIVE_TILES: 30, LIT_POSITIVE_CHANNEL_GAIN: 15000}}
-        benchmark.caustic.validate_metrics(good)
+        CausticFootprint(benchmark.caustic.POLICY, PRESETS).validate_metrics(good)
         for key, value in ((LIT_POSITIVE_PIXELS, 99), (LIT_POSITIVE_CHANNEL_GAIN, 1499), (LIT_POSITIVE_TILES, 81)):
             changed = copy.deepcopy(good)
             changed[LIT_SPARSE][key] = value
             with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.caustic.validate_metrics(changed)
+                CausticFootprint(benchmark.caustic.POLICY, PRESETS).validate_metrics(changed)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.caustic.validate_metrics({LIT_POPULATED: good[LIT_POPULATED], LIT_SPARSE: good[LIT_POPULATED]})
+            CausticFootprint(benchmark.caustic.POLICY, PRESETS).validate_metrics({LIT_POPULATED: good[LIT_POPULATED], LIT_SPARSE: good[LIT_POPULATED]})
 
     def test_caustic_cli_requires_both_frozen_arm_qualification_reports(self):
         common = [LIT_BASELINE_EXECUTABLE, LIT_A, LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, LIT_B, LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
@@ -275,7 +279,7 @@ class CausticMeasurementTests(unittest.TestCase):
                     manifest = arm_root / LIT_SOURCE_JSON
                     manifest.write_text(json.dumps({LIT_REVISION: name, LIT_FILES: { launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding=LIT_UTF_8)
                     launchers[name] = launcher
-                    sources[name] = benchmark.source_identity(manifest)
+                    sources[name] = RendererBenchmarkIdentity.source_identity(manifest)
                 identity = {"executable": str(directory / LIT_FIXTURE_EXE), LIT_RUNTIME: str(directory / LIT_RUNTIME), LIT_SOURCE: sources[LIT_CANDIDATE]}
                 logger = directory / LIT_LOGGER_EXE
                 logger.write_bytes(b"synthetic logger identity")
@@ -283,15 +287,15 @@ class CausticMeasurementTests(unittest.TestCase):
                 logger_dependency = directory / "logger_dependency.dll"
                 logger_dependency.write_bytes(b"synthetic logger dependency identity")
                 args = SimpleNamespace(**identity, logserver_executable=logger, timeout=90.0, application_arg=[])
-                document = {LIT_SCHEMA: utility.SCHEMA, LIT_POLICY: policy, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {}, LIT_QUALIFICATION_TOOL: benchmark.file_identity(Path(utility.__file__)),
-                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)), "logserver": benchmark.file_identity(logger), "logserver_path": str(logger), "logserver_binaries": benchmark.binary_identity(logger),
+                document = {LIT_SCHEMA: utility.SCHEMA, LIT_POLICY: policy, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {}, LIT_QUALIFICATION_TOOL: benchmark.file_identity(Path(utility.__file__)), "footprint_analysis": benchmark.file_identity(Path(utility.__file__).with_name("caustic_footprint.py")), "workload_analysis": benchmark.file_identity(Path(utility.__file__).with_name("caustic_workload.py")),
+                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)), "logserver": benchmark.file_identity(logger), "logserver_path": str(logger), "logserver_binaries": RendererBenchmarkIdentity.binary_identity(logger),
                     "timeout_seconds": 90.0, "application_args": []}
-                for preset, distance in utility.PRESETS.items():
+                for preset, distance in PRESETS.items():
                     frames = {}
                     for enabled in (True, False):
                         key = preset + ("_on" if enabled else "_off")
                         image, log = directory / (key + LIT_BMP), directory / (key + ".log")
-                        selected = set(utility.receiver_pixels(width, height, distance)) if enabled else set()
+                        selected = set(CausticFootprint(utility.POLICY, PRESETS).receiver_pixels(width, height, distance)) if enabled else set()
                         pixels = bytearray()
                         for y in reversed(range(height)):
                             for x in range(width):
@@ -300,16 +304,26 @@ class CausticMeasurementTests(unittest.TestCase):
                         header += struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(pixels), 0, 0, 0, 0)
                         image.write_bytes(header + pixels)
                         log.write_text(caustic_log_text(preset, enabled, capture=True).replace(LIT_N_1280X900, "160x120"), encoding=LIT_UTF_8)
-                        settings = utility.environment(preset, enabled)
-                        document[LIT_CAPTURES][key] = {"settings": settings, LIT_RUNTIME: utility.validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True), LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
+                        settings = CausticWorkload.environment(preset, enabled)
+                        document[LIT_CAPTURES][key] = {"settings": settings, LIT_RUNTIME: CausticWorkload(width, height).validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True), LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
                             LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: benchmark.file_identity(image)}, LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: benchmark.file_identity(log)}}
                         frames[enabled] = utility.read_bmp_24_rows(image)
-                    document[LIT_METRICS][preset] = utility.footprint(frames[True], frames[False], distance)
+                    document[LIT_METRICS][preset] = CausticFootprint(utility.POLICY, PRESETS).footprint(frames[True], frames[False], distance)
                 report = directory / LIT_QUALIFICATION_JSON
                 report.write_text(json.dumps(document), encoding=LIT_UTF_8)
                 result, paths = utility.validate_report(report, identity)
                 self.assertEqual(result[LIT_METRICS], document[LIT_METRICS])
                 self.assertEqual(len(paths), 12)
+                changed_analysis = copy.deepcopy(document)
+                changed_analysis["footprint_analysis"]["sha256"] = "0" * 64
+                report.write_text(json.dumps(changed_analysis), encoding=LIT_UTF_8)
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "footprint or workload analysis or framebuffer launcher changed"):
+                    utility.validate_report(report, identity)
+                changed_workload = copy.deepcopy(document)
+                changed_workload["workload_analysis"]["sha256"] = "0" * 64
+                report.write_text(json.dumps(changed_workload), encoding=LIT_UTF_8)
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "footprint or workload analysis or framebuffer launcher changed"):
+                    utility.validate_report(report, identity)
                 # Replay must bind the launcher from the selected arm root.
                 baseline_identity = {**identity, LIT_SOURCE: sources[LIT_BASELINE]}
                 baseline_document = copy.deepcopy(document)

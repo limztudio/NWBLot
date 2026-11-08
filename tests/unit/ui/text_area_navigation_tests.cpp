@@ -4,6 +4,7 @@
 
 #include "widget_fixture.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/text_area_navigation.h>
 
 #include <global/simdmath.h>

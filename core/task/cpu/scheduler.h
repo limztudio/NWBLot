@@ -6,6 +6,7 @@
 
 
 #include "profiling.h"
+#include "profile_buffer.h"
 
 #include <core/alloc/general.h>
 
@@ -95,21 +96,7 @@ private:
         u64 captureEpoch = 0u;
     };
 
-    struct ProfileLabelRecord{
-        CpuTaskProfileLabel label;
-        Name name;
-    };
-
-    struct ProfileSample{
-        Timer begin;
-        CpuTaskHandle task;
-        u64 frameIndex;
-        u64 captureEpoch;
-        usize workerIndex;
-        CpuTaskProfileLabel label;
-        CpuAffinity::Enum affinity;
-        CpuTaskProfileKind::Enum kind;
-    };
+    using ProfileSample = CpuTaskProfileBuffer::Sample;
 
     class ProfileMeasure final : NoCopy{
     public:
@@ -159,7 +146,6 @@ private:
 
 private:
     static u64 AllocateDomainIdentity()noexcept;
-    static u64 AllocateProfileLabelIdentity()noexcept;
     static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount)noexcept;
     static usize QueueIndex(const CpuTaskOptions& options)noexcept;
 
@@ -257,7 +243,6 @@ private:
 
 private:
     const u64 m_domainIdentity;
-    const usize m_profileEventCapacity;
     Alloc::GlobalArena m_arena;
     Deque<TaskNode, Alloc::GlobalArena> m_nodes;
     Vector<CpuWorkerPlacement, Alloc::GlobalArena> m_placements;
@@ -265,8 +250,7 @@ private:
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
     Vector<u64, Alloc::GlobalArena> m_scopeContributionVisits;
-    Vector<ProfileLabelRecord, Alloc::GlobalArena> m_profileLabels;
-    Vector<CpuTaskProfileEvent, Alloc::GlobalArena> m_profileEvents;
+    CpuTaskProfileBuffer m_profileBuffer;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
     Array<ReadyQueue, s_QueueCount> m_ready;
     Array<u32, s_CostValueCount> m_readyWorkerCosts{};
@@ -291,10 +275,6 @@ private:
     CpuTaskSchedulerStatistics m_statistics;
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
-    u64 m_profileRecordedEvents = 0u;
-    u64 m_profileDroppedEvents = 0u;
-    usize m_profileRead = 0u;
-    usize m_profileCount = 0u;
     b8 m_aborting = false;
     Atomic<b8> m_profileEnabled{ false };
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;

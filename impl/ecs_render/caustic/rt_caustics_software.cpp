@@ -46,7 +46,7 @@ b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets&
     // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
         return true;
-    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
+    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargets.buffer)
         return true;
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return prepareCausticResources(meshView, false, targets);

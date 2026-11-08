@@ -85,14 +85,6 @@ b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
     ;
 }
 
-b8 IsValidUiSkinHeaderFlags(in UiSkinHeaderBinary header){
-    return header.reserved0 == 0u && header.reserved1 == 0u;
-}
-
-b8 IsValidUiSkinRegionBinaryFlags(in UiSkinRegionBinary packed){
-    return packed.reserved == 0u && packed.drawMode <= cast<u32>(UiSkinDrawMode::NineSlice);
-}
-
 b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
     if(region.name == s_NameNone || region.name == Name(""))
         return false;
@@ -210,34 +202,6 @@ b8 ValidateUiSkinToolkitRegions(in Span<UiSkinRegion> regions, in Span<u32> regi
     return true;
 }
 
-b8 ValidateUiSkinHeaderBinary(in UiSkinHeaderBinary header, in usize remainingBytes, in usize regionBinaryBytes){
-    if(header.version != s_UiSkinBinaryVersion){
-        error("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required", header.version);
-        return false;
-    }
-    if(!IsValidUiSkinHeaderFlags(header)){
-        error("UiSkin::loadBinary failed: header contains unsupported flags");
-        return false;
-    }
-    if(header.regionCount > s_UiSkinMaxRegionCount){
-        error("UiSkin::loadBinary failed: region count {} exceeds schema limit {}", header.regionCount, s_UiSkinMaxRegionCount);
-        return false;
-    }
-    if(header.regionCount == 0u || cast<usize>(header.regionCount) > remainingBytes / regionBinaryBytes){
-        error("UiSkin::loadBinary failed: region count is empty or exceeds the payload");
-        return false;
-    }
-    return true;
-}
-
-Expected<UiSkinRegion> TryUnpackUiSkinRegionBinary(in UiSkinRegionBinary packed, in u32 index){
-    if(!IsValidUiSkinRegionBinaryFlags(packed)){
-        error("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags", index);
-        return makeUnexpected(Failure());
-    }
-    return UnpackUiSkinRegionBinary(packed);
-}
-
 b8 ValidateUiSkinAtlasTextureParameters(
     in Name textureVirtualPath,
     in Name expectedTextureName,
@@ -267,127 +231,6 @@ b8 ValidateUiSkinCookRegionCount(in usize regionCount){
 
     error("BuildUiSkinAsset failed: region count {} exceeds schema limit {}", regionCount, s_UiSkinMaxRegionCount);
     return false;
-}
-
-b8 ReadUiSkinRegionsPaletteAndTypography(
-    in Span<u8> binary,
-    in u32 regionCount,
-    mut usize inOutCursor,
-    mut Vector<UiSkinRegion> outRegions,
-    mut UiSkinPalette outPalette,
-    mut UiSkinTypography outTypography
-){
-    outRegions.clear();
-    outRegions.reserve(cast<usize>(regionCount));
-    for(u32 index = 0u; index < regionCount; ++index){
-        const Expected<UiSkinRegionBinary> packedResult = ReadPOD<UiSkinRegionBinary>(binary, inOutCursor);
-        if(!packedResult.has_value()){
-            error("UiSkin::loadBinary failed: malformed region {}", index);
-            return false;
-        }
-        const Expected<UiSkinRegion> unpacked = TryUnpackUiSkinRegionBinary(packedResult.value(), index);
-        if(!unpacked.has_value())
-            return false;
-
-        outRegions.push_back(unpacked.value());
-    }
-    for(u32 index = 0u; index < s_UiSkinPaletteColorCount; ++index){
-        const Expected<UiSkinColor> packedResult = ReadPOD<UiSkinColor>(binary, inOutCursor);
-        if(!packedResult.has_value()){
-            error("UiSkin::loadBinary failed: malformed palette color {}", index);
-            return false;
-        }
-        outPalette.colors[cast<usize>(index)] = packedResult.value();
-    }
-    const Expected<UiSkinTypography> typographyResult = ReadPOD<UiSkinTypography>(binary, inOutCursor);
-    if(!typographyResult.has_value()){
-        error("UiSkin::loadBinary failed: malformed typography payload");
-        return false;
-    }
-    outTypography = typographyResult.value();
-    return true;
-}
-
-b8 SerializeUiSkinBinaryPayload(
-    in AssetRef<Texture> texture,
-    in u32 atlasWidth,
-    in u32 atlasHeight,
-    in f32 referenceDensity,
-    in Span<UiSkinRegion> regions,
-    in UiSkinPalette palette,
-    in UiSkinTypography typography,
-    mut Vector<u8> outBinary
-){
-    usize reserveBytes = s_UiSkinHeaderBinaryBytes;
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, regions.size(), s_UiSkinRegionBinaryBytes)){
-        error("UiSkinAssetCodec::serialize failed: payload size overflows");
-        return false;
-    }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, cast<usize>(s_UiSkinPaletteColorCount), s_UiSkinColorBytes)){
-        error("UiSkinAssetCodec::serialize failed: palette payload size overflows");
-        return false;
-    }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, s_UiSkinTypographyBytes)){
-        error("UiSkinAssetCodec::serialize failed: typography payload size overflows");
-        return false;
-    }
-
-    const UiSkinHeaderBinary header = MakeUiSkinHeaderBinary(
-        texture.name().hash(),
-        atlasWidth,
-        atlasHeight,
-        referenceDensity,
-        cast<u32>(regions.size())
-    );
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-    AppendPOD(outBinary, header);
-    for(in UiSkinRegion region : regions)
-        AppendPOD(outBinary, PackUiSkinRegionBinary(region));
-    for(in UiSkinColor color : palette.colors)
-        AppendPOD(outBinary, color);
-    AppendPOD(outBinary, typography);
-    return true;
-}
-
-b8 DeserializeUiSkinBinaryPayload(
-    in Span<u8> binary,
-    mut AssetRef<Texture> outTexture,
-    mut u32 outAtlasWidth,
-    mut u32 outAtlasHeight,
-    mut f32 outReferenceDensity,
-    mut Vector<UiSkinRegion> outRegions,
-    mut Vector<u32> outRegionIndex,
-    mut UiSkinPalette outPalette,
-    mut UiSkinTypography outTypography
-){
-    usize cursor = 0u;
-    const Expected<UiSkinHeaderBinary> headerResult = ReadPOD<UiSkinHeaderBinary>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("UiSkin::loadBinary failed: malformed header");
-        return false;
-    }
-    const UiSkinHeaderBinary header = headerResult.value();
-    if(header.magic != s_UiSkinBinaryMagic){
-        error("UiSkin::loadBinary failed: invalid UI skin asset format; recook required");
-        return false;
-    }
-    if(!ValidateUiSkinHeaderBinary(header, binary.size() - cursor, s_UiSkinRegionBinaryBytes))
-        return false;
-
-    outTexture.virtualPath = Name(header.textureNameHash);
-    outAtlasWidth = header.atlasWidth;
-    outAtlasHeight = header.atlasHeight;
-    outReferenceDensity = header.referenceDensity;
-    if(!ReadUiSkinRegionsPaletteAndTypography(binary, header.regionCount, cursor, outRegions, outPalette, outTypography))
-        return false;
-    if(cursor != binary.size()){
-        error("UiSkin::loadBinary failed: trailing bytes detected");
-        return false;
-    }
-    RebuildUiSkinRegionIndex(outRegions, outRegionIndex);
-    return true;
 }
 
 void ResetUiSkinAtlasFields(

@@ -3,6 +3,7 @@
 
 
 #include "mesh_system.h"
+#include <impl/ecs_render/mesh/mesh_view_state_policy.adhd.h>
 #include "mesh_view_private.h"
 
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
@@ -36,7 +37,7 @@ MeshViewGpuData ResolveMeshViewState(const f32 fallbackAspectRatio, Core::ECS::W
         projection = cameraView.projection;
     }
 
-    return BuildMeshViewGpuData(
+    return MeshViewStatePolicy().build(
         viewBasis.v[0u],
         viewBasis.v[1u],
         viewBasis.v[2u],
@@ -62,7 +63,7 @@ MeshViewGpuData ResolveMeshViewState(const f32 fallbackAspectRatio, Core::ECS::W
 void RendererMeshState::invalidateResources()noexcept{
     m_meshes.clear();
     m_meshViewBuffer.reset();
-    m_frameBindings = {};
+    m_frameBindings.reset();
     m_meshViewGpuDataValid = false;
 }
 
@@ -120,15 +121,11 @@ b8 RendererMeshSystem::createMeshViewBuffer(){
 }
 
 ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const noexcept{
-    ECSRenderDetail::MeshViewBufferSnapshot snapshot;
-    snapshot.buffer = m_meshState.m_meshViewBuffer;
-    if(m_meshState.m_frameBindings.meshView.buffer == m_meshState.m_meshViewBuffer)
-        snapshot.heapHandle = m_meshState.m_frameBindings.meshView.heapHandle;
-    return snapshot;
+    return m_meshState.m_frameBindings.viewSnapshot(m_meshState.m_meshViewBuffer);
 }
 
 Expected<Float44> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const noexcept{
-    const Expected<MeshViewGpuData> acceptedView = TryReadAcceptedMeshViewGpuData(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData);
+    const Expected<MeshViewGpuData> acceptedView = MeshViewStatePolicy().readAccepted(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData);
     if(!acceptedView)
         return MakeUnexpected(Failure{});
     return acceptedView->worldToClip;
@@ -139,12 +136,12 @@ MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 f
 
     MeshViewBufferUpload upload;
     upload.viewState = ECSRenderDetail::ResolveMeshViewState(fallbackAspectRatio, m_world);
-    upload.uploadRequired = IsMeshViewUploadRequired(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData, upload.viewState);
+    upload.uploadRequired = MeshViewStatePolicy().uploadRequired(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData, upload.viewState);
     return upload;
 }
 
 void RendererMeshSystem::confirmMeshViewBufferUpload(const MeshViewGpuData& viewState)noexcept{
-    StoreConfirmedMeshViewGpuData(viewState, m_meshState.m_meshViewGpuData, m_meshState.m_meshViewGpuDataValid);
+    MeshViewStatePolicy().storeConfirmed(viewState, m_meshState.m_meshViewGpuData, m_meshState.m_meshViewGpuDataValid);
 }
 
 

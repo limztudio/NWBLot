@@ -1,0 +1,214 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/bind_storage.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindAttribute{
+    public String name = "";
+    public Vector<String> arguments;
+}
+
+class MaterialBindField{
+    public String type = "";
+    public String name = "";
+    public Vector<MaterialBindAttribute> attributes;
+
+    public b8 hasAttribute(in StringView attributeName)const{
+        for(in MaterialBindAttribute attribute : this.attributes){
+            if(attribute.name == attributeName)
+                return true;
+        }
+        return false;
+    }
+
+    public StringView defaultArgument()const{
+        for(in MaterialBindAttribute attribute : this.attributes){
+            if(attribute.name == s_MaterialDefaultAttribute && attribute.arguments.size() == 1u)
+                return attribute.arguments[0u];
+        }
+        return "";
+    }
+}
+
+class MaterialBindStruct{
+    public String name = "";
+    public Vector<MaterialBindAttribute> attributes;
+    public Vector<MaterialBindField> fields;
+
+    public b8 hasField(in StringView fieldName)const{
+        for(in MaterialBindField field : this.fields){
+            if(field.name == fieldName)
+                return true;
+        }
+        return false;
+    }
+
+    public b8 hasAttribute(in StringView attributeName)const{
+        for(in MaterialBindAttribute attribute : this.attributes){
+            if(attribute.name == attributeName)
+                return true;
+        }
+        return false;
+    }
+}
+
+class MaterialBindInstance{
+    public String type = "";
+    public String name = "";
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<usize> FindMaterialBindStructIndex(in Span<MaterialBindStruct> structs, in StringView structName){
+    for(usize i = 0u; i < structs.size(); ++i){
+        if(structs[i].name == structName)
+            return i;
+    }
+    return makeUnexpected(Failure());
+}
+
+b8 HasMaterialBindInstance(in Span<MaterialBindInstance> instances, in StringView instanceName){
+    for(in MaterialBindInstance instance : instances){
+        if(instance.name == instanceName)
+            return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Name> TryParseMaterialBindName(in StringView text){
+    Name resolved = s_NameNone;
+    b8 valid = false;
+    native(in text, mut resolved, mut valid){
+        const auto name = Name::FromText(text);
+        if(name && *name){
+            resolved = *name;
+            valid = true;
+        }
+    }
+    if(!valid)
+        return makeUnexpected(Failure());
+    return resolved;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindSchemaValidator{
+    public b8 validateMaterialBindStructAttributes(in StringView bindFilePathText, in MaterialBindStruct bindStruct){
+        b8 foundBlockClass = false;
+
+        for(in MaterialBindAttribute attribute : bindStruct.attributes){
+            if(attribute.name != s_MaterialConstantAttribute && attribute.name != s_MaterialMutableAttribute){
+                error("Material bind '{}': struct '{}' has unsupported attribute '{}'", bindFilePathText, bindStruct.name, attribute.name);
+                return false;
+            }
+            if(!attribute.arguments.empty()){
+                error("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments", bindFilePathText, bindStruct.name, attribute.name);
+                return false;
+            }
+            if(foundBlockClass){
+                error("Material bind '{}': struct '{}' declares more than one block class attribute", bindFilePathText, bindStruct.name);
+                return false;
+            }
+
+            foundBlockClass = true;
+        }
+
+        if(foundBlockClass)
+            return true;
+
+        error("Material bind '{}': struct '{}' must declare a material block class attribute", bindFilePathText, bindStruct.name);
+        return false;
+    }
+
+    public b8 validateMaterialBindFieldAttributes(in StringView bindFilePathText, in MaterialBindStruct bindStruct, in MaterialBindField field){
+        const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(field.type).has_value();
+        if(isResourceField && field.attributes.empty())
+            return true;
+        b8 foundRequiredAttribute = false;
+
+        for(in MaterialBindAttribute attribute : field.attributes){
+            if(isResourceField || attribute.name != s_MaterialDefaultAttribute){
+                error("Material bind '{}': field '{}.{}' has unsupported attribute '{}'", bindFilePathText, bindStruct.name, field.name, attribute.name);
+                return false;
+            }
+            if(foundRequiredAttribute){
+                error("Material bind '{}': field '{}.{}' declares {} more than once", bindFilePathText, bindStruct.name, field.name, s_MaterialDefaultAttribute);
+                return false;
+            }
+            if(attribute.arguments.size() != 1u || attribute.arguments[0u].empty()){
+                error("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument", bindFilePathText, bindStruct.name, field.name, attribute.name);
+                return false;
+            }
+            foundRequiredAttribute = true;
+        }
+
+        if(!foundRequiredAttribute){
+            error("Material bind '{}': field '{}.{}' must declare a {} attribute", bindFilePathText, bindStruct.name, field.name, s_MaterialDefaultAttribute);
+            return false;
+        }
+
+        return true;
+    }
+
+    public b8 validateMaterialBindFieldSpec(in StringView bindFilePathText, in MaterialBindStruct bindStruct, in MaterialBindField field){
+        const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(field.type).has_value();
+        if(!IsAsciiIdentifier(field.type) || (!isResourceField && !TryParseMaterialParameterTypeText(field.type).has_value())){
+            error("Material bind '{}': field '{}.{}' has unsupported type '{}'", bindFilePathText, bindStruct.name, field.name, field.type);
+            return false;
+        }
+        if(isResourceField && bindStruct.hasAttribute(s_MaterialMutableAttribute)){
+            error("Material bind '{}': resource field '{}.{}' must use material_constant storage", bindFilePathText, bindStruct.name, field.name);
+            return false;
+        }
+        if(!IsAsciiIdentifier(field.name)){
+            error("Material bind '{}': field '{}.{}' has invalid name", bindFilePathText, bindStruct.name, field.name);
+            return false;
+        }
+        return true;
+    }
+
+    public b8 validateAndAppendMaterialBindInstance(
+        in StringView bindFilePathText,
+        in Span<MaterialBindStruct> structs,
+        in StringView typeName,
+        in StringView instanceName,
+        mut Vector<MaterialBindInstance> inOutInstances
+    ){
+        if(!IsAsciiIdentifier(typeName) || !FindMaterialBindStructIndex(structs, typeName).has_value()){
+            error("Material bind '{}': instance '{}' references unknown struct type '{}'", bindFilePathText, instanceName, typeName);
+            return false;
+        }
+        if(!IsAsciiIdentifier(instanceName)){
+            error("Material bind '{}': invalid instance name '{}'", bindFilePathText, instanceName);
+            return false;
+        }
+        if(HasMaterialBindInstance(inOutInstances, instanceName)){
+            error("Material bind '{}': duplicate instance name '{}'", bindFilePathText, instanceName);
+            return false;
+        }
+        MaterialBindInstance instance;
+        instance.type.assign(typeName);
+        instance.name.assign(instanceName);
+        inOutInstances.push_back(instance);
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

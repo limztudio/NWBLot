@@ -45,6 +45,12 @@ public:
 // Only unused padded rectangles are written; page publication copies after a batch of mutations.
 class GlyphAtlas final : NoCopy{
 private:
+    struct Placement{
+        u32 x = 0u;
+        u32 y = 0u;
+        u32 rowHeight = 0u;
+    };
+
     struct GlyphKey{
         SharedFontFace::pointer face = nullptr;
         u32 glyphId = 0u;
@@ -81,6 +87,7 @@ public:
 
 
 private:
+    [[nodiscard]] static Expected<Placement> tryPlace(u32 cursorX, u32 cursorY, u32 rowHeight, u32 width, u32 height)noexcept;
     void appendGlyph(AtlasGlyph&& record);
 
 

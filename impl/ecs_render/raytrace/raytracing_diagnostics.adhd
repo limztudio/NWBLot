@@ -1,0 +1,156 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RayTracingDiagnostics{
+    public void shadowMeshHeapHighWater(
+        in b8 hardware,
+        in u32 meshCount,
+        mut u32 inOutHighWater
+    )const{
+        if(meshCount <= inOutHighWater)
+            return;
+        inOutHighWater = meshCount;
+        StringView routeLabel = "SW";
+        u64 bufferCountPerMesh = s_SoftwareRayTracingMeshBufferCount;
+        if(hardware){
+            routeLabel = "HW";
+            bufferCountPerMesh = s_HardwareRayTracingMeshBufferCount;
+        }
+        info(
+            "RendererSystem: {}-shadow heap registration high-water: {} distinct meshes -> {} handles"
+            , routeLabel
+            , cast<u64>(meshCount)
+            , cast<u64>(meshCount) * bufferCountPerMesh
+        );
+    }
+
+    public void unsupportedCausticVolumes(
+        in b8 traceResourcesPreflighted,
+        in u32 causticLightCount,
+        in u32 unsupportedCausticVolumeCount,
+        in u64 unsupportedCausticVolumeHash,
+        in u32 firstUnsupportedCausticVolumeEntity,
+        mut b8 inOutUnsupportedCausticVolumeReported,
+        mut u64 inOutReportedUnsupportedCausticVolumeHash
+    )const{
+        if(
+            !traceResourcesPreflighted
+            || causticLightCount == 0u
+            || unsupportedCausticVolumeCount == 0u
+            || (inOutUnsupportedCausticVolumeReported && inOutReportedUnsupportedCausticVolumeHash == unsupportedCausticVolumeHash)
+        )
+            return;
+        inOutReportedUnsupportedCausticVolumeHash = unsupportedCausticVolumeHash;
+        inOutUnsupportedCausticVolumeReported = true;
+        warning(
+            "RendererSystem: caustic photons unavailable: {} refractive volume(s) need an explicit closed homogeneous optical boundary mode (first entity {})"
+            , unsupportedCausticVolumeCount
+            , firstUnsupportedCausticVolumeEntity
+        );
+    }
+
+    public void causticEmissionGate(
+        in u32 causticLightCount,
+        in u32 causticRefractiveInstanceCount,
+        in VectorSingle boundsMin,
+        in VectorSingle boundsMax,
+        in Span<SceneLightGpuData> lights,
+        mut b8 inOutCausticEmissionGateLogged
+    )const{
+        if(inOutCausticEmissionGateLogged)
+            return;
+        inOutCausticEmissionGateLogged = true;
+
+        [essential]
+        info(
+            "RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})"
+            , causticLightCount
+            , causticRefractiveInstanceCount
+            , boundsMin.x
+            , boundsMin.y
+            , boundsMin.z
+            , boundsMax.x
+            , boundsMax.y
+            , boundsMax.z
+        );
+
+        const u32 lightCount = cast<u32>(lights.size());
+        for(u32 i = 0u; i < lightCount; ++i){
+            const SceneLightGpuData light = lights[cast<usize>(i)];
+            if(light.params.w < 0.0f)
+                continue;
+            StringView lightKind = "spot";
+            if(light.params.y < s_LightTypeDirectionalMax)
+                lightKind = "directional";
+            [essential]
+            info(
+                "RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})"
+                , cast<u32>(light.params.w)
+                , i
+                , lightKind
+            );
+        }
+    }
+
+    public void rayTracingCapability(
+        in b8 accelStructSupported,
+        in b8 pipelineSupported,
+        in b8 rayQuerySupported,
+        mut b8 inOutCapabilityLogged
+    )const{
+        if(inOutCapabilityLogged)
+            return;
+        inOutCapabilityLogged = true;
+        info(
+            "RendererSystem: ray tracing capability - accel struct {}, pipeline {}, ray query {}"
+            , accelStructSupported
+            , pipelineSupported
+            , rayQuerySupported
+        );
+    }
+
+    public void meshBlasFirstBuild(
+        in b8 firstBuild,
+        in Name meshName,
+        in b8 runtimeMesh,
+        in u32 vertexCount,
+        in u32 indexCount
+    )const{
+        if(!firstBuild)
+            return;
+        info(
+            "RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"
+            , meshName.resolvedText()
+            , runtimeMesh
+            , cast<u64>(vertexCount)
+            , cast<u64>(indexCount)
+        );
+    }
+
+    public void meshSwBvhFirstBuild(
+        in b8 firstBuild,
+        in Name meshName,
+        in b8 runtimeMesh,
+        in u32 primitiveCount
+    )const{
+        if(!firstBuild)
+            return;
+        info(
+            "RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"
+            , meshName.resolvedText()
+            , runtimeMesh
+            , cast<u64>(primitiveCount)
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -45,8 +45,12 @@ public:
 
 class ListState final : NoCopy{
     friend class Builder;
+    friend class ListCoordinator;
+    friend class ContextMenuCoordinator;
     friend class BuilderScopeFrame;
     friend class ListBehavior;
+    friend class ListInput;
+    friend class ListLayoutPreparer;
 
 
 private:

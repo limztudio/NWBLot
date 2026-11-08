@@ -81,7 +81,7 @@ b8 UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     if(ui.button(__hidden_ui_popup_tools_smoke::s_AnchorKey, "Right-click / Menu / Shift+F10", anchor))
         ++m_anchorClicks;
     TooltipOptions tooltip;
-    constexpr f32 s_TooltipDelaySeconds = 1.0f;
+    constexpr f32 s_TooltipDelaySeconds = 8.0f;
     tooltip.delaySeconds = s_TooltipDelaySeconds;
     if(!ui.tooltip("hint", __hidden_ui_popup_tools_smoke::s_AnchorKey, "Open commands here; Delete is disabled.", m_tooltip, tooltip))
         return false;

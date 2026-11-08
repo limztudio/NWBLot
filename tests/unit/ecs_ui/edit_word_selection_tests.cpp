@@ -4,6 +4,7 @@
 
 #include "edit_box_host_fixture.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <global/simd/vector.h>
 
 

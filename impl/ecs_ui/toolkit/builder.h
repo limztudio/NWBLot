@@ -19,6 +19,14 @@ NWB_IMPL_UI_BEGIN
 
 // Transient declarations shape text, arrange a panel, then freeze paint and hit targets in the same order.
 class Builder final : NoCopy{
+    friend class ListLayoutPreparer;
+    friend class TooltipCoordinator;
+    friend class ContextMenuCoordinator;
+    friend class ComboCoordinator;
+    friend class EditBoxCoordinator;
+    friend class TextAreaCoordinator;
+    friend class NumericEditCoordinator;
+    friend class ListCoordinator;
 private:
     using Item = BuilderScopeFrame::Item;
     using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
@@ -151,13 +159,7 @@ private:
     [[nodiscard]] b8 paintItems();
     [[nodiscard]] b8 paintItem(const Item& item, const LayoutBox& box);
     [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
-    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
-    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
     [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
-    [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
-    [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
-    void snapshotTextArea(TextAreaFrame& frame)noexcept;
     [[nodiscard]] b8 textAreaMatches(const TextAreaFrame& frame)const noexcept;
     [[nodiscard]] b8 numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept;
     template<typename EditFrameT>
@@ -174,11 +176,7 @@ private:
         const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token,
         u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame
     );
-    [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
-    [[nodiscard]] Expected<ListRow> prepareListRow(const ListFrame& frame, u64 index);
-    [[nodiscard]] Expected<ScrollPlacement> measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip);
     [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] b8 paintRadioGroup(const Item& item, const LayoutBox& box);
     [[nodiscard]] b8 radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     [[nodiscard]] b8 radioGroupMatches(const RadioGroupFrame& frame)const;
@@ -193,52 +191,6 @@ private:
     [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     void publishSliderResults(b8 valid)noexcept;
 
-    [[nodiscard]] b8 applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
-    template<typename MatchF, typename ApplyActionF>
-    [[nodiscard]] b8 consumeListInput(
-        const WidgetState& rows, const ControlToken& token, const b8 enabled, const PopupToken* const popup,
-        ListState& state, MatchF&& matches, ApplyActionF&& applyAction
-    ){
-        const auto thumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
-        if(!thumb)
-            return false;
-        const auto nextGesture = [&](){
-            return popup ? m_context.input().consumePointerGesture(*thumb, rows.declarationGeneration) : m_context.takePartPointerGesture(rows, *thumb, enabled);
-        };
-        const auto validGesture = [&](const Expected<PointerGesture>& gesture)noexcept{
-            return gesture && gesture->control == token && (!popup || gesture->popup == *popup);
-        };
-        const auto nextAction = [&](){
-            return popup ? m_context.input().consumeControlAction(rows.id, rows.declarationGeneration, token) : m_context.takeControlAction(rows, enabled, token);
-        };
-        const auto validAction = [&](const Expected<ControlAction>& action)noexcept{
-            return action && (!popup || action->popup == *popup);
-        };
-        auto gesture = nextGesture();
-        b8 haveGesture = validGesture(gesture);
-        auto action = nextAction();
-        b8 haveAction = validAction(action);
-        while(haveGesture || haveAction){
-            if(!matches())
-                return false;
-            if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
-                if(!applyListGesture(state, *gesture))
-                    return false;
-                gesture = nextGesture();
-                haveGesture = validGesture(gesture);
-            }
-            else{
-                const ListActionOutcome::Enum outcome = applyAction(*action);
-                if(outcome == ListActionOutcome::Failed)
-                    return false;
-                if(outcome == ListActionOutcome::Stop)
-                    return true;
-                action = nextAction();
-                haveAction = validAction(action);
-            }
-        }
-        return matches();
-    }
     [[nodiscard]] ComboResult declareCombo(
         AStringView stableKey, const IListDataSource& source,
         const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state,
@@ -246,14 +198,8 @@ private:
     );
     [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
     [[nodiscard]] b8 paintCombos();
-    [[nodiscard]] b8 paintComboPopup(ComboFrame& frame);
     [[nodiscard]] b8 comboStateMatches(const ComboFrame& frame)const noexcept;
     [[nodiscard]] b8 comboMatches(const ComboFrame& frame)const;
-    [[nodiscard]] b8 applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 applyComboListInput(ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 prepareComboSearch(const WidgetState& field, ComboFrame& frame);
-    void snapshotComboQuery(ComboFrame& frame)noexcept;
-    [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
     [[nodiscard]] Item* annotationAnchor(AStringView stableKey)noexcept;
     [[nodiscard]] b8 paintDeferred(){ return paintDeferredContents() && validateDeferredSources() && validateDeferredStates(); }
     [[nodiscard]] b8 paintDeferredContents(){ return paintContextMenus() && paintCombos() && paintTooltips(); }
@@ -265,13 +211,9 @@ private:
     }
     [[nodiscard]] b8 listMatches(const ListFrame& frame)const;
     [[nodiscard]] b8 paintTooltips();
-    [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
-    [[nodiscard]] b8 applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
-    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
     [[nodiscard]] b8 contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept;
     [[nodiscard]] b8 contextMenuMatches(const ContextMenuFrame& frame)const;
     [[nodiscard]] b8 paintContextMenus();
-    [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] b8 paintPopup();
     [[nodiscard]] b8 synchronizePopup()noexcept;
     [[nodiscard]] b8 popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{

@@ -83,6 +83,7 @@ class AccelStruct final : public RefCounter<GraphicsResource>{
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;
     friend class TrackedCommandBuffer;
+    friend class AccelStructBuildJournal;
 
 
 public:

@@ -353,7 +353,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("const ::SIMDVectorSingle withUnitW = ::VectorPermute<0u, 1u, 2u, 7u>(a, ::s_SIMDIdentityR3);"), MStringView::npos);
     EXPECT_NE(optView.find("const f32 idxGetZ = ::VectorGetZ(a);"), MStringView::npos);
     EXPECT_NE(optView.find("::StoreFloat(::LoadFloat(box.minPt), outBox.extent4);"), MStringView::npos);
-    EXPECT_NE(optView.find("!::VectorIsFinite(::LoadFloat(box.extent4), ::VectorComponentMask::s_XYZW)"), MStringView::npos);
+    EXPECT_NE(optView.find("((!::IsFinite(box.extent4.raw[0u]) || !::IsFinite(box.extent4.raw[1u])) || !::IsFinite(box.extent4.raw[2u])) || !::IsFinite(box.extent4.raw[3u])"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle scaledNorm3Swiz = ::VectorSwizzle<1u, 2u, 0u, 3u>(scaledNorm3);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorDouble mixedBounds = ::VectorDoublePermute<0u, 1u, 6u, 7u>(::VectorDoubleMin(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)), ::VectorDoubleMax(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle nonUniformAdd = ::VectorAdd(a, ::VectorSet(scale, 1.0f, 2.0f, 3.0f));"), MStringView::npos);
@@ -362,8 +362,8 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("const ::SIMDVectorSingle planeEq = ::VectorPermute<0u, 1u, 2u, 7u>(norm3, ::VectorNegate(::Vector3Dot(norm3, b)));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle negNorm3ZeroW = ::VectorXorInt(norm3, ::s_SIMDNegate3);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle negScaleFma = ::VectorNegativeMultiplySubtract(a, ::VectorReplicate(scale), b);"), MStringView::npos);
-    EXPECT_NE(optView.find("!::VectorIsFinite(::VectorAdd(a, ::VectorSwizzle<2u, 3u, 2u, 3u>(a)), ::VectorComponentMask::s_XY)"), MStringView::npos);
-    EXPECT_NE(optView.find("((::VectorMoveMask(::VectorPermute<0u, 1u, 6u, 7u>(::VectorLessOrEqual(a, ::VectorSet(scale, 2.0f, scale, 2.0f)), ::VectorGreater(a, ::VectorSet(scale, 2.0f, scale, 2.0f)))) & ::VectorComponentMask::s_XYZW) == ::VectorComponentMask::s_XYZW)"), MStringView::npos);
+    EXPECT_NE(optView.find("!::IsFinite((::VectorGetX(a) + ::VectorGetZ(a))) || !::IsFinite((::VectorGetY(a) + ::VectorGetW(a)))"), MStringView::npos);
+    EXPECT_NE(optView.find("(scale >= ::VectorGetX(a)) && (2.0f >= ::VectorGetY(a)) && (scale < ::VectorGetZ(a)) && (2.0f < ::VectorGetW(a))"), MStringView::npos);
 
     EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
     EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);
@@ -417,19 +417,19 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("::Vector2Transform(a, projMat)"), MStringView::npos);
     EXPECT_NE(optView.find("::Vector3TransformNormal(b, m)"), MStringView::npos);
     EXPECT_NE(optView.find("::StoreFloat(::VectorPermute<0u, 1u, 2u, 7u>(a, b), outBox.extent4)"), MStringView::npos);
-    EXPECT_NE(optView.find("!::VectorDoubleIsFinite(d, ::VectorDoubleComponentMask::s_DoubleXY) || ((::VectorDoubleMoveMask(::VectorDoubleGreater(d, ::VectorDoubleReplicate(10.0))) & ::VectorDoubleComponentMask::s_DoubleXY) != 0u)"), MStringView::npos);
-    EXPECT_NE(optView.find("((::VectorMoveMask(::VectorGreater(::VectorAbs(::LoadFloat(box.minPt)), ::s_SIMDOne)) & ::VectorComponentMask::s_XYZ) != 0u)"), MStringView::npos);
-    EXPECT_NE(optView.find("!::VectorIsFinite(a, ::VectorComponentMask::s_XYZW)"), MStringView::npos);
-    EXPECT_NE(optView.find("((::VectorMoveMask(::VectorLess(a, ::VectorZero())) & ::VectorComponentMask::s_XYZW) != 0u)"), MStringView::npos);
-    EXPECT_NE(optView.find("::Vector2LessOrEqual(a, ::VectorSwizzle<2u, 3u, 2u, 3u>(a))"), MStringView::npos);
     EXPECT_NE(optView.find("::VectorIsFinite(b, ::VectorComponentMask::s_XYZ)"), MStringView::npos);
-    EXPECT_NE(optView.find("::Vector3Equal(a, b)"), MStringView::npos);
     EXPECT_EQ(optView.find("::MatrixTranspose(m)"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow0 = m.v[0u];"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow2 = m.v[2u];"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle matCol0 = ::Vector4Transform(::s_SIMDIdentityR0, m);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle norm3ZeroW = norm3;"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle narrowXY = ::ConvertVectorDoubleToSingle(maxD);"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorDoubleIsFinite(d,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorMoveMask(::VectorGreater(::VectorAbs(::LoadFloat(box.minPt)),"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorIsFinite(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorMoveMask(::VectorLess(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::Vector2LessOrEqual(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::Vector3Equal(a, b)"), MStringView::npos);
 }
 
 
@@ -440,3 +440,4 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

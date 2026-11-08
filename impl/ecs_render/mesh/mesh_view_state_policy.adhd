@@ -1,0 +1,116 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshViewStatePolicy{
+    private MatrixSingle worldToClip(in VectorSingle positionDepthBias, in VectorSingle right, in VectorSingle up, in VectorSingle forward, in VectorSingle projection)const{
+        const f32 tx = -dot(positionDepthBias.xyz, right.xyz);
+        const f32 ty = -dot(positionDepthBias.xyz, up.xyz);
+        const f32 tz = -dot(positionDepthBias.xyz, forward.xyz) + positionDepthBias.w;
+        const MatrixSingle worldToView(
+            right.x, right.y, right.z, tx,
+            up.x, up.y, up.z, ty,
+            forward.x, forward.y, forward.z, tz,
+            0.0f, 0.0f, 0.0f, 1.0f
+        );
+        const MatrixSingle viewToClip(
+            projection.x, 0.0f, 0.0f, 0.0f,
+            0.0f, projection.y, 0.0f, 0.0f,
+            0.0f, 0.0f, projection.z, projection.w,
+            0.0f, 0.0f, 1.0f, 0.0f
+        );
+        return mul(viewToClip, worldToView);
+    }
+
+    private VectorSingle frustumPlane(in VectorSingle normal, in VectorSingle point)const{
+        const f32 lengthSquared = lengthSq(normal.xyz);
+        VectorSingle unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
+        if(isFinite(lengthSquared) && lengthSquared > 0.0f){
+            const VectorSingle scaled = normal * rsqrt(VectorSingle(lengthSquared));
+            unitNormal = VectorSingle(scaled, 0.0f);
+        }
+        return VectorSingle(unitNormal, -dot(unitNormal.xyz, point.xyz));
+    }
+
+    private VectorSingle frustumSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition)const{
+        const VectorSingle rawNormal = forward * tanHalfAngle + side;
+        return this.frustumPlane(VectorSingle(rawNormal, 0.0f), cameraPosition);
+    }
+
+    public MeshViewGpuData build(
+        in VectorSingle rightRow,
+        in VectorSingle upRow,
+        in VectorSingle forwardRow,
+        in VectorSingle positionDepthBias,
+        in VectorSingle projectionParams,
+        in f32 tanHalfVerticalFov,
+        in f32 aspectRatio,
+        in f32 nearPlane,
+        in f32 farPlane
+    )const{
+        MeshViewGpuData state;
+        const VectorSingle right(rightRow, 0.0f);
+        const VectorSingle up(upRow, 0.0f);
+        const VectorSingle forward(forwardRow, 0.0f);
+        const VectorSingle tanHalfV(tanHalfVerticalFov);
+        const VectorSingle tanHalfH(tanHalfVerticalFov * aspectRatio);
+        const VectorSingle nearVec(nearPlane);
+        const VectorSingle farVec(farPlane);
+
+        const MatrixSingle worldToClip = this.worldToClip(positionDepthBias, right, up, forward, projectionParams);
+        state.worldToClip = f32x4x4(worldToClip);
+        state.clipToWorld = f32x4x4(inverse(worldToClip));
+
+        const VectorSingle negForward = -forward;
+        const VectorSingle offsetPos = negForward * VectorSingle(positionDepthBias.w) + positionDepthBias;
+        const VectorSingle cameraPosition(offsetPos, 1.0f);
+        state.cameraPosition = f32x4(cameraPosition);
+        state.frustumPlanes[0] = f32x4(this.frustumSidePlane(forward, right, tanHalfH, cameraPosition));
+        state.frustumPlanes[1] = f32x4(this.frustumSidePlane(forward, -right, tanHalfH, cameraPosition));
+        state.frustumPlanes[2] = f32x4(this.frustumSidePlane(forward, up, tanHalfV, cameraPosition));
+        state.frustumPlanes[3] = f32x4(this.frustumSidePlane(forward, -up, tanHalfV, cameraPosition));
+
+        const VectorSingle nearRaw = forward * nearVec + cameraPosition;
+        const VectorSingle farRaw = forward * farVec + cameraPosition;
+        state.frustumPlanes[4] = f32x4(this.frustumPlane(forward, VectorSingle(nearRaw, 0.0f)));
+        state.frustumPlanes[5] = f32x4(this.frustumPlane(negForward, VectorSingle(farRaw, 0.0f)));
+        return state;
+    }
+
+    public Expected<MeshViewGpuData> readAccepted(in b8 valid, in Span<u8> storedBytes)const{
+        if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
+            return makeUnexpected(Failure());
+        usize cursor = 0u;
+        return ReadPOD<MeshViewGpuData>(storedBytes, cursor);
+    }
+
+    public b8 uploadRequired(in b8 valid, in Span<u8> storedBytes, in MeshViewGpuData viewState)const{
+        if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
+            return true;
+        b8 matches = false;
+        native(in storedBytes, in viewState, mut matches){
+            matches = NWB_MEMCMP(storedBytes.data(), &viewState, sizeof(viewState)) == 0;
+        }
+        return !matches;
+    }
+
+    public void storeConfirmed(
+        in MeshViewGpuData viewState,
+        mut Array<u8, 240u> outStoredBytes,
+        mut b8 outValid
+    )const{
+        native(in viewState, mut outStoredBytes){
+            NWB_MEMCPY(outStoredBytes.data(), outStoredBytes.size(), &viewState, sizeof(viewState));
+        }
+        outValid = true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

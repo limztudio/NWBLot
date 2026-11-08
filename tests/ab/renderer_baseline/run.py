@@ -12,44 +12,32 @@ import argparse
 import json
 import math
 import platform
-import re
-import struct
 import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Optional, Sequence, Tuple
 
-LIT_MINIMUM_COMPLEX_GI_SETTLE_SECONDS = 30.0
-
-LIT_ENABLED_FLAG = "1"
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from baseline_image_comparison import BaselineImageComparison  # noqa: E402
+from baseline_warmup_evidence import BaselineWarmupEvidence, LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT, LIT_ENABLED_FLAG, LIT_NWB_GI_SMOKE_COMPLEX_SCENE  # noqa: E402
 from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
 from window_capture_environment import make_runtime_launch_args  # noqa: E402
 from window_capture_logs import wait_for_log_message  # noqa: E402
+from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (  # noqa: E402
     FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit,
     build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process,)
+    shutdown_logserver_and_collect, )
 from window_capture_validation import validate_capture_result  # noqa: E402
 import renderer_baseline_self_test  # noqa: E402
 from renderer_baseline_corpus import CorpusReference, sha256_file, effective_frozen_environment, load_reference, load_corpus_reference, apply_corpus_limits, verify_corpus  # noqa: E402
 
-LIT_NWB_GI_SMOKE_COMPLEX_SCENE = "NWB_GI_SMOKE_COMPLEX_SCENE"
-LIT_B_BM = b"BM"
-LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT = "complex GI profile requires its selected complex scene"
-LIT_F = "f"
-LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "NWB_GI_SMOKE_MIN_SETTLE_SECONDS"
-LIT_START = "start"
-LIT_END = "end"
-LIT_READBACK = "readback"
-LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E = "complex GI has malformed live warmup evidence"
-LIT_CAPTURE_SOURCE_FRAME = "capture_source_frame"
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 LIT_SETTLE_SECONDS_MUST_BE_POSITIVE_AND_FI = "--settle-seconds must be positive and finite"
@@ -61,7 +49,6 @@ LIT_GIT = "git"
 LIT_UNAVAILABLE = "unavailable"
 LIT_FRAME_LOCKED = "frame-locked"
 LIT_SETTLED = "settled"
-LIT_I = "<I"
 LIT_RENDERER_BASELINE_CAPTURE = "renderer baseline capture"
 LIT_RENDERER_BASELINE_LOGSERVER = "renderer baseline logserver"
 LIT_UTF_8 = "utf-8"
@@ -100,7 +87,6 @@ LIT_OUTPUT_DIR = "--output-dir"
 LIT_REFERENCE_DIR = "--reference-dir"
 LIT_REFERENCE_CORPUS = "--reference-corpus"
 LIT_STORE_TRUE = "store_true"
-LIT_CAPTURE = "capture"
 LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
@@ -109,20 +95,6 @@ SCHEMA = "nwb.renderer-baseline.v1"
 CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
 CURRENT_CORPUS_ID = "current-renderer-v1"
 FORBIDDEN_LOG_MESSAGES = (*STRICT_LOG_FAILURE_MESSAGES, "cannot safely continue after an unresolved frame recovery submission",)
-
-
-@dataclass(frozen=True)
-class PixelDifference:
-    width: int
-    height: int
-    max_abs: int
-    mean_abs: float
-    changed_pixels: int
-    total_pixels: int
-
-    @property
-    def changed_fraction(self) -> float:
-        return self.changed_pixels / self.total_pixels if self.total_pixels else 0.0
 
 
 @dataclass(frozen=True)
@@ -160,105 +132,6 @@ def capture_mode(profile: BaselineProfile) -> str:
     return LIT_FRAME_LOCKED if profile.capture_freeze_frame != 0 else LIT_SETTLED
 
 
-def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
-    try:
-        data = path.read_bytes()
-    except OSError as error:
-        raise SmokeFailure(f"could not read BMP '{path}': {error}") from error
-    if len(data) < 54 or data[:2] != LIT_B_BM:
-        raise SmokeFailure(f"capture is not a BMP: {path}")
-
-    pixel_offset = struct.unpack_from(LIT_I, data, 10)[0]
-    dib_size = struct.unpack_from(LIT_I, data, 14)[0]
-    if dib_size < 40 or len(data) < 14 + dib_size:
-        raise SmokeFailure(f"capture has an unsupported DIB header: {path}")
-
-    width, signed_height, planes, bits_per_pixel, compression = struct.unpack_from("<iiHHI", data, 18)
-    if width <= 0 or signed_height == 0 or planes != 1 or bits_per_pixel != 24 or compression != 0:
-        raise SmokeFailure(f"capture must be an uncompressed 24-bit BMP: {path}")
-
-    height = abs(signed_height)
-    source_stride = ((width * 3 + 3) // 4) * 4
-    if pixel_offset + source_stride * height > len(data):
-        raise SmokeFailure(f"capture pixel data is truncated: {path}")
-
-    rows: List[bytes] = []
-    bottom_up = signed_height > 0
-    for logical_row in range(height):
-        source_row = height - 1 - logical_row if bottom_up else logical_row
-        source_offset = pixel_offset + source_row * source_stride
-        bgr = data[source_offset:source_offset + width * 3]
-        rgb = bytearray(width * 3)
-        for pixel in range(0, len(bgr), 3):
-            rgb[pixel] = bgr[pixel + 2]
-            rgb[pixel + 1] = bgr[pixel + 1]
-            rgb[pixel + 2] = bgr[pixel]
-        rows.append(bytes(rgb))
-    return width, height, b"".join(rows)
-
-
-def write_bmp_rgb(path: Path, width: int, height: int, rgb: bytes) -> None:
-    if width <= 0 or height <= 0 or len(rgb) != width * height * 3:
-        raise ValueError("invalid RGB baseline image dimensions or byte count")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    row_stride = ((width * 3 + 3) // 4) * 4
-    image_size = row_stride * height
-    padding = b"\0" * (row_stride - width * 3)
-    with path.open("wb") as output:
-        output.write(struct.pack("<2sIHHI", LIT_B_BM, 14 + 40 + image_size, 0, 0, 54))
-        output.write(struct.pack("<IIIHHIIIIII", 40, width, height, 1, 24, 0, image_size, 0, 0, 0, 0))
-        for row_index in range(height - 1, -1, -1):
-            row = rgb[row_index * width * 3:(row_index + 1) * width * 3]
-            bgr = bytearray(width * 3)
-            for pixel in range(0, len(row), 3):
-                bgr[pixel] = row[pixel + 2]
-                bgr[pixel + 1] = row[pixel + 1]
-                bgr[pixel + 2] = row[pixel]
-            output.write(bgr)
-            output.write(padding)
-
-
-def compare_bmp_rgb(reference_path: Path, candidate_path: Path, difference_path: Path) -> PixelDifference:
-    reference_width, reference_height, reference_rgb = read_bmp_rgb(reference_path)
-    candidate_width, candidate_height, candidate_rgb = read_bmp_rgb(candidate_path)
-    if (reference_width, reference_height) != (candidate_width, candidate_height):
-        raise SmokeFailure("reference and candidate captures have different dimensions: " f"{reference_width}x{reference_height} vs {candidate_width}x{candidate_height}")
-
-    total_abs = 0
-    max_abs = 0
-    changed_pixels = 0
-    difference_rgb = bytearray(len(reference_rgb))
-    for offset in range(0, len(reference_rgb), 3):
-        changed = False
-        for channel in range(3):
-            delta = abs(reference_rgb[offset + channel] - candidate_rgb[offset + channel])
-            total_abs += delta
-            max_abs = max(max_abs, delta)
-            difference_rgb[offset + channel] = min(255, delta * 8)
-            changed = changed or delta != 0
-        if changed:
-            changed_pixels += 1
-
-    write_bmp_rgb(difference_path, reference_width, reference_height, bytes(difference_rgb))
-    total_pixels = reference_width * reference_height
-    return PixelDifference(width=reference_width, height=reference_height, max_abs=max_abs, mean_abs=total_abs / len(reference_rgb), changed_pixels=changed_pixels, total_pixels=total_pixels,)
-
-
-def difference_failures(args: argparse.Namespace, difference: PixelDifference) -> List[str]:
-    maximum_max_abs = 0 if args.require_exact else args.maximum_max_abs
-    maximum_mean_abs = 0.0 if args.require_exact else args.maximum_mean_abs
-    maximum_changed_fraction = 0.0 if args.require_exact else args.maximum_changed_fraction
-    failures: List[str] = []
-    if maximum_max_abs is not None and difference.max_abs > maximum_max_abs:
-        failures.append(f"max abs {difference.max_abs} exceeds {maximum_max_abs}")
-    if maximum_mean_abs is not None and difference.mean_abs > maximum_mean_abs:
-        failures.append(f"mean abs {difference.mean_abs:.6f} exceeds {maximum_mean_abs:.6f}")
-    if maximum_changed_fraction is not None and difference.changed_fraction > maximum_changed_fraction:
-        failures.append(f"changed fraction {difference.changed_fraction:.6f} exceeds {maximum_changed_fraction:.6f}")
-    return failures
-
-
 def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tuple[str, ...]:
     if not log_text:
         raise SmokeFailure("renderer baseline capture produced no captured logger output")
@@ -267,58 +140,6 @@ def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tup
     if forbidden:
         raise SmokeFailure(f"renderer baseline capture found forbidden log messages: {list(forbidden)}")
     return forbidden
-
-
-def validate_complex_gi_warmup(log_text: str, profile: BaselineProfile, frozen_environment: Mapping[str, str]) -> Optional[Mapping[str, object]]:
-    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
-        return None
-    if frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
-        raise SmokeFailure(LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT)
-    try:
-        requested_seconds = struct.unpack(LIT_F, struct.pack(LIT_F, float(frozen_environment.get(LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS, "30"))))[0]
-    except (ValueError, OverflowError, struct.error) as error:
-        raise SmokeFailure("complex GI requires a finite live warmup of at least 30 seconds") from error
-    if not math.isfinite(requested_seconds) or requested_seconds < LIT_MINIMUM_COMPLEX_GI_SETTLE_SECONDS or profile.capture_freeze_frame < 360:
-        raise SmokeFailure("complex GI requires at least 360 presentations then 30 live warmup seconds")
-    patterns = {
-        LIT_START: r"GiTestSmokeProject: complex GI live warmup start graphics_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
-        LIT_END: r"GiTestSmokeProject: complex GI live warmup end graphics_frame=(\d+) presentations=(\d+) elapsed_seconds=(\S+)",
-        LIT_READBACK: r"FramebufferCapture: graphics source frame (\d+)",
-        LIT_CAPTURE: r"GiTestSmokeProject: complex GI capture source_frame=(\d+)",
-    }
-    matches = {}
-    for name, pattern in patterns.items():
-        records = list(re.finditer(pattern, log_text))
-        if len(records) != 1:
-            raise SmokeFailure(f"complex GI requires exactly one {name} live warmup evidence record")
-        matches[name] = records[0]
-    start_frame, start_presentations, required_presentations = map(int, matches[LIT_START].groups()[:3])
-    end_frame, end_presentations = map(int, matches[LIT_END].groups()[:2])
-    readback_frame = int(matches[LIT_READBACK].group(1))
-    capture_frame = int(matches[LIT_CAPTURE].group(1))
-    numeric_pattern = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
-    for value in (matches[LIT_START].group(4), matches[LIT_END].group(3)):
-        if not re.fullmatch(numeric_pattern, value):
-            raise SmokeFailure(LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E)
-    try:
-        required_seconds = float(matches[LIT_START].group(4))
-        elapsed_seconds = float(matches[LIT_END].group(3))
-    except ValueError as error:
-        raise SmokeFailure(LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E) from error
-    if required_presentations != profile.capture_freeze_frame or start_presentations < required_presentations:
-        raise SmokeFailure("complex GI live warmup began before the presentation warmup")
-    if not math.isfinite(required_seconds) or required_seconds != requested_seconds:
-        raise SmokeFailure("complex GI live warmup duration does not match its configured requirement")
-    if not math.isfinite(elapsed_seconds) or elapsed_seconds < required_seconds:
-        raise SmokeFailure("complex GI live warmup ended before its required duration")
-    if end_frame <= start_frame or end_presentations <= start_presentations:
-        raise SmokeFailure("complex GI live warmup has no rendered presentation progress")
-    if capture_frame != readback_frame or capture_frame < end_frame or capture_frame >= 2**64 - 1:
-        raise SmokeFailure("complex GI capture source does not match its completed readback and live warmup")
-    if not (matches[LIT_START].start() < matches[LIT_END].start() < matches[LIT_READBACK].start() < matches[LIT_CAPTURE].start()):
-        raise SmokeFailure("complex GI live warmup and readback evidence is out of order")
-    return {"start_graphics_frame": start_frame, "start_presentations": start_presentations, "required_presentations": required_presentations, "required_live_seconds": required_seconds,
-        "elapsed_live_seconds": elapsed_seconds, "warmup_end_graphics_frame": end_frame, "end_presentations": end_presentations, LIT_CAPTURE_SOURCE_FRAME: capture_frame}
 
 
 def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_path: Path, log_path: Path, frozen_environment: Mapping[str, str],) -> CaptureResult:
@@ -386,13 +207,13 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
             else:
                 capture = backend.capture_window(window, capture_path)
             validate_capture_result(capture)
-        app_exit_code, app_exit_tail = terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
+        app_exit_code, app_exit_tail = CaptureProcessTermination.terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
         app_process = None
         log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_RENDERER_BASELINE_LOGSERVER,)
         logserver_process = None
     finally:
-        terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
-        terminate_process(logserver_process, LIT_RENDERER_BASELINE_LOGSERVER)
+        CaptureProcessTermination.terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
+        CaptureProcessTermination.terminate_process(logserver_process, LIT_RENDERER_BASELINE_LOGSERVER)
         if backend:
             backend.close()
 
@@ -409,7 +230,7 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
         validate_capture_result(read_bmp_24(capture_path))
         if Path(str(capture_path) + ".partial").exists():
             raise SmokeFailure("complex GI application capture left an incomplete readback")
-    live_warmup = validate_complex_gi_warmup(log_text, profile, frozen_environment)
+    live_warmup = BaselineWarmupEvidence.validate(log_text, profile, frozen_environment)
     return CaptureResult(capture_file=capture_path.name, log_file=log_path.name, capture_sha256=sha256_file(capture_path), executable_sha256=sha256_file(args.executable), source_revision=source_revision(), source_worktree_clean=source_worktree_clean(),
         frozen_environment=dict(frozen_environment), forbidden_log_messages=forbidden, live_warmup=live_warmup,)
 
@@ -478,8 +299,8 @@ def run(args: argparse.Namespace) -> int:
         print(f"captured immutable renderer baseline: {args.output_dir}")
         return 0
 
-    difference = compare_bmp_rgb(reference_capture, capture_path, args.output_dir / LIT_DIFFERENCE_BMP)
-    failures = difference_failures(args, difference)
+    difference = BaselineImageComparison.compare_bmp_rgb(reference_capture, capture_path, args.output_dir / LIT_DIFFERENCE_BMP)
+    failures = BaselineImageComparison.difference_failures(args, difference)
     comparison = { LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1, LIT_PROFILE: args.profile, "reference_directory": str(reference_directory), "candidate_directory": str(args.output_dir),
         LIT_REFERENCE_SOURCE_REVISION: reference_manifest.get(LIT_SOURCE_REVISION), LIT_CANDIDATE_SOURCE_REVISION: capture.source_revision, "reference_capture": str(reference_capture), "candidate_capture": str(capture_path),
         "difference_capture": str(args.output_dir / LIT_DIFFERENCE_BMP), LIT_DIFFERENCE: asdict(difference) | {LIT_CHANGED_FRACTION: difference.changed_fraction}, "reference_corpus": corpus_reference.corpus_id if corpus_reference is not None else None,

@@ -5,9 +5,9 @@ import ctypes
 import time
 
 from combo_native import ComboNativeInput
-from interaction_smoke import INPUT_SETTLE_SECONDS, PRESS_HOLD_SECONDS, WIN32_WORD_MASK
+from native_input import INPUT_SETTLE_SECONDS, PRESS_HOLD_SECONDS, WIN32_WORD_MASK
 from window_capture_smoke import SmokeFailure
-from window_capture_x11 import LinuxXEvent
+from window_capture_x11_input import LinuxXEvent
 
 
 class PopupToolsNativeInput(ComboNativeInput):
@@ -20,6 +20,8 @@ class PopupToolsNativeInput(ComboNativeInput):
             backend.user32.GetCursorPos.restype = ctypes.c_int
             backend.user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
             backend.user32.SetCursorPos.restype = ctypes.c_int
+            backend.user32.WindowFromPoint.argtypes = [backend.POINT]
+            backend.user32.WindowFromPoint.restype = ctypes.c_void_p
 
     def pointer(self, x, y):
         self.requested_pointer = (int(x), int(y))
@@ -47,6 +49,8 @@ class PopupToolsNativeInput(ComboNativeInput):
             raise SmokeFailure("failed to inspect the popup tools cursor")
         if (observed.x, observed.y) != (requested.x, requested.y):
             self.pointer(*self.requested_pointer)
+        elif self.backend.user32.WindowFromPoint(observed) == self.handle:
+            super().pointer(*self.requested_pointer)
 
     def restore_pointer(self):
         if self.windows and self.original_cursor is not None:
@@ -59,7 +63,8 @@ class PopupToolsNativeInput(ComboNativeInput):
             return {}
         position = self.backend.POINT()
         cursor_known = bool(self.backend.user32.GetCursorPos(ctypes.byref(position)))
-        return {"cursor_screen": [position.x, position.y] if cursor_known else None, "foreground_is_fixture": self.backend.user32.GetForegroundWindow() == self.handle}
+        hovered = self.backend.user32.WindowFromPoint(position) if cursor_known else None
+        return {"cursor_screen": [position.x, position.y] if cursor_known else None, "foreground_is_fixture": self.backend.user32.GetForegroundWindow() == self.handle, "window_under_pointer_is_fixture": hovered == self.handle}
 
     WM_KEYDOWN_MSG = 0x0100
     WM_KEYUP_MSG = 0x0101

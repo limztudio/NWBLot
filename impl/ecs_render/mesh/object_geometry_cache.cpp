@@ -3,6 +3,7 @@
 
 
 #include "object_geometry_cache.h"
+#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
 
 #include "mesh_system.h"
 
@@ -36,7 +37,7 @@ b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers&
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;
     // Accepted writes establish the retained buffer state even if current source content already moved on.
-    return TryAcceptObjectGeometryCacheContent(
+    return MeshGeometryBufferPolicy().acceptObjectCacheContent(
         cache.decoderPipeline == expected.decoderPipeline,
         cache.heapHandle == expected.heapHandle,
         cache.indexByteOffset,
@@ -74,7 +75,7 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryC
         .indexByteOffset = cache.indexByteOffset,
         .indexCount = cache.indexCount,
         .initialized = cache.initialized,
-        .requiresDecode = RequiresObjectGeometryCacheDecode(cache.acceptedContent, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, cache.acceptedContentRevision),
+        .requiresDecode = MeshGeometryBufferPolicy().requiresObjectCacheDecode(cache.acceptedContent, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, cache.acceptedContentRevision),
     };
 }
 
@@ -91,7 +92,7 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
     if(!cache.buffer){
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        const Expected<ObjectGeometryCacheLayout> layoutResult = TryResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
+        const Expected<ObjectGeometryCacheLayout> layoutResult = MeshGeometryBufferPolicy().resolveObjectCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
         if(!layoutResult)
             return false;
         const ObjectGeometryCacheLayout& layout = *layoutResult;

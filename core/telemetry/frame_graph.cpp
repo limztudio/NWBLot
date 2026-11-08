@@ -6,6 +6,7 @@
 
 #include "frame_graph_queue_codec_internal.h"
 #include "frame_graph_statistics_codec_internal.h"
+#include "frame_graph_statistics_validator.h"
 
 #include <core/alloc/scratch.h>
 
@@ -182,14 +183,14 @@ b8 BuildFrameGraphPayloadImpl(
     orderedPhysicalQueueRuntimeStatistics.reserve(physicalQueueRuntimeStatistics.size());
     for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics)
         orderedPhysicalQueueRuntimeStatistics.push_back(record);
-    Sort(orderedPhysicalQueueRuntimeStatistics.begin(), orderedPhysicalQueueRuntimeStatistics.end(), FrameGraphStatisticsCodecDetail::PhysicalQueueRuntimeStatisticsRecordLess);
+    Sort(orderedPhysicalQueueRuntimeStatistics.begin(), orderedPhysicalQueueRuntimeStatistics.end(), FrameGraphStatisticsValidator::PhysicalQueueRuntimeStatisticsRecordLess);
 
     Vector<FrameGraphPacketSubmissionStatisticsRecord, Alloc::ScratchArena> orderedPacketSubmissionStatistics(scratchArena);
     if(packetSubmissionStatistics){
         orderedPacketSubmissionStatistics.reserve(packetSubmissionStatistics->size());
         for(const FrameGraphPacketSubmissionStatisticsRecord& record : *packetSubmissionStatistics)
             orderedPacketSubmissionStatistics.push_back(record);
-        Sort(orderedPacketSubmissionStatistics.begin(), orderedPacketSubmissionStatistics.end(), FrameGraphStatisticsCodecDetail::PacketSubmissionStatisticsRecordLess);
+        Sort(orderedPacketSubmissionStatistics.begin(), orderedPacketSubmissionStatistics.end(), FrameGraphStatisticsValidator::PacketSubmissionStatisticsRecordLess);
     }
 
     usize stringTableBytes = 0u;
@@ -217,26 +218,26 @@ b8 BuildFrameGraphPayloadImpl(
     }
 
     u32 accumulatedOwnerNodeIndex = Limit<u32>::s_Max;
-    FrameGraphStatisticsCodecDetail::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator accumulatedStatistics;
+    FrameGraphPhysicalQueueRuntimeStatisticsAccumulator accumulatedStatistics;
     for(usize statisticsIndex = 0u; statisticsIndex < orderedPhysicalQueueRuntimeStatistics.size(); ++statisticsIndex){
         const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record = orderedPhysicalQueueRuntimeStatistics[statisticsIndex];
         if(record.ownerNodeIndex >= nodes.size())
             return false;
-        if(!FrameGraphStatisticsCodecDetail::ValidatePhysicalQueueRuntimeStatisticsOwner(record, nodes.size(), nodes[record.ownerNodeIndex].kind, nodes[record.ownerNodeIndex].runtimeStatistics))
+        if(!FrameGraphStatisticsValidator::ValidatePhysicalQueueRuntimeStatisticsOwner(record, nodes.size(), nodes[record.ownerNodeIndex].kind, nodes[record.ownerNodeIndex].runtimeStatistics))
             return false;
         if(record.ownerNodeIndex != accumulatedOwnerNodeIndex){
             accumulatedOwnerNodeIndex = record.ownerNodeIndex;
             accumulatedStatistics = {};
         }
-        if(!FrameGraphStatisticsCodecDetail::AccumulatePhysicalQueueRuntimeStatistics(record.statistics, nodes[record.ownerNodeIndex].runtimeStatistics, accumulatedStatistics))
+        if(!FrameGraphStatisticsValidator::AccumulatePhysicalQueueRuntimeStatistics(record.statistics, nodes[record.ownerNodeIndex].runtimeStatistics, accumulatedStatistics))
             return false;
-        if(statisticsIndex != 0u && !FrameGraphStatisticsCodecDetail::PhysicalQueueRuntimeStatisticsRecordLess(orderedPhysicalQueueRuntimeStatistics[statisticsIndex - 1u], record))
+        if(statisticsIndex != 0u && !FrameGraphStatisticsValidator::PhysicalQueueRuntimeStatisticsRecordLess(orderedPhysicalQueueRuntimeStatistics[statisticsIndex - 1u], record))
             return false;
     }
 
     const b8 hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
-        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
+        if(!FrameGraphStatisticsValidator::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
             return false;
     }
 
@@ -491,7 +492,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
 
     FrameGraphPhysicalQueueRuntimeStatisticsRecord previousPhysicalQueueStatistics;
     u32 accumulatedOwnerNodeIndex = Limit<u32>::s_Max;
-    FrameGraphStatisticsCodecDetail::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator accumulatedStatistics;
+    FrameGraphPhysicalQueueRuntimeStatisticsAccumulator accumulatedStatistics;
     for(u32 statisticsIndex = 0u; statisticsIndex < physicalQueueRuntimeStatisticsCount; ++statisticsIndex){
         const auto decodedEncodedStatistics = ReadPOD<EncodedFrameGraphPhysicalQueueRuntimeStatistics>(encoded, cursor);
         if(!decodedEncodedStatistics)
@@ -507,11 +508,11 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
             accumulatedOwnerNodeIndex = statistics.ownerNodeIndex;
             accumulatedStatistics = {};
         }
-        if(!FrameGraphStatisticsCodecDetail::AccumulatePhysicalQueueRuntimeStatistics(statistics.statistics, parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics, accumulatedStatistics))
+        if(!FrameGraphStatisticsValidator::AccumulatePhysicalQueueRuntimeStatistics(statistics.statistics, parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics, accumulatedStatistics))
             return MakeUnexpected(Failure{});
-        if(!FrameGraphStatisticsCodecDetail::ValidatePhysicalQueueRuntimeStatisticsOwner(statistics, parsedPayload.nodes.size(), parsedPayload.nodes[statistics.ownerNodeIndex].kind, parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics))
+        if(!FrameGraphStatisticsValidator::ValidatePhysicalQueueRuntimeStatisticsOwner(statistics, parsedPayload.nodes.size(), parsedPayload.nodes[statistics.ownerNodeIndex].kind, parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics))
             return MakeUnexpected(Failure{});
-        if(statisticsIndex != 0u && !FrameGraphStatisticsCodecDetail::PhysicalQueueRuntimeStatisticsRecordLess(previousPhysicalQueueStatistics, statistics))
+        if(statisticsIndex != 0u && !FrameGraphStatisticsValidator::PhysicalQueueRuntimeStatisticsRecordLess(previousPhysicalQueueStatistics, statistics))
             return MakeUnexpected(Failure{});
         parsedPayload.physicalQueueRuntimeStatistics.push_back(statistics);
         previousPhysicalQueueStatistics = statistics;
@@ -529,7 +530,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
         parsedPayload.packetSubmissionStatistics.push_back(*statistics);
     }
     if(parsedPayload.packetSubmissionStatisticsPresent){
-        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable<FrameGraphNodePayload>(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
+        if(!FrameGraphStatisticsValidator::ValidatePacketSubmissionStatisticsTable<FrameGraphNodePayload>(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
             return MakeUnexpected(Failure{});
     }
 

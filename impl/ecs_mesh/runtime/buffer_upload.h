@@ -44,7 +44,7 @@ template<typename PayloadT>
     if(!payloadBytes)
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
-    Core::GraphicsRuntime::BufferSetupDesc setup;
+    Core::GraphicsStandaloneService::BufferSetupDesc setup;
     setup.bufferDesc
         .setByteSize(static_cast<u64>(*payloadBytes))
         .setStructStride(sizeof(PayloadT))
@@ -57,7 +57,7 @@ template<typename PayloadT>
     ;
     setup.data = payload.data();
     setup.dataSize = *payloadBytes;
-    auto buffer = graphics.setupBuffer(setup);
+    auto buffer = graphics.standaloneGraph().setupBuffer(setup);
     if(!buffer)
         return MakeUnexpected(BufferSetupFailure::CreateFailed);
     return Move(*buffer);

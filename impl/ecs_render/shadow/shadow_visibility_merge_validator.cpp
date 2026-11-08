@@ -49,27 +49,27 @@ void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::Read
     outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(
         compiledPlan,
         PreparedShadowVisibilityTasks{
-            .terminal = pipeline.m_deferredShadowVisibilityTask,
-            .opaque = pipeline.m_deferredShadowVisibilityOpaqueTask,
-            .opaqueFirstWavelet = pipeline.m_deferredShadowVisibilityOpaqueFirstWaveletTask,
-            .opaqueResolve = pipeline.m_deferredShadowVisibilityOpaqueResolveTask,
-            .transparentTrace = pipeline.m_deferredShadowVisibilityTransparentTraceTask,
-            .transparentTemporalMerge = pipeline.m_deferredShadowVisibilityTransparentTemporalMergeTask,
-            .transparentFirstWavelet = pipeline.m_deferredShadowVisibilityTransparentFirstWaveletTask,
-            .diagnostics = pipeline.m_deferredShadowVisibilityDiagnosticsTask,
-            .combinedUpsample = pipeline.m_deferredShadowCombinedUpsample,
-            .combinedWavelet = pipeline.m_deferredShadowCombinedWavelet,
-            .combinedTemporal = pipeline.m_deferredShadowCombinedTemporal,
+            .terminal = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
+            .opaque = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask,
+            .opaqueFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask,
+            .opaqueResolve = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask,
+            .transparentTrace = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask,
+            .transparentTemporalMerge = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask,
+            .transparentFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask,
+            .diagnostics = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask,
+            .combinedUpsample = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedUpsample,
+            .combinedWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedWavelet,
+            .combinedTemporal = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedTemporal,
         }
     );
     // Keep the all-lit clear in its packet; split-soft frames keep native clear.
-    outResult.allLitClearMerged = pipeline.m_deferredShadowVisibilityOpaqueTask.valid()
-        ? !pipeline.m_deferredShadowVisibilityAllLitClearTask.valid()
-        : pipeline.m_deferredShadowVisibilityAllLitClearTask.valid()
-            && compiledPlan.tasksSharePacket(pipeline.m_deferredShadowVisibilityTask, pipeline.m_deferredShadowVisibilityAllLitClearTask)
+    outResult.allLitClearMerged = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask.valid()
+        ? !pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask.valid()
+        : pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask.valid()
+            && compiledPlan.tasksSharePacket(pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask)
     ;
     // The append-counter clear must precede visibility in the same packet.
-    outResult.adaptivePrimitivesMerged = !pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_deferredShadowVisibilityTask, pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask);
+    outResult.adaptivePrimitivesMerged = !pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAdaptiveCounterClearTask);
 }
 
 

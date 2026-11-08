@@ -4,6 +4,8 @@
 
 #include <core/common/name_symbols.h>
 
+#include <global/name_hash_text.h>
+#include <global/filesystem/executable_paths.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
@@ -44,10 +46,10 @@ static void VerifyUnknownAndBoundaryTokens(){
     NameSymbols::ClearRuntimeSymbols();
     Arena arena("Tests/NameSymbols/Boundaries");
     const Name known(AStringView("decode/known"));
-    Array<char, s_DebugHashTextLength + 1u> knownToken = {};
-    Array<char, s_DebugHashTextLength + 1u> unknownToken = {};
-    HashToDebugString(knownToken.data(), sizeof(knownToken), known.identityHash());
-    HashToDebugString(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unknown")));
+    Array<char, NameHashTextCodec::s_TextLength + 1u> knownToken = {};
+    Array<char, NameHashTextCodec::s_TextLength + 1u> unknownToken = {};
+    NameHashTextCodec::Format(knownToken.data(), sizeof(knownToken), known.identityHash());
+    NameHashTextCodec::Format(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unknown")));
     AString<Arena> source(arena);
     source.append(unknownToken.data()).append(" !").append(knownToken.data()).append("_ !a").append(knownToken.data()).append(" !");
     knownToken[0u] = 'g';
@@ -77,12 +79,12 @@ static void VerifyResolvedSpans(){
     const auto longNameResult = Name::FromText(AStringView(expanded.data(), expanded.size()));
     ASSERT_TRUE(longNameResult);
     const Name longName = *longNameResult;
-    Array<char, s_DebugHashTextLength + 1u> shortToken = {};
-    Array<char, s_DebugHashTextLength + 1u> longToken = {};
-    Array<char, s_DebugHashTextLength + 1u> unknownToken = {};
-    HashToDebugString(shortToken.data(), sizeof(shortToken), shortName.identityHash());
-    HashToDebugString(longToken.data(), sizeof(longToken), longName.identityHash());
-    HashToDebugString(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unresolved")));
+    Array<char, NameHashTextCodec::s_TextLength + 1u> shortToken = {};
+    Array<char, NameHashTextCodec::s_TextLength + 1u> longToken = {};
+    Array<char, NameHashTextCodec::s_TextLength + 1u> unknownToken = {};
+    NameHashTextCodec::Format(shortToken.data(), sizeof(shortToken), shortName.identityHash());
+    NameHashTextCodec::Format(longToken.data(), sizeof(longToken), longName.identityHash());
+    NameHashTextCodec::Format(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unresolved")));
     AString<Arena> source(arena);
     source.append(shortToken.data()).append(" !").append(unknownToken.data()).append(" !").append(longToken.data()).append(" !").append(shortToken.data());
     AString<Arena> expectedSource(arena);
@@ -119,6 +121,36 @@ TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){
 #endif
 
 
+TEST(NameSymbolDecodeTests, EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished){
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
+    ScopeExit cleanup([]()noexcept{
+        NameSymbols::ClearRuntimeSymbols();
+        NameSymbols::UninstallRuntimeRegistry();
+    });
+    Arena arena("Tests/NameSymbols/EscapedDocument");
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("Tests/NameSymbols/Scratch"));
+    constexpr AStringView s_Original = "symbols/line\ncarriage\rtab\tend";
+    const Name stored(s_Original);
+    const NameHash invalidHash = ComputeNameHash(MakeNotNull("symbols/invalid_escape_record"));
+    Array<char, NameHashTextCodec::s_TextLength + 1u> invalidToken = {};
+    NameHashTextCodec::Format(invalidToken.data(), invalidToken.size(), invalidHash);
+
+    AString<Arena> document("prefix:", arena);
+    const usize prefixLength = document.size();
+    ASSERT_TRUE(NameSymbols::Serialize(document));
+    EXPECT_NE(document.find("symbols/line\\ncarriage\\rtab\\tend"), AString<Arena>::npos);
+    document.append(invalidToken.data()).append("\truntime\tinvalid\\q\n");
+    document.append(invalidToken.data()).append("\truntime\tdangling\\\n");
+    NameSymbols::ClearRuntimeSymbols();
+    ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(document.data() + prefixLength, document.size() - prefixLength), scratchArena));
+
+    Array<char, NameSymbols::s_MaxResolvedTextLength> resolved = {};
+    ASSERT_TRUE(NameSymbols::Resolve(resolved.data(), resolved.size(), stored.identityHash()));
+    EXPECT_EQ(AStringView(resolved.data()), s_Original);
+    EXPECT_FALSE(NameSymbols::Resolve(resolved.data(), resolved.size(), invalidHash));
+}
+
 TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbols){
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
@@ -126,8 +158,8 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     NWB::Core::Alloc::ScratchArena scratchArena(Name("Tests/NameSymbols/Scratch"));
     const Name retained(AStringView("admission/retained"));
     const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
-    Array<char, s_DebugHashTextLength + 1u> incomingToken = {};
-    HashToDebugString(incomingToken.data(), sizeof(incomingToken), incomingHash);
+    Array<char, NameHashTextCodec::s_TextLength + 1u> incomingToken = {};
+    NameHashTextCodec::Format(incomingToken.data(), sizeof(incomingToken), incomingHash);
     AString<NWB::Core::Alloc::GlobalArena> record(arena);
     StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken.data());
     const usize retainedCount = NameSymbols::EntryCount();
@@ -238,8 +270,8 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
 #endif
 
     NameSymbols::ClearRuntimeSymbols();
-    const auto executableDirectory = GetExecutableDirectory(liveOwner);
-    const auto executableName = GetExecutableName(liveOwner);
+    const auto executableDirectory = ExecutablePaths(liveOwner).directory();
+    const auto executableName = ExecutablePaths(liveOwner).name();
     ASSERT_TRUE(executableDirectory);
     ASSERT_TRUE(executableName);
     NameSymbolTestPath namesymPath = *executableDirectory / *executableName;
@@ -258,6 +290,13 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     EXPECT_EQ(namesymText.find(s_TestsNamesymbolsBeforeRegistryLive), decltype(namesymText)::npos);
     EXPECT_EQ(namesymText.find(s_TestsNamesymbolsBeforeRegistryRetire), decltype(namesymText)::npos);
     EXPECT_EQ(namesymText.find(s_GlobalArenaMemoryHeapBacking), decltype(namesymText)::npos);
+#endif
+    NameSymbols::ClearRuntimeSymbols();
+    const auto loadedDefault = NameSymbols::LoadDefaultFile();
+    EXPECT_TRUE(loadedDefault ? *loadedDefault : loadedDefault.error().loadedAny);
+#if defined(NWB_BUILD_SYMBOLS)
+    ASSERT_TRUE(NameSymbols::Resolve(resolvedText.data(), sizeof(resolvedText), s_LiveHash));
+    EXPECT_STREQ(resolvedText.data(), s_TestsNamesymbolsBeforeRegistryLive.data());
 #endif
     EXPECT_TRUE(RemoveFile(namesymPath));
 }

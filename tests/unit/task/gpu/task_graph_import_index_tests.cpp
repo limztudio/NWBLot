@@ -129,6 +129,34 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
 }
 
 
+TEST(TaskGraphImportIndex, DuplicatePointerRollsBackOnlyNewIdentity){
+    Core::Alloc::GlobalArena arena{ Name("tests/graph_import_index/partial_publication") };
+    Vector<Core::GpuTaskGraphDetail::GpuGraphResourceNode, Core::Alloc::GlobalArena> resources(arena);
+    resources.resize(32u);
+    for(usize index = 0u; index < resources.size(); ++index){
+        const auto name = IndexedName(Name("tests/graph_import_index/prefix"), index);
+        ASSERT_TRUE(name);
+        resources[index].identity = *name;
+    }
+    Core::GpuGraphResourceImportIndex index(arena);
+    const Core::GpuTaskGraphDetail::ResourcePointerKey pointer{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
+    index.prepareResourceIndexes(resources, pointer);
+    const Name first("tests/graph_import_index/first_pointer");
+    const Name second("tests/graph_import_index/rejected_pointer");
+    Core::GpuGraphResourceImportIndex::Publication accepted;
+    ASSERT_TRUE(index.publishResource(first.identityHash(), pointer, 32u, accepted));
+    Core::GpuGraphResourceImportIndex::Publication rejected;
+    EXPECT_FALSE(index.publishResource(second.identityHash(), pointer, 33u, rejected));
+    EXPECT_TRUE(rejected.identity);
+    EXPECT_FALSE(rejected.pointer);
+    index.rollbackResource(second.identityHash(), pointer, rejected);
+    EXPECT_EQ(index.findResourceIdentity(resources, second), Limit<u32>::s_Max);
+    EXPECT_EQ(index.findResourceIdentity(resources, first), 32u);
+    const auto match = index.findResourceImportMatch(resources, nullptr, pointer);
+    EXPECT_TRUE(match.samePointer);
+    EXPECT_EQ(match.index, 32u);
+}
+
 TEST(TaskGraphImportIndex, ManySetsReuseOnlyTheirOriginalOrderedMembersAndRetainFirstLabels){
     ImportContext context;
     constexpr usize s_Count = 96u;

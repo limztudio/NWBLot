@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "protocol.h"
 #include "package_names.h"
 
 #include <core/alloc/scratch.h>
@@ -33,18 +34,7 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
-inline constexpr u32 s_AckMagic = 0x4E574241u; // NWBA
-inline constexpr u32 s_RequestVersion = 2u;
-inline constexpr usize s_MaxMetadata = 32u;
-inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxDiagnosticSites = 64u;
-inline constexpr usize s_MaxCallstackFrames = 64u;
-inline constexpr usize s_MaxShortText = 64u;
-inline constexpr usize s_MaxMediumText = 256u;
-inline constexpr usize s_MaxPathText = 1024u;
-inline constexpr usize s_MaxUrlText = 1024u;
-inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
 inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
 inline constexpr u32 s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
@@ -55,9 +45,6 @@ inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 #endif
 
 #if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr u32 s_WindowsContextArchitectureMask = 0x00FF0000u;
-inline constexpr u32 s_WindowsContextArchitecture = CONTEXT_CONTROL & s_WindowsContextArchitectureMask;
-inline constexpr u32 s_WindowsExtendedContextFlag = CONTEXT_XSTATE & ~s_WindowsContextArchitectureMask;
 inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
 #else
 inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
@@ -83,26 +70,6 @@ using CrashStringT = AString<ArenaT>;
 template<typename ArenaT>
 using CrashBytesT = Vector<u8, ArenaT>;
 
-
-namespace PlatformKind{
-    enum Enum : u32{
-        Unknown,
-        Windows,
-        Linux,
-        Android,
-    };
-};
-
-namespace CrashReasonKind{
-    enum Enum : u32{
-        Unknown,
-        WindowsException,
-        PosixSignal,
-        Terminate,
-        ManualDump,
-        GpuCrash,
-    };
-};
 
 namespace CrashDumpTransportStatus{
     enum Enum : u8{
@@ -182,136 +149,11 @@ private:
 };
 
 
-struct FixedMetadata{
-    Array<char, s_MaxShortText> key = {};
-    Array<char, s_MaxMediumText> value = {};
-    u8 used = 0u;
-};
-
-struct FixedBreadcrumb{
-    u64 order = 0u;
-    Array<char, s_MaxShortText> category = {};
-    Array<char, s_MaxMediumText> message = {};
-    u8 used = 0u;
-};
-
 struct FixedDiagnosticSite{
     u64 hash = 0u;
     u32 captureCount = 0u;
     u8 used = 0u;
 };
-
-struct CrashRequest{
-    u32 magic = s_RequestMagic;
-    u32 version = s_RequestVersion;
-    u32 platform = PlatformKind::Unknown;
-    u32 reasonKind = CrashReasonKind::Unknown;
-    u32 reasonCode = 0u;
-    u32 processId = 0u;
-    u32 threadId = 0u;
-    u32 dumpDetailMode = DumpDetailMode::Small;
-    u64 exceptionPointers = 0u;
-    u64 faultAddress = 0u;
-    u64 instructionPointer = 0u;
-    u64 stackPointer = 0u;
-    u64 framePointer = 0u;
-    u32 triggerLine = 0u;
-    u32 callstackFrameCount = 0u;
-    u32 callstackFramesToSkip = 0u;
-    CrashSpoolRetentionConfig spoolRetention;
-    Array<char, s_MaxShortText> crashId = {};
-    Array<char, s_MaxShortText> applicationName = {};
-    Array<char, s_MaxShortText> versionText = {};
-    Array<char, s_MaxMediumText> buildId = {};
-    Array<char, s_MaxShortText> abi = {};
-    Array<char, s_MaxPathText> spoolDirectory = {};
-    Array<char, s_MaxUrlText> logServerUrl = {};
-    Array<char, s_MaxMediumText> crashUploadToken = {};
-    Array<char, s_MaxShortText> event = {};
-    Array<char, s_MaxShortText> triggerCategory = {};
-    Array<char, s_MaxMediumText> triggerExpression = {};
-    Array<char, s_MaxMediumText> triggerMessage = {};
-    Array<char, s_MaxPathText> triggerFile = {};
-    u32 metadataCount = 0u;
-    u32 breadcrumbCount = 0u;
-    Array<FixedMetadata, s_MaxMetadata> metadata = {};
-    Array<FixedBreadcrumb, s_MaxBreadcrumbs> breadcrumbs = {};
-    Array<u64, s_MaxCallstackFrames> callstackFrames = {};
-#if defined(NWB_PLATFORM_WINDOWS)
-    u32 manualContextSize = 0u;
-    u32 manualExceptionRecordSize = 0u;
-    u32 manualContextArchitecture = 0u;
-    CONTEXT manualContext = {};
-    EXCEPTION_RECORD manualExceptionRecord = {};
-#endif
-};
-
-static_assert(IsTriviallyCopyable_V<CrashRequest>, "crash request transport requires an owning fixed native value");
-#if defined(NWB_PLATFORM_WINDOWS)
-static_assert(alignof(CrashRequest) >= alignof(CONTEXT), "crash request must preserve native context alignment");
-#endif
-
-struct CrashAck{
-    u32 magic = s_AckMagic;
-    u32 version = s_RequestVersion;
-    u8 packageWritten = 0u;
-    Array<char, s_MaxShortText> crashId = {};
-};
-
-// This fixed-size native protocol is shared only by the application and its same-build handler.
-// Native context admission does not provide mixed-binary or cross-architecture message framing.
-[[nodiscard]] inline b8 IsCurrentCrashRequest(const CrashRequest& request)noexcept{
-    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
-        return false;
-    if(request.metadataCount > s_MaxMetadata || request.breadcrumbCount > s_MaxBreadcrumbs || request.callstackFrameCount > s_MaxCallstackFrames)
-        return false;
-    const auto terminated = [](const auto& buffer)noexcept{ return FixedBufferView(buffer).size() < buffer.size(); };
-    if(
-        !terminated(request.crashId) || !terminated(request.applicationName) || !terminated(request.versionText)
-        || !terminated(request.buildId) || !terminated(request.abi) || !terminated(request.spoolDirectory)
-        || !terminated(request.logServerUrl) || !terminated(request.crashUploadToken) || !terminated(request.event)
-        || !terminated(request.triggerCategory) || !terminated(request.triggerExpression) || !terminated(request.triggerMessage)
-        || !terminated(request.triggerFile)
-    )
-        return false;
-    const AStringView crashId = FixedBufferView(request.crashId);
-    if(crashId.empty() || crashId == "." || crashId == "..")
-        return false;
-    for(const char ch : crashId){
-        if(!IsAsciiIdentifierChar(ch) && ch != '-' && ch != '.')
-            return false;
-    }
-    for(u32 i = 0u; i < request.metadataCount; ++i){
-        if(!terminated(request.metadata[i].key) || !terminated(request.metadata[i].value))
-            return false;
-    }
-    for(u32 i = 0u; i < request.breadcrumbCount; ++i){
-        if(!terminated(request.breadcrumbs[i].category) || !terminated(request.breadcrumbs[i].message))
-            return false;
-    }
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(request.manualContextSize == 0u)
-        return request.manualExceptionRecordSize == 0u && request.manualContextArchitecture == 0u;
-    if(request.platform != PlatformKind::Windows || request.exceptionPointers != 0u)
-        return false;
-    if(request.manualContextSize != sizeof(CONTEXT) || request.manualExceptionRecordSize != sizeof(EXCEPTION_RECORD) || request.manualContextArchitecture != s_WindowsContextArchitecture)
-        return false;
-    if((request.manualContext.ContextFlags & s_WindowsContextArchitectureMask) != s_WindowsContextArchitecture || (request.manualContext.ContextFlags & CONTEXT_CONTROL) != CONTEXT_CONTROL)
-        return false;
-    if((request.manualContext.ContextFlags & s_WindowsExtendedContextFlag) != 0u)
-        return false;
-    return request.manualExceptionRecord.ExceptionCode == s_ManualDumpExceptionCode && request.manualExceptionRecord.ExceptionRecord == nullptr && request.manualExceptionRecord.NumberParameters == 0u;
-#else
-    return true;
-#endif
-}
-
-[[nodiscard]] inline b8 CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
-    const AStringView ackId = FixedBufferView(ack.crashId);
-    const AStringView requestId = FixedBufferView(request.crashId);
-    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && ack.packageWritten <= 1u
-        && !ackId.empty() && ackId.size() < ack.crashId.size() && requestId.size() < request.crashId.size() && ackId == requestId;
-}
 
 struct ManualDumpContextStorage;
 

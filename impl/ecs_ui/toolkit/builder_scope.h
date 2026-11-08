@@ -41,6 +41,14 @@ NWB_IMPL_UI_BEGIN
 // Each declaration scope owns its transient layout and control loans in the caller's UI arena.
 class BuilderScopeFrame final : NoCopy{
     friend class Builder;
+    friend class ComboCoordinator;
+    friend class EditBoxCoordinator;
+    friend class TextAreaCoordinator;
+    friend class NumericEditCoordinator;
+    friend class ListCoordinator;
+    friend class ContextMenuCoordinator;
+    friend class ListLayoutPreparer;
+    friend class TooltipCoordinator;
 
 
 private:

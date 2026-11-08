@@ -91,7 +91,6 @@ public:
     Span<const MaterialCookEntry> materialEntries,
     ShaderCook::CookArena& cookArena,
     Core::Assets::ScratchArena& scratchArena,
-    ShaderCook& shaderCook,
     Span<ShaderCook::ShaderEntry> inOutShaderEntries
 );
 [[nodiscard]] b8 ValidateMaterials(Span<const PreparedShaderEntry> preparedEntries, Span<const MaterialCookEntry> materialEntries, Core::Assets::ScratchArena& scratchArena);
@@ -101,7 +100,6 @@ public:
     Span<const PreparedShaderEntry> preparedEntries,
     ShaderCook::CookArena& cookArena,
     Core::Assets::ScratchArena& scratchArena,
-    ShaderCook& shaderCook,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     Core::Assets::CookEntryPathHashSet& inOutSeenVirtualPathHashes
 );

@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_ui_skin/validation.adhd.h>
+#include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
 #include <impl/assets_texture/asset.h>
 
 #include <core/assets/auto_registration.h>
@@ -48,7 +50,7 @@ static_assert(sizeof(UiSkinTypography) == s_UiSkinTypographyBytes, "UiSkinTypogr
 
 b8 UiSkin::loadBinary(const Span<const u8> binary){
     UiSkin candidate(m_regions.get_allocator().arena(), virtualPath());
-    if(!DeserializeUiSkinBinaryPayload(
+    if(!UiSkinBinaryCodec().deserialize(
         binary,
         candidate.m_texture,
         candidate.m_atlasWidth,

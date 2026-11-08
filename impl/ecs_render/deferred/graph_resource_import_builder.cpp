@@ -3,6 +3,10 @@
 
 
 #include "graph_resource_import_builder.h"
+#include "csg_texture_imports.h"
+#include "avboit_resource_imports.h"
+
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -39,13 +43,6 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return RendererTaskGraphDetail::ImportExternalTexture(m_graph, texture, identity, label, Core::ResourceStates::Unknown);
     };
-    // Clears may start Undefined; no-clear frames import retained Common.
-    const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return clearAvboitTargets
-            ? importFirstWriteTexture(texture, identity, label)
-            : RendererTaskGraphDetail::ImportExternalTexture(m_graph, texture, identity, label)
-        ;
-    };
     const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
         return RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.bindless.slotsBuffer, identity, label);
     };
@@ -55,17 +52,8 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     Expected<Core::GpuGraphResourceId> worldPositionResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> specularRoughnessResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> depthResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgCapBackNormalResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgIntervalDepthResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgIntervalIdResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgReceiverEventDataResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgReceiverEventCountResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgReceiverSpanDataResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgReceiverSpanCountResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgRemovedIntervalDepthResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgRemovedIntervalCapNormalResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgRemovedIntervalDataResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> csgRemovedIntervalCountResult = MakeUnexpected(Failure{});
+    DeferredCsgTextureImports csgTextureImports;
+    DeferredAvboitResourceImports avboitImports;
     Expected<Core::GpuGraphResourceId> shadowVisibilityResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> causticIrradianceResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> surfelIrradianceResult = MakeUnexpected(Failure{});
@@ -91,25 +79,6 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     Expected<Core::GpuGraphResourceId> historyCopyDestinationShadowVisibilityResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> historyCopyDestinationCausticIrradianceResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> historyCopyDestinationSurfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitLowRasterResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitAccumColorResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitAccumExtinctionResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionDepthResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionNormalIorResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionTintCoverageResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionInstanceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionSpecularRoughnessResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> refractionResolveResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitForegroundColorResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitForegroundExtinctionResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitTransmittanceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitCoverageResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitDepthWarpResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitControlResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitExtinctionResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitExtinctionOverflowResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitMaterialDomainResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> avboitCsgDomainResult = MakeUnexpected(Failure{});
 
     albedoResult = importFirstWriteTexture(deferredTargets.albedo, Name("render.deferred_lighting.albedo"), "G-Buffer Albedo");
     normalResult = importFirstWriteTexture(deferredTargets.normal, Name("render.deferred_lighting.normal"), "G-Buffer Normal");
@@ -118,19 +87,8 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     depthResult = importFirstWriteTexture(deferredTargets.depth, Name("render.deferred_lighting.depth"), "G-Buffer Depth");
 
     // CSG working set is declared only for frames with CSG work; wider target lifecycle stays in native producers.
-    if(hasCsgFrameWork){
-        csgCapBackNormalResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
-        csgIntervalDepthResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgIntervalDepth, Name("render.deferred.csg_interval_depth"), "CSG Interval Depth");
-        csgIntervalIdResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgIntervalId, Name("render.deferred.csg_interval_id"), "CSG Interval ID");
-        csgReceiverEventDataResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgReceiverEventData, Name("render.deferred.csg_receiver_event_data"), "CSG Receiver Event Data");
-        csgReceiverEventCountResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgReceiverEventCount, Name("render.deferred.csg_receiver_event_count"), "CSG Receiver Event Count");
-        csgReceiverSpanDataResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgReceiverSpanData, Name("render.deferred.csg_receiver_span_data"), "CSG Receiver Span Data");
-        csgReceiverSpanCountResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgReceiverSpanCount, Name("render.deferred.csg_receiver_span_count"), "CSG Receiver Span Count");
-        csgRemovedIntervalDepthResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgRemovedIntervalDepth, Name("render.deferred.csg_removed_interval_depth"), "CSG Removed Interval Depth");
-        csgRemovedIntervalCapNormalResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
-        csgRemovedIntervalDataResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
-        csgRemovedIntervalCountResult = RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
-    }
+    if(hasCsgFrameWork)
+        csgTextureImports.capture(m_graph, deferredTargets);
     shadowVisibilityResult = RendererTaskGraphDetail::ImportExternalTexture(
         m_graph, history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : RendererGpuPassText::s_ShadowVisibilityLabel
     );
@@ -214,25 +172,7 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     }
 
     // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
-    avboitLowRasterResult = importAvboitTexture(deferredTargets.avboit.lowRasterTarget, Name("render.avboit.low_raster"), "AVBOIT Low Raster");
-    avboitAccumColorResult = importAvboitTexture(deferredTargets.avboit.accumColor, Name("render.avboit.accum_color"), "AVBOIT Accumulated Color");
-    avboitAccumExtinctionResult = importAvboitTexture(deferredTargets.avboit.accumExtinction, Name("render.avboit.accum_extinction"), "AVBOIT Accumulated Extinction");
-    refractionDepthResult = importAvboitTexture(deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
-    refractionNormalIorResult = importAvboitTexture(deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
-    refractionTintCoverageResult = importAvboitTexture(deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
-    refractionInstanceResult = importAvboitTexture(deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
-    refractionSpecularRoughnessResult = importAvboitTexture(deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
-    refractionResolveResult = importAvboitTexture(deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
-    avboitForegroundColorResult = importAvboitTexture(deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
-    avboitForegroundExtinctionResult = importAvboitTexture(deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
-    avboitTransmittanceResult = importAvboitTexture(deferredTargets.avboit.transmittanceTexture, Name("render.avboit.transmittance"), "AVBOIT Transmittance");
-    avboitCoverageResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.avboit.coverageBuffer, Name("render.avboit.coverage"), "AVBOIT Coverage");
-    avboitDepthWarpResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.avboit.depthWarpBuffer, Name(RendererGpuPassText::s_AvboitDepthWarpName), RendererGpuPassText::s_AvboitDepthWarpLabel);
-    avboitControlResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.avboit.controlBuffer, Name("render.avboit.control"), "AVBOIT Control");
-    avboitExtinctionResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.avboit.extinctionBuffer, Name(RendererGpuPassText::s_AvboitExtinctionName), RendererGpuPassText::s_AvboitExtinctionLabel);
-    avboitExtinctionOverflowResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.avboit.extinctionOverflowBuffer, Name("render.avboit.extinction_overflow"), "AVBOIT Extinction Overflow");
-    avboitMaterialDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry"));
-    avboitCsgDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
+    avboitImports.capture(m_graph, deferredTargets, clearAvboitTargets);
     if(
         !csgIntervalSampleStateResult
         || !materialInstancesResult
@@ -240,32 +180,14 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
         || !csgReceiverRangesResult
         || !csgCuttersResult
         || !csgClipContextSlotsResult
-        || !refractionDepthResult
-        || !refractionNormalIorResult
-        || !refractionTintCoverageResult
-        || !refractionInstanceResult
-        || !refractionResolveResult
-        || !avboitForegroundColorResult
-        || !avboitForegroundExtinctionResult
+        || !avboitImports.validRefractionInputs()
         || !albedoResult
         || !normalResult
         || !worldPositionResult
         || !specularRoughnessResult
-        || !refractionSpecularRoughnessResult
+        || !avboitImports.validRefractionSpecular()
         || !depthResult
-        || (hasCsgFrameWork && (
-            !csgCapBackNormalResult
-            || !csgIntervalDepthResult
-            || !csgIntervalIdResult
-            || !csgReceiverEventDataResult
-            || !csgReceiverEventCountResult
-            || !csgReceiverSpanDataResult
-            || !csgReceiverSpanCountResult
-            || !csgRemovedIntervalDepthResult
-            || !csgRemovedIntervalCapNormalResult
-            || !csgRemovedIntervalDataResult
-            || !csgRemovedIntervalCountResult
-        ))
+        || (hasCsgFrameWork && !csgTextureImports.valid())
         || !shadowVisibilityResult
         || !causticIrradianceResult
         || !surfelIrradianceResult
@@ -287,17 +209,7 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
             || !historyCopyDestinationCausticIrradianceResult
             || !historyCopyDestinationSurfelIrradianceResult
         ))
-        || !avboitLowRasterResult
-        || !avboitAccumColorResult
-        || !avboitAccumExtinctionResult
-        || !avboitTransmittanceResult
-        || !avboitCoverageResult
-        || !avboitDepthWarpResult
-        || !avboitControlResult
-        || !avboitExtinctionResult
-        || !avboitExtinctionOverflowResult
-        || !avboitMaterialDomainResult
-        || !avboitCsgDomainResult
+        || !avboitImports.validAvboitInputs()
     )
         return MakeUnexpected(Failure{});
 
@@ -306,19 +218,8 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
     result.worldPosition = *worldPositionResult;
     result.specularRoughness = *specularRoughnessResult;
     result.depth = *depthResult;
-    if(hasCsgFrameWork){
-        result.csgCapBackNormal = *csgCapBackNormalResult;
-        result.csgIntervalDepth = *csgIntervalDepthResult;
-        result.csgIntervalId = *csgIntervalIdResult;
-        result.csgReceiverEventData = *csgReceiverEventDataResult;
-        result.csgReceiverEventCount = *csgReceiverEventCountResult;
-        result.csgReceiverSpanData = *csgReceiverSpanDataResult;
-        result.csgReceiverSpanCount = *csgReceiverSpanCountResult;
-        result.csgRemovedIntervalDepth = *csgRemovedIntervalDepthResult;
-        result.csgRemovedIntervalCapNormal = *csgRemovedIntervalCapNormalResult;
-        result.csgRemovedIntervalData = *csgRemovedIntervalDataResult;
-        result.csgRemovedIntervalCount = *csgRemovedIntervalCountResult;
-    }
+    if(hasCsgFrameWork)
+        csgTextureImports.publish(result);
     result.shadowVisibility = *shadowVisibilityResult;
     result.causticIrradiance = *causticIrradianceResult;
     result.surfelIrradiance = *surfelIrradianceResult;
@@ -353,25 +254,7 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
         result.historyCopyDestinationCausticIrradiance = *historyCopyDestinationCausticIrradianceResult;
         result.historyCopyDestinationSurfelIrradiance = *historyCopyDestinationSurfelIrradianceResult;
     }
-    result.avboitLowRaster = *avboitLowRasterResult;
-    result.avboitAccumColor = *avboitAccumColorResult;
-    result.avboitAccumExtinction = *avboitAccumExtinctionResult;
-    result.refractionDepth = *refractionDepthResult;
-    result.refractionNormalIor = *refractionNormalIorResult;
-    result.refractionTintCoverage = *refractionTintCoverageResult;
-    result.refractionInstance = *refractionInstanceResult;
-    result.refractionSpecularRoughness = *refractionSpecularRoughnessResult;
-    result.refractionResolve = *refractionResolveResult;
-    result.avboitForegroundColor = *avboitForegroundColorResult;
-    result.avboitForegroundExtinction = *avboitForegroundExtinctionResult;
-    result.avboitTransmittance = *avboitTransmittanceResult;
-    result.avboitCoverage = *avboitCoverageResult;
-    result.avboitDepthWarp = *avboitDepthWarpResult;
-    result.avboitControl = *avboitControlResult;
-    result.avboitExtinction = *avboitExtinctionResult;
-    result.avboitExtinctionOverflow = *avboitExtinctionOverflowResult;
-    result.avboitMaterialDomain = *avboitMaterialDomainResult;
-    result.avboitCsgDomain = *avboitCsgDomainResult;
+    avboitImports.publish(result);
     result.csgPeelSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
     result.csgReceiverEventDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverEventLayerCount);
     result.csgReceiverEventCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);

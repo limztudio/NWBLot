@@ -132,6 +132,7 @@ TEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfte
     ASSERT_TRUE(codec.serialize(atlas, binary));
     FontAtlas loaded(testArena.arena, atlas.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
+    EXPECT_EQ(loaded.payload().font.name(), atlas.payload().font.name());
     ASSERT_NE(loaded.glyph(4u), nullptr);
     EXPECT_EQ(loaded.glyph(4u)->drawable, 0u);
     EXPECT_FLOAT_EQ(loaded.glyph(4u)->advanceUnits, 404.f);
@@ -203,6 +204,10 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
         EXPECT_EQ(atlas.payload().fontSha256, payload.fontSha256);
         EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
     }
+    Core::Assets::AssetBytes legacy(*valid);
+    WriteLittleU32(4u, 2u, legacy);
+    EXPECT_FALSE(atlas.loadBinary(legacy));
+    EXPECT_EQ(atlas.payload().font.name(), payload.font.name());
     Core::Assets::AssetBytes changed(*valid);
     changed.back() ^= 1u;
     EXPECT_FALSE(atlas.loadBinary(changed));

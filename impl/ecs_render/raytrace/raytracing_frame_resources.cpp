@@ -3,9 +3,16 @@
 
 
 #include "raytracing_system.h"
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
+
+#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
 
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/software_bvh_builder.h>
+#include <impl/ecs_render/shadow/light_space_resource_set.h>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.h>
+#include <impl/ecs_render/caustic/caustic_activity_resources.h>
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
@@ -21,6 +28,7 @@ NWB_IMPL_BEGIN
 
 
 void RendererRayTracingSystem::invalidateResources(){
+    SoftwareBvhBuilder bvh(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
     discardPreflightShadowVisibilityResources();
     invalidatePreparedShadowTraceGeometryBuffers();
     m_hardwareOpticalScene.invalidate();
@@ -29,13 +37,16 @@ void RendererRayTracingSystem::invalidateResources(){
     m_sceneSwBvhRefit.invalidate();
     releaseSceneTlasHeapHandle();
     releaseCausticEmissionTargetHeapHandle();
-    releaseCausticResolveActivity();
-    releaseRayTraceMaterialContextHeapHandles();
-    releaseSwBvhScratchHeapHandles();
+    CausticActivityResources activity(m_graphics, m_rayTracingState.m_causticResolve.m_activity);
+    activity.releaseCausticResolveActivity();
+    RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).releaseRayTraceMaterialContextHeapHandles();
+    bvh.releaseSwBvhScratchHeapHandles();
     releaseSurfelGiHeapHandles();
-    releaseHardwareTransparentShadowResources();
-    releaseLightSpaceShadowResources();
-    m_refractionStatistics.invalidateResources();
+    HardwareTransparentShadowResources transparentResources(m_arena, m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+    transparentResources.releaseHardwareTransparentShadowResources();
+    LightSpaceResourceSet resources(m_arena, m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
+    resources.releaseLightSpaceShadowResources();
+    m_refraction.invalidateResources();
     m_rayTracingState.invalidateResources();
 }
 
@@ -54,7 +65,7 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
 
 void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const SceneLightGpuData> lights){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
-    LogUnsupportedCausticVolumesIfNeeded(
+    RayTracingDiagnostics().unsupportedCausticVolumes(
         m_shadowVisibilityTraceResourcesPreflighted,
         classification.causticLightCount,
         m_unsupportedCausticVolumeCount,
@@ -69,7 +80,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
 
     // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
     // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
-    LogCausticEmissionGateIfNeeded(
+    RayTracingDiagnostics().causticEmissionGate(
         classification.causticLightCount,
         m_rayTracingState.m_causticRefractiveInstanceCount,
         LoadFloat(m_rayTracingState.m_causticTargetBoundsMin),
@@ -112,7 +123,7 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
         .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
         .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
-        .causticEmissionTargetBuffer = state.m_causticEmissionTargetBuffer,
+        .causticEmissionTargetBuffer = state.m_causticEmissionTargets.buffer,
         .surfelFrameConstantsBuffer = state.m_surfelConstants,
         .hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer,
         .hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer,
@@ -138,7 +149,7 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
 
 
 void RendererRayTracingSystem::logCapabilityOnce(){
-    LogRayTracingCapabilityIfNeeded(
+    RayTracingDiagnostics().rayTracingCapability(
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct),
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline),
         m_graphics.queryFeatureSupport(Core::Feature::RayQuery),

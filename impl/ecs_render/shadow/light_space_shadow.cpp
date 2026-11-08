@@ -3,6 +3,11 @@
 
 
 #include "light_space_shadow.h"
+#include "light_space_resource_set.h"
+
+#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
+
+#include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd.h>
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
@@ -91,7 +96,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
                 if(mappedFailures){
                     const u32 failureFlags = *MakeNotNull(static_cast<const u32*>(*mappedFailures));
                     device.unmapBuffer(*diagnostics.readback);
-                    LogNewLightSpaceCsgRayFailures(failureFlags, diagnostics.reportedFailures);
+                    LightSpaceShadowLogReporter{}.reportRayFailures(failureFlags, diagnostics.reportedFailures);
                     diagnostics.submission = {};
                 }
             }
@@ -111,7 +116,8 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
-    state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
+    LightSpaceResourceSet resources(m_arena, m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
+    state.m_resourcesPrepared = resources.ensureLightSpaceShadowPipelines() && resources.ensureLightSpaceShadowStorage(plan);
 }
 
 Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const Span<const SceneLightGpuData> lights)const noexcept{
@@ -119,7 +125,7 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
     const usize lightCount = lights.size();
     if(
         (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
-        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhReady)
+        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhTraversal.ready())
         || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
         || state.m_casters.empty() || lightCount > NWB_SCENE_MAX_LIGHTS
     )
@@ -170,7 +176,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
             return;
     }
     DeferredFrameTargets& targets = *m_shadowVisibilityPreparedTargets;
-    const LightSpaceCaptureIdentity identity = BuildLightSpaceCaptureIdentity(
+    const LightSpaceCaptureIdentity identity = LightSpaceCaptureIdentityBuilder().buildCaptureIdentity(
         state.m_captureSceneIdentity,
         state.m_captureSceneTrusted,
         lights,

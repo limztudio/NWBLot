@@ -359,7 +359,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         pointerKey.pointer = binding.buffer->get();
     else if(binding.accelStruct)
         pointerKey.pointer = binding.accelStruct->get();
-    prepareResourceIndexes(pointerKey);
+    m_resourceImportIndexes.prepareResourceIndexes(m_resources, pointerKey);
 
     ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffSources, m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffStateSnapshots, m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
@@ -419,26 +419,12 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     }
 
     const NameHash& identityKey = desc.identity.identityHash();
-    b8 identityInserted = false;
-    b8 pointerInserted = false;
-    ScopeExit indexRollback([&]()noexcept{
-        if(pointerInserted)
-            m_resourcePointerIndex->erase(pointerKey);
-        if(identityInserted)
-            m_resourceIdentityIndex->erase(identityKey);
-    });
+    GpuGraphResourceImportIndex::Publication publication;
+    ScopeExit indexRollback([&]()noexcept{ m_resourceImportIndexes.rollbackResource(identityKey, pointerKey, publication); });
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
-    if(m_resourceIdentityIndex){
-        identityInserted = m_resourceIdentityIndex->emplace(identityKey, index).second;
-        if(!identityInserted)
-            return MakeUnexpected(Failure{});
-        if(pointerKey.pointer){
-            pointerInserted = m_resourcePointerIndex->emplace(pointerKey, index).second;
-            if(!pointerInserted)
-                return MakeUnexpected(Failure{});
-        }
-    }
+    if(!m_resourceImportIndexes.publishResource(identityKey, pointerKey, index, publication))
+        return MakeUnexpected(Failure{});
     if(initialOwnerHandoffStateSnapshots){
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
             snapshot.release();
@@ -520,7 +506,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resourceSetMembers, m_resourceSetMembers.size() + desc.memberCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceSets, m_resourceSets.size() + 1u);
-    prepareResourceSetIndex();
+    m_resourceImportIndexes.prepareResourceSetIndex(m_resourceSets);
 
     AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
     AppendedContainerRollbackScope memberRollback(m_resourceSetMembers, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
@@ -539,17 +525,11 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
 
     const NameHash& identityKey = desc.identity.identityHash();
     b8 identityInserted = false;
-    ScopeExit indexRollback([&]()noexcept{
-        if(identityInserted)
-            m_resourceSetIdentityIndex->erase(identityKey);
-    });
+    ScopeExit indexRollback([&]()noexcept{ m_resourceImportIndexes.rollbackResourceSet(identityKey, identityInserted); });
     const u32 index = static_cast<u32>(m_resourceSets.size());
     m_resourceSets.push_back(Move(resourceSet));
-    if(m_resourceSetIdentityIndex){
-        identityInserted = m_resourceSetIdentityIndex->emplace(identityKey, index).second;
-        if(!identityInserted)
-            return MakeUnexpected(Failure{});
-    }
+    if(!m_resourceImportIndexes.publishResourceSet(identityKey, index, identityInserted))
+        return MakeUnexpected(Failure{});
     markerRollback.commit();
     memberRollback.commit();
     setRollback.commit();

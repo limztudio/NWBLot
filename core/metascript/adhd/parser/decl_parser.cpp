@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 #include "decl_parser.h"
 
 
@@ -18,7 +24,7 @@ b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize
     usize minParams = 1u;
     usize maxParams = 1u;
     b8 prohibitsUnary = false;
-    if(!TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary))
+    if(!OperatorSemantics::TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary))
         return false;
     if(prohibitsUnary && paramCount == 0u){
         outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
@@ -65,7 +71,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
     if(m_cursor.check(TokenType::Identifier)){
-        const MStringView prohibitedErr = FindProhibitedTopLevelKeywordError(m_cursor.current().text);
+        const MStringView prohibitedErr = KeywordSemantics::FindProhibitedTopLevelKeywordError(m_cursor.current().text);
         if(!prohibitedErr.empty()){
             m_cursor.error(prohibitedErr);
             return false;
@@ -108,7 +114,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     b8 isFlagDecl = false;
-    if(m_cursor.check(TokenType::Identifier) && TryParseEnumDeclKeyword(m_cursor.current().text, &isFlagDecl)){
+    if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::TryParseEnumDeclKeyword(m_cursor.current().text, &isFlagDecl)){
         m_cursor.advance();
         EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl);
         if(!enumDecl)
@@ -212,7 +218,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     const MStringView sizeTypeName = m_cursor.current().text;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
-    if(!ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
+    if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
         m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
         return nullptr;
     }
@@ -250,7 +256,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         entry.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
         m_cursor.advance();
 
-        if(TryParseEnumDeclKeyword(entry.name) && m_cursor.check(TokenType::Identifier)){
+        if(KeywordSemantics::TryParseEnumDeclKeyword(entry.name) && m_cursor.check(TokenType::Identifier)){
             m_cursor.error("enumerator entries must not be prefixed with 'enum' or 'flag'");
             return nullptr;
         }
@@ -333,18 +339,18 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         if(!AttributeParser::ParseOptionalList(m_cursor, methodAttrs))
             return nullptr;
 
-        if(m_cursor.check(TokenType::Identifier) && ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
+        if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
             m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'");
             return nullptr;
         }
         if(m_cursor.check(TokenType::Identifier)){
-            const MStringView prohibitedErr = FindProhibitedMemberKeywordError(m_cursor.current().text, true);
+            const MStringView prohibitedErr = KeywordSemantics::FindProhibitedMemberKeywordError(m_cursor.current().text, true);
             if(!prohibitedErr.empty()){
                 m_cursor.error(prohibitedErr);
                 return nullptr;
             }
         }
-        if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
+        if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsNestedTypeKeyword(m_cursor.current().text, true)){
             m_cursor.error("nested type declarations inside 'interface' are prohibited in adhd; declare types at file scope");
             return nullptr;
         }

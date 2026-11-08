@@ -3,6 +3,7 @@
 
 
 #include "lexer.h"
+#include "literal_decoder.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,7 +367,7 @@ Token Lexer::readNumber()noexcept{
             advance();
             return makeErrorToken(invalidLitMsg, startLine, startColumn);
         }
-        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
+        while(!isAtEnd() && LiteralDecoder::IsIntegerLiteralSuffixChar(peek()))
             advance();
         if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
             while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
@@ -443,7 +444,7 @@ Token Lexer::readNumber()noexcept{
                 advance();
             return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
         }
-        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
+        while(!isAtEnd() && LiteralDecoder::IsIntegerLiteralSuffixChar(peek()))
             advance();
         if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
             while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
@@ -498,7 +499,7 @@ Token Lexer::readNumber()noexcept{
         advance();
     }
     else if(!isDouble){
-        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
+        while(!isAtEnd() && LiteralDecoder::IsIntegerLiteralSuffixChar(peek()))
             advance();
     }
 
@@ -629,7 +630,7 @@ Token Lexer::readCharLiteral()noexcept{
                     break;
             }
         }
-        else if(!TryDecodeSimpleEscapeChar(esc)){
+        else if(!LiteralDecoder::TryDecodeSimpleEscapeChar(esc)){
             return makeErrorToken(MStringView("invalid escape sequence in character literal"), startLine, startColumn);
         }
     }

@@ -3,9 +3,7 @@
 
 
 #include "reflection_optical_scene.h"
-#include "csg_smoke_helpers.h"
-
-#include <impl/ecs_csg/shape_registry.h>
+#include "reflection_optical_csg_builder.h"
 
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
@@ -30,7 +28,6 @@ namespace __hidden_reflection_optical_scene{
 
 constexpr AStringView s_SpecularParameterPath = "runtime.specular_f0";
 constexpr AStringView s_RoughnessParameterPath = "runtime.perceptual_roughness";
-constexpr AStringView s_PlaneShapePath = "engine/csg/plane";
 constexpr AStringView s_OpticalCsgDenseCase = "optical_csg_dense";
 constexpr AStringView s_OpticalReferenceCase = "optical_reference";
 constexpr AStringView s_OpticalGroupEntryCase = "optical_group_entry";
@@ -145,16 +142,8 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(const b8 csg, Core:
     if(!csg)
         return OpticalReceiverEntities{ .receiver = receiver };
     const Name group("smoke/reflection/csg_dense");
-    AddStaticCsgMeshReceiver(receiver, group, true, false, world);
-    auto cutterEntity = world.createEntity();
-    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-    cutter.receiverGroup = group;
-    cutter.shapeType = Name(s_PlaneShapePath);
-    Impl::CsgPlaneShapeParameters parameters;
-    parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 11.f);
-    AssignCsgCutterParameters(parameters, cutter);
-    AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
+    const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, true, false, Float4(-1.f, 0.f, 0.f, 11.f));
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
 }
 
 static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(const SmokeMeshRef& mesh, const b8 cavity, const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world){
@@ -163,16 +152,8 @@ static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(const SmokeMe
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
     const Name group("smoke/reflection/csg_optics");
-    AddStaticCsgMeshReceiver(receiver, group, false, true, world);
-    auto cutterEntity = world.createEntity();
-    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-    cutter.receiverGroup = group;
-    cutter.shapeType = Name(s_PlaneShapePath);
-    Impl::CsgPlaneShapeParameters parameters;
-    parameters.normalDistance = Float4(0.f, 0.f, -1.f, -9.f);
-    AssignCsgCutterParameters(parameters, cutter);
-    AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
+    const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(0.f, 0.f, -1.f, -9.f));
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
 }
 
 static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& world){
@@ -193,15 +174,7 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
         if(ordinary)
             return true;
         const Name group("smoke/reflection/csg_group_entry");
-        AddStaticCsgMeshReceiver(receiver, group, false, true, world);
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/box");
-        Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4(13.f, 10.f, 3.5e-6f, 0.f);
-        AssignCsgCutterParameters(parameters, cutter);
-        AssignCsgCutterTransform(VectorSet(0.f, 1.4f, -9.0000085f, 0.f), QuaternionIdentity(), cutter);
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addBox(receiver, group, Float4(13.f, 10.f, 3.5e-6f, 0.f), VectorSet(0.f, 1.4f, -9.0000085f, 0.f));
         return true;
     }
     const b8 groupGapSubUlp = caseName == s_OpticalGroupGapSubUlpCase || caseName == "optical_csg_group_gap_sub_ulp";
@@ -213,15 +186,7 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
         if(caseName == s_OpticalGroupGapCase || caseName == s_OpticalGroupGapSubUlpCase)
             return true;
         const Name group(groupGapSubUlp ? "smoke/reflection/csg_group_gap_sub_ulp" : "smoke/reflection/csg_group_gap");
-        AddStaticCsgMeshReceiver(receiver, group, false, true, world);
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name(s_PlaneShapePath);
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
-        AssignCsgCutterParameters(parameters, cutter);
-        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
         return true;
     }
     const b8 subUlp = caseName == s_OpticalSubUlpCase || caseName == "optical_csg_sub_ulp";
@@ -233,15 +198,7 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
         if(caseName == s_OpticalSliverCase || caseName == s_OpticalSubUlpCase)
             return true;
         const Name group(subUlp ? "smoke/reflection/csg_sub_ulp" : "smoke/reflection/csg_sliver");
-        AddStaticCsgMeshReceiver(receiver, group, false, true, world);
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name(s_PlaneShapePath);
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
-        AssignCsgCutterParameters(parameters, cutter);
-        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
         return true;
     }
     const b8 unspecifiedCap = caseName == "optical_csg_unspecified_cap";

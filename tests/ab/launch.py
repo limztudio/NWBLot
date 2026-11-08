@@ -16,7 +16,7 @@ sys.path.insert(0, str(REPO))
 
 from launcher.cli import LauncherCli  # noqa: E402
 from launcher.cmake_settings import CmakeSettings  # noqa: E402
-from launcher.discovery import LauncherDiscovery  # noqa: E402
+from launcher.commands import LauncherCommands  # noqa: E402
 
 
 TESTS_DIR_NAME = "tests"
@@ -111,7 +111,7 @@ def parse_ab_launcher_args(
 
 
 def main(argv: Sequence[str]) -> int:
-    return LauncherDiscovery.run_directory_launcher(Path(TESTS_DIR_NAME) / AB_SUBDIR_NAME, argv)
+    return LauncherCommands.run_directory_launcher(Path(TESTS_DIR_NAME) / AB_SUBDIR_NAME, argv)
 
 
 if __name__ == MAIN_ENTRY:

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import pathlib
-import re
 import struct
 import subprocess
 import sys
@@ -14,27 +12,13 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "common"))
 
-from png_fixture import write_png_rows  # noqa: E402
+from image_fixtures import TextureImageFixtures, LIT_A, LIT_B, LIT_G, LIT_R, LIT_Y, EXR_UINT, EXR_FLOAT  # noqa: E402
+from prepared_texture_reader import (PreparedTextureReader, LIT_METADATA_SUFFIX, LIT_FORMAT, LIT_DIMENSION, LIT_ALPHA_MODE, LIT_CUBE, LIT_VOLUME, LIT_ALPHA_CONSTANT, LIT_MIPS)  # noqa: E402
 
 LIT_BACKUP_SUFFIX = ".old"
-LIT_METADATA_SUFFIX = ".nwb"
 LIT_TEXTURE_SUFFIX = ".tex"
 
-LIT_A = "A"
-LIT_B = "B"
-LIT_G = "G"
-LIT_R = "R"
-LIT_Y = "Y"
 LIT_FORCE = "--force"
-LIT_FORMAT = "format"
-LIT_DIMENSION = "dimension"
-LIT_RESOLUTION = "resolution"
-LIT_ALPHA_MODE = "alpha_mode"
-LIT_ALPHA_CONSTANT_UNORM8 = "alpha_constant_unorm8"
-LIT_CUBE = "cube"
-LIT_VOLUME = "volume"
-LIT_ALPHA_CONSTANT = "alpha_constant"
-LIT_MIPS = "mips"
 LIT_CUBE_2 = "--cube"
 LIT_VOLUME_2 = "--volume"
 LIT_OUTPUT = "--output"
@@ -44,102 +28,8 @@ LIT_WHITE = "white"
 LIT_BLACK = "black"
 LIT_ALPHA = "--alpha"
 
-LIT_ASCII = "ascii"
-LIT_X00 = b"\x00"
-LIT_COMPRESSION = "compression"
-LIT_BOX2I = "box2i"
-LIT_N_4I = "<4i"
-LIT_LINEORDER = "lineOrder"
-LIT_FLOAT = "float"
-LIT_F = "<f"
 LIT_TMP_SUFFIX = ".tmp"
 LIT_LINEAR = "--linear"
-EXR_UINT = 0
-EXR_FLOAT = 2
-
-
-def write_png_pixels(path: pathlib.Path, width: int, height: int, color_type: int, pixels: tuple[tuple[int, ...], ...]) -> None:
-    channel_count = 4 if color_type == 6 else 3 if color_type == 2 else 0
-    if channel_count == 0:
-        raise AssertionError(f"unsupported PNG fixture color type: {color_type}")
-    if len(pixels) != width * height:
-        raise AssertionError("PNG fixture dimensions do not match the supplied pixel count")
-
-    rows = bytearray()
-    for y in range(height):
-        rows.append(0)
-        for pixel in pixels[y * width : (y + 1) * width]:
-            if len(pixel) != channel_count or any(component < 0 or component > 255 for component in pixel):
-                raise AssertionError("PNG fixture has an invalid pixel")
-            rows.extend(pixel)
-
-    write_png_rows(path, width, height, color_type, rows)
-
-
-def float_to_rgbe(red: float, green: float, blue: float) -> bytes:
-    maximum = max(red, green, blue)
-    if maximum < 1.0e-32:
-        return b"\x00\x00\x00\x00"
-
-    mantissa, exponent = math.frexp(maximum)
-    scale = mantissa * 256.0 / maximum
-    return bytes((max(0, min(255, int(red * scale))), max(0, min(255, int(green * scale))), max(0, min(255, int(blue * scale))), exponent + 128,))
-
-
-def write_radiance_hdr_pixels(path: pathlib.Path, width: int, height: int, pixels: tuple[tuple[float, float, float, float], ...]) -> None:
-    if len(pixels) != width * height:
-        raise AssertionError("Radiance fixture dimensions do not match the supplied pixel count")
-    payload = bytearray(f"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {height} +X {width}\n".encode(LIT_ASCII))
-    for red, green, blue, _alpha in pixels:
-        payload.extend(float_to_rgbe(red, green, blue))
-    path.write_bytes(payload)
-
-
-def exr_attribute(name: str, kind: str, value: bytes) -> bytes:
-    return name.encode(LIT_ASCII) + LIT_X00 + kind.encode(LIT_ASCII) + LIT_X00 + struct.pack("<I", len(value)) + value
-
-
-def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, float], ...], channel_names: tuple[str, ...] = (LIT_A, LIT_B, LIT_G, LIT_R), channel_types: tuple[int, ...] = ()) -> None:
-    # Minimal uncompressed scanline EXR writer so tests need no external image packages.
-    width = 4
-    height = 2
-    if len(pixels) != width * height:
-        raise AssertionError("EXR fixture dimensions do not match the supplied pixel count")
-    if not channel_types:
-        channel_types = (EXR_FLOAT,) * len(channel_names)
-    if len(channel_types) != len(channel_names) or any(pixel_type not in (EXR_UINT, EXR_FLOAT) for pixel_type in channel_types):
-        raise AssertionError("EXR fixture requires one supported pixel type per channel")
-    channels = bytearray()
-    for channel, pixel_type in zip(channel_names, channel_types):
-        channels.extend(channel.encode(LIT_ASCII) + LIT_X00)
-        channels.extend(struct.pack("<iB3xii", pixel_type, 0, 1, 1))
-    channels.append(0)
-
-    header = bytearray()
-    header.extend(exr_attribute("channels", "chlist", bytes(channels)))
-    header.extend(exr_attribute(LIT_COMPRESSION, LIT_COMPRESSION, LIT_X00))
-    header.extend(exr_attribute("dataWindow", LIT_BOX2I, struct.pack(LIT_N_4I, 0, 0, width - 1, height - 1)))
-    header.extend(exr_attribute("displayWindow", LIT_BOX2I, struct.pack(LIT_N_4I, 0, 0, width - 1, height - 1)))
-    header.extend(exr_attribute(LIT_LINEORDER, LIT_LINEORDER, LIT_X00))
-    header.extend(exr_attribute("pixelAspectRatio", LIT_FLOAT, struct.pack(LIT_F, 1.0)))
-    header.extend(exr_attribute("screenWindowCenter", "v2f", struct.pack("<2f", 0.0, 0.0)))
-    header.extend(exr_attribute("screenWindowWidth", LIT_FLOAT, struct.pack(LIT_F, 1.0)))
-    header.append(0)
-
-    chunk_data_size = width * len(channel_names) * 4
-    first_chunk_offset = 8 + len(header) + height * 8
-    output = bytearray(struct.pack("<II", 20000630, 2))
-    output.extend(header)
-    for row in range(height):
-        output.extend(struct.pack("<Q", first_chunk_offset + row * (8 + chunk_data_size)))
-    for row in range(height):
-        output.extend(struct.pack("<ii", row, chunk_data_size))
-        row_pixels = pixels[row * width : (row + 1) * width]
-        for channel, pixel_type in zip(channel_names, channel_types):
-            component = {LIT_R: 0, LIT_G: 1, LIT_B: 2, LIT_A: 3, LIT_Y: 0}[channel]
-            packing = "I" if pixel_type == EXR_UINT else "f"
-            output.extend(struct.pack(f"<{width}{packing}", *(pixel[component] for pixel in row_pixels)))
-    path.write_bytes(output)
 
 
 def verify_publication_failure_preserves_outputs(executable: str, source_path: pathlib.Path, metadata_path: pathlib.Path, texture_path: pathlib.Path, output_dir: pathlib.Path,) -> None:
@@ -213,57 +103,6 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
         raise AssertionError("successful recovery left publication work files")
 
 
-def read_raw_pair(path: pathlib.Path) -> dict:
-    metadata_path = path.with_suffix(LIT_METADATA_SUFFIX)
-    metadata = metadata_path.read_text(encoding="utf-8")
-    assignments = re.findall(r"asset\.(\w+)\s*=\s*([^;]+);", metadata)
-    fields = dict(assignments)
-    required = {LIT_FORMAT, LIT_DIMENSION, LIT_RESOLUTION, LIT_ALPHA_MODE}
-    if len(fields) != len(assignments) or set(fields) not in (required, required | {LIT_ALPHA_CONSTANT_UNORM8}):
-        raise AssertionError(f"texture metadata contains missing, duplicate, or unsupported fields: {metadata_path}\n{metadata}")
-    try:
-        values = {name: json.loads(value) for name, value in fields.items()}
-    except json.JSONDecodeError as error:
-        raise AssertionError(f"texture metadata contains malformed descriptor values: {metadata_path}") from error
-    formats = {"uastc_ldr_4x4": 0, "uastc_hdr_4x4": 1}
-    dimensions = {"2d": 0, LIT_CUBE: 1, LIT_VOLUME: 2}
-    alpha_modes = {"opaque": 0, "embedded_ldr": 1, "constant_unorm8": 2, "separate_uastc_ldr_4x4": 3}
-    if values[LIT_FORMAT] not in formats or values[LIT_DIMENSION] not in dimensions or values[LIT_ALPHA_MODE] not in alpha_modes:
-        raise AssertionError(f"texture metadata has an unsupported format, dimension, or alpha mode: {metadata_path}")
-    dimension = dimensions[values[LIT_DIMENSION]]
-    payload_format = formats[values[LIT_FORMAT]]
-    alpha_mode = alpha_modes[values[LIT_ALPHA_MODE]]
-    resolution = values[LIT_RESOLUTION]
-    if not isinstance(resolution, list) or len(resolution) != (3 if dimension == 2 else 2) or any(type(value) is not int or value <= 0 for value in resolution):
-        raise AssertionError(f"invalid texture resolution: {metadata_path}")
-    width, height = resolution[:2]
-    depth = resolution[2] if dimension == 2 else 1
-    count = max(width, height, depth).bit_length()
-    if dimension == 1 and width != height:
-        raise AssertionError(f"cube texture faces must be square: {metadata_path}")
-    if (alpha_mode == 2) != (LIT_ALPHA_CONSTANT_UNORM8 in values):
-        raise AssertionError(f"alpha constant must appear only for constant transport: {metadata_path}")
-    alpha_constant = values.get(LIT_ALPHA_CONSTANT_UNORM8, 255)
-    if alpha_mode == 2 and (type(alpha_constant) is not int or not 0 <= alpha_constant <= 254):
-        raise AssertionError(f"invalid alpha constant: {metadata_path}")
-    if (payload_format == 0 and alpha_mode not in (0, 1)) or (payload_format == 1 and alpha_mode == 1):
-        raise AssertionError(f"incompatible alpha transport: {metadata_path}")
-    records = []
-    mip_width, mip_height, mip_depth, primary_size = width, height, depth, 0
-    for level in range(count):
-        planes = 6 if dimension == 1 else mip_depth if dimension == 2 else 1
-        primary_size += ((mip_width + 3) // 4) * ((mip_height + 3) // 4) * 16 * planes
-        records.append((mip_width, mip_height, planes))
-        terminal = mip_width == mip_height == 1 and (dimension != 2 or mip_depth == 1)
-        if terminal != (level == count - 1):
-            raise AssertionError(f"texture mip chain is incomplete or excessive: {metadata_path}")
-        mip_width, mip_height = max(1, mip_width // 2), max(1, mip_height // 2)
-        mip_depth = max(1, mip_depth // 2) if dimension == 2 else 1
-    if len(path.read_bytes()) != primary_size * (2 if alpha_mode == 3 else 1):
-        raise AssertionError(f"raw sidecar length does not match metadata mip and alpha layout: {path}")
-    return {LIT_DIMENSION: dimension, LIT_FORMAT: payload_format, LIT_ALPHA_MODE: alpha_mode, LIT_ALPHA_CONSTANT: alpha_constant, LIT_MIPS: records}
-
-
 def run_conversion(executable: str, output_dir: pathlib.Path, name: str, inputs: tuple[pathlib.Path, ...], *options: str) -> pathlib.Path:
     base = output_dir / name
     mode = tuple(option for option in options if option in (LIT_CUBE_2, LIT_VOLUME_2))
@@ -272,12 +111,12 @@ def run_conversion(executable: str, output_dir: pathlib.Path, name: str, inputs:
     result = subprocess.run(command, cwd=output_dir, text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"conversion failed: {command}\n{result.stdout}\n{result.stderr}")
-    read_raw_pair(base.with_suffix(LIT_TEXTURE_SUFFIX))
+    PreparedTextureReader.read_raw_pair(base.with_suffix(LIT_TEXTURE_SUFFIX))
     return base.with_suffix(LIT_TEXTURE_SUFFIX)
 
 
 def decode_pixels(executable: str, prepared: pathlib.Path, level: int = 0) -> tuple[tuple[float, ...], ...]:
-    description = read_raw_pair(prepared)
+    description = PreparedTextureReader.read_raw_pair(prepared)
     extent = description[LIT_MIPS][level]
     destination = prepared.with_suffix(f".mip{level}.decoded")
     result = subprocess.run([executable, str(prepared.with_suffix(LIT_METADATA_SUFFIX)), str(destination), str(level)], text=True, capture_output=True)
@@ -309,7 +148,7 @@ def normalized(pixels: tuple[tuple[int, ...], ...]) -> tuple[tuple[float, ...], 
 
 
 def require_matching_payloads(actual: pathlib.Path, expected: pathlib.Path, description: str) -> None:
-    if actual.read_bytes() != expected.read_bytes() or read_raw_pair(actual) != read_raw_pair(expected):
+    if actual.read_bytes() != expected.read_bytes() or PreparedTextureReader.read_raw_pair(actual) != PreparedTextureReader.read_raw_pair(expected):
         raise AssertionError(f"{description} differs from equivalent RGBA input: {actual} != {expected}")
 
 
@@ -324,9 +163,9 @@ def main() -> int:
 
     checker = tuple(((x * 37 + y * 11) & 255, (x * 17 + y * 53) & 255, (x * 71 + y * 29) & 255, 255 if (x + y) % 3 else 128) for y in range(5) for x in range(7))
     source_path = output_dir / "checker.png"
-    write_png_pixels(source_path, 7, 5, 6, checker)
+    TextureImageFixtures.write_png_pixels(source_path, 7, 5, 6, checker)
     prepared = run_conversion(args.tex_conv, output_dir, "checker", (source_path,))
-    if read_raw_pair(prepared)[LIT_MIPS] != [(7, 5, 1), (3, 2, 1), (1, 1, 1)]:
+    if PreparedTextureReader.read_raw_pair(prepared)[LIT_MIPS] != [(7, 5, 1), (3, 2, 1), (1, 1, 1)]:
         raise AssertionError("non-power-of-two preparation changed its complete mip chain")
     overwrite = subprocess.run([args.tex_conv, str(source_path)], cwd=output_dir, text=True, capture_output=True)
     if overwrite.returncode != 1 or "Output already exists:" not in overwrite.stdout + overwrite.stderr or "[ERROR]:" not in overwrite.stdout + overwrite.stderr:
@@ -334,14 +173,14 @@ def main() -> int:
     verify_publication_failure_preserves_outputs(args.tex_conv, source_path, prepared.with_suffix(LIT_METADATA_SUFFIX), prepared, output_dir)
 
     gray = output_dir / "gray.png"
-    write_png_pixels(gray, 2, 2, 6, ((128, 128, 128, 128),) * 4)
+    TextureImageFixtures.write_png_pixels(gray, 2, 2, 6, ((128, 128, 128, 128),) * 4)
     srgb = run_conversion(args.tex_conv, output_dir, "gray_srgb", (gray,))
     linear = run_conversion(args.tex_conv, output_dir, "gray_linear", (gray,), LIT_LINEAR)
     require_pixels(decode_pixels(args.prepared_decode, srgb), ((srgb_to_linear(128.0 / 255.0),) * 3 + (128.0 / 255.0,),) * 4)
     require_pixels(decode_pixels(args.prepared_decode, linear), ((128.0 / 255.0,) * 4,) * 4)
 
     black_white = output_dir / "black_white.png"
-    write_png_pixels(black_white, 2, 2, 6, ((0, 0, 0, 255), (255, 255, 255, 255), (255, 255, 255, 255), (0, 0, 0, 255)))
+    TextureImageFixtures.write_png_pixels(black_white, 2, 2, 6, ((0, 0, 0, 255), (255, 255, 255, 255), (255, 255, 255, 255), (0, 0, 0, 255)))
     black_white_prepared = run_conversion(args.tex_conv, output_dir, "black_white", (black_white,))
     require_pixels(decode_pixels(args.prepared_decode, black_white_prepared, 1), ((0.5, 0.5, 0.5, 1.0),))
 
@@ -349,7 +188,7 @@ def main() -> int:
     for index in range(5):
         path = output_dir / f"pulse_{index}.png"
         value = 255 if index == 2 else 0
-        write_png_pixels(path, 1, 1, 6, ((value, value, value, 255),))
+        TextureImageFixtures.write_png_pixels(path, 1, 1, 6, ((value, value, value, 255),))
         pulse_paths.append(path)
     pulse = run_conversion(args.tex_conv, output_dir, "pulse", tuple(pulse_paths), LIT_VOLUME_2, LIT_LINEAR)
     for level, count in ((1, 2), (2, 1)):
@@ -360,23 +199,23 @@ def main() -> int:
     original_alpha = (255, 0, 71, 19, 168, 253, 3, 110, 47, 202, 88, 144, 30, 226, 62, 180)
     mask_alpha = (12, 46, 91, 153, 218, 33, 76, 129, 182, 241, 65, 112, 168, 205, 28, 187)
     alpha_source = output_dir / "alpha_input.png"
-    write_png_pixels(alpha_source, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, original_alpha)))
+    TextureImageFixtures.write_png_pixels(alpha_source, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, original_alpha)))
     original = run_conversion(args.tex_conv, output_dir, "alpha_original", (alpha_source,))
     for name, values, override in ((LIT_ORIGINAL_MASK, original_alpha, LIT_MASK), ("red_mask", mask_alpha, LIT_MASK), (LIT_WHITE, (255,) * 16, LIT_WHITE), (LIT_BLACK, (0,) * 16, LIT_BLACK)):
         reference_path = output_dir / f"{name}_reference.png"
-        write_png_pixels(reference_path, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, values)))
+        TextureImageFixtures.write_png_pixels(reference_path, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, values)))
         reference = run_conversion(args.tex_conv, output_dir, f"{name}_reference", (reference_path,))
         argument = override
         if override == LIT_MASK:
             mask = output_dir / f"{name}.png"
-            write_png_pixels(mask, 4, 4, 6, tuple((alpha, (alpha + 83) & 255, (alpha + 159) & 255, 255 - alpha) for alpha in values))
+            TextureImageFixtures.write_png_pixels(mask, 4, 4, 6, tuple((alpha, (alpha + 83) & 255, (alpha + 159) & 255, 255 - alpha) for alpha in values))
             argument = str(mask)
         actual = run_conversion(args.tex_conv, output_dir, f"alpha_{name}", (alpha_source,), LIT_ALPHA, argument)
         require_matching_payloads(actual, reference, f"alpha {name}")
         if name == LIT_ORIGINAL_MASK:
             require_matching_payloads(actual, original, "default original alpha")
     opaque_source = output_dir / "rgb_only.png"
-    write_png_pixels(opaque_source, 4, 4, 2, colors)
+    TextureImageFixtures.write_png_pixels(opaque_source, 4, 4, 2, colors)
     opaque = run_conversion(args.tex_conv, output_dir, "rgb_only", (opaque_source,))
     require_matching_payloads(opaque, output_dir / "white_reference.tex", "missing original alpha")
 
@@ -386,27 +225,27 @@ def main() -> int:
         for plane in range(count):
             path = output_dir / f"{dimension}_{plane}.png"
             pixel = (32 + plane * 31, 64 + plane * 17, 16 + plane * 23, 255)
-            write_png_pixels(path, width, height, 6, (pixel,) * (width * height))
+            TextureImageFixtures.write_png_pixels(path, width, height, 6, (pixel,) * (width * height))
             inputs.append(path)
             expected.extend(normalized((pixel,) * (width * height)))
         result = run_conversion(args.tex_conv, output_dir, dimension, tuple(inputs), f"--{dimension}")
-        if read_raw_pair(result)[LIT_DIMENSION] != (1 if dimension == LIT_CUBE else 2):
+        if PreparedTextureReader.read_raw_pair(result)[LIT_DIMENSION] != (1 if dimension == LIT_CUBE else 2):
             raise AssertionError(f"wrong prepared {dimension} dimension")
         require_pixels(decode_pixels(args.prepared_decode, result), tuple(expected))
 
     radiance_path = output_dir / "radiance.hdr"
     radiance_pixels = ((4.5, 0.25, 1.5, 1.0),) * 8
-    write_radiance_hdr_pixels(radiance_path, 4, 2, radiance_pixels)
+    TextureImageFixtures.write_radiance_hdr_pixels(radiance_path, 4, 2, radiance_pixels)
     radiance = run_conversion(args.tex_conv, output_dir, "radiance", (radiance_path,))
     require_pixels(decode_pixels(args.prepared_decode, radiance), radiance_pixels, absolute=0.025, relative=0.05)
-    if read_raw_pair(radiance)[LIT_ALPHA_MODE] != 0:
+    if PreparedTextureReader.read_raw_pair(radiance)[LIT_ALPHA_MODE] != 0:
         raise AssertionError("opaque HDR alpha was not inferred")
     for mode, alpha in ((LIT_WHITE, 1.0), (LIT_BLACK, 0.0)):
         result = run_conversion(args.tex_conv, output_dir, f"radiance_{mode}", (radiance_path,), LIT_ALPHA, mode)
         require_pixels(decode_pixels(args.prepared_decode, result), tuple((*pixel[:3], alpha) for pixel in radiance_pixels), absolute=0.025, relative=0.05)
         if mode == LIT_WHITE:
             require_matching_payloads(result, radiance, "HDR alpha white")
-        elif read_raw_pair(result)[LIT_ALPHA_MODE] != 2 or read_raw_pair(result)[LIT_ALPHA_CONSTANT] != 0:
+        elif PreparedTextureReader.read_raw_pair(result)[LIT_ALPHA_MODE] != 2 or PreparedTextureReader.read_raw_pair(result)[LIT_ALPHA_CONSTANT] != 0:
             raise AssertionError("zero HDR alpha did not use its constant transport")
 
     for dimension, count in ((LIT_CUBE, 6), (LIT_VOLUME, 3)):
@@ -414,11 +253,11 @@ def main() -> int:
         for plane in range(count):
             path = output_dir / f"hdr_{dimension}_{plane}.hdr"
             pixel = (2.0 + plane, 0.25, 1.5, 1.0)
-            write_radiance_hdr_pixels(path, 2, 2, (pixel,) * 4)
+            TextureImageFixtures.write_radiance_hdr_pixels(path, 2, 2, (pixel,) * 4)
             inputs.append(path)
             expected.extend((pixel,) * 4)
         result = run_conversion(args.tex_conv, output_dir, f"hdr_{dimension}", tuple(inputs), f"--{dimension}")
-        if read_raw_pair(result)[LIT_FORMAT] != 1:
+        if PreparedTextureReader.read_raw_pair(result)[LIT_FORMAT] != 1:
             raise AssertionError(f"HDR {dimension} lost its HDR payload")
         require_pixels(decode_pixels(args.prepared_decode, result), tuple(expected), absolute=0.025, relative=0.05)
 
@@ -427,9 +266,9 @@ def main() -> int:
     exr_cases = (("equal_rgba_constant", ((0.5,) * 4,) * 8, (LIT_A, LIT_B, LIT_G, LIT_R), 2), ("equal_rgba_varying", equal, (LIT_A, LIT_B, LIT_G, LIT_R), 3), ("single_luminance", equal, (LIT_Y,), 0))
     for name, pixels, channels, alpha_mode in exr_cases:
         path = output_dir / f"{name}.exr"
-        write_openexr(path, pixels, channels)
+        TextureImageFixtures.write_openexr(path, pixels, channels)
         result = run_conversion(args.tex_conv, output_dir, name, (path,))
-        if read_raw_pair(result)[LIT_ALPHA_MODE] != alpha_mode:
+        if PreparedTextureReader.read_raw_pair(result)[LIT_ALPHA_MODE] != alpha_mode:
             raise AssertionError(f"EXR channel metadata changed alpha transport: {name}")
         expected = tuple((*pixel[:3], 1.0) for pixel in pixels) if len(channels) == 1 else pixels
         require_pixels(decode_pixels(args.prepared_decode, result), expected, absolute=0.04, relative=0.05)
@@ -443,9 +282,9 @@ def main() -> int:
     for name, pixel, pixel_types, alpha_mode in uint_exr_cases:
         path = output_dir / f"{name}.exr"
         pixels = (pixel,) * 8
-        write_openexr(path, pixels, channel_types=pixel_types)
+        TextureImageFixtures.write_openexr(path, pixels, channel_types=pixel_types)
         result = run_conversion(args.tex_conv, output_dir, name, (path,))
-        description = read_raw_pair(result)
+        description = PreparedTextureReader.read_raw_pair(result)
         if description[LIT_FORMAT] != 1 or description[LIT_ALPHA_MODE] != alpha_mode:
             raise AssertionError(f"EXR integer channel types changed HDR or alpha transport: {name}")
         require_pixels(decode_pixels(args.prepared_decode, result), pixels, absolute=0.04, relative=0.05)
@@ -457,7 +296,7 @@ def main() -> int:
     for channel, value in ((0, math.nan), (1, math.inf), (2, -0.125), (0, 65217.0), (3, math.nan), (3, math.inf), (3, -0.125), (3, 1.125)):
         first = list(valid_pixels[0])
         first[channel] = value
-        write_openexr(invalid_path, (tuple(first), *valid_pixels[1:]))
+        TextureImageFixtures.write_openexr(invalid_path, (tuple(first), *valid_pixels[1:]))
         invalid = subprocess.run([args.tex_conv, str(invalid_path), LIT_FORCE, LIT_OUTPUT, str(prepared.with_suffix(LIT_METADATA_SUFFIX))], cwd=output_dir, text=True, capture_output=True)
         if invalid.returncode != 1:
             raise AssertionError(f"invalid float channel {channel}: {value} was accepted\n{invalid.stdout}\n{invalid.stderr}")

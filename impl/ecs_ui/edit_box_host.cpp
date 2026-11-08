@@ -3,6 +3,7 @@
 
 
 #include "edit_box_host.h"
+#include <impl/ecs_ui/edit_geometry.adhd.h>
 
 #include <global/simplemath.h>
 #include <global/termination.h>
@@ -52,7 +53,7 @@ b8 UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& 
     Entry* entry = find(widget.id);
     if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || entry->popup != m_context.popupToken() || !view.ready())
         return false;
-    PublishUiEditBoxGeometry(
+    UiEditGeometry().publish(
         entry->popup,
         placement,
         view.caretStops(),
@@ -98,7 +99,7 @@ void UiEditBoxHost::commitFrame(const u64 generation){
     if(m_context.input().layoutGeneration() != generation)
         return;
     for(auto& entry : m_entries)
-        CommitUiEditBoxCandidateGeometry(generation, entry.candidate, entry.displayed);
+        UiEditGeometry().commit(generation, entry.candidate, entry.displayed);
     if(m_session.token().valid()){
         const Entry* entry = find(m_session.owner().widget);
         if(entry && entry->owner == m_session.owner() && entry->displayed.generation == generation){
@@ -198,7 +199,7 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const 
 
 const UiEditBoxHost::Entry* UiEditBoxHost::focusedTextEntry()const noexcept{
     const Entry* entry = find(m_context.input().focus());
-    if(!entry || !IsFocusedUiEditBoxEntryDisplayedReady(entry->displayed, entry->owner, entry->popup))
+    if(!entry || !UiEditGeometry().focusedReady(entry->displayed, entry->owner, entry->popup))
         return nullptr;
     const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
     return target && target->enabled && target->textEditable && target->popup == entry->popup ? entry : nullptr;

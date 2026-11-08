@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include <impl/assets_scene/scene_asset_binary_codec.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +31,7 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!entity.validatePayload(scratchArena))
         return false;
 
-    return SerializeEntityAssetBinary(Span<const EntityAsset::ComponentRef>(entity.components()), outBinary);
+    return SceneAssetBinaryCodec().serializeEntity(Span<const EntityAsset::ComponentRef>(entity.components()), outBinary);
 }
 
 b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
@@ -40,7 +42,7 @@ b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!project.validatePayload())
         return false;
 
-    return SerializeProjectAssetBinary(project.startScene().name().hash(), outBinary);
+    return SceneAssetBinaryCodec().serializeProject(project.startScene().name().hash(), outBinary);
 }
 
 b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
@@ -53,7 +55,7 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
         return false;
 
     Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
-    return SerializeSceneAssetBinary(
+    return SceneAssetBinaryCodec().serializeScene(
         Span<const SceneAsset::SubsystemRef>(scene.subsystems()),
         Span<const SceneAsset::EntityRef>(scene.entities()),
         scene.assets(),

@@ -160,67 +160,6 @@ Expected<usize> TryFindUiSkinRegionIndex(
     return matchedPosition;
 }
 
-UiSkinHeaderBinary MakeUiSkinHeaderBinary(
-    in NameHash textureNameHash,
-    in u32 atlasWidth,
-    in u32 atlasHeight,
-    in f32 referenceDensity,
-    in u32 regionCount
-){
-    UiSkinHeaderBinary header;
-    header.textureNameHash = textureNameHash;
-    header.atlasWidth = atlasWidth;
-    header.atlasHeight = atlasHeight;
-    header.referenceDensity = referenceDensity;
-    header.regionCount = regionCount;
-    return header;
-}
-
-UiSkinRegionBinary PackUiSkinRegionBinary(in UiSkinRegion region){
-    UiSkinRegionBinary packed;
-    packed.nameHash = region.name.hash();
-    packed.x = region.rectangle.x;
-    packed.y = region.rectangle.y;
-    packed.width = region.rectangle.width;
-    packed.height = region.rectangle.height;
-    packed.sliceLeft = region.sliceInsets.left;
-    packed.sliceTop = region.sliceInsets.top;
-    packed.sliceRight = region.sliceInsets.right;
-    packed.sliceBottom = region.sliceInsets.bottom;
-    packed.paddingLeft = region.padding.left;
-    packed.paddingTop = region.padding.top;
-    packed.paddingRight = region.padding.right;
-    packed.paddingBottom = region.padding.bottom;
-    packed.minimumWidth = region.minimumWidth;
-    packed.minimumHeight = region.minimumHeight;
-    packed.drawMode = cast<u32>(region.drawMode);
-    return packed;
-}
-
-UiSkinRegion UnpackUiSkinRegionBinary(in UiSkinRegionBinary packed){
-    UiSkinRegion region;
-    region.name = Name(packed.nameHash);
-    region.rectangle.x = packed.x;
-    region.rectangle.y = packed.y;
-    region.rectangle.width = packed.width;
-    region.rectangle.height = packed.height;
-    region.sliceInsets.left = packed.sliceLeft;
-    region.sliceInsets.top = packed.sliceTop;
-    region.sliceInsets.right = packed.sliceRight;
-    region.sliceInsets.bottom = packed.sliceBottom;
-    region.padding.left = packed.paddingLeft;
-    region.padding.top = packed.paddingTop;
-    region.padding.right = packed.paddingRight;
-    region.padding.bottom = packed.paddingBottom;
-    region.minimumWidth = packed.minimumWidth;
-    region.minimumHeight = packed.minimumHeight;
-    if(packed.drawMode == cast<u32>(UiSkinDrawMode::NineSlice))
-        region.drawMode = UiSkinDrawMode::NineSlice;
-    else
-        region.drawMode = UiSkinDrawMode::Sprite;
-    return region;
-}
-
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){
     return max(minimumExtent, max(region.minimumWidth, region.minimumHeight));
 }

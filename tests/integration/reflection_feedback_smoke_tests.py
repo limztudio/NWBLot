@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 
 import reflection_feedback_smoke as smoke
 import smoke_volume_identity as volume_identity
-from reflection_smoke import SmokeFailure, panel_projection
+from reflection_image_analysis import ReflectionImageAnalysis  # noqa: E402
+from reflection_feedback_image_analysis import ReflectionFeedbackImageAnalysis  # noqa: E402
+from reflection_feedback_evidence import ReflectionFeedbackEvidence, TraversalEvidence, FEEDBACK_FIELDS  # noqa: E402
+from reflection_smoke import SmokeFailure  # noqa: E402
 
 LIT_RED = "red"
 LIT_GREEN = "green"
@@ -62,7 +65,7 @@ def long_frame(missing=None, shift=0):
         for reflected in (False, True):
             if missing == (name, reflected):
                 continue
-            projection = smoke.long_panel_projection(width, height, name, reflected)
+            projection = ReflectionFeedbackImageAnalysis.long_panel_projection(width, height, name, reflected)
             if reflected:
                 projection = (projection[0] + shift, *projection[1:])
             paint_rectangle(rows, projection, color)
@@ -75,7 +78,7 @@ def mutation_frame(final):
     case = "onscreen" if final else LIT_BOUNDARY
     for name, color in ((LIT_RED, (220, 20, 20)), (LIT_GREEN, (20, 220, 20))):
         for reflected in (False, True):
-            paint_rectangle(rows, panel_projection(width, height, name, case, reflected), color)
+            paint_rectangle(rows, ReflectionImageAnalysis.panel_projection(width, height, name, case, reflected), color)
     return width, height, rows
 
 
@@ -101,11 +104,11 @@ class CapturePlanTests(unittest.TestCase):
 class ProjectionTests(unittest.TestCase):
     def test_missing_hardware_marker_fails(self):
         with self.assertRaises(SmokeFailure):
-            smoke.analyze_long_miss_panels(long_frame(missing=(LIT_RED, True)))
+            ReflectionFeedbackImageAnalysis.analyze_long_miss_panels(long_frame(missing=(LIT_RED, True)))
 
     def test_wrong_reflected_position_fails(self):
         with self.assertRaises(SmokeFailure):
-            smoke.analyze_long_miss_panels(long_frame(shift=20))
+            ReflectionFeedbackImageAnalysis.analyze_long_miss_panels(long_frame(shift=20))
 
     def test_static_comparison_rejects_unrelated_background_change(self):
         first, second = long_frame(), long_frame()
@@ -113,47 +116,47 @@ class ProjectionTests(unittest.TestCase):
             for x in range(20, 60):
                 second[2][y][x] = (160, 160, 160)
         with self.assertRaises(SmokeFailure):
-            smoke.compare_static_images(first, second, "feedback_long_miss")
+            ReflectionFeedbackImageAnalysis.compare_static_images(first, second, "feedback_long_miss")
 
 
 class MutationTests(unittest.TestCase):
     def test_retained_old_marker_fails(self):
         changed = mutation_frame(True)
-        paint_rectangle(changed[2], panel_projection(400, 300, LIT_GREEN, LIT_BOUNDARY, True), (20, 220, 20))
+        paint_rectangle(changed[2], ReflectionImageAnalysis.panel_projection(400, 300, LIT_GREEN, LIT_BOUNDARY, True), (20, 220, 20))
         with self.assertRaises(SmokeFailure):
-            smoke.compare_mutation_images(mutation_frame(False), changed, mutation_frame(True))
+            ReflectionFeedbackImageAnalysis.compare_mutation_images(mutation_frame(False), changed, mutation_frame(True))
 
     def test_initial_image_is_not_a_valid_reset(self):
         with self.assertRaises(SmokeFailure):
-            smoke.compare_mutation_images(mutation_frame(False), mutation_frame(False), mutation_frame(True))
+            ReflectionFeedbackImageAnalysis.compare_mutation_images(mutation_frame(False), mutation_frame(False), mutation_frame(True))
 
 
 class TraversalQualificationTests(unittest.TestCase):
     def test_large_attempt_count_with_immediate_rejects_cannot_qualify(self):
-        sample = smoke.TraversalEvidence(attempts=100000, iterations=100000, step_limit_misses=0, maximum_steps=16)
+        sample = TraversalEvidence(attempts=100000, iterations=100000, step_limit_misses=0, maximum_steps=16)
         with self.assertRaises(SmokeFailure):
-            smoke.qualify_costly_misses([sample] * 8)
+            ReflectionFeedbackEvidence.qualify_costly_misses([sample] * 8)
 
     def test_productive_cost_does_not_qualify_as_costly_misses(self):
-        sample = smoke.TraversalEvidence(attempts=1000, iterations=15000, step_limit_misses=50, maximum_steps=16)
+        sample = TraversalEvidence(attempts=1000, iterations=15000, step_limit_misses=50, maximum_steps=16)
         with self.assertRaises(SmokeFailure):
-            smoke.qualify_costly_misses([sample] * 8)
+            ReflectionFeedbackEvidence.qualify_costly_misses([sample] * 8)
 
     def test_impossible_iteration_counts_fail(self):
         for iterations in (100, 17000):
-            sample = smoke.TraversalEvidence(attempts=1000, iterations=iterations, step_limit_misses=750, maximum_steps=16)
+            sample = TraversalEvidence(attempts=1000, iterations=iterations, step_limit_misses=750, maximum_steps=16)
             with self.assertRaises(SmokeFailure):
-                smoke.qualify_costly_misses([sample] * 8)
+                ReflectionFeedbackEvidence.qualify_costly_misses([sample] * 8)
 
     def test_bypassed_work_cannot_qualify_a_baseline(self):
-        sample = smoke.TraversalEvidence(attempts=1000, iterations=14000, step_limit_misses=750, maximum_steps=16, bypassed_pixels=10)
+        sample = TraversalEvidence(attempts=1000, iterations=14000, step_limit_misses=750, maximum_steps=16, bypassed_pixels=10)
         with self.assertRaises(SmokeFailure):
-            smoke.qualify_costly_misses([sample] * 8)
+            ReflectionFeedbackEvidence.qualify_costly_misses([sample] * 8)
 
     def test_one_favorable_observation_is_insufficient(self):
-        sample = smoke.TraversalEvidence(attempts=1000, iterations=14000, step_limit_misses=750, maximum_steps=16)
+        sample = TraversalEvidence(attempts=1000, iterations=14000, step_limit_misses=750, maximum_steps=16)
         with self.assertRaises(SmokeFailure):
-            smoke.qualify_costly_misses([sample])
+            ReflectionFeedbackEvidence.qualify_costly_misses([sample])
 
 
 class CompletedFeedbackTests(unittest.TestCase):
@@ -162,11 +165,11 @@ class CompletedFeedbackTests(unittest.TestCase):
         for index in range(8):
             frame = 32 + 5 * index
             stats.append({"sequence": index + 1, LIT_GENERATION: 2, "frame": frame, "opaque_pixels": 600, "glass_pixels": 0, LIT_SCREEN_HITS: 50, "screen_attempts": 100, LIT_EFFECTIVE_BUDGET: smoke.DEFAULT_RAY_BUDGET})
-            feedback.append(dict(zip(smoke.FEEDBACK_FIELDS, (index + 1, 2, frame + 100, frame + 40, 1, 100, frame if enabled else 0, int(enabled), int(enabled), int(enabled), 0, 0, 1, 600, 60, 100 if enabled else 0, 1 if enabled else 0, 800, 2))))
+            feedback.append(dict(zip(FEEDBACK_FIELDS, (index + 1, 2, frame + 100, frame + 40, 1, 100, frame if enabled else 0, int(enabled), int(enabled), int(enabled), 0, 0, 1, 600, 60, 100 if enabled else 0, 1 if enabled else 0, 800, 2))))
         return stats, feedback
 
     def log(self, samples, source=160, mutation=None):
-        result = LIT_N.join("ReflectionSmokeFeedback: " + " ".join(f"{key}={sample[key]}" for key in smoke.FEEDBACK_FIELDS) for sample in samples)
+        result = LIT_N.join("ReflectionSmokeFeedback: " + " ".join(f"{key}={sample[key]}" for key in FEEDBACK_FIELDS) for sample in samples)
         result += "\nFramebufferCapture: graphics source frame " + str(source)
         if mutation is not None:
             result += "\nReflectionSmokeFeedbackMutation: graphics_frame=" + str(source) + " fresh_final=" + str(int(mutation))
@@ -174,7 +177,7 @@ class CompletedFeedbackTests(unittest.TestCase):
 
     def validate(self, samples=None, spec=None, stats=None, source=160, mutation=None):
         baseline_stats, baseline_feedback = self.observations()
-        return smoke.validate_feedback(self.log(samples if samples is not None else baseline_feedback, source, mutation), stats if stats is not None else baseline_stats, spec or smoke.FeedbackCapture("floor_feedback", LIT_FLOOR, True))
+        return ReflectionFeedbackEvidence.validate_feedback(self.log(samples if samples is not None else baseline_feedback, source, mutation), stats if stats is not None else baseline_stats, spec or smoke.FeedbackCapture("floor_feedback", LIT_FLOOR, True))
 
     def test_metadata_cannot_detach_from_statistics(self):
         _, samples = self.observations()
@@ -183,18 +186,18 @@ class CompletedFeedbackTests(unittest.TestCase):
             self.validate(samples)
 
     def test_npot_statistics_use_actual_extent_and_queue_capacity(self):
-        from reflection_smoke import STATISTICS_FIELDS
+        from reflection_statistics import STATISTICS_FIELDS
         sample = dict.fromkeys(STATISTICS_FIELDS, 0)
         capacity = 2 * 953 * 713
         sample.update(sequence=1, generation=1, frame=3, mode=2, width=953, height=713, requested_budget=smoke.DEFAULT_RAY_BUDGET, effective_budget=capacity, queue_capacity=capacity,
             hardware_requested=1, hardware_available=1, hardware_ready=1, token_value=1, device_generation=1, candidates=100, hardware_rays=100, hardware_hits=100, opaque_pixels=100)
-        smoke.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE, extent=(953, 713))
+        smoke.ReflectionStatistics.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE, extent=(953, 713))
         with self.assertRaisesRegex(SmokeFailure, "dimensions"):
-            smoke.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE)
+            smoke.ReflectionStatistics.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE)
         sample["queue_capacity"] = smoke.DEFAULT_RAY_BUDGET
         sample[LIT_EFFECTIVE_BUDGET] = smoke.DEFAULT_RAY_BUDGET
         with self.assertRaisesRegex(SmokeFailure, "capacity"):
-            smoke.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE, extent=(953, 713))
+            smoke.ReflectionStatistics.validate_statistics([sample], LIT_OFFSCREEN, LIT_HARDWARE, extent=(953, 713))
 
     def test_low_budget_blocks_bypass_even_with_previous_valid_header(self):
         stats, samples = self.observations()
@@ -228,7 +231,7 @@ class CompletedFeedbackTests(unittest.TestCase):
         _, samples = self.observations()
         for log in ("", self.log(samples).replace("screen_returns=60", "other=60"), self.log(samples).replace("sequence=1 ", "sequence=1 sequence=1 ", 1)):
             with self.assertRaises(SmokeFailure):
-                smoke.parse_feedback(log)
+                ReflectionFeedbackEvidence.parse_feedback(log)
 
     def test_first_changed_frame_has_new_anchor_and_no_stale_reuse(self):
         stats, samples = self.observations()
@@ -290,19 +293,19 @@ class DiagnosticsOffTests(unittest.TestCase):
 
     def test_completed_readback_proof_does_not_invent_feedback_statistics(self):
         spec = smoke.DIAGNOSTICS_OFF_CAPTURES[1]
-        result = smoke.validate_diagnostics_off(self.log(), spec)
+        result = ReflectionFeedbackEvidence.validate_diagnostics_off(self.log(), spec)
         self.assertIsNone(result["completed_feedback_observations"])
         self.assertIsNone(result["completed_feedback_counters"])
 
     def test_early_or_unanchored_capture_fails(self):
         for log in (self.log(63), self.log() + "\nFramebufferCapture: graphics source frame 65", ""):
             with self.assertRaises(SmokeFailure):
-                smoke.validate_diagnostics_off(log, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
+                ReflectionFeedbackEvidence.validate_diagnostics_off(log, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
 
     def test_unexpected_completed_diagnostics_fail(self):
         for prefix in (LIT_REFLECTIONSMOKEFEEDBACK, "ReflectionSmokeStatistics:", "ReflectionSmokeHistory:", "ReflectionSmokeOptics:"):
             with self.assertRaisesRegex(SmokeFailure, "unexpectedly published"):
-                smoke.validate_diagnostics_off(self.log() + LIT_N + prefix, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
+                ReflectionFeedbackEvidence.validate_diagnostics_off(self.log() + LIT_N + prefix, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
 
 if __name__ == LIT_MAIN:
     unittest.main()

@@ -3,6 +3,7 @@
 
 
 #include "crash_symbolicate_internal.h"
+#include "minidump_image.h"
 
 #include <core/crash/package_names.h>
 
@@ -42,46 +43,6 @@ struct DumpMemoryRange{
     NotNull<const u8*> bytes;
 };
 
-struct DumpImage{
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-
-public:
-    [[nodiscard]] const u8* rva(const u64 offset, const u64 size)const noexcept{
-        if(!bytes || offset > static_cast<u64>(byteCount) || size > static_cast<u64>(byteCount) - offset)
-            return nullptr;
-        return bytes + static_cast<usize>(offset);
-    }
-
-    template<typename T>
-    [[nodiscard]] Expected<T> read(const u64 offset)const noexcept{
-        static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
-        const u8* const source = rva(offset, sizeof(T));
-        if(!source)
-            return MakeUnexpected(Failure{});
-        T value;
-        NWB_MEMCPY(&value, sizeof(value), source, sizeof(value));
-        return value;
-    }
-};
-
-template<typename T>
-struct MinidumpRecords{
-    NotNull<const u8*> bytes;
-    usize count = 0u;
-
-
-public:
-    [[nodiscard]] T record(const usize index)const noexcept{
-        static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
-        NWB_ASSERT(index < count);
-        T value;
-        NWB_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
-        return value;
-    }
-};
-
 struct DumpMemoryReader{
     Vector<DumpMemoryRange, Core::Alloc::ScratchArena> ranges;
 
@@ -97,54 +58,6 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<WString<Core::Alloc::ScratchArena>> ReadDumpString(const DumpImage& dumpImage, const RVA rvaValue, Core::Alloc::ScratchArena& scratchArena){
-    const auto byteCount = dumpImage.read<ULONG32>(rvaValue);
-    if(!byteCount || (*byteCount % sizeof(wchar)) != 0u)
-        return MakeUnexpected(Failure{});
-    const u64 textOffset = static_cast<u64>(rvaValue) + offsetof(MINIDUMP_STRING, Buffer);
-    const u8* const bytes = dumpImage.rva(textOffset, static_cast<u64>(*byteCount) + sizeof(wchar));
-    if(!bytes)
-        return MakeUnexpected(Failure{});
-    const auto terminator = dumpImage.read<wchar>(textOffset + *byteCount);
-    if(!terminator || *terminator != 0)
-        return MakeUnexpected(Failure{});
-    WString<Core::Alloc::ScratchArena> text(scratchArena);
-    text.resize(static_cast<usize>(*byteCount / sizeof(wchar)));
-    if(*byteCount != 0u)
-        NWB_MEMCPY(text.data(), *byteCount, bytes, *byteCount);
-    return text;
-}
-
-[[nodiscard]] static Expected<Optional<DumpImage>> ReadMinidumpStream(const DumpImage& dumpImage, const MINIDUMP_STREAM_TYPE streamType)noexcept{
-    const auto header = dumpImage.read<MINIDUMP_HEADER>(0u);
-    if(!header || header->Signature != MINIDUMP_SIGNATURE || (header->Version & Limit<u16>::s_Max) != MINIDUMP_VERSION)
-        return MakeUnexpected(Failure{});
-    const u64 directoryBytes = static_cast<u64>(header->NumberOfStreams) * sizeof(MINIDUMP_DIRECTORY);
-    if(!dumpImage.rva(header->StreamDirectoryRva, directoryBytes))
-        return MakeUnexpected(Failure{});
-
-    Optional<DumpImage> selected;
-    for(u32 index = 0u; index < header->NumberOfStreams; ++index){
-        const u64 directoryOffset = static_cast<u64>(header->StreamDirectoryRva) + static_cast<u64>(index) * sizeof(MINIDUMP_DIRECTORY);
-        const auto directory = dumpImage.read<MINIDUMP_DIRECTORY>(directoryOffset);
-        if(!directory)
-            return MakeUnexpected(Failure{});
-        const u8* const bytes = dumpImage.rva(directory->Location.Rva, directory->Location.DataSize);
-        if(!bytes)
-            return MakeUnexpected(Failure{});
-        if(directory->StreamType == static_cast<ULONG32>(streamType) && !selected)
-            selected = DumpImage{ bytes, static_cast<usize>(directory->Location.DataSize) };
-    }
-    return selected;
-}
-
-template<typename T>
-[[nodiscard]] static Expected<MinidumpRecords<T>> ReadMinidumpRecords(const DumpImage& stream, const usize recordsOffset, const u64 count)noexcept{
-    if(!stream.bytes || recordsOffset > stream.byteCount || count > static_cast<u64>((stream.byteCount - recordsOffset) / sizeof(T)))
-        return MakeUnexpected(Failure{});
-    return MinidumpRecords<T>{ MakeNotNull(stream.bytes + recordsOffset), static_cast<usize>(count) };
-}
 
 [[nodiscard]] static Expected<void> AddMemoryRange(const u64 begin, const u64 size, const u8* const bytes, DumpMemoryReader& reader){
     if(size == 0u)
@@ -162,7 +75,7 @@ template<typename T>
 [[nodiscard]] static Expected<usize> CountDumpMemoryRanges(const DumpImage& dumpImage)noexcept{
     usize total = 0u;
     for(const auto streamType : Array<MINIDUMP_STREAM_TYPE, 3u>{ ThreadListStream, MemoryListStream, Memory64ListStream }){
-        const auto selected = ReadMinidumpStream(dumpImage, streamType);
+        const auto selected = dumpImage.stream(streamType);
         if(!selected)
             return MakeUnexpected(Failure{});
         if(!*selected)
@@ -171,7 +84,7 @@ template<typename T>
         u64 count = 0u;
         if(streamType == Memory64ListStream){
             const auto records = stream.read<ULONG64>(0u);
-            if(!records || !ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR64>(stream, offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), *records))
+            if(!records || !stream.records<MINIDUMP_MEMORY_DESCRIPTOR64>(offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), *records))
                 return MakeUnexpected(Failure{});
             count = *records;
         }
@@ -180,10 +93,10 @@ template<typename T>
             if(!records)
                 return MakeUnexpected(Failure{});
             if(streamType == ThreadListStream){
-                if(!ReadMinidumpRecords<MINIDUMP_THREAD>(stream, offsetof(MINIDUMP_THREAD_LIST, Threads), *records))
+                if(!stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *records))
                     return MakeUnexpected(Failure{});
             }
-            else if(!ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR>(stream, offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges), *records))
+            else if(!stream.records<MINIDUMP_MEMORY_DESCRIPTOR>(offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges), *records))
                 return MakeUnexpected(Failure{});
             count = *records;
         }
@@ -200,7 +113,7 @@ template<typename T>
         return MakeUnexpected(Failure{});
     DumpMemoryReader reader(scratchArena);
     reader.ranges.reserve(*rangeCapacity);
-    const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
+    const auto threadStream = dumpImage.stream(ThreadListStream);
     if(!threadStream)
         return MakeUnexpected(Failure{});
     if(*threadStream){
@@ -208,7 +121,7 @@ template<typename T>
         const auto count = stream.read<ULONG32>(0u);
         if(!count)
             return MakeUnexpected(Failure{});
-        const auto threads = ReadMinidumpRecords<MINIDUMP_THREAD>(stream, offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
+        const auto threads = stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
         if(!threads)
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < threads->count; ++index){
@@ -218,7 +131,7 @@ template<typename T>
         }
     }
 
-    const auto memoryStream = ReadMinidumpStream(dumpImage, MemoryListStream);
+    const auto memoryStream = dumpImage.stream(MemoryListStream);
     if(!memoryStream)
         return MakeUnexpected(Failure{});
     if(*memoryStream){
@@ -226,7 +139,7 @@ template<typename T>
         const auto count = stream.read<ULONG32>(0u);
         if(!count)
             return MakeUnexpected(Failure{});
-        const auto ranges = ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR>(stream, offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges), *count);
+        const auto ranges = stream.records<MINIDUMP_MEMORY_DESCRIPTOR>(offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges), *count);
         if(!ranges)
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < ranges->count; ++index){
@@ -236,7 +149,7 @@ template<typename T>
         }
     }
 
-    const auto memory64Stream = ReadMinidumpStream(dumpImage, Memory64ListStream);
+    const auto memory64Stream = dumpImage.stream(Memory64ListStream);
     if(!memory64Stream)
         return MakeUnexpected(Failure{});
     if(*memory64Stream){
@@ -245,7 +158,7 @@ template<typename T>
         const auto baseRva = stream.read<RVA64>(offsetof(MINIDUMP_MEMORY64_LIST, BaseRva));
         if(!count || !baseRva)
             return MakeUnexpected(Failure{});
-        const auto ranges = ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR64>(stream, offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), *count);
+        const auto ranges = stream.records<MINIDUMP_MEMORY_DESCRIPTOR64>(offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), *count);
         if(!ranges || !dumpImage.rva(*baseRva, 0u))
             return MakeUnexpected(Failure{});
         u64 cursor = *baseRva;
@@ -300,7 +213,7 @@ struct CrashContext{
 }
 
 [[nodiscard]] static Expected<CrashContext> FindCrashContext(const DumpImage& dumpImage, const CrashPackageSummary& summary)noexcept{
-    const auto exceptionStream = ReadMinidumpStream(dumpImage, ExceptionStream);
+    const auto exceptionStream = dumpImage.stream(ExceptionStream);
     if(!exceptionStream)
         return MakeUnexpected(Failure{});
     if(*exceptionStream){
@@ -313,14 +226,14 @@ struct CrashContext{
     if(summary.threadId > Limit<DWORD>::s_Max)
         return MakeUnexpected(Failure{});
     const DWORD threadId = static_cast<DWORD>(summary.threadId);
-    const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
+    const auto threadStream = dumpImage.stream(ThreadListStream);
     if(!threadStream || !*threadStream)
         return MakeUnexpected(Failure{});
     const DumpImage& stream = **threadStream;
     const auto count = stream.read<ULONG32>(0u);
     if(!count)
         return MakeUnexpected(Failure{});
-    const auto threads = ReadMinidumpRecords<MINIDUMP_THREAD>(stream, offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
+    const auto threads = stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
     if(!threads)
         return MakeUnexpected(Failure{});
     for(usize index = 0u; index < threads->count; ++index){
@@ -369,7 +282,7 @@ static void InitializeStackFrameFromContext(const CONTEXT& context, STACKFRAME64
 }
 
 static void LoadDumpModules(const HANDLE symbolProcess, const DumpImage& dumpImage, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
-    const auto moduleStream = ReadMinidumpStream(dumpImage, ModuleListStream);
+    const auto moduleStream = dumpImage.stream(ModuleListStream);
     if(!moduleStream){
         outReport += s_InvalidModuleListReport;
         return;
@@ -384,7 +297,7 @@ static void LoadDumpModules(const HANDLE symbolProcess, const DumpImage& dumpIma
         outReport += s_InvalidModuleListReport;
         return;
     }
-    const auto modules = ReadMinidumpRecords<MINIDUMP_MODULE>(stream, offsetof(MINIDUMP_MODULE_LIST, Modules), *count);
+    const auto modules = stream.records<MINIDUMP_MODULE>(offsetof(MINIDUMP_MODULE_LIST, Modules), *count);
     if(!modules){
         outReport += s_InvalidModuleListReport;
         return;
@@ -393,7 +306,7 @@ static void LoadDumpModules(const HANDLE symbolProcess, const DumpImage& dumpIma
     u32 loadedCount = 0u;
     for(usize index = 0u; index < modules->count; ++index){
         const MINIDUMP_MODULE module = modules->record(index);
-        const auto moduleNameText = ReadDumpString(dumpImage, module.ModuleNameRva, scratchArena);
+        const auto moduleNameText = dumpImage.readString(module.ModuleNameRva, scratchArena);
         if(!moduleNameText){
             outReport += s_InvalidModuleListReport;
             return;

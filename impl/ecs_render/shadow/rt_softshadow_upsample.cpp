@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -69,8 +70,8 @@ b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList&
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedUpsamplePipeline(){
+    auto& resolve = m_shadow.m_softShadowResolve;
     if(resolve.m_combinedUpsample.m_pipeline)
         return true;
     if(resolve.m_combinedUpsampleFailed || !resolve.m_bindingLayout)

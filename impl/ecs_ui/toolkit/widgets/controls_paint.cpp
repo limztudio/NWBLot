@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +23,7 @@ b8 Builder::paintPanel(){
     m_paint.pushClip(visibleClip(panel->clip));
     const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
     const b8 popped = m_paint.popClip();
-    const HitTarget barrier = MakeBarrierHitTarget(panel->rectangle, visibleClip(panel->clip));
+    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(panel->rectangle, visibleClip(panel->clip));
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();
@@ -61,7 +63,7 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     const b8 focused = input.focus() == item.state.id;
     const b8 interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
     const Rect clip = visibleClip(box.clip);
-    if(!PaintBasicControlItemVisual(
+    if(!ControlVisualPainter().paintBasicControlItemVisual(
         m_paint,
         m_text,
         *m_skin,
@@ -85,7 +87,7 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         return true;
     if(interactive || item.annotated){
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
-        const HitTarget target = MakeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
+        const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
         return m_context.addTarget(item.state, target);
     }
     return true;
@@ -97,7 +99,7 @@ b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     if(!PaintSelectable(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
-    const HitTarget target = MakeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
+    const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
     return m_context.addTarget(item.state, target);
 }
 
@@ -107,7 +109,7 @@ b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& cl
         return false;
     if(!item.annotated)
         return true;
-    const HitTarget target = MakeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
+    const HitTarget target = HitTargetFactory().makeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
     return m_context.addTarget(item.state, target);
 }
 

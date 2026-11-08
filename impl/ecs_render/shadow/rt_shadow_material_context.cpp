@@ -33,18 +33,18 @@ b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
 ){
     if(!m_preparedShadowMaterialContext.capture(m_rayTracingState, route, staticScene, hash, instanceMaterials, instances, materialTypedBytes))
         return false;
-    clearPreparedSceneSwBvhTraversal();
+    m_preparedSceneSwBvhTraversal.clear();
     return true;
 }
 
 b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
-    clearPreparedSceneSwBvhTraversal();
+    m_preparedSceneSwBvhTraversal.clear();
     return m_preparedShadowMaterialContext.captureCacheReuse(m_rayTracingState, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
 }
 
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowMaterialContext.clear();
-    clearPreparedSceneSwBvhTraversal();
+    m_preparedSceneSwBvhTraversal.clear();
 }
 
 

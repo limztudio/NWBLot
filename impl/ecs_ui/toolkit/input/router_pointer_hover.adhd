@@ -131,8 +131,9 @@ void RouteRouterSecondary(
     in HitTarget hit,
     in b8 primaryDown,
     in b8 pointerSequenceConsumed,
-    mut Vector<PopupRecord> popups,
-    mut Vector<PopupDismissal> popupDismissals,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut PopupDismissRequest popupDismissRequest,
     mut Vector<ContextMenuAction> contextMenuActions,
     mut u64 inOutNextActionSequence,
     mut b8 inOutSecondaryDown,
@@ -187,7 +188,10 @@ void RouteRouterSecondary(
     if(!inOutSecondarySequenceConsumed)
         return;
     if(!popups.empty() && !hasHit){
-        outDismissedPopup = TryDismissRouterPopup(PopupDismissReason::OutsideClick, popups, popupDismissals);
+        const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+        outDismissedPopup = dismissal.has_value();
+        if(outDismissedPopup)
+            popupDismissRequest = dismissal.value();
         return;
     }
     if(!hasAnchor || !anchor.contextMenu || !windowFocused)

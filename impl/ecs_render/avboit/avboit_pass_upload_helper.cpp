@@ -61,13 +61,13 @@ Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
         && inputs.csgClipContextSlots.valid()
         && (inputs.pass != MaterialPipelinePass::AvboitExtinction || inputs.csgIntervalSampleState.valid())
         && inputs.csgResources.frameReady(csgFrameData)
-        && m_materialSystem.materialPassDrawResourcesReady(drawItems.csg, inputs.frameBindings)
+        && m_materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.csg, inputs.frameBindings)
     );
     if(
         !inputs.materialInstances.valid()
         || !inputs.materialTyped.valid()
         || !inputs.frameBindings.frameReady(instanceData.size(), materialTypedBytes.size())
-        || !m_materialSystem.materialPassDrawResourcesReady(drawItems.regular, inputs.frameBindings)
+        || !m_materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.regular, inputs.frameBindings)
         || !csgReady
     )
         return MakeUnexpected(Failure{});

@@ -41,8 +41,6 @@ struct OpaqueCsgIntervalStageInputs{
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     MaterialPassDrawItemPartitionsView opaqueDrawItems{};
     CsgFrameGpuDataView csgFrameData{};
-    Span<const Core::GpuTaskResourceUse> receiverSpanResourceUses;
-    Span<const Core::GpuTaskResourceUse> intervalCombineResourceUses;
     Core::GpuTimingSubmissionTicket** intervalSampleTimingTicket = nullptr;
     Core::TextureSubresourceSet removedIntervalSubresources{};
     Core::TextureSubresourceSet removedIntervalCountSubresources{};

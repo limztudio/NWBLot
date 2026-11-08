@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
+#include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -34,8 +35,8 @@ b8 RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySetting
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
-    auto& sampling = m_rayTracingState.m_softwareTransparentSampling;
+b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline(){
+    auto& sampling = m_shadow.m_softwareTransparentSampling;
     if(sampling.m_pipelines[0] && sampling.m_pipelines[1])
         return true;
     auto& device = m_graphics.getDevice();

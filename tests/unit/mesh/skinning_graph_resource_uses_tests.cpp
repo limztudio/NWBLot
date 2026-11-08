@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_mesh/skinning/graph_resource_uses.h>
+#include <impl/ecs_mesh/skinning/skinning_state_handoff.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
@@ -212,6 +213,24 @@ TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan)
     EXPECT_EQ(repeated.allocationCount, single.allocationCount);
     EXPECT_EQ(repeated.peakUsedBytes, single.peakUsedBytes);
     EXPECT_EQ(repeated.reservedBytes, single.reservedBytes);
+}
+
+
+TEST(SkinningStateHandoff, RejectsUnpreparedAcceptanceAndMissingRecordedState){
+    NWB::Tests::TestArena<> arena;
+    Core::Alloc::ScratchArena scratch(Name("tests/skinning_handoff/rejected"));
+    Core::GpuPersistentResourceStateCache cache(arena.arena);
+    SkinningStateHandoff handoff(cache, scratch, {});
+    EXPECT_FALSE(SkinningStateHandoff::Prepare(nullptr, nullptr));
+    EXPECT_FALSE(SkinningStateHandoff::Accept(nullptr, {}));
+    EXPECT_FALSE(SkinningStateHandoff::Accept(&handoff, {}));
+    EXPECT_FALSE(handoff.preparationInvoked());
+    EXPECT_FALSE(SkinningStateHandoff::Prepare(&handoff, nullptr));
+    EXPECT_TRUE(handoff.preparationInvoked());
+    EXPECT_FALSE(handoff.statePrepared());
+    EXPECT_FALSE(handoff.stateAccepted());
+    EXPECT_FALSE(SkinningStateHandoff::Accept(&handoff, {}));
+    EXPECT_FALSE(cache.valid());
 }
 
 

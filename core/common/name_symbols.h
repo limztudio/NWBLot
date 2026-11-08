@@ -11,6 +11,7 @@
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
 
+#include <global/name_hash_text.h>
 #include <global/filesystem/operations_file_io.h>
 #include <global/name.h>
 
@@ -88,15 +89,15 @@ inline void AppendResolvedText(const AStringView resolvedText, ArenaT& arena, Ba
 
 template<typename CharT, typename ArenaT>
 inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutText){
-    if(inOutText.size() < s_DebugHashTextLength)
+    if(inOutText.size() < NameHashTextCodec::s_TextLength)
         return;
 
     Optional<BasicString<CharT, ArenaT>> decoded;
     usize copiedUntil = 0u;
-    const usize lastTokenOffset = inOutText.size() - s_DebugHashTextLength;
+    const usize lastTokenOffset = inOutText.size() - NameHashTextCodec::s_TextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
-        const auto hashText = CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
-        const auto hash = hashText ? DecodeDebugHashText(AStringView(hashText->data(), s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
+        const auto hashText = NameHashTextCodec::CopyToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
+        const auto hash = hashText ? NameHashTextCodec::Decode(AStringView(hashText->data(), NameHashTextCodec::s_TextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
         if(hash){
             Array<char, s_MaxResolvedTextLength> resolvedText;
             if(Resolve(resolvedText.data(), resolvedText.size(), *hash)){
@@ -106,7 +107,7 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
                 }
                 decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
                 AppendResolvedText(AStringView(resolvedText.data()), arena, *decoded);
-                i += s_DebugHashTextLength;
+                i += NameHashTextCodec::s_TextLength;
                 copiedUntil = i;
                 continue;
             }

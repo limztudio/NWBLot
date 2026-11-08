@@ -4,6 +4,8 @@
 
 #include "optical_scene_resources.h"
 
+#include <impl/ecs_render/optics/optical_scene_binary_codec.adhd.h>
+
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -41,7 +43,7 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
     m_runtimeBoundsSnapshot.reset();
     usize instanceBytes = 0u;
     usize byteCount = 0u;
-    if(!ComputeRayTracingOpticalSceneByteSize(gather.instances.size(), instanceBytes, byteCount))
+    if(!OpticalSceneBinaryCodec{}.computeByteSize(gather.instances.size(), instanceBytes, byteCount))
         return false;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -105,7 +107,7 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
             m_uploads.push_back(upload);
         }
         else{
-            SerializeRayTracingOpticalSceneGatherBytes(
+            OpticalSceneBinaryCodec{}.serialize(
                 gather.header,
                 Span<const RayTracingOpticalInstanceGpu>(gather.instances.data(), gather.instances.size()),
                 upload->bytes,

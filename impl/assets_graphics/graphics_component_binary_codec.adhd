@@ -1,0 +1,144 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_graphics/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_SingleAssetRefComponentPayloadBinaryBytes = 64u;
+const usize s_RendererComponentPayloadBinaryBytes = 144u;
+
+
+class GraphicsComponentBinaryCodec{
+    private RendererComponentPayloadBinary packRenderer(in RendererComponent component)const{
+        RendererComponentPayloadBinary binaryPayload;
+        binaryPayload.materialHash = component.material.name().hash();
+        binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
+        binaryPayload.opticalVolumePriority = component.opticalVolumePriority;
+        binaryPayload.opticalMediumPriority = component.opticalMediumPriority;
+        if(component.visible)
+            binaryPayload.visible = 1u;
+        else
+            binaryPayload.visible = 0u;
+        binaryPayload.opticalVolumeCoincidence = cast<u8>(component.opticalVolumeCoincidence);
+        binaryPayload.opticalBoundaryMode = cast<u8>(component.opticalBoundaryMode);
+        binaryPayload.reserved0 = 0u;
+        binaryPayload.reserved1 = 0u;
+        return binaryPayload;
+    }
+
+    private Expected<RendererComponent> unpackRenderer(in RendererComponentPayloadBinary binaryPayload)const{
+        if(
+            binaryPayload.visible > 1u
+            || binaryPayload.opticalVolumeCoincidence > cast<u8>(OpticalVolumeCoincidence::SharedGroup)
+            || binaryPayload.opticalBoundaryMode > cast<u8>(OpticalBoundaryMode::ClosedPriority)
+            || binaryPayload.reserved0 != 0u
+            || binaryPayload.reserved1 != 0u
+        )
+            return makeUnexpected(Failure());
+        RendererComponent outComponent;
+        outComponent.material.virtualPath = Name(binaryPayload.materialHash);
+        outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);
+        outComponent.visible = binaryPayload.visible != 0u;
+        outComponent.opticalVolumeCoincidence = cast<OpticalVolumeCoincidence>(binaryPayload.opticalVolumeCoincidence);
+        outComponent.opticalVolumePriority = binaryPayload.opticalVolumePriority;
+        outComponent.opticalBoundaryMode = cast<OpticalBoundaryMode>(binaryPayload.opticalBoundaryMode);
+        outComponent.opticalMediumPriority = binaryPayload.opticalMediumPriority;
+        return outComponent;
+    }
+
+    private b8 validOpticalConfig(in RendererComponent component)const{
+        return
+            cast<u8>(component.opticalVolumeCoincidence) <= cast<u8>(OpticalVolumeCoincidence::SharedGroup)
+            && cast<u8>(component.opticalBoundaryMode) <= cast<u8>(OpticalBoundaryMode::ClosedPriority)
+        ;
+    }
+
+    public b8 validateRenderer(in RendererComponent component, in Name virtualPath)const{
+        if(!component.material.valid()){
+            error("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty", virtualPath.resolvedText());
+            return false;
+        }
+        if(!this.validOpticalConfig(component)){
+            error("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value", virtualPath.resolvedText());
+            return false;
+        }
+        if(component.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && component.opticalVolumeGroup == s_NameNone){
+            error(
+                "RendererComponentAsset::validatePayload failed: renderer_component '{}' shared_group optical volume requires optical_volume_group"
+                , virtualPath.resolvedText()
+            );
+            return false;
+        }
+        return true;
+    }
+
+    private SingleAssetRefComponentPayloadBinary packAssetRef(in Name assetName)const{
+        SingleAssetRefComponentPayloadBinary binaryPayload;
+        binaryPayload.assetHash = assetName.hash();
+        return binaryPayload;
+    }
+
+    public AssetRef<TAsset> unpackAssetRef<TAsset>(in SingleAssetRefComponentPayloadBinary binaryPayload)const{
+        AssetRef<TAsset> ref;
+        ref.virtualPath = Name(binaryPayload.assetHash);
+        return ref;
+    }
+
+    public b8 validateAssetRef(in b8 validAssetRef, in Name virtualPath, in StringView context, in StringView kindLabel)const{
+        if(validAssetRef)
+            return true;
+
+        error("{} failed: {} '{}' asset must not be empty", context, kindLabel, virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeAssetRef(in Name assetName, mut Vector<u8> outPayload)const{
+        const SingleAssetRefComponentPayloadBinary binaryPayload = this.packAssetRef(assetName);
+        outPayload.clear();
+        outPayload.reserve(s_SingleAssetRefComponentPayloadBinaryBytes);
+        AppendPOD(outPayload, binaryPayload);
+        return true;
+    }
+
+    public b8 deserializeAssetRef(in Span<u8> payload, in StringView context, mut Name outVirtualPath)const{
+        usize cursor = 0u;
+        const Expected<SingleAssetRefComponentPayloadBinary> binaryPayload = ReadPOD<SingleAssetRefComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("{} failed: invalid payload size", context);
+            return false;
+        }
+        outVirtualPath = Name(binaryPayload.value().assetHash);
+        return true;
+    }
+
+    public b8 serializeRenderer(in RendererComponent component, mut Vector<u8> outPayload)const{
+        const RendererComponentPayloadBinary binaryPayload = this.packRenderer(component);
+        outPayload.clear();
+        outPayload.reserve(s_RendererComponentPayloadBinaryBytes);
+        AppendPOD(outPayload, binaryPayload);
+        return true;
+    }
+
+    public b8 deserializeRenderer(in Span<u8> payload, mut RendererComponent outComponent)const{
+        usize cursor = 0u;
+        const Expected<RendererComponentPayloadBinary> binaryPayload = ReadPOD<RendererComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("RendererComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        const Expected<RendererComponent> unpacked = this.unpackRenderer(binaryPayload.value());
+        if(!unpacked.has_value()){
+            error("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags");
+            return false;
+        }
+        outComponent = unpacked.value();
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

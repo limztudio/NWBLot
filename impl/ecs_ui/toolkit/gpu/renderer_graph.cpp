@@ -3,6 +3,7 @@
 
 
 #include "renderer_internal.h"
+#include "image_resources.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,13 +88,14 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     Core::GpuGraphResourceId indices;
     uses.push_back({ color, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write });
     uses.push_back({ skin, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
-    auto glyphPages = declareGlyphPages(graph, frame, uses);
+    GpuImageResources imageResources(m_arena, m_graphics, m_imageCache);
+    auto glyphPages = imageResources.declareGlyphPages(graph, frame, uses);
     if(!glyphPages)
         return MakeUnexpected(Failure{});
-    auto sdfPages = declareSdfPages(graph, frame, uses);
+    auto sdfPages = imageResources.declareSdfPages(graph, frame, uses);
     if(!sdfPages)
         return MakeUnexpected(Failure{});
-    auto textureImages = declareTextureImages(graph, frame, uses);
+    auto textureImages = imageResources.declareTextureImages(graph, frame, uses);
     if(!textureImages)
         return MakeUnexpected(Failure{});
     if(!frame->m_snapshot.vertices().empty()){

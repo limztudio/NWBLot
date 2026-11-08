@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "runtime_internal.h"
+#include "runtime_setup_upload_graph.h"
 
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/task_graph.h>
@@ -33,7 +33,7 @@ inline constexpr Name s_SetupBufferUploadIdentity("graphics.setup_buffer.upload"
 
 struct BufferSetupSubmissionData{
     BufferHandle& buffer;
-    const GraphicsRuntime::BufferSetupDesc& setupDesc;
+    const GraphicsStandaloneService::BufferSetupDesc& setupDesc;
     const BufferDesc& uploadDesc;
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting;
     QueueSubmissionToken& uploadToken;
@@ -62,7 +62,7 @@ struct BufferSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupBufferUploadIdentity)
         .setMarkerLabel("Setup Buffer Upload")
-        .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
+        .setScheduling(GraphicsModuleDetail::SetupUploadGraph::scheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
     const auto taskResult = graph.addUploadBufferTask(
         uploadTaskDesc,
@@ -70,7 +70,7 @@ struct BufferSetupSubmissionData{
             .source = source,
             .destination = destination,
             .destinationOffsetBytes = submissionData.setupDesc.destOffsetBytes,
-            .finalState = GraphicsModuleDetail::SetupUploadGraphFinalState(submissionData.uploadDesc.initialState),
+            .finalState = GraphicsModuleDetail::SetupUploadGraph::finalState(submissionData.uploadDesc.initialState),
             .acceptedToken = &submissionData.uploadToken,
         }
     );
@@ -96,7 +96,7 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
+b8 ValidateBufferSetupUpload(const GraphicsStandaloneService::BufferSetupDesc& desc){
     if(desc.dataSize == 0)
         return true;
     if(!desc.data){
@@ -137,8 +137,8 @@ b8 ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
-    auto& device = getDevice();
+Expected<BufferHandle> GraphicsStandaloneService::setupBuffer(const BufferSetupDesc& desc)const{
+    auto& device = m_graphics.getDevice();
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
     if(!GraphicsModuleDetail::ValidateBufferSetupUpload(desc))
@@ -151,10 +151,10 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         return buffer;
     }
 
-    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
-    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.dataSize);
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::SetupUploadGraph::resolveConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
+    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::resolveSameClassRouting(device, consumerQueue, desc.dataSize);
     BufferDesc uploadDesc = desc.bufferDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
+    uploadDesc.queueSharing = GraphicsModuleDetail::SetupUploadGraph::resolveConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
     auto bufferResult = device.createBuffer(uploadDesc);
     if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
@@ -171,14 +171,14 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         .uploadToken = uploadToken,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        *this,
+    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::submit(
+        m_graphics,
         uploadDesc.queueSharing,
         consumerQueue,
         MakeNotNull(&__hidden_graphics_setup::DeclareBufferSetupUpload),
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{},
         &submissionData,
-        *m_standaloneGraphWorkspaces,
+        m_workspaces,
         uploadToken
     );
     if(!submitted){

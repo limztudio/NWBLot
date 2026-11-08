@@ -8,8 +8,11 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from reflection_roughness_reference import analyze_furnace, analyze_roughness, integrated_radiance, mirror_cells, reference_grid
-from reflection_roughness_smoke import CaptureSpec, HISTORY_FIELDS, compare_convergence, compare_deformation, compare_exact_scene, compare_sampling_seeds, high_frequency_energy, parse_history, spec_environment, validate_history
+from reflection_roughness_reference import analyze_furnace, analyze_roughness
+from reflection_roughness_oracle import ReflectionRoughnessOracle
+from reflection_roughness_smoke import CaptureSpec, spec_environment
+from reflection_history_evidence import HISTORY_FIELDS, ReflectionHistoryEvidence
+from reflection_roughness_image_evidence import ReflectionRoughnessImageEvidence
 from reflection_smoke import SmokeFailure
 
 LIT_SEQUENCE = "sequence"
@@ -35,7 +38,7 @@ def encode_radiance(value):
 def reference_frame(roughness, scale=1.0, swap_colors=False, camera_x=0.0):
     width, height = 320, 240
     rows = [[(0, 0, 0)] * width for _ in range(height)]
-    for cell, value in zip(mirror_cells(width, height, camera_x), reference_grid(width, height, roughness, camera_x)):
+    for cell, value in zip(ReflectionRoughnessOracle.mirror_cells(width, height, camera_x), ReflectionRoughnessOracle.reference_grid(width, height, roughness, camera_x)):
         values = value[::-1] if swap_colors else value
         pixel = tuple(encode_radiance(channel * scale) for channel in values) + (0,)
         for y in range(cell[1], cell[3]):
@@ -47,9 +50,9 @@ def reference_frame(roughness, scale=1.0, swap_colors=False, camera_x=0.0):
 class ReflectionRoughnessReferenceTests(unittest.TestCase):
     def test_exact_mirror_hits_virtual_emitter_and_rejects_wrong_position(self):
         # Point x=-1.6*6/14 reflects exactly to emitter x=-1.6 at z=-8.
-        self.assertAlmostEqual(integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 0), 0.95, places=6)
-        self.assertEqual(integrated_radiance((0, 1.4, 0), 0, 0), 0)
-        self.assertEqual(integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 1), 0)
+        self.assertAlmostEqual(ReflectionRoughnessOracle.integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 0), 0.95, places=6)
+        self.assertEqual(ReflectionRoughnessOracle.integrated_radiance((0, 1.4, 0), 0, 0), 0)
+        self.assertEqual(ReflectionRoughnessOracle.integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 1), 0)
 
     def test_smooth_image_cannot_pass_for_rough_lobe(self):
         with self.assertRaises(SmokeFailure):
@@ -85,17 +88,17 @@ class ReflectionRoughnessReferenceTests(unittest.TestCase):
 
     def test_stale_color_is_rejected_by_final_scene_comparison(self):
         clean = reference_frame(0.4)
-        compare_exact_scene(clean, clean)
+        ReflectionRoughnessImageEvidence.compare_exact_scene(clean, clean)
         with self.assertRaises(SmokeFailure):
-            compare_exact_scene(clean, reference_frame(0.4, scale=0.8))
+            ReflectionRoughnessImageEvidence.compare_exact_scene(clean, reference_frame(0.4, scale=0.8))
 
     def test_spatial_metric_detects_local_sample_noise(self):
         frame = reference_frame(0.4)
-        clean = high_frequency_energy(frame)
+        clean = ReflectionRoughnessImageEvidence.high_frequency_energy(frame)
         for row in frame[2]:
             for x in range(0, frame[0], 2):
                 row[x] = (80, 0, 0)
-        self.assertGreater(high_frequency_energy(frame), clean * 2)
+        self.assertGreater(ReflectionRoughnessImageEvidence.high_frequency_energy(frame), clean * 2)
 
     def test_camera_settled_reference_uses_shifted_world_and_receiver_crop(self):
         analyze_roughness(reference_frame(0.4, camera_x=0.6), 0.4, camera_x=0.6)
@@ -111,29 +114,29 @@ class ReflectionRoughnessReferenceTests(unittest.TestCase):
                     frame[2][y][x] = (180, 0, 0)
                 for x in range(200, 215):
                     frame[2][y][x] = (0, 180, 0)
-        self.assertGreater(compare_deformation(before, after)["changed_red_footprint_pixels"], 0)
+        self.assertGreater(ReflectionRoughnessImageEvidence.compare_deformation(before, after)["changed_red_footprint_pixels"], 0)
         with self.assertRaises(SmokeFailure):
-            compare_deformation(before, before)
+            ReflectionRoughnessImageEvidence.compare_deformation(before, before)
         for row in after[2]:
             row[:] = [(0, 0, 0)] * 320
         with self.assertRaises(SmokeFailure):
-            compare_deformation(before, after)
+            ReflectionRoughnessImageEvidence.compare_deformation(before, after)
 
     def test_sampling_seed_comparison_rejects_identical_estimator_noise(self):
         first = reference_frame(0.4)
         with self.assertRaises(SmokeFailure):
-            compare_sampling_seeds(first, first)
+            ReflectionRoughnessImageEvidence.compare_sampling_seeds(first, first)
         second = reference_frame(0.4)
         for row in second[2]:
             for x in range(0, second[0], 2):
                 row[x] = (40, 0, 0)
-        self.assertGreater(compare_sampling_seeds(first, second)["changed_receiver_pixels"], 64)
+        self.assertGreater(ReflectionRoughnessImageEvidence.compare_sampling_seeds(first, second)["changed_receiver_pixels"], 64)
 
     def test_more_samples_must_converge_without_hiding_late_energy_bias(self):
-        compare_convergence(0.06, 0.02, 0.008)
+        ReflectionRoughnessImageEvidence.compare_convergence(0.06, 0.02, 0.008)
         for errors in ((0.06, 0.02, 0.046), (0.06, 0.07, 0.008), (0.06, 0.058, 0.057)):
             with self.subTest(errors=errors), self.assertRaises(SmokeFailure):
-                compare_convergence(*errors)
+                ReflectionRoughnessImageEvidence.compare_convergence(*errors)
 
 
 class ReflectionCompletedHistoryTests(unittest.TestCase):
@@ -153,79 +156,79 @@ class ReflectionCompletedHistoryTests(unittest.TestCase):
     def test_converged_image_requires_completed_cap_before_capture(self):
         spec = CaptureSpec(LIT_STATIC)
         text, stats = self.evidence([self.sample(), self.sample(2, 42)], 41)
-        self.assertEqual(validate_history(text, stats, spec)["captured_graphics_frame"], 41)
+        self.assertEqual(ReflectionHistoryEvidence.validate_history(text, stats, spec)["captured_graphics_frame"], 41)
         text, stats = self.evidence([self.sample(count=8), self.sample(2, 42, count=8)], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, spec)
+            ReflectionHistoryEvidence.validate_history(text, stats, spec)
 
     def test_requested_256_does_not_substitute_for_accepted_samples(self):
         spec = CaptureSpec("reference", samples=256)
         text, stats = self.evidence([self.sample(), self.sample(2, 42)], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, spec)
+            ReflectionHistoryEvidence.validate_history(text, stats, spec)
 
     def test_latest_only_publication_can_cover_first_reset_source(self):
         samples = [self.sample(count=32), self.sample(2, 44, count=4, epoch=3, start=41)]
         text, stats = self.evidence(samples, 41, mutation=41)
-        result = validate_history(text, stats, CaptureSpec(LIT_RESET, case=LIT_TEMPORAL_CAMERA))
+        result = ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_RESET, case=LIT_TEMPORAL_CAMERA))
         self.assertEqual(result["covering_completed_history"]["graphics_frame"], 44)
 
     def test_capture_one_frame_late_cannot_claim_first_reset(self):
         text, stats = self.evidence([self.sample(count=32), self.sample(2, 44, count=4, epoch=3, start=41)], 42, mutation=41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_RESET, case=LIT_TEMPORAL_CAMERA))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_RESET, case=LIT_TEMPORAL_CAMERA))
 
     def test_changed_epoch_without_matching_start_does_not_prove_reset(self):
         text, stats = self.evidence([self.sample(count=32), self.sample(2, 44, count=4, epoch=3, start=42)], 41, mutation=41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_RESET, case="temporal_material"))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_RESET, case="temporal_material"))
 
     def test_no_completed_sample_after_capture_is_rejected(self):
         text, stats = self.evidence([self.sample()], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_STATIC))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_STATIC))
 
     def test_detached_history_token_is_rejected(self):
         text, stats = self.evidence([self.sample(), self.sample(2, 42)], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats[:1], CaptureSpec(LIT_STATIC))
+            ReflectionHistoryEvidence.validate_history(text, stats[:1], CaptureSpec(LIT_STATIC))
 
     def test_reused_deformation_history_is_rejected(self):
         text, stats = self.evidence([self.sample(count=32), self.sample(2, 44, count=4, epoch=3, start=41)], 41, mutation=41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_DEFORM, case=LIT_TEMPORAL_DEFORM, roughness=0))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_DEFORM, case=LIT_TEMPORAL_DEFORM, roughness=0))
 
     def test_raw_and_held_deformation_advance_without_history(self):
         samples = [self.sample(count=0, start=0, eligible=0, reused=0), self.sample(2, 44, count=0, epoch=3, start=0, eligible=0, reused=0)]
         text, stats = self.evidence(samples, 41)
-        validate_history(text, stats, CaptureSpec(LIT_RAW, temporal=False))
+        ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_RAW, temporal=False))
         text, stats = self.evidence(samples, 41, mutation=41)
-        validate_history(text, stats, CaptureSpec(LIT_DEFORM, case=LIT_TEMPORAL_DEFORM, roughness=0))
+        ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_DEFORM, case=LIT_TEMPORAL_DEFORM, roughness=0))
 
     def test_history_integer_overflow_is_rejected(self):
         text, stats = self.evidence([self.sample(), self.sample(2, 42, sample_index=2**32)], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_STATIC))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_STATIC))
 
     def test_duplicate_history_field_and_wrong_boolean_are_rejected(self):
         text, stats = self.evidence([self.sample(), self.sample(2, 42, eligible=2)], 41)
         with self.assertRaises(SmokeFailure):
-            validate_history(text, stats, CaptureSpec(LIT_STATIC))
+            ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec(LIT_STATIC))
         with self.assertRaises(SmokeFailure):
-            parse_history("ReflectionSmokeHistory: sequence=1 sequence=2")
+            ReflectionHistoryEvidence.parse_history("ReflectionSmokeHistory: sequence=1 sequence=2")
 
     def test_fresh_scene_preserves_same_mutation_boundary_with_seed_reset(self):
         samples = [self.sample(count=32, seed=1), self.sample(2, 44, count=4, epoch=3, start=41)]
         text, stats = self.evidence(samples, 41, mutation=41, fresh=True)
-        validate_history(text, stats, CaptureSpec("fresh", case="temporal_transform", final_state=True))
+        ReflectionHistoryEvidence.validate_history(text, stats, CaptureSpec("fresh", case="temporal_transform", final_state=True))
 
     def test_requested_independent_seed_must_match_completed_metadata(self):
         spec = CaptureSpec("seed1", seed=1)
         text, stats = self.evidence([self.sample(), self.sample(2, 42)], 41)
         with self.assertRaisesRegex(SmokeFailure, "sampling seed"):
-            validate_history(text, stats, spec)
+            ReflectionHistoryEvidence.validate_history(text, stats, spec)
         text, stats = self.evidence([self.sample(seed=1), self.sample(2, 42, seed=1)], 41)
-        validate_history(text, stats, spec)
+        ReflectionHistoryEvidence.validate_history(text, stats, spec)
 
     def test_environment_removes_inherited_controls(self):
         with patch.dict(os.environ, {"NWB_REFLECTION_SMOKE_MODE": "disabled", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source", LIT_NWB_REFLECTION_SMOKE_SEED: "900", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0"}):

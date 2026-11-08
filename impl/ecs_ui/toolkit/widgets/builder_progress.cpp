@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -33,7 +35,7 @@ b8 Builder::progress(const AStringView stableKey, const f64 fraction, const Prog
     frame.fraction = fraction;
     frame.options = options;
     frame.style = m_progressStyle;
-    if(!TryResolveProgressStyleMetrics(*m_skin, fraction, options, frame.style, frame.metrics)){
+    if(!ControlStyleMetrics().progressMetrics(*m_skin, fraction, options, frame.style, frame.metrics)){
         m_context.fail();
         return false;
     }
@@ -57,7 +59,7 @@ b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
     const auto placement = PlaceProgress(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
     if(!placement)
         return false;
-    const b8 painted = PaintProgressBarRegions(m_paint, frame.style, *placement);
+    const b8 painted = ControlVisualPainter().paintProgressBarRegions(m_paint, frame.style, *placement);
     return finishClipPaint(item, placement->bounds, placement->clip, painted);
 }
 

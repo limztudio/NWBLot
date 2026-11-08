@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 #include "decl_parser.h"
 
 
@@ -168,7 +172,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
             m_cursor.error(span.line, span.column, "'reflect' attribute is only permitted on class or interface methods, not free functions");
             return nullptr;
         }
-        if(m_cursor.check(TokenType::Identifier) && IsMethodQualifierKeyword(m_cursor.current().text)){
+        if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsMethodQualifierKeyword(m_cursor.current().text)){
             m_cursor.error(span.line, span.column, "'const' and 'override' qualifiers are only permitted on class methods, not free functions");
             return nullptr;
         }
@@ -219,7 +223,7 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
 }
 
 b8 DeclParser::parseOperatorName(MStringView& outOpName){
-    const MStringView prohibitedOverloadErr = FindProhibitedOperatorOverloadError(m_cursor.current().type);
+    const MStringView prohibitedOverloadErr = OperatorSemantics::FindProhibitedOperatorOverloadError(m_cursor.current().type);
     if(!prohibitedOverloadErr.empty()){
         m_cursor.error(prohibitedOverloadErr);
         return false;
@@ -233,7 +237,7 @@ b8 DeclParser::parseOperatorName(MStringView& outOpName){
     }
 
     const Token tok = m_cursor.current();
-    if(IsOverloadableOperatorToken(tok.type)){
+    if(OperatorSemantics::IsOverloadableOperatorToken(tok.type)){
         outOpName = tok.text;
         m_cursor.advance();
         return true;

@@ -5,7 +5,11 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
+import stress_reflection_diagnostics as reflection_diagnostics
 import stress_timing_smoke as smoke
+import stress_presentation_evidence as presentation
+import stress_shadow_evidence as shadow
+import stress_workload as workload
 
 
 LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE = "SurfelGiQualitySmoke: requested resolve_factor=4"
@@ -27,25 +31,25 @@ def stress_arguments(runtime, extra=()):
 
 
 def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0, capture_cadence=0):
-    return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
+    return (shadow.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
         f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search} capture_cadence={capture_cadence}")
 
 
 def shadow_quality_record(sampling=0, factor=4, width=1280, height=900):
-    return (smoke.SHADOW_QUALITY_SETTINGS + f"{sampling} receiver_factor={factor}\n" + smoke.SHADOW_RECEIVER_GRID + f"factor={factor} full={width}x{height} receiver={(width+factor-1)//factor}x{(height+factor-1)//factor}")
+    return (shadow.SHADOW_QUALITY_SETTINGS + f"{sampling} receiver_factor={factor}\n" + shadow.SHADOW_RECEIVER_GRID + f"factor={factor} full={width}x{height} receiver={(width+factor-1)//factor}x{(height+factor-1)//factor}")
 
 
 def workload_record(characters_per_class=10):
     if characters_per_class == 5:
-        return (smoke.WORKLOAD + "characters_per_class=5 total=10 transparent=5 opaque=5 layout=zigzag_v1 " "rows=2 columns=5 row_spacing_x=1.44 row_stagger_x=0.36 front_z=-0.55 back_z=0.55 body_scale=1 "
+        return (workload.WORKLOAD + "characters_per_class=5 total=10 transparent=5 opaque=5 layout=zigzag_v1 " "rows=2 columns=5 row_spacing_x=1.44 row_stagger_x=0.36 front_z=-0.55 back_z=0.55 body_scale=1 "
             "camera_x=0 camera_y=1.8 camera_z=-4.8 camera_pitch=0.2 vertical_fov=1.0471976 " "near_plane=0.001 far_plane=10000 aspect=0")
-    return (smoke.WORKLOAD + "characters_per_class=10 total=20 transparent=10 opaque=10 layout=two_rows_v1 " "rows=2 columns=10 row_spacing_x=0.72 row_stagger_x=0.18 front_z=-0.55 back_z=0.55 body_scale=1 "
+    return (workload.WORKLOAD + "characters_per_class=10 total=20 transparent=10 opaque=10 layout=two_rows_v1 " "rows=2 columns=10 row_spacing_x=0.72 row_stagger_x=0.18 front_z=-0.55 back_z=0.55 body_scale=1 "
         "camera_x=0 camera_y=2.7 camera_z=-7.2 camera_pitch=0.25 vertical_fov=1.0471976 " "near_plane=0.001 far_plane=10000 aspect=0")
 
 
 def valid_log(characters_per_class=10):
-    lines = [marker for marker in smoke.REQUIRED if marker != smoke.SHUTDOWN]
-    lines.append(smoke.SPAWN + f"{characters_per_class * 2} spinning characters ({characters_per_class} transparent + " f"{characters_per_class} opaque) over ground, directional + point light")
+    lines = [marker for marker in presentation.REQUIRED if marker != presentation.SHUTDOWN]
+    lines.append(workload.SPAWN + f"{characters_per_class * 2} spinning characters ({characters_per_class} transparent + " f"{characters_per_class} opaque) over ground, directional + point light")
     lines.append(workload_record(characters_per_class))
     lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
     # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
@@ -55,12 +59,12 @@ def valid_log(characters_per_class=10):
     lines.append(LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE)
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, " "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
     lines.append(shadow_quality_record())
-    lines.append(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96)
+    lines.append(reflection_diagnostics.REFLECTION_QUALITY_SETTINGS + LIT_N_96)
     for index in range(60):
-        lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
-    lines.append(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
-    lines.append(smoke.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI)
-    lines.append(smoke.SHUTDOWN)
+        lines.append(presentation.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
+    lines.append(presentation.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
+    lines.append(presentation.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI)
+    lines.append(presentation.SHUTDOWN)
     return "\n\n".join(lines) + "\n"
 
 
@@ -75,4 +79,4 @@ def reflection_record(**changes):
 
 
 def reflection_log(*records):
-    return valid_log().replace(smoke.START, smoke.REFLECTION_ENABLED + "\n" + smoke.START).replace(smoke.SHUTDOWN, "\n".join(records) + "\n" + smoke.SHUTDOWN)
+    return valid_log().replace(presentation.START, reflection_diagnostics.REFLECTION_ENABLED + "\n" + presentation.START).replace(presentation.SHUTDOWN, "\n".join(records) + "\n" + presentation.SHUTDOWN)

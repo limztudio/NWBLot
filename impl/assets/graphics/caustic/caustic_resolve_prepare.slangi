@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CAUSTIC_RESOLVE_PREPARE_SLANGI
+#define NWB_CAUSTIC_RESOLVE_PREPARE_SLANGI
+
+
+#include "caustic_resolve_common.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCausticResolvePrepare{
+    static void run(const uint3 dispatchThreadID, const uint3 groupThreadID, const uint3 groupID){
+        const uint2 pixel = dispatchThreadID.xy;
+        const int2 texel = int2(pixel);
+        const bool inBounds = pixel.x < g_NwbCausticResolvePushConstants.halfWidth && pixel.y < g_NwbCausticResolvePushConstants.halfHeight;
+        half4 result = half4(0.0h, 0.0h, 0.0h, 1.0h);
+        if(inBounds){
+            if(nwbCausticResolveValidAtHalf(texel)){
+                const int fw = (int)g_NwbCausticResolvePushConstants.width;
+                const int fh = (int)g_NwbCausticResolvePushConstants.height;
+                const int2 base = int2(texel.x * 2, texel.y * 2);
+                // The accumulator holds fixed-point counts; keep full precision, convert to half only at the final divide.
+                float3 flux = float3(0.0, 0.0, 0.0);
+                [unroll] for(int oy = 0; oy < 2; ++oy){
+                    [unroll] for(int ox = 0; ox < 2; ++ox){
+                        const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
+                        flux += float3(
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_GREEN, 0)).r,
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_BLUE, 0)).r
+                        );
+                    }
+                }
+                flux /= NWB_CAUSTIC_FIXED_POINT_SCALE;
+                const float area = nwbCausticResolveHalfPixelArea(texel);
+                const half3 irradiance = half3(flux / area * g_NwbCausticResolvePushConstants.causticIntensity);
+                result = half4(irradiance, 1.0h);
+            }
+            g_NwbCausticResolveOutput[pixel] = result;
+        }
+        const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
+        nwbCausticResolvePublishActivity(result.rgb, inBounds, groupID.xy, threadIndex);
+        return;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

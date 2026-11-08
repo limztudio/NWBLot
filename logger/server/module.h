@@ -5,13 +5,11 @@
 #pragma once
 
 
-#include <microhttpd.h>
+#include "crash_ingest_worker.h"
+#include "http_handler.h"
 
 #include <logger/common.h>
-#include <logger/telemetry/ingest.h>
-
-#include "crash_auth.h"
-#include "crash_ingest.h"
+#include <logger/processed_message_file.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,26 +21,15 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
-struct PendingCrashUpload{
-    Array<char, s_MaxPendingCrashUploadPathText> path = {};
-};
-
-using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
-
-class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>{
+class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>, private ICrashIngestSink{
+    friend class ServerHttpHandler;
     template<typename> friend class LoggerWorkerBase;
     template<typename, f32> friend class IntervalLoggerWorkerBase;
 
     using BaseType = LoggerWorkerBase<Server>;
     using UpdateBaseType = IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>;
-
-
-private:
-    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress);
-    static void CrashIngestUpdate(Server& self);
 
 
 public:
@@ -56,7 +43,7 @@ public:
 
 protected:
     b8 internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView(), AStringView readinessToken = AStringView());
-    void internalDestroy(){ stopCrashIngestWorker(); }
+    void internalDestroy(){ m_crashIngestWorker.stop(); }
     b8 internalUpdate();
 
 
@@ -67,22 +54,13 @@ protected:
 
 private:
     [[nodiscard]] b8 enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena);
-    void stopCrashIngestWorker();
-    [[nodiscard]] b8 crashUploadAuthorized(MHD_Connection& connection)const noexcept;
-    [[nodiscard]] Expected<PendingCrashUpload> tryDequeueCrashUpload();
+    virtual void deliverCrashIngestMessage(LogString&& message, Core::Common::LogType::Enum type)override;
 
 
 private:
-    MHD_Daemon* m_daemon;
     ProcessedMessageFile m_processedMessageFile;
-    CrashIngestConfig m_crashIngestConfig;
-    TelemetryIngestConfig m_telemetryIngestConfig;
-    AString<LogArena> m_crashUploadToken;
-    AString<LogArena> m_readinessToken;
-    CrashUploadQueue m_crashUploads;
-    Semaphore<> m_crashIngestSemaphore;
-    Atomic<b8> m_crashIngestExit;
-    Thread m_crashIngestThread;
+    CrashIngestWorker m_crashIngestWorker;
+    ServerHttpHandler m_httpHandler;
 };
 
 

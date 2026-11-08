@@ -99,8 +99,6 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceTextureCompressionASTCHDRFeatures textureCompressionAstcHdr = MakeVkFeatureStruct<VkPhysicalDeviceTextureCompressionASTCHDRFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES);
 };
 
-[[nodiscard]] OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures()noexcept;
-[[nodiscard]] void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature)noexcept;
 [[nodiscard]] Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params)noexcept;
 
 [[nodiscard]] inline constexpr b8 SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexcept{
@@ -117,8 +115,6 @@ void SetHdr10Metadata(const VolkDeviceTable& deviceDispatch, VkDevice device, Vk
 [[nodiscard]] u64 GetDeviceLocalMemoryBytes(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice);
 void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, AdapterInfo& outAdapter);
 
-[[nodiscard]] b8 SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept;
-void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported)noexcept;
 
 template<typename FeatureT>
 inline void AppendFeatureStruct(void*& pNext, FeatureT& feature)noexcept{
@@ -126,7 +122,6 @@ inline void AppendFeatureStruct(void*& pNext, FeatureT& feature)noexcept{
     pNext = &feature;
 }
 
-void AppendOptionalDeviceFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, Array<b8, static_cast<usize>(DeviceExtensionFeature::Count)>& appended)noexcept;
 [[nodiscard]] AStringView DebugUtilsSeverityToString(VkDebugUtilsMessageSeverityFlagBitsEXT severity)noexcept;
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData);
 

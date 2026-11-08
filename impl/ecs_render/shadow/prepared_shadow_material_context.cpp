@@ -4,6 +4,8 @@
 
 #include "prepared_shadow_material_context.h"
 
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
+
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
@@ -12,6 +14,12 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(InstanceGpuData) == s_InstanceGpuDataByteSize, "Shadow instance payload size must match the mesh GPU layout");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,7 +63,7 @@ b8 PreparedShadowMaterialContext::capture(
         return false;
 
     clear();
-    CaptureShadowMaterialContextBytes(
+    ShadowMaterialContextPolicy().captureBytes(
         instanceMaterials,
         instances,
         materialTypedBytes,
@@ -116,7 +124,7 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
     if(!m_ready)
         return result;
 
-    if(!ValidatePreparedShadowMaterialContextRetainState(
+    if(!ShadowMaterialContextPolicy().validateRetainState(
         m_route,
         m_instanceMaterialCount,
         m_instanceCount,
@@ -155,7 +163,7 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
 }
 
 b8 PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
-    return PublishAcceptedShadowMaterialContextUpload(
+    return ShadowMaterialContextPolicy().publishAcceptedUpload(
         m_ready,
         m_uploadRequired,
         m_route,
@@ -180,11 +188,11 @@ b8 PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& 
 }
 
 b8 PreparedShadowMaterialContext::softwareSnapshotCovers(const usize sceneInstanceCount)const noexcept{
-    return IsPreparedShadowMaterialSoftwareSnapshotCovers(m_ready, m_route, m_instanceMaterialCount, m_instanceCount, sceneInstanceCount);
+    return ShadowMaterialContextPolicy().softwareSnapshotCovers(m_ready, m_route, m_instanceMaterialCount, m_instanceCount, sceneInstanceCount);
 }
 
 b8 PreparedShadowMaterialContext::softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept{
-    return IsPreparedShadowMaterialSoftwareSnapshotAccepted(
+    return ShadowMaterialContextPolicy().softwareSnapshotAccepted(
         m_uploadRequired,
         m_static,
         state.m_swShadowMaterialContextHashValid,
@@ -232,3 +240,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -77,8 +78,8 @@ void RendererRayTracingSystem::discardSoftShadowTemporalHistory()noexcept{
     m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
 }
 
-b8 RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftShadowResolvePipeline(){
+    auto& resolve = m_shadow.m_softShadowResolve;
     if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
         return true;
     if(resolve.m_scalar.m_failed)
@@ -94,10 +95,10 @@ b8 RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     return __hidden_softshadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, m_shaderSystem, device, resolve.m_scalar);
 }
 
-b8 RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
-    if(m_rayTracingState.m_shadowGeometryDownsamplePipeline)
+b8 ShadowPipelineSet::ensureShadowGeometryDownsamplePipeline(){
+    if(m_softShadow.m_shadowGeometryDownsamplePipeline)
         return true;
-    if(m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed)
+    if(m_softShadow.m_shadowGeometryDownsamplePipelineFailed)
         return false;
 
     if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
@@ -109,18 +110,18 @@ b8 RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
         "ECSRender_ShadowGeometryDownsample",
         sizeof(ShadowGeometryDownsamplePushConstants),
         false,
-        m_rayTracingState.m_shadowGeometryDownsampleBindingLayout,
-        m_rayTracingState.m_shadowGeometryDownsampleShader,
-        m_rayTracingState.m_shadowGeometryDownsamplePipeline
+        m_softShadow.m_shadowGeometryDownsampleBindingLayout,
+        m_softShadow.m_shadowGeometryDownsampleShader,
+        m_softShadow.m_shadowGeometryDownsamplePipeline
     )){
-        m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
+        m_softShadow.m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftTransparentResolvePipeline(){
+    auto& resolve = m_shadow.m_softShadowResolve;
     if(resolve.m_rgb.m_wavelet.m_pipeline && resolve.m_rgb.m_upsample.m_pipeline)
         return true;
     if(resolve.m_rgb.m_failed || !resolve.m_bindingLayout)
@@ -133,15 +134,15 @@ b8 RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
 }
 
 // Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
-void RendererRayTracingSystem::prepareSoftCombinedResolvePipelines(){
-    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady)
+void ShadowPipelineSet::prepareSoftCombinedResolvePipelines(){
+    if(!m_softShadow.m_softShadowReady || !m_softShadow.m_softTransparentReady)
         return;
     if(!ensureSoftCombinedUpsamplePipeline())
-        m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
+        m_shadow.m_softShadowResolve.m_combinedUpsampleFailed = true;
     if(!ensureSoftCombinedWaveletPipeline())
-        m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
+        m_shadow.m_softShadowResolve.m_combinedWaveletFailed = true;
     if(!ensureSoftCombinedTemporalPipeline())
-        m_rayTracingState.m_softShadowResolve.m_combinedTemporalFailed = true;
+        m_shadow.m_softShadowResolve.m_combinedTemporalFailed = true;
 }
 
 void RendererRayTracingSystem::dispatchSoftShadowResolve(
@@ -249,10 +250,10 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY, dispatch.graphOwnsUpsampleInputColorEntryState, dispatch.graphOwnsUpsampleVisibilityOutputState);
 }
 
-b8 RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
-    if(m_rayTracingState.m_shadowReprojectMergePipeline)
+b8 ShadowPipelineSet::ensureShadowReprojectMergePipeline(){
+    if(m_softShadow.m_shadowReprojectMergePipeline)
         return true;
-    if(m_rayTracingState.m_shadowReprojectMergePipelineFailed)
+    if(m_softShadow.m_shadowReprojectMergePipelineFailed)
         return false;
 
     if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
@@ -264,11 +265,11 @@ b8 RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
         "ECSRender_SoftShadowReprojectMerge",
         sizeof(ShadowReprojectMergePushConstants),
         false,
-        m_rayTracingState.m_shadowReprojectMergeBindingLayout,
-        m_rayTracingState.m_shadowReprojectMergeShader,
-        m_rayTracingState.m_shadowReprojectMergePipeline
+        m_softShadow.m_shadowReprojectMergeBindingLayout,
+        m_softShadow.m_shadowReprojectMergeShader,
+        m_softShadow.m_shadowReprojectMergePipeline
     )){
-        m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
+        m_softShadow.m_shadowReprojectMergePipelineFailed = true;
         return false;
     }
     return true;

@@ -47,6 +47,7 @@ nwb_target_adhd_sources(nwb_ui
     NAMESPACE "NWB::Impl::Ui"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/state/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/layout/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/input/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/text/*.adhd"

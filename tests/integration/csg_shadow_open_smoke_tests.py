@@ -11,8 +11,10 @@ from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import csg_shadow_open_smoke as smoke
-from csg_shadow_open_smoke import CASES, COUNTS, LENGTHS, OPEN_CAPACITY_MESSAGE, REGIONS, compare_frames, expected_open_rgb, parse_args, validate_runtime
-from csg_shadow_reference import expected_rgb, region_pixels
+from csg_shadow_open_smoke import parse_args
+from csg_shadow_open_evidence import CASES, COUNTS, LENGTHS, OPEN_CAPACITY_MESSAGE, REGIONS, CsgOpenShadowImageEvidence, CsgOpenShadowRuntimeEvidence
+from csg_shadow_reference import region_pixels
+from csg_shadow_geometry import CsgShadowGeometry
 from generate_csg_shadow_open_meshes import open_sheets, validate_open_sheets
 from window_capture_smoke import SmokeFailure
 
@@ -54,7 +56,7 @@ class CsgOpenShadowTests(unittest.TestCase):
             rows = [[(255, 255, 255)] * width for _ in range(height)]
             for index, region in enumerate(REGIONS):
                 length = LENGTHS[case][index] if index < 2 else 0.
-                rgb = tuple(round(value) for value in expected_open_rgb(length, COUNTS[case][index] if index < 2 else 0))
+                rgb = tuple(round(value) for value in CsgOpenShadowImageEvidence.expected_open_rgb(length, COUNTS[case][index] if index < 2 else 0))
                 for x, y in region_pixels(region, width, height):
                     rows[y][x] = rgb
             frames[case] = width, height, rows
@@ -83,69 +85,69 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def test_fifth_event_black_fallback_is_rejected(self):
         frames = self.frames()
-        self.assertEqual(len(compare_frames(frames)[LIT_REGIONS]), 6)
+        self.assertEqual(len(CsgOpenShadowImageEvidence.compare_frames(frames)[LIT_REGIONS]), 6)
         self.replace(frames, LIT_RETAINED, 0, (0, 0, 0))
         with self.assertRaisesRegex(SmokeFailure, "retained/first_receiver"):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
 
     def test_even_six_pairing_cannot_use_first_last_approximation(self):
         frames = self.frames()
-        value = tuple(round(channel) for channel in expected_open_rgb(2., 6))
+        value = tuple(round(channel) for channel in CsgOpenShadowImageEvidence.expected_open_rgb(2., 6))
         self.replace(frames, LIT_RETAINED, 1, value)
         with self.assertRaisesRegex(SmokeFailure, "retained/six_sheet_control"):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
 
     def test_stale_cutter_and_all_black_controls_are_rejected(self):
         frames = self.frames()
         frames["clipped"] = frames[LIT_RETAINED]
         with self.assertRaisesRegex(SmokeFailure, "clipped/first_receiver"):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
         frames = self.frames()
         self.replace(frames, LIT_RETAINED, 2, (0, 0, 0))
         with self.assertRaisesRegex(SmokeFailure, "clear_receiver"):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
 
     def test_capacity64_must_remain_positive_and65_must_fail_conservatively(self):
         frames = self.frames()
         self.replace(frames, LIT_BOUNDARY64, 0, (0, 0, 0))
         with self.assertRaisesRegex(SmokeFailure, LIT_BOUNDARY64_FIRST_RECEIVER):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
         frames = self.frames()
         self.replace(frames, LIT_TERMINAL65, 0, (255, 255, 255))
         with self.assertRaisesRegex(SmokeFailure, "terminal65/first_receiver"):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
 
     def test_capacity64_cannot_drop_nonunit_ior_interface_product(self):
         frames = self.frames()
-        beer_only = tuple(round(channel) for channel in expected_rgb(64. / 63., -1.2, 0., "directional"))
+        beer_only = tuple(round(channel) for channel in CsgShadowGeometry.expected_rgb(64. / 63., -1.2, 0., "directional"))
         self.replace(frames, LIT_BOUNDARY64, 0, beer_only)
         with self.assertRaisesRegex(SmokeFailure, LIT_BOUNDARY64_FIRST_RECEIVER):
-            compare_frames(frames)
+            CsgOpenShadowImageEvidence.compare_frames(frames)
 
     def test_open_terminal_requires_exact_flag_and_rejects_other_capacity(self):
-        self.assertEqual(validate_runtime(self.log(LIT_TERMINAL65), LIT_TERMINAL65, LIT_HARDWARE, 120)[LIT_DIAGNOSTIC_FLAGS], 16)
+        self.assertEqual(CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_TERMINAL65), LIT_TERMINAL65, LIT_HARDWARE, 120)[LIT_DIAGNOSTIC_FLAGS], 16)
         for log in (self.log(LIT_TERMINAL65).replace("flags=16", "flags=2"), self.log(LIT_TERMINAL65) + "\n[WARNING]: unrelated", self.log(LIT_TERMINAL65).replace("[WARNING]", "[ERROR]")):
             with self.assertRaises(SmokeFailure):
-                validate_runtime(log, LIT_TERMINAL65, LIT_HARDWARE, 120)
+                CsgOpenShadowRuntimeEvidence.validate_runtime(log, LIT_TERMINAL65, LIT_HARDWARE, 120)
 
     def test_disabled_warning_policy_preserves_all_cases_without_fabricating_flags(self):
         for route in (LIT_HARDWARE, LIT_SOFTWARE):
             for case in CASES:
-                receipt = validate_runtime(self.log(case, route, LIT_DISABLED), case, route, 120, LIT_DISABLED)
+                receipt = CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(case, route, LIT_DISABLED), case, route, 120, LIT_DISABLED)
                 self.assertIsNone(receipt[LIT_DIAGNOSTIC_FLAGS])
                 self.assertFalse(receipt[LIT_DIAGNOSTIC_FLAGS_OBSERVED])
                 self.assertFalse(receipt["capacity_diagnostic_available"])
                 self.assertEqual(receipt["warning_policy"], LIT_DISABLED)
                 self.assertEqual(receipt["expected_capacity_terminal"], case == LIT_TERMINAL65)
-        self.assertEqual(len(compare_frames(self.frames())[LIT_REGIONS]), 6)
+        self.assertEqual(len(CsgOpenShadowImageEvidence.compare_frames(self.frames())[LIT_REGIONS]), 6)
 
     def test_disabled_warning_policy_rejects_every_warning_and_validation_error(self):
         for case in CASES:
             for marker in ("00:00:01.250 [WARNING]:\n" + OPEN_CAPACITY_MESSAGE, "[WARNING]: unrelated", "[ERROR]: unrelated", "VUID-invalid"):
                 with self.assertRaises(SmokeFailure):
-                    validate_runtime(self.log(case, warning_policy=LIT_DISABLED) + "\n" + marker, case, LIT_HARDWARE, 120, LIT_DISABLED)
+                    CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(case, warning_policy=LIT_DISABLED) + "\n" + marker, case, LIT_HARDWARE, 120, LIT_DISABLED)
         with self.assertRaises(SmokeFailure):
-            validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120)
+            CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120)
 
     def test_warning_policy_is_explicit_and_independent_of_gpu_validation(self):
         base = [LIT_EXECUTABLE, "smoke", LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, ".", LIT_ROUTE, LIT_SOFTWARE]
@@ -153,39 +155,39 @@ class CsgOpenShadowTests(unittest.TestCase):
             with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                 parse_args(base + invalid)
         disabled = parse_args(base + [LIT_WARNING_POLICY, LIT_DISABLED, "--gpu-validation"])
-        receipt = validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120, disabled.warning_policy)
+        receipt = CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120, disabled.warning_policy)
         self.assertIsNone(receipt[LIT_DIAGNOSTIC_FLAGS])
         self.assertFalse(receipt[LIT_DIAGNOSTIC_FLAGS_OBSERVED])
         enabled = parse_args(base + [LIT_WARNING_POLICY, LIT_ENABLED, "--no-gpu-validation"])
         with self.assertRaises(SmokeFailure):
-            validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120, enabled.warning_policy)
+            CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_TERMINAL65, warning_policy=LIT_DISABLED), LIT_TERMINAL65, LIT_HARDWARE, 120, enabled.warning_policy)
 
     def test_multiline_warning_cannot_waive_prefix_suffix_or_detached_message(self):
-        self.assertEqual(validate_runtime(self.log(LIT_TERMINAL65), LIT_TERMINAL65, LIT_HARDWARE, 120)[LIT_DIAGNOSTIC_FLAGS], 16)
+        self.assertEqual(CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_TERMINAL65), LIT_TERMINAL65, LIT_HARDWARE, 120)[LIT_DIAGNOSTIC_FLAGS], 16)
         for changed in (self.log(LIT_TERMINAL65).replace("00:00:01.250 [WARNING]:", "unknown 00:00:01.250 [WARNING]:"), self.log(LIT_TERMINAL65).replace(OPEN_CAPACITY_MESSAGE, "prefix " + OPEN_CAPACITY_MESSAGE),
             self.log(LIT_TERMINAL65).replace(OPEN_CAPACITY_MESSAGE, OPEN_CAPACITY_MESSAGE + " suffix"), self.log(LIT_TERMINAL65).replace(OPEN_CAPACITY_MESSAGE, "unrelated warning") + "\n" + OPEN_CAPACITY_MESSAGE,
             self.log(LIT_TERMINAL65).replace("00:00:01.250 [WARNING]:\n\n", "[WARNING]: ")):
             with self.assertRaises(SmokeFailure):
-                validate_runtime(changed, LIT_TERMINAL65, LIT_HARDWARE, 120)
+                CsgOpenShadowRuntimeEvidence.validate_runtime(changed, LIT_TERMINAL65, LIT_HARDWARE, 120)
 
     def test_valid_cases_and_terminal_reject_validation_errors(self):
         for case in (LIT_RETAINED, LIT_BOUNDARY64, LIT_TERMINAL65):
             with self.assertRaises(SmokeFailure):
-                validate_runtime(self.log(case) + "\nVUID-invalid", case, LIT_HARDWARE, 120)
+                CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(case) + "\nVUID-invalid", case, LIT_HARDWARE, 120)
         with self.assertRaises(SmokeFailure):
-            validate_runtime(self.log() + "\n[WARNING]: " + OPEN_CAPACITY_MESSAGE, LIT_RETAINED, LIT_HARDWARE, 120)
+            CsgOpenShadowRuntimeEvidence.validate_runtime(self.log() + "\n[WARNING]: " + OPEN_CAPACITY_MESSAGE, LIT_RETAINED, LIT_HARDWARE, 120)
 
     def test_missing_stale_or_repeated_completed_source_is_rejected(self):
         log = self.log()
         for changed in (log.replace("frame 119", "frame 118"), log + "\nFramebufferCapture: graphics source frame 120", log.replace(LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, "")):
             with self.assertRaises(SmokeFailure):
-                validate_runtime(changed, LIT_RETAINED, LIT_HARDWARE, 120)
+                CsgOpenShadowRuntimeEvidence.validate_runtime(changed, LIT_RETAINED, LIT_HARDWARE, 120)
 
     def test_ordinary_and_software_routes_cannot_claim_csg_or_hardware(self):
         with self.assertRaises(SmokeFailure):
-            validate_runtime(self.log(LIT_REFERENCE) + "\nRendererSystem: dispatched CSG light-space shadows", LIT_REFERENCE, LIT_HARDWARE, 120)
+            CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_REFERENCE) + "\nRendererSystem: dispatched CSG light-space shadows", LIT_REFERENCE, LIT_HARDWARE, 120)
         with self.assertRaises(SmokeFailure):
-            validate_runtime(self.log(LIT_RETAINED, LIT_SOFTWARE) + "\nRendererSystem: dispatched hardware transparent shadow traversal", LIT_RETAINED, LIT_SOFTWARE, 120)
+            CsgOpenShadowRuntimeEvidence.validate_runtime(self.log(LIT_RETAINED, LIT_SOFTWARE) + "\nRendererSystem: dispatched hardware transparent shadow traversal", LIT_RETAINED, LIT_SOFTWARE, 120)
 
     def test_generator_rejects_a_quad_joined_to_the_next_component(self):
         mesh = open_sheets(65)
@@ -212,7 +214,7 @@ class CsgOpenShadowOutputTests(unittest.TestCase):
                 return None, {"case": case}
 
             required = [LIT_EXECUTABLE, LIT_APP_EXE, LIT_WORKING_DIRECTORY, LIT_RUNTIME, LIT_OUTPUT_ROOT, str(root), LIT_ROUTE, LIT_SOFTWARE, LIT_WARNING_POLICY, LIT_ENABLED]
-            with patch.object(smoke, LIT_CAPTURE_CASE, side_effect=capture_case), patch.object(smoke, "compare_frames", side_effect=lambda frames: {}):
+            with patch.object(smoke, LIT_CAPTURE_CASE, side_effect=capture_case), patch.object(CsgOpenShadowImageEvidence, "compare_frames", side_effect=lambda frames: {}):
                 self.assertEqual(smoke.main(required), 0)
                 self.assertEqual(smoke.main(required), 0)
             self.assertEqual(len(set(destinations)), 2)

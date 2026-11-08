@@ -6,6 +6,7 @@
 
 #include "memory_report.h"
 
+#include <global/name_hash_text.h>
 #include <global/binary.h>
 #include <global/json_text.h>
 
@@ -408,7 +409,7 @@ void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize grap
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
         const Core::Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
-        Array<char, s_DebugHashTextLength + 1u> identityText;
+        Array<char, NameHashTextCodec::s_TextLength + 1u> identityText;
         const AStringView identity = FormatNameIdentityText(node.name, identityText);
 
         StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);

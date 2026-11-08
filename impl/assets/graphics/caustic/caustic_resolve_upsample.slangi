@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CAUSTIC_RESOLVE_UPSAMPLE_SLANGI
+#define NWB_CAUSTIC_RESOLVE_UPSAMPLE_SLANGI
+
+
+#include "caustic_resolve_common.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCausticResolveUpsample{
+    static bool inactive(const int2 baseTexel){
+        if(g_NwbCausticResolvePushConstants.activityInputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT)
+            return false;
+        const int2 maximum = int2(g_NwbCausticResolvePushConstants.halfWidth, g_NwbCausticResolvePushConstants.halfHeight) - 1;
+        const uint2 firstTile = uint2(clamp(baseTexel, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const uint2 lastTile = uint2(clamp(baseTexel + 1, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        // The four clamped bilinear taps occupy one, two or four activity tiles.
+        for(uint y = firstTile.y; y <= lastTile.y; ++y){
+            for(uint x = firstTile.x; x <= lastTile.x; ++x){
+                if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    static void run(const uint3 dispatchThreadID){
+        const uint2 pixel = dispatchThreadID.xy;
+        if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
+            return;
+
+        const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
+        const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
+        // Center-aligned full-to-half texel mapping; changing it shifts the upsample.
+        const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5;
+        const int2 baseTexel = int2(floor(src));
+        const half2 lerpFrac = half2(src - float2(baseTexel));
+        if(inactive(baseTexel)){
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+
+        const int fw = (int)g_NwbCausticResolvePushConstants.width;
+        const int fh = (int)g_NwbCausticResolvePushConstants.height;
+        const int2 fullTexel = int2(pixel);
+        if(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH){
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+
+        // World-position G-buffer is RGBA16F. Promote only for the distance edge stop, like the half-res cache.
+        const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
+        const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
+        const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
+        const float3 dxWorld = float3(nwbCausticResolveWorldAtFull(rightFull)) - centerWorld;
+        const float3 dyWorld = float3(nwbCausticResolveWorldAtFull(downFull)) - centerWorld;
+        const float spacing = max(max(length(dxWorld), length(dyWorld)), NWB_CAUSTIC_RESOLVE_MIN_PIXEL_SPACING);
+        const float sigmaWorld = spacing * NWB_CAUSTIC_RESOLVE_UPSAMPLE_SIGMA_SCALE;
+        const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
+
+        // Bilinear and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
+        half3 sum = half3(0.0h, 0.0h, 0.0h);
+        half weightSum = half(0.0h);
+        [unroll] for(int j = 0; j < 2; ++j){
+            [unroll] for(int i = 0; i < 2; ++i){
+                const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
+                if(!nwbCausticResolveValidAtHalf(tap))
+                    continue;
+                const half bilinearWeight = (i == 0 ? (half(1.0h) - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (half(1.0h) - lerpFrac.y) : lerpFrac.y);
+                const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
+                const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
+                const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+                sum += weight * tapColor;
+                weightSum += weight;
+            }
+        }
+        g_NwbCausticResolveOutput[pixel] = (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

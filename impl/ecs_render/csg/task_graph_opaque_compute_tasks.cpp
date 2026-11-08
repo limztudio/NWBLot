@@ -185,7 +185,7 @@ b8 OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Co
     const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
     const b8 deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
     const b8 csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
-    if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
+    if(!csgResourcesReady || !materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
 
     Core::ViewportState csgViewportState;
@@ -202,7 +202,7 @@ b8 OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Co
         payload.materialGeometryStatesGraphOwned,
         true
     };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -229,7 +229,7 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& paylo
     const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
     const b8 deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
     const b8 csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
-    if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
+    if(!csgResourcesReady || !materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
     if(payload.opaqueCsgTiming.has_value())
         return false;
@@ -252,7 +252,7 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& paylo
         payload.materialGeometryStatesGraphOwned,
         true
     };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 

@@ -48,10 +48,10 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
 
     const b8 hasDeferredDrawItems = !opaqueDrawItems.empty();
     const b8 deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
-    const b8 regularDrawResourcesReady = deferredResourcesReady && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
+    const b8 regularDrawResourcesReady = deferredResourcesReady && materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
     const MaterialPassDrawItemsView regularDrawItemsForGbuffer = payload.regularSharedComputeEmulationDrawsGraphOwned ? MaterialPassDrawItemsView{ opaqueDrawItems.regular.meshDrawItems, opaqueDrawItems.regular.indexedDrawItems, {} } : opaqueDrawItems.regular;
     const b8 csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData) && payload.frameBindings.bindingValid()));
-    const b8 csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
+    const b8 csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
     if(regularDrawResourcesReady && payload.regularSharedComputeEmulationDrawsGraphOwned && (!payload.regularSharedComputeEmulationTiming || payload.regularSharedComputeEmulationTiming->has_value()))
         return false;
 
@@ -92,12 +92,12 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
                 if(!regularDrawItemsForGbuffer.empty())
-                    materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
+                    materialSystem.drawRecorder().renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
 
-                materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
+                materialSystem.drawRecorder().renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
             }
         }
 
@@ -118,7 +118,7 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
 
-            materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
+            materialSystem.drawRecorder().renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
         }
     }
     commandList.endRenderPass();

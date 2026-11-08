@@ -26,7 +26,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
             order.push_back(index);
     }
     Sort(order.begin(), order.end(), [&glyphs](u32 left, u32 right)noexcept{
-        return IsFontAtlasGlyphPackOrderBefore(glyphs[left].record, glyphs[right].record);
+        return FontAtlasPacker{}.packOrderBefore(glyphs[left].record, glyphs[right].record);
     });
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
@@ -37,7 +37,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
         const RasterGlyph& glyph = glyphs[index];
         const u32 width = glyph.record.width + s_GlyphGuardExtent;
         const u32 height = glyph.record.height + s_GlyphGuardExtent;
-        const auto placed = TryPlaceGlyphInShelves(width, height, options.extent, options.maxGroups, shelves);
+        const auto placed = FontAtlasPacker{}.placeInShelves(width, height, options.extent, options.maxGroups, shelves);
         if(!placed){
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem"), glyph.record.glyphId, width, height, options.extent, options.extent, options.maxGroups);
             return false;
@@ -51,7 +51,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
             group.pixels.resize(static_cast<usize>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount, 0u);
             outPayload.groups.push_back(Move(group));
         }
-        CopyGlyphToAtlasGroup(glyph.pixels, options.extent, *placed, outPayload.glyphs[index], outPayload.groups[groupIndex].pixels);
+        FontAtlasPacker{}.copyGlyphToGroup(glyph.pixels, options.extent, *placed, outPayload.glyphs[index], outPayload.groups[groupIndex].pixels);
         lastPage = Max(lastPage, placed->page);
     }
     CompactAtlasGroups(outPayload);

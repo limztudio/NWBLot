@@ -1,0 +1,217 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Impl{
+interface IShader;
+using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBinaryWriter{
+    private MaterialTypedLayoutBlockBinary packTypedLayoutBlock(in MaterialTypedLayoutBlock block)const{
+        MaterialTypedLayoutBlockBinary blockBinary;
+        blockBinary.blockNameHash = block.blockName.hash();
+        blockBinary.blockClass = cast<u32>(block.blockClass);
+        blockBinary.fieldBegin = block.fieldBegin;
+        blockBinary.fieldCount = block.fieldCount;
+        blockBinary.byteSize = block.byteSize;
+        return blockBinary;
+    }
+
+    private MaterialTypedLayoutFieldBinary packTypedLayoutField(in MaterialTypedLayoutField field)const{
+        MaterialTypedLayoutFieldBinary fieldBinary;
+        fieldBinary.fieldNameHash = field.fieldName.hash();
+        fieldBinary.fieldType = cast<u32>(field.fieldType);
+        fieldBinary.offset = field.offset;
+        fieldBinary.defaultValue = field.defaultValue;
+        return fieldBinary;
+    }
+
+    private MaterialResourceReferenceBinary packResourceReference(in MaterialResourceReference resourceReference)const{
+        MaterialResourceReferenceBinary resourceReferenceBinary;
+        resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
+        resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
+        if(resourceReference.resourceKind == MaterialResourceKind::SampledImage2D)
+            resourceReferenceBinary.resourceNameHash = resourceReference.textureAsset.name().hash();
+        else
+            resourceReferenceBinary.resourceNameHash = resourceReference.samplerAsset.name().hash();
+        resourceReferenceBinary.resourceKind = cast<u32>(resourceReference.resourceKind);
+        resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
+        return resourceReferenceBinary;
+    }
+
+    private u32 packFlags(in b8 transparent, in b8 twoSided, in b8 refractive)const{
+        u32 materialFlags = 0u;
+        if(transparent)
+            materialFlags |= cast<u32>(MaterialFlag::Transparent);
+        if(twoSided)
+            materialFlags |= cast<u32>(MaterialFlag::TwoSided);
+        if(refractive)
+            materialFlags |= cast<u32>(MaterialFlag::Refractive);
+        return materialFlags;
+    }
+
+    private b8 appendHeaderAndTypedLayout(
+        in StringView shaderVariant,
+        in Name materialInterface,
+        in u64 typedLayoutHash,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in Span<u8> typedBlockBytes,
+        in Span<MaterialResourceReference> resourceReferences,
+        in u32 stageShaderCount,
+        mut Vector<u8> outBinary
+    )const{
+        usize reserveBytes = 4u;
+        b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, shaderVariant);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 64u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 8u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryRepeatedReserveBytes(reserveBytes, typedLayoutBlocks.size(), s_MaterialTypedLayoutBlockBytes);
+        canReserve = canReserve && AddBinaryRepeatedReserveBytes(reserveBytes, typedLayoutFields.size(), s_MaterialTypedLayoutFieldBytes);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, typedBlockBytes.size());
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryRepeatedReserveBytes(reserveBytes, resourceReferences.size(), s_MaterialResourceReferenceBytes);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryRepeatedReserveBytes(reserveBytes, cast<usize>(stageShaderCount), s_MaterialShaderEntryBytes);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 64u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 64u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 4u);
+        canReserve = canReserve && AddBinaryReserveBytes(reserveBytes, 64u);
+
+        outBinary.clear();
+        if(canReserve)
+            outBinary.reserve(reserveBytes);
+
+        AppendPOD(outBinary, s_MaterialBinaryMagic);
+        if(!AppendString(outBinary, shaderVariant)){
+            error("MaterialAssetCodec::serialize failed: shader variant is too long");
+            return false;
+        }
+        AppendPOD(outBinary, materialInterface.hash());
+        AppendPOD(outBinary, typedLayoutHash);
+        AppendPOD(outBinary, cast<u32>(typedLayoutBlocks.size()));
+        AppendPOD(outBinary, cast<u32>(typedLayoutFields.size()));
+        for(in MaterialTypedLayoutBlock block : typedLayoutBlocks)
+            AppendPOD(outBinary, this.packTypedLayoutBlock(block));
+        for(in MaterialTypedLayoutField field : typedLayoutFields)
+            AppendPOD(outBinary, this.packTypedLayoutField(field));
+        AppendPOD(outBinary, cast<u32>(typedBlockBytes.size()));
+        for(in u8 byteValue : typedBlockBytes)
+            outBinary.push_back(byteValue);
+        AppendPOD(outBinary, cast<u32>(resourceReferences.size()));
+        for(in MaterialResourceReference resourceReference : resourceReferences)
+            AppendPOD(outBinary, this.packResourceReference(resourceReference));
+        AppendPOD(outBinary, stageShaderCount);
+        return true;
+    }
+
+    private void appendOptionalAvboitPixelShader(in AssetRef<PixelShader> shaderRef, mut Vector<u8> outBinary)const{
+        if(shaderRef.valid()){
+            AppendPOD(outBinary, 1u);
+            AppendPOD(outBinary, shaderRef.name().hash());
+        }
+        else
+            AppendPOD(outBinary, 0u);
+    }
+
+    private void appendFooter(
+        in b8 transparent,
+        in b8 twoSided,
+        in b8 refractive,
+        in u32 shadingModelId,
+        in u32 surfaceDispatchId,
+        in AssetRef<PixelShader> avboitAccumulatePixelShader,
+        in AssetRef<PixelShader> avboitOccupancyPixelShader,
+        in AssetRef<PixelShader> avboitExtinctionPixelShader,
+        mut Vector<u8> outBinary
+    )const{
+        AppendPOD(outBinary, this.packFlags(transparent, twoSided, refractive));
+        AppendPOD(outBinary, shadingModelId);
+        AppendPOD(outBinary, surfaceDispatchId);
+        this.appendOptionalAvboitPixelShader(avboitAccumulatePixelShader, outBinary);
+        this.appendOptionalAvboitPixelShader(avboitOccupancyPixelShader, outBinary);
+        this.appendOptionalAvboitPixelShader(avboitExtinctionPixelShader, outBinary);
+    }
+
+    public b8 serialize(
+        in StringView shaderVariant,
+        in Name materialInterface,
+        in u64 typedLayoutHash,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in Span<u8> typedBlockBytes,
+        in Span<MaterialResourceReference> resourceReferences,
+        in MaterialStageShaderArray stageShaders,
+        in u32 stageShaderCount,
+        in b8 transparent,
+        in b8 twoSided,
+        in b8 refractive,
+        in u32 shadingModelId,
+        in u32 surfaceDispatchId,
+        in AssetRef<PixelShader> avboitAccumulatePixelShader,
+        in AssetRef<PixelShader> avboitOccupancyPixelShader,
+        in AssetRef<PixelShader> avboitExtinctionPixelShader,
+        mut Vector<u8> outBinary
+    )const{
+        if(!this.appendHeaderAndTypedLayout(
+            shaderVariant,
+            materialInterface,
+            typedLayoutHash,
+            typedLayoutBlocks,
+            typedLayoutFields,
+            typedBlockBytes,
+            resourceReferences,
+            stageShaderCount,
+            outBinary
+        ))
+            return false;
+
+        for(usize shaderIndex = 0u; shaderIndex < s_MaterialShaderStageCount; ++shaderIndex){
+            if(!stageShaders[shaderIndex].valid())
+                continue;
+
+            const u8 shaderTypeValue = cast<u8>(shaderIndex);
+            assert(IsSupportedMaterialShaderStageValue(shaderTypeValue));
+            AppendPOD(outBinary, shaderTypeValue);
+            AppendPOD(outBinary, stageShaders[shaderIndex].name().hash());
+        }
+
+        this.appendFooter(
+            transparent,
+            twoSided,
+            refractive,
+            shadingModelId,
+            surfaceDispatchId,
+            avboitAccumulatePixelShader,
+            avboitOccupancyPixelShader,
+            avboitExtinctionPixelShader,
+            outBinary
+        );
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

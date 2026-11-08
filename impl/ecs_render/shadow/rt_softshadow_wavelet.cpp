@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/soft_shadow_wavelet.h>
+#include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -73,8 +74,8 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& 
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedWaveletPipeline(){
+    auto& resolve = m_shadow.m_softShadowResolve;
     if(resolve.m_combinedWavelet.m_pipeline)
         return true;
     if(resolve.m_combinedWaveletFailed)

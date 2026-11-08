@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "texture_image_policy.h"
 #include "backend.h"
 #include "buffer_resource_detail.h"
 #include "texture_resource_detail.h"
@@ -44,7 +45,7 @@ using VulkanDetail::IsBufferRangeInBounds;
     return device.isBufferReadyForGpuUse(buffer, buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->getCreationDescription(), state) : 0u);
 }
 
-[[nodiscard]] inline b8 IsTextureReadyForState(const Device& device, Texture* texture, const ResourceStates::Mask state)noexcept{ return device.isTextureReadyForGpuUse(texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state)); }
+[[nodiscard]] inline b8 IsTextureReadyForState(const Device& device, Texture* texture, const ResourceStates::Mask state)noexcept{ return device.isTextureReadyForGpuUse(texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state)); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

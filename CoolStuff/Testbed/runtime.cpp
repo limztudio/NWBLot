@@ -3,6 +3,7 @@
 
 
 #include "project.h"
+#include "CoolStuff/Testbed/fly_camera_motion.adhd.h"
 #include "CoolStuff/Testbed/scene_constants.adhd.h"
 #include "CoolStuff/Testbed/ui_gallery_constants.adhd.h"
 
@@ -13,6 +14,7 @@
 #include <impl/ecs_ui/layer_system.h>
 
 #include <core/common/log.h>
+#include <core/input/module.h>
 
 #include <global/simd/frame.h>
 #include <global/simd/vector.h>
@@ -48,8 +50,8 @@ static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const 
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
-    const SIMDVectorSingle resolvedRotation = ResolveFlyCameraStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
-    const SIMDVectorSingle resolvedPosition = ResolveFlyCameraPosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
+    const SIMDVectorSingle resolvedRotation = FlyCameraMotion().resolveStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
+    const SIMDVectorSingle resolvedPosition = FlyCameraMotion().resolvePosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);
 }
@@ -125,13 +127,13 @@ b8 Project::onStartup(){
 
 void Project::onShutdown(){
     unregisterInputHandler();
-    clearInputState();
+    m_cameraInput.clear();
     destroyWorld();
     NWB_LOGGER_ESSENTIAL_INFO(__hidden_testbed_runtime::s_ShutdownText);
 }
 
 b8 Project::onUpdate(f32 delta){
-    const f32 safeDelta = SanitizeFlyCameraDelta(delta);
+    const f32 safeDelta = FlyCameraMotion().sanitizeDelta(delta);
 
     updateMainCamera(safeDelta);
     const auto updated = m_world->tick(safeDelta);
@@ -144,55 +146,37 @@ b8 Project::onUpdate(f32 delta){
 
 void Project::windowFocusUpdate(const b8 focused)noexcept{
     if(!focused)
-        clearInputState();
+        m_cameraInput.clear();
 }
 
 void Project::pointerCaptureLost()noexcept{
-    // Ordinary button-up already completed the gesture; keep its accumulated camera motion.
-    if(!m_mouseLookActive)
-        return;
-    m_mouseLookActive = false;
-    m_mousePositionValid = false;
-    m_pendingMouseDeltaX = 0.0f;
-    m_pendingMouseDeltaY = 0.0f;
+    m_cameraInput.pointerCaptureLost();
 }
 
 ::NWB::Core::KeyboardInputResult Project::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, [[maybe_unused]] const i32 mods)noexcept{
     if(action == NWB::Core::InputAction::Release)
-        setKeyState(key, false);
+        m_cameraInput.setKeyState(key, false);
 
     if(MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard())
         return false;
 
     if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
-        setKeyState(key, true);
+        m_cameraInput.setKeyState(key, true);
 
     return false;
 }
 
 b8 Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
-    UpdateFlyCameraMousePosition(
-        xpos,
-        ypos,
-        MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer(),
-        m_mouseLookActive,
-        m_mousePositionValid,
-        m_lastMouseX,
-        m_lastMouseY,
-        m_pendingMouseDeltaX,
-        m_pendingMouseDeltaY
-    );
+    m_cameraInput.updatePointer(xpos, ypos, MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer());
     return false;
 }
 
 b8 Project::mouseButtonUpdate(const i32 button, const i32 action, [[maybe_unused]] const i32 mods)noexcept{
-    UpdateFlyCameraMouseButton(
+    m_cameraInput.updateButton(
         MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer(),
         button == NWB::Core::MouseButton::Right,
         action == NWB::Core::InputAction::Press,
-        action == NWB::Core::InputAction::Release,
-        m_mouseLookActive,
-        m_mousePositionValid
+        action == NWB::Core::InputAction::Release
     );
     return false;
 }
@@ -230,55 +214,21 @@ void Project::unregisterInputHandler()noexcept{
     m_inputRegistered = false;
 }
 
-void Project::clearInputState()noexcept{
-    m_keyPressed.fill(false);
-    m_pendingMouseDeltaX = 0.0f;
-    m_pendingMouseDeltaY = 0.0f;
-    m_lastMouseX = 0.0;
-    m_lastMouseY = 0.0;
-    m_mouseLookActive = false;
-    m_mousePositionValid = false;
-}
-
-void Project::setKeyState(const i32 key, const b8 pressed)noexcept{
-    const auto keyIndex = ResolveKeyIndex(key, NWB::Core::Key::Menu);
-    if(!keyIndex)
-        return;
-
-    m_keyPressed[*keyIndex] = pressed;
-}
-
-b8 Project::keyPressed(const i32 key)const noexcept{
-    const auto keyIndex = ResolveKeyIndex(key, NWB::Core::Key::Menu);
-    if(!keyIndex)
-        return false;
-
-    return m_keyPressed[*keyIndex];
-}
-
 void Project::updateMainCamera(const f32 delta)noexcept{
     const b8 pointerCaptured = MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer();
-    // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
-    const f32 mouseDeltaX = m_pendingMouseDeltaX;
-    const f32 mouseDeltaY = m_pendingMouseDeltaY;
-    m_pendingMouseDeltaX = 0.0f;
-    m_pendingMouseDeltaY = 0.0f;
-    if(pointerCaptured){
-        m_mouseLookActive = false;
-        m_mousePositionValid = false;
-    }
+    const FlyCameraPointerDelta mouseDelta = m_cameraInput.takePointerDelta(pointerCaptured);
 
     const b8 keyboardCaptured = MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
-    const SIMDVectorSingle moveAxes = BuildFlyCameraMoveAxes(
+    const SIMDVectorSingle moveAxes = FlyCameraMotion().buildMoveAxes(
         keyboardCaptured,
-        keyPressed(NWB::Core::Key::D),
-        keyPressed(NWB::Core::Key::A),
-        keyPressed(NWB::Core::Key::W),
-        keyPressed(NWB::Core::Key::S)
+        m_cameraInput.keyPressed(NWB::Core::Key::D),
+        m_cameraInput.keyPressed(NWB::Core::Key::A),
+        m_cameraInput.keyPressed(NWB::Core::Key::W),
+        m_cameraInput.keyPressed(NWB::Core::Key::S)
     );
-    const b8 boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
+    const b8 boosted = !keyboardCaptured && (m_cameraInput.keyPressed(NWB::Core::Key::LeftShift) || m_cameraInput.keyPressed(NWB::Core::Key::RightShift));
 
-    __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), delta);
+    __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f), delta);
 }
 
 void Project::destroyWorld()noexcept{

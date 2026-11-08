@@ -4,6 +4,7 @@
 
 #include "text_area_scene.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>

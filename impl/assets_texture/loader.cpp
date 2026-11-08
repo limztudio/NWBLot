@@ -5,6 +5,7 @@
 #include "loader.h"
 
 #include "texture_mip_decoder.h"
+#include "texture_format_selector.h"
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
@@ -30,8 +31,6 @@ namespace __hidden_texture_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
-
 static Futex s_BasisTranscoderInitializationMutex;
 static Atomic<b8> s_BasisTranscoderInitialized = false;
 
@@ -54,48 +53,6 @@ static void InitializeBasisTranscoder(){
 
     basist::basisu_transcoder_init();
     s_BasisTranscoderInitialized.store(true, MemoryOrder::release);
-}
-
-[[nodiscard]] static b8 SupportsTextureFormat(const Core::Format::Enum format, Core::Device& device)noexcept{
-    return (device.queryFormatSupport(format) & s_RequiredTextureFormatSupport) == s_RequiredTextureFormatSupport;
-}
-
-[[nodiscard]] static Core::Format::Enum SelectUploadFormat(const Texture& textureAsset, Core::Device& device)noexcept{
-    if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4){
-        if(textureAsset.alphaMode() == TextureAlphaMode::Opaque){
-            if(SupportsTextureFormat(Core::Format::ASTC_4x4_FLOAT, device))
-                return Core::Format::ASTC_4x4_FLOAT;
-            if(SupportsTextureFormat(Core::Format::BC6H_UFLOAT, device))
-                return Core::Format::BC6H_UFLOAT;
-        }
-        return SupportsTextureFormat(Core::Format::RGBA16_FLOAT, device) ? Core::Format::RGBA16_FLOAT : Core::Format::UNKNOWN;
-    }
-    if(textureAsset.payloadFormat() != TexturePayloadFormat::UastcLdr4x4)
-        return Core::Format::UNKNOWN;
-
-    if(SupportsTextureFormat(Core::Format::ASTC_4x4_UNORM, device))
-        return Core::Format::ASTC_4x4_UNORM;
-
-    if(SupportsTextureFormat(Core::Format::BC7_UNORM, device))
-        return Core::Format::BC7_UNORM;
-
-    return SupportsTextureFormat(Core::Format::RGBA8_UNORM, device) ? Core::Format::RGBA8_UNORM : Core::Format::UNKNOWN;
-}
-
-[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(const Core::Format::Enum failedFormat, Core::Device& device)noexcept{
-    if(failedFormat == Core::Format::ASTC_4x4_FLOAT && SupportsTextureFormat(Core::Format::BC6H_UFLOAT, device))
-        return Core::Format::BC6H_UFLOAT;
-    if(failedFormat != Core::Format::RGBA16_FLOAT && SupportsTextureFormat(Core::Format::RGBA16_FLOAT, device))
-        return Core::Format::RGBA16_FLOAT;
-    return Core::Format::UNKNOWN;
-}
-
-[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(const Core::Format::Enum failedFormat, Core::Device& device)noexcept{
-    if(failedFormat == Core::Format::ASTC_4x4_UNORM && SupportsTextureFormat(Core::Format::BC7_UNORM, device))
-        return Core::Format::BC7_UNORM;
-    if(failedFormat != Core::Format::RGBA8_UNORM && SupportsTextureFormat(Core::Format::RGBA8_UNORM, device))
-        return Core::Format::RGBA8_UNORM;
-    return Core::Format::UNKNOWN;
 }
 
 [[nodiscard]] static Expected<CreatedTexture> CreateTextureWithFormatFallback(
@@ -165,7 +122,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         return false;
     }
 
-    Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(textureAsset, device);
+    Core::Format::Enum format = TextureFormatSelector::SelectUploadFormat(textureAsset, device);
     if(format == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
         return false;
@@ -202,7 +159,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         auto fallbackResult = __hidden_texture_loader::CreateTextureWithFormatFallback(
             textureDesc,
             format,
-            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 ? __hidden_texture_loader::SelectLdrUploadFallback : __hidden_texture_loader::SelectHdrOpaqueUploadFallback,
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 ? TextureFormatSelector::SelectLdrUploadFallback : TextureFormatSelector::SelectHdrOpaqueUploadFallback,
             graphics,
             device
         );
@@ -232,7 +189,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         decodedMips.push_back(Move(*decoded));
     }
 
-    Vector<Core::GraphicsRuntime::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
+    Vector<Core::GraphicsStandaloneService::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
     usize uploadRegionReserveCount = 0u;
     const b8 isVolumeTexture = textureAsset.dimension() == TextureDimension::Texture3D;
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex)
@@ -244,7 +201,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
-            uploadRegions.push_back(Core::GraphicsRuntime::TextureUploadRegion{
+            uploadRegions.push_back(Core::GraphicsStandaloneService::TextureUploadRegion{
                 .data = decoded.bytes.data(),
                 .dataSize = decoded.bytes.size(),
                 .rowPitch = decoded.rowPitch,
@@ -256,7 +213,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         }
 
         for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-            uploadRegions.push_back(Core::GraphicsRuntime::TextureUploadRegion{
+            uploadRegions.push_back(Core::GraphicsStandaloneService::TextureUploadRegion{
                 .data = decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount,
                 .dataSize = decoded.sliceByteCount,
                 .rowPitch = decoded.rowPitch,
@@ -282,7 +239,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     }
 
     Core::QueueSubmissionToken uploadToken;
-    if(!graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
+    if(!graphics.standaloneGraph().uploadTextureBatch(Core::GraphicsStandaloneService::TextureUploadBatchDesc{
         .destination = texture,
         .regions = uploadRegions.data(),
         .regionCount = uploadRegions.size(),

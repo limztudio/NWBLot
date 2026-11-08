@@ -156,9 +156,7 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
-    m_causticEmissionTargetBuffer.reset();
-    m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_causticEmissionTargetCapacity = 0u;
+    m_causticEmissionTargets.reset();
     m_causticRefractiveInstanceCount = 0u;
     m_causticLightCount = 0u;
     m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);

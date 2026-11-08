@@ -7,6 +7,7 @@
 
 #include "global.h"
 
+#include <global/filesystem/executable_paths.h>
 #include <global/binary.h>
 #include <global/filesystem/operations.h>
 #include <global/process.h>
@@ -70,8 +71,6 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 
 
 inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
-inline constexpr TStringView s_TruncatedMessageError = NWB_TEXT("Received a truncated message");
-inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received a malformed message payload");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,189 +108,14 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
     }
 }
 
-[[nodiscard]] constexpr b8 IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
-    switch(type){
-    case Core::Common::LogType::Info:
-    case Core::Common::LogType::EssentialInfo:
-    case Core::Common::LogType::Warning:
-    case Core::Common::LogType::CriticalWarning:
-    case Core::Common::LogType::Assert:
-    case Core::Common::LogType::Error:
-    case Core::Common::LogType::Fatal:
-        return true;
-    }
-    return false;
-}
-
 [[nodiscard]] inline LogString FormatMessageForProcessing(LogArena& arena, const MessageType& msg){
     const auto& [time, type, str] = msg;
     return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
-namespace MessagePayloadError{
-    enum Enum : u8{
-        InvalidType,
-        SizeOverflow,
-    };
-};
-
-template<typename PayloadContainer>
-[[nodiscard]] inline Expected<void, MessagePayloadError::Enum> BuildMessagePayload(const MessageType& msg, PayloadContainer& outPayload){
-    const auto& [time, type, str] = msg;
-    outPayload.clear();
-
-    if(!IsValidMessageType(type))
-        return MakeUnexpected(MessagePayloadError::InvalidType);
-
-    usize payloadBytes = 0u;
-    if(!AddBinaryReserveBytes(payloadBytes, sizeof(time)) || !AddBinaryReserveBytes(payloadBytes, sizeof(type)) || !AddBinaryRepeatedReserveBytes(payloadBytes, str.size(), sizeof(tchar)) || !AddBinaryReserveBytes(payloadBytes, sizeof(tchar)))
-        return MakeUnexpected(MessagePayloadError::SizeOverflow);
-
-    if constexpr(requires(PayloadContainer& p, usize bytes){ p.reserve(bytes); })
-        outPayload.reserve(payloadBytes);
-
-    AppendPOD(outPayload, time);
-    AppendPOD(outPayload, type);
-    AppendBytesNoReserveUnchecked(outPayload, str.data(), str.size() * sizeof(tchar));
-
-    constexpr tchar s_NullTerminator = 0;
-    AppendPOD(outPayload, s_NullTerminator);
-
-    NWB_ASSERT(outPayload.size() == payloadBytes);
-    return {};
-}
-
-[[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(LogArena& arena, const void* contents, const usize totalSize){
-    if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
-        return MakeUnexpected(s_TruncatedMessageError);
-    }
-    if(!contents){
-        return MakeUnexpected(s_MalformedMessagePayloadError);
-    }
-
-    const BinaryByteView payload{ static_cast<const u8*>(contents), totalSize };
-    usize cursor = 0u;
-
-    const auto time = ReadPOD<Timer>(payload, cursor);
-    const auto type = ReadPOD<Core::Common::LogType::Enum>(payload, cursor);
-    if(!time || !type){
-        return MakeUnexpected(s_TruncatedMessageError);
-    }
-
-    if(!IsValidMessageType(*type)){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a message with an invalid type")));
-    }
-
-    const usize textBytes = totalSize - cursor;
-    if((textBytes % sizeof(tchar)) != 0u){
-        return MakeUnexpected(s_MalformedMessagePayloadError);
-    }
-
-    usize terminatorCursor = totalSize - sizeof(tchar);
-    const auto terminator = ReadPOD<tchar>(payload, terminatorCursor);
-    if(!terminator || *terminator != 0){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a non-null-terminated message")));
-    }
-
-    // Serialized text can start at an unaligned byte offset; copy into aligned character storage before reading it.
-    LogString message(arena);
-    const usize messageBytes = textBytes - sizeof(tchar);
-    message.resize(messageBytes / sizeof(tchar));
-    if(messageBytes != 0u)
-        NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
-    return MakeTuple(*time, *type, Move(message));
-}
-
-class ProcessedMessageFile{
-public:
-    using StreamType = BasicOutputFileStream<tchar>;
 
 
-public:
-    explicit ProcessedMessageFile(LogArena& arena)
-        : m_arena(arena)
-        , m_filePath(arena)
-    {}
-    ~ProcessedMessageFile()noexcept{ close(); }
 
-
-public:
-    b8 open(BasicStringView<tchar> fileNameBase){
-        close();
-        if(fileNameBase.empty())
-            return false;
-
-        const auto localTime = GetLocalTime();
-        if(!localTime)
-            return false;
-
-        const auto executableDirectory = GetExecutableDirectory(m_arena);
-        if(!executableDirectory)
-            return false;
-
-        static Atomic<u64> sequence{ 0u };
-        constexpr usize s_MaxAttempts = 1024u;
-        for(usize attempt = 0u; attempt < s_MaxAttempts; ++attempt){
-            const LogString fileName = StringFormat(
-                m_arena,
-                NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}.log"),
-                fileNameBase,
-                localTime->tm_year + s_LocalTimeYearBase,
-                localTime->tm_mon + s_LocalTimeMonthBase,
-                localTime->tm_mday,
-                localTime->tm_hour,
-                localTime->tm_min,
-                localTime->tm_sec,
-                CurrentProcessId(),
-                sequence.fetch_add(1u, MemoryOrder::relaxed)
-            );
-            m_filePath = *executableDirectory / fileName;
-            m_stream.open(m_filePath, s_FileOpenWrite | StreamType::noreplace);
-            if(m_stream.is_open())
-                return true;
-            m_stream.clear();
-            const auto exists = FileExistsNoFollow(m_filePath);
-            if(!exists || !*exists)
-                return false;
-        }
-        return false;
-    }
-
-    b8 openByExecutableName(){
-        const auto executableName = GetExecutableName(m_arena);
-        if(!executableName)
-            return false;
-
-        const LogString executableNameString = PathToString<tchar>(m_arena, *executableName);
-        return open(executableNameString);
-    }
-
-    [[nodiscard]] const Path& path()const noexcept{ return m_filePath; }
-
-    void close(){
-        if(!m_stream.is_open())
-            return;
-
-        m_stream.close();
-        if(!m_stream.good())
-            CaptureDiagnosticEvent("logger_processed_message_file", "Processed log stream failed while closing", __FILE__, __LINE__);
-    }
-
-    [[nodiscard]] b8 writeLine(BasicStringView<tchar> line){
-        if(!m_stream.is_open())
-            return false;
-
-        m_stream << line << static_cast<tchar>('\n');
-        m_stream.flush();
-        return m_stream.good();
-    }
-
-
-private:
-    LogArena& m_arena;
-    StreamType m_stream;
-    Path m_filePath;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

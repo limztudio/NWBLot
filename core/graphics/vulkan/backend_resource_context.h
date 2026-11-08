@@ -166,7 +166,6 @@ public:
     {}
 };
 
-void AttachGraphicsPipelineFixedState(VkGraphicsPipelineCreateInfo& pipelineInfo, const VkPipelineRasterizationStateCreateInfo& rasterizer, const GraphicsPipelineFixedState& fixedState)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,34 +188,14 @@ CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0)noexcept;
 b8 IsSupportedSampleCount(u32 sampleCount)noexcept;
-b8 ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept;
 Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept;
 Expected<u32> TryComputeUploadSuballocationAlignment(u32 requiredAlignment)noexcept;
 b8 IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel)noexcept;
-Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
-    const VkExtent3D& extent,
-    const TextureFormatBlockLayout& formatLayout,
-    u64 rowPitch,
-    u64 depthPitch,
-    BufferImageCopyRequiredSize::Enum requiredSizeMode,
-    BufferImageCopyPitchFields::Enum pitchFields,
-    TStringView operationName = {}
-);
 VkImageSubresourceLayers BuildImageSubresourceLayers(VkImageAspectFlags aspectMask, MipLevel mipLevel, ArraySlice arraySlice, ArraySlice layerCount = 1u)noexcept;
 VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask)noexcept;
 Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, b8 assertFailure);
-Expected<TextureSlice> ResolveTextureSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept;
-Expected<StagingTextureRange> BuildStagingTextureRange(
-    const TextureSlice& resolvedSlice,
-    const StagingTextureMipLayout& mipLayout,
-    const TextureFormatBlockLayout& formatLayout,
-    u64 arrayByteSize,
-    u64 totalByteSize,
-    u32 requiredOffsetAlignment,
-    b8 requireHostPointerRange
-)noexcept;
 b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
 
 [[nodiscard]] constexpr b8 IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
@@ -232,18 +211,6 @@ b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)
 }
 
 [[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, TStringView operationName);
-struct ClusterOperationInput{
-    VkClusterAccelerationStructureInputInfoNV info = {};
-    VkClusterAccelerationStructureMoveObjectsInputNV move = {};
-    VkClusterAccelerationStructureTriangleClusterInputNV cluster = {};
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blas = {};
-
-
-public:
-    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept;
-};
-
-Expected<ClusterOperationInput> BuildClusterOperationInputInfo(const RayTracingClusterOperationParams& params, TStringView operationName);
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType)noexcept(noexcept(T{}) && noexcept(static_cast<T*>(nullptr)->sType = sType) && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
@@ -269,7 +236,6 @@ constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode)noexcept{
     }
 }
 
-[[nodiscard]] VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(const RasterState& rasterState, VkPolygonMode polygonMode, VkBool32 depthClampEnable)noexcept;
 
 constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc)noexcept{
     switch(compareFunc){
@@ -366,22 +332,10 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
     return state;
 }
 
-[[nodiscard]] VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments);
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept;
 VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept;
 // Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
 u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcept;
-Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, b8 alphaToCoverageEnable, TStringView operationName);
-void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
-Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
-    const FramebufferInfo& fbinfo,
-    const RenderState& renderState,
-    PipelineStencilFaceMode::Enum stencilFaceMode,
-    Span<const VkDynamicState> dynamicStates,
-    TStringView operationName,
-    Alloc::ScratchArena& scratchArena
-);
-Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, Alloc::ScratchArena& scratchArena);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, b8& ownsPipelineLayout);
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
 b8 ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);

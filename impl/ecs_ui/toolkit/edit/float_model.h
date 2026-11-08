@@ -7,6 +7,7 @@
 
 #include "numeric_model_operations.h"
 
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <global/bit.h>
 #include <global/numeric_text.h>
 

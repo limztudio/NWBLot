@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/raytrace/prepared_builds.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem;
+
+
+class PreparedSceneSwBvhTraversal final : NoCopy{
+public:
+    PreparedSceneSwBvhTraversal(RendererRayTracingSystem& owner, Core::Alloc::GlobalArena& arena)noexcept
+        : m_owner(owner)
+        , m_preparedSceneSwBvhMeshes(arena)
+    {}
+
+
+public:
+    [[nodiscard]] b8 capture(Span<const PreparedSceneSwBvhMesh> meshes, u32 instanceCount);
+    [[nodiscard]] b8 record();
+    void clear()noexcept;
+    [[nodiscard]] b8 ready()const noexcept{ return m_preparedSceneSwBvhReady; }
+
+
+private:
+    RendererRayTracingSystem& m_owner;
+    PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
+    u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
+    u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
+    u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+    u32 m_preparedSceneSwBvhInstanceCount = 0u;
+    b8 m_preparedSceneSwBvhReady = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

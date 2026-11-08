@@ -10,6 +10,7 @@
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/text_log.h>
 
+#include <global/name_hash_text.h>
 #include <global/bit.h>
 #include <global/csv_text.h>
 
@@ -37,9 +38,9 @@ static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, s_DebugHashTextLength + 1u>& outIdentityText)noexcept{
-    HashToDebugString(outIdentityText.data(), outIdentityText.size(), name.hash());
-    return AStringView(outIdentityText.data(), s_DebugHashTextLength);
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameHashTextCodec::s_TextLength + 1u>& outIdentityText)noexcept{
+    NameHashTextCodec::Format(outIdentityText.data(), outIdentityText.size(), name.hash());
+    return AStringView(outIdentityText.data(), NameHashTextCodec::s_TextLength);
 }
 
 [[nodiscard]] usize EventKindBucket(const Core::Telemetry::EventKind::Enum kind)noexcept{

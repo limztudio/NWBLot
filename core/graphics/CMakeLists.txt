@@ -24,6 +24,7 @@ nwb_declare_static_library(nwb_graphics_backend)
 target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gpu_crash.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_overlap_metric_tracker.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"

@@ -105,7 +105,7 @@ public:
 
 public:
     static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        return payload.system.recordRefractionTileClassification(commandList, payload.targets, payload.resources);
+        return payload.system.refraction().recordRefractionTileClassification(commandList, payload.targets, payload.resources);
     }
 };
 

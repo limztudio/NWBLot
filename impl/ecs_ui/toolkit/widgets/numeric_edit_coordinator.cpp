@@ -1,0 +1,132 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/numeric_edit_coordinator.h>
+#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_builder_numeric_edit{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <typename Model, typename Bounds>
+class NumericActions final : public IEditActionSink{
+public:
+    NumericActions(const Bounds& bounds, const Context& context, Model& model, NumericEditResult& result, u64& revision)noexcept
+        : m_model(model)
+        , m_bounds(bounds)
+        , m_result(result)
+        , m_revision(revision)
+        , m_context(context)
+    {}
+    virtual ~NumericActions()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual b8 apply(EditModel& draft, const EditAction::Enum action, const b8 readOnly)noexcept(
+        noexcept(static_cast<b8>(DeclVal<const Context&>().failed() || &draft != &DeclVal<Model&>().draft() || DeclVal<Model&>().revision() != DeclVal<u64&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().submit(DeclVal<const Bounds&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().cancel())
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().abandon())
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().blur(DeclVal<const Bounds&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = (readOnly ? DeclVal<Model&>().abandon() : DeclVal<Model&>().blur(DeclVal<const Bounds&>())))
+        && noexcept(DeclVal<u64&>() = DeclVal<Model&>().revision())
+    )override{
+        if(m_context.failed() || &draft != &m_model.draft() || m_model.revision() != m_revision){
+            m_result.valid = false;
+            return false;
+        }
+        NumericEditResult result;
+        switch(action){
+        case EditAction::Submit:
+            if(readOnly)
+                result.valid = true;
+            else
+                result = m_model.submit(m_bounds);
+            break;
+        case EditAction::Cancel: result = m_model.cancel(); break;
+        case EditAction::Blur: result = readOnly ? m_model.abandon() : m_model.blur(m_bounds); break;
+        case EditAction::Abandon: result = m_model.abandon(); break;
+        default: break;
+        }
+        m_revision = m_model.revision();
+        MergeNumericEditResult(result, m_result);
+        return result.valid && !m_context.failed();
+    }
+
+
+private:
+    Model& m_model;
+    const Bounds& m_bounds;
+    NumericEditResult& m_result;
+    u64& m_revision;
+    const Context& m_context;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
+NumericEditBoxResult NumericEditCoordinator::declareNumericEdit(const AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, const ValidateBoundsF validateBounds, FrameListT& frames){
+    NumericEditBoxResult result;
+    result.numeric.valid = true;
+    if(m_builder.declarationBlocked() || !validateBounds(options.bounds)){
+        m_builder.m_context.fail();
+        result.numeric.valid = false;
+        return result;
+    }
+    FrameT frame;
+    frame.model = &model;
+    frame.state = &state;
+    frame.revision = model.revision();
+    __hidden_builder_numeric_edit::NumericActions actions(options.bounds, m_builder.m_context, model, result.numeric, frame.revision);
+    const usize previousCount = m_builder.m_scope->m_items.size();
+    if constexpr(IsSame_V<FrameT, IntegerEditFrame>)
+        result.edit = m_builder.declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, &frame);
+    else
+        result.edit = m_builder.declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, nullptr, &frame);
+    result.numeric.valid &= result.edit.valid;
+    if(result.edit.valid && m_builder.m_scope->m_items.size() > previousCount){
+        frame.item = static_cast<u32>(previousCount);
+        frames.push_back(frame);
+    }
+    return result;
+}
+
+NumericEditBoxResult NumericEditCoordinator::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
+    return declareNumericEdit<IntegerEditFrame>(stableKey, model, state, options, ValidateIntegerBounds, m_builder.m_scope->m_integerEdits);
+}
+
+NumericEditBoxResult NumericEditCoordinator::floatEdit(const AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options){
+    return declareNumericEdit<FloatEditFrame>(stableKey, model, state, options, ValidateFloatBounds, m_builder.m_scope->m_floatEdits);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

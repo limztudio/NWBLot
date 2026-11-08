@@ -9,6 +9,7 @@
 #include "statistics_readback.h"
 #include "postprocess_resources.h"
 #include "feedback_resources.h"
+#include "reflection_pipelines.h"
 
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
@@ -117,11 +118,11 @@ public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
         : m_arena(arena)
         , m_graphics(graphics)
-        , m_shaders(shaders)
         , m_statistics(arena, graphics)
         , m_postprocess(arena, graphics, shaders)
         , m_feedback(arena, graphics)
         , m_csgDispatchStates(arena)
+        , m_pipelines(arena, graphics, shaders)
     {}
 
 
@@ -147,38 +148,18 @@ private:
     [[nodiscard]] b8 prepareCsgDispatchResources();
     [[nodiscard]] b8 prepareQueue(u32 capacity);
     [[nodiscard]] b8 prepareArguments(u32 capacity, b8 sliced);
-    [[nodiscard]] b8 preparePipelines(b8 prepareHardware, b8 prepareCsgHardware);
 
 
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaders;
     ReflectionStatisticsReadback m_statistics;
     RendererReflectionPostprocess m_postprocess;
     RendererReflectionFeedback m_feedback;
     ReflectionFrameSnapshot m_resources;
     Vector<ReflectionCsgDispatchHandle, Core::Alloc::GlobalArena> m_csgDispatchStates;
     ReflectionCsgDispatchControl* m_preparedCsgDispatch = nullptr;
-    Core::BindingLayoutHandle m_bindingLayout;
-    Core::BindingLayoutHandle m_depthBindingLayout;
-    Core::BindingLayoutHandle m_csgBindingLayout;
-    Core::ShaderHandle m_classifyShader;
-    Core::ShaderHandle m_buildArgsShader;
-    Core::ShaderHandle m_hardwareShader;
-    Core::ShaderHandle m_plainHardwareShader;
-    Core::ShaderHandle m_unspecifiedHardwareShader;
-    Core::ComputePipelineHandle m_plainHardwarePipeline;
-    Core::ComputePipelineHandle m_unspecifiedHardwarePipeline;
-    Core::ShaderHandle m_csgBuildArgsShader;
-    Core::ComputePipelineHandle m_csgBuildArgsPipeline;
-    Core::ShaderHandle m_csgHardwareShader;
-    Core::ShaderHandle m_csgPlainHardwareShader;
-    Core::ShaderHandle m_csgUnspecifiedHardwareShader;
-    Core::ComputePipelineHandle m_csgHardwarePipeline;
-    Core::ComputePipelineHandle m_csgPlainHardwarePipeline;
-    Core::ComputePipelineHandle m_csgUnspecifiedHardwarePipeline;
-    Core::ShaderHandle m_depthShader;
+    RendererReflectionPipelines m_pipelines;
     Array<Core::GpuDescriptorHandle, s_ReflectionDescriptorCount> m_descriptors{};
     Core::GpuDescriptorHandle m_depthSampledDescriptor;
     Array<Core::GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipSampledDescriptors{};
@@ -193,3 +174,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

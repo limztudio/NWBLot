@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/optics/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OpticalSceneIdentityBuilder{
+    public u64 baseHash(
+        in RayTracingOpticalSceneHeaderGpu header,
+        in Span<RayTracingOpticalInstanceGpu> instances,
+        in b8 hasRuntimeBounds,
+        in b8 boundsCompleteExceptRuntime
+    )const{
+        u64 hash = 14695981039346656037ul;
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMin.x));
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMin.y));
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMin.z));
+        hash = updateFnv64U32(hash, header.transparentCount);
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMax.x));
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMax.y));
+        hash = updateFnv64U32(hash, bit_cast<u32>(header.boundsMax.z));
+        hash = updateFnv64U32(hash, header.flags);
+        for(in RayTracingOpticalInstanceGpu instance : instances){
+            hash = updateFnv64U32(hash, instance.entityId);
+            hash = updateFnv64U32(hash, bit_cast<u32>(instance.mediumPriority));
+            hash = updateFnv64U32(hash, instance.boundaryMode);
+            hash = updateFnv64U32(hash, instance.flags);
+        }
+        if(hasRuntimeBounds){
+            u8 completeByte = 0u;
+            if(boundsCompleteExceptRuntime)
+                completeByte = 1u;
+            hash = updateFnv64Byte(hash, completeByte);
+        }
+        return hash;
+    }
+
+    public u64 updateRuntimeBounds(
+        in u64 hash,
+        in MatrixSingle objectToWorld,
+        in u32 instanceIndex
+    )const{
+        u64 result = hash;
+        for(u32 rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+            const VectorSingle row = objectToWorld[rowIndex];
+            result = updateFnv64U32(result, bit_cast<u32>(row.x));
+            result = updateFnv64U32(result, bit_cast<u32>(row.y));
+            result = updateFnv64U32(result, bit_cast<u32>(row.z));
+            result = updateFnv64U32(result, bit_cast<u32>(row.w));
+        }
+        return updateFnv64U32(result, instanceIndex);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

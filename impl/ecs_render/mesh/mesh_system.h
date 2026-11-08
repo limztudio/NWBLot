@@ -102,6 +102,8 @@ namespace ECSRenderDetail{
 
 
 class RendererMeshSystem final : NoCopy{
+    friend class RuntimeMeshResourceCache;
+
 public:
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
 

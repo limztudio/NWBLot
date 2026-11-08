@@ -1,0 +1,140 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/scene_bvh.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RayTracingSceneIdentityBuilder{
+    private u64 updateF32(in u64 inHash, in f32 value)const{
+        return updateFnv64U32(inHash, bit_cast<u32>(value));
+    }
+
+    private u64 updateVector4(in u64 inHash, in VectorSingle v)const{
+        u64 hash = this.updateF32(inHash, v.x);
+        hash = this.updateF32(hash, v.y);
+        hash = this.updateF32(hash, v.z);
+        return this.updateF32(hash, v.w);
+    }
+
+    public u64 staticSceneHash(in Span<SceneSwBvhInstanceGpu> instances, in Span<SceneBvhPrimitiveCalculation> primitives)const{
+        assert(instances.size() == primitives.size());
+
+        u64 hash = s_Fnv64OffsetBasis;
+        hash = updateFnv64U32(hash, s_SceneStaticCacheHashVersion);
+        hash = updateFnv64U64(hash, cast<u64>(instances.size()));
+        for(usize index = 0u; index < instances.size(); ++index){
+            const SceneSwBvhInstanceGpu instance = instances[index];
+            const SceneBvhPrimitiveCalculation primitive = primitives[index];
+            const MatrixSingle worldToObject(instance.worldToObject);
+            hash = this.updateVector4(hash, worldToObject[0u]);
+            hash = this.updateVector4(hash, worldToObject[1u]);
+            hash = this.updateVector4(hash, worldToObject[2u]);
+            hash = updateFnv64U32(hash, instance.primitiveCount);
+            hash = this.updateF32(hash, primitive.aabbMin.x);
+            hash = this.updateF32(hash, primitive.aabbMin.y);
+            hash = this.updateF32(hash, primitive.aabbMin.z);
+            hash = this.updateF32(hash, 0.0f);
+            hash = this.updateF32(hash, primitive.aabbMax.x);
+            hash = this.updateF32(hash, primitive.aabbMax.y);
+            hash = this.updateF32(hash, primitive.aabbMax.z);
+            hash = this.updateF32(hash, 0.0f);
+            u8 transparentByte = 0u;
+            if(primitive.transparentOccluder)
+                transparentByte = 1u;
+            hash = updateFnv64Byte(hash, transparentByte);
+        }
+        return hash;
+    }
+
+    public void updateTlasStaticInput(
+        in MatrixSingle transform,
+        in u32 instanceId,
+        in u32 instanceMask,
+        in u32 instanceContributionToHitGroupIndex,
+        in u32 flags,
+        mut u64 inOutHash
+    )const{
+        inOutHash = this.updateVector4(inOutHash, transform[0u]);
+        inOutHash = this.updateVector4(inOutHash, transform[1u]);
+        inOutHash = this.updateVector4(inOutHash, transform[2u]);
+        inOutHash = updateFnv64U32(inOutHash, instanceId);
+        inOutHash = updateFnv64U32(inOutHash, instanceMask);
+        inOutHash = updateFnv64U32(inOutHash, instanceContributionToHitGroupIndex);
+        inOutHash = updateFnv64U32(inOutHash, flags);
+    }
+
+    public void updateSoftwareCapture(
+        in u32 meshletPrimitiveIndexCount,
+        in u32 runtimeMeshVersion,
+        in u64 runtimeGeometryContentRevision,
+        in NwbRtInstanceMaterialGpu instanceMaterial,
+        in f32 translationW,
+        in Span<u32> geometryHeapSlots,
+        in RayTracingOpticalInstanceGpu opticalInstance,
+        mut u64 inOutHash
+    )const{
+        inOutHash = updateFnv64U32(inOutHash, meshletPrimitiveIndexCount);
+        inOutHash = updateFnv64U32(inOutHash, runtimeMeshVersion);
+        inOutHash = updateFnv64U64(inOutHash, runtimeGeometryContentRevision);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.surfaceDispatchId);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.flags);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.shadingModelId);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.materialConstantByteOffset);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.meshInstanceIndex);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.indexSlot);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.attributeSlot);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.positionSlot);
+        inOutHash = updateFnv64U32(inOutHash, instanceMaterial.nodeSlot);
+        inOutHash = updateFnv64U32(inOutHash, bit_cast<u32>(translationW));
+        for(in u32 slot : geometryHeapSlots)
+            inOutHash = updateFnv64U32(inOutHash, slot);
+        inOutHash = updateFnv64U32(inOutHash, opticalInstance.entityId);
+        inOutHash = updateFnv64U32(inOutHash, bit_cast<u32>(opticalInstance.mediumPriority));
+        inOutHash = updateFnv64U32(inOutHash, opticalInstance.boundaryMode);
+        inOutHash = updateFnv64U32(inOutHash, opticalInstance.flags);
+    }
+
+    public void updateHardwareCaster(
+        in u32 meshletCount,
+        in u32 meshletDescSlot,
+        in u32 meshletBoundsSlot,
+        mut u64 inOutCaptureIdentity
+    )const{
+        inOutCaptureIdentity = updateFnv64U32(inOutCaptureIdentity, meshletCount);
+        inOutCaptureIdentity = updateFnv64U32(inOutCaptureIdentity, meshletDescSlot);
+        inOutCaptureIdentity = updateFnv64U32(inOutCaptureIdentity, meshletBoundsSlot);
+    }
+
+    public RayTracingSceneContentStamp buildSoftwareContentStamp(
+        in u64 sceneStaticHash,
+        in u64 swMaterialContextHash,
+        in u64 opticalSceneContentHash,
+        in b8 hasCsg,
+        in u64 csgIdentity,
+        in b8 staticScene,
+        in b8 contentComplete
+    )const{
+        u64 opticalMaterialContentHash = updateFnv64U64(swMaterialContextHash, opticalSceneContentHash);
+        if(hasCsg)
+            opticalMaterialContentHash = updateFnv64U64(opticalMaterialContentHash, csgIdentity);
+        return RayTracingSceneContentStamp(sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete);
+    }
+
+    public void appendMaterialBytes(
+        in u32 instanceCount,
+        in Span<u8> shadowMaterialTypedBytes,
+        mut u64 inOutCaptureSceneIdentity
+    )const{
+        inOutCaptureSceneIdentity = updateFnv64U32(inOutCaptureSceneIdentity, instanceCount);
+        inOutCaptureSceneIdentity = updateFnv64U64(inOutCaptureSceneIdentity, cast<u64>(shadowMaterialTypedBytes.size()));
+        for(in u8 byte : shadowMaterialTypedBytes)
+            inOutCaptureSceneIdentity = updateFnv64Byte(inOutCaptureSceneIdentity, byte);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

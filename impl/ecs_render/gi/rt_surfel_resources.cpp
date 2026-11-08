@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/gi/quality_settings.adhd.h>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
+#include <impl/ecs_render/gi/surfel_gi_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -307,8 +309,9 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
     }
 
     // Only tracing differs between hardware and software surfel paths.
-    const b8 traceReady = m_rayTracingState.m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
-    if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !traceReady || !ensureSurfelResolvePipeline() || !ensureSurfelUpsamplePipeline() || !ensureSurfelTraceBuildArgsPipeline())
+    SurfelGiPipelineSet pipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
+    const b8 traceReady = m_rayTracingState.m_surfelUseHwTrace ? pipelines.ensureSurfelTraceHwPipeline() : pipelines.ensureSurfelTracePipeline();
+    if(!pipelines.ensureSurfelSpawnPipeline() || !pipelines.ensureSurfelAgeFreePipeline() || !pipelines.ensureSurfelHashBuildPipeline() || !traceReady || !pipelines.ensureSurfelResolvePipeline() || !pipelines.ensureSurfelUpsamplePipeline() || !pipelines.ensureSurfelTraceBuildArgsPipeline())
         return false;
     return true;
 }
@@ -326,7 +329,7 @@ b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& target
         return false;
 
     // GI consumes the same selector descriptor as the other current ray effects.
-    if(!targets.bindless.valid() || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !ensureRayTraceMaterialContextSlotsHeapHandle()){
+    if(!targets.bindless.valid() || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }

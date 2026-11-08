@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "texture_image_policy.h"
+#include "texture_shape_policy.h"
+#include "texture_transfer_layout.h"
 #include "backend.h"
 #include "arena_names.h"
 #include "texture_copy_contract.h"
@@ -118,8 +121,8 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         && dest.m_formatLayout.bytesPerBlock == contract->formatLayout.bytesPerBlock
     );
     NWB_ASSERT(
-        VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
-        && VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
+        VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        && VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
         && src.m_imageInfo.imageType == contract->imageType
         && dest.m_imageInfo.imageType == contract->imageType
     );
@@ -196,8 +199,8 @@ b8 CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, con
     if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return false;
 
-    NWB_ASSERT(VulkanTextureDetail::IsTextureImageInfoConsistent(texDesc, dest.m_imageInfo));
-    NWB_ASSERT(VulkanTextureDetail::TextureFormatMetadataMatches(texDesc.format, dest.m_aspectMask, dest.m_formatLayout));
+    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(texDesc, dest.m_imageInfo));
+    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::textureFormatMetadataMatches(texDesc.format, dest.m_aspectMask, dest.m_formatLayout));
     NWB_ASSERT((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0u);
 
     const auto copyAspect = __hidden_texture_transfer::ResolveTextureUploadCopyAspect(texDesc, aspect);
@@ -211,7 +214,7 @@ b8 CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, con
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
     NWB_ASSERT(VulkanDetail::IsBufferImageCopyAspectMaskSupported(copyAspectMask));
 
-    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(
+    const auto copyLayout = VulkanDetail::TextureTransferLayout::buildBufferImageCopyLayout(
         mipExtent,
         copyFormatLayout,
         static_cast<u64>(rowPitch),
@@ -277,10 +280,10 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     if(!validateTextureTransferResources(dest, ResourceStates::ResolveDest, src, ResourceStates::ResolveSource, s_OperationName))
         return;
     NWB_ASSERT(
-        VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)
-        && VulkanTextureDetail::IsTextureDescShapeValid(dest.m_creationDesc)
-        && VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
-        && VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
+        VulkanTextureDetail::TextureShapePolicy::isValid(src.m_creationDesc)
+        && VulkanTextureDetail::TextureShapePolicy::isValid(dest.m_creationDesc)
+        && VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        && VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
     );
     if(src.m_imageInfo.imageType != dest.m_imageInfo.imageType){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination image types must match"));
@@ -295,7 +298,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         return;
     }
     NWB_ASSERT(src.m_imageInfo.format == dest.m_imageInfo.format);
-    NWB_ASSERT(VulkanTextureDetail::TextureFormatMetadataMatches(src.m_creationDesc.format, src.m_aspectMask, src.m_formatLayout) && VulkanTextureDetail::TextureFormatMetadataMatches(dest.m_creationDesc.format, dest.m_aspectMask, dest.m_formatLayout));
+    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::textureFormatMetadataMatches(src.m_creationDesc.format, src.m_aspectMask, src.m_formatLayout) && VulkanTextureDetail::TextureImagePolicy::textureFormatMetadataMatches(dest.m_creationDesc.format, dest.m_aspectMask, dest.m_formatLayout));
 
     if(src.m_aspectMask != VK_IMAGE_ASPECT_COLOR_BIT){
         rejectCommandRecording(s_OperationName, NWB_TEXT("resolve requires a color format"));

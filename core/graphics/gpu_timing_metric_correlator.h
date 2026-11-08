@@ -6,6 +6,7 @@
 
 
 #include "gpu_timing_metrics.h"
+#include "gpu_overlap_metric_tracker.h"
 
 #include <core/perf/timing.h>
 #include <global/span.h>
@@ -30,13 +31,7 @@ struct GpuPacketEnvelopeMetricQueueOutput{
     Name internalIdleScopeName = s_NameNone;
 };
 
-struct GpuTimingSinkSample{
-    Perf::TimingScopeId scope;
-    f64 durationSeconds = 0.0;
-    u64 sourceFrameIndex = 0u;
-};
 
-using GpuTimingSinkSampleVector = Vector<GpuTimingSinkSample, Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,28 +45,6 @@ private:
 
 
 private:
-    struct PendingOverlapFrame{
-        u64 frameIndex = 0u;
-        GpuComparableTimestampRange first;
-        GpuComparableTimestampRange second;
-        b8 hasFirst = false;
-        b8 hasSecond = false;
-    };
-
-    struct OverlapRecord{
-        Name firstScope = s_NameNone;
-        Name secondScope = s_NameNone;
-        Name outputScopeName = s_NameNone;
-        Perf::TimingScopeId outputScope;
-        Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
-
-
-    public:
-        explicit OverlapRecord(Alloc::GlobalArena& arena)noexcept
-            : pendingFrames(arena)
-        {}
-    };
-
     struct PacketEnvelopeMetricScopeRecord{
         GpuComparableTimestampRange range;
         Name scopeName = s_NameNone;
@@ -112,7 +85,6 @@ private:
 
 
 private:
-    using OverlapVector = Vector<OverlapRecord, Alloc::GlobalArena>;
     using PendingPacketEnvelopeMetricVector = Vector<PendingPacketEnvelopeMetric, Alloc::GlobalArena>;
     using PacketEnvelopeMetricOutputRoleVector = Vector<PacketEnvelopeMetricOutputRoleRecord, Alloc::GlobalArena>;
 
@@ -143,7 +115,7 @@ private:
 private:
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
-    OverlapVector m_overlapRecords;
+    GpuOverlapMetricTracker m_overlapMetrics;
     PendingPacketEnvelopeMetricVector m_pendingPacketEnvelopeMetrics;
     PacketEnvelopeMetricOutputRoleVector m_packetEnvelopeMetricOutputRoles;
 };

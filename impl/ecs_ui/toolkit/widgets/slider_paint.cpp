@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 
 #include <global/bit.h>
 
@@ -57,16 +59,16 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     const b8 hover = interactive && input.hover() == *thumbId;
     const b8 pressed = interactive && input.primaryDown() && (input.capture() == *trackId || input.capture() == *thumbId);
     const b8 focused = input.focus() == item.state.id;
-    if(!PaintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
+    if(!ControlVisualPainter().paintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
         return false;
-    const HitTarget host = MakeSliderHostHitTarget(*placement, interactive, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
+    const HitTarget host = HitTargetFactory().makeSliderHostHitTarget(*placement, interactive, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
     if(!m_context.addTarget(item.state, host))
         return false;
     if(interactive){
-        const HitTarget trackTarget = MakeSliderTrackHitTarget(*placement, frame.m_token);
+        const HitTarget trackTarget = HitTargetFactory().makeSliderTrackHitTarget(*placement, frame.m_token);
         if(!m_context.addPartTarget(item.state, *trackId, trackTarget))
             return false;
-        const HitTarget thumbTarget = MakeSliderThumbHitTarget(*placement, frame.m_token, frame.m_state.value());
+        const HitTarget thumbTarget = HitTargetFactory().makeSliderThumbHitTarget(*placement, frame.m_token, frame.m_state.value());
         if(!m_context.addPartTarget(item.state, *thumbId, thumbTarget))
             return false;
     }

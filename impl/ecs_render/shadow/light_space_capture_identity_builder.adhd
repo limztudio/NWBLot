@@ -1,0 +1,158 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LightSpaceCaptureIdentityBuilder{
+    private CsgSnapshotIdentityBuilder m_identityBuilder;
+    public void updateReceiverGeometry(
+        in EntityID entity,
+        in b8 transparent,
+        in Name meshName,
+        in u64 positionBufferId,
+        in u64 triangleIndexBufferId,
+        in u64 attributeBufferId,
+        in u32 meshletCount,
+        in u64 meshletDescBufferId,
+        in u64 meshletLocalBoundsBufferId,
+        in u32 meshletDescHeapHandle,
+        in u32 meshletLocalBoundsHeapHandle,
+        in u64 runtimeLocalBoundsBufferId,
+        in u32 runtimeLocalBoundsHeapHandle,
+        in u64 swBvhNodeBufferId,
+        in u32 swBvhNodeHeapHandle,
+        in u32 meshletPrimitiveIndexCount,
+        in u64 runtimeMeshVersion,
+        in u64 runtimeGeometryContentRevision,
+        in b8 runtimeMesh,
+        mut u64 inOutCaptureGeometryIdentity,
+        mut b8 inOutCaptureGeometryTrusted
+    )const{
+        u64 hash = updateFnv64U32(inOutCaptureGeometryIdentity, entity.id);
+        hash = this.m_identityBuilder.updateFnv64BoolValue(hash, transparent);
+        hash = updateFnv64NameHash(hash, meshName.hash());
+        hash = updateFnv64U64(hash, positionBufferId);
+        hash = updateFnv64U64(hash, triangleIndexBufferId);
+        hash = updateFnv64U64(hash, attributeBufferId);
+        hash = updateFnv64U32(hash, meshletCount);
+        hash = updateFnv64U64(hash, meshletDescBufferId);
+        hash = updateFnv64U64(hash, meshletLocalBoundsBufferId);
+        hash = updateFnv64U32(hash, meshletDescHeapHandle);
+        hash = updateFnv64U32(hash, meshletLocalBoundsHeapHandle);
+        hash = updateFnv64U64(hash, runtimeLocalBoundsBufferId);
+        hash = updateFnv64U32(hash, runtimeLocalBoundsHeapHandle);
+        hash = updateFnv64U64(hash, swBvhNodeBufferId);
+        hash = updateFnv64U32(hash, swBvhNodeHeapHandle);
+        hash = updateFnv64U32(hash, meshletPrimitiveIndexCount);
+        hash = updateFnv64U64(hash, runtimeMeshVersion);
+        hash = updateFnv64U64(hash, runtimeGeometryContentRevision);
+        hash = this.m_identityBuilder.updateFnv64BoolValue(hash, runtimeMesh);
+        inOutCaptureGeometryIdentity = hash;
+        if(runtimeMesh && runtimeGeometryContentRevision == 0u)
+            inOutCaptureGeometryTrusted = false;
+    }
+
+    private u64 updateFloat4(in u64 hash, in VectorSingle value)const{
+        u64 outHash = updateFnv64U32(hash, bit_cast<u32>(value.x));
+        outHash = updateFnv64U32(outHash, bit_cast<u32>(value.y));
+        outHash = updateFnv64U32(outHash, bit_cast<u32>(value.z));
+        outHash = updateFnv64U32(outHash, bit_cast<u32>(value.w));
+        return outHash;
+    }
+
+    public LightSpaceCaptureIdentity buildCaptureIdentity(
+        in u64 sceneIdentity,
+        in b8 sceneTrusted,
+        in Span<SceneLightGpuData> lights,
+        in u32 width,
+        in u32 height,
+        in LightSpacePlan plan
+    )const{
+        LightSpaceCaptureIdentity identity;
+        identity.scene = sceneIdentity;
+        identity.trusted = sceneTrusted;
+        identity.lighting = s_Fnv64OffsetBasis;
+        const u32 lightCount = cast<u32>(lights.size());
+        identity.lighting = updateFnv64U32(identity.lighting, lightCount);
+        for(in SceneLightGpuData light : lights){
+            identity.lighting = this.updateFloat4(identity.lighting, VectorSingle(light.position));
+            identity.lighting = this.updateFloat4(identity.lighting, VectorSingle(light.direction));
+            identity.lighting = this.updateFloat4(identity.lighting, VectorSingle(light.colorIntensity));
+            identity.lighting = this.updateFloat4(identity.lighting, VectorSingle(light.params));
+            identity.lighting = this.updateFloat4(identity.lighting, VectorSingle(light.params2));
+        }
+        identity.layout = s_Fnv64OffsetBasis;
+        identity.layout = updateFnv64U32(identity.layout, width);
+        identity.layout = updateFnv64U32(identity.layout, height);
+        identity.layout = updateFnv64U32(identity.layout, plan.lightCount);
+        identity.layout = updateFnv64U32(identity.layout, plan.viewCount);
+        identity.layout = updateFnv64U32(identity.layout, plan.textureResolution);
+        identity.layout = updateFnv64U64(identity.layout, plan.drawArgumentByteSize);
+        for(u32 view = 0u; view < plan.viewCount; ++view){
+            for(usize lane = 0u; lane < 4u; ++lane)
+                identity.layout = updateFnv64U32(identity.layout, plan.views[cast<usize>(view)].map[lane]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                identity.layout = updateFnv64U32(identity.layout, plan.views[cast<usize>(view)].light[lane]);
+        }
+        return identity;
+    }
+
+    public u64 buildCsgBaseIdentity(
+        in u64 captureGeometryIdentity,
+        in u64 snapshotContentIdentity,
+        in Span<NwbRtInstanceMaterialGpu> materials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialBytes,
+        in usize textureCount
+    )const{
+        const usize instanceCount = instances.size();
+        u64 identity = updateFnv64U64(captureGeometryIdentity, snapshotContentIdentity);
+        identity = updateFnv64U64(identity, cast<u64>(instanceCount));
+        for(usize index = 0u; index < instanceCount; ++index){
+            const NwbRtInstanceMaterialGpu mat = materials[index];
+            identity = updateFnv64U32(identity, mat.surfaceDispatchId);
+            identity = updateFnv64U32(identity, mat.flags);
+            identity = updateFnv64U32(identity, mat.shadingModelId);
+            identity = updateFnv64U32(identity, mat.materialConstantByteOffset);
+            identity = updateFnv64U32(identity, mat.meshInstanceIndex);
+            identity = updateFnv64U32(identity, mat.indexSlot);
+            identity = updateFnv64U32(identity, mat.attributeSlot);
+            identity = updateFnv64U32(identity, mat.positionSlot);
+            identity = updateFnv64U32(identity, mat.nodeSlot);
+            const InstanceGpuData inst = instances[index];
+            identity = updateFnv64U32(identity, bit_cast<u32>(inst.translation.w));
+            for(usize slotIndex = 0u; slotIndex < inst.geometryHeapSlots.size(); ++slotIndex)
+                identity = updateFnv64U32(identity, inst.geometryHeapSlots[slotIndex]);
+        }
+        identity = this.m_identityBuilder.updateFnv64ByteSpan(identity, materialBytes);
+        return updateFnv64U64(identity, cast<u64>(textureCount));
+    }
+
+    public void updateCsgInstances(
+        in Span<LightSpaceCsgInstanceGpu> instances,
+        mut u64 inOutIdentity
+    )const{
+        const u64 instanceBytes = cast<u64>(instances.size()) * 96ul;
+        inOutIdentity = updateFnv64U64(inOutIdentity, instanceBytes);
+        for(in LightSpaceCsgInstanceGpu inst : instances){
+            inOutIdentity = this.m_identityBuilder.updateFnv64Matrix34Bits(inOutIdentity, MatrixSingle(inst.worldToObject));
+            inOutIdentity = updateFnv64U32(inOutIdentity, inst.runtimeBoundsSlot);
+            inOutIdentity = updateFnv64U32(inOutIdentity, inst.primitiveCount);
+            inOutIdentity = updateFnv64U32(inOutIdentity, inst.meshRootSlot);
+            inOutIdentity = updateFnv64U32(inOutIdentity, inst.padding);
+            inOutIdentity = this.m_identityBuilder.updateFnv64Vector4Bits(inOutIdentity, VectorSingle(inst.localMin));
+            inOutIdentity = this.m_identityBuilder.updateFnv64Vector4Bits(inOutIdentity, VectorSingle(inst.localMax));
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

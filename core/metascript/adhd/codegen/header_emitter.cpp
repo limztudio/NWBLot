@@ -3,8 +3,9 @@
 
 
 #include "header_emitter.h"
+#include "header_preamble_emitter.h"
 
-#include "../sema/layout_optimizer.h"
+#include "../sema/declaration_dependency_analyzer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,89 +18,12 @@ NWB_ADHD_BEGIN
 
 
 MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView namespacePath)const{
+    const DeclarationDependencyAnalyzer declarationDependencies(m_arena, m_symbols);
     MString out(m_arena);
     out.reserve(s_AdhdEmitReserveBytes);
 
 
-    out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
-    out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
-    out.append("#pragma once\r\n\r\n\r\n");
-    out.append("#include <global/global.h>\r\n");
-    out.append("#include <global/atomic_identity.h>\r\n");
-    out.append("#include <global/binary_big_endian.h>\r\n");
-    out.append("#include <global/binary_little_endian.h>\r\n");
-    out.append("#include <global/numeric_range.h>\r\n");
-    out.append("#include <global/simdmath.h>\r\n");
-    out.append("#include <global/inplace_function.h>\r\n");
-    out.append("#include <global/not_null.h>\r\n");
-    out.append("#include <core/alloc/global.h>\r\n");
-    out.append("#include <core/alloc/general.h>\r\n");
-    out.append("#include <core/alloc/scratch.h>\r\n");
-    out.append("#include <core/assets/ref.h>\r\n");
-    out.append("#include <core/ecs/entity_id.h>\r\n");
-    if(namespacePath == "NWB::Impl::Scene")
-        out.append("#include <impl/ecs_scene/global.h>\r\n");
-    else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
-        out.append("#include <impl/global.h>\r\n");
-
-    b8 hasSubsystemDecl = false;
-    b8 hasComponentAssetDecl = false;
-    b8 hasHeaderTaskScope = false;
-    for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl)
-            continue;
-        for(const MethodDecl* method : classDecl->methods){
-            if(!method || method->isImported || !method->hasBody || !method->usesTaskScope)
-                continue;
-            if(!classDecl->templateParams.empty() || !method->templateParams.empty() || method->isInline){
-                hasHeaderTaskScope = true;
-                break;
-            }
-        }
-        if(classDecl->isImported)
-            continue;
-        if(!classDecl->subsystemTypeName.empty())
-            hasSubsystemDecl = true;
-        if(!classDecl->componentAssetTypeName.empty())
-            hasComponentAssetDecl = true;
-    }
-    if(hasSubsystemDecl)
-        out.append("#include <impl/assets_subsystem/asset.h>\r\n");
-    if(hasComponentAssetDecl)
-        out.append("#include <impl/assets_scene/components.h>\r\n");
-    if(!hasHeaderTaskScope){
-        for(const MethodDecl* fn : unit.freeFunctions){
-            if(fn && !fn->isImported && fn->hasBody && fn->usesTaskScope && (fn->isInline || !fn->templateParams.empty())){
-                hasHeaderTaskScope = true;
-                break;
-            }
-        }
-    }
-    if(hasHeaderTaskScope)
-        out.append("#include <core/task/cpu/scheduler.h>\r\n");
-
-    for(const MString& inc : unit.includedAdhdFiles){
-        const MStringView incView = StripAdhdExtension(MStringView(inc.data(), inc.size()));
-        out.append("#include \"");
-        out.append(incView.data(), incView.size());
-        out.append(".adhd.h\"\r\n");
-    }
-
-    if(!unit.topLevelNativeBlocks.empty()){
-        out.append("\r\n");
-        for(const MStringView& rawBlock : unit.topLevelNativeBlocks){
-            AppendTextDiscardCrAndExpandLf(out, rawBlock);
-            out.append("\r\n");
-        }
-    }
-
-    out.append("\r\n\r\n////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
-
-    if(!namespacePath.empty()){
-        out.append("namespace ");
-        out.append(namespacePath.data(), namespacePath.size());
-        out.append("{\r\n\r\n\r\n");
-    }
+    HeaderPreambleEmitter::emit(out, unit, namespacePath);
 
     for(const EnumDecl* enumDecl : unit.enums){
         if(enumDecl && !enumDecl->isImported)
@@ -110,15 +34,15 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     MVector<MStringView> externalForwardClasses(m_arena);
     const auto collectCallableForwardDeclClasses = [&](const MethodDecl& callable, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams){
         if(callable.returnType)
-            CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
+            declarationDependencies.collectExternalForwardDeclClasses(*callable.returnType, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, forwardDeclParamTypes, 0u, externalForwardClasses);
+                declarationDependencies.collectExternalForwardDeclClasses(*p.type, outerTemplateParams, innerTemplateParams, forwardDeclParamTypes, 0u, externalForwardClasses);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
-            CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, aliasDecl->templateParams, {}, false, 0u, externalForwardClasses);
+            declarationDependencies.collectExternalForwardDeclClasses(*aliasDecl->aliasedType, aliasDecl->templateParams, {}, false, 0u, externalForwardClasses);
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(!ifaceDecl || ifaceDecl->isImported)
@@ -133,7 +57,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             continue;
         for(const FieldDecl* f : classDecl->fields){
             if(f && f->type)
-                CollectExternalForwardDeclClasses(*f->type, m_symbols, classDecl->templateParams, {}, false, 0u, externalForwardClasses);
+                declarationDependencies.collectExternalForwardDeclClasses(*f->type, classDecl->templateParams, {}, false, 0u, externalForwardClasses);
         }
         for(const MethodDecl* m : classDecl->methods){
             if(m)
@@ -177,7 +101,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-            if(aliasDecl && !aliasDecl->isImported && TypeRefReferencesSymbol(*c.varType, aliasDecl->name))
+            if(aliasDecl && !aliasDecl->isImported && declarationDependencies.typeRefReferencesSymbol(*c.varType, aliasDecl->name))
                 return true;
         }
         return false;
@@ -187,7 +111,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const ClassDecl* classDecl : unit.classes){
-            if(classDecl && !classDecl->isImported && TypeRefReferencesSymbolByValue(*c.varType, classDecl->name, m_symbols))
+            if(classDecl && !classDecl->isImported && declarationDependencies.typeRefReferencesSymbolByValue(*c.varType, classDecl->name))
                 return true;
         }
         return false;
@@ -216,7 +140,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
     if(!localAliases.empty()){
         MVector<const TypeAliasDecl*> sortedAliases(m_arena);
-        SortTypeAliasesTopologically(localAliases, m_arena, sortedAliases);
+        declarationDependencies.sortTypeAliasesTopologically(localAliases, sortedAliases);
         for(const TypeAliasDecl* aliasDecl : sortedAliases){
             if(aliasDecl)
                 emitTypeAliasDecl(out, *aliasDecl);
@@ -234,7 +158,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
     if(!localInterfaces.empty()){
         MVector<const InterfaceDecl*> sortedInterfaces(m_arena);
-        SortInterfacesTopologically(localInterfaces, m_symbols, m_arena, sortedInterfaces);
+        declarationDependencies.sortInterfacesTopologically(localInterfaces, sortedInterfaces);
         for(const InterfaceDecl* ifaceDecl : sortedInterfaces){
             if(ifaceDecl)
                 emitInterfaceDecl(out, *ifaceDecl);
@@ -256,7 +180,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
     if(!allClasses.empty()){
         MVector<const ClassDecl*> sortedClasses(m_arena);
-        SortClassesTopologically(allClasses, m_symbols, m_arena, sortedClasses);
+        declarationDependencies.sortClassesTopologically(allClasses, sortedClasses);
 
         MVector<u8> instEmitted(unit.templateInstantiations.size(), 0u, m_arena);
         MVector<const ClassDecl*> readyClasses(m_arena);
@@ -292,7 +216,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     for(const ClassDecl* depCls : sortedClasses){
                         if(!depCls || isClassReady(depCls))
                             continue;
-                        if(InstantiationDependsOnClassByValue(*inst, depCls->name, m_symbols)){
+                        if(declarationDependencies.instantiationDependsOnClassByValue(*inst, depCls->name)){
                             depsReady = false;
                             break;
                         }

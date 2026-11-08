@@ -7,7 +7,9 @@
 
 #include "text_edit_session.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/clipboard_types.adhd.h>
+#include <impl/ecs_ui/edit_clipboard_policy.adhd.h>
 
 #include <impl/ecs_ui/toolkit/edit/commands.h>
 #include <impl/ecs_ui/toolkit/edit/single_line_text.h>
@@ -54,7 +56,7 @@ public:
             return { UiEditClipboardStatus::InvalidOwner };
         if(!cancel())
             return { UiEditClipboardStatus::NativeFailure };
-        const auto reads = ValidateUiEditClipboardActionMode(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection());
+        const auto reads = UiEditClipboardPolicy().validateAction(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection());
         if(!reads)
             return { reads.error() };
         const auto capabilities = m_service.capabilities(channel);
@@ -134,7 +136,7 @@ private:
         case Core::ClipboardStatus::Success: break;
         default: return { UiEditClipboardStatus::NativeFailure };
         }
-        const UiEditClipboardStatus::Enum prepStatus = PrepareUiEditClipboardInsertText(
+        const UiEditClipboardStatus::Enum prepStatus = UiEditClipboardPolicy().prepareInsertText(
             m_action,
             readOnly,
             model.textMode(),

@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
+#include "expr_parser.h"
+
 #include "stmt_parser.h"
 
 
@@ -71,7 +79,7 @@ b8 ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
 
     if(!m_cursor.check(TokenType::RightParen)){
         for(;;){
-            if(m_cursor.check(TokenType::Identifier) && ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None){
+            if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None){
                 m_cursor.error("do not write 'in' or 'mut' at call sites in adhd");
                 return false;
             }
@@ -105,7 +113,7 @@ Expr* ExprParser::parseAssignment(){
         return nullptr;
     }
 
-    if(IsCompoundOrSimpleAssignment(m_cursor.current().type)){
+    if(OperatorSemantics::IsCompoundOrSimpleAssignment(m_cursor.current().type)){
         const Token opTok = m_cursor.current();
         m_cursor.advance();
         Expr* rhs = parseAssignment();
@@ -121,7 +129,7 @@ Expr* ExprParser::parseAssignment(){
 Expr* ExprParser::parseBinaryFromPrecedence(const u8 minPrecedence){
     Expr* left = parseUnary();
     while(left){
-        const u8 prec = BinaryOperatorPrecedence(m_cursor.current().type);
+        const u8 prec = OperatorSemantics::BinaryOperatorPrecedence(m_cursor.current().type);
         if(prec == 0u || prec < minPrecedence)
             break;
         const Token opTok = m_cursor.current();
@@ -135,13 +143,13 @@ Expr* ExprParser::parseBinaryFromPrecedence(const u8 minPrecedence){
 }
 
 Expr* ExprParser::parseUnary(){
-    const MStringView prohibitedUnaryErr = FindProhibitedUnaryOperatorError(m_cursor.current().type);
+    const MStringView prohibitedUnaryErr = OperatorSemantics::FindProhibitedUnaryOperatorError(m_cursor.current().type);
     if(!prohibitedUnaryErr.empty()){
         m_cursor.error(prohibitedUnaryErr);
         return nullptr;
     }
 
-    if(IsPrefixUnaryOperatorToken(m_cursor.current().type)){
+    if(OperatorSemantics::IsPrefixUnaryOperatorToken(m_cursor.current().type)){
         const Token opTok = m_cursor.current();
         m_cursor.advance();
         Expr* operand = parseUnary();
@@ -236,7 +244,7 @@ Expr* ExprParser::parsePostfix(){
             continue;
         }
 
-        if(IsIncrementOrDecrementOperatorToken(m_cursor.current().type)){
+        if(OperatorSemantics::IsIncrementOrDecrementOperatorToken(m_cursor.current().type)){
             const Token opTok = m_cursor.current();
             m_cursor.advance();
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
@@ -268,7 +276,7 @@ Expr* ExprParser::parsePrimary(){
 
     if(m_cursor.match(TokenType::LeftParen)){
         if(m_cursor.check(TokenType::Identifier)){
-            const MStringView prohibitedTypeErr = FindProhibitedTypeKeywordError(m_cursor.current().text);
+            const MStringView prohibitedTypeErr = KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text);
             if(!prohibitedTypeErr.empty()){
                 m_cursor.error(prohibitedTypeErr);
                 return nullptr;
@@ -287,7 +295,7 @@ Expr* ExprParser::parsePrimary(){
                 }
             }
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
-                const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || IsBuiltinTypeName(maybeType->name);
+                const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || BuiltinTypeSemantics::IsBuiltinTypeName(maybeType->name);
                 const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
                 const b8 nextIsUnambiguousCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type);
                 const b8 nextIsPlusOrMinus = m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus);
@@ -308,13 +316,13 @@ Expr* ExprParser::parsePrimary(){
     }
 
     if(tok.type == TokenType::Identifier){
-        const MStringView prohibitedErr = FindProhibitedExprKeywordError(tok.text);
+        const MStringView prohibitedErr = KeywordSemantics::FindProhibitedExprKeywordError(tok.text);
         if(!prohibitedErr.empty()){
             m_cursor.error(prohibitedErr);
             return nullptr;
         }
 
-        if(IsBoolLiteralText(tok.text)){
+        if(KeywordSemantics::IsBoolLiteralText(tok.text)){
             m_cursor.advance();
             return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::BoolLiteral, tok, span);
         }

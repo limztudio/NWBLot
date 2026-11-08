@@ -3,6 +3,7 @@
 
 
 #include "header_emitter.h"
+#include "constructor_argument_emitter.h"
 
 #include "reflection_emitter.h"
 
@@ -211,7 +212,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
     out.append(c.name.data(), c.name.size());
     if(c.isCtorInit){
         const MStringView baseConstType = m_symbols.resolveBaseTypeName(c.varType->name);
-        m_sourceEmitter.emitCtorOrCallArgs(out, baseConstType, c.arguments, {}, false, true);
+        ConstructorArgumentEmitter(m_sourceEmitter).emit(out, baseConstType, c.arguments, {}, false, true);
         out.append(";\r\n");
     }
     else{

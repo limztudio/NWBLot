@@ -36,7 +36,7 @@ NWB_IMPL_BEGIN
 
     const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
-    const b8 drawResourcesReady = csgComputeEmulation ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
+    const b8 drawResourcesReady = csgComputeEmulation ? materialSystem.drawRecorder().materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
     if(!drawResourcesReady)
         return false;
     if(csgComputeEmulation){
@@ -67,7 +67,7 @@ NWB_IMPL_BEGIN
         true,
         inputs.conservativeGeometryScissor
     };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
+    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
     return true;
 }
 
@@ -87,7 +87,7 @@ NWB_IMPL_BEGIN
         return false;
 
     const Span<const MaterialPassDrawItem> drawItems(&inputs.plan.drawItems[inputs.drawIndex], 1u);
-    if(!materialSystem.computeMaterialPassDrawResourcesReady(drawItems, inputs.frameBindings))
+    if(!materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(drawItems, inputs.frameBindings))
         return false;
 
     if(generatePhase){
@@ -112,9 +112,9 @@ NWB_IMPL_BEGIN
     Core::Framebuffer* const rasterFramebuffer = generatePhase ? nullptr : (inputs.targets.avboit.*(trait.framebuffer)).get();
     const MaterialPassDrawContext drawContext{ commandList, rasterFramebuffer, &inputs.targets.avboit, viewportState, nullptr, inputs.frameBindings, trait.pipelinePass, inputs.materialFrameStatesGraphOwned, inputs.materialGeometryStatesGraphOwned, true };
     if(generatePhase)
-        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
+        materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
+        materialSystem.drawRecorder().renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         if(inputs.finishTiming){
             inputs.timing.value().finishTiming(commandList);
             inputs.timing.reset();

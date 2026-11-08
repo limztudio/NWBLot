@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/software_bvh_builder.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
+b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
@@ -120,8 +123,8 @@ b8 RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::Bu
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
-    if(!ValidateMeshSwBvhPrimitiveCount(primitiveCount))
+b8 SoftwareBvhBuilder::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
+    if(!RayTracingBuildPolicy().validateMeshSwBvhPrimitiveCount(primitiveCount))
         return false;
 
     if(!ensureBvhSortPipeline())
@@ -138,26 +141,26 @@ b8 RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::
     return true;
 }
 
-b8 RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
+b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
     return
         nodeBuffer
         && parentBuffer
         && RayTracingDetail::IsHeapHandle(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && RayTracingDetail::IsHeapHandle(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && m_rayTracingState.m_bvhSortPipeline
-        && m_rayTracingState.m_bvhSortKeysBuffer
-        && m_rayTracingState.m_bvhSortPayloadBuffer
-        && RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && m_rayTracingState.m_bvhMortonPipeline
-        && m_rayTracingState.m_bvhTopologyPipeline
-        && m_rayTracingState.m_bvhFitPipeline
-        && m_rayTracingState.m_bvhVisitCounterBuffer
-        && RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && m_state.m_bvhSortPipeline
+        && m_state.m_bvhSortKeysBuffer
+        && m_state.m_bvhSortPayloadBuffer
+        && RayTracingDetail::IsHeapHandle(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && m_state.m_bvhMortonPipeline
+        && m_state.m_bvhTopologyPipeline
+        && m_state.m_bvhFitPipeline
+        && m_state.m_bvhVisitCounterBuffer
+        && RayTracingDetail::IsHeapHandle(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 
-b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
+b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,
     u32 primitiveCount,
@@ -174,9 +177,9 @@ b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
 
     const u32 paddedCount = ResolveBvhPaddedSortCount(primitiveCount);
 
-    const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
-    const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
-    const NotNull<Core::Buffer*> visitCounterBuffer(m_rayTracingState.m_bvhVisitCounterBuffer.get());
+    const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
+    const NotNull<Core::Buffer*> payloadBuffer(m_state.m_bvhSortPayloadBuffer.get());
+    const NotNull<Core::Buffer*> visitCounterBuffer(m_state.m_bvhVisitCounterBuffer.get());
     const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
     const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
 
@@ -184,11 +187,11 @@ b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
         primitiveCount,
         positionHeapSlot,
         triangleIndexHeapSlot,
-        m_rayTracingState.m_bvhSortKeysHeapHandle.slot(),
-        m_rayTracingState.m_bvhSortPayloadHeapHandle.slot(),
+        m_state.m_bvhSortKeysHeapHandle.slot(),
+        m_state.m_bvhSortPayloadHeapHandle.slot(),
         nodeHeapHandle.slot(),
         parentHeapHandle.slot(),
-        m_rayTracingState.m_bvhVisitCounterHeapHandle.slot(),
+        m_state.m_bvhVisitCounterHeapHandle.slot(),
         LoadFloatInt(aabbMin),
         LoadFloatInt(aabbMax)
     );
@@ -218,7 +221,7 @@ b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.dispatch(groupCount, 1u, 1u);
     };
 
-    dispatchBuildKernel(*m_rayTracingState.m_bvhMortonPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(*m_state.m_bvhMortonPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
     // Attribute sorting to the mesh rebuild at its call site.
@@ -231,15 +234,15 @@ b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
     bvhBuildBarrier();
 
     if(primitiveCount > 1u){
-        dispatchBuildKernel(*m_rayTracingState.m_bvhTopologyPipeline, DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+        dispatchBuildKernel(*m_state.m_bvhTopologyPipeline, DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
         bvhBuildBarrier();
     }
 
-    dispatchBuildKernel(*m_rayTracingState.m_bvhFitPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(*m_state.m_bvhFitPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     return true;
 }
 
-b8 RendererRayTracingSystem::refitMeshSwBvhPrepared(
+b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,
     u32 primitiveCount,
@@ -252,21 +255,21 @@ b8 RendererRayTracingSystem::refitMeshSwBvhPrepared(
     if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
-    const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
-    const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
+    const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
+    const NotNull<Core::Buffer*> payloadBuffer(m_state.m_bvhSortPayloadBuffer.get());
     const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
     const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
-    const NotNull<Core::Buffer*> visitCounterBuffer(m_rayTracingState.m_bvhVisitCounterBuffer.get());
+    const NotNull<Core::Buffer*> visitCounterBuffer(m_state.m_bvhVisitCounterBuffer.get());
 
     const BvhBuildPushConstants pushConstants = MakeBvhRefitPushConstants(
         primitiveCount,
         positionHeapSlot,
         triangleIndexHeapSlot,
-        m_rayTracingState.m_bvhSortKeysHeapHandle.slot(),
-        m_rayTracingState.m_bvhSortPayloadHeapHandle.slot(),
+        m_state.m_bvhSortKeysHeapHandle.slot(),
+        m_state.m_bvhSortPayloadHeapHandle.slot(),
         nodeHeapHandle.slot(),
         parentHeapHandle.slot(),
-        m_rayTracingState.m_bvhVisitCounterHeapHandle.slot()
+        m_state.m_bvhVisitCounterHeapHandle.slot()
     );
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
@@ -275,9 +278,9 @@ b8 RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer.get(), true);
     Core::ComputeState computeState;
-    computeState.setPipeline(m_rayTracingState.m_bvhFitPipeline.get());
+    computeState.setPipeline(m_state.m_bvhFitPipeline.get());
     commandList.setComputeState(computeState);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_rayTracingState.m_bvhFitPipeline.get());
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_state.m_bvhFitPipeline.get());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 

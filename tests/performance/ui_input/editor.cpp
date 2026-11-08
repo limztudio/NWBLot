@@ -4,6 +4,7 @@
 
 #include "benchmark.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/edit_box_host.h>
 
 #include <core/os/clipboard_service.h>

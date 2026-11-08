@@ -2,8 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/gi/surfel_gi_pipeline_set.h>
+#include <impl/ecs_render/gi/rt_surfel_gi_state.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/shader/shader_system.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
 
 #include <global/algorithm.h>
 
@@ -76,7 +82,7 @@ namespace __hidden_surfel_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelSpawnPipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),
@@ -93,7 +99,7 @@ b8 RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelAgeFreePipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),
@@ -110,7 +116,7 @@ b8 RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelHashBuildPipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),
@@ -127,7 +133,7 @@ b8 RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelTracePipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelTracePipeline(){
     const b8 csg = m_rayTracingState.m_surfelUseCsgTrace;
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
@@ -146,7 +152,7 @@ b8 RendererRayTracingSystem::ensureSurfelTracePipeline(){
 }
 
 // Hardware trace twin; other surfel passes are shared.
-b8 RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelTraceHwPipeline(){
     const b8 csg = m_rayTracingState.m_surfelUseCsgTrace;
     auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgHwPipeline : m_rayTracingState.m_surfelTraceHwPipeline;
     auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgHwShader : m_rayTracingState.m_surfelTraceHwShader;
@@ -177,7 +183,7 @@ b8 RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelResolvePipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelResolvePipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),
@@ -194,7 +200,7 @@ b8 RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelUpsamplePipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),
@@ -211,7 +217,7 @@ b8 RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     );
 }
 
-b8 RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
+b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
     return __hidden_surfel_pipelines::EnsureSurfelComputePipeline(
         m_arena,
         m_graphics.getDevice(),

@@ -41,7 +41,7 @@ namespace __hidden_rt_caustics_gpu_render{
         frameIndex,
         targets.bindless.gbufferDepth.slot(),
         targets.bindless.gbufferWorldPosition.slot(),
-        state.m_causticEmissionTargetHeapHandle.slot(),
+        state.m_causticEmissionTargets.heapHandle.slot(),
         meshView.heapHandle.slot(),
         targets.bindless.slotsBufferDescriptor.slot(),
         state.m_rayTraceMaterialContextSlotsHeapHandle.slot(),

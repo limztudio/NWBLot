@@ -6,6 +6,7 @@
 
 
 #include "parser.h"
+#include "preprocessor_includes.h"
 
 #include <core/alloc/scratch.h>
 
@@ -16,19 +17,6 @@
 
 
 NWB_METASCRIPT_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-interface IIncludeResolver{
-    virtual ~IIncludeResolver()noexcept = default;
-
-
-public:
-    [[nodiscard]] virtual b8 resolveInclude(MStringView includePath, b8 isAngleBracket, MetaArena& arena, MString& outResolvedKey, MString& outContent) = 0;
-    virtual void popIncludeScope()noexcept{}
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,11 +42,10 @@ public:
 
 
 class Preprocessor final{
+    friend class PreprocessorIncludes;
+
 public:
-    struct IncludedByteRange{
-        usize startOffset = 0u;
-        usize endOffset = 0u;
-    };
+    using IncludedByteRange = PreprocessorIncludes::IncludedByteRange;
 
 
 private:
@@ -73,9 +60,9 @@ private:
 
 public:
     using MacroMap = MStringMap<PreprocessorMacro>;
-    using IncludedSet = MStringMap<b8>;
-    using IncludedList = MVector<MString>;
-    using IncludedRangeList = MVector<IncludedByteRange>;
+    using IncludedSet = PreprocessorIncludes::IncludedSet;
+    using IncludedList = PreprocessorIncludes::IncludedList;
+    using IncludedRangeList = PreprocessorIncludes::IncludedRangeList;
 
 
 public:
@@ -93,17 +80,15 @@ public:
 
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);
 
-    [[nodiscard]] Span<const MString> includedFiles()const noexcept{ return {m_includedFiles.data(), m_includedFiles.size()}; }
-    [[nodiscard]] Span<const MString> resolvedIncludedFiles()const noexcept{ return {m_resolvedIncludedFiles.data(), m_resolvedIncludedFiles.size()}; }
+    [[nodiscard]] Span<const MString> includedFiles()const noexcept{ return m_includes.includedFiles(); }
+    [[nodiscard]] Span<const MString> resolvedIncludedFiles()const noexcept{ return m_includes.resolvedIncludedFiles(); }
 
 
 private:
     [[nodiscard]] b8 processInternal(MStringView source, u32 depth, MStringView currentFileKey, MString& outProcessed);
     [[nodiscard]] b8 handleDirective(MStringView directiveLine, u32 line, u32 depth, MStringView currentFileKey, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed);
-    [[nodiscard]] b8 handleInclude(MStringView rest, u32 line, u32 depth, MStringView currentFileKey, MString& outProcessed);
     [[nodiscard]] b8 handleDefine(MStringView rest, u32 line);
     [[nodiscard]] b8 handleUndef(MStringView rest, u32 line);
-    [[nodiscard]] b8 expandLineMacros(MStringView lineText, u32 line, MString& outExpanded);
     [[nodiscard]] b8 evaluateCondition(MStringView exprText, u32 line, b8& outResult);
 
 
@@ -111,13 +96,8 @@ private:
     MetaArena& m_arena;
     Alloc::ScratchArena& m_scratchArena;
     MVector<ParseError>& m_errors;
-    IIncludeResolver* m_includeResolver = nullptr;
     MacroMap m_macros;
-    IncludedSet m_includedSet;
-    IncludedList m_includedFiles;
-    IncludedList m_resolvedIncludedFiles;
-    IncludedRangeList m_includedByteRanges;
-    b8 m_allowNwbInclude = true;
+    PreprocessorIncludes m_includes;
 };
 
 

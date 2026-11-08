@@ -3,6 +3,7 @@
 
 
 #include "avboit_system.h"
+#include "avboit_compute_emulation_validator.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,26 +63,11 @@ RendererTaskGraphTransparencyStage RendererAvboitTaskGraphStageState::transparen
 
 RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, const b8 clearTargets, const b8 hasTransparentRenderers)const noexcept{
     const RendererAvboitTaskGraphStageState& taskGraphStage = m_taskGraphStage;
-    const auto optionalTaskPrecedesInSharedPacket = [&compiledGraph](const Core::GpuTaskId optionalTask, const Core::GpuTaskId consumerTask)noexcept{
-        return !optionalTask.valid() || !compiledGraph.tasksSharePacket(optionalTask, consumerTask) || compiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask);
-    };
-    const auto taskIsCompiled = [&compiledGraph](const Core::GpuTaskId task)noexcept{
-        return compiledGraph.findTask(task).valid();
-    };
-    const auto taskBoundaryIsOrdered = [&compiledGraph](const Core::GpuTaskId producerTask, const Core::GpuTaskId consumerTask)noexcept{
-        if(!producerTask.valid() || !consumerTask.valid())
-            return false;
-        if(compiledGraph.tasksSharePacket(producerTask, consumerTask))
-            return compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask);
-        return compiledGraph.taskPrecedesOrSharesPacket(producerTask, consumerTask);
-    };
-    const auto reusedGeometryIsOrdered = [&](const Core::GpuTaskId source, const Core::GpuTaskId consumer, const Core::GpuTaskId localProducer, const usize sharedPhaseCount)noexcept{
-        return !source.valid() || (!localProducer.valid() && sharedPhaseCount == 0u && source != consumer && taskIsCompiled(source) && taskBoundaryIsOrdered(source, consumer));
-    };
-    const b8 reusedGeometryValid = reusedGeometryIsOrdered(
+    const AvboitComputeEmulationValidator computeValidator(compiledGraph);
+    const b8 reusedGeometryValid = computeValidator.reusedGeometryIsOrdered(
         taskGraphStage.m_occupancyReusedGeometryProducer, taskGraphStage.m_occupancyTask,
         taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancySharedComputeEmulationTaskCount
-    ) && reusedGeometryIsOrdered(taskGraphStage.m_extinctionReusedGeometryProducer, taskGraphStage.m_extinctionTask, taskGraphStage.m_extinctionComputeEmulationTask, taskGraphStage.m_extinctionSharedComputeEmulationTaskCount) && reusedGeometryIsOrdered(
+    ) && computeValidator.reusedGeometryIsOrdered(taskGraphStage.m_extinctionReusedGeometryProducer, taskGraphStage.m_extinctionTask, taskGraphStage.m_extinctionComputeEmulationTask, taskGraphStage.m_extinctionSharedComputeEmulationTaskCount) && computeValidator.reusedGeometryIsOrdered(
         taskGraphStage.m_accumulationReusedGeometryProducer, taskGraphStage.m_accumulationTask,
         taskGraphStage.m_accumulationComputeEmulationTask, taskGraphStage.m_accumulationSharedComputeEmulationTaskCount
     );
@@ -168,82 +154,18 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
         && (integrationRunsOnGraphics || integrationRunsOnCompute)
         && avboitAccumulationQueue->queueClass == Core::CommandQueue::Graphics
         && avboitAccumulationFinalizeQueue->queueClass == Core::CommandQueue::Graphics
-        && taskBoundaryIsOrdered(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)
-        && taskBoundaryIsOrdered(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)
-        && taskBoundaryIsOrdered(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)
-        && taskBoundaryIsOrdered(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)
-        && taskBoundaryIsOrdered(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)
+        && computeValidator.taskBoundaryIsOrdered(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)
+        && computeValidator.taskBoundaryIsOrdered(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)
+        && computeValidator.taskBoundaryIsOrdered(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)
+        && computeValidator.taskBoundaryIsOrdered(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)
+        && computeValidator.taskBoundaryIsOrdered(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)
         && (!depthWarpRunsOnGraphics || (compiledGraph.tasksSharePacket(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask) && compiledGraph.tasksSharePacket(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)))
         && (!integrationRunsOnGraphics || (compiledGraph.tasksSharePacket(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask) && compiledGraph.tasksSharePacket(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)))
         && compiledGraph.tasksSharePacket(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)
     );
     // Require exact packet order so the graph owns the output handoff.
-    const auto computeEmulationMerged = [&](
-        const Core::GpuTaskId computeEmulationTask,
-        const Core::GpuTaskId rasterTask,
-        const Core::GpuTaskId streamTask,
-        const Core::GpuPhysicalQueueInfo* const computeEmulationQueue,
-        const Core::GpuPhysicalQueueInfo* const rasterQueue
-    )noexcept{
-        if(!computeEmulationTask.valid())
-            return true;
-        if(
-            !streamTask.valid()
-            || !computeEmulationQueue
-            || !rasterQueue
-            || computeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || rasterQueue->queueClass != Core::CommandQueue::Graphics
-            || !compiledGraph.tasksSharePacket(computeEmulationTask, rasterTask)
-            || !compiledGraph.taskPrecedesOrSharesPacket(streamTask, computeEmulationTask)
-        )
-            return false;
-        const Array<Core::GpuTaskId, 2> producerRasterSequence = { computeEmulationTask, rasterTask, };
-        return compiledGraph.tasksFormContiguousPacketSequence(producerRasterSequence) && optionalTaskPrecedesInSharedPacket(streamTask, computeEmulationTask);
-    };
-    const auto sharedComputeEmulationChainValid = [&](
-        const Span<const Core::GpuTaskId> sharedTasks,
-        const usize phaseCount,
-        const Core::GpuTaskId regularComputeEmulationTask,
-        const Core::GpuTaskId rasterTask,
-        const Core::GpuTaskId streamTask,
-        const Core::GpuPhysicalQueueInfo* const sharedQueue,
-        const Core::GpuPhysicalQueueInfo* const rasterQueue
-    )noexcept{
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : sharedTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(
-            !IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
-            || regularComputeEmulationTask.valid()
-            || !streamTask.valid()
-            || !sharedQueue
-            || !rasterQueue
-            || sharedQueue->queueClass != Core::CommandQueue::Graphics
-            || rasterQueue->queueClass != Core::CommandQueue::Graphics
-            || rasterTask != sharedTasks[phaseCount - 1u]
-            || !compiledGraph.taskPrecedesOrSharesPacket(streamTask, sharedTasks[0u])
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = sharedTasks[phaseIndex];
-            if(!task.valid())
-                return false;
-            const Core::GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfoForTask(task);
-            if(!queue || queue->queueClass != Core::CommandQueue::Graphics || !compiledGraph.tasksSharePacket(sharedTasks[0u], task))
-                return false;
-        }
-        for(usize phaseIndex = phaseCount; phaseIndex < sharedTasks.size(); ++phaseIndex){
-            if(sharedTasks[phaseIndex].valid())
-                return false;
-        }
-        return compiledGraph.tasksFormContiguousPacketSequence(sharedTasks.subspan(0u, phaseCount));
-    };
     const b8 avboitOccupancyComputeEmulationMerged =
-        computeEmulationMerged(taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancyTask, taskGraphStage.m_occupancyStreamTask, avboitOccupancyComputeEmulationQueue, avboitOccupancyQueue)
+        computeValidator.computeEmulationMerged(taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancyTask, taskGraphStage.m_occupancyStreamTask, avboitOccupancyComputeEmulationQueue, avboitOccupancyQueue)
         && (
             !taskGraphStage.m_occupancyComputeEmulationTask.valid()
             || (
@@ -251,14 +173,14 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
                 && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
                 && compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_occupancyComputeEmulationTask)
                 && (!taskGraphStage.m_clearTask.valid() || compiledGraph.taskPrecedesOrSharesPacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancyComputeEmulationTask))
-                && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancyComputeEmulationTask)
+                && computeValidator.optionalTaskPrecedesInSharedPacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancyComputeEmulationTask)
             )
         )
     ;
     // Shared outputs need contiguous D/R callbacks in Pre's packet.
     const b8 avboitOccupancySharedComputeEmulationMerged = [&]()noexcept{
         const usize phaseCount = taskGraphStage.m_occupancySharedComputeEmulationTaskCount;
-        if(!sharedComputeEmulationChainValid(
+        if(!computeValidator.sharedComputeEmulationChainValid(
             taskGraphStage.m_occupancySharedComputeEmulationTasks,
             phaseCount,
             taskGraphStage.m_occupancyComputeEmulationTask,
@@ -272,7 +194,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return true;
         return
             taskGraphStage.m_clearTask.valid()
-            && taskIsCompiled(taskGraphStage.m_preTask)
+            && computeValidator.taskIsCompiled(taskGraphStage.m_preTask)
             && avboitPreQueue
             && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
             && compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_occupancySharedComputeEmulationTasks[0u])
@@ -285,7 +207,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
         ;
     }();
     const b8 avboitOccupancyAllComputeEmulationMerged = avboitOccupancyComputeEmulationMerged && avboitOccupancySharedComputeEmulationMerged;
-    const b8 avboitExtinctionComputeEmulationMerged = computeEmulationMerged(
+    const b8 avboitExtinctionComputeEmulationMerged = computeValidator.computeEmulationMerged(
         taskGraphStage.m_extinctionComputeEmulationTask,
         taskGraphStage.m_extinctionTask,
         taskGraphStage.m_extinctionStreamTask,
@@ -295,7 +217,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
     // Shared outputs need a packet-local D/R chain.
     const b8 avboitExtinctionSharedComputeEmulationMerged = [&]()noexcept{
         const usize phaseCount = taskGraphStage.m_extinctionSharedComputeEmulationTaskCount;
-        if(!sharedComputeEmulationChainValid(
+        if(!computeValidator.sharedComputeEmulationChainValid(
             taskGraphStage.m_extinctionSharedComputeEmulationTasks,
             phaseCount,
             taskGraphStage.m_extinctionComputeEmulationTask,
@@ -305,10 +227,10 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             avboitExtinctionQueue
         ))
             return false;
-        return phaseCount == 0u || (taskIsCompiled(taskGraphStage.m_extinctionTask) && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_extinctionStreamTask, taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]));
+        return phaseCount == 0u || (computeValidator.taskIsCompiled(taskGraphStage.m_extinctionTask) && computeValidator.optionalTaskPrecedesInSharedPacket(taskGraphStage.m_extinctionStreamTask, taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]));
     }();
     const b8 avboitExtinctionAllComputeEmulationMerged = avboitExtinctionComputeEmulationMerged && avboitExtinctionSharedComputeEmulationMerged;
-    const b8 avboitAccumulationComputeEmulationMerged = computeEmulationMerged(
+    const b8 avboitAccumulationComputeEmulationMerged = computeValidator.computeEmulationMerged(
         taskGraphStage.m_accumulationComputeEmulationTask,
         taskGraphStage.m_accumulationTask,
         taskGraphStage.m_accumulationStreamTask,
@@ -318,7 +240,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
     // Shared outputs need packet-local D/R callbacks.
     const b8 avboitAccumulationSharedComputeEmulationMerged = [&]()noexcept{
         const usize phaseCount = taskGraphStage.m_accumulationSharedComputeEmulationTaskCount;
-        if(!sharedComputeEmulationChainValid(
+        if(!computeValidator.sharedComputeEmulationChainValid(
             taskGraphStage.m_accumulationSharedComputeEmulationTasks,
             phaseCount,
             taskGraphStage.m_accumulationComputeEmulationTask,
@@ -330,10 +252,10 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return false;
         if(phaseCount == 0u)
             return true;
-        if(!taskIsCompiled(taskGraphStage.m_accumulationTask) || !taskGraphStage.m_accumulationFinalizeTask.valid())
+        if(!computeValidator.taskIsCompiled(taskGraphStage.m_accumulationTask) || !taskGraphStage.m_accumulationFinalizeTask.valid())
             return false;
         const Array<Core::GpuTaskId, 2> finalizerBoundary = { taskGraphStage.m_accumulationSharedComputeEmulationTasks[phaseCount - 1u], taskGraphStage.m_accumulationFinalizeTask, };
-        return compiledGraph.tasksFormContiguousPacketSequence(finalizerBoundary) && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_accumulationStreamTask, taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]);
+        return compiledGraph.tasksFormContiguousPacketSequence(finalizerBoundary) && computeValidator.optionalTaskPrecedesInSharedPacket(taskGraphStage.m_accumulationStreamTask, taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]);
     }();
     const b8 avboitAccumulationAllComputeEmulationMerged = avboitAccumulationComputeEmulationMerged && avboitAccumulationSharedComputeEmulationMerged;
     const RendererTaskGraphTransparencyStage stage = taskGraphStage.transparencyStage();
@@ -347,8 +269,8 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             && transparentTaskShapeValid
             && reusedGeometryValid
             && stage.hasTransparentTasks == hasTransparentRenderers
-            && taskIsCompiled(stage.firstTask)
-            && taskIsCompiled(stage.completionTask)
+            && computeValidator.taskIsCompiled(stage.firstTask)
+            && computeValidator.taskIsCompiled(stage.completionTask)
             && avboitPrePacketContainsClear
             && avboitPrePacketContainsTransparentCsgClear
             && avboitPrePacketContainsCsgReceiverSpan
@@ -362,11 +284,11 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             && avboitAccumulationPacketContainsFinalizer
             && avboitNaturalStagePlacementValid
             && (!hasTransparentRenderers || (
-                taskIsCompiled(taskGraphStage.m_depthWarpTask)
-                && taskIsCompiled(taskGraphStage.m_extinctionTask)
-                && taskIsCompiled(taskGraphStage.m_integrationTask)
-                && taskIsCompiled(taskGraphStage.m_accumulationTask)
-                && taskIsCompiled(taskGraphStage.m_accumulationFinalizeTask)
+                computeValidator.taskIsCompiled(taskGraphStage.m_depthWarpTask)
+                && computeValidator.taskIsCompiled(taskGraphStage.m_extinctionTask)
+                && computeValidator.taskIsCompiled(taskGraphStage.m_integrationTask)
+                && computeValidator.taskIsCompiled(taskGraphStage.m_accumulationTask)
+                && computeValidator.taskIsCompiled(taskGraphStage.m_accumulationFinalizeTask)
             ))
             && avboitPreQueue
             && avboitPreQueue->queueClass == Core::CommandQueue::Graphics

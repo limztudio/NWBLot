@@ -8,7 +8,6 @@
 #include "array.h"
 #include "expected.h"
 #include "hash_utils.h"
-#include "numeric_text.h"
 #include "not_null.h"
 
 #include <functional>
@@ -21,8 +20,6 @@
 class Name;
 
 inline constexpr u32 s_NameHashLaneCount = 8u;
-inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
-inline constexpr usize s_DebugHashTextLength = s_HexDigitsPerHashLane * s_NameHashLaneCount + (s_NameHashLaneCount - 1u);
 
 struct NameHash{
     Array<u64, s_NameHashLaneCount> qwords;
@@ -59,8 +56,6 @@ namespace NameDetail{
 
 inline constexpr usize s_DebugNameCapacity = 256u;
 inline constexpr usize s_NameHashBytes = sizeof(u64) * s_NameHashLaneCount;
-inline constexpr i32 s_HashHexInitialBitShift = static_cast<i32>((s_HexU64DigitCount - 1u) * s_HexNibbleBits);
-inline constexpr i32 s_HashHexBitShiftStep = static_cast<i32>(s_HexNibbleBits);
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
@@ -113,11 +108,6 @@ template<typename CharT>
     return true;
 }
 
-template<typename CharT>
-[[nodiscard]] inline b8 IsNameHashTokenChar(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')) || ch == static_cast<CharT>('_');
-}
-
 inline constexpr b8 EqualHash(const NameHash& a, const NameHash& b)noexcept{
     for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         if(a.qwords[i] != b.qwords[i])
@@ -144,85 +134,12 @@ inline constexpr usize HashValue(const NameHash& hash)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CharT>
-[[nodiscard]] inline Expected<Array<char, s_DebugHashTextLength + 1u>> CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset)noexcept(IsArithmetic_V<CharT>){
-    Array<char, s_DebugHashTextLength + 1u> hashText;
-    if(offset > text.size() || s_DebugHashTextLength > text.size() - offset)
-        return MakeUnexpected(Failure{});
-    if(offset > 0u && NameDetail::IsNameHashTokenChar(text[offset - 1u]))
-        return MakeUnexpected(Failure{});
-    if(offset + s_DebugHashTextLength < text.size() && NameDetail::IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
-        return MakeUnexpected(Failure{});
-
-    for(usize i = 0u; i < s_DebugHashTextLength; ++i){
-        const CharT ch = text[offset + i];
-        if(((i + 1u) % (s_HexDigitsPerHashLane + 1u)) == 0u){
-            if(ch != static_cast<CharT>('_'))
-                return MakeUnexpected(Failure{});
-        }
-        else if(!NameDetail::IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
-            return MakeUnexpected(Failure{});
-        }
-
-        hashText[i] = static_cast<char>(ch);
-    }
-    hashText[s_DebugHashTextLength] = 0;
-    return hashText;
-}
-
-[[nodiscard]] inline Expected<NameHash> DecodeDebugHashText(const AStringView text)noexcept{
-    if(text.size() != s_DebugHashTextLength)
-        return MakeUnexpected(Failure{});
-
-    NameHash hash;
-    usize cursor = 0u;
-    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
-        if((lane > 0u && text[cursor++] != '_') || cursor + s_HexDigitsPerHashLane > text.size())
-            return MakeUnexpected(Failure{});
-
-        const auto laneHash = ParseHexU64<char>(AStringView(text.data() + cursor, s_HexDigitsPerHashLane));
-        if(!laneHash)
-            return MakeUnexpected(Failure{});
-        hash.qwords[lane] = *laneHash;
-        cursor += s_HexDigitsPerHashLane;
-    }
-
-    if(cursor != text.size())
-        return MakeUnexpected(Failure{});
-    return hash;
-}
-
 inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
     for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         if(hash.qwords[i] != 0)
             return false;
     }
     return true;
-}
-
-template<typename CharT>
-inline void HashToDebugString(CharT* dst, const usize dstSize, const NameHash& hash)noexcept(IsArithmetic_V<CharT>){
-    if(dstSize == 0)
-        return;
-
-    if(dstSize <= s_DebugHashTextLength){
-        dst[0] = CharT{};
-        return;
-    }
-
-    CharT* writeCursor = dst;
-    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
-        if(i > 0){
-            *writeCursor = static_cast<CharT>('_');
-            ++writeCursor;
-        }
-        const u64 value = hash.qwords[i];
-        for(i32 bitShift = NameDetail::s_HashHexInitialBitShift; bitShift >= 0; bitShift -= NameDetail::s_HashHexBitShiftStep){
-            *writeCursor = NumericTextDetail::HexDigit<CharT>(static_cast<usize>((value >> bitShift) & s_HexNibbleMask));
-            ++writeCursor;
-        }
-    }
-    *writeCursor = CharT{};
 }
 
 

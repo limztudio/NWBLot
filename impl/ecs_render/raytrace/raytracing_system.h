@@ -8,7 +8,7 @@
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <impl/ecs_render/refraction/statistics_readback.h>
+#include <impl/ecs_render/refraction/refraction_renderer.h>
 #include <impl/ecs_render/shadow/soft_shadow_wavelet.h>
 #include <impl/ecs_render/caustic/settings.adhd.h>
 #include <impl/ecs_render/caustic/caustic_resolve_state.h>
@@ -16,6 +16,7 @@
 #include <impl/ecs_render/optics/optical_scene_resources.h>
 #include <impl/ecs_render/shadow/shadow_trace_geometry.h>
 #include <impl/ecs_render/raytrace/prepared_builds.h>
+#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.h>
 #include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.h>
 #include <impl/ecs_render/raytrace/prepared_scene_tlas_build.h>
 #include <impl/ecs_render/shadow/prepared_shadow_material_context.h>
@@ -81,6 +82,9 @@ namespace ECSRenderDetail{
 
 
 class RendererRayTracingSystem final : NoCopy{
+    friend class PreparedSceneSwBvhTraversal;
+    friend class ShadowMaterialContextPreparer;
+    friend class RefractionRenderer;
 private:
     struct SurfelGiInitializationLifecycleGraphTask;
 
@@ -110,7 +114,7 @@ public:
         , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
         , m_sceneSwBvhRefit(arena, graphics)
         , m_lightSpaceShadow(arena)
-        , m_refractionStatistics(arena, graphics)
+        , m_refraction(*this, arena, graphics)
         , m_preparedShadowTraceGeometryBuffers(arena)
         , m_acceptedShadowTraceGeometryBuffers(arena)
         , m_preparedShadowTraceMaterialSampledTextures(arena)
@@ -118,7 +122,7 @@ public:
         , m_preparedShadowMaterialContext(arena)
         , m_preparedSceneBvh(arena)
         , m_preparedSceneTlas(arena)
-        , m_preparedSceneSwBvhMeshes(arena)
+        , m_preparedSceneSwBvhTraversal(*this, arena)
         , m_preparedMeshBlasBuilds(arena)
         , m_preparedMeshSwBvhBuilds(arena)
     {}
@@ -159,14 +163,9 @@ public:
 
     void logCapabilityOnce();
 
-    [[nodiscard]] b8 prepareRefractionResources();
+    [[nodiscard]] RefractionRenderer& refraction()noexcept{ return m_refraction; }
+    [[nodiscard]] const RefractionRenderer& refraction()const noexcept{ return m_refraction; }
     void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{ m_rayTracingState.m_refractionHardwareTracingEnabled = enabled; }
-    void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_refractionDiagnosticsEnabled = enabled; }
-    void pollRefractionStatistics(){ m_refractionStatistics.pollCompleted(); }
-    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept{ return m_refractionStatistics.latestStatistics(); }
-    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources(u32 width, u32 height, u32 frameIndex)const noexcept;
-    [[nodiscard]] b8 recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
-    [[nodiscard]] b8 recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
     // Identity freezes in the shared graph. Select/grow trace resources before compile; the prep packet works only on that set.
     [[nodiscard]] b8 preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
@@ -195,7 +194,6 @@ public:
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 
     void releaseCausticEmissionTargetHeapHandle();
-    [[nodiscard]] b8 createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] b8 createCausticTargets(DeferredFrameTargets& targets);
     [[nodiscard]] b8 createSurfelTargets(DeferredFrameTargets& targets);
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
@@ -241,8 +239,6 @@ public:
     // Shadow Preparation records each frozen build after typed sentinel clears. Revalidate right before its compute sequence.
     [[nodiscard]] b8 recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
     void confirmPreparedMeshSwBvhBuilds();
-    void releaseRayTraceMaterialContextHeapHandles();
-    void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
     // The deferred graph declares hardware trace entry resources before recording.
     [[nodiscard]] Expected<u32> renderShadowVisibility(
@@ -467,16 +463,6 @@ public:
     void discardSurfelResourceInitialization()noexcept{ m_rayTracingState.m_surfelResourcesClearPending = false; }
     // Persistent surfel storage survives resize.
     [[nodiscard]] b8 ensureSurfelResources();
-    [[nodiscard]] b8 ensureSurfelSpawnPipeline();
-    [[nodiscard]] b8 ensureSurfelAgeFreePipeline();
-    [[nodiscard]] b8 ensureSurfelHashBuildPipeline();
-    [[nodiscard]] b8 ensureSurfelTracePipeline();
-    // Hardware surfel trace uses inline RayQuery over the TLAS.
-    [[nodiscard]] b8 ensureSurfelTraceHwPipeline();
-    // Resolve keeps the writable surfel pool off deferred lighting.
-    [[nodiscard]] b8 ensureSurfelResolvePipeline();
-    [[nodiscard]] b8 ensureSurfelUpsamplePipeline();
-    [[nodiscard]] b8 ensureSurfelTraceBuildArgsPipeline();
     // The graph schedules the small diagnostic readback as a late copy task and publishes its token.
     [[nodiscard]] b8 shouldCaptureSurfelCountReadback()const noexcept;
     void markSurfelCountReadbackScheduled()noexcept{ m_rayTracingState.m_surfelCountReadbackFrame = m_rayTracingState.m_surfelFrameIndex; }
@@ -559,10 +545,6 @@ private:
     [[nodiscard]] b8 capturePreparedSceneBvh(b8 staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
     [[nodiscard]] b8 capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount)noexcept;
     void clearPreparedSceneBvh()noexcept;
-    [[nodiscard]] b8 capturePreparedSceneSwBvhTraversal(Span<const PreparedSceneSwBvhMesh> meshes, u32 instanceCount);
-    // Preflight leaves descriptor tables populated. Frozen traversal checks tables and retained identities without republishing state.
-    [[nodiscard]] b8 recordPreparedSceneSwBvhTraversal();
-    void clearPreparedSceneSwBvhTraversal()noexcept;
     [[nodiscard]] b8 capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 recordPreparedMeshBlasBuilds(Core::CommandList& commandList, b8 meshBlasGeometryBuildInputStatesGraphOwned);
     void clearPreparedMeshBlasBuilds()noexcept;
@@ -574,21 +556,7 @@ private:
     [[nodiscard]] b8 prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources);
     // Runtime meshes prepare every frame; static meshes remain dirty until first build.
     [[nodiscard]] b8 preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 ensureShadowPipeline();
     // Hardware soft trace feeds the shared software denoise chain.
-    [[nodiscard]] b8 ensureShadowSoftPipeline();
-    [[nodiscard]] b8 ensureSwShadowPipeline();
-    [[nodiscard]] b8 ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel);
-    [[nodiscard]] b8 ensureSoftwareTransparentSamplingPipeline();
-    [[nodiscard]] b8 ensureSoftShadowResolvePipeline();
-    [[nodiscard]] b8 ensureShadowGeometryDownsamplePipeline();
-    [[nodiscard]] b8 ensureSoftTransparentResolvePipeline();
-    void prepareSoftCombinedResolvePipelines();
-    [[nodiscard]] b8 ensureSoftCombinedUpsamplePipeline();
-    [[nodiscard]] b8 ensureSoftCombinedWaveletPipeline();
-    [[nodiscard]] b8 ensureSoftCombinedTemporalPipeline();
-    [[nodiscard]] b8 prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets);
-    void releaseHardwareTransparentShadowResources();
     [[nodiscard]] b8 hardwareTransparentShadowReady()const noexcept;
     void dispatchHardwareTransparentShadow(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex);
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
@@ -641,68 +609,18 @@ private:
     );
     void reportSoftwareShadowTraversal(const DeferredFrameTargets& targets);
     // Temporal merge precedes soft resolve and swaps history at frame end.
-    [[nodiscard]] b8 ensureShadowReprojectMergePipeline();
     [[nodiscard]] b8 softShadowTemporalHistoryUsable()const noexcept;
     [[nodiscard]] u32 transparentShadowSampleCount()const noexcept;
     void reportTransparentShadowSampling(u32 sampleCount);
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
     [[nodiscard]] b8 prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, b8 hardware, DeferredFrameTargets& targets);
-    [[nodiscard]] b8 ensureSwCausticPipeline();
-    [[nodiscard]] b8 ensureCausticResolvePipeline();
-    [[nodiscard]] b8 prepareCausticResolveActivity(u32 halfWidth, u32 halfHeight);
-    void releaseCausticResolveActivity();
-    [[nodiscard]] b8 ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] b8 causticResolveResourcesReady(const DeferredFrameTargets& targets)const noexcept;
     [[nodiscard]] b8 hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
-    [[nodiscard]] b8 ensureCausticAccumulatorDecayPipeline();
-    [[nodiscard]] b8 ensureCausticRtPipeline();
-    [[nodiscard]] b8 ensureBvhSortPipeline();
-    [[nodiscard]] b8 ensureBvhSortBuffers(usize paddedCount);
-    [[nodiscard]] b8 bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
-    [[nodiscard]] b8 ensureBvhBuildPipeline();
-    [[nodiscard]] b8 ensureBvhVisitCounterBuffer(usize primitiveCount);
-    [[nodiscard]] b8 createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
-    [[nodiscard]] b8 buildMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        const Float3Int& aabbMin,
-        const Float3Int& aabbMax,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-    [[nodiscard]] b8 refitMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
     void preflightLightSpaceShadowResources();
     [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const SceneLightGpuData> lights)const noexcept;
     void prepareLightSpaceShadows(Span<const SceneLightGpuData> lights);
-    [[nodiscard]] b8 ensureLightSpaceShadowPipelines();
-    [[nodiscard]] b8 ensureLightSpaceShadowStorage(const LightSpacePlan& plan);
-    void releaseLightSpaceShadowResources();
-    [[nodiscard]] b8 ensureSceneBvhBuffers(u32 instanceCount);
-    [[nodiscard]] b8 ensureRayTraceMaterialContextSlotsBuffer();
     [[nodiscard]] b8 ensureRayTraceContextReadTracking(b8 opticalCausticReader);
     [[nodiscard]] b8 ensureCsgTraceContextResources();
-    [[nodiscard]] b8 ensureRayTraceMaterialContextSlotsHeapHandle();
-    [[nodiscard]] b8 ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    [[nodiscard]] b8 replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    [[nodiscard]] b8 ensureCausticEmissionTargetBuffer(usize targetCount);
-    [[nodiscard]] b8 ensureShadowInstanceMaterialBuffer(usize instanceCount);
-    [[nodiscard]] b8 ensureShadowInstanceContextBuffer(usize instanceCount);
-    [[nodiscard]] b8 ensureShadowMaterialTypedBuffer(usize byteCount);
 
 
 private:
@@ -719,8 +637,7 @@ private:
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
     LightSpaceShadowState m_lightSpaceShadow;
-    RefractionStatisticsReadback m_refractionStatistics;
-    b8 m_refractionDiagnosticsEnabled = false;
+    RefractionRenderer m_refraction;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
@@ -732,10 +649,7 @@ private:
     PreparedSceneBvhUpload m_preparedSceneBvh;
     PreparedSceneTlasBuild m_preparedSceneTlas;
     // Fresh uploads and static-cache reuse both freeze the traversal table. Recording never rebuilds scene data; ECS versions reject stale plans.
-    PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
-    u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
-    u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
-    u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+    PreparedSceneSwBvhTraversal m_preparedSceneSwBvhTraversal;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     // Per-frame BLAS actions keyed by dirty reason.
     u64 m_blasLedgerStaticSkipped = 0u;
@@ -747,10 +661,8 @@ private:
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
     CausticQualitySettings m_causticQualitySettings;
-    u32 m_preparedSceneSwBvhInstanceCount = 0u;
     ShadowQualitySettings m_shadowQualitySettings;
     b8 m_temporalOneShadowSamplingLogged = false;
-    b8 m_preparedSceneSwBvhReady = false;
     b8 m_preparedMeshBlasBuildsReady = false;
     b8 m_preparedMeshSwBvhBuildsReady = false;
     b8 m_preparedMeshSwBvhBuildPlanFrozen = false;

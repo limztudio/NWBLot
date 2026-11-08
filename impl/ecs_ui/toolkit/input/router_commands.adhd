@@ -17,8 +17,9 @@ void RouteRouterCommand(
     in b8 pointerSequenceConsumed,
     in b8 secondarySequenceConsumed,
     in Span<PointerSource> pointerSources,
-    mut Vector<PopupRecord> popups,
-    mut Vector<PopupDismissal> popupDismissals,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut PopupDismissRequest popupDismissRequest,
     mut Vector<CommandSource> commandSources,
     mut Vector<InputAction> actions,
     mut Vector<ControlAction> controlActions,
@@ -113,7 +114,8 @@ void RouteRouterCommand(
             lookup,
             event.command == InputCommand::FocusPrevious,
             popups,
-            popupDismissals,
+            canAppendPopupDismissal,
+            popupDismissRequest,
             commandSources,
             inOutFocus,
             inOutFocusDeclaration,
@@ -145,7 +147,12 @@ void RouteRouterCommand(
             source = commandSources[sourceIndex];
         }
         if(!popups.empty() && !(hasFocused && focused.textEditable)){
-            outDismissedPopup = !event.repeat && !alreadyPressed && TryDismissRouterPopup(PopupDismissReason::Cancel, popups, popupDismissals);
+            if(!event.repeat && !alreadyPressed){
+                const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::Cancel);
+                outDismissedPopup = dismissal.has_value();
+                if(outDismissedPopup)
+                    popupDismissRequest = dismissal.value();
+            }
             consumed = true;
         }
         else if(!event.repeat && !alreadyPressed && !(hasFocused && focused.textEditable)){
@@ -183,3 +190,4 @@ void RouteRouterCommand(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

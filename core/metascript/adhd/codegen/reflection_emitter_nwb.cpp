@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "reflection_emitter.h"
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include "nwb_reflection_emitter.h"
+
+#include <core/metascript/adhd/sema/asset_type_analyzer.h>
+#include <core/metascript/adhd/sema/type_resolver.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +53,7 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
 }
 
 [[nodiscard]] b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
-    return IsScalarType(typeName) || FindBuiltinNwbValueType(typeName) != nullptr;
+    return BuiltinTypeSemantics::IsScalarType(typeName) || FindBuiltinNwbValueType(typeName) != nullptr;
 }
 
 [[nodiscard]] b8 RequiresNwbNameAdmission(const MStringView typeName)noexcept{
@@ -75,12 +80,12 @@ void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const 
             out.append(nwbVal->valueSuffix.data(), nwbVal->valueSuffix.size());
         }
     }
-    else if(IsIntegerScalarType(typeName) || IsFloatScalarType(typeName)){
+    else if(BuiltinTypeSemantics::IsIntegerScalarType(typeName) || BuiltinTypeSemantics::IsFloatScalarType(typeName)){
         out.append("static_cast<");
         out.append(typeName.data(), typeName.size());
         out.append(">(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(IsIntegerScalarType(typeName) ? ".asInteger())" : ".toDouble())");
+        out.append(BuiltinTypeSemantics::IsIntegerScalarType(typeName) ? ".asInteger())" : ".toDouble())");
     }
 }
 
@@ -90,9 +95,9 @@ void EmitNwbValueAdmissionGuard(MString& out, const MStringView typeName, const 
     out.append(valueAccessor.data(), valueAccessor.size());
     if(nwbVal)
         out.append(nwbVal->nwbCheckMethod.data(), nwbVal->nwbCheckMethod.size());
-    else if(IsIntegerScalarType(typeName))
+    else if(BuiltinTypeSemantics::IsIntegerScalarType(typeName))
         out.append(".isInteger()");
-    else if(IsFloatScalarType(typeName))
+    else if(BuiltinTypeSemantics::IsFloatScalarType(typeName))
         out.append(".isNumeric()");
     else
         out.append(".isString()");
@@ -126,7 +131,7 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
             continue;
         }
         const MStringView curScalar = (isMixedVec && lane == 3u) ? wLaneScalar : laneScalar;
-        const b8 laneIsInt = IsIntegerScalarType(curScalar);
+        const b8 laneIsInt = BuiltinTypeSemantics::IsIntegerScalarType(curScalar);
         out.append("static_cast<");
         out.append(curScalar.data(), curScalar.size());
         out.append(">(");
@@ -223,7 +228,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         out.append(suffix.data(), suffix.size());
         return true;
     }
-    if(IsIntegerScalarType(typeName)){
+    if(BuiltinTypeSemantics::IsIntegerScalarType(typeName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isInteger()) this->");
         out.append(fieldName.data(), fieldName.size());
@@ -232,7 +237,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         out.append(">(__f->asInteger());\r\n");
         return true;
     }
-    if(IsFloatScalarType(typeName)){
+    if(BuiltinTypeSemantics::IsFloatScalarType(typeName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isNumeric()) this->");
         out.append(fieldName.data(), fieldName.size());
@@ -545,7 +550,7 @@ void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const FieldDecl* const> fields)const{
+void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const FieldDecl* const> fields)const{
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
     out.append("    template<typename NwbValue>\r\n");
@@ -593,7 +598,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const 
     out.append("    }\r\n");
 }
 
-void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, const Span<const FieldDecl* const> fields)const{
+void NwbReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, const Span<const FieldDecl* const> fields)const{
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
     out.append("    template<typename NwbValue, typename DependencyCallback>\r\n");
@@ -601,11 +606,11 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyType(field->type, m_symbols))
+        if(!field || !IsFieldReflected(*field) || !field->type || !AssetTypeAnalyzer(m_symbols).isAssetDependencyType(field->type))
             continue;
         b8 isOptional = false;
         MStringView effectiveScalarOrClassType;
-        const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, effectiveScalarOrClassType);
+        const TypeRef* effectiveTypeRef = TypeResolver(m_symbols).unwrapOptionalFieldType(field->type, isOptional, effectiveScalarOrClassType);
 
         if(IsAssetHandleType(effectiveScalarOrClassType)){
             EmitNwbFieldFindPrefix(out, field->name);

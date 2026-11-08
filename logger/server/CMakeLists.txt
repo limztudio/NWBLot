@@ -2,8 +2,14 @@ nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_android.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_archive_extractor.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_manifest_validator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest_worker.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/http_handler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_linux.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/linux_frame_symbol_resolver.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_report_composer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_rgd.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_aftermath.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
@@ -20,7 +26,9 @@ if(WIN32)
     target_sources(nwb_logserver PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_win32.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/minidump_image.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/log_row_painter.cpp"
     )
     set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)
     target_link_libraries(nwb_logserver PRIVATE dbghelp)

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "texture_image_policy.h"
 #include "backend.h"
 #include "texture_resource_detail.h"
 
@@ -41,70 +42,6 @@ b8 IsSupportedSampleCount(u32 sampleCount)noexcept{
     }
 }
 
-b8 ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
-    if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
-        return false;
-    }
-    switch(desc.dimension){
-    case TextureDimension::Unknown:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
-        return false;
-    case TextureDimension::Texture1D:
-    case TextureDimension::Texture1DArray:
-    case TextureDimension::Texture2D:
-    case TextureDimension::Texture2DArray:
-    case TextureDimension::TextureCube:
-    case TextureDimension::TextureCubeArray:
-    case TextureDimension::Texture2DMS:
-    case TextureDimension::Texture2DMSArray:
-    case TextureDimension::Texture3D:
-        break;
-    default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
-        return false;
-    }
-    if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture2D || desc.dimension == TextureDimension::Texture2DMS) && desc.arraySize != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
-        return false;
-    }
-    if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
-        return false;
-    }
-    if(desc.dimension != TextureDimension::Texture3D && desc.depth != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-3D texture depth must be 1"), operationName);
-        return false;
-    }
-    if(desc.dimension == TextureDimension::Texture3D && desc.arraySize != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 3D texture array size must be 1"), operationName);
-        return false;
-    }
-
-    const u32 maxMipLevels = VulkanTextureDetail::GetMaxMipLevels(desc);
-    if(desc.mipLevels > maxMipLevels){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"), operationName, desc.mipLevels, maxMipLevels, desc.width, desc.height, desc.depth);
-        return false;
-    }
-
-    if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray){
-        if(desc.width != desc.height){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
-            return false;
-        }
-        if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != VulkanTextureDetail::s_TextureCubeLayerCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
-            return false;
-        }
-        if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < VulkanTextureDetail::s_TextureCubeLayerCount || (desc.arraySize % VulkanTextureDetail::s_TextureCubeLayerCount) != 0)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
-            return false;
-        }
-    }
-
-    return true;
-}
-
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept{
     VkImageAspectFlags aspectMask = 0;
     if(formatInfo.hasDepth)
@@ -139,89 +76,6 @@ VkExtent3D GetTextureMipExtent(const TextureDesc& desc, const MipLevel mipLevel)
     return extent;
 }
 
-Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
-    const VkExtent3D& extent,
-    const TextureFormatBlockLayout& formatLayout,
-    const u64 rowPitch,
-    const u64 depthPitch,
-    const BufferImageCopyRequiredSize::Enum requiredSizeMode,
-    const BufferImageCopyPitchFields::Enum pitchFields,
-    TStringView operationName
-){
-    BufferImageCopyLayout outLayout{};
-    NWB_ASSERT(formatLayout.blockWidth != 0u && formatLayout.blockHeight != 0u && formatLayout.bytesPerBlock != 0u);
-
-    const u64 blockCountX = Max<u64>(DivideUp(static_cast<u64>(extent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
-    const u64 blockCountY = Max<u64>(DivideUp(static_cast<u64>(extent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
-
-    const u64 naturalRowPitch = blockCountX * formatLayout.bytesPerBlock;
-    const u64 effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
-    if(blockCountY > UINT64_MAX / effectiveRowPitch){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatLayout.bytesPerBlock) != 0){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-
-    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
-    const u64 effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
-    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-
-    const u64 bufferRowBlocks = effectiveRowPitch / formatLayout.bytesPerBlock;
-    const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
-    if(bufferRowBlocks > UINT64_MAX / formatLayout.blockWidth || bufferImageBlocks > UINT64_MAX / formatLayout.blockHeight){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-
-    const u64 bufferRowLength = bufferRowBlocks * formatLayout.blockWidth;
-    const u64 bufferImageHeight = bufferImageBlocks * formatLayout.blockHeight;
-    if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-
-    if(requiredSizeMode == BufferImageCopyRequiredSize::PaddedSlices){
-        const auto requiredSize = ComputeStridedRangeByteSize(Max<u32>(extent.depth, 1u), effectiveDepthPitch, packedSlicePitch);
-        if(!requiredSize){
-            if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return MakeUnexpected(Failure{});
-        }
-        outLayout.requiredSize = *requiredSize;
-    }
-    else{
-        const u64 depthOffset = static_cast<u64>(extent.depth - 1);
-        if(depthOffset > UINT64_MAX / effectiveDepthPitch){
-            if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return MakeUnexpected(Failure{});
-        }
-        const u64 depthBytes = depthOffset * effectiveDepthPitch;
-        const u64 rowBytes = static_cast<u64>(blockCountY - 1) * effectiveRowPitch;
-        if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
-            if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return MakeUnexpected(Failure{});
-        }
-        outLayout.requiredSize = depthBytes + rowBytes + naturalRowPitch;
-    }
-
-    outLayout.bufferRowLength = pitchFields == BufferImageCopyPitchFields::EmitExplicit || rowPitch != 0 ? static_cast<u32>(bufferRowLength) : 0u;
-    outLayout.bufferImageHeight = pitchFields == BufferImageCopyPitchFields::EmitExplicit || depthPitch != 0 ? static_cast<u32>(bufferImageHeight) : 0u;
-    return outLayout;
-}
-
 VkImageSubresourceLayers BuildImageSubresourceLayers(const VkImageAspectFlags aspectMask, const MipLevel mipLevel, const ArraySlice arraySlice, const ArraySlice layerCount)noexcept{
     VkImageSubresourceLayers layers{};
     layers.aspectMask = aspectMask;
@@ -252,7 +106,7 @@ Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture
         return MakeUnexpected(Failure{});
     }
 
-    if(!VulkanTextureDetail::ValidateTextureViewShape(dimension, resolvedSubresources)){
+    if(!VulkanTextureDetail::TextureImagePolicy::validateTextureViewShape(dimension, resolvedSubresources)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
         return MakeUnexpected(Failure{});
@@ -262,7 +116,7 @@ Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture
 
     outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     outViewInfo.image = texture.m_image;
-    outViewInfo.viewType = VulkanTextureDetail::TextureDimensionToViewType(dimension);
+    outViewInfo.viewType = VulkanTextureDetail::TextureImagePolicy::textureDimensionToViewType(dimension);
     outViewInfo.format = vkFormat;
     outViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     outViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;

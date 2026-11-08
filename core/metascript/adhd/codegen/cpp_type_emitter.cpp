@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
 #include "cpp_type_emitter.h"
 
 
@@ -15,7 +17,7 @@ NWB_ADHD_BEGIN
 
 
 MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcept{
-    if(IsScalarType(typeName))
+    if(BuiltinTypeSemantics::IsScalarType(typeName))
         return typeName;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->cppExportName;

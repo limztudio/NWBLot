@@ -7,7 +7,6 @@ This harness does not qualify physical pointer grabs or Wayland input.
 """
 from __future__ import annotations
 
-import ctypes
 import json
 import math
 from pathlib import Path
@@ -21,22 +20,18 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from window_capture_image import read_bmp_24_rows  # noqa: E402
 from window_capture_logs import wait_for_log_message  # noqa: E402
+from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
-    launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+    launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_expected_log_text  # noqa: E402
-from window_capture_win32 import WinRect  # noqa: E402
-from window_capture_x11 import LinuxXEvent  # noqa: E402
+import native_input
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
 from probe_reference import linear_rgb_bytes
 
-LIT_FLAGS = "flags"
-LIT_TIME = "time"
-LIT_EXTRA = "extra"
-LIT_DATA = "data"
 LIT_ENABLED = "enabled"
 LIT_PASSED = "passed"
 LIT_UTF_8 = "utf-8"
@@ -49,42 +44,13 @@ LIT_UI_INTERACTION_FIXTURE = "UI interaction fixture"
 DISPLAY_PATTERN = re.compile(r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)")
 ACTION_PATTERN = re.compile(r"UiInteractiveSmoke: action=(increase|enabled|reset) count=(\d+) enabled=([01]) actions=(\d+)")
 EXPECTED_ACTIONS = [("increase", 1, 1, 1), ("increase", 2, 1, 2), ("increase", 3, 1, 3), ("enabled", 3, 0, 4), ("enabled", 3, 1, 5), ("increase", 4, 1, 6), ("increase", 5, 1, 7), ("increase", 6, 1, 8),]
-VIRTUAL_KEYS = {"Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B}
 OFF = (0.08, 0.01, 0.01)
 ON = (0.02, 0.70, 0.12)
 MARKER_TOLERANCE = 4
 COUNT_MARKER_BITS = 8
 BUTTON_POINT = (91, 76)
 RESIZED_CLIENT_EXTENT = (800, 600)
-# Native input pacing shared by every derived fixture input class.
-KEY_REPEAT_INTERVAL_SECONDS = 0.04
-PRESS_HOLD_SECONDS = 0.08
-INPUT_SETTLE_SECONDS = 0.1
-FOCUS_SETTLE_SECONDS = 0.15
 HIT_LAYOUT_SETTLE_SECONDS = 0.2
-# Win32 packs client x/y and wheel deltas into 16-bit message words.
-WIN32_WORD_MASK = 0xFFFF
-
-
-class WinKeyboardInput(ctypes.Structure):
-    _fields_ = [("virtual_key", ctypes.c_uint16), ("scan", ctypes.c_uint16), (LIT_FLAGS, ctypes.c_uint32), (LIT_TIME, ctypes.c_uint32), (LIT_EXTRA, ctypes.c_void_p)]
-
-
-class WinMouseInput(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32), (LIT_DATA, ctypes.c_uint32), (LIT_FLAGS, ctypes.c_uint32), (LIT_TIME, ctypes.c_uint32), (LIT_EXTRA, ctypes.c_void_p)]
-
-
-class WinInputUnion(ctypes.Union):
-    _fields_ = [("keyboard", WinKeyboardInput), ("mouse", WinMouseInput)]
-
-
-class WinInput(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_uint32), (LIT_DATA, WinInputUnion)]
-
-
-class WinGuiThreadInfo(ctypes.Structure):
-    _fields_ = [("cbSize", ctypes.c_uint32), (LIT_FLAGS, ctypes.c_uint32), ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
-        ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p), ("rcCaret", WinRect),]
 
 
 def parse_args(argv, *, description=__doc__):
@@ -109,121 +75,6 @@ def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
     return {"extent": [width, height], "count": expected_count, LIT_ENABLED: enabled, "probes": probes, LIT_PASSED: all(probe[LIT_PASSED] for probe in probes)}
 
 
-class NativeInput:
-    def __init__(self, backend, handle):
-        self.backend = backend
-        self.handle = handle
-        self.windows = platform.system() == "Windows"
-        if self.windows:
-            backend.user32.GetForegroundWindow.argtypes = []
-            backend.user32.GetForegroundWindow.restype = ctypes.c_void_p
-            backend.user32.SendInput.argtypes = [ctypes.c_uint32, ctypes.POINTER(WinInput), ctypes.c_int]
-            backend.user32.SendInput.restype = ctypes.c_uint32
-            backend.user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
-            backend.user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
-            backend.user32.GetGUIThreadInfo.argtypes = [ctypes.c_uint32, ctypes.POINTER(WinGuiThreadInfo)]
-            backend.user32.GetGUIThreadInfo.restype = ctypes.c_int
-
-    def wait_for_foreground(self, process, timeout):
-        if not self.windows:
-            return
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            ensure_process_running(process, "while waiting for foreground focus")
-            self.backend.focus_window(self.handle)
-            if self.backend.user32.GetForegroundWindow() == self.handle:
-                return
-            time.sleep(INPUT_SETTLE_SECONDS)
-        raise SmokeSkip("the fixture could not acquire foreground input focus")
-
-    def capture_owner(self):
-        thread_id = self.backend.user32.GetWindowThreadProcessId(ctypes.c_void_p(self.handle), None)
-        info = WinGuiThreadInfo(cbSize=ctypes.sizeof(WinGuiThreadInfo))
-        if not thread_id or not self.backend.user32.GetGUIThreadInfo(thread_id, ctypes.byref(info)):
-            raise SmokeFailure(f"failed to observe capture for window {self.handle:#x}, " f"thread {thread_id}: Win32 error {ctypes.get_last_error()}")
-        return info.hwndCapture
-
-    def _post(self, message, parameter=0, data=0):
-        if not self.backend.user32.PostMessageW(ctypes.c_void_p(self.handle), message, parameter, data):
-            raise SmokeFailure(f"PostMessageW failed for message {message:#x}")
-
-    def pointer(self, x, y):
-        if self.windows:
-            self._post(0x0200, 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
-        else:
-            self.backend.send_motion_event(self.handle, int(x), int(y))
-
-    def button(self, down, x, y):
-        self.pointer(x, y)
-        if self.windows:
-            self._post(0x0201 if down else 0x0202, 1 if down else 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
-        else:
-            event_type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE
-            self.backend.send_button_event(self.handle, event_type, int(x), int(y))
-
-    def click(self, x, y):
-        self.button(True, x, y)
-        time.sleep(PRESS_HOLD_SECONDS)
-        self.button(False, x, y)
-
-    def key(self, name, down, *, repeat=False, shift=False):
-        if self.windows:
-            self._post(0x0100 if down else 0x0101, VIRTUAL_KEYS[name], 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0))
-            return
-        keysym = self.backend.x11.XStringToKeysym(name.encode("ascii"))
-        keycode = self.backend.x11.XKeysymToKeycode(self.backend.display, keysym)
-        if not keycode:
-            raise SmokeFailure(f"could not resolve X11 key '{name}'")
-        event = LinuxXEvent()
-        event.xkey.type = self.backend.KEY_PRESS if down else self.backend.KEY_RELEASE
-        self.backend._fill_input_event_prefix(event.xkey, self.handle, 0, 0, state=1 if shift else 0)
-        event.xkey.keycode = keycode
-        mask = self.backend.KEY_PRESS_MASK if down else self.backend.KEY_RELEASE_MASK
-        if not self.backend.x11.XSendEvent(self.backend.display, self.handle, False, mask, ctypes.byref(event)):
-            raise SmokeFailure(f"failed to send X11 key '{name}'")
-        self.backend.x11.XFlush(self.backend.display)
-
-    def _shift(self, down):
-        if not self.windows:
-            return
-        event = WinInput(type=1)
-        event.data.keyboard = WinKeyboardInput(0x10, 0, 0 if down else 0x0002, 0, None)
-        if self.backend.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(WinInput)) != 1:
-            raise SmokeFailure("SendInput failed for Shift modifier")
-
-    def tap(self, name, *, repeat_count=0, shift=False):
-        if shift and self.windows:
-            self.backend.focus_window(self.handle)
-            time.sleep(INPUT_SETTLE_SECONDS)
-            if self.backend.user32.GetForegroundWindow() != self.handle:
-                raise SmokeSkip("the fixture cannot take foreground focus for native Shift+Tab")
-            self._shift(True)
-            time.sleep(INPUT_SETTLE_SECONDS)
-        try:
-            self.key(name, True, shift=shift)
-            for _ in range(repeat_count):
-                time.sleep(KEY_REPEAT_INTERVAL_SECONDS)
-                self.key(name, True, repeat=True, shift=shift)
-            time.sleep(PRESS_HOLD_SECONDS)
-            self.key(name, False, shift=shift)
-        finally:
-            if shift and self.windows:
-                self._shift(False)
-        time.sleep(INPUT_SETTLE_SECONDS)
-
-    def focus_loss_and_gain(self):
-        if self.windows:
-            self._post(0x0006, 0)  # WM_ACTIVATE / WA_INACTIVE reaches the real native lifecycle callback.
-            time.sleep(FOCUS_SETTLE_SECONDS)
-            self._post(0x0006, 1)
-        else:
-            self.backend.x11.XSetInputFocus(self.backend.display, self.backend.root, self.backend.REVERT_TO_PARENT, self.backend.CURRENT_TIME)
-            self.backend.x11.XFlush(self.backend.display)
-            time.sleep(FOCUS_SETTLE_SECONDS)
-            self.backend.focus_window(self.handle)
-        time.sleep(FOCUS_SETTLE_SECONDS)
-
-
 class InteractionRun:
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
         self.args = args
@@ -233,7 +84,7 @@ class InteractionRun:
         self.log_directory = log_directory
         self.log_baseline = log_baseline
         self.log_pattern = log_pattern
-        self.native = NativeInput(backend, handle)
+        self.native = native_input.NativeInput(backend, handle)
         self.deadline = time.monotonic() + args.timeout
         self.scale_x = 1.0
         self.scale_y = 1.0
@@ -321,13 +172,13 @@ class InteractionRun:
         self.native.click(*self.point(*BUTTON_POINT))
         self.checkpoint("enabled_click", 4, True)
         self.native.button(True, *self.point(*BUTTON_POINT))
-        time.sleep(INPUT_SETTLE_SECONDS)
+        time.sleep(native_input.INPUT_SETTLE_SECONDS)
         self.native.button(False, *self.point(400, 260))
         self.checkpoint("drag_out_cancels", 4, True)
         self.native.tap(LIT_SPACE)
         self.checkpoint("release_outside_cleanup", 5, True)
         self.native.button(True, *self.point(*BUTTON_POINT))
-        time.sleep(INPUT_SETTLE_SECONDS)
+        time.sleep(native_input.INPUT_SETTLE_SECONDS)
         self.native.focus_loss_and_gain()
         self.native.button(False, *self.point(*BUTTON_POINT))
         self.checkpoint("focus_loss_cancels_hold", 5, True)
@@ -366,7 +217,7 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, LIT_UI_INTERACTION_FIXTURE, handle)
+                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_INTERACTION_FIXTURE, handle)
                 require_normal_process_exit(exit_code, tail, LIT_UI_INTERACTION_FIXTURE)
         finally:
             try:
@@ -377,7 +228,7 @@ def run(args):
                     (args.output_directory / "interaction.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 if logserver is not None:
-                    terminate_process(logserver, "UI interaction logserver")
+                    CaptureProcessTermination.terminate_process(logserver, "UI interaction logserver")
                 backend.close()
     validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     observed = [(action, int(count), int(enabled), int(sequence)) for action, count, enabled, sequence in ACTION_PATTERN.findall(text)]

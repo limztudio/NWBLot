@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
+#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets_mesh/asset.h>
 
@@ -22,7 +23,7 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 TEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView){
-    const Expected<ComputeEmulationLayout> layout = TryResolveComputeEmulationLayout(3u * sizeof(MeshletLocalVertexRef), 3u);
+    const Expected<ComputeEmulationLayout> layout = MeshGeometryBufferPolicy().resolveComputeEmulationLayout(3u * sizeof(MeshletLocalVertexRef), 3u);
     ASSERT_TRUE(layout);
     EXPECT_EQ(layout->indexByteOffset, 4u * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
     EXPECT_EQ(layout->bufferByteSize, 5u * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
@@ -32,20 +33,20 @@ TEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStruc
 TEST(ComputeEmulationLayoutTests, RejectsInvalidSourceSizes){
     const Array<u64, 4> sizes = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
     for(const u64 size : sizes)
-        EXPECT_FALSE(TryResolveComputeEmulationLayout(size, 3u));
-    EXPECT_FALSE(TryResolveComputeEmulationLayout(sizeof(MeshletLocalVertexRef), 0u));
+        EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(size, 3u));
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(sizeof(MeshletLocalVertexRef), 0u));
 }
 
 TEST(ComputeEmulationLayoutTests, LastIndexWordMayEndAtTheUintAddressBoundary){
     constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
     constexpr u64 s_VertexCapacity = s_AddressableBytes / NWB_MESH_EMULATION_VERTEX_BYTE_SIZE - 1u;
     constexpr u64 s_RefBytes = (s_VertexCapacity - NWB_MESH_EMULATION_FIRST_VERTEX_INDEX) * sizeof(MeshletLocalVertexRef);
-    const Expected<ComputeEmulationLayout> layout = TryResolveComputeEmulationLayout(s_RefBytes, 16u);
+    const Expected<ComputeEmulationLayout> layout = MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes, 16u);
     ASSERT_TRUE(layout);
     EXPECT_EQ(layout->indexByteOffset, s_AddressableBytes - NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
     EXPECT_EQ(layout->bufferByteSize, s_AddressableBytes);
-    EXPECT_FALSE(TryResolveComputeEmulationLayout(s_RefBytes, 17u));
-    EXPECT_FALSE(TryResolveComputeEmulationLayout(s_RefBytes + sizeof(MeshletLocalVertexRef), 1u));
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes, 17u));
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes + sizeof(MeshletLocalVertexRef), 1u));
 }
 
 

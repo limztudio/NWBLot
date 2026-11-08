@@ -28,44 +28,23 @@ public:
 
 public:
     [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept{
-        return MatchesEditModelSurrounding(model.stamp(), model.text(), m_expectedStamp, AStringView(m_expectedText));
+        const TextAreaModelStamp current = model.stamp();
+        return current.revision == m_expectedStamp.revision && current.externalRevision == m_expectedStamp.externalRevision && current.selectionGeneration == m_expectedStamp.selectionGeneration
+            && model.text() == AStringView(m_expectedText) && current.anchor == m_expectedStamp.anchor && current.caret == m_expectedStamp.caret;
     }
     [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
-        return MatchesEditModelSnapshot(model.stamp(), model.text(), model.composition(), m_expectedStamp, AStringView(m_expectedText), m_expectedComposition, AStringView(m_expectedPreedit));
+        const EditCompositionView current = model.composition();
+        return model.stamp() == m_expectedStamp && model.text() == AStringView(m_expectedText) && current.active == m_expectedComposition.active && current.text == AStringView(m_expectedPreedit)
+            && current.anchor == m_expectedComposition.anchor && current.caret == m_expectedComposition.caret && current.replacementStart == m_expectedComposition.replacementStart && current.replacementEnd == m_expectedComposition.replacementEnd;
     }
-    void captureSurrounding(const EditModel& model){
-        CaptureEditModelSurrounding(
-            model.text(),
-            model.stamp(),
-            m_expectedText,
-            m_expectedStamp,
-            m_expectedRevision,
-            m_expectedExternalRevision
-        );
-    }
-    void capture(const EditModel& model){
-        CaptureEditModelSnapshot(
-            model.text(),
-            model.stamp(),
-            model.composition(),
-            m_expectedText,
-            m_expectedPreedit,
-            m_expectedComposition,
-            m_expectedStamp,
-            m_expectedRevision,
-            m_expectedExternalRevision
-        );
-    }
-    void clear()noexcept{
-        ClearEditModelSnapshot(
-            m_expectedText,
-            m_expectedPreedit,
-            m_expectedComposition,
-            m_expectedStamp,
-            m_expectedRevision,
-            m_expectedExternalRevision
-        );
-    }
+    void captureSurrounding(const EditModel& model);
+    void capture(const EditModel& model);
+    void clear()noexcept;
+
+
+private:
+    void captureSurroundingValues(AStringView text, const TextAreaModelStamp& stamp)noexcept;
+    void captureValues(AStringView text, const TextAreaModelStamp& stamp, const EditCompositionView& composition)noexcept;
 
 
 public:

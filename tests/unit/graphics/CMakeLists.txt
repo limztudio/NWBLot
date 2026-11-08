@@ -23,4 +23,4 @@ target_sources(nwb_graphics_resource_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
-target_link_libraries(nwb_graphics_resource_tests PRIVATE nwb_graphics_backend nwb_common nwb_alloc)
+target_link_libraries(nwb_graphics_resource_tests PRIVATE nwb_graphics nwb_graphics_backend nwb_common nwb_alloc)

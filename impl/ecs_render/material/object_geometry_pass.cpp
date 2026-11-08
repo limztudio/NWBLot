@@ -57,50 +57,11 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelin
     return true;
 }
 
-b8 RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
-    for(const MaterialPassDrawItem& draw : drawItems){
-        const auto& cache = draw.meshResources.objectGeometryCache;
-        if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)
-            return false;
-    }
-    return true;
-}
-
-void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
-    if(drawItems.empty())
-        return;
-    NWB_ASSERT(context.materialGeometryStatesGraphOwned);
-    NWB_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
-    for(const MaterialPassDrawItem& drawItem : drawItems){
-        const auto& mesh = drawItem.meshResources;
-        const auto& cache = mesh.objectGeometryCache;
-        const Core::GraphicsPipelineHandle& pipeline = drawItem.pipelineResources.indexedPipeline;
-        setMaterialPassCommonBufferStates(context, mesh);
-        Core::GraphicsState state;
-        state.setPipeline(pipeline.get());
-        state.setFramebuffer(context.framebuffer);
-        state.setViewport(context.viewportState);
-        state.addVertexBuffer(Core::VertexBufferBinding().setBuffer(cache.buffer.get()).setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(0u));
-        state.setIndexBuffer(Core::IndexBufferBinding().setBuffer(cache.buffer.get()).setFormat(Core::Format::R32_UINT).setOffset(cache.indexByteOffset));
-        context.commandList.setGraphicsState(state);
-        m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipeline.get());
-        if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
-            continue;
-        Core::DrawArguments arguments;
-        arguments.setVertexCount(cache.indexCount);
-        {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
-
-            context.commandList.drawIndexed(arguments);
-        }
-    }
-}
-
 b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
     const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
     const auto& cache = mesh.objectGeometryCache;
     const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
-    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !materialPassDrawResourcesReady(mesh, context.frameBindings))
+    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !m_drawRecorder.materialPassDrawResourcesReady(mesh, context.frameBindings))
         return false;
     Core::ComputeState state;
     state.setPipeline(pipeline.get());

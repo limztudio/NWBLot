@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from csg_shadow_reference import (  # noqa: E402
-    ANALYTIC_ARMS, ANALYTIC_REGIONS, ANALYTIC_REGION_SPACING, ARMS, REGIONS, analytic_optical_length, clipped_union_length, compare_analytic_frames, compare_frames, expected_rgb, expected_sample_rgb, ray_box,
+    ANALYTIC_ARMS, ANALYTIC_REGIONS, ANALYTIC_REGION_SPACING, ARMS, REGIONS, compare_analytic_frames, compare_frames,
     receiver_pixel_world, region_pixels,)
+from csg_shadow_geometry import CsgShadowGeometry  # noqa: E402
 from csg_shadow_smoke import capture_environment, parse_args  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
@@ -57,7 +58,7 @@ class CsgShadowImageTests(unittest.TestCase):
             rows = [[(255, 255, 255) for _ in range(self.width)] for _ in range(self.height)]
             for region in REGIONS:
                 _, world_x, world_y, _, _ = region
-                value = tuple(round(channel) for channel in expected_sample_rgb(world_x, world_y, arm, light))
+                value = tuple(round(channel) for channel in CsgShadowGeometry.expected_sample_rgb(world_x, world_y, arm, light))
                 for x, y in region_pixels(region, self.width, self.height, 0.3 if arm == LIT_CAMERA_SHIFT else 0.0):
                     rows[y][x] = value
             frames[arm] = self.width, self.height, rows
@@ -84,14 +85,14 @@ class CsgShadowImageTests(unittest.TestCase):
 
     def test_uncut_thickness_cannot_pass_transparent_depth_cut(self):
         frames = self.frames()
-        value = tuple(round(channel) for channel in expected_rgb(2.0, 2.0, 1.0, LIT_DIRECTIONAL))
+        value = tuple(round(channel) for channel in CsgShadowGeometry.expected_rgb(2.0, 2.0, 1.0, LIT_DIRECTIONAL))
         self.replace_region(frames, LIT_CUT, LIT_GLASS_DEPTH, value)
         with self.assertRaisesRegex(SmokeFailure, "cut/glass_depth"):
             compare_frames(frames)
 
     def test_missing_second_volume_cannot_pass_overlap(self):
         frames = self.frames()
-        value = tuple(round(channel) for channel in expected_rgb(1.0, 0.0, -1.0, LIT_DIRECTIONAL))
+        value = tuple(round(channel) for channel in CsgShadowGeometry.expected_rgb(1.0, 0.0, -1.0, LIT_DIRECTIONAL))
         self.replace_region(frames, LIT_CUT, "overlap", value)
         with self.assertRaisesRegex(SmokeFailure, "cut/overlap"):
             compare_frames(frames)
@@ -138,8 +139,8 @@ class CsgShadowImageTests(unittest.TestCase):
             parse_args(arguments + ["--timeout", "nan"])
 
     def test_parallel_and_oblique_slab_intersections(self):
-        self.assertIsNone(ray_box((2.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)))
-        self.assertEqual(ray_box((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)), (2.0, 3.0))
+        self.assertIsNone(CsgShadowGeometry.ray_box((2.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)))
+        self.assertEqual(CsgShadowGeometry.ray_box((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)), (2.0, 3.0))
 
 
 class CsgAnalyticShadowImageTests(unittest.TestCase):
@@ -153,15 +154,15 @@ class CsgAnalyticShadowImageTests(unittest.TestCase):
             for region in ANALYTIC_REGIONS:
                 for x, y in region_pixels(region, self.width, self.height, spacing=ANALYTIC_REGION_SPACING):
                     world_x, world_y = receiver_pixel_world(x, y, self.width, self.height)
-                    length = analytic_optical_length(world_x, world_y, arm)
-                    rows[y][x] = tuple(round(value) for value in expected_rgb(length, world_x, world_y, LIT_DIRECTIONAL))
+                    length = CsgShadowGeometry.analytic_optical_length(world_x, world_y, arm)
+                    rows[y][x] = tuple(round(value) for value in CsgShadowGeometry.expected_rgb(length, world_x, world_y, LIT_DIRECTIONAL))
             frames[arm] = self.width, self.height, rows
         return frames
 
 
     def test_cutter_union_clips_and_counts_overlap_once(self):
-        self.assertAlmostEqual(clipped_union_length([(-6.8, -5.7), (-6.3, -5.2)]), 1.6)
-        self.assertEqual(clipped_union_length([(-9.0, -8.0), (-7.5, -6.5), (-6.75, -6.5), (-5.5, -4.0)]), 1.0)
+        self.assertAlmostEqual(CsgShadowGeometry.clipped_union_length([(-6.8, -5.7), (-6.3, -5.2)]), 1.6)
+        self.assertEqual(CsgShadowGeometry.clipped_union_length([(-9.0, -8.0), (-7.5, -6.5), (-6.75, -6.5), (-5.5, -4.0)]), 1.0)
 
 
     def test_missing_curvature_axis_length_or_union_cannot_pass(self):
@@ -170,7 +171,7 @@ class CsgAnalyticShadowImageTests(unittest.TestCase):
             with self.subTest(name=name):
                 frames = self.frames()
                 region = next(region for region in ANALYTIC_REGIONS if region[0] == name)
-                value = tuple(round(channel) for channel in expected_rgb(incorrect_length, region[1], region[2], LIT_DIRECTIONAL))
+                value = tuple(round(channel) for channel in CsgShadowGeometry.expected_rgb(incorrect_length, region[1], region[2], LIT_DIRECTIONAL))
                 for x, y in region_pixels(region, self.width, self.height, spacing=ANALYTIC_REGION_SPACING):
                     frames[LIT_CUT][2][y][x] = value
                 with self.assertRaisesRegex(SmokeFailure, "cut/" + name):

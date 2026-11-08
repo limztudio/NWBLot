@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -45,7 +47,7 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
         m_context.fail();
         return false;
     }
-    const PopupScope scope = MakePopupFrameScope(token, m_context.popupToken(), *placement, options);
+    const PopupScope scope = UiScopeDescriptorFactory().popupFrame(token, m_context.popupToken(), *placement, options);
     NotNull<BuilderScopeFrame*> next = m_scope;
     if(!nested)
         reset();
@@ -67,7 +69,7 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
     m_scope->m_panelState = declaration;
     m_scope->m_popupPaintStyle = m_popupStyle;
     m_scope->m_bounds = placement->bounds;
-    const LayoutNodeDesc description = MakePopupRootLayoutNodeDesc(
+    const LayoutNodeDesc description = UiScopeDescriptorFactory().popupRoot(
         m_scope->m_bounds,
         m_scope->m_popupPaintStyle.padding,
         background->padding,
@@ -228,7 +230,7 @@ b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& to
     const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
-    const PopupScope scope = MakeBasicPopupScope(token, m_context.popupToken(), *placement);
+    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(token, m_context.popupToken(), *placement);
     return m_context.registerPopupScope(widget, scope);
 }
 
@@ -246,7 +248,7 @@ b8 Builder::paintPopup(){
     m_paint.pushClip(m_scope->m_popupPlacement.viewport);
     const b8 painted = m_paint.drawRegion(background->name, panel->rectangle);
     const b8 popped = m_paint.popClip();
-    const HitTarget barrier = MakeBarrierHitTarget(panel->rectangle, m_scope->m_popupPlacement.viewport);
+    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(panel->rectangle, m_scope->m_popupPlacement.viewport);
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();

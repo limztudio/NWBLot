@@ -11,6 +11,9 @@
 #include "bind_private.h"
 #include "bind_typed_value.h"
 
+#include <impl/assets_material/bind_parameter_application.adhd.h>
+#include <impl/assets_material/layout_validation.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +39,7 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
     Material::TypedBlockByteVector& inOutBlockBytes
 ){
     const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
-    return ApplyMaterialBindTypedLayoutParameterValueToStorage(
+    return MaterialBindParameterApplication{}.applyMaterialBindTypedLayoutParameterValueToStorage(
         interfacePath,
         layout.parameterLookup,
         layout.typedLayoutFields,
@@ -106,7 +109,7 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
 
 b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
     const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
-    return ApplyMaterialBindTypedLayoutParametersToStorage(
+    return MaterialBindParameterApplication{}.applyMaterialBindTypedLayoutParametersToStorage(
         interfacePath,
         layout.parameterLookup,
         layout.typedLayoutFields,
@@ -131,3 +134,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

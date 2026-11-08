@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -119,7 +121,7 @@ b8 RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::Al
     )){
         const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
         const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
-        LogDeferredGraphSchedulingFailure(
+        DeferredFrameDiagnostics{}.logDeferredGraphSchedulingFailure(
             static_cast<u32>(analysisDiagnostic.status),
             analysisDiagnostic.task.index,
             analysisDiagnostic.resource.index,

@@ -8,6 +8,7 @@
 
 #include <core/common/name_symbols.h>
 
+#include <global/name_hash_text.h>
 #include <global/json_text.h>
 #include <global/overflow.h>
 
@@ -135,7 +136,7 @@ void AppendTelemetryMemoryRecordJson(const Core::Telemetry::PerfMemoryPayload& p
     AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
     out += __hidden_memory_report::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
-    Array<char, s_DebugHashTextLength + 1u> identityText;
+    Array<char, NameHashTextCodec::s_TextLength + 1u> identityText;
     const AStringView identity = TelemetryReportDetail::FormatNameIdentityText(payload.scopeName, identityText);
     Array<char, Core::Common::NameSymbols::s_MaxResolvedTextLength> resolvedText;
     AStringView scopeText = payload.scopeText;

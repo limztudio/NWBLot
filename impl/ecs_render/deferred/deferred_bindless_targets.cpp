@@ -4,6 +4,8 @@
 
 #include "deferred_system.h"
 
+#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd.h>
+
 #include <impl/ecs_render/deferred/deferred_bindless_registrar.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 
@@ -46,7 +48,7 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
         return false;
     }
 
-    bindless.slots = BuildDeferredBindlessResourceSlots(
+    bindless.slots = DeferredBindlessSlotsBuilder{}.build(
         bindless.gbufferBaseColor.slot(),
         bindless.gbufferNormal.slot(),
         bindless.gbufferWorldPosition.slot(),

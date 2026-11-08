@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/edit_geometry.adhd.h>
 #include <impl/ecs_ui/text_edit_session.h>
 #include <impl/ecs_ui/edit_clipboard_controller.h>
 #include <impl/ecs_ui/clipboard_publications.h>
@@ -146,7 +148,7 @@ private:
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(const Ui::EditBoxOptions& options, b8 inputMethod, Entry& entry, Ui::EditModel& model);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
-        const Int4 bounds = ResolveUiEditNativeCaretBounds(geometry.placement.caret, m_display);
+        const Int4 bounds = UiEditGeometry().nativeCaretBounds(geometry.placement.caret, m_display);
         return { bounds.x, bounds.y, bounds.z, bounds.w };
     }
     void cancelTransfers();

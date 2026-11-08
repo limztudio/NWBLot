@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include <impl/assets_shader/shader_source_fingerprint.adhd.h>
+
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -200,7 +202,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
             }
             return MakeUnexpected(Failure{});
         }
-        ShaderBinaryPayload::AppendShaderDependencyItemChecksum(
+        ShaderBinaryPayload::ShaderSourceFingerprint{}.appendDependencyChecksum(
             AStringView(item.canonicalPath),
             Span<const u8>(dependencyBytes.data(), dependencyBytes.size()),
             result.checksum,
@@ -212,7 +214,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
 }
 
 u64 ShaderCook::ComputeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, const u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena){
-    u64 checksum = ShaderBinaryPayload::BeginShaderSourceChecksum(
+    u64 checksum = ShaderBinaryPayload::ShaderSourceFingerprint{}.beginSourceChecksum(
         AStringView(entry.name),
         entry.stage,
         entry.archiveStage,
@@ -223,17 +225,17 @@ u64 ShaderCook::ComputeSourceChecksum(const ShaderEntry& entry, const AStringVie
     );
     if(entry.implicitDefines.size() <= 1u){
         for(const auto& [defineName, defineValue] : entry.implicitDefines){
-            ShaderBinaryPayload::AppendShaderChecksumLine(defineName, checksum);
-            ShaderBinaryPayload::AppendShaderChecksumLine(defineValue, checksum);
+            ShaderBinaryPayload::ShaderSourceFingerprint{}.appendChecksumLine(defineName, checksum);
+            ShaderBinaryPayload::ShaderSourceFingerprint{}.appendChecksumLine(defineValue, checksum);
         }
     }
     else{
         for(const auto& entryDefine : SortedDefineEntries(entry.implicitDefines, scratchArena)){
-            ShaderBinaryPayload::AppendShaderChecksumLine(*entryDefine.key, checksum);
-            ShaderBinaryPayload::AppendShaderChecksumLine(*entryDefine.value, checksum);
+            ShaderBinaryPayload::ShaderSourceFingerprint{}.appendChecksumLine(*entryDefine.key, checksum);
+            ShaderBinaryPayload::ShaderSourceFingerprint{}.appendChecksumLine(*entryDefine.value, checksum);
         }
     }
-    return ShaderBinaryPayload::FinalizeShaderSourceChecksum(dependencyChecksum, compilerFingerprint, checksum);
+    return ShaderBinaryPayload::ShaderSourceFingerprint{}.finalizeSourceChecksum(dependencyChecksum, compilerFingerprint, checksum);
 }
 
 

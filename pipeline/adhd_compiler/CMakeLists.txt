@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_pipeline_adhd_compiler)
 target_sources(nwb_pipeline_adhd_compiler PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compile.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/output_transaction.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"

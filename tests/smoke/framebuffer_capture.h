@@ -100,7 +100,6 @@ private:
     void resetPendingReadback();
     [[nodiscard]] b8 stagingMatches(const Core::TextureDesc& description)const noexcept;
     [[nodiscard]] b8 prepareReadback(const Core::TextureDesc& description);
-    [[nodiscard]] b8 writeCapture(NotNull<const u8*> sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:
@@ -125,36 +124,6 @@ private:
     b8 m_stopped = false;
 };
 
-struct SmokeCaptureSeries{
-    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> paths;
-    UniquePtr<FramebufferCapture> capture;
-
-
-public:
-    explicit SmokeCaptureSeries(Core::Alloc::GlobalArena& arena)noexcept
-        : paths(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Return a started observer when capture is configured.
-[[nodiscard]] Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
-    TStringView projectName,
-    u32 defaultFrameCount,
-    const FramebufferCaptureOptions& options,
-    ProjectRuntimeContext& context,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
-    TStringView projectName,
-    u32 defaultFrameCount,
-    const FramebufferCaptureOptions& options,
-    ProjectRuntimeContext& context
-);
-[[nodiscard]] Expected<SmokeCaptureSeries> PrepareSmokeCaptureSeries(AStringView outputPath, u32 sampleCount, const FramebufferCaptureOptions& options, ProjectRuntimeContext& context);
 [[nodiscard]] b8 TickSmokeWorld(f32 delta, Core::ECS::World& world);
 [[nodiscard]] b8 TickSmokeWorldWithCapture(f32 delta, Core::ECS::World& world, UniquePtr<FramebufferCapture>& capture);
 

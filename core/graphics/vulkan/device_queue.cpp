@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "arena_names.h"
 #include "device_detail.h"
+#include "submission_workspace.h"
 
 #include <core/common/log.h>
 
@@ -134,76 +135,6 @@ u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
     return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
 }
 
-void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const b8 graphSubmissionAuthorized){
-    auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
-    auto& submittedOwners = queue.m_executeSubmittedOwners;
-    expectedCommandLists.clear();
-
-    if(commandLists && numCommandLists > 0u){
-        expectedCommandLists.reserve(numCommandLists);
-        for(usize i = 0u; i < numCommandLists; ++i){
-            auto& commandList = *MakeNotNull(commandLists[i]);
-            TrackedCommandBuffer& owner = *commandList.m_currentCmdBuf;
-            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
-                .owner = &owner,
-                .recordingLeaseSerial = commandList.m_recordingLeaseSerial,
-                .nativeRecordingID = commandList.m_nativeRecordingID,
-                .recordingWorkerDomain = commandList.m_creationDesc.recordingWorkerDomain,
-                .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
-                .recordingWorkerIndex = commandList.m_creationDesc.recordingWorkerIndex,
-                .graphSubmissionAuthorized = graphSubmissionAuthorized,
-            });
-        }
-    }
-
-    submittedOwners.prepare(expectedCommandLists.size());
-    if(submittedOwners.indexed()){
-        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-            if(expected.owner)
-                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
-        }
-    }
-
-}
-
-void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const b8 submissionAccepted){
-    const auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
-    if(expectedCommandLists.empty())
-        return;
-
-    if(submissionAccepted){
-        m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
-        m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
-        m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
-        return;
-    }
-
-    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected)noexcept -> b8 {
-        if(!expected.owner || expected.nativeRecordingID == 0u || !commandLists)
-            return false;
-        for(usize i = 0u; i < numCommandLists; ++i){
-            CommandList* const commandList = commandLists[i];
-            if(commandList && commandList->m_currentCmdBuf.get() == expected.owner && commandList->m_nativeRecordingID == expected.nativeRecordingID)
-                return true;
-        }
-        return false;
-    };
-
-    const Expected<u64> reusableVersion = queueGetCompletedInstance(executionQueue);
-    for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-        if(ownerStillRecorded(expected))
-            continue;
-        if(!reusableVersion){
-            m_uploadManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
-            m_scratchManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
-            m_accelStructInputManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
-            continue;
-        }
-        m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
-        m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
-        m_accelStructInputManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -313,7 +244,8 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         }
     }
 
-    prepareSubmissionCommandListWorkspaceLocked(*queue, commandLists, numCommandLists, graphSubmissionAuthorized);
+    SubmissionWorkspace submissionWorkspace(*this, *queue);
+    submissionWorkspace.prepare(commandLists, numCommandLists, graphSubmissionAuthorized);
 
     // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
@@ -357,7 +289,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         : QueueSubmissionToken{}
     ;
 
-    finalizeSubmissionCommandListResourcesLocked(*queue, commandLists, numCommandLists, executionQueue, submittedID, submissionAccepted);
+    submissionWorkspace.finalize(commandLists, numCommandLists, executionQueue, submittedID, submissionAccepted);
     hookResolution.resolve(submissionToken);
 
     submissionWorkspaceLock.unlock();
@@ -406,96 +338,6 @@ b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, con
     return result == VK_SUCCESS;
 }
 
-b8 Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
-    const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
-    const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::DeviceMinimumQueueCapabilities(desc.queueClass));
-    const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
-    const u8 knownCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
-    const u8 graphicsOrComputeCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
-    constexpr u32 s_MinTimestampValidBits = 36u;
-    constexpr u32 s_MaxTimestampValidBits = 64u;
-    const b8 missingRequiredTransferCapability = (providedCapabilities & graphicsOrComputeCapabilities) != 0u && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u;
-    if(
-        nativeQueue.queue == VK_NULL_HANDLE
-        || nativeQueue.familyIndex == Limit<u32>::s_Max
-        || nativeQueue.queueIndex == Limit<u32>::s_Max
-        || queueClassIndex >= static_cast<u32>(CommandQueue::kCount)
-        || requiredCapabilities == 0u
-        || (providedCapabilities & requiredCapabilities) != requiredCapabilities
-        || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u
-        || missingRequiredTransferCapability
-        || (desc.timestampValidBits != 0u && (desc.timestampValidBits < s_MinTimestampValidBits || desc.timestampValidBits > s_MaxTimestampValidBits))
-        || m_physicalQueueInfos.size() >= static_cast<usize>(Limit<u16>::s_Max)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
-        return false;
-    }
-
-    for(const GpuPhysicalQueueInfo& existing : m_physicalQueueInfos){
-        if(existing.familyIndex == nativeQueue.familyIndex && existing.queueIndex == nativeQueue.queueIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
-            return false;
-        }
-    }
-    if(desc.primaryForClass && m_explicitPrimaryQueues[queueClassIndex]){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
-        return false;
-    }
-
-    const GpuPhysicalQueueInfo info{
-        .familyIndex = nativeQueue.familyIndex,
-        .queueIndex = nativeQueue.queueIndex,
-        .timestampValidBits = desc.timestampValidBits,
-        .id = GpuPhysicalQueueId{ .index = static_cast<u16>(m_physicalQueueInfos.size()), .deviceGeneration = m_deviceGeneration, },
-        .queueClass = desc.queueClass,
-        .capabilities = desc.capabilities,
-        .dedicated = desc.dedicated,
-    };
-    Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue);
-    if(!queue)
-        return false;
-    ScopeExit destroyQueue([&]()noexcept{ DestroyArenaObjectNoexcept(m_context.objectArena, queue); });
-    if(queue->m_trackingSemaphore == VK_NULL_HANDLE)
-        return false;
-
-    m_physicalQueueInfos.push_back(info);
-    m_physicalQueues.push_back(MakeNotNull(queue));
-    if(desc.primaryForClass){
-        m_primaryQueues[queueClassIndex] = queue;
-        m_explicitPrimaryQueues[queueClassIndex] = true;
-    }
-    else if(!m_primaryQueues[queueClassIndex])
-        m_primaryQueues[queueClassIndex] = queue;
-    destroyQueue.release();
-    return true;
-}
-
-void Device::configureQueueSharingContext()noexcept{
-    const Queue* const graphicsQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Graphics)];
-    const Queue* const computeQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Compute)];
-    const Queue* const transferQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Transfer)];
-
-    const auto resolveAuxiliaryFamily = [this](const Queue* const primaryQueue, const CommandQueue::Enum queueClass)noexcept{
-        if(!primaryQueue)
-            return s_InvalidQueueFamilyIndex;
-        for(const auto physicalQueue : m_physicalQueues){
-
-            if(physicalQueue->m_queueID == queueClass && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex)
-                return static_cast<i32>(physicalQueue->m_queueFamilyIndex);
-        }
-        return s_InvalidQueueFamilyIndex;
-    };
-
-    m_context.graphicsQueueFamilyIndex = graphicsQueue ? static_cast<i32>(graphicsQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
-    m_context.auxiliaryGraphicsQueueFamilyIndex = resolveAuxiliaryFamily(graphicsQueue, CommandQueue::Graphics);
-    m_context.asyncComputeQueueFamilyIndex = computeQueue ? static_cast<i32>(computeQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
-    m_context.auxiliaryAsyncComputeQueueFamilyIndex = resolveAuxiliaryFamily(computeQueue, CommandQueue::Compute);
-    m_context.transferQueueFamilyIndex = transferQueue ? static_cast<i32>(transferQueue->m_queueFamilyIndex) : s_InvalidQueueFamilyIndex;
-    m_context.auxiliaryTransferQueueFamilyIndex = resolveAuxiliaryFamily(transferQueue, CommandQueue::Transfer);
-    // Cross-family async Compute stays an explicit sharing capability.
-    m_context.asyncComputeLaneEnabled = graphicsQueue && computeQueue && computeQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex;
-    m_context.transferQueueEnabled = transferQueue && (!graphicsQueue || transferQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex) && (!computeQueue || transferQueue->m_queueFamilyIndex != computeQueue->m_queueFamilyIndex);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

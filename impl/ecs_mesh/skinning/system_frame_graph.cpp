@@ -6,6 +6,7 @@
 #include "frame_graph_tasks.h"
 #include "frame_plan_builder.h"
 #include "graph_resource_uses.h"
+#include "skinning_state_handoff.h"
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -262,35 +263,9 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     liveBuffers.clear();
     collectLiveSkinningStateBuffers(scratchArena, liveBuffers);
-    Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
-    struct SkinningStateContext{
-        Core::GpuPersistentResourceStateCache& cache;
-        Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache::Candidate& candidate;
-        Span<const Core::BufferHandle> buffers;
-        b8 preparationInvoked = false;
-        b8 statePrepared = false;
-        b8 stateAccepted = false;
-    } skinningState{ .cache = m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = acceptedStateCandidate, .buffers = liveBuffers, };
-    const auto prepareSkinningState = [](void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState) -> b8 {
-        SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
-        if(!context)
-            return false;
-        context->preparationInvoked = true;
-        if(!finalState || (!context->buffers.empty() && !context->buffers.data()))
-            return false;
-        context->statePrepared = context->cache.buildMergedBufferSubset(*finalState, Span<const Core::BufferHandle>(context->buffers), context->scratchArena, context->candidate);
-        return context->statePrepared;
-    };
-    const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = prepareSkinningState, };
-    const auto acceptSkinningTask = [](void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept -> b8 {
-        SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
-        if(!context || !context->statePrepared)
-            return false;
-        context->stateAccepted = context->cache.commit(context->candidate);
-        return context->stateAccepted;
-    };
-    const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{ .task = terminalTask, .context = &skinningState, .invoke = acceptSkinningTask, };
+    SkinningStateHandoff skinningState(m_acceptedSkinningState, scratchArena, liveBuffers);
+    const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = &SkinningStateHandoff::Prepare, };
+    const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{ .task = terminalTask, .context = &skinningState, .invoke = &SkinningStateHandoff::Accept, };
 
     const Array<Core::GpuTaskGraphTaskTimingTicket, 1> timingTickets = { Core::GpuTaskGraphTaskTimingTicket{ .task = terminalTask, .timingTicket = &timingTicket, }, };
     Core::GpuTaskGraphNormalExecutionDesc normalExecution;
@@ -305,15 +280,15 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     if(!skinningToken.valid()){
         if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))
             m_graphics.requestDeviceRecreation();
-        if(!skinningState.preparationInvoked)
+        if(!skinningState.preparationInvoked())
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
-        else if(!skinningState.statePrepared)
+        else if(!skinningState.statePrepared())
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
         else
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }
-    if(!skinningGraphAccepted || !skinningState.stateAccepted){
+    if(!skinningGraphAccepted || !skinningState.stateAccepted()){
         m_graphics.requestDeviceRecreation();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
         return false;

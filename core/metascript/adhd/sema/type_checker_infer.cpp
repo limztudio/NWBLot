@@ -2,7 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/literal_decoder.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 #include "type_checker.h"
+
+#include "callable_template_deduction.h"
 
 #include <global/algorithm.h>
 
@@ -11,149 +19,6 @@
 
 
 NWB_ADHD_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_adhd_type_checker_infer{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, MStringView varName)noexcept;
-
-[[nodiscard]] b8 ExprReferencesIdentifier(const Expr* expr, const MStringView varName)noexcept{
-    if(!expr)
-        return false;
-    if(expr->kind == ExprKind::Identifier && expr->text == varName)
-        return true;
-    if(expr->kind == ExprKind::ScopeAccess && !expr->scopeChain.empty() && expr->scopeChain[0] == varName)
-        return true;
-    if(expr->kind == ExprKind::Lambda){
-        for(const LambdaCapture& cap : expr->lambdaCaptures){
-            if(cap.name == varName)
-                return true;
-        }
-        for(const Stmt* child : expr->lambdaBody){
-            if(StmtReferencesIdentifier(child, varName))
-                return true;
-        }
-    }
-    if(ExprReferencesIdentifier(expr->lhs, varName) || ExprReferencesIdentifier(expr->rhs, varName))
-        return true;
-    for(const Expr* arg : expr->arguments){
-        if(ExprReferencesIdentifier(arg, varName))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, const MStringView varName)noexcept{
-    if(!stmt)
-        return false;
-    if(stmt->initStmt && StmtReferencesIdentifier(stmt->initStmt, varName))
-        return true;
-    if(ExprReferencesIdentifier(stmt->expr, varName) || ExprReferencesIdentifier(stmt->condition, varName) || ExprReferencesIdentifier(stmt->stepExpr, varName))
-        return true;
-    for(const Expr* arg : stmt->arguments){
-        if(ExprReferencesIdentifier(arg, varName))
-            return true;
-    }
-    for(const NativeBinding& nb : stmt->nativeBindings){
-        if(ExprReferencesIdentifier(nb.sourceExpr, varName))
-            return true;
-    }
-    for(const Stmt* child : stmt->statements){
-        if(StmtReferencesIdentifier(child, varName))
-            return true;
-    }
-    for(const Stmt* child : stmt->elseStatements){
-        if(StmtReferencesIdentifier(child, varName))
-            return true;
-    }
-    for(const SwitchCase& sc : stmt->switchCases){
-        if(ExprReferencesIdentifier(sc.matchExpr, varName))
-            return true;
-        for(const Stmt* child : sc.statements){
-            if(StmtReferencesIdentifier(child, varName))
-                return true;
-        }
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, MStringView varName, const SymbolTable& symbols)noexcept;
-
-[[nodiscard]] b8 ExprHasMutLambdaCapture(const Expr* expr, const MStringView varName, const SymbolTable& symbols)noexcept{
-    if(!expr)
-        return false;
-    if(expr->kind == ExprKind::Lambda){
-        for(const LambdaCapture& cap : expr->lambdaCaptures){
-            if(cap.mode == ParamPassingMode::Mut && cap.name == varName)
-                return true;
-        }
-        for(const Stmt* child : expr->lambdaBody){
-            if(StmtPreventsMoveAtLastUse(child, varName, symbols))
-                return true;
-        }
-    }
-    if(ExprHasMutLambdaCapture(expr->lhs, varName, symbols) || ExprHasMutLambdaCapture(expr->rhs, varName, symbols))
-        return true;
-    for(const Expr* arg : expr->arguments){
-        if(ExprHasMutLambdaCapture(arg, varName, symbols))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, const MStringView varName, const SymbolTable& symbols)noexcept{
-    if(!stmt)
-        return false;
-    if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall) && StmtReferencesIdentifier(stmt, varName))
-        return true;
-    if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && StmtReferencesIdentifier(stmt, varName)){
-        const MStringView baseVarType = symbols.resolveBaseTypeName(stmt->varType->name);
-        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || IsBorrowViewType(baseVarType))
-            return true;
-    }
-    if(ExprHasMutLambdaCapture(stmt->expr, varName, symbols) || ExprHasMutLambdaCapture(stmt->condition, varName, symbols) || ExprHasMutLambdaCapture(stmt->stepExpr, varName, symbols))
-        return true;
-    for(const Expr* arg : stmt->arguments){
-        if(ExprHasMutLambdaCapture(arg, varName, symbols))
-            return true;
-    }
-    for(const NativeBinding& nb : stmt->nativeBindings){
-        if(ExprHasMutLambdaCapture(nb.sourceExpr, varName, symbols))
-            return true;
-    }
-    if(stmt->initStmt && StmtPreventsMoveAtLastUse(stmt->initStmt, varName, symbols))
-        return true;
-    for(const Stmt* child : stmt->statements){
-        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
-            return true;
-    }
-    for(const Stmt* child : stmt->elseStatements){
-        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
-            return true;
-    }
-    for(const SwitchCase& sc : stmt->switchCases){
-        if(ExprHasMutLambdaCapture(sc.matchExpr, varName, symbols))
-            return true;
-        for(const Stmt* child : sc.statements){
-            if(StmtPreventsMoveAtLastUse(child, varName, symbols))
-                return true;
-        }
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,7 +40,7 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier && expr.lhs->callTemplateArgs.empty() && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
             const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(IsNumericScalarType(resolvedBaseType) && TryMapScalarLimitMember(expr.text))
+            if(BuiltinTypeSemantics::IsNumericScalarType(resolvedBaseType) && BuiltinTypeSemantics::TryMapScalarLimitMember(expr.text))
                 return resolvedBaseType;
         }
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
@@ -259,7 +124,7 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
         const MStringView t = expr.text;
         b8 hasU = false;
         b8 hasL = false;
-        for(usize i = t.size(); i > 0u && IsIntegerLiteralSuffixChar(t[i - 1u]); --i){
+        for(usize i = t.size(); i > 0u && LiteralDecoder::IsIntegerLiteralSuffixChar(t[i - 1u]); --i){
             const MChar c = t[i - 1u];
             if(c == 'u' || c == 'U')
                 hasU = true;
@@ -352,7 +217,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
     else if((expr.kind == ExprKind::Unary || expr.kind == ExprKind::Binary) && expr.lhs && expr.op != TokenType::Equal){
         if(!expr.resolvedSimdType.empty() || !expr.resolvedUnalignedType.empty())
             return nullptr;
-        const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
+        const MStringView opSym = OperatorSemantics::MapTokenTypeToOperatorSymbol(expr.op);
         if(!opSym.empty()){
             const TypeRef* lhsTypeRef = nullptr;
             const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
@@ -387,7 +252,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     }
                     else{
                         MVector<TypeArg> deducedArgs(m_arena);
-                        deduceCallTemplateArgs(ownerClass, method, *fn, expr.arguments, scope, deducedArgs);
+                        CallableTemplateDeduction(*this).deduce(ownerClass, method, *fn, expr.arguments, scope, deducedArgs);
                         if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                             rt = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, deducedArgs);
                     }
@@ -434,7 +299,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     }
                     else{
                         MVector<TypeArg> deducedArgs(m_arena);
-                        deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
+                        CallableTemplateDeduction(*this).deduce(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
                         if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                             rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, deducedArgs);
                     }
@@ -482,7 +347,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                         }
                         else{
                             MVector<TypeArg> deducedArgs(m_arena);
-                            deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
+                            CallableTemplateDeduction(*this).deduce(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
                             if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                                 rt = m_symbols.substituteTypeParams(*rt, m->templateParams, deducedArgs);
                         }
@@ -540,7 +405,7 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsT = expr.lhs ? inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef) : MStringView{};
         if(expr.lhs && expr.op != TokenType::Equal){
-            const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
+            const MStringView opSym = OperatorSemantics::MapTokenTypeToOperatorSymbol(expr.op);
             if(!opSym.empty() && (m_symbols.findClass(lhsT) || m_symbols.findInterface(lhsT) || FindTemplateParam(ownerClass, method, lhsT))){
                 const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
                 const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
@@ -561,7 +426,7 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         }
         if(outTypeRef)
             *outTypeRef = nullptr;
-        if(IsBoolReturnOperatorToken(expr.op))
+        if(OperatorSemantics::IsBoolReturnOperatorToken(expr.op))
             return "b8";
         if(expr.kind == ExprKind::Unary){
             if(SymbolTable::IsSimdType(lhsT))
@@ -591,320 +456,7 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         : inferExprTypeName(ownerClass, method, expr, scope);
 }
 
-b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
-    const TypeRef* exprTypeRef = nullptr;
-    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope, &exprTypeRef);
-    if(m_symbols.resolveRefMode(exprTypeRef) != ParamPassingMode::None)
-        return false;
-    if(IsBorrowViewType(baseType))
-        return false;
 
-    switch(expr.kind){
-    case ExprKind::Identifier:
-    case ExprKind::ThisMember:
-        return false;
-    case ExprKind::MemberAccess:
-        return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
-    case ExprKind::Index:{
-        if(!expr.lhs)
-            return false;
-        const TypeRef* containerTypeRef = nullptr;
-        const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &containerTypeRef);
-        if(IsBorrowViewType(lhsBase))
-            return false;
-        const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
-        if(const MethodDecl* customOp = resolveCustomOperator(ownerClass, method, containerTypeRef, lhsBase, "[]", 1u, recvIsConst))
-            return m_symbols.resolveRefMode(customOp->returnType) == ParamPassingMode::None;
-        return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
-    }
-    case ExprKind::Call:{
-        if(expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView mName = expr.lhs->text;
-            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
-            if(IsContainerOrWrapperValueAccessMethod(recvBase, mName, true)){
-                return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
-            }
-            if(IsBorrowViewType(recvBase)){
-                const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName);
-                if((memberInfo && !memberInfo->isMutating && memberInfo->returnRule == BuiltinMemberReturnRule::FirstTypeArg) || IsStringByteAccessorMethod(recvBase, mName))
-                    return false;
-            }
-        }
-        return true;
-    }
-    case ExprKind::Binary:
-        if(IsCompoundOrSimpleAssignment(expr.op))
-            return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
-        return true;
-    case ExprKind::Unary:
-        if(!expr.isPostfix && IsIncrementOrDecrementOperatorToken(expr.op))
-            return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
-        return true;
-    default:
-        return true;
-    }
-}
-
-b8 TypeChecker::exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
-    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
-    if(IsOwningStringType(baseType))
-        return isTemporaryOwnerExpr(ownerClass, method, expr, scope);
-    if(baseType != "StringView")
-        return false;
-
-    if(expr.kind == ExprKind::Call && expr.lhs){
-        if(expr.lhs->kind == ExprKind::Identifier){
-            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
-                return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.arguments[0], scope);
-        }
-        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView mName = expr.lhs->text;
-            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
-            if(IsStringReceiverBorrowViewMethod(recvBase, mName)){
-                if(exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.lhs->lhs, scope))
-                    return true;
-            }
-        }
-        for(const Expr* arg : expr.arguments){
-            if(!arg)
-                continue;
-            const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
-            if(IsStringLikeType(argBase) && exprBorrowsTemporaryStringOwner(ownerClass, method, *arg, scope))
-                return true;
-        }
-        return false;
-    }
-    if(expr.kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr.op) && expr.rhs)
-        return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.rhs, scope);
-    if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.lhs)
-        return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.lhs, scope);
-    return false;
-}
-
-b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, MStringView* outOwnerName, usize* outOwnerScopeIndex)const noexcept{
-    const auto resolveLocalIndex = [&](const MStringView name, usize& outIndex)noexcept -> const ScopedVarInfo*{
-        for(usize i = scope.size(); i > 0u; --i){
-            if(scope[i - 1u].name == name){
-                outIndex = i - 1u;
-                return &scope[i - 1u];
-            }
-        }
-        return nullptr;
-    };
-
-    const auto checkRootLocalOwner = [&](const Expr& candidate)noexcept -> b8{
-        const Expr* root = &candidate;
-        while(root){
-            if(root->kind == ExprKind::MemberAccess && root->lhs){
-                const TypeRef* midType = inferExprTypeRef(ownerClass, method, *root, scope);
-                if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None)
-                    return false;
-                root = root->lhs;
-                continue;
-            }
-            if(root->kind == ExprKind::Index && root->lhs){
-                const TypeRef* midType = inferExprTypeRef(ownerClass, method, *root, scope);
-                if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None)
-                    return false;
-                const MStringView parentBase = inferExprBaseType(ownerClass, method, *root->lhs, scope);
-                if(IsBorrowViewType(parentBase))
-                    return false;
-                root = root->lhs;
-                continue;
-            }
-            if(root->kind == ExprKind::Call && root->lhs && root->lhs->kind == ExprKind::MemberAccess && root->lhs->lhs){
-                const MStringView mName = root->lhs->text;
-                const MStringView recvBase = inferExprBaseType(ownerClass, method, *root->lhs->lhs, scope);
-                if(IsContainerOrWrapperValueAccessMethod(recvBase, mName, false)){
-                    root = root->lhs->lhs;
-                    continue;
-                }
-            }
-            break;
-        }
-        if(!root || root->kind != ExprKind::Identifier)
-            return false;
-        usize localIdx = 0u;
-        const ScopedVarInfo* local = resolveLocalIndex(root->text, localIdx);
-        if(!local)
-            return false;
-        if(local->borrowsLocalStringOwner){
-            usize ownerIdx = localIdx;
-            if(!local->borrowedLocalOwnerName.empty())
-                resolveLocalIndex(local->borrowedLocalOwnerName, ownerIdx);
-            if(outOwnerName)
-                *outOwnerName = local->borrowedLocalOwnerName;
-            if(outOwnerScopeIndex)
-                *outOwnerScopeIndex = ownerIdx;
-            return true;
-        }
-        const MStringView candidateBase = inferExprBaseType(ownerClass, method, candidate, scope);
-        if(IsOwningStringType(candidateBase)
-            && !local->isParam
-            && local->mode == ParamPassingMode::None
-            && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None
-            && !IsBorrowViewType(resolveScopedVarBaseType(*local))){
-            if(outOwnerName)
-                *outOwnerName = local->name;
-            if(outOwnerScopeIndex)
-                *outOwnerScopeIndex = localIdx;
-            return true;
-        }
-        return false;
-    };
-
-    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
-    if(IsOwningStringType(baseType))
-        return checkRootLocalOwner(expr);
-    if(checkRootLocalOwner(expr))
-        return true;
-    if(baseType != "StringView")
-        return false;
-
-    if(expr.kind == ExprKind::Call && expr.lhs){
-        if(expr.lhs->kind == ExprKind::Identifier){
-            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
-                return exprBorrowsLocalStringOwner(ownerClass, method, *expr.arguments[0], scope, outOwnerName, outOwnerScopeIndex);
-        }
-        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView mName = expr.lhs->text;
-            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
-            if(IsStringReceiverBorrowViewMethod(recvBase, mName)){
-                if(exprBorrowsLocalStringOwner(ownerClass, method, *expr.lhs->lhs, scope, outOwnerName, outOwnerScopeIndex))
-                    return true;
-            }
-        }
-        for(const Expr* arg : expr.arguments){
-            if(!arg)
-                continue;
-            const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
-            if(IsStringLikeType(argBase)
-                && exprBorrowsLocalStringOwner(ownerClass, method, *arg, scope, outOwnerName, outOwnerScopeIndex)){
-                return true;
-            }
-        }
-        return false;
-    }
-    if(expr.kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr.op) && expr.rhs)
-        return exprBorrowsLocalStringOwner(ownerClass, method, *expr.rhs, scope, outOwnerName, outOwnerScopeIndex);
-    if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.lhs)
-        return exprBorrowsLocalStringOwner(ownerClass, method, *expr.lhs, scope, outOwnerName, outOwnerScopeIndex);
-    return false;
-}
-
-void TypeChecker::deduceCallTemplateArgs(
-    const ClassDecl* ownerClass,
-    const MethodDecl* enclosingMethod,
-    const MethodDecl& targetCallable,
-    const Span<const Expr* const> arguments,
-    const Span<const ScopedVarInfo> scope,
-    MVector<TypeArg>& outDeducedArgs
-)const{
-    outDeducedArgs.clear();
-    outDeducedArgs.reserve(targetCallable.templateParams.size());
-    for(const TemplateParamDecl& tp : targetCallable.templateParams){
-        TypeArg dArg;
-        if(!tp.constValueType){
-            for(usize k = 0u; k < arguments.size() && k < targetCallable.params.size(); ++k){
-                const Expr* arg = arguments[k];
-                const TypeRef* pType = targetCallable.params[k].type;
-                if(!arg || !pType)
-                    continue;
-                if(pType->name == tp.name && pType->templateArgs.empty()){
-                    const TypeRef* argRef = nullptr;
-                    const MStringView argBase = inferExprBaseType(ownerClass, enclosingMethod, *arg, scope, &argRef);
-                    if(argRef){
-                        dArg.type = const_cast<TypeRef*>(argRef);
-                        break;
-                    }
-                    if(!argBase.empty()){
-                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = argBase;
-                        dArg.type = synth;
-                        break;
-                    }
-                }
-                else if(!pType->templateArgs.empty()){
-                    const TypeRef* argRef = inferExprTypeRef(ownerClass, enclosingMethod, *arg, scope);
-                    if(const TypeRef* sub = DeduceTemplateParamTypeRef(pType, argRef, tp.name, m_symbols)){
-                        dArg.type = const_cast<TypeRef*>(sub);
-                        break;
-                    }
-                }
-            }
-        }
-        outDeducedArgs.push_back(dArg);
-    }
-}
-
-void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, const Span<const ScopedVarInfo> scope, const usize savedScopeSize)const noexcept{
-    for(usize i = savedScopeSize; i < scope.size(); ++i){
-        const ScopedVarInfo& local = scope[i];
-        if(local.isParam || local.isConst || (local.type && m_symbols.resolveRefMode(local.type) != ParamPassingMode::None))
-            continue;
-
-        const MStringView localBaseType = resolveScopedVarBaseType(local);
-        if(SymbolTable::IsSimdType(localBaseType) || m_symbols.isSmallValueType(localBaseType))
-            continue;
-
-        usize lastUseIndex = statements.size();
-        for(usize s = statements.size(); s > 0u; --s){
-            if(__hidden_adhd_type_checker_infer::StmtReferencesIdentifier(statements[s - 1u], local.name)){
-                lastUseIndex = s - 1u;
-                break;
-            }
-        }
-
-        b8 capturedOrAsyncOrAliased = false;
-        for(usize j = 0u; j < scope.size(); ++j){
-            if(scope[j].borrowsLocalStringOwner && scope[j].borrowedLocalOwnerName == local.name){
-                capturedOrAsyncOrAliased = true;
-                break;
-            }
-            if(j >= savedScopeSize){
-                if(const Expr* lam = scope[j].lambdaExpr){
-                    for(const LambdaCapture& cap : lam->lambdaCaptures){
-                        if(cap.name == local.name){
-                            capturedOrAsyncOrAliased = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            if(capturedOrAsyncOrAliased)
-                break;
-        }
-        for(usize s = 0u; !capturedOrAsyncOrAliased && s < statements.size(); ++s){
-            if(__hidden_adhd_type_checker_infer::StmtPreventsMoveAtLastUse(statements[s], local.name, m_symbols)){
-                capturedOrAsyncOrAliased = true;
-                break;
-            }
-        }
-        if(capturedOrAsyncOrAliased || lastUseIndex >= statements.size())
-            continue;
-
-        Stmt* lastStmt = statements[lastUseIndex];
-        const b8 isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
-            || (lastStmt->kind == StmtKind::Return && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
-            || (lastStmt->kind == StmtKind::VarDecl && lastStmt->name != local.name && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call);
-        if(!isDirectCallStmt || __hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name))
-            continue;
-
-        usize argRefCount = 0u;
-        for(const Expr* arg : lastStmt->expr->arguments){
-            if(__hidden_adhd_type_checker_infer::ExprReferencesIdentifier(arg, local.name))
-                ++argRefCount;
-        }
-        if(argRefCount == 1u){
-            for(Expr* arg : lastStmt->expr->arguments){
-                if(arg && !arg->isMutArg && arg->kind == ExprKind::Identifier && arg->text == local.name)
-                    arg->moveAtLastUse = true;
-            }
-        }
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

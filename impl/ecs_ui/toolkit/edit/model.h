@@ -7,8 +7,13 @@
 
 #include "grapheme.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/global.h>
 
+#include <impl/ecs_ui/toolkit/edit/edit_history.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/edit_history_actions.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/edit_composition_rules.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/edit_selection_actions.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model_validation.adhd.h>
 
 #include <global/atomic_identity.h>
@@ -118,7 +123,7 @@ public:
     }
 
     [[nodiscard]] b8 setSelection(const usize anchor, const usize caret)noexcept{
-        return ApplyEditModelSetSelection(
+        return EditSelectionActions{}.setSelection(
             m_boundaries,
             anchor,
             caret,
@@ -140,7 +145,7 @@ public:
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] b8 move(const EditMove::Enum movement, const b8 extend = false)noexcept{
-        return ApplyEditModelMove(
+        return EditSelectionActions{}.move(
             text(),
             m_boundaries,
             m_textMode,
@@ -213,7 +218,7 @@ public:
     }
 
     [[nodiscard]] b8 undo(){
-        return ApplyEditModelUndo(
+        return EditHistoryActions{}.undo(
             m_history,
             m_textMode,
             m_text,
@@ -234,7 +239,7 @@ public:
     }
 
     [[nodiscard]] b8 redo(){
-        return ApplyEditModelRedo(
+        return EditHistoryActions{}.redo(
             m_history,
             m_textMode,
             m_text,
@@ -259,7 +264,7 @@ public:
     [[nodiscard]] b8 canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
 
     [[nodiscard]] b8 beginComposition()noexcept{
-        return ApplyEditModelBeginComposition(
+        return EditCompositionRules{}.begin(
             m_anchor,
             m_caret,
             m_preedit,
@@ -274,7 +279,7 @@ public:
 
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
     [[nodiscard]] b8 updateComposition(const AStringView value, const usize anchor, const usize caret){
-        return ApplyEditModelUpdateComposition(
+        return EditCompositionRules{}.update(
             m_compositionActive,
             value,
             anchor,
@@ -298,7 +303,7 @@ public:
     }
 
     void cancelComposition()noexcept{
-        CancelEditModelComposition(
+        EditCompositionRules{}.cancel(
             m_preedit,
             m_preeditAnchor,
             m_preeditCaret,
@@ -310,7 +315,7 @@ public:
     }
 
     [[nodiscard]] EditCompositionView composition()const noexcept{
-        return MakeEditCompositionView(
+        return EditCompositionRules{}.view(
             { m_preedit.data(), m_preedit.size() },
             m_preeditAnchor,
             m_preeditCaret,
@@ -352,7 +357,7 @@ private:
     }
 
     [[nodiscard]] b8 restoreHistoryState(const AStringView value, const usize anchor, const usize caret, const isize cursorDelta){
-        return ApplyEditModelRestoreHistoryState(
+        return EditHistoryActions{}.restore(
             value,
             anchor,
             caret,

@@ -28,14 +28,14 @@ void GraphicsPrefixTimingResolver::resolve(
     outResult = GraphicsPrefixTimingResolutionResult{};
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
     const Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> resolvedTasks = {
-        pipeline.m_graphicsPrefixMeshViewSetupTask,
-        pipeline.m_graphicsPrefixSceneShadingSetupTask,
-        pipeline.m_graphicsPrefixDeferredClearTask,
-        pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgReceiverSpanTask.valid() ? pipeline.m_graphicsPrefixCsgReceiverSpanTask : pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgIntervalCombineTask.valid() ? pipeline.m_graphicsPrefixCsgIntervalCombineTask : pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixCsgIntervalSampleTask.valid() ? pipeline.m_graphicsPrefixCsgIntervalSampleTask : pipeline.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask,
     };
     if(ownedTickets.size() != s_GraphicsPrefixTimingTaskCount || timingTickets.size() != s_GraphicsPrefixTimingTaskCount || timingTasks.size() != s_GraphicsPrefixTimingTaskCount)
         return;
@@ -61,7 +61,7 @@ void GraphicsPrefixTimingResolver::resolve(
         }
     }
     // Measures are submission-local; skip the scope across a frontier.
-    asyncSpansOnePacket = outResult.bindingsValid && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixMeshViewSetupTask, pipeline.m_graphicsPrefixTask);
+    asyncSpansOnePacket = outResult.bindingsValid && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask);
 }
 
 

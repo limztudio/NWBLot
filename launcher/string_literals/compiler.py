@@ -13,28 +13,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
+if __package__:
+    from .response_file import CLANG_CL_DRIVER_NAME, CL_DRIVER_MODE_OPTION, ResponseFileTool
+else:
+    from response_file import CLANG_CL_DRIVER_NAME, CL_DRIVER_MODE_OPTION, ResponseFileTool
+
 
 MAIN_ENTRY = "__main__"
 ROOT_PACKAGE = "launcher"
 COMMAND_ARGUMENT = "command"
-RESPONSE_FILE_ENCODING = "utf-8"
-QUOTING_WINDOWS = "windows"
-QUOTING_POSIX = "posix"
-QUOTING_MODES = {QUOTING_WINDOWS, QUOTING_POSIX}
-RESPONSE_QUOTING_OPTION = "--rsp-quoting="
 CLANG_CL_PASSTHROUGH_PREFIX = "/clang:"
-CLANG_CL_DRIVER_NAME = "clang-cl"
-CL_DRIVER_MODE_OPTION = "--driver-mode=cl"
-MAX_RESPONSE_FILE_DEPTH = 64
-DOUBLED_QUOTE_WIDTH = 2
-ESCAPED_BACKSLASH_PAIR_WIDTH = 2
 OPTION_WITH_VALUE_WIDTH = 2
 CLANG_CL_SOURCE_OPTION_LENGTH = 3
 XCLANG_PAIR_ARGUMENT_COUNT = 4
 XCLANG_PAIR_SECOND_MARKER_OFFSET = 2
 XCLANG_PAIR_LAST_OFFSET = 3
 LLVM_VERSION_PART_COUNT = 3
-UNTERMINATED_QUOTE_MESSAGE = "Unterminated quote in response file"
 SINGLE_OUTPUT_MESSAGE = "Object compilation requires exactly one output path"
 OUTPUT_OPTION = "-o"
 CLANG_CL_OUTPUT_OPTION = "/Fo"
@@ -65,130 +59,6 @@ def effective_argument(argument: str) -> str:
     return argument[len(CLANG_CL_PASSTHROUGH_PREFIX):] if argument.startswith(CLANG_CL_PASSTHROUGH_PREFIX) else argument
 
 
-def split_gnu_response(text: str) -> list[str]:
-    """LLVM GNU response escaping applies inside both kinds of quoted text."""
-    result = []
-    index = 0
-    whitespace = " \t\r\n"
-    while index < len(text):
-        while index < len(text) and text[index] in whitespace:
-            index += 1
-        if index == len(text):
-            break
-        word = []
-        while index < len(text) and text[index] not in whitespace:
-            character = text[index]
-            if character == "\\" and index + 1 < len(text):
-                index += 1
-                word.append(text[index])
-            elif character in {'"', "'"}:
-                quote = character
-                index += 1
-                while index < len(text) and text[index] != quote:
-                    if text[index] == "\\" and index + 1 < len(text):
-                        index += 1
-                    word.append(text[index])
-                    index += 1
-                if index == len(text):
-                    raise ValueError(UNTERMINATED_QUOTE_MESSAGE)
-            else:
-                word.append(character)
-            index += 1
-        result.append("".join(word))
-    return result
-
-
-def quote_gnu_response(arguments: Sequence[str]) -> str:
-    return " ".join('"' + argument.replace("\\", "\\\\").replace('"', '\\"') + '"' for argument in arguments)
-
-
-def split_windows_response(text: str) -> list[str]:
-    """LLVM's Windows response quoting: backslashes escape only double quotes."""
-    result = []
-    index = 0
-    while index < len(text):
-        while index < len(text) and text[index].isspace():
-            index += 1
-        if index == len(text):
-            break
-        word = []
-        quoted = False
-        while index < len(text) and (quoted or not text[index].isspace()):
-            if text[index] == "\\":
-                start = index
-                while index < len(text) and text[index] == "\\":
-                    index += 1
-                count = index - start
-                if index < len(text) and text[index] == '"':
-                    word.append("\\" * (count // ESCAPED_BACKSLASH_PAIR_WIDTH))
-                    if count % ESCAPED_BACKSLASH_PAIR_WIDTH:
-                        word.append('"')
-                        index += 1
-                        continue
-                else:
-                    word.append("\\" * count)
-                    continue
-            if text[index] == '"':
-                if quoted and index + 1 < len(text) and text[index + 1] == '"':
-                    word.append('"')
-                    index += DOUBLED_QUOTE_WIDTH
-                    continue
-                quoted = not quoted
-            else:
-                word.append(text[index])
-            index += 1
-        if quoted:
-            raise ValueError(UNTERMINATED_QUOTE_MESSAGE)
-        result.append("".join(word))
-    return result
-
-
-def driver_response_quoting(tool: str, arguments: Sequence[str] = ()) -> str:
-    name = Path(tool).stem.lower()
-    return QUOTING_WINDOWS if name.endswith((CLANG_CL_DRIVER_NAME, "lld-link")) or name == "link" or CL_DRIVER_MODE_OPTION in arguments else QUOTING_POSIX
-
-
-def expand_response_files(arguments: Sequence[str], quoting: Optional[str] = None) -> list[str]:
-    mode = quoting or QUOTING_POSIX
-    for argument in arguments:
-        if argument.startswith(RESPONSE_QUOTING_OPTION):
-            mode = argument.split("=", 1)[1]
-    if mode not in QUOTING_MODES:
-        raise ValueError(f"Unsupported response quoting: {mode}")
-
-    def expand(items: Sequence[str], ancestors: tuple[Path, ...]) -> list[str]:
-        expanded = []
-        for argument in items:
-            if not argument.startswith("@"):
-                expanded.append(argument)
-                continue
-            path = Path(argument[1:]).resolve()
-            if path in ancestors or len(ancestors) >= MAX_RESPONSE_FILE_DEPTH:
-                raise ValueError(f"Recursive response file: {path}")
-            data = path.read_bytes()
-            encoding = "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
-            text = data.decode(encoding)
-            tokens = split_windows_response(text) if mode == QUOTING_WINDOWS else split_gnu_response(text)
-            expanded.extend(expand(tokens, ancestors + (path,)))
-        return expanded
-
-    return expand(arguments, ())
-
-
-def run_tool(command: Sequence[str], response_path: Path, prefix: Sequence[str] = ()) -> subprocess.CompletedProcess:
-    """Keep expanded compiler/linker arguments below host command-line limits."""
-    mode = driver_response_quoting(command[0], command[1:])
-    controls = [argument for argument in command[1:] if argument.startswith(RESPONSE_QUOTING_OPTION)]
-    if controls:
-        mode = controls[-1].split("=", 1)[1]
-    if mode not in QUOTING_MODES:
-        raise ValueError(f"Unsupported response quoting: {mode}")
-    arguments = [argument for argument in command[1:] if not argument.startswith(RESPONSE_QUOTING_OPTION)]
-    text = subprocess.list2cmdline(arguments) if mode == QUOTING_WINDOWS else quote_gnu_response(arguments)
-    response_path.write_text(text + "\n", encoding=RESPONSE_FILE_ENCODING)
-    return subprocess.run([*prefix, command[0], *controls, "@" + str(response_path.resolve())], check=False)
-
-
 @dataclass(frozen=True)
 class CompilePlan:
     compiler: str
@@ -202,7 +72,7 @@ def compile_plan(command: Sequence[str]) -> Optional[CompilePlan]:
     if not command:
         raise ValueError("Missing compiler command after --")
     compiler = command[0]
-    arguments = expand_response_files(command[1:], driver_response_quoting(compiler, command[1:]))
+    arguments = ResponseFileTool.expand_response_files(command[1:], ResponseFileTool.driver_response_quoting(compiler, command[1:]))
     clang_cl = Path(compiler).stem.lower().endswith(CLANG_CL_DRIVER_NAME) or CL_DRIVER_MODE_OPTION in arguments
     source_indices = set()
     frontend = []
@@ -361,14 +231,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             encoded = directory / "encoded.bc"
             object_path = directory / ("output.obj" if plan.clang_cl else "output.o")
             frontend, backend = stage_commands(plan, original, encoded, object_path)
-            result = run_tool(frontend, directory / "frontend.rsp")
+            result = ResponseFileTool.run_tool(frontend, directory / "frontend.rsp")
             if result.returncode:
                 return result.returncode
             transformer = importlib.import_module("launcher.string_literals.transformer")
             statistics = transformer.transform_bitcode(original, encoded, options.llvm_library, version)
             if not isinstance(statistics, dict) or not encoded.is_file():
                 raise RuntimeError("Transformer did not produce a verified bitcode result")
-            result = run_tool(backend, directory / "backend.rsp")
+            result = ResponseFileTool.run_tool(backend, directory / "backend.rsp")
             if result.returncode:
                 return result.returncode
             os.replace(object_path, plan.output)

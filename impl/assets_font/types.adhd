@@ -8,66 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <global/sha256.h>
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FontBinaryHeader MakeFontBinaryHeader(in u32 faceIndex, in u64 byteCount){
-    FontBinaryHeader header;
-    header.faceIndex = faceIndex;
-    header.byteCount = byteCount;
-    return header;
-}
-
-b8 IsValidFontBinaryHeader(in FontBinaryHeader header){
-    return
-        header.magic == s_FontBinaryMagic
-        && header.version == s_FontBinaryVersion
-        && header.faceIndex == 0u
-        && header.reserved == 0u
-    ;
-}
-
-b8 IsValidPreparedFontHeaderInputs(in usize fontByteCount, in u32 faceIndex, in usize groupCount){
-    return
-        fontByteCount > 0u
-        && fontByteCount <= cast<usize>(s_FontMaxSourceBytes)
-        && faceIndex == 0u
-        && groupCount > 0u
-        && groupCount <= cast<usize>(s_PreparedFontMaxGroupCount)
-    ;
-}
-
-b8 IsValidPreparedFontHeader(in u32 magic, in u32 version, in u32 faceIndex, in u32 flags){
-    return
-        magic == s_PreparedFontMagic
-        && version == s_PreparedFontVersion
-        && faceIndex == 0u
-        && flags == 0u
-    ;
-}
-
-Expected<u64> TryComputePreparedFontExpectedPayloadBytes(in usize fontByteCount, in usize groupCount, in u64 pixelByteCount){
-    if(
-        fontByteCount == 0u
-        || fontByteCount > cast<usize>(s_FontMaxSourceBytes)
-        || groupCount == 0u
-        || groupCount > cast<usize>(s_PreparedFontMaxGroupCount)
-        || pixelByteCount > s_PreparedFontMaxPixelBytes
-    )
-        return makeUnexpected(Failure());
-    return
-        cast<u64>(s_PreparedFontHeaderBytes)
-        + cast<u64>(groupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes)
-        + cast<u64>(fontByteCount)
-        + pixelByteCount
-    ;
-}
-
 NativeFontFailure MakeNativeFontFailure(in StringView operation, in i32 nativeError){
     NativeFontFailure failure;
     failure.operation = operation;
@@ -93,12 +33,6 @@ Expected<FontSfntDirectory> ReadFontSfntDirectory(in Span<u8> bytes){
     FontSfntDirectory directory;
     directory.assign(bytes, tableCount);
     return directory;
-}
-
-Expected<u32> TryComputePreparedFontImageByteCount(in u32 width, in u32 height, in u32 channels){
-    if(width == 0u || width > s_PreparedFontMaxSide || height == 0u || height > s_PreparedFontMaxSide || channels == 0u || channels > s_PreparedFontMaxChannelCount)
-        return makeUnexpected(Failure());
-    return width * height * channels;
 }
 
 b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
@@ -167,22 +101,6 @@ b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
     return hasCff;
 }
 
-b8 ValidateFontBinaryPayloadHeader(in FontBinaryHeader header, in usize remainingBytes){
-    if(!IsValidFontBinaryHeader(header)){
-        error("Font::loadBinary failed: unsupported version, flags, or face index; recook required");
-        return false;
-    }
-    if(header.byteCount == 0u || header.byteCount > cast<u64>(s_FontMaxSourceBytes)){
-        error("Font::loadBinary failed: source size must be 1..{} bytes", s_FontMaxSourceBytes);
-        return false;
-    }
-    if(header.byteCount != cast<u64>(remainingBytes)){
-        error("Font::loadBinary failed: truncated source bytes or trailing payload");
-        return false;
-    }
-    return true;
-}
-
 b8 ValidateFontSourceDirectory(in Span<u8> bytes, in u32 faceIndex){
     if(faceIndex != 0u || bytes.empty() || bytes.size() > cast<usize>(s_FontMaxSourceBytes)){
         error("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes", s_FontMaxSourceBytes);
@@ -201,173 +119,6 @@ void ReportNativeFontFailure(in NativeFontFailure failure){
     else
         error("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})", failure.operation);
 }
-
-Expected<u64, StringView> ValidatePreparedFontSerializeInputs(
-    in usize sfntByteCount,
-    in b8 hasSfntData,
-    in u32 faceIndex,
-    in Span<PreparedFontImageView> groups
-){
-    if(!hasSfntData || !IsValidPreparedFontHeaderInputs(sfntByteCount, faceIndex, groups.size())){
-        error("Prepared font serialization: invalid font bytes, face index, or image group count");
-        return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
-    }
-
-    u64 pixelByteCount = 0u;
-    for(usize index = 0u; index < groups.size(); ++index){
-        const PreparedFontImageView group = groups[index];
-        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
-        if(
-            !expectedBytes.has_value()
-            || group.pixels.empty()
-            || group.pixels.size() != cast<usize>(expectedBytes.value())
-            || cast<u64>(expectedBytes.value()) > s_PreparedFontMaxPixelBytes - pixelByteCount
-        ){
-            error("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes", index);
-            return makeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
-        }
-        pixelByteCount += cast<u64>(expectedBytes.value());
-    }
-    const Expected<u64> expectedPayloadBytes = TryComputePreparedFontExpectedPayloadBytes(sfntByteCount, groups.size(), pixelByteCount);
-    if(!expectedPayloadBytes.has_value()){
-        error("Prepared font serialization: invalid font bytes, face index, or image group count");
-        return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
-    }
-    return expectedPayloadBytes.value();
-}
-
-void SerializeFontBinaryPayload(in u32 faceIndex, in Span<u8> fontBytes, mut Vector<u8> outBinary){
-    const FontBinaryHeader header = MakeFontBinaryHeader(faceIndex, cast<u64>(fontBytes.size()));
-    outBinary.clear();
-    outBinary.reserve(s_FontBinaryHeaderBytes + fontBytes.size());
-    AppendPOD(outBinary, header);
-    for(in u8 byteValue : fontBytes)
-        outBinary.push_back(byteValue);
-}
-
-b8 DeserializeFontBinaryPayload(in Span<u8> binary, mut Vector<u8> outFontBytes, mut u32 outFaceIndex){
-    usize cursor = 0u;
-    const Expected<FontBinaryHeader> headerResult = ReadPOD<FontBinaryHeader>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("Font::loadBinary failed: malformed header");
-        return false;
-    }
-    const FontBinaryHeader header = headerResult.value();
-    if(header.magic != s_FontBinaryMagic){
-        error("Font::loadBinary failed: invalid font asset format; recook required");
-        return false;
-    }
-    const usize remainingBytes = binary.size() - cursor;
-    if(!ValidateFontBinaryPayloadHeader(header, remainingBytes))
-        return false;
-
-    outFontBytes.clear();
-    outFontBytes.resize(remainingBytes);
-    for(usize i = 0u; i < remainingBytes; ++i)
-        outFontBytes[i] = binary[cursor + i];
-    outFaceIndex = header.faceIndex;
-    return true;
-}
-
-void AppendSha256Bytes(in Span<u8> sourceBytes, mut Vector<u8> outBinary){
-    native(in sourceBytes, mut outBinary){
-        const Sha256Digest digest = ComputeSha256({ sourceBytes.data(), sourceBytes.size() });
-        outBinary.insert(outBinary.end(), digest.bytes, digest.bytes + sizeof(digest.bytes));
-    }
-}
-
-void AppendPreparedFontSourceBinary(
-    in Span<u8> sfnt,
-    in u32 faceIndex,
-    in Span<PreparedFontImageView> groups,
-    in u64 expectedPayloadBytes,
-    mut Vector<u8> outBinary
-){
-    outBinary.clear();
-    outBinary.reserve(cast<usize>(expectedPayloadBytes));
-    AppendU32LittleEndian(outBinary, s_PreparedFontMagic);
-    AppendU32LittleEndian(outBinary, s_PreparedFontVersion);
-    AppendU32LittleEndian(outBinary, faceIndex);
-    AppendU32LittleEndian(outBinary, cast<u32>(sfnt.size()));
-    AppendU32LittleEndian(outBinary, cast<u32>(groups.size()));
-    AppendU32LittleEndian(outBinary, 0u);
-    AppendSha256Bytes(sfnt, outBinary);
-
-    for(usize index = 0u; index < groups.size(); ++index){
-        const PreparedFontImageView group = groups[index];
-        AppendU32LittleEndian(outBinary, group.width);
-        AppendU32LittleEndian(outBinary, group.height);
-        AppendU32LittleEndian(outBinary, group.channelCount);
-        AppendU32LittleEndian(outBinary, cast<u32>(group.pixels.size()));
-        AppendSha256Bytes(group.pixels, outBinary);
-    }
-    for(in u8 byteValue : sfnt)
-        outBinary.push_back(byteValue);
-    for(usize index = 0u; index < groups.size(); ++index){
-        const Span<u8> pixels = groups[index].pixels;
-        for(in u8 byteValue : pixels)
-            outBinary.push_back(byteValue);
-    }
-}
-
-Expected<b8, StringView> DecodePreparedFontHeaderBytes(
-    in Span<u8> headerBytes,
-    mut u32 outFaceIndex,
-    mut u32 outFontByteCount,
-    mut u32 outGroupCount
-){
-    usize cursor = 0u;
-    const Expected<u32> magic = ReadU32LittleEndian(headerBytes, cursor);
-    const Expected<u32> version = ReadU32LittleEndian(headerBytes, cursor);
-    const Expected<u32> faceIndex = ReadU32LittleEndian(headerBytes, cursor);
-    const Expected<u32> fontByteCount = ReadU32LittleEndian(headerBytes, cursor);
-    const Expected<u32> groupCount = ReadU32LittleEndian(headerBytes, cursor);
-    const Expected<u32> flags = ReadU32LittleEndian(headerBytes, cursor);
-    if(!magic.has_value() || !version.has_value() || !faceIndex.has_value() || !fontByteCount.has_value() || !groupCount.has_value() || !flags.has_value())
-        return makeUnexpected(s_PreparedFontHeaderTruncatedReason);
-    if(!IsValidPreparedFontHeader(magic.value(), version.value(), faceIndex.value(), flags.value()))
-        return makeUnexpected(s_PreparedFontUnsupportedHeaderReason);
-    if(!IsValidPreparedFontHeaderInputs(cast<usize>(fontByteCount.value()), faceIndex.value(), cast<usize>(groupCount.value())))
-        return makeUnexpected(s_PreparedFontCountsOutOfBoundsReason);
-
-    outFaceIndex = faceIndex.value();
-    outFontByteCount = fontByteCount.value();
-    outGroupCount = groupCount.value();
-    return true;
-}
-
-Expected<b8, StringView> DecodePreparedFontGroupHeaderBytes(
-    in Span<u8> groupHeaderBytes,
-    mut u64 inOutPixelByteCount,
-    mut u32 outWidth,
-    mut u32 outHeight,
-    mut u32 outChannelCount,
-    mut u32 outByteCount
-){
-    usize cursor = 0u;
-    const Expected<u32> width = ReadU32LittleEndian(groupHeaderBytes, cursor);
-    const Expected<u32> height = ReadU32LittleEndian(groupHeaderBytes, cursor);
-    const Expected<u32> channelCount = ReadU32LittleEndian(groupHeaderBytes, cursor);
-    const Expected<u32> byteCount = ReadU32LittleEndian(groupHeaderBytes, cursor);
-    if(!width.has_value() || !height.has_value() || !channelCount.has_value() || !byteCount.has_value())
-        return makeUnexpected(s_PreparedFontImageDirectoryTruncatedReason);
-
-    const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(width.value(), height.value(), channelCount.value());
-    if(
-        !expectedBytes.has_value()
-        || byteCount.value() != expectedBytes.value()
-        || cast<u64>(expectedBytes.value()) > s_PreparedFontMaxPixelBytes - inOutPixelByteCount
-    )
-        return makeUnexpected(s_PreparedFontInvalidImageGroupReason);
-
-    inOutPixelByteCount += cast<u64>(expectedBytes.value());
-    outWidth = width.value();
-    outHeight = height.value();
-    outChannelCount = channelCount.value();
-    outByteCount = expectedBytes.value();
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

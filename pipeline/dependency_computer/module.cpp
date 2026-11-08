@@ -9,6 +9,8 @@
 #include <core/assets/input_list.h>
 #include <core/common/log.h>
 
+#include <global/filesystem/staged_file_writer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +37,7 @@ int RunPipelineTool(const int argc, char** argv){
             return s_PipelineExitFailure;
         }
         const auto output = AbsolutePath(Path(arena, parsed.outputPath));
-        if(!output || !EnsureDirectories(output->parentPath()) || !WriteTextFileAtomic(*output, AStringView(*text))){
+        if(!output || !EnsureDirectories(output->parentPath()) || !StagedFileWriter(*output).writeTextAtomic(AStringView(*text))){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
             return s_PipelineExitFailure;
         }

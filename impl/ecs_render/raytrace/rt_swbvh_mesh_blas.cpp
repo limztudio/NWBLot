@@ -4,6 +4,12 @@
 
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
 
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
+
+#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
+#include <impl/ecs_render/raytrace/prepared_mesh_blas_builder.h>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +27,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     b8 allPlansCurrent = true;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::matches((*meshResourcesResult), build)){
             allPlansCurrent = false;
             continue;
         }
@@ -31,7 +37,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         u64 refits = m_blasLedgerRefits;
         u64 rebuilds = m_blasLedgerRebuilds;
         u64 uploadedBytes = m_blasLedgerUploadedBytes;
-        ApplyConfirmedMeshBlasBuildState(
+        RayTracingBuildPolicy().applyConfirmedMeshBlasBuild(
             build.firstBuild,
             build.performRefit,
             build.refitsAfterBuild,
@@ -55,10 +61,10 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         m_blasLedgerRefits = refits;
         m_blasLedgerRebuilds = rebuilds;
         m_blasLedgerUploadedBytes = uploadedBytes;
-        LogConfirmedMeshBlasFirstBuildIfNeeded(build.firstBuild, build.meshName, build.runtimeMesh, build.vertexCount, build.indexCount);
+        RayTracingDiagnostics().meshBlasFirstBuild(build.firstBuild, build.meshName, build.runtimeMesh, build.vertexCount, build.indexCount);
     }
     // A replacement after recording never joins the accepted cache. Force a future TLAS rebuild, not a retired hash.
-    FinalizeConfirmedMeshBlasBuilds(
+    RayTracingBuildPolicy().finalizeConfirmedMeshBlasBuilds(
         allPlansCurrent,
         m_blasLedgerStaticSkipped,
         m_blasLedgerFirstBuilds,
@@ -78,7 +84,7 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scratc
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        if(!RequiresMeshBlasUpdateState(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision))
+        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision))
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
@@ -102,13 +108,13 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchA
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         // Reuse only accepted, unchanged object-space geometry, including off-screen mesh resources.
-        if(!RequiresMeshBlasUpdateState(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision)){
+        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision)){
             if(!meshResources.runtimeMesh)
                 ++m_blasLedgerStaticSkipped;
             continue;
         }
 
-        auto build = RayTracingSoftwareBvhDetail::ResolvePreparedMeshBlasBuild(meshResources);
+        auto build = PreparedMeshBlasBuilder::resolve(meshResources);
         if(!build){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
@@ -126,13 +132,13 @@ b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& com
 
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::matches((*meshResourcesResult), build)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }
     }
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        if(!RayTracingSoftwareBvhDetail::RecordPreparedMeshBlasBuild(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
+        if(!PreparedMeshBlasBuilder::record(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }
@@ -190,7 +196,7 @@ b8 RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTr
     }
     Core::RayTracingAccelStructHandle blas = Move(*blasResult);
     meshResources.blas = Move(blas);
-    InitializeCreatedMeshBlasState(
+    RayTracingBuildPolicy().initializeCreatedMeshBlas(
         meshResources.blasBuildPending,
         meshResources.blasBuildAccepted,
         meshResources.blasGeometryContentRevision,

@@ -13,6 +13,7 @@
 
 #include "cook_meshlet_triangles.h"
 #include <impl/assets_mesh/cook_types.adhd.h>
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
 
 #include <core/task/cpu/scheduler.h>
 
@@ -118,3 +119,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

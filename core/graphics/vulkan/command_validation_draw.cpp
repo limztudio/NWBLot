@@ -4,6 +4,7 @@
 
 #include "command_validation.h"
 #include "backend.h"
+#include "framebuffer_rendering_preparation.h"
 #include "buffer_resource_detail.h"
 #include "texture_resource_detail.h"
 
@@ -57,7 +58,7 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
         rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("a graphics pipeline requires an explicit framebuffer"));
         return false;
     }
-    if(!validateFramebufferForRendering(state.framebuffer, s_SetGraphicsStateOperation))
+    if(!FramebufferRenderingPreparation(*this).validateFramebuffer(state.framebuffer, s_SetGraphicsStateOperation))
         return false;
     if(!validateViewportState(state.viewport, s_SetGraphicsStateOperation))
         return false;
@@ -145,7 +146,7 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
         rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("a meshlet pipeline requires an explicit framebuffer"));
         return false;
     }
-    if(!validateFramebufferForRendering(state.framebuffer, s_SetMeshletStateOperation))
+    if(!FramebufferRenderingPreparation(*this).validateFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
         return false;
     if(!validateViewportState(state.viewport, s_SetMeshletStateOperation))
         return false;

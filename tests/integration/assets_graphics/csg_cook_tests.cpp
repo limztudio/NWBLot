@@ -4,6 +4,7 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <impl/assets_csg/shape_module_writer.h>
 #include <impl/assets_graphics/csg_shader_variants.h>
 #include <impl/assets_graphics/shader_cook_plan.h>
 
@@ -96,7 +97,6 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     Core::Assets::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
     paths.cacheDirectory = root / s_CacheDirectory;
-    ShaderCook shaderCook(testArena.arena);
     Plan::IncludeMetadataMap includeMetadata(testArena.arena);
     const auto addDefine = [&](auto& defines, AStringView name, InitializerList<AStringView> values){
         ShaderCook::DefineEntry definition(testArena.arena);
@@ -133,7 +133,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             addDefine(entry.defineValues, Impl::s_CsgProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
         entries.push_back(Move(entry));
         const Path emptyPath(testArena.arena);
-        return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, shaderCook, entries);
+        return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, entries);
     };
 
     for(u32 mode = 0u; mode < 3u; ++mode){
@@ -248,7 +248,7 @@ asset.eval = "project/csg/MixedCaseEval.slangi";
     Impl::AssetsCsgCook::CsgShapeCookEntryVector entries(testArena.arena);
     entries.push_back(Move(*cooked));
     ASSERT_TRUE(Impl::AssetsCsgCook::AssignCsgShapeCookIds(entries, scratchArena));
-    const auto generatedRoot = Impl::AssetsCsgCook::EmitCsgShapeModuleIncludes(root / s_CacheDirectory, "tests", entries, scratchArena);
+    const auto generatedRoot = Impl::AssetsCsgCook::CsgShapeModuleWriter().emit(root / s_CacheDirectory, "tests", entries, scratchArena);
     ASSERT_TRUE(generatedRoot);
     const auto generatedExists = FileExists(*generatedRoot / moduleInclude);
     ASSERT_TRUE(generatedExists);
@@ -348,7 +348,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
 
 
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_FALSE(EmitCsgShapeModuleIncludes(root / s_CacheDirectory, "tests", entries, scratchArena));
+    EXPECT_FALSE(CsgShapeModuleWriter().emit(root / s_CacheDirectory, "tests", entries, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));

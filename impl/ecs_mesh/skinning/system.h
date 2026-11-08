@@ -117,6 +117,7 @@ private:
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
     class FramePlanBuilder;
+    class FrameResourceImports;
 
 
 public:

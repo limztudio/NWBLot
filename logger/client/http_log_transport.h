@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <logger/global.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+class LogHttpTransport final : NoCopy{
+public:
+    struct Result{
+        i32 code = 0;
+        const char* operation = nullptr;
+        long responseCode = 0;
+        b8 transferCompleted = false;
+    };
+
+    static b8 globalInit()noexcept;
+    ~LogHttpTransport()noexcept;
+    [[nodiscard]] b8 init();
+    [[nodiscard]] Result send(const char* url, const u8* bytes, usize byteCount);
+
+private:
+    void* m_curl = nullptr;
+};
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

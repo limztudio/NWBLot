@@ -22,6 +22,7 @@ NWB_IMPL_UI_BEGIN
 class TooltipState final : NoCopy{
     friend class Builder;
     friend class TooltipBehavior;
+    friend class TooltipCoordinator;
 
 
 private:

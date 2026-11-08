@@ -225,18 +225,6 @@ public:
     [[nodiscard]] b8 valid()const noexcept;
 };
 
-[[nodiscard]] b8 GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] b8 GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] b8 GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] b8 GpuTaskTimingFeedbackCanSwitch(
-    const GpuTaskTimingHistory& incumbent,
-    const GpuTaskTimingHistory& candidate,
-    const GpuTaskTimingAssignmentState& assignment,
-    const GpuPhysicalQueueId& incumbentQueue,
-    const GpuPhysicalQueueId& candidateQueue,
-    u64 frameIndex,
-    const GpuTaskTimingFeedbackPolicy& policy
-)noexcept;
 
 
 class GpuTaskTimingHistoryStore;

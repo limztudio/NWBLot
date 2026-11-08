@@ -1,0 +1,70 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LightSpaceShadowLogReporter{
+    public void reportRayFailures(in u32 failureFlags, mut u32 inOutReportedFailures)const{
+        const u32 newFailures = failureFlags & ~inOutReportedFailures;
+        inOutReportedFailures |= failureFlags;
+        if((newFailures & s_LightSpaceCsgRayFailureUnsupported) != 0u)
+            warning("RendererSystem: CSG direct-shadow traversal rejected unsupported receiver or cutter geometry; conservative occlusion retained");
+        if((newFailures & s_LightSpaceCsgRayFailureCapacity) != 0u)
+            warning("RendererSystem: CSG direct-shadow traversal exceeded closed-crossing or BVH stack capacity (flags=2); conservative occlusion retained");
+        if((newFailures & s_LightSpaceCsgRayFailureTopology) != 0u)
+            warning("RendererSystem: CSG direct-shadow traversal rejected incomplete or invalid solid topology; conservative occlusion retained");
+        if((newFailures & s_LightSpaceCsgRayFailureOpenCapacity) != 0u)
+            warning("RendererSystem: CSG direct-shadow traversal exceeded open-surface capacity (flags=16); conservative occlusion retained");
+    }
+
+    public void reportUnsupportedLimitations(
+        in Span<CsgShadowReceiverRangeGpu> receiverRanges,
+        mut b8 inOutLimitationLogged
+    )const{
+        if(inOutLimitationLogged)
+            return;
+        for(in CsgShadowReceiverRangeGpu range : receiverRanges){
+            if((range.flags & s_CsgRayReceiverUnsupported) == 0u)
+                continue;
+            inOutLimitationLogged = true;
+            warning("RendererSystem: unsupported or over-budget CSG cutters retain conservative shadows and suppress GI bounce radiance");
+            break;
+        }
+    }
+
+    public void reportCsgDispatch(
+        in b8 csgEnabled,
+        in b8 hardwareCompose,
+        in u32 instanceCount,
+        mut b8 inOutCsgDispatchLogged
+    )const{
+        if(!csgEnabled || inOutCsgDispatchLogged)
+            return;
+        inOutCsgDispatchLogged = true;
+        u32 hardwareComposeFlag = 0u;
+        if(hardwareCompose)
+            hardwareComposeFlag = 1u;
+        [essential]
+        info(
+            "RendererSystem: dispatched CSG light-space shadows (hardware_compose={}, {} instances)"
+            , hardwareComposeFlag
+            , cast<u64>(instanceCount)
+        );
+    }
+
+    public void reportShadowMapDispatch(mut b8 inOutDispatchLogged)const{
+        if(inOutDispatchLogged)
+            return;
+        inOutDispatchLogged = true;
+        [essential]
+        info("RendererSystem: dispatched light-space shadow maps");
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

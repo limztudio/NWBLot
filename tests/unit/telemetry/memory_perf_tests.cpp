@@ -1,0 +1,221 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "telemetry_test_helpers.h"
+
+#include <global/binary.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_telemetry_memory_perf_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_MemoryProjectArena = "memory/project_arena";
+static constexpr AStringView s_ProjectArenaText = "Project Arena";
+using namespace TelemetryTestDetail;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    const Name scopeName{ s_MemoryProjectArena };
+    NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
+    NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
+
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(s_NameNone, s_ProjectArenaText, snapshot, delta, payload));
+
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(scopeName, AStringView(), snapshot, delta, payload));
+
+    snapshot.scopeName = Name("memory/other_arena");
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(scopeName, s_ProjectArenaText, snapshot, delta, payload));
+
+    snapshot = MakeTestMemorySnapshot(scopeName);
+    delta.currentFrameIndex = 99u;
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(scopeName, s_ProjectArenaText, snapshot, delta, payload));
+}
+
+TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
+    using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
+    constexpr u64 s_MaxSigned = static_cast<u64>(Limit<i64>::s_Max);
+    constexpr u64 s_MinMagnitude = s_MaxSigned + 1u;
+    struct CounterCase{
+        u64 current;
+        u64 previous;
+        i64 expected;
+    };
+    constexpr Array<CounterCase, 10> s_Cases = {{
+        { 0u, 0u, 0 },
+        { s_MaxSigned, 0u, Limit<i64>::s_Max },
+        { 0u, s_MaxSigned, -Limit<i64>::s_Max },
+        { 0u, s_MinMagnitude, Limit<i64>::s_Min },
+        { s_MinMagnitude - 1u, s_MinMagnitude, -1 },
+        { s_MinMagnitude + 5u, s_MinMagnitude - 5u, 10 },
+        { s_MinMagnitude - 5u, s_MinMagnitude + 5u, -10 },
+        { Limit<u64>::s_Max, Limit<u64>::s_Max - 17u, 17 },
+        { Limit<u64>::s_Max - 17u, Limit<u64>::s_Max, -17 },
+        { 0u, 128u, -128 },
+    }};
+    const Name scopeName(s_MemoryProjectArena);
+    const auto makeSnapshot = [scopeName](const u64 counter, const u64 frame)noexcept{
+        MemorySnapshot snapshot;
+        snapshot.scopeName = scopeName;
+        snapshot.frameIndex = frame;
+        snapshot.reservedBytes = counter;
+        snapshot.usedBytes = counter;
+        snapshot.peakUsedBytes = counter;
+        snapshot.allocationCount = counter;
+        snapshot.reallocationCount = counter;
+        snapshot.deallocationCount = counter;
+        return snapshot;
+    };
+    for(const CounterCase& test : s_Cases){
+        SCOPED_TRACE(test.current);
+        SCOPED_TRACE(test.previous);
+        const auto delta = NWB::Core::Perf::Difference(makeSnapshot(test.current, 2u), makeSnapshot(test.previous, 1u));
+        ASSERT_TRUE(delta.valid());
+        EXPECT_EQ(delta.previousFrameIndex, 1u);
+        EXPECT_EQ(delta.currentFrameIndex, 2u);
+        EXPECT_EQ(delta.reservedBytes, test.expected);
+        EXPECT_EQ(delta.usedBytes, test.expected);
+        EXPECT_EQ(delta.peakUsedBytes, test.expected);
+        EXPECT_EQ(delta.allocationCount, test.expected);
+        EXPECT_EQ(delta.reallocationCount, test.expected);
+        EXPECT_EQ(delta.deallocationCount, test.expected);
+    }
+}
+
+TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
+    using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
+    using CounterField = u64 MemorySnapshot::*;
+    constexpr Array<CounterField, 6> s_Fields = { &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes, &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount };
+    struct CounterCase{
+        u64 current;
+        u64 previous;
+    };
+    constexpr u64 s_MinMagnitude = static_cast<u64>(Limit<i64>::s_Max) + 1u;
+    constexpr Array<CounterCase, 4> s_Cases = {{
+        { s_MinMagnitude, 0u },
+        { 0u, s_MinMagnitude + 1u },
+        { Limit<u64>::s_Max, 0u },
+        { 0u, Limit<u64>::s_Max },
+    }};
+    TestArena testArena;
+    const Name scopeName(s_MemoryProjectArena);
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    for(const CounterField field : s_Fields){
+        for(const CounterCase& test : s_Cases){
+            SCOPED_TRACE(test.current);
+            SCOPED_TRACE(test.previous);
+            MemorySnapshot previous;
+            previous.scopeName = scopeName;
+            previous.frameIndex = 1u;
+            previous.*field = test.previous;
+            MemorySnapshot current;
+            current.scopeName = scopeName;
+            current.frameIndex = 2u;
+            current.*field = test.current;
+            const auto delta = NWB::Core::Perf::Difference(current, previous);
+            EXPECT_FALSE(delta.valid());
+            ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(scopeName, s_ProjectArenaText, current, delta, payload));
+            const auto parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
+            ASSERT_TRUE(parsed);
+            EXPECT_FALSE(parsed->delta.valid());
+            EXPECT_EQ(parsed->snapshot.*field, test.current);
+            EXPECT_EQ(parsed->snapshot.frameIndex, 2u);
+        }
+    }
+}
+
+TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualRecords){
+    struct DeltaCase{
+        i64 first;
+        i64 second;
+        i64 expected;
+        b8 valid;
+    };
+    constexpr Array<DeltaCase, 6> s_Cases = {{
+        { Limit<i64>::s_Max, 1, 0, false },
+        { Limit<i64>::s_Min, -1, 0, false },
+        { Limit<i64>::s_Max - 1, 1, Limit<i64>::s_Max, true },
+        { Limit<i64>::s_Min + 1, -1, Limit<i64>::s_Min, true },
+        { Limit<i64>::s_Max, -Limit<i64>::s_Max, 0, true },
+        { Limit<i64>::s_Min, Limit<i64>::s_Max, -1, true },
+    }};
+    TestArena testArena;
+    const Name scopeName(s_MemoryProjectArena);
+    for(const DeltaCase& test : s_Cases){
+        SCOPED_TRACE(test.first);
+        SCOPED_TRACE(test.second);
+        Telemetry::Recorder recorder(testArena.arena);
+        recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+        auto snapshot = MakeTestMemorySnapshot(scopeName);
+        auto delta = MakeTestMemoryDelta();
+        delta.usedBytes = test.first;
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
+        ++snapshot.frameIndex;
+        ++delta.previousFrameIndex;
+        ++delta.currentFrameIndex;
+        delta.usedBytes = test.second;
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
+        const auto report = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+        ASSERT_TRUE(report);
+        EXPECT_EQ(report->summary.parseFailureCount, 0u);
+        EXPECT_EQ(report->summary.memoryEventCount, 2u);
+        const auto& summary = report->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope];
+        EXPECT_EQ(summary.eventCount, 2u);
+        EXPECT_EQ(summary.maxUsedBytes, snapshot.usedBytes);
+        EXPECT_EQ(summary.totalUsedDeltaValid, test.valid);
+        const AStringView json(report->json);
+        if(test.valid){
+            EXPECT_EQ(summary.totalUsedDeltaBytes, test.expected);
+            const auto expected = StringFormat(testArena.arena, "\"totalUsedDeltaBytes\": {}", test.expected);
+            EXPECT_NE(json.find(AStringView(expected)), AStringView::npos);
+            EXPECT_EQ(json.find("\"totalUsedDeltaBytes\": null"), AStringView::npos);
+        }
+        else{
+            EXPECT_NE(json.find("\"totalUsedDeltaBytes\": null"), AStringView::npos);
+            ++snapshot.frameIndex;
+            ++delta.previousFrameIndex;
+            ++delta.currentFrameIndex;
+            delta.usedBytes = -test.second;
+            ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
+            const auto continued = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+            ASSERT_TRUE(continued);
+            EXPECT_FALSE(continued->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);
+            EXPECT_EQ(continued->summary.memoryEventCount, 3u);
+        }
+        const Array<i64, 2> values = { test.first, test.second };
+        for(const i64 value : values){
+            const auto expected = StringFormat(testArena.arena, "\"usedBytes\": {}", value);
+            EXPECT_NE(json.find(AStringView(expected)), AStringView::npos);
+        }
+
+        recorder.clear();
+        delta.usedBytes = 0;
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
+        const auto reset = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+        ASSERT_TRUE(reset);
+        EXPECT_TRUE(reset->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);
+        EXPECT_EQ(reset->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaBytes, 0);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

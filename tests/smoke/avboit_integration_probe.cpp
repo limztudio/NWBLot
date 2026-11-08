@@ -289,12 +289,12 @@ b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsys
     slots.avboitExtinctionOverflow = descriptors[1].slot();
     slots.avboitControl = descriptors[2].slot();
     slots.avboitTransmittanceStorage = descriptors[3].slot();
-    Core::GraphicsRuntime::BufferSetupDesc setup;
+    Core::GraphicsStandaloneService::BufferSetupDesc setup;
     setup.bufferDesc.setDebugName(Name("AvboitIntegrationSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
     setup.data = &slots;
     setup.dataSize = sizeof(slots);
     setup.queue = Core::CommandQueue::Graphics;
-    const auto slotBufferResult = graphics.setupBuffer(setup);
+    const auto slotBufferResult = graphics.standaloneGraph().setupBuffer(setup);
     if(!slotBufferResult)
         return false;
     slotBuffer = *slotBufferResult;
@@ -316,7 +316,7 @@ b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsys
     payload.push.heapSlots[0] = uniform->slot();
     for(u32 phase = 0u; phase < s_PhaseCount; ++phase){
         PreparePhase(phase, payload);
-        const auto token = graphics.submitStandaloneTaskGraph(&payload, DeclareProbe);
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareProbe);
         if(!token){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} standalone graph rejected at {}"), phase, stage);
             return false;

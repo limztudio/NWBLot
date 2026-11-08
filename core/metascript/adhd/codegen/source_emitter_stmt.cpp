@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "parallel_statement_emitter.h"
+#include "constructor_argument_emitter.h"
 #include "source_emitter.h"
+#include "switch_statement_emitter.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,70 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_source_emitter_stmt{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 StatementsContainBreak(const Span<const Stmt* const> statements)noexcept{
-    for(const Stmt* s : statements){
-        if(!s)
-            continue;
-        if(s->kind == StmtKind::Break)
-            return true;
-        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
-            if(StatementsContainBreak(s->statements) || StatementsContainBreak(s->elseStatements))
-                return true;
-        }
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StatementsContainOuterLoopContinue(const Span<const Stmt* const> statements)noexcept{
-    for(const Stmt* s : statements){
-        if(!s)
-            continue;
-        if(s->kind == StmtKind::Continue)
-            return true;
-        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
-            if(StatementsContainOuterLoopContinue(s->statements) || StatementsContainOuterLoopContinue(s->elseStatements))
-                return true;
-        }
-        else if(s->kind == StmtKind::Switch){
-            for(const SwitchCase& sc : s->switchCases){
-                if(StatementsContainOuterLoopContinue(sc.statements))
-                    return true;
-            }
-        }
-    }
-    return false;
-}
-
-[[nodiscard]] b8 CaseNeedsDoWhileBreakLowering(const Span<const Stmt* const> statements)noexcept{
-    for(usize i = 0u; i < statements.size(); ++i){
-        const Stmt* s = statements[i];
-        if(!s)
-            continue;
-        const b8 isLast = (i + 1u == statements.size())
-            || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break);
-        if(s->kind == StmtKind::Break && !isLast)
-            return true;
-        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
-            if(!isLast && (StatementsContainBreak(s->statements) || StatementsContainBreak(s->elseStatements)))
-                return true;
-            if(CaseNeedsDoWhileBreakLowering(s->statements) || CaseNeedsDoWhileBreakLowering(s->elseStatements))
-                return true;
-        }
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,62 +34,6 @@ void SourceEmitter::emitStatementList(MString& out, const Span<const Stmt* const
         emitStmt(out, *stmt, indent);
         if(stmt->kind == StmtKind::VarDecl && !stmt->name.empty())
             m_activeLocalVarDecls.push_back(stmt);
-    }
-    m_remainingBlockStatements = prevRemaining;
-    m_activeLocalVarDecls.resize(prevLocalDeclCount);
-}
-
-void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
-    const usize prevLocalDeclCount = m_activeLocalVarDecls.size();
-    const Span<const Stmt* const> prevRemaining = m_remainingBlockStatements;
-    for(usize i = 0u; i < statements.size(); ++i){
-        const Stmt* child = statements[i];
-        if(!child)
-            continue;
-        const b8 isTrailingBreak = (child->kind == StmtKind::Break) && (i + 1u == statements.size());
-        if(isTrailingBreak)
-            continue;
-        m_remainingBlockStatements = Span<const Stmt* const>(statements.data() + (i + 1u), statements.size() - (i + 1u));
-        if(child->kind == StmtKind::Block){
-            emitIndent(out, indent);
-            out.append("{\r\n");
-            if(i + 1u == statements.size() || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break))
-                emitSwitchIfChainStatements(out, child->statements, indent + 1u);
-            else
-                emitStatementList(out, child->statements, indent + 1u);
-            emitIndent(out, indent);
-            out.append("}\r\n");
-        }
-        else if(child->kind == StmtKind::If){
-            const b8 isLastInCase = (i + 1u == statements.size())
-                || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break);
-            emitIndent(out, indent);
-            out.append("if(");
-            if(child->condition)
-                emitExpr(out, *child->condition, true);
-            out.append("){\r\n");
-            if(isLastInCase)
-                emitSwitchIfChainStatements(out, child->statements, indent + 1u);
-            else
-                emitStatementList(out, child->statements, indent + 1u);
-            emitIndent(out, indent);
-            out.append("}\r\n");
-            if(!child->elseStatements.empty()){
-                emitIndent(out, indent);
-                out.append("else{\r\n");
-                if(isLastInCase)
-                    emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
-                else
-                    emitStatementList(out, child->elseStatements, indent + 1u);
-                emitIndent(out, indent);
-                out.append("}\r\n");
-            }
-        }
-        else{
-            emitStmt(out, *child, indent);
-            if(child->kind == StmtKind::VarDecl && !child->name.empty())
-                m_activeLocalVarDecls.push_back(child);
-        }
     }
     m_remainingBlockStatements = prevRemaining;
     m_activeLocalVarDecls.resize(prevLocalDeclCount);
@@ -192,7 +76,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         }
         else if(stmt.isCtorInit){
             const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
-            emitCtorOrCallArgs(
+            ConstructorArgumentEmitter(*this).emit(
                 out,
                 baseVarType,
                 stmt.arguments,
@@ -236,7 +120,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         }
         if(tryEmitSimdAssignStmt(out, stmt, indent))
             break;
-        if(tryEmitParallelWaitStmt(out, stmt, indent))
+        if(ParallelStatementEmitter(*this).tryEmitParallelWaitStmt(out, stmt, indent))
             break;
 
         emitIndent(out, indent);
@@ -300,146 +184,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         break;
     }
     case StmtKind::Switch:{
-        if(stmt.lowerSwitchToIfChain){
-            b8 needsEarlyBreakLowering = false;
-            b8 hasOuterContinue = false;
-            for(const SwitchCase& sc : stmt.switchCases){
-                if(__hidden_adhd_source_emitter_stmt::CaseNeedsDoWhileBreakLowering(sc.statements))
-                    needsEarlyBreakLowering = true;
-                if(__hidden_adhd_source_emitter_stmt::StatementsContainOuterLoopContinue(sc.statements))
-                    hasOuterContinue = true;
-            }
-            const b8 needsDoWhileWrap = needsEarlyBreakLowering && !hasOuterContinue;
-            const b8 needsBreakLabel = needsEarlyBreakLowering && hasOuterContinue;
-            const b8 cacheSubject = stmt.expr
-                && stmt.expr->kind != ExprKind::Identifier
-                && stmt.expr->kind != ExprKind::ThisMember;
-            const u32 bodyIndent = (cacheSubject || needsDoWhileWrap) ? (indent + 1u) : indent;
-            if(needsDoWhileWrap){
-                emitIndent(out, indent);
-                out.append("do{\r\n");
-                if(cacheSubject){
-                    emitIndent(out, bodyIndent);
-                    out.append("const auto& __adhd_switch_subject = (");
-                    emitExpr(out, *stmt.expr);
-                    out.append(");\r\n");
-                }
-            }
-            else if(cacheSubject){
-                emitIndent(out, indent);
-                out.append("{\r\n");
-                emitIndent(out, bodyIndent);
-                out.append("const auto& __adhd_switch_subject = (");
-                emitExpr(out, *stmt.expr);
-                out.append(");\r\n");
-            }
-
-            const u32 prevBreakLabelLine = m_activeSwitchBreakLabelLine;
-            if(needsBreakLabel)
-                m_activeSwitchBreakLabelLine = stmt.span.line != 0u ? stmt.span.line : 1u;
-            else if(needsDoWhileWrap)
-                m_activeSwitchBreakLabelLine = 0u;
-
-            b8 firstBranch = true;
-            usize defaultGroupEnd = stmt.switchCases.size();
-            usize idx = 0u;
-            while(idx < stmt.switchCases.size()){
-                usize groupEnd = idx;
-                b8 groupHasDefault = stmt.switchCases[idx].isDefault;
-                while(groupEnd + 1u < stmt.switchCases.size() && stmt.switchCases[groupEnd].statements.empty()){
-                    ++groupEnd;
-                    if(stmt.switchCases[groupEnd].isDefault)
-                        groupHasDefault = true;
-                }
-
-                if(groupHasDefault){
-                    defaultGroupEnd = groupEnd;
-                    idx = groupEnd + 1u;
-                    continue;
-                }
-
-                emitIndent(out, bodyIndent);
-                out.append(firstBranch ? "if(" : "else if(");
-                b8 firstCond = true;
-                for(usize k = idx; k <= groupEnd; ++k){
-                    if(stmt.switchCases[k].isDefault)
-                        continue;
-                    if(!firstCond)
-                        out.append(" || ");
-                    firstCond = false;
-                    if(cacheSubject)
-                        out.append("__adhd_switch_subject");
-                    else if(stmt.expr)
-                        emitExpr(out, *stmt.expr);
-                    out.append(" == ");
-                    if(stmt.switchCases[k].matchExpr)
-                        emitExpr(out, *stmt.switchCases[k].matchExpr);
-                }
-                out.append("){\r\n");
-                firstBranch = false;
-                emitSwitchIfChainStatements(out, stmt.switchCases[groupEnd].statements, bodyIndent + 1u);
-                emitIndent(out, bodyIndent);
-                out.append("}\r\n");
-                idx = groupEnd + 1u;
-            }
-            if(defaultGroupEnd < stmt.switchCases.size()){
-                emitIndent(out, bodyIndent);
-                out.append(firstBranch ? "{\r\n" : "else{\r\n");
-                emitSwitchIfChainStatements(out, stmt.switchCases[defaultGroupEnd].statements, bodyIndent + 1u);
-                emitIndent(out, bodyIndent);
-                out.append("}\r\n");
-            }
-
-            m_activeSwitchBreakLabelLine = prevBreakLabelLine;
-
-            if(needsBreakLabel){
-                emitIndent(out, bodyIndent);
-                out.append("__adhd_switch_break_");
-                AppendUnsignedDecimal(out, stmt.span.line != 0u ? stmt.span.line : 1u);
-                out.append(":;\r\n");
-            }
-            if(needsDoWhileWrap){
-                emitIndent(out, indent);
-                out.append("}while(false);\r\n");
-            }
-            else if(cacheSubject){
-                emitIndent(out, indent);
-                out.append("}\r\n");
-            }
-        }
-        else{
-            const u32 prevBreakLabelLine = m_activeSwitchBreakLabelLine;
-            m_activeSwitchBreakLabelLine = 0u;
-            emitIndent(out, indent);
-            out.append("switch(");
-            if(stmt.expr)
-                emitExpr(out, *stmt.expr);
-            out.append("){\r\n");
-            for(const SwitchCase& sc : stmt.switchCases){
-                emitIndent(out, indent);
-                if(sc.isDefault){
-                    out.append("default:");
-                }
-                else{
-                    out.append("case ");
-                    if(sc.matchExpr)
-                        emitExpr(out, *sc.matchExpr);
-                    out.push_back(':');
-                }
-                if(sc.statements.empty()){
-                    out.append("\r\n");
-                }
-                else{
-                    out.append("{\r\n");
-                    emitStatementList(out, sc.statements, indent + 1u);
-                    emitIndent(out, indent);
-                    out.append("}\r\n");
-                }
-            }
-            emitIndent(out, indent);
-            out.append("}\r\n");
-            m_activeSwitchBreakLabelLine = prevBreakLabelLine;
-        }
+        SwitchStatementEmitter(*this).emit(out, stmt, indent);
         break;
     }
     case StmtKind::ForRange:{
@@ -525,10 +270,54 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
     case StmtKind::ParallelForRange:
     case StmtKind::ParallelForIndex:
     case StmtKind::ParallelBlock:
-    case StmtKind::ParallelCall:
-    case StmtKind::NativeBlock:
+    case StmtKind::ParallelCall:{
+        ParallelStatementEmitter(*this).emitParallelStmt(out, stmt, indent);
+        break;
+    }
+    case StmtKind::NativeBlock:{
+        emitIndent(out, indent);
+        out.append("{\r\n");
+        for(const NativeBinding& binding : stmt.nativeBindings){
+            if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName)
+                continue;
+            emitIndent(out, indent + 1u);
+            if(binding.mode == ParamPassingMode::In)
+                out.append("const auto& ");
+            else
+                out.append("auto& ");
+            out.append(binding.aliasName.data(), binding.aliasName.size());
+            out.append(" = (");
+            if(binding.sourceExpr)
+                emitExpr(out, *binding.sourceExpr);
+            out.append(");\r\n");
+        }
+        emitIndent(out, indent + 1u);
+        AppendTextDiscardCrAndExpandLf(out, stmt.nativeCode);
+        out.append("\r\n");
+        emitIndent(out, indent);
+        out.append("}\r\n");
+        break;
+    }
     case StmtKind::Diagnostic:{
-        emitParallelStmt(out, stmt, indent);
+        emitIndent(out, indent);
+        MStringView macroPrefix;
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, enumName, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+        if(stmt.diagnosticKind == DiagnosticKind::enumName){ \
+            if(stmt.arguments.size() > 1u) \
+                macroPrefix = stmt.isEssential ? MStringView(essentialMsgMacroPrefix) : MStringView(defaultMsgMacroPrefix); \
+            else \
+                macroPrefix = stmt.isEssential ? MStringView(essentialMacroPrefix) : MStringView(defaultMacroPrefix); \
+        }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
+        out.append(macroPrefix.data(), macroPrefix.size());
+        for(usize i = 0u; i < stmt.arguments.size(); ++i){
+            if(i > 0u)
+                out.append(", ");
+            if(stmt.arguments[i])
+                emitExpr(out, *stmt.arguments[i]);
+        }
+        out.append(");\r\n");
         break;
     }
     }

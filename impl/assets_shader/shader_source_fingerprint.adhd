@@ -1,0 +1,106 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShaderSourceFingerprint{
+    public void appendChecksumLine(in StringView text, mut u64 inOutChecksum)const{
+        for(usize i = 0u; i < text.size(); ++i)
+            inOutChecksum = updateFnv64Byte(inOutChecksum, cast<u8>(text[i]));
+        inOutChecksum = updateFnv64Byte(inOutChecksum, s_ShaderChecksumNewlineByte);
+    }
+
+    public u64 beginSourceChecksum(
+        in StringView name,
+        in StringView stage,
+        in StringView archiveStage,
+        in b8 rayQuery,
+        in ShaderOptimizationLevel optimizationLevel,
+        in StringView entryPoint,
+        in StringView variantSignature
+    )const{
+        u64 checksum = 14695981039346656037ul;
+        this.appendChecksumLine(s_ShaderSourceChecksumVersionTag, checksum);
+        this.appendChecksumLine(name, checksum);
+        this.appendChecksumLine(stage, checksum);
+        this.appendChecksumLine(archiveStage, checksum);
+        if(rayQuery)
+            this.appendChecksumLine(s_Spirv15RayQueryTargetProfileText, checksum);
+        else
+            this.appendChecksumLine(s_Spirv15TargetProfileText, checksum);
+        this.appendChecksumLine(ShaderOptimizationLevelText(optimizationLevel), checksum);
+        this.appendChecksumLine(entryPoint, checksum);
+        this.appendChecksumLine(variantSignature, checksum);
+        return checksum;
+    }
+
+    public u64 finalizeSourceChecksum(
+        in u64 dependencyChecksum,
+        in u64 compilerFingerprint,
+        mut u64 inOutChecksum
+    )const{
+        inOutChecksum = updateFnv64U64(inOutChecksum, dependencyChecksum);
+        inOutChecksum = updateFnv64U64(inOutChecksum, compilerFingerprint);
+        return inOutChecksum;
+    }
+
+    private b8 hasDependencyUtf8Bom(in Span<u8> bytes)const{
+        return bytes.size() >= 3u && bytes[0u] == 0xEFu && bytes[1u] == 0xBBu && bytes[2u] == 0xBFu;
+    }
+
+    public void appendDependencyChecksum(
+        in StringView canonicalPath,
+        in Span<u8> dependencyBytes,
+        mut u64 inOutChecksum,
+        mut b8 inOutCompilerInputsHaveBom
+    )const{
+        this.appendChecksumLine(canonicalPath, inOutChecksum);
+        if(this.hasDependencyUtf8Bom(dependencyBytes))
+            inOutCompilerInputsHaveBom = true;
+        for(in u8 b : dependencyBytes)
+            inOutChecksum = updateFnv64Byte(inOutChecksum, b);
+        inOutChecksum = updateFnv64Byte(inOutChecksum, s_ShaderChecksumZeroByte);
+    }
+
+    private void appendFingerprintText(in StringView text, mut u64 inOutFingerprint)const{
+        for(usize i = 0u; i < text.size(); ++i)
+            inOutFingerprint = updateFnv64Byte(inOutFingerprint, cast<u8>(text[i]));
+    }
+
+    public u64 finalizeCompilerFingerprint(
+        in StringView versionText,
+        in Span<StringView> commonArguments,
+        in Span<StringView> baselineCapabilities,
+        in Span<SlangStageMapping> stageMappings,
+        mut u64 inOutFingerprint
+    )const{
+        this.appendFingerprintText(trimView(versionText), inOutFingerprint);
+        for(in StringView argument : commonArguments)
+            this.appendFingerprintText(argument, inOutFingerprint);
+        for(in StringView capability : baselineCapabilities){
+            this.appendFingerprintText(s_SlangCapabilityArgument, inOutFingerprint);
+            this.appendFingerprintText(capability, inOutFingerprint);
+        }
+        this.appendFingerprintText(s_SpvRayQueryCapabilityText, inOutFingerprint);
+        this.appendFingerprintText(s_SlangEntryPointArgument, inOutFingerprint);
+        this.appendFingerprintText(s_SlangStageArgument, inOutFingerprint);
+        this.appendFingerprintText(s_SlangIncludeArgument, inOutFingerprint);
+        this.appendFingerprintText(s_SlangDefineArgument, inOutFingerprint);
+        this.appendFingerprintText(s_SlangOutputArgument, inOutFingerprint);
+        for(in SlangStageMapping mapping : stageMappings){
+            this.appendFingerprintText(mapping.stage, inOutFingerprint);
+            this.appendFingerprintText(mapping.slangStage, inOutFingerprint);
+        }
+        for(u8 optimizationLevel = 0u; optimizationLevel < cast<u8>(ShaderOptimizationLevel::kCount); ++optimizationLevel)
+            this.appendFingerprintText(SlangOptimizationArgument(cast<ShaderOptimizationLevel>(optimizationLevel)), inOutFingerprint);
+        return inOutFingerprint;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

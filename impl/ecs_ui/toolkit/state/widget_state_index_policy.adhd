@@ -1,0 +1,139 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/id.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class WidgetStateIndexPolicy{
+    private b8 validTouchRequest(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration)const{
+        return id.valid() && root.generation != 0u && frameGeneration != 0u && cast<u8>(kind) <= cast<u8>(WidgetKind::Image);
+    }
+
+    private b8 canTouchExisting(in WidgetState entry, in WidgetRoot root, in u64 frameGeneration)const{
+        return entry.root == root && entry.lastSeenFrame != frameGeneration;
+    }
+
+    public b8 matchesDeclaration(
+        in b8 rootActive,
+        in WidgetRoot activeRoot,
+        in u64 frameGeneration,
+        in WidgetState state,
+        in WidgetState current
+    )const{
+        return
+            rootActive
+            && state.root == activeRoot
+            && state.lastSeenFrame == frameGeneration
+            && current.root == state.root
+            && current.declarationGeneration == state.declarationGeneration
+            && current.lastSeenFrame == state.lastSeenFrame
+            && current.kind == state.kind
+        ;
+    }
+
+    private b8 rebuildIndex(in Span<WidgetState> entries, mut HashMap<u64, usize> outIndex)const{
+        outIndex.clear();
+        for(usize index = 0u; index < entries.size(); ++index){
+            const u64 idValue = entries[index].id.value;
+            if(outIndex.contains(idValue))
+                return false;
+            outIndex.try_emplace(idValue, index);
+        }
+        return true;
+    }
+
+    public Expected<usize> findIndex(
+        in Span<WidgetState> entries,
+        in WidgetId id,
+        mut HashMap<u64, usize> inOutIndex,
+        mut b8 inOutIndexDirty,
+        mut b8 outInvariantFailed
+    )const{
+        outInvariantFailed = false;
+        if(inOutIndexDirty){
+            if(!this.rebuildIndex(entries, inOutIndex)){
+                outInvariantFailed = true;
+                return makeUnexpected(Failure());
+            }
+            inOutIndexDirty = false;
+        }
+        if(!inOutIndex.contains(id.value))
+            return makeUnexpected(Failure());
+        const usize index = inOutIndex[id.value];
+        assert(index < entries.size() && entries[index].id == id);
+        return index;
+    }
+
+    public void eraseAt(
+        in usize index,
+        mut Vector<WidgetState> inOutEntries,
+        mut b8 outIndexDirty
+    )const{
+        if(index >= inOutEntries.size())
+            return;
+        for(usize i = index; i + 1u < inOutEntries.size(); ++i)
+            inOutEntries[i] = inOutEntries[i + 1u];
+        inOutEntries.pop_back();
+        outIndexDirty = true;
+    }
+
+    public Expected<usize> touch(
+        in WidgetId id,
+        in WidgetRoot root,
+        in WidgetKind kind,
+        in u64 frameGeneration,
+        mut Vector<WidgetState> inOutEntries,
+        mut HashMap<u64, usize> inOutIndex,
+        mut u64 inOutNextDeclarationGeneration,
+        mut b8 inOutIndexDirty,
+        mut b8 outInvariantFailed
+    )const{
+        outInvariantFailed = false;
+        if(!this.validTouchRequest(id, root, kind, frameGeneration))
+            return makeUnexpected(Failure());
+        const Expected<usize> foundIndex = this.findIndex(inOutEntries, id, inOutIndex, inOutIndexDirty, outInvariantFailed);
+        if(outInvariantFailed)
+            return makeUnexpected(Failure());
+        if(foundIndex.has_value()){
+            const usize index = foundIndex.value();
+            WidgetState entry = inOutEntries[index];
+            if(!this.canTouchExisting(entry, root, frameGeneration))
+                return makeUnexpected(Failure());
+            if(entry.kind != kind){
+                if(inOutNextDeclarationGeneration == u64.max){
+                    outInvariantFailed = true;
+                    return makeUnexpected(Failure());
+                }
+                entry.declarationGeneration = inOutNextDeclarationGeneration;
+                ++inOutNextDeclarationGeneration;
+                entry.kind = kind;
+            }
+            entry.lastSeenFrame = frameGeneration;
+            inOutEntries[index] = entry;
+            return index;
+        }
+        if(inOutEntries.size() >= s_WidgetStateRetainedCapacity)
+            return makeUnexpected(Failure());
+        if(inOutNextDeclarationGeneration == u64.max){
+            outInvariantFailed = true;
+            return makeUnexpected(Failure());
+        }
+        const usize newIndex = inOutEntries.size();
+        inOutEntries.push_back(WidgetState(id, root, inOutNextDeclarationGeneration, frameGeneration, kind));
+        if(inOutIndex.contains(id.value)){
+            inOutEntries.pop_back();
+            outInvariantFailed = true;
+            return makeUnexpected(Failure());
+        }
+        inOutIndex.try_emplace(id.value, newIndex);
+        ++inOutNextDeclarationGeneration;
+        return newIndex;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

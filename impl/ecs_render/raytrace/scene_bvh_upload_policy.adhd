@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_SceneSwBvhInstanceGpuByteSize = 64u;
+
+
+class SceneBvhUploadPolicy{
+    public void captureBytes(
+        in Span<NwbBvhNodeGpu> nodes,
+        in Span<SceneSwBvhInstanceGpu> instances,
+        mut Vector<u8> outNodeBytes,
+        mut Vector<u8> outInstanceBytes
+    )const{
+        outNodeBytes.clear();
+        outNodeBytes.reserve(nodes.size() * s_NwbBvhNodeGpuByteSize);
+        for(in NwbBvhNodeGpu node : nodes)
+            AppendPOD(outNodeBytes, node);
+
+        outInstanceBytes.clear();
+        outInstanceBytes.reserve(instances.size() * s_SceneSwBvhInstanceGpuByteSize);
+        for(in SceneSwBvhInstanceGpu instance : instances)
+            AppendPOD(outInstanceBytes, instance);
+    }
+
+    public b8 publishAcceptedUpload(
+        in b8 ready,
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in u64 staticSceneHash,
+        mut u64 inOutStaticSceneHash,
+        mut b8 inOutStaticSceneHashValid
+    )const{
+        if(!ready || !uploadRequired)
+            return false;
+
+        if(staticScene){
+            inOutStaticSceneHash = staticSceneHash;
+            inOutStaticSceneHashValid = true;
+        }
+        else
+            inOutStaticSceneHashValid = false;
+        return true;
+    }
+
+    public b8 snapshotAccepted(
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in b8 staticSceneHashValid,
+        in u64 currentStaticSceneHash,
+        in u64 expectedStaticSceneHash,
+        in usize currentInstanceCount,
+        in usize expectedInstanceCount
+    )const{
+        return uploadRequired
+            || (staticScene && staticSceneHashValid && currentStaticSceneHash == expectedStaticSceneHash && currentInstanceCount == expectedInstanceCount);
+    }
+
+    public b8 validateRetainState(
+        in b8 storageMatches,
+        in b8 storageReady,
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in b8 staticSceneHashValid,
+        in u64 currentStaticSceneHash,
+        in u64 expectedStaticSceneHash,
+        in usize currentInstanceCount,
+        in usize expectedInstanceCount,
+        in usize nodeByteCount,
+        in usize expectedNodeCount,
+        in usize instanceByteCount
+    )const{
+        if(!storageMatches || !storageReady){
+            error("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage");
+            return false;
+        }
+        if(!uploadRequired){
+            if(!staticScene || !staticSceneHashValid || currentStaticSceneHash != expectedStaticSceneHash || currentInstanceCount != expectedInstanceCount){
+                error("RendererSystem: frozen software scene-BVH cache identity is no longer accepted");
+                return false;
+            }
+            return true;
+        }
+        if(
+            nodeByteCount == 0u
+            || instanceByteCount == 0u
+            || nodeByteCount != expectedNodeCount * s_NwbBvhNodeGpuByteSize
+            || instanceByteCount != expectedInstanceCount * s_SceneSwBvhInstanceGpuByteSize
+        ){
+            error("RendererSystem: frozen software scene-BVH payload is incomplete");
+            return false;
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

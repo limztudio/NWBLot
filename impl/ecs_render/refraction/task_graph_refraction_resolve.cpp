@@ -80,7 +80,7 @@ b8 RefractionResolveGraphTask::Record(const Payload& payload, Core::CommandList&
         resources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
         resources.materialContextSlotsHeapSlot = 0u;
     }
-    return payload.system.recordRefractionResolve(commandList, payload.targets, resources);
+    return payload.system.refraction().recordRefractionResolve(commandList, payload.targets, resources);
 }
 
 void RefractionResolveGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){

@@ -3,6 +3,8 @@
 
 
 #include "builder.h"
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -48,7 +50,7 @@ b8 Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const La
     m_scope->m_panelStyle = m_style;
     m_scope->m_panelState = **state;
     m_scope->m_bounds = bounds;
-    const LayoutNodeDesc description = MakePanelRootLayoutNodeDesc(bounds, direction, panel->padding, m_style.gap);
+    const LayoutNodeDesc description = UiScopeDescriptorFactory().panelRoot(bounds, direction, panel->padding, m_style.gap);
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode || !m_context.pushScope(stableKey)){
@@ -188,7 +190,7 @@ b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::E
         m_context.fail();
         return false;
     }
-    const LayoutNodeDesc description = MakeContainerLayoutNodeDesc(direction, options);
+    const LayoutNodeDesc description = UiScopeDescriptorFactory().container(direction, options);
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode || !m_context.pushScope(stableKey)){
@@ -246,7 +248,7 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
         intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, minimum);
     }
     else if(kind == WidgetKind::Checkbox){
-        const auto checkboxExtent = ResolveCheckboxStyleExtent(*m_skin, m_style);
+        const auto checkboxExtent = ControlStyleMetrics().checkboxExtent(*m_skin, m_style);
         if(!checkboxExtent){
             m_context.fail();
             return MakeUnexpected(Failure{});
@@ -284,13 +286,13 @@ const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)
 Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Name> names, const Name& fallback)const noexcept{
     if(!m_skin)
         return initial;
-    return ResolveSkinRegionsMaxPadding(*m_skin, initial, names, fallback);
+    return ControlStyleMetrics().skinRegionsMaxPadding(*m_skin, initial, names, fallback);
 }
 
 void Builder::loadButtonMetrics(Point& size, Insets& padding)const noexcept{
     if(!m_skin)
         return;
-    LoadButtonStyleMetrics(*m_skin, m_style, size, padding);
+    ControlStyleMetrics().buttonMetrics(*m_skin, m_style, size, padding);
 }
 
 

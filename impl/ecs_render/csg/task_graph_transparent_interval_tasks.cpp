@@ -45,7 +45,7 @@ struct TransparentIntervalReadiness{
     readiness.csgFrameData = payload.transparentCsgSnapshot.csgFrameDataView();
     const b8 drawBuffersReady = payload.frameBindings.frameReady(payload.transparentCsgSnapshot.instanceCount, payload.transparentCsgSnapshot.materialTypedByteCount);
     const b8 csgResourcesReady = payload.csgResources.frameReady(readiness.csgFrameData);
-    const b8 receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, payload.frameBindings);
+    const b8 receiverSurfaceDrawResourcesReady = materialSystem.drawRecorder().materialPassDrawResourcesReady(receiverSurfaceDrawItems, payload.frameBindings);
     readiness.ready = payload.csgFrameBuffersUploaded && payload.targets.framebuffer && !receiverSurfaceDrawItems.empty() && readiness.csgFrameData.hasWork() && drawBuffersReady && csgResourcesReady && receiverSurfaceDrawResourcesReady;
     return readiness;
 }

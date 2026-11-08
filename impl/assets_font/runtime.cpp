@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_font/font_binary_codec.adhd.h>
+
 #include <core/assets/auto_registration.h>
 
 
@@ -36,7 +38,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 
 b8 Font::loadBinary(const Span<const u8> binary){
     Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
-    if(!DeserializeFontBinaryPayload(binary, candidate.m_fontBytes, candidate.m_faceIndex))
+    if(!FontBinaryCodec{}.deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
         return false;
     if(!candidate.validatePayload())
         return false;

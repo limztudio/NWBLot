@@ -6,7 +6,10 @@
 
 
 #include "input/router.h"
+#include <impl/ecs_ui/toolkit/state/widget_state_index_policy.adhd.h>
 #include "state/store.h"
+
+#include <impl/ecs_ui/toolkit/input/context_staging.adhd.h>
 
 #include <global/hash_utils.h>
 
@@ -329,7 +332,7 @@ private:
     }
     [[nodiscard]] b8 currentDeclaration(const WidgetState& state)const noexcept{
         const WidgetState* current = m_states.find(state.id);
-        return current && IsMatchingWidgetStateDeclaration(m_rootActive, m_root, m_frameGeneration, state, *current);
+        return current && WidgetStateIndexPolicy().matchesDeclaration(m_rootActive, m_root, m_frameGeneration, state, *current);
     }
     void retireUnseenStates(){
         if(m_frameGeneration == 0u)

@@ -4,7 +4,8 @@
 import ctypes
 import time
 from window_capture_outcome import SmokeSkip, SmokeFailure, write_status  # noqa: E402
-from window_capture_image import write_capture_rows, ximage_rgb_rows  # noqa: E402
+from window_capture_x11_pixels import X11DrawablePixels  # noqa: E402
+from window_capture_x11_input import (X11InputSender, LinuxXEvent, LinuxXKeyEvent, LinuxXButtonEvent, LinuxXMotionEvent, LINUX_X_INPUT_EVENT_PREFIX)  # noqa: E402
 
 
 LIT_WINDOW_POLL_SECONDS = 0.1
@@ -23,10 +24,6 @@ LIT_DEPTH = "depth"
 LIT_ROOT = "root"
 LIT_TYPE = "type"
 LIT_SAME_SCREEN = "same_screen"
-LINUX_X_INPUT_EVENT_PREFIX = [(LIT_TYPE, ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("window", ctypes.c_ulong), (LIT_ROOT, ctypes.c_ulong), ("subwindow", ctypes.c_ulong), ("time", ctypes.c_ulong),
-    (LIT_X, ctypes.c_int), (LIT_Y, ctypes.c_int), ("x_root", ctypes.c_int), ("y_root", ctypes.c_int), ("state", ctypes.c_uint),]
-
-
 class LinuxXWindowAttributes(ctypes.Structure):
     _fields_ = [(LIT_X, ctypes.c_int), (LIT_Y, ctypes.c_int), (LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("border_width", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("visual", ctypes.c_void_p), (LIT_ROOT, ctypes.c_ulong), ("class", ctypes.c_int),
         ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong),
@@ -38,23 +35,9 @@ class LinuxXImageFuncs(ctypes.Structure):
 
 
 class LinuxXImage(ctypes.Structure):
-    pass
-
-
-class LinuxXKeyEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("keycode", ctypes.c_uint), (LIT_SAME_SCREEN, ctypes.c_int),]
-
-
-class LinuxXButtonEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("button", ctypes.c_uint), (LIT_SAME_SCREEN, ctypes.c_int),]
-
-
-class LinuxXMotionEvent(ctypes.Structure):
-    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [("is_hint", ctypes.c_char), (LIT_SAME_SCREEN, ctypes.c_int),]
-
-
-class LinuxXEvent(ctypes.Union):
-    _fields_ = [(LIT_TYPE, ctypes.c_int), ("xkey", LinuxXKeyEvent), ("xbutton", LinuxXButtonEvent), ("xmotion", LinuxXMotionEvent), ("pad", ctypes.c_long * 24),]
+    _fields_ = [(LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int), ("data", ctypes.c_void_p), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int), ("bitmap_bit_order", ctypes.c_int),
+    ("bitmap_pad", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int), ("red_mask", ctypes.c_ulong), ("green_mask", ctypes.c_ulong), ("blue_mask", ctypes.c_ulong), ("obdata", ctypes.c_void_p),
+    ("f", LinuxXImageFuncs),]
 
 
 class LinuxX11Capture:
@@ -113,12 +96,8 @@ class LinuxX11Capture:
         self.x11.XGetWindowProperty.restype = ctypes.c_int
         self.x11.XGetWindowAttributes.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(self.XWindowAttributes),]
         self.x11.XGetWindowAttributes.restype = ctypes.c_int
-        self.x11.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_int,]
-        self.x11.XGetImage.restype = ctypes.POINTER(self.XImage)
-        self.x11.XDestroyImage.argtypes = [ctypes.POINTER(self.XImage)]
-        self.x11.XDestroyImage.restype = ctypes.c_int
-        self.x11.XSendEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_long, ctypes.POINTER(LinuxXEvent),]
-        self.x11.XSendEvent.restype = ctypes.c_int
+        X11DrawablePixels.bind(self.x11, self.XImage)
+        X11InputSender.bind(self.x11)
         self.x11.XFlush.argtypes = [ctypes.c_void_p]
         self.x11.XFlush.restype = ctypes.c_int
         self.x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
@@ -237,34 +216,13 @@ class LinuxX11Capture:
         return None
 
     def send_motion_event(self, window, x, y):
-        event = LinuxXEvent()
-        event.xmotion.type = self.MOTION_NOTIFY
-        self._fill_input_event_prefix(event.xmotion, window, x, y)
-        event.xmotion.is_hint = b"\0"
-        if not self.x11.XSendEvent(self.display, window, False, self.POINTER_MOTION_MASK, ctypes.byref(event)):
-            raise SmokeFailure("failed to send pointer motion")
-        self.x11.XFlush(self.display)
+        X11InputSender(self.x11, self.display, self.root).send_motion_event(window, x, y)
 
     def send_button_event(self, window, event_type, x, y):
-        event = LinuxXEvent()
-        event.xbutton.type = event_type
-        state = self.BUTTON1_MASK if event_type == self.BUTTON_RELEASE else 0
-        self._fill_input_event_prefix(event.xbutton, window, x, y, state)
-        event.xbutton.button = self.BUTTON_LEFT
-        event_mask = self.BUTTON_PRESS_MASK if event_type == self.BUTTON_PRESS else self.BUTTON_RELEASE_MASK
-        if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
-            raise SmokeFailure("failed to send mouse button event")
-        self.x11.XFlush(self.display)
+        X11InputSender(self.x11, self.display, self.root).send_button_event(window, event_type, x, y)
 
     def send_key_event(self, window, event_type, keycode):
-        event = LinuxXEvent()
-        event.xkey.type = event_type
-        self._fill_input_event_prefix(event.xkey, window, 0, 0)
-        event.xkey.keycode = keycode
-        event_mask = self.KEY_PRESS_MASK if event_type == self.KEY_PRESS else self.KEY_RELEASE_MASK
-        if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
-            raise SmokeFailure("failed to send key event")
-        self.x11.XFlush(self.display)
+        X11InputSender(self.x11, self.display, self.root).send_key_event(window, event_type, keycode)
 
     def focus_window(self, window):
         self.x11.XRaiseWindow(self.display, window)
@@ -306,28 +264,10 @@ class LinuxX11Capture:
         return attributes.width, attributes.height
 
     def _window_root_point(self, window, x, y):
-        root_x = ctypes.c_int()
-        root_y = ctypes.c_int()
-        child = ctypes.c_ulong()
-        if self.x11.XTranslateCoordinates(self.display, window, self.root, x, y, ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(child),) == 0:
-            return x, y
-
-        return root_x.value, root_y.value
+        return X11InputSender(self.x11, self.display, self.root)._window_root_point(window, x, y)
 
     def _fill_input_event_prefix(self, event, window, x, y, state=0):
-        root_x, root_y = self._window_root_point(window, x, y)
-        event.send_event = True
-        event.display = self.display
-        event.window = window
-        event.root = self.root
-        event.subwindow = 0
-        event.time = self.CURRENT_TIME
-        event.x = x
-        event.y = y
-        event.x_root = root_x
-        event.y_root = root_y
-        event.state = state
-        event.same_screen = True
+        X11InputSender(self.x11, self.display, self.root)._fill_input_event_prefix(event, window, x, y, state)
 
     def capture_window(self, window, output_path):
         self.x11.XRaiseWindow(self.display, window)
@@ -368,16 +308,7 @@ class LinuxX11Capture:
         client_width, client_height = self._validated_window_size(window)
         if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > client_width or y + height > client_height:
             raise SmokeFailure("X11 pixel sample falls outside the client area")
-        image = self.x11.XGetImage(self.display, window, x, y, width, height, ctypes.c_ulong(-1).value, self.Z_PIXMAP)
-        if not image:
-            raise SmokeFailure(f"XGetImage failed for window 0x{window:x}")
-        try:
-            if image.contents.bits_per_pixel not in (16, 24, 32) or not image.contents.data:
-                raise SmokeFailure("X11 pixel sample has unsupported or missing image data")
-            byte_order = LIT_LITTLE if image.contents.byte_order == self.LSB_FIRST else LIT_BIG
-            return ximage_rgb_rows(image.contents, byte_order)
-        finally:
-            self.x11.XDestroyImage(image)
+        return X11DrawablePixels(self.x11, self.display).sample(window, x, y, width, height)
 
     def _window_root_region(self, window, attributes):
         root_x = ctypes.c_int()
@@ -402,22 +333,4 @@ class LinuxX11Capture:
         return capture_x, capture_y, width, height
 
     def _capture_drawable_region(self, drawable, output_handle, x, y, width, height, output_path):
-        image = self.x11.XGetImage(self.display, drawable, x, y, width, height, ctypes.c_ulong(-1).value, self.Z_PIXMAP,)
-        if not image:
-            raise SmokeFailure(f"XGetImage failed for drawable 0x{drawable:x}")
-
-        try:
-            return self._write_ximage_bmp(output_handle, image.contents, output_path)
-        finally:
-            self.x11.XDestroyImage(image)
-
-    def _write_ximage_bmp(self, output_handle, image, output_path):
-        bytes_per_pixel = (image.bits_per_pixel + 7) // 8
-        if bytes_per_pixel not in (2, 3, 4):
-            raise SmokeFailure(f"unsupported XImage pixel size: {image.bits_per_pixel} bits")
-        if not image.data:
-            raise SmokeFailure(f"XImage for drawable 0x{output_handle:x} has no pixel data")
-
-        byte_order = LIT_LITTLE if image.byte_order == self.LSB_FIRST else LIT_BIG
-        rows = ximage_rgb_rows(image, byte_order)
-        return write_capture_rows(output_handle, image.width, image.height, rows, output_path)
+        return X11DrawablePixels(self.x11, self.display).capture(drawable, output_handle, x, y, width, height, output_path)

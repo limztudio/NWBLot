@@ -1,0 +1,193 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/model_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditHistoryActions{
+    private void commit(
+        in StringView value,
+        in Span<usize> newBoundaries,
+        in usize anchor,
+        in usize caret,
+        in isize cursorDelta,
+        mut String inOutText,
+        mut Vector<usize> inOutBoundaries,
+        mut usize outAnchor,
+        mut usize outCaret,
+        mut u64 inOutSelectionGeneration,
+        mut usize inOutHistoryCursor,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration,
+        mut u64 inOutRevision
+    ){
+        inOutText.assign(value);
+        inOutBoundaries.clear();
+        for(usize i = 0u; i < newBoundaries.size(); ++i)
+            inOutBoundaries.push_back(newBoundaries[i]);
+        outAnchor = anchor;
+        outCaret = caret;
+        ++inOutSelectionGeneration;
+        inOutHistoryCursor = cast<usize>(cast<isize>(inOutHistoryCursor) + cursorDelta);
+        EditCompositionRules compositionRules;
+        compositionRules.cancel(
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration
+        );
+        ++inOutRevision;
+    }
+
+
+    public b8 restore(
+        in StringView value,
+        in usize anchor,
+        in usize caret,
+        in isize cursorDelta,
+        in EditTextMode textMode,
+        mut String inOutText,
+        mut Vector<usize> inOutBoundaries,
+        mut usize outAnchor,
+        mut usize outCaret,
+        mut u64 inOutSelectionGeneration,
+        mut usize inOutHistoryCursor,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration,
+        mut u64 inOutRevision
+    ){
+        Vector<usize> boundaries;
+        if(!TryBuildEditModelBoundaries(value, textMode, boundaries))
+            return false;
+        this.commit(
+            value,
+            boundaries,
+            anchor,
+            caret,
+            cursorDelta,
+            inOutText,
+            inOutBoundaries,
+            outAnchor,
+            outCaret,
+            inOutSelectionGeneration,
+            inOutHistoryCursor,
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration,
+            inOutRevision
+        );
+        return true;
+    }
+
+    public b8 undo(
+        in Span<EditHistoryRecord> history,
+        in EditTextMode textMode,
+        mut String inOutText,
+        mut Vector<usize> inOutBoundaries,
+        mut usize outAnchor,
+        mut usize outCaret,
+        mut u64 inOutSelectionGeneration,
+        mut usize inOutHistoryCursor,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration,
+        mut u64 inOutRevision
+    ){
+        if(inOutHistoryCursor == 0u)
+            return false;
+        const usize recordIndex = inOutHistoryCursor - 1u;
+        return this.restore(
+            history[recordIndex].before,
+            history[recordIndex].beforeAnchor,
+            history[recordIndex].beforeCaret,
+            -1,
+            textMode,
+            inOutText,
+            inOutBoundaries,
+            outAnchor,
+            outCaret,
+            inOutSelectionGeneration,
+            inOutHistoryCursor,
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration,
+            inOutRevision
+        );
+    }
+
+    public b8 redo(
+        in Span<EditHistoryRecord> history,
+        in EditTextMode textMode,
+        mut String inOutText,
+        mut Vector<usize> inOutBoundaries,
+        mut usize outAnchor,
+        mut usize outCaret,
+        mut u64 inOutSelectionGeneration,
+        mut usize inOutHistoryCursor,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration,
+        mut u64 inOutRevision
+    ){
+        if(inOutHistoryCursor >= history.size())
+            return false;
+        const usize recordIndex = inOutHistoryCursor;
+        return this.restore(
+            history[recordIndex].after,
+            history[recordIndex].afterAnchor,
+            history[recordIndex].afterCaret,
+            1,
+            textMode,
+            inOutText,
+            inOutBoundaries,
+            outAnchor,
+            outCaret,
+            inOutSelectionGeneration,
+            inOutHistoryCursor,
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration,
+            inOutRevision
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

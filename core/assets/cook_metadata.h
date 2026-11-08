@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include "asset_file_discovery.h"
 #include "cook_dependency_registry.h"
 #include "cook_entry_registry.h"
 #include "expanded_metadata.h"
@@ -167,25 +168,6 @@ template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct DiscoveredNwbFile{
-    Path assetRoot;
-    Path filePath;
-    CookString normalizedPathText;
-    ACompactString virtualRoot;
-
-
-public:
-    template<typename FileArenaT>
-    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, AStringView inVirtualRoot)
-        : assetRoot(arena, inAssetRoot)
-        , filePath(arena, inFilePath)
-        , normalizedPathText(inNormalizedPathText, arena)
-        , virtualRoot(inVirtualRoot)
-    {}
-};
-
-using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 
 inline constexpr u32 s_NwbAssetCacheMagic = 0x4341574eu; // NWAC
 inline constexpr u16 s_NwbAssetCacheVersion = 2u;
@@ -360,7 +342,6 @@ void RegisterNonStandaloneFirstTokenSuffix(AStringView tokenSuffix);
 [[nodiscard]] b8 IsNonStandaloneAssetType(const Name& assetType);
 [[nodiscard]] b8 IsLikelyNonStandaloneFirstToken(AStringView firstToken);
 void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
-[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena);
 [[nodiscard]] b8 AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);

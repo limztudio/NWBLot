@@ -4,6 +4,7 @@
 
 #include "runtime.h"
 #include "runtime_internal.h"
+#include "runtime_frame_timing_reset.h"
 #include "runtime_standalone_graph.h"
 #include "profile_names.h"
 
@@ -167,7 +168,7 @@ b8 GraphicsRuntime::prepareFramePreamble(){
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
+        if(!GraphicsModuleDetail::FrameTimingResetGraph::submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }
@@ -182,11 +183,7 @@ b8 GraphicsRuntime::prepareFramePreamble(){
 }
 
 b8 GraphicsRuntime::shouldRenderUnfocused()const{
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->shouldRenderUnfocused())
-            return true;
-    }
-    return false;
+    return m_renderPasses.shouldRenderUnfocused();
 }
 
 Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
@@ -202,7 +199,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;
-    for(const auto renderPass : m_renderPasses){
+    for(const auto renderPass : m_renderPasses.passes()){
         const auto admitted = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())
@@ -267,7 +264,7 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
         Timer animateBegin;
         if(phaseTiming)
             animateBegin = TimerNow();
-        animate(elapsedTime);
+        m_renderPasses.animate(elapsedTime);
         if(phaseTiming)
             phaseTiming->stage(m_animateTimingScope, animateBegin);
 

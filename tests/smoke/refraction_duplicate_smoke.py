@@ -8,7 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection, write_gallery
+from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection
+from refraction_gallery_publisher import RefractionGalleryPublisher
 from window_capture_image import read_bmp_24_rows
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
@@ -144,7 +145,7 @@ def main(argv):
         manifest = {"captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "frames": args.frames, "hardware_required": args.require_hardware, "application_args": args.application_arg,
             LIT_VARIANTS: list(args.variants) + [LIT_DISABLED], "variant_labels": labels, "limits": COMMON_LIMIT, "image_count": sum(len(entry[LIT_CAPTURES]) for entry in entries.values()), "cases": list(entries.values()),
             "validation": "Matched single-volume comparisons, insertion-order and priority checks, authored coincidence modes, and independent-layer controls."}
-        write_gallery(args.output_directory, manifest)
+        RefractionGalleryPublisher.write(args.output_directory, manifest)
         results = validate_captures(args.output_directory, args.variants)
         report = {"maximum_channel_error": MAXIMUM_CHANNEL_ERROR, "maximum_mean_error": MAXIMUM_MEAN_ERROR, "minimum_distinct_pixels": MINIMUM_DISTINCT_PIXELS, "comparisons": results}
         (args.output_directory / "duplicate_comparisons.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)

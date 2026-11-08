@@ -4,6 +4,7 @@
 
 #include "numeric_edit_scene.h"
 
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>

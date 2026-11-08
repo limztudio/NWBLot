@@ -3,12 +3,11 @@
 
 
 #include "crash_symbolicate_internal.h"
+#include "linux_frame_symbol_resolver.h"
 
 #include <core/crash/package_names.h>
 
 #include <global/overflow.h>
-#include <global/process_execution.h>
-#include <global/process_capture.h>
 #include <global/process_memory_map.h>
 #include <global/text_utils.h>
 
@@ -30,23 +29,6 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr AStringView s_LinuxUnknownSymbolText = "??";
-inline constexpr AStringView s_LinuxUnknownLocationPrefix = "??:";
-inline constexpr AStringView s_LinuxSymbolFrameSeparator = " <- ";
-inline constexpr AStringView s_LinuxSymbolLocationSeparator = " at ";
-inline constexpr AStringView s_LinuxSymbolLocationBarePrefix = "at ";
-inline constexpr AStringView s_LlvmSymbolizerTool = "llvm-symbolizer";
-inline constexpr AStringView s_Addr2LineTool = "addr2line";
-inline constexpr AStringView s_LlvmSymbolizerObjectPrefix = "--obj=";
-inline constexpr AStringView s_LlvmSymbolizerDemangleFlag = "--demangle";
-inline constexpr AStringView s_LlvmSymbolizerFunctionsFlag = "--functions";
-inline constexpr AStringView s_LlvmSymbolizerInliningFlag = "--inlining=true";
-inline constexpr AStringView s_Addr2LineFunctionsFlag = "-f";
-inline constexpr AStringView s_Addr2LineDemangleFlag = "-C";
-inline constexpr AStringView s_Addr2LineInlineFlag = "-i";
-inline constexpr AStringView s_Addr2LineExeFlag = "-e";
-inline constexpr AStringView s_AnonymousModulePath = "<anonymous>";
-inline constexpr usize s_SymbolizerResultReserveMultiplier = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,201 +44,24 @@ public:
     {}
 };
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-struct LinuxSymbolFileCacheEntry{
-    AString<Core::Alloc::ScratchArena> modulePath;
-    AString<Core::Alloc::ScratchArena> symbolPath;
-    b8 found = false;
 
-
-public:
-    explicit LinuxSymbolFileCacheEntry(Core::Alloc::ScratchArena& arena)noexcept(noexcept(decltype(modulePath)(arena)) && noexcept(decltype(symbolPath)(arena)))
-        : modulePath(arena)
-        , symbolPath(arena)
-    {}
-};
-
-struct LinuxSymbolFileCache{
-    Vector<LinuxSymbolFileCacheEntry, Core::Alloc::ScratchArena> entries;
-
-
-public:
-    explicit LinuxSymbolFileCache(Core::Alloc::ScratchArena& arena)noexcept(noexcept(decltype(entries)(arena)))
-        : entries(arena)
-    {}
-};
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static b8 IsUnknownSymbolLine(const AStringView line)noexcept{
-    const AStringView trimmed = TrimView(line);
-    return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
-}
 
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(const AStringView outputText, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> outSymbol(arena);
-    outSymbol.reserve(AddSize(outputText.size(), SizeOf<s_SymbolizerResultReserveMultiplier>(outputText.size())));
-
-    usize cursor = 0u;
-    while(const auto function = NextTrimmedTextLine(outputText, cursor)){
-        const auto location = NextTrimmedTextLine(outputText, cursor);
-
-        const b8 hasFunction = !IsUnknownSymbolLine(*function);
-        const b8 hasLocation = location && !IsUnknownSymbolLine(*location);
-        if(!hasFunction && !hasLocation)
-            continue;
-
-        if(!outSymbol.empty())
-            outSymbol += s_LinuxSymbolFrameSeparator;
-        b8 wroteFrame = false;
-        if(hasFunction){
-            outSymbol.append(function->data(), function->size());
-            wroteFrame = true;
-        }
-        if(hasLocation){
-            if(wroteFrame)
-                outSymbol += s_LinuxSymbolLocationSeparator;
-            else
-                outSymbol += s_LinuxSymbolLocationBarePrefix;
-            outSymbol.append(location->data(), location->size());
-        }
-    }
-
-    if(outSymbol.empty())
-        return MakeUnexpected(Failure{});
-    return outSymbol;
-}
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> RunLinuxSymbolizerCommand(const Span<const AStringView> arguments, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> output{arena};
-    output.reserve(ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes);
-    const auto captured = CaptureProcessOutput(output, arena, arguments);
-    if(!captured){
-        const ProcessCaptureFailure& failure = captured.error();
-        NWB_LOGGER_INFO(NWB_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
-            , static_cast<u32>(failure.kind)
-            , static_cast<i32>(failure.nativeError)
-            , static_cast<i32>(failure.completionError)
-            , failure.exitCode
-            , failure.terminationSignal
-            , failure.outputTruncated
-        );
-        return MakeUnexpected(Failure{});
-    }
-
-    return ExtractSymbolizerResult(AStringView(output.data(), output.size()), arena);
-}
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> TryRunLinuxSymbolizer(const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> addressArgument{arena};
-    addressArgument.reserve(s_HexAddressPrefix.size() + ::s_HexU64DigitCount);
-    addressArgument += s_HexAddressPrefix;
-    AppendHexU64(moduleOffset, addressArgument);
-
-    if(toolName == s_LlvmSymbolizerTool){
-        AString<Core::Alloc::ScratchArena> objectArgument{arena};
-        objectArgument.reserve(AddSize(s_LlvmSymbolizerObjectPrefix.size(), modulePathText.size()));
-        objectArgument += s_LlvmSymbolizerObjectPrefix;
-        objectArgument.append(modulePathText.data(), modulePathText.size());
-
-        const Array<AStringView, 6> arguments = {{ s_LlvmSymbolizerTool, s_LlvmSymbolizerDemangleFlag, s_LlvmSymbolizerFunctionsFlag, s_LlvmSymbolizerInliningFlag, AStringView(objectArgument), AStringView(addressArgument) }};
-
-        return RunLinuxSymbolizerCommand(arguments, arena);
-    }
-
-    AString<Core::Alloc::ScratchArena> modulePathArgument{arena};
-    modulePathArgument.reserve(modulePathText.size());
-    modulePathArgument.append(modulePathText.data(), modulePathText.size());
-
-    const Array<AStringView, 7> arguments = {{ s_Addr2LineTool, s_Addr2LineFunctionsFlag, s_Addr2LineDemangleFlag, s_Addr2LineInlineFlag, s_Addr2LineExeFlag, AStringView(modulePathArgument), AStringView(addressArgument) }};
-
-    return RunLinuxSymbolizerCommand(arguments, arena);
-}
-
-[[nodiscard]] static Expected<CrashScratchPath> FindLinuxSymbolFile(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena){
-    if(modulePathText.empty() || modulePathText == s_AnonymousModulePath)
-        return MakeUnexpected(Failure{});
-
-    CrashScratchPath modulePath(arena, modulePathText);
-    const auto regularModule = IsRegularFile(modulePath);
-    if(!regularModule){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    if(*regularModule)
-        return modulePath;
-
-    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(config, arena);
-    if(symbolStoreDirectory.empty())
-        return MakeUnexpected(Failure{});
-
-    const auto moduleFileName = modulePath.filenameView();
-    if(moduleFileName.empty())
-        return MakeUnexpected(Failure{});
-
-    CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
-    const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
-    if(!regularCandidate){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    if(*regularCandidate)
-        return symbolStoreCandidate;
-
-    return MakeUnexpected(Failure{});
-}
-
-[[nodiscard]] static Expected<AStringView> FindLinuxSymbolFileText(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache){
-    for(const LinuxSymbolFileCacheEntry& entry : cache.entries){
-        if(AStringView(entry.modulePath.data(), entry.modulePath.size()) != modulePathText)
-            continue;
-
-        if(!entry.found)
-            return MakeUnexpected(Failure{});
-
-        return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-    }
-
-    LinuxSymbolFileCacheEntry& entry = cache.entries.emplace_back(cache.entries.get_allocator().arena());
-    entry.modulePath.assign(modulePathText.data(), modulePathText.size());
-
-    const auto symbolPath = FindLinuxSymbolFile(modulePathText, config, arena);
-    entry.found = symbolPath.has_value();
-    if(!entry.found)
-        return MakeUnexpected(Failure{});
-
-    const auto symbolPathText = PathToString<char>(cache.entries.get_allocator().arena(), *symbolPath);
-    entry.symbolPath.assign(symbolPathText.data(), symbolPathText.size());
-    return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-}
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ResolveLinuxFrameSymbol(const AStringView modulePathText, const u64 moduleOffset, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache){
-    const auto symbolPathText = FindLinuxSymbolFileText(modulePathText, config, arena, cache);
-    if(!symbolPathText)
-        return MakeUnexpected(Failure{});
-
-    auto llvmSymbol = TryRunLinuxSymbolizer(s_LlvmSymbolizerTool, *symbolPathText, moduleOffset, arena);
-    if(llvmSymbol)
-        return Move(*llvmSymbol);
-    return TryRunLinuxSymbolizer(s_Addr2LineTool, *symbolPathText, moduleOffset, arena);
-}
-#endif
 
 static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, [[maybe_unused]] Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    LinuxSymbolFileCache symbolFileCache(arena);
     usize frameLineCount = 1u;
     for(const char ch : callstackText){
         if(ch == '\n')
             ++frameLineCount;
     }
-    symbolFileCache.entries.reserve(frameLineCount);
+    LinuxFrameSymbolResolver symbolResolver(config, arena, frameLineCount);
 #endif
 
     usize cursor = 0u;
@@ -280,7 +85,7 @@ static void AppendLinuxClientCallstack(const AStringView callstackText, const Li
                 const auto symbolOffset = AddNoOverflow(moduleOffset, mapEntry->fileOffset);
                 AppendHexAddress(moduleOffset, outReport);
                 if(symbolOffset){
-                    const auto symbol = ResolveLinuxFrameSymbol(modulePath, *symbolOffset, config, arena, symbolFileCache);
+                    const auto symbol = symbolResolver.resolve(modulePath, *symbolOffset);
                     if(symbol){
                         outReport += " ";
                         outReport += *symbol;

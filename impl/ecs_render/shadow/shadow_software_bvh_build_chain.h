@@ -1,0 +1,54 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShadowSoftwareBvhBuildChain final : NoCopy{
+public:
+    ShadowSoftwareBvhBuildChain(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
+        : m_graph(graph)
+        , m_raytracingSystem(raytracingSystem)
+    {}
+
+
+public:
+    [[nodiscard]] b8 declare(
+        Span<const PreparedMeshSwBvhGraphResources> pureSoftwareMeshSwBvhGraphResources,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Core::GpuTaskId& shadowPrepareDependency,
+        Core::GpuTaskId& firstTask,
+        Core::GpuTaskId& lastTask
+    );
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererRayTracingSystem& m_raytracingSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

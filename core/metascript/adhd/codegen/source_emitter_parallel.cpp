@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "source_emitter.h"
+#include "parallel_statement_emitter.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,28 +53,28 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SourceEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
-    emitIndent(out, indent);
+void ParallelStatementEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
+    m_emitter.emitIndent(out, indent);
     out.append("static ::NWB::Core::CpuTaskScheduler s_AdhdTaskScheduler;\r\n");
-    emitIndent(out, indent);
+    m_emitter.emitIndent(out, indent);
     out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
-    emitIndent(out, indent);
+    m_emitter.emitIndent(out, indent);
     out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
 }
 
-b8 SourceEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+b8 ParallelStatementEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     if(!IsParallelWaitCallExpr(stmt.expr))
         return false;
 
     if(stmt.expr->arguments.empty()){
-        emitIndent(out, indent);
+        m_emitter.emitIndent(out, indent);
         out.append("__adhd_task_scope.wait();\r\n");
     }
     else{
         for(const Expr* arg : stmt.expr->arguments){
             if(!arg || arg->kind != ExprKind::Identifier)
                 continue;
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("s_AdhdTaskScheduler.wait(__adhd_task_");
             out.append(arg->text.data(), arg->text.size());
             out.append(");\r\n");
@@ -83,68 +83,68 @@ b8 SourceEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const 
     return true;
 }
 
-void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     using namespace __hidden_adhd_source_emitter_parallel;
 
     switch(stmt.kind){
     case StmtKind::ParallelForRange:{
-        emitIndent(out, indent);
+        m_emitter.emitIndent(out, indent);
         out.append("__adhd_task_scope.parallelFor(0u, (");
         if(stmt.expr)
-            emitExpr(out, *stmt.expr);
+            m_emitter.emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
         if(stmt.usesScratchArena)
-            emitScratchArenaPrologue(out, indent + 1u, "parallel");
-        emitIndent(out, indent + 1u);
+            m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
+        m_emitter.emitIndent(out, indent + 1u);
         if(stmt.rangeMode == ParamPassingMode::In)
             out.append("const ");
         if(stmt.varType)
-            m_typeEmitter.emitTypeCpp(out, *stmt.varType);
+            m_emitter.m_typeEmitter.emitTypeCpp(out, *stmt.varType);
         else
             out.append("auto");
         out.append("& ");
         out.append(stmt.name.data(), stmt.name.size());
         out.append(" = (");
         if(stmt.expr)
-            emitExpr(out, *stmt.expr);
+            m_emitter.emitExpr(out, *stmt.expr);
         out.append(")[__adhd_idx];\r\n");
 
-        const usize prevParRangeDecls = m_activeLocalVarDecls.size();
+        const usize prevParRangeDecls = m_emitter.m_activeLocalVarDecls.size();
         if(!stmt.name.empty())
-            m_activeLocalVarDecls.push_back(&stmt);
-        emitStatementList(out, stmt.statements, indent + 1u);
-        m_activeLocalVarDecls.resize(prevParRangeDecls);
+            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
+        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
+        m_emitter.m_activeLocalVarDecls.resize(prevParRangeDecls);
 
-        emitIndent(out, indent);
+        m_emitter.emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
         out.append(");\r\n");
         break;
     }
     case StmtKind::ParallelForIndex:{
-        emitIndent(out, indent);
+        m_emitter.emitIndent(out, indent);
         out.append("__adhd_task_scope.parallelFor(static_cast<usize>(");
         if(stmt.initStmt && stmt.initStmt->expr)
-            emitExpr(out, *stmt.initStmt->expr);
+            m_emitter.emitExpr(out, *stmt.initStmt->expr);
         else if(stmt.initStmt && stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
-            emitExpr(out, *stmt.initStmt->arguments[0]);
+            m_emitter.emitExpr(out, *stmt.initStmt->arguments[0]);
         else
             out.append("0u");
         out.append("), static_cast<usize>(");
         if(stmt.condition && stmt.condition->kind == ExprKind::Binary && stmt.condition->rhs){
-            emitExpr(out, *stmt.condition->rhs);
+            m_emitter.emitExpr(out, *stmt.condition->rhs);
             if(stmt.condition->op == TokenType::LessEqual)
                 out.append(" + 1u");
         }
         else if(stmt.condition)
-            emitExpr(out, *stmt.condition);
+            m_emitter.emitExpr(out, *stmt.condition);
         else
             out.append("0u");
         out.append("), ");
         if(stmt.stepExpr && stmt.stepExpr->kind == ExprKind::Binary){
             if(stmt.stepExpr->op == TokenType::PlusEqual && stmt.stepExpr->rhs){
                 out.append("static_cast<usize>(");
-                emitExpr(out, *stmt.stepExpr->rhs);
+                m_emitter.emitExpr(out, *stmt.stepExpr->rhs);
                 out.push_back(')');
             }
             else if(stmt.stepExpr->op == TokenType::Equal && stmt.stepExpr->rhs && stmt.stepExpr->rhs->kind == ExprKind::Binary && stmt.stepExpr->rhs->op == TokenType::Plus){
@@ -154,7 +154,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                     : stmt.stepExpr->rhs->rhs;
                 out.append("static_cast<usize>(");
                 if(stepOperand)
-                    emitExpr(out, *stepOperand);
+                    m_emitter.emitExpr(out, *stepOperand);
                 else
                     out.append("1u");
                 out.push_back(')');
@@ -168,9 +168,9 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         }
         out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
         if(stmt.usesScratchArena)
-            emitScratchArenaPrologue(out, indent + 1u, "parallel");
+            m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
         if(stmt.initStmt && stmt.initStmt->varType){
-            emitIndent(out, indent + 1u);
+            m_emitter.emitIndent(out, indent + 1u);
             if(stmt.initStmt->varType->isAuto){
                 out.append("const auto ");
                 out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
@@ -178,20 +178,20 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             }
             else{
                 out.append("const ");
-                m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+                m_emitter.m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
                 out.push_back(' ');
                 out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
                 out.append(" = static_cast<");
-                m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+                m_emitter.m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
                 out.append(">(__adhd_idx);\r\n");
             }
         }
-        const usize prevParIdxDecls = m_activeLocalVarDecls.size();
+        const usize prevParIdxDecls = m_emitter.m_activeLocalVarDecls.size();
         if(stmt.initStmt && !stmt.initStmt->name.empty())
-            m_activeLocalVarDecls.push_back(&stmt);
-        emitStatementList(out, stmt.statements, indent + 1u);
-        m_activeLocalVarDecls.resize(prevParIdxDecls);
-        emitIndent(out, indent);
+            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
+        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
+        m_emitter.m_activeLocalVarDecls.resize(prevParIdxDecls);
+        m_emitter.emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
         out.append(");\r\n");
@@ -205,7 +205,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 AppendUnsignedDecimal(out, stmt.span.line);
         };
         if(!stmt.parallelDependencies.empty()){
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("const ::NWB::Array<::NWB::Core::CpuTaskHandle, ");
             AppendUnsignedDecimal(out, stmt.parallelDependencies.size());
             out.append("u> __adhd_deps_");
@@ -219,7 +219,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             }
             out.append(" };\r\n");
         }
-        emitIndent(out, indent);
+        m_emitter.emitIndent(out, indent);
         if(!stmt.name.empty()){
             out.append("const auto __adhd_submit_");
             appendBlockSuffix();
@@ -227,13 +227,13 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         }
         out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
         if(stmt.usesScratchArena)
-            emitScratchArenaPrologue(out, indent + 1u, "parallel");
-        const usize prevParIdxDecls = m_activeLocalVarDecls.size();
+            m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
+        const usize prevParIdxDecls = m_emitter.m_activeLocalVarDecls.size();
         if(stmt.initStmt && !stmt.initStmt->name.empty())
-            m_activeLocalVarDecls.push_back(&stmt);
-        emitStatementList(out, stmt.statements, indent + 1u);
-        m_activeLocalVarDecls.resize(prevParIdxDecls);
-        emitIndent(out, indent);
+            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
+        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
+        m_emitter.m_activeLocalVarDecls.resize(prevParIdxDecls);
+        m_emitter.emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
         if(!stmt.parallelDependencies.empty()){
@@ -245,7 +245,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         }
         out.append(");\r\n");
         if(!stmt.name.empty()){
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
             appendBlockSuffix();
             out.append(" = __adhd_submit_");
@@ -258,21 +258,21 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
     }
     case StmtKind::ParallelCall:{
         if(stmt.expr && stmt.expr->kind == ExprKind::Call && !stmt.expr->arguments.empty()){
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("{\r\n");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
                 if(arg && arg->isMutArg)
                     continue;
-                emitIndent(out, indent + 1u);
+                m_emitter.emitIndent(out, indent + 1u);
                 out.append("const auto __adhd_arg_");
                 AppendUnsignedDecimal(out, i);
                 out.append(" = (");
                 if(arg)
-                    emitExpr(out, *arg);
+                    m_emitter.emitExpr(out, *arg);
                 out.append(");\r\n");
             }
-            emitIndent(out, indent + 1u);
+            m_emitter.emitIndent(out, indent + 1u);
             out.append("__adhd_task_scope.submit([&");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
@@ -284,19 +284,19 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append("]()noexcept{ ");
             if(stmt.usesScratchArena){
                 out.append("\r\n");
-                emitScratchArenaPrologue(out, indent + 2u, "parallel");
-                emitIndent(out, indent + 2u);
+                m_emitter.emitScratchArenaPrologue(out, indent + 2u, "parallel");
+                m_emitter.emitIndent(out, indent + 2u);
             }
-            emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall);
+            m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall);
             if(!stmt.expr->callTemplateArgs.empty())
-                m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
+                m_emitter.m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
             out.push_back('(');
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
                 const Expr* arg = stmt.expr->arguments[i];
                 if(arg && arg->isMutArg)
-                    emitExpr(out, *arg);
+                    m_emitter.emitExpr(out, *arg);
                 else{
                     out.append("__adhd_arg_");
                     AppendUnsignedDecimal(out, i);
@@ -309,69 +309,23 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append("); }, ");
             AppendTaskOptions(out, stmt);
             out.append(");\r\n");
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("}\r\n");
         }
         else{
-            emitIndent(out, indent);
+            m_emitter.emitIndent(out, indent);
             out.append("__adhd_task_scope.submit([&]()noexcept{ ");
             if(stmt.usesScratchArena){
                 out.append("\r\n");
-                emitScratchArenaPrologue(out, indent + 1u, "parallel");
-                emitIndent(out, indent + 1u);
+                m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
+                m_emitter.emitIndent(out, indent + 1u);
             }
             if(stmt.expr)
-                emitExpr(out, *stmt.expr);
+                m_emitter.emitExpr(out, *stmt.expr);
             out.append("; }, ");
             AppendTaskOptions(out, stmt);
             out.append(");\r\n");
         }
-        break;
-    }
-    case StmtKind::NativeBlock:{
-        emitIndent(out, indent);
-        out.append("{\r\n");
-        for(const NativeBinding& binding : stmt.nativeBindings){
-            if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName)
-                continue;
-            emitIndent(out, indent + 1u);
-            if(binding.mode == ParamPassingMode::In)
-                out.append("const auto& ");
-            else
-                out.append("auto& ");
-            out.append(binding.aliasName.data(), binding.aliasName.size());
-            out.append(" = (");
-            if(binding.sourceExpr)
-                emitExpr(out, *binding.sourceExpr);
-            out.append(");\r\n");
-        }
-        emitIndent(out, indent + 1u);
-        AppendTextDiscardCrAndExpandLf(out, stmt.nativeCode);
-        out.append("\r\n");
-        emitIndent(out, indent);
-        out.append("}\r\n");
-        break;
-    }
-    case StmtKind::Diagnostic:{
-        emitIndent(out, indent);
-        MStringView macroPrefix;
-#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, enumName, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
-        if(stmt.diagnosticKind == DiagnosticKind::enumName){ \
-            if(stmt.arguments.size() > 1u) \
-                macroPrefix = stmt.isEssential ? MStringView(essentialMsgMacroPrefix) : MStringView(defaultMsgMacroPrefix); \
-            else \
-                macroPrefix = stmt.isEssential ? MStringView(essentialMacroPrefix) : MStringView(defaultMacroPrefix); \
-        }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
-        out.append(macroPrefix.data(), macroPrefix.size());
-        for(usize i = 0u; i < stmt.arguments.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
-            if(stmt.arguments[i])
-                emitExpr(out, *stmt.arguments[i]);
-        }
-        out.append(");\r\n");
         break;
     }
     default:

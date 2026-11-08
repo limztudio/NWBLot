@@ -3,6 +3,7 @@
 
 
 #include "text_log.h"
+#include "text_log_payload_builder.h"
 
 #include <global/binary.h>
 #include <global/type_properties.h>
@@ -33,7 +34,19 @@ static void AppendUtf8Text(const TStringView message, TelemetryBytes& outText){
 }
 
 
-[[nodiscard]] static b8 BuildUnaliasedPayload(const Common::LogType::Enum type, const TStringView message, TelemetryBytes& outPayload){
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TextLogPayloadBuilder::BuildUnaliased(const Common::LogType::Enum type, const TStringView message, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -48,18 +61,12 @@ static void AppendUtf8Text(const TStringView message, TelemetryBytes& outText){
     header.type = static_cast<u8>(type);
     outPayload.reserve(minimumPayloadBytes);
     AppendPOD(outPayload, header);
-    AppendUtf8Text(message, outPayload);
+    __hidden_telemetry_text_log::AppendUtf8Text(message, outPayload);
 
     header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
     NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +105,7 @@ b8 BuildTextLogPayload(const Common::LogType::Enum type, TStringView message, Al
         }
     }
 
-    return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, outPayload);
+    return TextLogPayloadBuilder::BuildUnaliased(type, message, outPayload);
 }
 
 Expected<TextLogPayload> ParseTextLogPayload(const void* const payload, const usize payloadBytes)noexcept{
@@ -130,7 +137,7 @@ Expected<TextLogPayload> ParseTextLogPayload(const void* const payload, const us
 
 b8 RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena&, TelemetryBytes& payload){
-        return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
+        return TextLogPayloadBuilder::BuildUnaliased(type, message, payload);
     });
 }
 
@@ -138,31 +145,7 @@ b8 RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TSt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TextLogCaptureLogger::enqueue(Common::LogString&& str, const Common::LogType::Enum type){
-    capture(TStringView(str.data(), str.size()), type);
-    if(Common::ILogger* const forwardLogger = m_forwardLogger.load(MemoryOrder::acquire)){
-        if(&str.get_allocator().arena() == &forwardLogger->arena())
-            forwardLogger->enqueue(Move(str), type);
-        else
-            forwardLogger->enqueue(Common::LogString(TStringView(str.data(), str.size()), forwardLogger->arena()), type);
-    }
-}
 
-void TextLogCaptureLogger::enqueue(const Common::LogString& str, const Common::LogType::Enum type){
-    capture(TStringView(str.data(), str.size()), type);
-    if(Common::ILogger* const forwardLogger = m_forwardLogger.load(MemoryOrder::acquire))
-        forwardLogger->enqueue(str, type);
-}
-
-void TextLogCaptureLogger::capture(const TStringView message, const Common::LogType::Enum type){
-    const auto buildPayload = [type, message](TelemetryArena&, TelemetryBytes& payload){
-        return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
-    };
-    const u64 currentFrameIndex = m_frameIndex.load(MemoryOrder::acquire);
-    const u32 currentStreamId = m_streamId.load(MemoryOrder::acquire);
-    if(m_recorder.recordBuiltPayloadResult(EventKind::TextLog, currentFrameIndex, currentStreamId, buildPayload) == Recorder::BuiltPayloadResult::Failed)
-        m_droppedTextLogCount.fetch_add(1u, MemoryOrder::relaxed);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

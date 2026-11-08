@@ -3,6 +3,7 @@
 
 
 #include "caustic_resolve_state.h"
+#include "caustic_activity_resources.h"
 
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
@@ -54,8 +55,8 @@ CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivityS
     return activity;
 }
 
-b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
-    const auto& current = m_rayTracingState.m_causticResolve.m_activity;
+b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
+    const auto& current = m_activity;
     if(current.valid() && current.halfWidth == halfWidth && current.halfHeight == halfHeight)
         return true;
     releaseCausticResolveActivity();
@@ -65,7 +66,7 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    auto& activity = m_rayTracingState.m_causticResolve.m_activity;
+    auto& activity = m_activity;
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
         desc.setByteSize(layout->bufferByteSize)
@@ -93,8 +94,8 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
     return true;
 }
 
-void RendererRayTracingSystem::releaseCausticResolveActivity(){
-    auto& activity = m_rayTracingState.m_causticResolve.m_activity;
+void CausticActivityResources::releaseCausticResolveActivity(){
+    auto& activity = m_activity;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         for(const Core::GpuDescriptorHandle descriptor : activity.descriptors){

@@ -11,6 +11,8 @@
 #include "build.h"
 #include "../root_discovery.h"
 
+#include <core/assets/asset_file_discovery.h>
+#include <core/assets/cook_input_selection.h>
 #include <core/assets/volume/built_asset.h>
 #include <core/assets/volume/cooked_object_cache.h>
 #include <core/assets/volume/pack_manifest.h>
@@ -43,13 +45,13 @@ b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCoo
 
     Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
     // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
-    const auto selectionResult = Assets::SelectDiscoveredNwbInputs(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
+    const auto selectionResult = Assets::CookInputSelector::Select(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
     if(!selectionResult){
         LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("AssetBuilder"));
         return false;
     }
 
-    Assets::CompactSelectedDiscoveredNwbFiles(selected, files);
+    Assets::CookInputSelector::Compact(selected, files);
     return true;
 }
 
@@ -63,7 +65,7 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
         return false;
     const Assets::ResolvedCookPaths& resolvedPaths = *paths;
 
-    auto discoveredFiles = Assets::DiscoverFilesWithExtension(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
+    auto discoveredFiles = Assets::AssetFileDiscovery::discover(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
     if(!discoveredFiles)
         return false;
 

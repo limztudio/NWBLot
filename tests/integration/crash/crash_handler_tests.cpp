@@ -37,22 +37,22 @@ TEST(Crash, RequestAdmissionRejectsCorruptCountsAndUnterminatedText){
     using namespace NWB::Core::Crash::CrashDetail;
     CrashRequest request;
     CopyFixedBuffer(request.crashId, "crash-1-1");
-    ASSERT_TRUE(IsCurrentCrashRequest(request));
+    ASSERT_TRUE(CrashProtocol::IsCurrentCrashRequest(request));
 
     request.metadataCount = static_cast<u32>(s_MaxMetadata + 1u);
-    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
     request.metadataCount = 1u;
     request.breadcrumbCount = static_cast<u32>(s_MaxBreadcrumbs + 1u);
-    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
     request.breadcrumbCount = 1u;
     request.callstackFrameCount = static_cast<u32>(s_MaxCallstackFrames + 1u);
-    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
     request.callstackFrameCount = 0u;
 
     const auto rejectUnterminated = [&request](auto& text){
         const auto original = text;
         text.fill('x');
-        EXPECT_FALSE(IsCurrentCrashRequest(request));
+        EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
         text = original;
     };
     rejectUnterminated(request.crashId);
@@ -72,11 +72,11 @@ TEST(Crash, RequestAdmissionRejectsCorruptCountsAndUnterminatedText){
     rejectUnterminated(request.metadata[0u].value);
     rejectUnterminated(request.breadcrumbs[0u].category);
     rejectUnterminated(request.breadcrumbs[0u].message);
-    EXPECT_TRUE(IsCurrentCrashRequest(request));
+    EXPECT_TRUE(CrashProtocol::IsCurrentCrashRequest(request));
     CopyFixedBuffer(request.crashId, "../outside");
-    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
     CopyFixedBuffer(request.crashId, "..\\outside");
-    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
 }
 
 TEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity){
@@ -85,14 +85,14 @@ TEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity){
     CrashAck ack;
     CopyFixedBuffer(request.crashId, "crash-1-1");
     CopyFixedBuffer(ack.crashId, "crash-1-1");
-    EXPECT_TRUE(CrashAckMatchesRequest(ack, request));
+    EXPECT_TRUE(CrashProtocol::CrashAckMatchesRequest(ack, request));
     ack.packageWritten = 2u;
-    EXPECT_FALSE(CrashAckMatchesRequest(ack, request));
+    EXPECT_FALSE(CrashProtocol::CrashAckMatchesRequest(ack, request));
     ack.packageWritten = 0u;
     ack.crashId.fill('x');
-    EXPECT_FALSE(CrashAckMatchesRequest(ack, request));
+    EXPECT_FALSE(CrashProtocol::CrashAckMatchesRequest(ack, request));
     request.crashId.fill('x');
-    EXPECT_FALSE(CrashAckMatchesRequest(ack, request));
+    EXPECT_FALSE(CrashProtocol::CrashAckMatchesRequest(ack, request));
 }
 
 
@@ -337,7 +337,7 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
         storage.exceptionRecord = EXCEPTION_RECORD{};
         storage.exceptionPointers = EXCEPTION_POINTERS{};
     }
-    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     EXPECT_EQ(request.exceptionPointers, 0u);
     EXPECT_EQ(request.manualContext.ContextFlags, capturedContextFlags);
     EXPECT_NE(capturedContextFlags, 0u);
@@ -407,23 +407,23 @@ TEST(Crash, ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLi
     NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
     NWB::Core::Crash::CrashDetail::CaptureManualDumpContext(options, storage);
     auto request = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
-    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.version = 1u;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.version = NWB::Core::Crash::CrashDetail::s_RequestVersion + 1u;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.version = NWB::Core::Crash::CrashDetail::s_RequestVersion;
     --request.manualContextSize;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.manualContextSize = sizeof(CONTEXT);
     request.manualContextArchitecture ^= 0x00010000u;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.manualContextArchitecture = NWB::Core::Crash::CrashDetail::s_WindowsContextArchitecture;
     request.manualExceptionRecord.ExceptionRecord = &storage.exceptionRecord;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
     request.manualExceptionRecord.ExceptionRecord = nullptr;
     request.manualContext.ContextFlags |= NWB::Core::Crash::CrashDetail::s_WindowsExtendedContextFlag;
-    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::CrashProtocol::IsCurrentCrashRequest(request));
 }
 
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){

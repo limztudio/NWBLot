@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
 #include "stmt_parser.h"
 
 
@@ -239,7 +241,7 @@ b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attri
                 m_cursor.error(attr.line, attr.column, argErrorMessage); \
                 return false; \
             } \
-            if(!parseFn(attr.arguments[0].text, outVar)){ \
+            if(!KeywordSemantics::parseFn(attr.arguments[0].text, outVar)){ \
                 m_cursor.error(attr.line, attr.column, invalidValueErrorMessage); \
                 return false; \
             } \

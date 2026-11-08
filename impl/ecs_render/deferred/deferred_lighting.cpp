@@ -4,6 +4,8 @@
 
 #include "deferred_system.h"
 
+#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
+
 #include <impl/ecs_render/caustic/rt_caustic_state.h>
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
@@ -94,7 +96,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     uploads.lightingClassification.softShadowSlotMask = ResolveSoftShadowSlotMask(activeLights);
 
     // A zero-light scene has nothing to copy; still record the empty mirror.
-    uploads.lightUploadRequired = IsSceneLightUploadRequired(
+    uploads.lightUploadRequired = SceneShadingUploadTracker{}.lightUploadRequired(
         m_deferredState.m_lightGpuDataValid,
         m_deferredState.m_lightGpuDataCount,
         m_deferredState.m_lightGpuData,
@@ -103,7 +105,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     uploads.lightCount = lightCount;
 
     uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(fallbackAspectRatio, lightCount, m_world);
-    uploads.sceneShadingUploadRequired = IsSceneShadingUploadRequired(
+    uploads.sceneShadingUploadRequired = SceneShadingUploadTracker{}.shadingUploadRequired(
         m_deferredState.m_sceneShadingGpuDataValid,
         m_deferredState.m_sceneShadingGpuData,
         uploads.sceneShadingState
@@ -117,7 +119,7 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const SceneShadingGpuData& sceneShadingState,
     const b8 sceneShadingUploadRequired
 )noexcept{
-    ConfirmSceneShadingBufferUploads(
+    SceneShadingUploadTracker{}.confirm(
         lights,
         lightUploadRequired,
         sceneShadingState,

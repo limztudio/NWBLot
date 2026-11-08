@@ -23,6 +23,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
+#include <core/input/module.h>
 #include <core/graphics/runtime/runtime.h>
 
 #include <global/simd/frame.h>

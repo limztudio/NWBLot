@@ -4,6 +4,8 @@
 
 #include "prepared_source.h"
 
+#include <impl/assets_font/prepared_font_binary_codec.adhd.h>
+
 #include <global/binary_little_endian.h>
 
 
@@ -38,11 +40,11 @@ namespace __hidden_prepared_source{
 
 
 Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
-    const Expected<u64, AStringView> expectedPayloadBytes = ValidatePreparedFontSerializeInputs(sfnt.size(), sfnt.data() != nullptr, faceIndex, groups);
+    const Expected<u64, AStringView> expectedPayloadBytes = PreparedFontBinaryCodec{}.validateSerializeInputs(sfnt.size(), sfnt.data() != nullptr, faceIndex, groups);
     if(!expectedPayloadBytes)
         return MakeUnexpected(expectedPayloadBytes.error());
     Core::Assets::AssetBytes binary(arena);
-    AppendPreparedFontSourceBinary(Span<const u8>(sfnt.data(), sfnt.size()), faceIndex, groups, *expectedPayloadBytes, binary);
+    PreparedFontBinaryCodec{}.appendSourceBinary(Span<const u8>(sfnt.data(), sfnt.size()), faceIndex, groups, *expectedPayloadBytes, binary);
     return binary;
 }
 
@@ -65,7 +67,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     u32 faceIndex = 0u;
     u32 fontByteCount = 0u;
     u32 groupCount = 0u;
-    const Expected<b8, AStringView> headerDecode = DecodePreparedFontHeaderBytes(header, faceIndex, fontByteCount, groupCount);
+    const Expected<b8, AStringView> headerDecode = PreparedFontBinaryCodec{}.decodeHeader(header, faceIndex, fontByteCount, groupCount);
     if(!headerDecode)
         return ReadFailure(path, headerDecode.error());
 
@@ -80,7 +82,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         if(!ReadStreamExact(stream, NotNull<void*>(groupHeader.data()), sizeof(groupHeader)))
             return ReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason);
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
-        const Expected<b8, AStringView> groupDecode = DecodePreparedFontGroupHeaderBytes(
+        const Expected<b8, AStringView> groupDecode = PreparedFontBinaryCodec{}.decodeGroupHeader(
             groupHeader,
             pixelByteCount,
             group.width,
@@ -94,7 +96,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         candidate.groups.push_back(Move(group));
     }
 
-    const Expected<u64> expectedFileBytes = TryComputePreparedFontExpectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
+    const Expected<u64> expectedFileBytes = PreparedFontBinaryCodec{}.expectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
     if(!expectedFileBytes || *expectedFileBytes != static_cast<u64>(fileEnd))
         return ReadFailure(path, s_PreparedFontLayoutMismatchReason);
     candidate.fontBytes.resize(fontByteCount);

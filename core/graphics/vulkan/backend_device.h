@@ -13,6 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
+#include "amd_breadcrumb_storage.h"
+#include "device_crash_diagnostics.h"
 #include "native_resource_provenance.h"
 #include "native_queue_state.h"
 #include "submitted_command_buffer_owner_lookup.h"
@@ -33,6 +35,9 @@ class Device final : public RefCounter<GraphicsResource>{
     friend Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc);
     friend class ::NWB::Core::GpuTaskScheduler;
     friend class BackendContext;
+    friend class SwapChainLifecycle;
+    friend class FramePresentationCoordinator;
+    friend class DeviceCrashDiagnostics;
     friend class Buffer;
     friend class CommandList;
     friend class DescriptorBufferManager;
@@ -58,6 +63,9 @@ private:
 
 
 private:
+    class SubmissionWorkspace;
+    class PhysicalQueueRegistrar;
+
     class SubmissionOperationLease final : NoCopy{
     private:
         [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept;
@@ -81,45 +89,7 @@ private:
         const SubmissionOperationLease* m_previousActiveLease = nullptr;
     };
 
-    // AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
-    struct AmdBreadcrumbSlotRecord{
-        u64 serial = 0u;
-        usize markerHash = 0u;
-        u32 marker = 0u;
-    };
-    struct AmdBreadcrumbBuffer{
-        struct Metadata{
-            Alloc::PersistentArena arena;
-            PersistentUniquePtr<AmdBreadcrumbSlotRecord[]> slotRecords;
-            PersistentUniquePtr<u64[]> nextSerials;
-            usize slotRecordCount = 0u;
-            usize nextSerialCount = 0u;
 
-
-        public:
-            Metadata(const Name& allocationLog, const usize arenaBytes, const usize newSlotRecordCount, const usize newNextSerialCount)
-                : arena(allocationLog, arenaBytes)
-                , slotRecords(MakePersistentUnique<AmdBreadcrumbSlotRecord[]>(arena, newSlotRecordCount))
-                , nextSerials(MakePersistentUnique<u64[]>(arena, newNextSerialCount))
-                , slotRecordCount(newSlotRecordCount)
-                , nextSerialCount(newNextSerialCount)
-            {}
-        };
-
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VulkanAllocationHandle allocation = {};
-        void* mappedMemory = nullptr;
-        VulkanDetail::AmdBreadcrumbRingLayout layout;
-        // Prevents concurrent recording from tearing marker records or per-queue reservation serials.
-        Futex slotMutex;
-        Optional<Metadata> metadata;
-
-
-    public:
-        // The caller supplies a validated, non-empty ring layout.
-        // Both arrays allocate once with device-lifetime backing, so their spans fit the persistent arena.
-        [[nodiscard]] b8 initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog);
-    };
 
 
 public:
@@ -247,11 +217,11 @@ public:
     // External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept;
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept;
-    b8 isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
+    b8 isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnostics.enabled() && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
 
-    b8 isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    b8 isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnostics.enabled() && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
 
-    [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
+    [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashDiagnostics.tracker(); }
     void captureDeviceLoss(AStringView context);
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, usize markerHash)noexcept;
@@ -265,8 +235,6 @@ public:
 
 
 private:
-    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, b8 graphSubmissionAuthorized);
-    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
         CommandList* const* commandLists,
@@ -298,8 +266,6 @@ private:
     }
     [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
-    [[nodiscard]] b8 registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
-    void configureQueueSharingContext()noexcept;
     void releaseOwnedResources()noexcept;
     // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
@@ -358,15 +324,10 @@ private:
     Atomic<b8> m_deviceLost = false;
     Atomic<b8> m_deviceQuarantined = false;
     Atomic<b8> m_lifecycleDestructionPrepared = false;
-    Atomic<b8> m_gpuCrashCaptured = false;
-    b8 m_gpuCrashDiagnosticsEnabled = false;
+    DeviceCrashDiagnostics m_gpuCrashDiagnostics;
     b8 m_queueRegistryReady = false;
-    GpuCrashTracker m_gpuCrashTracker;
-    // Pre-reserved crash-capture arena.
-    Alloc::PersistentArena m_gpuCrashReportArena;
-    Alloc::PersistentArena m_gpuCrashVendorBinaryArena;
 
-    AmdBreadcrumbBuffer m_amdBreadcrumb;
+    AmdBreadcrumbStorage m_amdBreadcrumb;
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;

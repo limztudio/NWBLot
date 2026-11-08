@@ -143,7 +143,7 @@ StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, const A
     stageToken.reserve(s_StagedVolumeTokenPrefix.size() + s_StagedVolumeHashDigits);
     stageToken += s_StagedVolumeTokenPrefix;
     AppendHexU64(ComputeFnv64Text(AStringView(stageKey)), stageToken);
-    return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
+    return StagedDirectoryPaths::Create(scratchArena, outputDirectory, stageToken);
 }
 
 static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){

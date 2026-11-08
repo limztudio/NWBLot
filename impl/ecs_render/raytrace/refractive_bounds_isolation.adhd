@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RayTracingInstanceWorldBounds{
+    public f32x3u minimum(0.0f, 0.0f, 0.0f);
+    public f32x3u maximum(0.0f, 0.0f, 0.0f);
+}
+
+
+class RefractiveBoundsIsolation{
+    public b8 isIsolated(in Span<RayTracingInstanceWorldBounds> instanceWorldBounds, in usize targetIndex)const{
+        if(targetIndex >= instanceWorldBounds.size())
+            return false;
+
+        const RayTracingInstanceWorldBounds targetBounds = instanceWorldBounds[targetIndex];
+        const f32 expandedMinX = targetBounds.minimum.x - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMinY = targetBounds.minimum.y - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMinZ = targetBounds.minimum.z - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxX = targetBounds.maximum.x + s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxY = targetBounds.maximum.y + s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxZ = targetBounds.maximum.z + s_RefractionCertifiedBoundsMargin;
+        for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
+            if(index == targetIndex)
+                continue;
+            const RayTracingInstanceWorldBounds otherBounds = instanceWorldBounds[index];
+            const b8 separated =
+                expandedMaxX < otherBounds.minimum.x || otherBounds.maximum.x < expandedMinX
+                || expandedMaxY < otherBounds.minimum.y || otherBounds.maximum.y < expandedMinY
+                || expandedMaxZ < otherBounds.minimum.z || otherBounds.maximum.z < expandedMinZ
+            ;
+            if(!separated)
+                return false;
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

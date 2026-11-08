@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <utilities/font_builder/bake_types.adhd.h>
+#include <utilities/font_builder/font_atlas_packer.adhd.h>
 
 #include <impl/assets_font_atlas/model.h>
 
@@ -72,7 +73,7 @@ inline void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
             continue;
 
         Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
-        CompactFontAtlasGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
+        FontAtlasPacker{}.compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
         for(auto& glyph : payload.glyphs)
             Impl::OffsetFontAtlasGroupGlyph(static_cast<u32>(groupIndex), bounds.firstX, bounds.firstY, glyph);
         group.width = bounds.width;

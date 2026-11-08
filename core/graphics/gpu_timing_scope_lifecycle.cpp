@@ -3,6 +3,7 @@
 
 
 #include "gpu_timing.h"
+#include "gpu_timing_submission_ticket.h"
 #include "backend_selection.h"
 
 #include <global/scope_exit.h>

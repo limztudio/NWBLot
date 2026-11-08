@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "module.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+class PhysicalQueueSharingPolicy final{
+public:
+    struct Result{
+        i32 graphics;
+        i32 auxiliaryGraphics;
+        i32 compute;
+        i32 auxiliaryCompute;
+        i32 transfer;
+        i32 auxiliaryTransfer;
+        b8 asyncComputeLaneEnabled;
+        b8 transferQueueEnabled;
+    };
+
+    [[nodiscard]] static Result resolve(Span<const GpuPhysicalQueueInfo> queues, u32 graphics, u32 compute, u32 transfer)noexcept;
+};
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

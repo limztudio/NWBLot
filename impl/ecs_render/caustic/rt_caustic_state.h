@@ -10,6 +10,7 @@
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/ecs_render/caustic/caustic_resolve_state.h>
+#include <impl/ecs_render/caustic/caustic_emission_target_buffer.h>
 
 #include <core/graphics/rhi/device.h>
 
@@ -69,7 +70,6 @@ static_assert((NWB_CAUSTIC_SW_GRID_SIDE % s_CausticTemporalPhaseCount) == 0u);
 struct RtCausticState{
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    usize m_causticEmissionTargetCapacity = 0u;
 
     // Software caustics are push-only and reuse the SW trace geometry.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
@@ -84,7 +84,7 @@ struct RtCausticState{
     Core::RayTracingPipelineHandle m_hwCausticCsgPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
     // Per-frame refractive-instance AABBs shared by caustic lights.
-    Core::BufferHandle m_causticEmissionTargetBuffer;
+    CausticEmissionTargetBuffer m_causticEmissionTargets;
     // Push-only a-trous caustic resolve.
     CausticResolveState m_causticResolve;
     // Half-resolution geometry cache for edge-aware caustic resolve.
@@ -97,7 +97,6 @@ struct RtCausticState{
     Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
 
     // Fresh heap views preserve old buffers for recorded dispatches.
-    Core::GpuDescriptorHandle m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_causticRefractiveInstanceCount = 0u;
     // Producer runs only when refractive instances and caustic lights exist.
     u32 m_causticLightCount = 0u;

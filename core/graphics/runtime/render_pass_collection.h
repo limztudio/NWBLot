@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "render_pass.h"
+
+#include <global/containers.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace GraphicsModuleDetail{
+
+
+class RenderPassCollection{
+public:
+    using PassList = List<NotNull<IRenderPass*>, Alloc::GlobalArena>;
+
+
+public:
+    explicit RenderPassCollection(Alloc::GlobalArena& arena);
+
+    void addToBack(IRenderPass& pass, u32 width, u32 height, u32 samples);
+    void remove(IRenderPass& pass);
+    void clear();
+    void invalidateResources();
+    [[nodiscard]] b8 validateResources(u32 width, u32 height, u32 samples);
+    void backBufferResizing();
+    void backBufferResized(u32 width, u32 height, u32 samples);
+    void displayScaleChanged(f32 x, f32 y);
+    void animate(f64 elapsedTime);
+    [[nodiscard]] b8 shouldRenderUnfocused()const;
+    [[nodiscard]] const PassList& passes()const noexcept{ return m_passes; }
+
+
+private:
+    PassList m_passes;
+};
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

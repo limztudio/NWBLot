@@ -3,8 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
-
-#include <global/simplemath.h>
+#include <impl/ecs_ui/toolkit/widgets/combo_coordinator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,96 +16,7 @@ NWB_IMPL_UI_BEGIN
 
 
 SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options){
-    if(declarationBlocked() || !IsValidSearchComboDeclarationOptions(options)){
-        m_context.fail();
-        return {};
-    }
-    const usize previousCount = m_scope->m_combos.size();
-    SearchComboResult result;
-    result.combo = declareCombo(stableKey, source, options.combo, &options, state.combo(), &state, &source);
-    if(result.combo.valid && m_scope->m_combos.size() > previousCount)
-        result.queryChanged = m_scope->m_combos.back().queryChanged;
-    return result;
-}
-
-b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
-    SearchComboState& state = *frame.search;
-    EditModel& query = state.query();
-    if(!frame.open){
-        query.cancelComposition();
-        snapshotComboQuery(frame);
-        return comboMatches(frame);
-    }
-    const auto declared = m_context.declarePart(field, s_WidgetPartQuery, WidgetKind::EditBox);
-    if(!declared)
-        return false;
-    const WidgetState editor = **declared;
-    if(!m_context.claimState(editor, query.instanceGeneration()))
-        return false;
-    Item item(m_arena);
-    item.state = editor;
-    item.style = m_style;
-    item.editStyle = m_editStyle;
-    item.editOptions.enabled = frame.options.enabled;
-    EditBoxResult result;
-    result.valid = true;
-    result.focused = m_context.input().focus() == editor.id;
-    if(m_editHost)
-        result = m_editHost->editInPopup(editor, item.editOptions, frame.popupToken, query);
-    if(!result.valid)
-        return false;
-    frame.queryChanged = result.textChanged;
-    frame.editorSubmitted = result.submitted;
-    if(result.cancelled){
-        ComboBehavior::Close(*frame.state);
-        m_context.input().closePopup(frame.popupToken);
-        frame.open = false;
-    }
-    snapshotComboQuery(frame);
-    if(!SearchComboBehavior::Filter(state, *frame.searchSource))
-        return false;
-    frame.results = &frame.searchSource->filtered();
-    if(!ListBehavior::Reconcile(frame.state->m_list, *frame.results))
-        return false;
-    frame.listToken = { frame.state->m_list.inputGeneration(), frame.results->instanceGeneration(), frame.results->revision() };
-    frame.resultCount = frame.results->rowCount();
-    m_context.input().fenceControl(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-    if(!comboMatches(frame))
-        return false;
-    if(!frame.open)
-        return true;
-    if(!prepareEditBox(result, query, state.m_editor, item))
-        return false;
-    frame.editor = static_cast<u32>(m_scope->m_comboEditors.size());
-    m_scope->m_comboEditors.push_back(Move(item));
-    return comboMatches(frame);
-}
-
-void Builder::snapshotComboQuery(ComboFrame& frame)noexcept{
-    if(!frame.search)
-        return;
-    frame.queryStamp = frame.search->query().stamp();
-}
-
-b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
-    if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
-        return false;
-    const Item& item = m_scope->m_comboEditors[frame.editor];
-    const f32 measuredHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
-    Rect nextContentRect = content.rectangle;
-    LayoutBox box = content;
-    box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);
-    const HitTarget navigation = MakeComboQueryNavigationTarget(
-        frame.options.enabled,
-        item.editView.composing(),
-        frame.rows.id,
-        frame.rows.declarationGeneration,
-        frame.listToken
-    );
-    if(!paintEditBox(item, box, &navigation))
-        return false;
-    content.rectangle = nextContentRect;
-    return comboMatches(frame);
+    return ComboCoordinator(*this).searchComboBox(stableKey, source, state, options);
 }
 
 

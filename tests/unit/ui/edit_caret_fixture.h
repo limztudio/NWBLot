@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.h>
 
 #include <global/simplemath.h>

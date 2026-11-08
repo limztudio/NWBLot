@@ -47,32 +47,6 @@ class SubsystemHeaderBinary{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-SubsystemHeaderBinary MakeSubsystemHeaderBinary(
-    in NameHash subsystemTypeHash,
-    in u64 subsystemCount,
-    in u64 fieldCount,
-    in u64 assetCount
-){
-    SubsystemHeaderBinary header;
-    header.subsystemTypeHash = subsystemTypeHash;
-    header.subsystemCount = subsystemCount;
-    header.fieldCount = fieldCount;
-    header.assetCount = assetCount;
-    return header;
-}
-
-Expected<u64> TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts){
-    u64 totalCount = 0u;
-    for(usize i = 0u; i < fieldCounts.size(); ++i){
-        u64 count = fieldCounts[i];
-        if(count == 0u || count > 0xFFFFFFFFFFFFFFFFu - totalCount)
-            return makeUnexpected(Failure());
-        totalCount += count;
-    }
-    return totalCount;
-}
-
 b8 ValidateSubsystemDependentRef(in Name virtualPath, in Name refName, in b8 isValidRef, in usize index){
     if(!isValidRef){
         error("ISubsystem::validatePayload failed: subsystem '{}' dependent subsystem entry {} must not be empty", virtualPath.resolvedText(), index);
@@ -120,40 +94,6 @@ b8 ValidateSubsystemFieldElementValue(in Name virtualPath, in SubsystemFieldValu
             , descriptor.fieldName
             , value.resolvedText()
         );
-        return false;
-    }
-    return true;
-}
-
-b8 ValidateSubsystemHeaderBinary(in SubsystemHeaderBinary header, in Name assetType, in usize expectedFieldCount){
-    if(header.version != s_SubsystemVersion){
-        error("ISubsystem::loadBinary failed: unsupported version {}", header.version);
-        return false;
-    }
-    if(header.subsystemTypeHash != assetType.hash()){
-        error("ISubsystem::loadBinary failed: subsystem binary type does not match '{}'", assetType.resolvedText());
-        return false;
-    }
-    if(header.fieldCount != cast<u64>(expectedFieldCount)){
-        error(
-            "ISubsystem::loadBinary failed: expected {} asset fields for '{}', got {}"
-            , expectedFieldCount
-            , assetType.resolvedText()
-            , header.fieldCount
-        );
-        return false;
-    }
-    return true;
-}
-
-b8 ValidateSubsystemFieldElementCountSum(in Span<u64> fieldCounts, in u64 expectedAssetCount){
-    const Expected<u64> totalCount = TrySumSubsystemFieldElementCounts(fieldCounts);
-    if(!totalCount.has_value()){
-        error("ISubsystem::loadBinary failed: invalid field element count");
-        return false;
-    }
-    if(totalCount.value() != expectedAssetCount){
-        error("ISubsystem::loadBinary failed: field element counts do not sum to asset count");
         return false;
     }
     return true;
@@ -218,129 +158,6 @@ b8 UnpackSubsystemRefHashes<TAsset>(in Span<NameHash> subsystemHashes, mut Vecto
 const usize s_SubsystemHeaderBinaryBytes = 96u;
 const usize s_SubsystemNameHashBinaryBytes = 64u;
 const usize s_SubsystemFieldCountBinaryBytes = 8u;
-
-b8 SerializeSubsystemBinaryStreams(
-    in NameHash subsystemTypeHash,
-    in Span<NameHash> subsystemHashes,
-    in Span<u64> fieldCounts,
-    in Span<NameHash> assetHashes,
-    mut Vector<u8> outBinary
-){
-    usize reserveBytes = s_SubsystemHeaderBinaryBytes;
-    const b8 canReserve =
-        AddBinaryRepeatedReserveBytes(reserveBytes, subsystemHashes.size(), s_SubsystemNameHashBinaryBytes)
-        && AddBinaryRepeatedReserveBytes(reserveBytes, fieldCounts.size(), s_SubsystemFieldCountBinaryBytes)
-        && AddBinaryRepeatedReserveBytes(reserveBytes, assetHashes.size(), s_SubsystemNameHashBinaryBytes)
-        && CanStoreValueCount(outBinary, reserveBytes)
-    ;
-    if(!canReserve){
-        error("SubsystemAssetCodec::serialize failed: subsystem payload byte size overflows");
-        return false;
-    }
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-
-    const SubsystemHeaderBinary header = MakeSubsystemHeaderBinary(
-        subsystemTypeHash,
-        cast<u64>(subsystemHashes.size()),
-        cast<u64>(fieldCounts.size()),
-        cast<u64>(assetHashes.size())
-    );
-    AppendPOD(outBinary, header);
-    for(in NameHash hash : subsystemHashes)
-        AppendPOD(outBinary, hash);
-    for(in u64 count : fieldCounts)
-        AppendPOD(outBinary, count);
-    for(in NameHash hash : assetHashes)
-        AppendPOD(outBinary, hash);
-    return true;
-}
-
-b8 ReadSubsystemBinaryStreams(
-    in Span<u8> binary,
-    in Name assetType,
-    in usize expectedFieldCount,
-    mut ScratchSubsystemNameHashVector outSubsystemHashes,
-    mut ScratchSubsystemFieldCountVector outFieldCounts,
-    mut ScratchSubsystemNameHashVector outAssetHashes
-){
-    usize cursor = 0u;
-    const Expected<SubsystemHeaderBinary> headerResult = ReadPOD<SubsystemHeaderBinary>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("ISubsystem::loadBinary failed: malformed header");
-        return false;
-    }
-    const SubsystemHeaderBinary header = headerResult.value();
-    if(header.magic != s_SubsystemMagic){
-        error("ISubsystem::loadBinary failed: invalid subsystem asset format; recook required");
-        return false;
-    }
-    if(!ValidateSubsystemHeaderBinary(header, assetType, expectedFieldCount))
-        return false;
-
-    if(header.subsystemCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
-        error("ISubsystem::loadBinary failed: 'subsystems' payload byte size overflows");
-        return false;
-    }
-    const usize subsystemCount = cast<usize>(header.subsystemCount);
-    if(!CanReadBytes(binary, cursor, subsystemCount * s_SubsystemNameHashBinaryBytes) || !CanStoreValueCount(outSubsystemHashes, subsystemCount)){
-        error("ISubsystem::loadBinary failed: malformed 'subsystems' payload");
-        return false;
-    }
-    outSubsystemHashes.clear();
-    outSubsystemHashes.reserve(subsystemCount);
-    for(usize i = 0u; i < subsystemCount; ++i){
-        const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
-        if(!item.has_value())
-            return false;
-        outSubsystemHashes.push_back(item.value());
-    }
-
-    if(header.fieldCount > cast<u64>(usize.max / s_SubsystemFieldCountBinaryBytes)){
-        error("ISubsystem::loadBinary failed: 'field counts' payload byte size overflows");
-        return false;
-    }
-    const usize fieldCount = cast<usize>(header.fieldCount);
-    if(!CanReadBytes(binary, cursor, fieldCount * s_SubsystemFieldCountBinaryBytes) || !CanStoreValueCount(outFieldCounts, fieldCount)){
-        error("ISubsystem::loadBinary failed: malformed 'field counts' payload");
-        return false;
-    }
-    outFieldCounts.clear();
-    outFieldCounts.reserve(fieldCount);
-    for(usize i = 0u; i < fieldCount; ++i){
-        const Expected<u64> item = ReadPOD<u64>(binary, cursor);
-        if(!item.has_value())
-            return false;
-        outFieldCounts.push_back(item.value());
-    }
-
-    if(header.assetCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
-        error("ISubsystem::loadBinary failed: 'assets' payload byte size overflows");
-        return false;
-    }
-    const usize assetCount = cast<usize>(header.assetCount);
-    if(!CanReadBytes(binary, cursor, assetCount * s_SubsystemNameHashBinaryBytes) || !CanStoreValueCount(outAssetHashes, assetCount)){
-        error("ISubsystem::loadBinary failed: malformed 'assets' payload");
-        return false;
-    }
-    outAssetHashes.clear();
-    outAssetHashes.reserve(assetCount);
-    for(usize i = 0u; i < assetCount; ++i){
-        const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
-        if(!item.has_value())
-            return false;
-        outAssetHashes.push_back(item.value());
-    }
-
-    if(cursor != binary.size()){
-        error("ISubsystem::loadBinary failed: trailing bytes detected");
-        return false;
-    }
-
-    return ValidateSubsystemFieldElementCountSum(outFieldCounts, header.assetCount);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

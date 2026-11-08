@@ -3,7 +3,6 @@
 
 
 #include "reflection_system.h"
-#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -51,29 +50,7 @@ void RendererReflectionSystem::invalidateResources(){
     m_csgDispatchStates.clear();
     m_statistics.resetReadbackBuffers();
     releaseTargets();
-    m_resources.classifyPipeline = nullptr;
-    m_resources.buildArgsPipeline = nullptr;
-    m_resources.hardwarePipeline = nullptr;
-    m_resources.depthPyramid.pipeline = nullptr;
-    m_classifyShader = nullptr;
-    m_buildArgsShader = nullptr;
-    m_hardwareShader = nullptr;
-    m_plainHardwareShader = nullptr;
-    m_plainHardwarePipeline = nullptr;
-    m_unspecifiedHardwareShader = nullptr;
-    m_unspecifiedHardwarePipeline = nullptr;
-    m_csgBuildArgsShader = nullptr;
-    m_csgBuildArgsPipeline = nullptr;
-    m_csgHardwareShader = nullptr;
-    m_csgPlainHardwareShader = nullptr;
-    m_csgUnspecifiedHardwareShader = nullptr;
-    m_csgHardwarePipeline = nullptr;
-    m_csgPlainHardwarePipeline = nullptr;
-    m_csgUnspecifiedHardwarePipeline = nullptr;
-    m_depthShader = nullptr;
-    m_bindingLayout = nullptr;
-    m_depthBindingLayout = nullptr;
-    m_csgBindingLayout = nullptr;
+    m_pipelines.invalidate(m_resources);
 }
 
 b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height, const b8 prepareHardware, const b8 prepareCsgHardware, const ReflectionSettings& settings){
@@ -87,18 +64,18 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         return false;
     if(
         m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
-        && (!prepareHardware || (m_resources.hardwarePipeline && m_plainHardwarePipeline && m_unspecifiedHardwarePipeline))
-        && (!csgHardwareWork || (m_csgBuildArgsPipeline && m_csgHardwarePipeline && m_csgPlainHardwarePipeline && m_csgUnspecifiedHardwarePipeline))
+        && (!prepareHardware || (m_resources.hardwarePipeline && m_pipelines.plainHardwarePipeline() && m_pipelines.unspecifiedHardwarePipeline()))
+        && (!csgHardwareWork || (m_pipelines.csgBuildArgsPipeline() && m_pipelines.csgHardwarePipeline() && m_pipelines.csgPlainHardwarePipeline() && m_pipelines.csgUnspecifiedHardwarePipeline()))
     )
         return
-            prepareQueue(capacity) && prepareArguments(capacity, csgHardwareWork && m_csgBuildArgsPipeline)
+            prepareQueue(capacity) && prepareArguments(capacity, csgHardwareWork && m_pipelines.csgBuildArgsPipeline())
             && m_statistics.prepareResources()
             && m_postprocess.prepareResources(width, height, settings)
             && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled)
         ;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !preparePipelines(prepareHardware, csgHardwareWork))
+    if(!heap.isInitialized() || !m_pipelines.prepare(prepareHardware, csgHardwareWork, m_resources))
         return false;
     const Array<NotNull<const Core::GpuTimingScopeDefinition*>, 3> scopes = { MakeNotNull(&ReflectionGpuTimingScope::s_Classify), MakeNotNull(&ReflectionGpuTimingScope::s_BuildArgs), MakeNotNull(&ReflectionGpuTimingScope::s_Hardware), };
     for(const NotNull<const Core::GpuTimingScopeDefinition*> scope : scopes){
@@ -109,7 +86,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
         return
-            prepareQueue(capacity) && prepareArguments(capacity, csgHardwareWork && m_csgBuildArgsPipeline)
+            prepareQueue(capacity) && prepareArguments(capacity, csgHardwareWork && m_pipelines.csgBuildArgsPipeline())
             && m_statistics.prepareResources()
             && m_postprocess.prepareResources(width, height, settings)
             && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled)
@@ -155,7 +132,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         m_resources.counters = Move(*countersResult);
     else
         m_resources.counters.reset();
-    const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, csgHardwareWork && m_csgBuildArgsPipeline);
+    const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, csgHardwareWork && m_pipelines.csgBuildArgsPipeline());
     auto indirectArgsResult = createBuffer(s_ReflectionIndirectArgsBufferName, static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes, false, true);
     if(indirectArgsResult)
         m_resources.indirectArgs = Move(*indirectArgsResult);
@@ -282,11 +259,11 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     if(scene.valid()){
         const b8 csg = static_cast<b8>(scene.csgTraceContextBuffer);
         if(!opticalTransport)
-            snapshot.hardwarePipeline = csg ? m_csgPlainHardwarePipeline : m_plainHardwarePipeline;
+            snapshot.hardwarePipeline = csg ? m_pipelines.csgPlainHardwarePipeline() : m_pipelines.plainHardwarePipeline();
         else if(scene.opticalScene.unspecifiedBoundariesOnly)
-            snapshot.hardwarePipeline = csg ? m_csgUnspecifiedHardwarePipeline : m_unspecifiedHardwarePipeline;
+            snapshot.hardwarePipeline = csg ? m_pipelines.csgUnspecifiedHardwarePipeline() : m_pipelines.unspecifiedHardwarePipeline();
         else if(csg)
-            snapshot.hardwarePipeline = m_csgHardwarePipeline;
+            snapshot.hardwarePipeline = m_pipelines.csgHardwarePipeline();
     }
     const ReflectionRadianceBinding base{ m_resources.opaqueRadiance, m_resources.parameters.opaqueRadianceSlot, m_resources.parameters.opaqueOutputSlot, };
     snapshot.postprocess = m_postprocess.snapshot(base, stamp, settings, m_graphics.getFrameIndex());
@@ -318,9 +295,9 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     );
     if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u && scene.csgTraceContextBuffer){
         const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
-        if(!m_csgBuildArgsPipeline || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes)
+        if(!m_pipelines.csgBuildArgsPipeline() || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes)
             return {};
-        snapshot.buildArgsPipeline = m_csgBuildArgsPipeline;
+        snapshot.buildArgsPipeline = m_pipelines.csgBuildArgsPipeline();
     }
     snapshot.postprocess.deferredResourcesSlot = parameters.deferredResourcesSlot;
     snapshot.postprocess.opaqueSpecularSlot = parameters.opaqueSpecularSlot;
@@ -451,62 +428,6 @@ b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 slice
     return true;
 }
 
-b8 RendererReflectionSystem::preparePipelines(const b8 prepareHardware, const b8 prepareCsgHardware){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(
-        !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(u32), Core::ShaderType::Compute, m_bindingLayout)
-        || !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_depthBindingLayout)
-    )
-        return false;
-    const auto preparePipeline = [&](
-        Core::ComputePipelineHandle& pipeline,
-        Core::ShaderHandle& shader,
-        const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* member,
-        const Name debugName,
-        const b8 hardware,
-        const Core::BindingLayoutHandle& bindingLayout,
-        const AStringView variant = Core::ShaderArchive::s_DefaultVariant
-    ){
-        if(pipeline)
-            return true;
-        if(!m_shaders.loadShader<ComputeShader>(member, variant, debugName, shader))
-            return false;
-        return RendererComputePipelineDetail::CreateHeapComputePipeline(device, shader, bindingLayout, hardware, pipeline);
-    };
-    if(
-        !preparePipeline(m_resources.classifyPipeline, m_classifyShader, &ReflectionSubsystem::classifyCs, Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
-        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, &ReflectionSubsystem::buildArgsCs, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
-        || !preparePipeline(m_resources.depthPyramid.pipeline, m_depthShader, &ReflectionSubsystem::depthReduceCs, Name("ECSRender_ReflectionDepthReduce"), false, m_depthBindingLayout)
-    )
-        return false;
-    if(
-        prepareHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout()
-        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
-            m_plainHardwarePipeline, m_plainHardwareShader,
-            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
-            s_ReflectionHwPlainVariant
-        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
-    )
-        return false;
-    const b8 csgHardware = prepareCsgHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout();
-    if(csgHardware && !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_csgBindingLayout))
-        return false;
-    if(
-        csgHardware
-        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, &ReflectionSubsystem::buildArgsCs, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
-            m_csgHardwarePipeline, m_csgHardwareShader,
-            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
-            s_ReflectionHwCsgOpticalVariant
-        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
-            m_csgUnspecifiedHardwarePipeline, m_csgUnspecifiedHardwareShader,
-            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
-            s_ReflectionHwCsgUnspecifiedVariant
-        ))
-    )
-        return false;
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/filesystem/executable_paths.h>
 #include <global/binary.h>
 #include <global/filesystem/exclusive_publication.h>
 #include <global/process.h>
@@ -93,7 +94,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     }
 
     Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
-    const auto storageDirectory = ResolveStorageDirectory(scratchArena, config.storageDirectory, __hidden_telemetry_ingest::s_StorageDirectoryName);
+    const auto storageDirectory = ExecutablePaths(scratchArena).storageDirectory(config.storageDirectory, __hidden_telemetry_ingest::s_StorageDirectoryName);
     const auto rawDirectory = storageDirectory / __hidden_telemetry_ingest::s_RawDirectoryName;
     const auto reportDirectory = storageDirectory / __hidden_telemetry_ingest::s_ReportDirectoryName;
     if(!EnsureDirectories(rawDirectory) || !EnsureDirectories(reportDirectory)){

@@ -3,6 +3,7 @@
 
 
 #include "compiler_internal.h"
+#include "timing_decision.h"
 
 #include <global/overflow.h>
 
@@ -173,9 +174,9 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         // A fresh store may finish calibration with no probe as incumbent; the static route is then the baseline.
-        const b8 canSwitch = assignmentState ? GpuTaskTimingFeedbackCanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
-                && GpuTaskTimingHistoryMeetsMinimumSamples(*candidateHistory, policy)
-                && GpuTaskTimingBenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
+        const b8 canSwitch = assignmentState ? GpuTaskTimingDecision::canSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingDecision::historyMeetsMinimumSamples(*incumbentHistory, policy)
+                && GpuTaskTimingDecision::historyMeetsMinimumSamples(*candidateHistory, policy)
+                && GpuTaskTimingDecision::benefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
         ;
         if(!canSwitch)
             continue;

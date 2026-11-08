@@ -1,0 +1,135 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_scene/component_assets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComponentAssetBinaryCodec{
+    private b8 validateHeader(in ComponentHeaderBinary header, in Name assetType, in usize remainingBytes)const{
+        if(header.version != s_ComponentVersion){
+            error("IComponent::loadBinary failed: unsupported version {}", header.version);
+            return false;
+        }
+        if(header.componentTypeHash != assetType.hash()){
+            error("IComponent::loadBinary failed: component binary type does not match '{}'", assetType.resolvedText());
+            return false;
+        }
+        if(header.payloadByteCount > cast<u64>(remainingBytes)){
+            error("IComponent::loadBinary failed: truncated component payload");
+            return false;
+        }
+        return true;
+    }
+
+    public void packEnvelope(
+        in NameHash componentTypeHash,
+        in Span<u8> payload,
+        mut Vector<u8> outBinary
+    )const{
+        const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
+        outBinary.clear();
+        outBinary.reserve(s_ComponentHeaderBinaryBytes + payload.size());
+        AppendPOD(outBinary, header);
+        for(in u8 b : payload)
+            outBinary.push_back(b);
+    }
+
+    public Expected<Span<u8>> unpackEnvelope(
+        in Span<u8> binary,
+        in Name assetType
+    )const{
+        usize cursor = 0u;
+        const Expected<ComponentHeaderBinary> headerResult = ReadPOD<ComponentHeaderBinary>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("IComponent::loadBinary failed: malformed header");
+            return makeUnexpected(Failure());
+        }
+        const ComponentHeaderBinary header = headerResult.value();
+        if(header.magic != s_ComponentMagic){
+            error("IComponent::loadBinary failed: invalid component asset format; recook required");
+            return makeUnexpected(Failure());
+        }
+        if(!this.validateHeader(header, assetType, binary.size() - cursor))
+            return makeUnexpected(Failure());
+
+        const usize payloadByteCount = cast<usize>(header.payloadByteCount);
+        const Span<u8> payload = binary.subspan(cursor, payloadByteCount);
+        cursor += payloadByteCount;
+        if(cursor != binary.size()){
+            error("IComponent::loadBinary failed: trailing bytes detected");
+            return makeUnexpected(Failure());
+        }
+        return payload;
+    }
+
+    public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
+        const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
+        outPayload.clear();
+        outPayload.reserve(s_TransformComponentPayloadBinaryBytes);
+        AppendPOD(outPayload, binaryPayload);
+        return true;
+    }
+
+    public b8 deserializeTransform(in Span<u8> payload, mut TransformComponent outComponent)const{
+        usize cursor = 0u;
+        const Expected<TransformComponentPayloadBinary> binaryPayload = ReadPOD<TransformComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("TransformComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        outComponent = UnpackTransformComponentPayloadBinary(binaryPayload.value());
+        return true;
+    }
+
+    public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
+        const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
+        outPayload.clear();
+        outPayload.reserve(s_CameraComponentPayloadBinaryBytes);
+        AppendPOD(outPayload, binaryPayload);
+        return true;
+    }
+
+    public b8 deserializeCamera(in Span<u8> payload, mut CameraComponent outComponent)const{
+        usize cursor = 0u;
+        const Expected<CameraComponentPayloadBinary> binaryPayload = ReadPOD<CameraComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("CameraComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        outComponent = UnpackCameraComponentPayloadBinary(binaryPayload.value());
+        return true;
+    }
+
+    public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
+        const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
+        outPayload.clear();
+        outPayload.reserve(s_LightComponentPayloadBinaryBytes);
+        AppendPOD(outPayload, binaryPayload);
+        return true;
+    }
+
+    public b8 deserializeLight(in Span<u8> payload, mut LightComponent outComponent)const{
+        usize cursor = 0u;
+        const Expected<LightComponentPayloadBinary> binaryPayload = ReadPOD<LightComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("LightComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        const Expected<LightComponent> unpacked = UnpackLightComponentPayloadBinary(binaryPayload.value());
+        if(!unpacked.has_value()){
+            error("LightComponentAsset::loadComponentPayload failed: invalid light flags");
+            return false;
+        }
+        outComponent = unpacked.value();
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

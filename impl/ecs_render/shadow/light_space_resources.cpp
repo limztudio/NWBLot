@@ -3,6 +3,7 @@
 
 
 #include "light_space_shadow.h"
+#include "light_space_resource_set.h"
 
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -21,11 +22,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
-    auto& state = m_lightSpaceShadow;
+b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
+    auto& state = m_state;
     auto& snapshot = state.m_snapshot;
     const b8 csg = state.m_csg.snapshot.hasCsg;
-    const b8 hardwareCsg = csg && m_shadowVisibilityHardwareSupported;
+    const b8 hardwareCsg = csg && m_hardwareSupported;
     if(state.m_pipelineFailed)
         return false;
     if(
@@ -133,8 +134,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     return true;
 }
 
-b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan& plan){
-    auto& snapshot = m_lightSpaceShadow.m_snapshot;
+b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& plan){
+    auto& snapshot = m_state.m_snapshot;
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const Array<u64, 4u> sizes = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
@@ -145,8 +146,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
         && sizes[2] != 0u && sizes[2] <= maximumRange && sizes[2] <= Limit<u32>::s_Max
         && sizes[3] != 0u && sizes[3] <= maximumRange && sizes[3] <= Limit<u32>::s_Max
     );
-    if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
-        auto& diagnostics = m_lightSpaceShadow.m_diagnostics;
+    if(m_state.m_csg.snapshot.hasCsg){
+        auto& diagnostics = m_state.m_diagnostics;
         if(!diagnostics.readback){
             Core::BufferDesc desc;
             desc
@@ -163,7 +164,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
             if(!readbackResult)
                 return false;
         }
-        const u64 contextSize = m_lightSpaceShadow.m_csg.bytes.size();
+        const u64 contextSize = m_state.m_csg.bytes.size();
         if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
             return false;
         if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
@@ -200,7 +201,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
             snapshot.csgOpaqueDepthDescriptor = csgDescriptors[1];
             for(auto& descriptor : csgDescriptors)
                 descriptor = Core::GpuDescriptorHandle::Invalid();
-            m_lightSpaceShadow.m_captureHistory.invalidate();
+            m_state.m_captureHistory.invalidate();
         }
     }
     if(
@@ -282,7 +283,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     RayTracingDetail::RetireHeapHandle(heap, snapshot.viewsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.drawArgumentsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.depthDescriptor);
-    m_lightSpaceShadow.m_captureHistory.invalidate();
+    m_state.m_captureHistory.invalidate();
     snapshot.counts = Move(buffers[s_LightSpaceCountsBufferIndex]);
     snapshot.events = Move(buffers[s_LightSpaceEventsBufferIndex]);
     snapshot.views = Move(buffers[s_LightSpaceViewsBufferIndex]);
@@ -300,8 +301,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     return true;
 }
 
-void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
-    auto& state = m_lightSpaceShadow;
+void LightSpaceResourceSet::releaseLightSpaceShadowResources(){
+    auto& state = m_state;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.countsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.eventsDescriptor);

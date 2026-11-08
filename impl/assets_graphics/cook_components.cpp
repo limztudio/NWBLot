@@ -10,6 +10,8 @@
 
 #include "cook_components.h"
 
+#include <impl/assets_graphics/graphics_component_binary_codec.adhd.h>
+
 #include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
@@ -17,6 +19,7 @@
 #include <impl/assets_scene/cook.h>
 
 #include <core/assets/cook_metadata.h>
+#include <core/assets/reserved_asset_ref_parser.h>
 #include <core/assets/paths.h>
 
 
@@ -65,7 +68,7 @@ template<
     const auto assetField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, DiagnosticPrefix, s_GraphicsComponentAssetField, true);
     if(!assetField)
         return MakeUnexpected(Failure{});
-    const auto assetRef = Core::Assets::ParseMetadataReservedAssetRefText<ReferencedAssetT>(nwbFilePath, DiagnosticPrefix, s_GraphicsComponentAssetField, assetField->text, scratchArena);
+    const auto assetRef = Core::Assets::ReservedAssetRefParser::parseText<ReferencedAssetT>(nwbFilePath, DiagnosticPrefix, s_GraphicsComponentAssetField, assetField->text, scratchArena);
     if(!assetRef)
         return MakeUnexpected(Failure{});
     entry.component.*FieldPtr = *assetRef;
@@ -109,7 +112,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
     const auto materialField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, true);
     if(!materialField)
         return MakeUnexpected(Failure{});
-    const auto materialRef = Core::Assets::ParseMetadataReservedAssetRefText<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, materialField->text, scratchArena);
+    const auto materialRef = Core::Assets::ReservedAssetRefParser::parseText<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, materialField->text, scratchArena);
     if(!materialRef)
         return MakeUnexpected(Failure{});
     entry.component.material = *materialRef;
@@ -205,15 +208,15 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
 
 
 b8 ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return SerializeSingleAssetRefComponentPayloadBinary(component.model.name(), outPayload);
+    return GraphicsComponentBinaryCodec{}.serializeAssetRef(component.model.name(), outPayload);
 }
 
 b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return SerializeSingleAssetRefComponentPayloadBinary(component.mesh.name(), outPayload);
+    return GraphicsComponentBinaryCodec{}.serializeAssetRef(component.mesh.name(), outPayload);
 }
 
 b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return SerializeRendererComponentPayloadBinary(component, outPayload);
+    return GraphicsComponentBinaryCodec{}.serializeRenderer(component, outPayload);
 }
 
 

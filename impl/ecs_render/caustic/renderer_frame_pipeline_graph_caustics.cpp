@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/caustic/caustics_graph_coordinator.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -25,7 +27,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
+b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
+    const CausticsGraphContext& context,
     const b8 hardwareCaustics,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -53,7 +56,7 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     // Direct successor of Shadow Visibility; Compute family is optional.
     if(
         hardwareCaustics
-        || !m_deferredShadowVisibilityTask.valid()
+        || !context.shadowVisibilityTask.valid()
         || !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
         || !worldPosition.valid()
@@ -65,11 +68,11 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     )
         return false;
 
-    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
-    if(m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot) && !opticalScene.valid())
+    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = context.mesh.meshViewBufferSnapshot();
+    if(context.rayTracing.hasCausticWork(meshViewBufferSnapshot) && !opticalScene.valid())
         return false;
 
-    CausticsResolveChainBuilder resolveChainBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
+    CausticsResolveChainBuilder resolveChainBuilder(context.graph, context.rayTracing);
     const auto stageTargetsResult = resolveChainBuilder.importStageTargets(deferredTargets, false);
     if(!stageTargetsResult)
         return false;
@@ -93,7 +96,7 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;
-        const auto resourceResult = ImportExternalBuffer(m_deferredLightingTaskGraph, buffer, identity, label);
+        const auto resourceResult = ImportExternalBuffer(context.graph, buffer, identity, label);
         if(!resourceResult)
             return false;
         photonResourceUses.push_back(ReadUse(*resourceResult, state));
@@ -106,13 +109,13 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         && appendOptionalReadBuffer(meshViewBufferSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
         && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources,
-            m_deferredLightingTaskGraph,
+            context.graph,
             photonResourceUses
         )
         && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
             rayTracingResources.csgTraceContextBuffer,
             rayTracingResources.csgTraceBoundsBuffers,
-            m_deferredLightingTaskGraph,
+            context.graph,
             photonResourceUses
         );
     if(!optionalResourcesImported){
@@ -133,23 +136,23 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const RendererFramePipelineDetail::TraceResourceSetUses photonResourceSetUses = RendererFramePipelineDetail::MakeTraceResourceSetUses(softwareTraceGeometrySet, traceMaterialSampledTextureSet);
 
     const Array<Core::GpuTaskExternalStateSource, 1u> scratchStateSources = {
-        Core::GpuTaskExternalStateSource{ .states = m_causticsComputePersistentState.source(), },
+        Core::GpuTaskExternalStateSource{ .states = context.causticsComputeState.source(), },
     };
-    const Span<const Core::GpuTaskExternalStateSource> scratchStateSourceSpan = m_causticsComputePersistentState.valid()
+    const Span<const Core::GpuTaskExternalStateSource> scratchStateSourceSpan = context.causticsComputeState.valid()
         ? Span<const Core::GpuTaskExternalStateSource>(scratchStateSources)
         : Span<const Core::GpuTaskExternalStateSource>{};
     const Array<Core::GpuTaskExternalStateSource, 1u> irradianceReturnStateSources = {
-        Core::GpuTaskExternalStateSource{ .states = m_causticIrradianceReturnState.source(), .applicableConsumerQueueClass = Core::CommandQueue::Compute, },
+        Core::GpuTaskExternalStateSource{ .states = context.irradianceReturnState.source(), .applicableConsumerQueueClass = Core::CommandQueue::Compute, },
     };
-    const Span<const Core::GpuTaskExternalStateSource> irradianceReturnStateSourceSpan = m_causticIrradianceReturnState.valid()
+    const Span<const Core::GpuTaskExternalStateSource> irradianceReturnStateSourceSpan = context.irradianceReturnState.valid()
         ? Span<const Core::GpuTaskExternalStateSource>(irradianceReturnStateSources)
         : Span<const Core::GpuTaskExternalStateSource>{};
-    const Array<Core::GpuTaskId, 1u> shadowVisibilityDependency = { m_deferredShadowVisibilityTask };
+    const Array<Core::GpuTaskId, 1u> shadowVisibilityDependency = { context.shadowVisibilityTask };
 
     const auto prefixTasksResult = resolveChainBuilder.declarePrefixTasks(CausticsStagePrefixInputs{
         .targets = deferredTargets,
         .meshViewSnapshot = meshViewBufferSnapshot,
-        .shadowPreparationReady = m_shadowPreparationOutcome.ready,
+        .shadowPreparationReady = context.shadowPrepared,
         .timingTicket = timingTicket,
         .photonTiming = causticPhotonTiming,
         .initialDependencies = shadowVisibilityDependency,
@@ -186,12 +189,12 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         .setResourceUses(photonResourceUses)
         .setResourceSetUses({ photonResourceSetUses.useCount != 0u ? photonResourceSetUses.uses.data() : nullptr, photonResourceSetUses.useCount })
     ;
-    const auto deferredCausticPhotonTaskResult = m_raytracingSystem.declareSoftwareCausticsTask(
-        m_deferredLightingTaskGraph,
+    const auto deferredCausticPhotonTaskResult = context.rayTracing.declareSoftwareCausticsTask(
+        context.graph,
         photonDesc,
         deferredLightingResources,
         meshViewBufferSnapshot,
-        m_shadowPreparationOutcome.ready,
+        context.shadowPrepared,
         prefixTasksResult->graphOwnsAccumulatorBootstrapClear,
         deferredTargets,
         timingTicket,
@@ -230,6 +233,20 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     m_deferredCausticResolveUpsampleTask = geometryAndResolveResult->causticResolveUpsampleTask;
     m_deferredSoftwareCausticsTask = geometryAndResolveResult->causticsTask;
     return true;
+}
+
+
+void CausticsGraphCoordinator::resetDeferredCausticsTaskState()noexcept{
+    m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
+    m_deferredCausticResolvePrepareTask = {};
+    m_deferredCausticResolveWaveletTasks = {};
+    m_deferredCausticResolveUpsampleTask = {};
+    m_deferredCausticProducerDispatched = false;
 }
 
 

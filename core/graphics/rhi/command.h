@@ -263,6 +263,8 @@ class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
     friend class GpuInitialStateHandoffValidation;
+    friend class GpuBufferStateFanIn;
+    friend class GpuTextureStateFanIn;
 
 
 private:

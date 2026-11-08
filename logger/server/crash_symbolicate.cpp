@@ -3,6 +3,7 @@
 
 
 #include "crash_symbolicate.h"
+#include "crash_report_composer.h"
 #include "crash_symbolicate_internal.h"
 
 #include <core/crash/package_names.h>
@@ -147,133 +148,7 @@ static void AppendEventSummary(const CrashPackageSummary& summary, CrashReportTe
         AppendExceptionSummary(summary, outReport);
 }
 
-struct ReportSectionRange{
-    usize removeBegin = AStringView::npos;
-    usize removeEnd = AStringView::npos;
-    usize contentBegin = AStringView::npos;
-    usize contentEnd = AStringView::npos;
 
-
-public:
-    [[nodiscard]] b8 found()const noexcept{ return removeBegin != AStringView::npos; }
-};
-
-[[nodiscard]] static Expected<ReportSectionRange> FindReportSection(const AStringView report, const AStringView header, const AStringView headerWithLeadingNewline)noexcept{
-    ReportSectionRange outRange;
-
-    if(StartsWith(report, header)){
-        outRange.removeBegin = 0u;
-        outRange.contentBegin = header.size();
-    }
-    else{
-        const usize headerBegin = report.find(headerWithLeadingNewline);
-        if(headerBegin == AStringView::npos)
-            return MakeUnexpected(Failure{});
-
-        outRange.removeBegin = headerBegin;
-        outRange.contentBegin = headerBegin + headerWithLeadingNewline.size();
-    }
-
-    const usize nextSection = report.find(s_ReportSectionOpen, outRange.contentBegin);
-    outRange.contentEnd = nextSection == AStringView::npos ? report.size() : nextSection;
-    outRange.removeEnd = outRange.contentEnd;
-    return outRange;
-}
-
-[[nodiscard]] static ReportSectionRange FindCallstackSection(const AStringView report)noexcept{
-    const auto callstack = FindReportSection(report, AStringView("[callstack]\n"), s_CallstackSectionHeader);
-    if(callstack)
-        return *callstack;
-    const auto tombstone = FindReportSection(report, AStringView("[tombstone_callstack]\n"), AStringView("\n[tombstone_callstack]\n"));
-    return tombstone ? *tombstone : ReportSectionRange{};
-}
-
-[[nodiscard]] static AStringView ReportSectionContent(const AStringView report, const ReportSectionRange& range)noexcept{
-    if(!range.found())
-        return AStringView();
-
-    return TrimView(AStringView(report.data() + range.contentBegin, range.contentEnd - range.contentBegin));
-}
-
-static void AppendReportWithoutSection(const AStringView report, const ReportSectionRange& range, AString<Core::Alloc::ScratchArena>& outReport){
-    if(!range.found()){
-        outReport.append(report.data(), report.size());
-        return;
-    }
-
-    if(range.removeBegin > 0u)
-        outReport.append(report.data(), range.removeBegin);
-    if(range.removeEnd < report.size())
-        outReport.append(report.data() + range.removeEnd, report.size() - range.removeEnd);
-}
-
-[[nodiscard]] static b8 AppendCrashHeadline(const CrashPackageSummary& summary, CrashReportText& outReport){
-    b8 wrote = false;
-    if(!summary.triggerExpression.empty()){
-        outReport += summary.triggerExpression;
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    if(!summary.triggerMessage.empty()){
-        outReport += summary.triggerMessage;
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    if(!summary.triggerFile.empty() || summary.triggerLine != 0u){
-        outReport += "at ";
-        if(!summary.triggerFile.empty())
-            outReport += summary.triggerFile;
-        else
-            outReport += "line ";
-        if(summary.triggerLine != 0u){
-            if(!summary.triggerFile.empty())
-                outReport += ":";
-            Array<char, s_DecimalTextBufferCapacity> buffer{};
-            outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
-        }
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    return wrote;
-}
-
-static void AppendVisibleCallstack(const AStringView callstack, CrashReportText& outReport){
-    outReport += "callstack:\n";
-    if(callstack.empty()){
-        outReport += "<unavailable>\n";
-        return;
-    }
-
-    outReport.append(callstack.data(), callstack.size());
-    if(outReport.back() != '\n')
-        outReport += s_ReportLineEnd;
-}
-
-[[nodiscard]] static CrashReportText BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
-    CrashReportText report(Move(detailReport));
-    const AStringView detailReportView(report.data(), report.size());
-    const ReportSectionRange callstackSection = FindCallstackSection(detailReportView);
-    const AStringView callstack = ReportSectionContent(detailReportView, callstackSection);
-
-    AString<Core::Alloc::ScratchArena> details(scratchArena);
-    details.reserve(report.size());
-    AppendReportWithoutSection(detailReportView, callstackSection, details);
-    const AStringView detailsView = TrimView(AStringView(details.data(), details.size()));
-
-    const AString<Core::Alloc::ScratchArena> callstackCopy(callstack.data(), callstack.size(), scratchArena);
-    report.clear();
-    report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
-    if(AppendCrashHeadline(summary, report))
-        report += s_ReportLineEnd;
-    AppendVisibleCallstack(AStringView(callstackCopy.data(), callstackCopy.size()), report);
-    report += "\ndetails:\n";
-    if(!detailsView.empty()){
-        report.append(detailsView.data(), detailsView.size());
-        if(report.back() != '\n')
-            report += s_ReportLineEnd;
-    }
-    return report;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,7 +207,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
-    return LoggerCrashSymbolicateDetail::BuildOrderedCrashReport(summary, scratchArena, Move(detailReport));
+    return LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, scratchArena, Move(detailReport));
 }
 
 

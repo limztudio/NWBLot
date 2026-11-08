@@ -1,0 +1,119 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+
+native{
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiScopeDescriptorFactory{
+    public PopupScope comboPopup(
+        in PopupToken token,
+        in PopupToken parent,
+        in PopupPlacement placement,
+        in WidgetId focusAnchor,
+        in u64 focusAnchorDeclarationGeneration
+    )const{
+        PopupScope scope;
+        scope.token = token;
+        scope.parent = parent;
+        scope.bounds = placement.bounds;
+        scope.viewport = placement.viewport;
+        scope.dismissFocusTraversal = true;
+        scope.focusAnchor = focusAnchor;
+        scope.focusAnchorDeclarationGeneration = focusAnchorDeclarationGeneration;
+        return scope;
+    }
+
+    public PopupScope popupFrame(
+        in PopupToken token,
+        in PopupToken parent,
+        in PopupPlacement placement,
+        in PopupOptions options
+    )const{
+        PopupScope scope;
+        scope.token = token;
+        scope.parent = parent;
+        scope.bounds = placement.bounds;
+        scope.viewport = placement.viewport;
+        scope.dismissOutside = options.dismissOutside;
+        scope.dismissCancel = options.dismissCancel;
+        scope.autofocus = options.autofocus;
+        return scope;
+    }
+
+    public LayoutNodeDesc popupRoot(
+        in Rect bounds,
+        in Insets popupPadding,
+        in UiSkinInsets backgroundPadding,
+        in f32 gap
+    )const{
+        LayoutNodeDesc description;
+        description.direction = LayoutDirection::Column;
+        description.width = LayoutSize(LayoutSizePolicy::Fixed, bounds.width);
+        description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
+        description.padding = MaxUiPadding(popupPadding, backgroundPadding);
+        description.gap = gap;
+        return description;
+    }
+
+    public PopupScope basicPopup(
+        in PopupToken token,
+        in PopupToken parent,
+        in PopupPlacement placement
+    )const{
+        PopupScope scope;
+        scope.token = token;
+        scope.parent = parent;
+        scope.bounds = placement.bounds;
+        scope.viewport = placement.viewport;
+        return scope;
+    }
+
+    public LayoutNodeDesc panelRoot(
+        in Rect bounds,
+        in LayoutDirection direction,
+        in UiSkinInsets panelPadding,
+        in f32 gap
+    )const{
+        LayoutNodeDesc description;
+        description.direction = direction;
+        description.width = LayoutSize(LayoutSizePolicy::Fixed, bounds.width);
+        description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
+        description.padding = Insets(panelPadding.left, panelPadding.top, panelPadding.right, panelPadding.bottom);
+        description.gap = gap;
+        return description;
+    }
+
+    public LayoutNodeDesc container(
+        in LayoutDirection direction,
+        in ContainerOptions options
+    )const{
+        LayoutNodeDesc description;
+        description.direction = direction;
+        description.width = options.width;
+        description.height = options.height;
+        description.padding = options.padding;
+        description.gap = options.gap;
+        return description;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

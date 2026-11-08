@@ -5,6 +5,7 @@
 #include "opaque_compute_emulation_producers.h"
 
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/common/log.h>

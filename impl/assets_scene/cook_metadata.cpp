@@ -11,6 +11,7 @@
 #include "cook.h"
 
 #include <core/common/log.h>
+#include <core/assets/reserved_asset_ref_parser.h>
 
 #include <global/text_utils.h>
 
@@ -52,7 +53,7 @@ using namespace Core::Metascript;
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
+        const auto parsedRef = Core::Assets::ReservedAssetRefParser::parseValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
         if(!parsedRef)
             return MakeUnexpected(Failure{});
         if(!assets.emplace(*nickname, *parsedRef).second){
@@ -89,7 +90,7 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EntityComponentsField));
         return MakeUnexpected(Failure{});
     }
-    auto components = Core::Assets::ParseMetadataReservedAssetRefList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
+    auto components = Core::Assets::ReservedAssetRefParser::parseList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
     if(!components)
         return MakeUnexpected(Failure{});
 
@@ -128,7 +129,7 @@ Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, cons
     const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
     if(!startSceneField)
         return MakeUnexpected(Failure{});
-    const auto startSceneRef = Core::Assets::ParseMetadataReservedAssetRefText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, startSceneField->text, scratchArena);
+    const auto startSceneRef = Core::Assets::ReservedAssetRefParser::parseText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, startSceneField->text, scratchArena);
     if(!startSceneRef)
         return MakeUnexpected(Failure{});
     entry.startScene = *startSceneRef;
@@ -169,14 +170,14 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneSubsystemsField));
         return MakeUnexpected(Failure{});
     }
-    auto subsystems = Core::Assets::ParseMetadataReservedAssetRefList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
+    auto subsystems = Core::Assets::ReservedAssetRefParser::parseList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
     if(!subsystems)
         return MakeUnexpected(Failure{});
     DeduplicateSubsystemRefs(*subsystems);
     entry.subsystems = Move(*subsystems);
 
     if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){
-        auto entities = Core::Assets::ParseMetadataReservedAssetRefList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
+        auto entities = Core::Assets::ReservedAssetRefParser::parseList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
         if(!entities)
             return MakeUnexpected(Failure{});
         entry.entities = Move(*entities);

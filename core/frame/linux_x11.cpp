@@ -4,7 +4,7 @@
 
 #include "linux_platform.h"
 #include "frame_detail.h"
-#include "input_helpers.h"
+#include "linux_x11_keyboard.h"
 
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
@@ -26,7 +26,6 @@
 #include <core/common/log.h>
 #include <core/os/linux/x11/clipboard.h>
 #include <core/os/linux/x11/text_input.h>
-#include <core/os/linux/x11/text_input_key_history.h>
 
 #include <global/scope_exit.h>
 #include <global/thread.h>
@@ -53,7 +52,6 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_KeyStateCount = 256;
 static constexpr u32 s_X11ScrollUpButton = 4u;
 static constexpr u32 s_X11ScrollDownButton = 5u;
 static constexpr u32 s_X11ScrollLeftButton = 6u;
@@ -64,14 +62,12 @@ static constexpr u32 s_X11MouseButton6 = 10u;
 static constexpr u32 s_X11MouseButton7 = 11u;
 static constexpr u32 s_X11MouseButton8 = 12u;
 static constexpr f64 s_ScrollUnit = 1.0;
-static constexpr usize s_TextInputBufferSize = 64u;
 // Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
 static constexpr i32 s_InactivePollSleepMs = 10;
 static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
-static b8 s_DetectableAutoRepeat = false;
-static Array<b8, s_KeyStateCount> s_KeyStates = {};
-static X11FilteredKeyHistory s_FilteredKeyHistory;
+static X11KeyboardInput s_Keyboard;
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,37 +91,6 @@ static Atom GetDeleteWindowMessage(const Common::LinuxFrame& frameData)noexcept{
 
 static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom)noexcept{
     frameData.nativeAuxValue() = static_cast<u64>(atom);
-}
-
-static void SynchronizeKeyStates(const Common::LinuxFrame& frameData){
-    Array<char, s_KeyStateCount / s_BitsPerByte> keymap;
-    if(XQueryKeymap(static_cast<::Display*>(frameData.nativeDisplay()), keymap.data()) == 0){
-        NWB_MEMSET(s_KeyStates.data(), 0, sizeof(s_KeyStates));
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 physical key-state query failed"));
-        return;
-    }
-    // Keys held while focus returns must remain repeats until their physical release.
-    for(usize keycode = 0u; keycode < s_KeyStateCount; ++keycode)
-        s_KeyStates[keycode] = (static_cast<u8>(keymap[keycode / s_BitsPerByte]) & (1u << (keycode % s_BitsPerByte))) != 0u;
-}
-
-static i32 TranslateModifiers(u32 state)noexcept{
-    i32 mods = 0;
-
-    if(state & ShiftMask)
-        mods |= InputModifier::Shift;
-    if(state & ControlMask)
-        mods |= InputModifier::Control;
-    if(state & Mod1Mask)
-        mods |= InputModifier::Alt;
-    if(state & Mod4Mask)
-        mods |= InputModifier::Super;
-    if(state & LockMask)
-        mods |= InputModifier::CapsLock;
-    if(state & Mod2Mask)
-        mods |= InputModifier::NumLock;
-
-    return mods;
 }
 
 static i32 TranslateMouseButton(u32 button)noexcept{
@@ -157,86 +122,6 @@ struct ScrollOffset{
     default:
         return {};
     }
-}
-
-NWB_DECLARE_LINUX_KEY_SYMBOLS(X11KeySymbols, KeySym, XK);
-
-static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mods){
-    Array<char, s_TextInputBufferSize> buffer;
-    KeySym ignored = NoSymbol;
-    const i32 byteCount = XLookupString(&keyEvent, buffer.data(), static_cast<i32>(buffer.size()), &ignored, nullptr);
-    if(byteCount <= 0)
-        return;
-
-    for(i32 i = 0; i < byteCount;){
-        const auto decoded = DecodeUtf8CodePoint(AStringView(buffer.data() + i, static_cast<usize>(byteCount - i)));
-        const u32 unicode = decoded ? decoded->codePoint : static_cast<u8>(buffer[i]);
-        const i32 consumed = decoded ? decoded->byteCount : 1;
-
-        i += consumed;
-
-        if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
-            continue;
-
-        input.keyboardCharInput(unicode, mods);
-    }
-}
-
-static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const b8 dispatchText, const b8 dispatchPhysical = true){
-    XKeyEvent translatedEvent = keyEvent;
-    const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
-    const i32 key = TranslateLinuxKeySymbol<X11KeySymbols>(keySym);
-    const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
-
-    if(dispatchPhysical && keyEvent.keycode)
-        frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
-    if(dispatchText && action != InputAction::Release){
-        // Forwarded XIM commits bypass the ordinary physical key policy.
-        if(dispatchPhysical && frame.input().keyboardTextBlocked(static_cast<i32>(keyEvent.keycode)))
-            return;
-        ITextInputService* const textInput = frame.tryTextInput();
-        if(!textInput || !DispatchX11TextInputKey(*textInput, translatedEvent))
-            DispatchTextInput(frame.input(), translatedEvent, mods);
-    }
-}
-
-static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const b8 dispatchText){
-    const u32 keycode = static_cast<u32>(event.keycode);
-    const u32 timestamp = static_cast<u32>(event.time);
-    const u32 serial = static_cast<u32>(event.serial);
-    const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
-    const b8 released = event.type == KeyRelease;
-    if(s_FilteredKeyHistory.isForwardedDuplicate(keycode, released, timestamp, serial, event.send_event != False, receivedAtMs)){
-        // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
-        if(dispatchText && !released)
-            DispatchKeyEvent(frame, event, InputAction::Press, true, false);
-        return;
-    }
-    if(event.type == KeyPress){
-        if(!dispatchText)
-            s_FilteredKeyHistory.recordFiltered(keycode, false, timestamp, serial, receivedAtMs);
-        i32 action = InputAction::Press;
-        if(keycode > 0u && keycode < s_KeyStateCount){
-            action = s_KeyStates[keycode] ? InputAction::Repeat : InputAction::Press;
-            s_KeyStates[keycode] = true;
-        }
-        DispatchKeyEvent(frame, event, action, dispatchText);
-        return;
-    }
-    // A coalesced autorepeat release must not return later as a real XIM-forwarded release.
-    if(!dispatchText)
-        s_FilteredKeyHistory.recordFiltered(keycode, true, timestamp, serial, receivedAtMs);
-    const auto& frameData = frame.data<Common::LinuxFrame>();
-    ::Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
-    if(!s_DetectableAutoRepeat && XEventsQueued(display, QueuedAfterReading) > 0){
-        XEvent nextEvent{};
-        XPeekEvent(display, &nextEvent);
-        if(nextEvent.type == KeyPress && nextEvent.xkey.keycode == event.keycode && nextEvent.xkey.time == event.time)
-            return;
-    }
-    if(keycode < s_KeyStateCount)
-        s_KeyStates[keycode] = false;
-    DispatchKeyEvent(frame, event, InputAction::Release, false);
 }
 
 static b8 ProcessEvent(Frame& frame, const XEvent& event){
@@ -272,7 +157,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
         break;
 
     case FocusIn:
-        SynchronizeKeyStates(frameData);
+        s_Keyboard.synchronize(static_cast<::Display*>(frameData.nativeDisplay()));
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(true))
                 NWB_FATAL_ASSERT(false);
@@ -287,13 +172,13 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
                 NWB_FATAL_ASSERT(false);
         }
         frameData.setActive(false);
-        s_KeyStates.fill(false);
+        s_Keyboard.focusLost();
         frame.input().windowFocusUpdate(false);
         break;
 
     case KeyPress:
     case KeyRelease:
-        ProcessKeyEvent(frame, event.xkey, true);
+        s_Keyboard.process(frame, event.xkey, true);
         break;
 
     case ButtonPress: {
@@ -306,7 +191,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
         const i32 button = TranslateMouseButton(event.xbutton.button);
         if(button != -1){
             frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
-            frame.input().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
+            frame.input().mouseButtonUpdate(button, InputAction::Press, X11KeyboardInput::TranslateModifiers(event.xbutton.state));
         }
     }
     break;
@@ -318,7 +203,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
         const i32 button = TranslateMouseButton(event.xbutton.button);
         if(button != -1){
             frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
-            frame.input().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
+            frame.input().mouseButtonUpdate(button, InputAction::Release, X11KeyboardInput::TranslateModifiers(event.xbutton.state));
         }
     }
     break;
@@ -370,9 +255,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
     SetX11Display(frameData, nullptr);
     SetX11Window(frameData, 0);
     SetDeleteWindowMessage(frameData, None);
-    s_DetectableAutoRepeat = false;
-    s_KeyStates.fill(false);
-    s_FilteredKeyHistory.reset();
+    s_Keyboard.reset();
 }
 
 
@@ -428,8 +311,7 @@ b8 InitX11Frame(Frame& frame){
         return false;
     }
 
-    Bool detectableAutoRepeat = False;
-    s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(display, True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
+    s_Keyboard.configure(*display);
 
     XSelectInput(display, GetX11Window(frameData), s_WindowEventMask);
     XStoreName(display, GetX11Window(frameData), windowTitle.data());
@@ -503,13 +385,10 @@ b8 RunX11Frame(Frame& frame){
                     continue;
             }
             if(ITextInputService* const textInput = frame.tryTextInput()){
-                s_FilteredKeyHistory.synchronizeSession(textInput->activeSession());
+                s_Keyboard.synchronizeSession(textInput->activeSession());
                 if(
                     event.xany.window == GetX11Window(frameData) && (event.type == KeyPress || event.type == KeyRelease)
-                    && s_FilteredKeyHistory.isRetiredDuplicate(
-                        static_cast<u32>(event.xkey.keycode), event.type == KeyRelease, static_cast<u32>(event.xkey.time),
-                        static_cast<u32>(event.xkey.serial), event.xkey.send_event != False, DurationInMS<u64>(TimerNow())
-                    )
+                    && s_Keyboard.isRetiredDuplicate(event.xkey)
                 ){
                     // XIM must not re-forward an old context's echo into its replacement context.
                     continue;
@@ -518,7 +397,7 @@ b8 RunX11Frame(Frame& frame){
                 if(FilterX11TextInputEvent(*textInput, event)){
                     // XIM filtering owns text. Normalized physical presses/releases must remain balanced.
                     if(physical.xany.window == GetX11Window(frameData) && (physical.type == KeyPress || physical.type == KeyRelease) && physical.xkey.keycode != 0u)
-                        ProcessKeyEvent(frame, physical.xkey, false);
+                        s_Keyboard.process(frame, physical.xkey, false);
                     else if(physical.type == FocusIn || physical.type == FocusOut || physical.type == UnmapNotify || physical.type == DestroyNotify){
                         if(!ProcessEvent(frame, physical))
                             return true;
@@ -570,9 +449,7 @@ void CleanupX11Frame(Frame& frame)noexcept{
     }
 
     SetDeleteWindowMessage(frameData, None);
-    s_DetectableAutoRepeat = false;
-    s_KeyStates.fill(false);
-    s_FilteredKeyHistory.reset();
+    s_Keyboard.reset();
 }
 
 

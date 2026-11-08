@@ -4,11 +4,15 @@
 import argparse
 from pathlib import Path
 import sys
+import struct
+import zlib
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_gallery_smoke import CASES, capture_environment, frame_difference, parse_selection, stage_logserver  # noqa: E402
+from framebuffer_png_encoder import FramebufferPngEncoder
+from window_capture_smoke import SmokeFailure
 
 LIT_CASES = "cases"
 LIT_NESTED = "nested"
@@ -51,6 +55,16 @@ class RefractionGalleryTests(unittest.TestCase):
         output = (2, 1, [[(9, 0, 0), (18, 10, 10)]])
         result = frame_difference(reference, output)
         self.assertEqual(result["changed_pixels"], 1)
+
+    def test_png_encoder_rejects_malformed_rows_and_preserves_boundary_bytes(self):
+        for frame in ((0, 1, [[]]), (1, 2, [[(0, 0, 0)]]), (2, 1, [[(0, 0, 0)]])):
+            with self.subTest(frame=frame), self.assertRaises(SmokeFailure):
+                FramebufferPngEncoder.encode(frame)
+        png = FramebufferPngEncoder.encode((2, 1, [[(0, 255, 128), (255, 0, 1)]]))
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        length = struct.unpack(">I", png[33:37])[0]
+        self.assertEqual(png[37:41], b"IDAT")
+        self.assertEqual(zlib.decompress(png[41:41 + length]), bytes((0, 0, 255, 128, 255, 0, 1)))
 
     def test_logserver_staging_is_unique_and_preserves_existing_logs(self):
         with tempfile.TemporaryDirectory(prefix="nwb_gallery_logger_") as temporary:

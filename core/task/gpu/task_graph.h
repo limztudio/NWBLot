@@ -10,6 +10,7 @@
 #include "task_desc.h"
 #include "task_graph_declaration_view.h"
 #include "task_graph_nodes.h"
+#include "task_graph_resource_import_index.h"
 #include "task_graph_packet_claims.h"
 #include "task_graph_submission_binding.h"
 
@@ -164,8 +165,6 @@ private:
     using GpuTaskNode = GpuTaskGraphDetail::GpuTaskNode;
     using GpuGraphResourceNode = GpuTaskGraphDetail::GpuGraphResourceNode;
     using ResourcePointerKey = GpuTaskGraphDetail::ResourcePointerKey;
-    using ResourcePointerHasher = TypedPointerHasher<ResourcePointerKey>;
-    using ResourcePointerEqual = GpuTaskGraphDetail::ResourcePointerEqual;
     using ResourceImportMatch = GpuTaskGraphDetail::ResourceImportMatch;
     using ResourceBinding = GpuTaskGraphDetail::ResourceBinding;
     using GpuGraphResourceVersionNode = GpuTaskGraphDetail::GpuGraphResourceVersionNode;
@@ -180,7 +179,6 @@ private:
     using GpuUploadBlobNode = GpuTaskGraphDetail::GpuUploadBlobNode;
     using MarkerLabelRange = GpuTaskGraphDetail::MarkerLabelRange;
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
-    using ResourcePointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, ResourcePointerEqual>;
     using PipelinePointerIndex = HashMap<PipelinePointerKey, u32, GraphicsArena, PipelinePointerHasher, PipelinePointerEqual>;
 
 
@@ -193,7 +191,6 @@ private:
 
 private:
     [[nodiscard]] static u64 AllocateGeneration()noexcept;
-    [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
     [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
     [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)noexcept;
@@ -244,6 +241,7 @@ public:
         , m_resourceUses(arena)
         , m_resourceVersionUses(arena)
         , m_resources(arena)
+        , m_resourceImportIndexes(arena)
         , m_resourceVersions(arena)
         , m_initialOwnerHandoffSources(arena)
         , m_initialOwnerHandoffStateSnapshots(arena)
@@ -517,15 +515,9 @@ private:
         void* payload
     );
     void discardAndDestroyUnappendedPayload(void* payload, GpuTaskDiscardedThunk discardPayload, GpuTaskPayloadDestroyThunk destroyPayload);
-    [[nodiscard]] u32 findResourceIdentity(const Name& identity)const noexcept;
-    // A null identity requests only the first matching typed pointer, without import metadata validation.
-    [[nodiscard]] ResourceImportMatch findResourceImportMatch(const NameHash* identity, const ResourcePointerKey& pointer)const noexcept;
-    [[nodiscard]] u32 findResourceSetIdentity(const Name& identity)const noexcept;
     [[nodiscard]] u32 findPipelineIdentity(const Name& identity)const noexcept;
     [[nodiscard]] PipelineImportMatch findPipelineImportMatch(const Name& identity, const PipelinePointerKey& pointer)const noexcept;
     [[nodiscard]] u32 findExternalCompletionIdentity(const Name& identity)const noexcept;
-    void prepareResourceIndexes(const ResourcePointerKey& pendingPointer);
-    void prepareResourceSetIndex();
     void preparePipelineIndexes(const PipelinePointerKey& pendingPointer);
     void prepareExternalCompletionIndex();
     [[nodiscard]] Expected<GpuGraphResourceId> appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess);
@@ -562,15 +554,12 @@ private:
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
-    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix.
-    Optional<ImportIdentityIndex> m_resourceIdentityIndex;
-    Optional<ResourcePointerIndex> m_resourcePointerIndex;
+    GpuGraphResourceImportIndex m_resourceImportIndexes;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
     GraphicsVector<NotNull<CommandListResourceStateHandoff*>> m_initialOwnerHandoffStateSnapshots;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
-    Optional<ImportIdentityIndex> m_resourceSetIdentityIndex;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     Optional<ImportIdentityIndex> m_pipelineIdentityIndex;

@@ -7,6 +7,7 @@
 
 #include "model.h"
 
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <core/alloc/global.h>
 
 #include <global/termination.h>

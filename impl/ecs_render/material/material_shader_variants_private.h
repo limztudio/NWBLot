@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
+#include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
 
 #include <core/graphics/shader_archive.h>
 
@@ -26,7 +27,7 @@ namespace ECSRenderMaterialShaderVariants{
 
 
 [[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){
-    const auto variant = TryBuildCsgClipShaderVariantText(baseVariant, Core::ShaderArchive::s_DefaultVariant, defineAssignments);
+    const auto variant = CsgShaderVariantBuilder().buildClipVariant(baseVariant, Core::ShaderArchive::s_DefaultVariant, defineAssignments);
     if(!variant)
         return MakeUnexpected(Failure{});
     return Core::GraphicsString(AStringView(*variant), arena);

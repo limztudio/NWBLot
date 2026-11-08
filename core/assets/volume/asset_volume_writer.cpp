@@ -52,7 +52,7 @@ static_assert(AssetsVolumeCookDetail::s_AssetVolumeName.size() <= ACompactString
     stageToken += configurationSafeName;
     stageToken += s_StagedVolumePathTokenSeparator;
     AppendHexU64(ComputeFnv64Text(PathToString(scratchArena, outputDirectory)), stageToken);
-    return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
+    return Core::Filesystem::StagedDirectoryPaths::Create(scratchArena, outputDirectory, stageToken);
 }
 
 static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount)noexcept{

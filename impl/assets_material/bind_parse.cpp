@@ -115,6 +115,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
 
 static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::Value& fieldValue, const MaterialBindStruct& bindStruct, MaterialCookArena& arena){
     MaterialBindField field;
+    MaterialBindSchemaValidator validator{};
     if(!fieldValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
@@ -128,13 +129,13 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     if(!parsedName)
         return MakeUnexpected(Failure{});
     field.name.assign(*parsedName);
-    if(!ValidateMaterialBindFieldSpec(bindFilePathText, bindStruct, field))
+    if(!validator.validateMaterialBindFieldSpec(bindFilePathText, bindStruct, field))
         return MakeUnexpected(Failure{});
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField(s_MaterialBindAttributesKey), field.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
     field.attributes = Move(*attributes);
-    if(!ValidateMaterialBindFieldAttributes(bindFilePathText, bindStruct, field))
+    if(!validator.validateMaterialBindFieldAttributes(bindFilePathText, bindStruct, field))
         return MakeUnexpected(Failure{});
 
     return field;
@@ -146,6 +147,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
 
 static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::MStringView structName, const Core::Metascript::Value& structValue, MaterialCookArena& arena){
     MaterialBindStruct bindStruct;
+    MaterialBindSchemaValidator validator{};
     if(!structValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
         return MakeUnexpected(Failure{});
@@ -160,7 +162,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
     if(!attributes)
         return MakeUnexpected(Failure{});
     bindStruct.attributes = Move(*attributes);
-    if(!ValidateMaterialBindStructAttributes(bindFilePathText, bindStruct))
+    if(!validator.validateMaterialBindStructAttributes(bindFilePathText, bindStruct))
         return MakeUnexpected(Failure{});
 
     const Core::Metascript::Value* fieldsValue = structValue.findField(s_MaterialBindFieldsKey);
@@ -229,6 +231,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
         return false;
     }
 
+    MaterialBindSchemaValidator validator{};
     outEntry.instances.reserve(doc.declarations().size());
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         const AStringView typeName(declaration.type.data(), declaration.type.size());
@@ -239,7 +242,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
             return false;
         }
 
-        if(!ValidateAndAppendMaterialBindInstance(bindFilePathText, outEntry.structs, typeName, instanceName, outEntry.instances))
+        if(!validator.validateAndAppendMaterialBindInstance(bindFilePathText, outEntry.structs, typeName, instanceName, outEntry.instances))
             return false;
     }
 

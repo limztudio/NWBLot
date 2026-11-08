@@ -342,7 +342,7 @@ Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecord
     if(!token.valid() || recordingLeaseSerial == 0u || recordingLeaseSerial != m_recordingLeaseSerial || !matchesNativeLeaseIdentity() || !m_currentCmdBuf)
         return endpoints;
 
-    for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
+    for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryClaims.claims()){
         if(claim.query.get() != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
             continue;
 

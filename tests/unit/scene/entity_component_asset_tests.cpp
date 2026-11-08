@@ -32,6 +32,26 @@ using namespace NWB::Tests::SceneAssetTestHelpers;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(SceneSubsystemAssets, RejectsInvalidLightFlagsAndTrailingComponentBytes){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    AssetArena arena(Name("tests/scene/component_binary_edges"));
+    ComponentAssetCodec codec;
+
+    LightComponentPayloadBinary payload;
+    payload.enableCaustics = 2u;
+    const auto invalidFlags = MakeComponentBinary<LightComponentAsset>(payload, arena);
+    EXPECT_FALSE(codec.deserialize(Name("project/entities/invalid_light"), invalidFlags, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid light flags")));
+
+    payload.enableCaustics = 1u;
+    auto trailing = MakeComponentBinary<LightComponentAsset>(payload, arena);
+    trailing.push_back(0u);
+    EXPECT_FALSE(codec.deserialize(Name("project/entities/trailing_light"), trailing, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
+}
+
+
 TEST(SceneSubsystemAssets, RejectsMissingSharedOpticalGroupAndDuplicateEntityComponentTypes){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

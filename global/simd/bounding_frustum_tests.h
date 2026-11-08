@@ -9,7 +9,10 @@
 #include "matrix.h"
 #include "collision_detail_volume.h"
 
-#include "bounding_shape_decls.h"
+#include "bounding_sphere_types.h"
+#include "bounding_box_types.h"
+#include "bounding_oriented_box_types.h"
+#include "bounding_frustum_types.h"
 #include "bounding_corners.h"
 
 

@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/avboit/compute_emulation_record.h>
+#include <impl/ecs_render/avboit/compute_emulation_output_planner.h>
 #include <impl/ecs_render/avboit/frame_graph_avboit_upload_result.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -208,51 +209,13 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
     rasterPayload.materialFrameStatesGraphOwned = streamsUploaded;
     rasterPayload.materialGeometryStatesGraphOwned = streamsUploaded && rasterPayload.materialGeometryStatesGraphOwned;
 
-    Core::GpuGraphResourceSetId computeEmulationOutputSet;
-    const b8 computeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
-    b8 computeEmulationOutputStatesGraphOwned = false;
-    if(inputs.regularComputeEmulationPlanCaptured){
-        const auto outputSetResult = GatherImportedOutputBufferResourceSet(
-            graph,
-            computeEmulationPayload.plan,
-            scratchArena,
-            phaseDesc.regularOutputSetIdentity,
-            phaseDesc.regularOutputSetLabel
-        );
-        computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
-        if(outputSetResult)
-            computeEmulationOutputSet = *outputSetResult;
-    }
-    else if(inputs.csgComputeEmulationPlanCaptured){
-        const auto outputSetResult = GatherImportedOutputBufferResourceSet(
-            graph,
-            computeEmulationPayload.csgPlan,
-            scratchArena,
-            phaseDesc.csgOutputSetIdentity,
-            phaseDesc.csgOutputSetLabel
-        );
-        computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
-        if(outputSetResult)
-            computeEmulationOutputSet = *outputSetResult;
-    }
-    if(computeEmulationPlanCaptured && !computeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT compute-emulation output states"));
-    if(generatedGeometryReused && !computeEmulationOutputStatesGraphOwned)
+    AvboitComputeEmulationOutputs emulationOutputs;
+    if(!AvboitComputeEmulationOutputPlanner::Prepare(graph, scratchArena, inputs, phaseDesc, rasterPayload, computeEmulationPayload, computeEmulationTiming, emulationOutputs))
         return false;
-    rasterPayload.computeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && computeEmulationOutputStatesGraphOwned;
-    rasterPayload.csgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && computeEmulationOutputStatesGraphOwned;
-    rasterPayload.computeEmulationTiming = computeEmulationOutputStatesGraphOwned ? &computeEmulationTiming : nullptr;
-
-    Core::GpuGraphResourceId sharedComputeEmulationOutput;
-    b8 sharedComputeEmulationOutputStatesGraphOwned = false;
-    if(inputs.sharedComputeEmulationPlanCaptured){
-        const auto sharedOutputResult = GatherRegularSharedComputeEmulationResource(graph, inputs.sharedComputeEmulationPlan, phaseDesc.sharedOutputLabel);
-        sharedComputeEmulationOutputStatesGraphOwned = sharedOutputResult.has_value();
-        if(sharedOutputResult)
-            sharedComputeEmulationOutput = *sharedOutputResult;
-    }
-    if(inputs.sharedComputeEmulationPlanCaptured && !sharedComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT shared compute-emulation output state"));
+    const auto& computeEmulationOutputSet = emulationOutputs.computeEmulationOutputSet;
+    const b8 computeEmulationOutputStatesGraphOwned = emulationOutputs.computeEmulationOutputStatesGraphOwned;
+    const auto& sharedComputeEmulationOutput = emulationOutputs.sharedComputeEmulationOutput;
+    const b8 sharedComputeEmulationOutputStatesGraphOwned = emulationOutputs.sharedComputeEmulationOutputStatesGraphOwned;
 
     inputs.instanceRange = Core::BufferRange(0u, rasterPayload.snapshot.instanceCount * sizeof(InstanceGpuData));
     inputs.materialTypedRange = Core::BufferRange(0u, rasterPayload.snapshot.materialTypedByteCount);

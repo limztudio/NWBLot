@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/literal_decoder.h>
+
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
 #include "type_parser.h"
 
 
@@ -45,7 +49,7 @@ namespace __hidden_adhd_type_parser{
 
 ParamPassingMode::Enum MatchParamPassingMode(ParserCursor& cursor){
     if(cursor.check(TokenType::Identifier)){
-        const ParamPassingMode::Enum mode = ParseParamPassingModeKeyword(cursor.current().text);
+        const ParamPassingMode::Enum mode = KeywordSemantics::ParseParamPassingModeKeyword(cursor.current().text);
         if(mode != ParamPassingMode::None){
             cursor.advance();
             return mode;
@@ -66,7 +70,7 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
         refMode = MatchParamPassingMode(m_cursor);
 
     if(m_cursor.check(TokenType::Identifier)){
-        const MStringView prohibitedErr = FindProhibitedTypeKeywordError(m_cursor.current().text);
+        const MStringView prohibitedErr = KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text);
         if(!prohibitedErr.empty()){
             m_cursor.error(prohibitedErr);
             return nullptr;
@@ -100,7 +104,7 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
 
         if(m_cursor.check(TokenType::IntegerLiteral)){
             u64 capVal = 0u;
-            if(!TryParseUnsignedIntegerLiteral(m_cursor.current().text, capVal) || capVal > Limit<u32>::s_Max){
+            if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(m_cursor.current().text, capVal) || capVal > Limit<u32>::s_Max){
                 m_cursor.error("invalid Func capture byte capacity literal");
                 return nullptr;
             }
@@ -194,7 +198,7 @@ b8 TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
         }
         else{
             if(m_cursor.check(TokenType::Identifier)){
-                const MStringView prohibitedErr = FindProhibitedTemplateParamKeywordError(m_cursor.current().text);
+                const MStringView prohibitedErr = KeywordSemantics::FindProhibitedTemplateParamKeywordError(m_cursor.current().text);
                 if(!prohibitedErr.empty()){
                     m_cursor.error(prohibitedErr);
                     return false;

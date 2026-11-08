@@ -4,7 +4,10 @@
 
 #include "csg_system.h"
 
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd.h>
+
 #include <impl/ecs_render/material/material_surface_lookup.h>
+#include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_render/components.adhd.h>
@@ -39,7 +42,7 @@ namespace CsgFrameCacheDetail{
     u64 contentHash = s_Fnv64OffsetBasis;
     auto cutterView = world.view<CsgCutterComponent>();
     cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-        UpdateCsgFrameStateCutterSignature(entity, cutter, contentHash);
+        CsgSnapshotIdentityBuilder().updateCsgFrameStateCutterSignature(entity, cutter, contentHash);
     });
 
     auto receiverView = world.view<StaticCsgMeshComponent>();
@@ -50,7 +53,7 @@ namespace CsgFrameCacheDetail{
         const MeshComponent* mesh = world.tryGetComponent<MeshComponent>(entity);
         const Scene::TransformComponent* transform = world.tryGetComponent<Scene::TransformComponent>(entity);
         const b8 hasRuntimeMeshBinding = receiver.enabled && renderer && renderer->visible && meshSystem.hasRuntimeMeshBinding(entity);
-        UpdateCsgFrameStateReceiverSignature(
+        CsgSnapshotIdentityBuilder().updateCsgFrameStateReceiverSignature(
             entity,
             receiver,
             renderer != nullptr,

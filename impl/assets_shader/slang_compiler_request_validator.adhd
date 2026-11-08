@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SlangCompilerRequestValidator{
+    private Expected<StringView> mapStage(in StringView stage, in Span<SlangStageMapping> mappings)const{
+        for(in SlangStageMapping mapping : mappings){
+            if(stage == mapping.stage)
+                return mapping.slangStage;
+        }
+        return makeUnexpected(Failure());
+    }
+
+    public b8 validateInputs(
+        in StringView shaderName,
+        in b8 sourcePathEmpty,
+        in b8 outputPathEmpty,
+        in StringView entryPoint,
+        in StringView stage,
+        in u8 optimizationLevelValue,
+        in Span<SlangStageMapping> stageMappings,
+        mut StringView outSlangStage,
+        mut StringView outOptimizationArgument
+    )const{
+        if(sourcePathEmpty){
+            error("Failed to compile shader '{}' : source path is empty", shaderName);
+            return false;
+        }
+        if(outputPathEmpty){
+            error("Failed to compile shader '{}' : output path is empty", shaderName);
+            return false;
+        }
+        if(entryPoint.empty()){
+            error("Failed to compile shader '{}' : entry point is empty", shaderName);
+            return false;
+        }
+        const Expected<StringView> slangStage = this.mapStage(stage, stageMappings);
+        if(!slangStage.has_value()){
+            error("Unknown shader stage '{}' in entry '{}'", stage, shaderName);
+            return false;
+        }
+        if(optimizationLevelValue >= cast<u8>(ShaderOptimizationLevel::kCount)){
+            error("Shader '{}' uses an invalid optimization level {}", shaderName, cast<u32>(optimizationLevelValue));
+            return false;
+        }
+        outSlangStage = slangStage.value();
+        outOptimizationArgument = SlangOptimizationArgument(cast<ShaderOptimizationLevel>(optimizationLevelValue));
+        return true;
+    }
+
+    public b8 argumentCounts(
+        in StringView shaderName,
+        in usize includeDirectoryCount,
+        in usize defineCount,
+        mut usize outArgumentReserve,
+        mut usize outOwnedArgumentCount
+    )const{
+        if(defineCount > usize.max - s_MaxFixedArgumentCount || includeDirectoryCount > (usize.max - s_MaxFixedArgumentCount - defineCount) / 2u){
+            error("ShaderCook: compiler request for '{}' has too many arguments", shaderName);
+            return false;
+        }
+        outArgumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
+        outOwnedArgumentCount = s_SlangFixedOwnedArgumentCount + includeDirectoryCount + defineCount;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

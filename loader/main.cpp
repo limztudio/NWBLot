@@ -3,6 +3,8 @@
 
 
 #include "callback_shutdown.h"
+#include "crash_reporting.h"
+#include "resource_mount_resolver.h"
 
 #include <logger/client/module.h>
 
@@ -17,6 +19,7 @@
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/volume_naming.h>
 
+#include <global/filesystem/executable_paths.h>
 #include <global/command_line.h>
 #include <global/terminal_entry.h>
 #include <global/filesystem.h>
@@ -33,7 +36,6 @@ namespace __hidden_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using Path = NWB::Path;
 using CrashArena = NWB::Core::Alloc::PersistentArena;
 
 
@@ -44,16 +46,6 @@ inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
 inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
 inline constexpr Name s_ProjectTaskProfileName("cpu.task.project");
-inline constexpr AStringView s_ResourceDirectoryName = "res";
-inline constexpr AStringView s_GraphicsVolumeName = "graphics";
-inline constexpr AStringView s_FallbackExecutableDirectory = ".";
-inline constexpr AStringView s_FallbackExecutableName = "nwb";
-inline constexpr AStringView s_UnknownBuildLabel = "unknown";
-inline constexpr AStringView s_RuntimeCrashMetadataKey = "runtime";
-inline constexpr AStringView s_LoaderCrashMetadataValue = "loader";
-inline constexpr AStringView s_GpuDebugCrashMetadataKey = "gpu_debug";
-inline constexpr AStringView s_EnabledText = "true";
-inline constexpr AStringView s_DisabledText = "false";
 inline constexpr int s_LoaderExitSuccess = 0;
 inline constexpr int s_LoaderExitFailure = -1;
 inline constexpr u16 s_EmptyFrameClientExtent = 0u;
@@ -93,47 +85,6 @@ b8 ProjectTickCallback(void* userData, f32 delta){
     return updateContext.callbacks.onUpdate(delta);
 }
 
-struct ResourceMountError{
-    ErrorCode code;
-    AStringView stage;
-    ::Path<NWB::Core::Alloc::ScratchArena> path;
-};
-
-Expected<Path, ResourceMountError> ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
-    const auto currentDirectory = GetCurrentPath(scratchArena);
-    if(!currentDirectory)
-        return MakeUnexpected(ResourceMountError{ currentDirectory.error(), "current directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena) });
-    const auto currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
-    const auto currentExists = NWB::Core::Filesystem::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName);
-    if(!currentExists)
-        return MakeUnexpected(ResourceMountError{ currentExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, currentResDirectory) });
-    if(*currentExists)
-        return Path(arena, currentResDirectory);
-
-    const auto executableDirectory = GetExecutableDirectory(scratchArena);
-    if(!executableDirectory)
-        return MakeUnexpected(ResourceMountError{ executableDirectory.error(), "executable directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena) });
-
-    const auto executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
-    const auto executableExists = NWB::Core::Filesystem::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName);
-    if(!executableExists)
-        return MakeUnexpected(ResourceMountError{ executableExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, executableResDirectory) });
-    if(*executableExists)
-        return Path(arena, executableResDirectory);
-
-    const auto parentDirectory = executableDirectory->parentPath();
-    if(parentDirectory.empty())
-        return Path(arena, s_ResourceDirectoryName);
-
-    const auto parentResDirectory = parentDirectory / s_ResourceDirectoryName;
-    const auto parentExists = NWB::Core::Filesystem::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName);
-    if(!parentExists)
-        return MakeUnexpected(ResourceMountError{ parentExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, parentResDirectory) });
-    if(*parentExists)
-        return Path(arena, parentResDirectory);
-
-    return Path(arena, s_ResourceDirectoryName);
-}
 
 
 class FilesystemAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
@@ -189,54 +140,6 @@ b8 ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOption
     return true;
 }
 
-b8 InstallCrashCapture(CrashArena& crashArena){
-    auto executableDirectory = GetExecutableDirectory(crashArena);
-    if(!executableDirectory)
-        executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
-
-    auto executableName = GetExecutableName(crashArena);
-    if(!executableName)
-        executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
-
-    AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
-
-    NWB::Core::Crash::CrashConfig crashConfig(crashArena);
-    crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
-    crashConfig.buildId = s_UnknownBuildLabel;
-    crashConfig.version = s_UnknownBuildLabel;
-    crashConfig.spoolDirectory = *executableDirectory / NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName;
-    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
-
-    if(!NWB::Core::Crash::InstallCrashHandler(crashConfig))
-        return false;
-
-    NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
-        const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
-        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
-        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
-        if(!dumpResult.requestAccepted() || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
-            NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
-        }
-    }, nullptr
-    );
-    return true;
-}
-
-void ConfigureCrashReporting(const LoaderOptions& options, const b8 crashReportingInstalled)noexcept(!NWB_OCCUR_WARNING){
-    if(!crashReportingInstalled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
-        return;
-    }
-
-    const AStringView logServerUrl = options.useStandaloneLogger ? AStringView() : AStringView(options.logAddress.data(), options.logAddress.size());
-    if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
-    if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
-    if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, options.enableGpuDebug ? s_EnabledText : s_DisabledText))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
-}
-
 b8 UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
     auto* logger = static_cast<NWB::Log::Client*>(userData);
     return logger && logger->enqueueTelemetry(bytes, byteCount);
@@ -270,7 +173,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
-        auto resourceDirectoryResult = __hidden_loader::ResolveResourceMountDirectory(frame.projectObjectArena(), scratchArena);
+        auto resourceDirectoryResult = NWB::LoaderDetail::ResourceMountResolver::resolve(frame.projectObjectArena(), scratchArena);
         if(resourceDirectoryResult)
             frame.graphics().setPipelineCacheDirectory(*resourceDirectoryResult);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
@@ -286,7 +189,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
             }
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to inspect {} '{}': {}; continuing with custom filesystem factory"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
         }
-        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? Move(*resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), __hidden_loader::s_ResourceDirectoryName);
+        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? Move(*resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), NWB::LoaderDetail::ResourceMountResolver::s_ResourceDirectoryName);
         if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
             return __hidden_loader::s_LoaderExitFailure;
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
@@ -300,7 +203,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
         NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
-        if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
+        if(!graphicsMount.volumeName.assign(NWB::LoaderDetail::ResourceMountResolver::s_GraphicsVolumeName))
             return __hidden_loader::s_LoaderExitFailure;
         graphicsMount.mountDirectory = resourceMountDirectory;
         auto graphicsFilesystemResult = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
@@ -402,7 +305,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
             return __hidden_loader::s_LoaderExitFailure;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
-        __hidden_loader::ConfigureCrashReporting(options, crashReportingInstalled);
+        NWB::LoaderDetail::CrashReporting::configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
 
         return RunProjectRuntime(scratchArena, options, inst, nullptr);
     }
@@ -412,7 +315,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
-    __hidden_loader::ConfigureCrashReporting(options, crashReportingInstalled);
+    NWB::LoaderDetail::CrashReporting::configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
 
     return RunProjectRuntime(scratchArena, options, inst, &logger);
 }
@@ -426,7 +329,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     // Capture early startup failures; configure uploads after CLI and logger setup.
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
-    const b8 crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
+    const b8 crashReportingInstalled = NWB::LoaderDetail::CrashReporting::install(crashArena);
     ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{
         if(crashReportingInstalled){
             NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);

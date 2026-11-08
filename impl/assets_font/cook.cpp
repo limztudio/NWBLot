@@ -9,6 +9,8 @@
 
 
 #include "cook.h"
+
+#include <impl/assets_font/font_binary_codec.adhd.h>
 #include "prepared_source.h"
 
 #include <core/assets/cook_metadata.h>
@@ -53,7 +55,7 @@ b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!font.validatePayload())
         return false;
 
-    SerializeFontBinaryPayload(font.faceIndex(), font.fontBytes(), outBinary);
+    FontBinaryCodec{}.serialize(font.faceIndex(), font.fontBytes(), outBinary);
     return true;
 }
 

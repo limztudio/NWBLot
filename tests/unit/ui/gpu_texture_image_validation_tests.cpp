@@ -4,7 +4,7 @@
 
 #include "paint_image_fixture.h"
 
-#include <impl/ecs_ui/toolkit/gpu/renderer_internal.h>
+#include <impl/ecs_ui/toolkit/gpu/image_resources.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_gpu_image";
 constexpr AStringView s_OverflowImagePath = "tests/ui/overflow_gpu_image";
 
 [[nodiscard]] static b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
-    return GpuRendererState::ValidateGlyphPages(snapshot) && GpuRendererState::ValidateSdfPages(snapshot) && GpuRendererState::ValidateTextureImages(snapshot);
+    return GpuImageResources::ValidateGlyphPages(snapshot) && GpuImageResources::ValidateSdfPages(snapshot) && GpuImageResources::ValidateTextureImages(snapshot);
 }
 
 
@@ -67,9 +67,9 @@ TEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainVa
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
     ASSERT_EQ(snapshot.commands().size(), 2u);
-    EXPECT_TRUE(GpuRendererState::ValidateGlyphPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::ValidateSdfPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateGlyphPages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateSdfPages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateTextureImages(snapshot));
 }
 
 TEST_F(GpuTextureImageValidationFixture, ImageIndexMustAddressAnOwnedTextureSource){
@@ -84,7 +84,7 @@ TEST_F(GpuTextureImageValidationFixture, ImageIndexMustAddressAnOwnedTextureSour
     const Array<u32, 2u> invalidIndices{ 1u, Limit<u32>::s_Max };
     for(const u32 index : invalidIndices){
         command.textureImageIndex = index;
-        EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+        EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
         EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
     }
     command.textureImageIndex = 0u;
@@ -100,7 +100,7 @@ TEST_F(GpuTextureImageValidationFixture, NullTextureSourceRejectsTheSnapshot){
     DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 1u);
     const_cast<SharedImageSource&>(snapshot.textureImages()[0u]).reset();
-    EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
     EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
 }
 
@@ -115,7 +115,7 @@ TEST_F(GpuTextureImageValidationFixture, DuplicateSourceGenerationRejectsTheSnap
     images.push_back(image);
     ASSERT_EQ(images.size(), 2u);
     ASSERT_EQ(images[0u]->generation(), images[1u]->generation());
-    EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
     EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
 }
 
@@ -137,9 +137,9 @@ TEST_F(GpuTextureImageValidationFixture, TextureBindingCountOverflowRejectsEvery
     ASSERT_EQ(images.size(), s_PaintMaxImages + 1u);
     EXPECT_TRUE(snapshot.glyphPages().empty());
     EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_FALSE(GpuRendererState::ValidateGlyphPages(snapshot));
-    EXPECT_FALSE(GpuRendererState::ValidateSdfPages(snapshot));
-    EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateGlyphPages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateSdfPages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
 }
 
 TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtCapacity){
@@ -166,9 +166,9 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtC
     ASSERT_TRUE(m_builder.drawImage(image, rectangle));
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size(), s_PaintMaxImages);
-    EXPECT_TRUE(GpuRendererState::ValidateGlyphPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::ValidateSdfPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateGlyphPages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateSdfPages(snapshot));
+    EXPECT_TRUE(GpuImageResources::ValidateTextureImages(snapshot));
 }
 
 TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryImageKind){
@@ -197,9 +197,9 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryI
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 2u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    EXPECT_FALSE(GpuRendererState::ValidateGlyphPages(snapshot));
-    EXPECT_FALSE(GpuRendererState::ValidateSdfPages(snapshot));
-    EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateGlyphPages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateSdfPages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
 }
 
 TEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureBindings){
@@ -230,7 +230,7 @@ TEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureB
             continue;
         ++nonImageCount;
         command.textureImageIndex = 0u;
-        EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
+        EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
         EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
         command.textureImageIndex = Limit<u32>::s_Max;
     }
@@ -263,8 +263,8 @@ TEST_F(GpuTextureImageValidationFixture, ImageCommandRejectsGlyphAndSdfMetadata)
             command.sdfPageIndex = 0u;
         else
             command.sdfChannel = 1u;
-        EXPECT_FALSE(GpuRendererState::ValidateTextureImages(snapshot));
-        EXPECT_FALSE(GpuRendererState::ValidateGlyphPages(snapshot));
+        EXPECT_FALSE(GpuImageResources::ValidateTextureImages(snapshot));
+        EXPECT_FALSE(GpuImageResources::ValidateGlyphPages(snapshot));
         EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
     }
     command = original;
@@ -282,7 +282,7 @@ TEST_F(GpuTextureImageValidationFixture, UnknownMaterialRejectsCombinedImageVali
     DrawCommand& command = const_cast<DrawCommand&>(snapshot.commands()[0u]);
     command.material = static_cast<PaintMaterial::Enum>(Limit<u8>::s_Max);
     command.textureImageIndex = Limit<u32>::s_Max;
-    EXPECT_FALSE(GpuRendererState::ValidateGlyphPages(snapshot));
+    EXPECT_FALSE(GpuImageResources::ValidateGlyphPages(snapshot));
     EXPECT_FALSE(__hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot));
 }
 

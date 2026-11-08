@@ -1,0 +1,85 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_composition_rules.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditSelectionActions{
+    public b8 setSelection(
+        in Span<usize> boundaries,
+        in usize anchor,
+        in usize caret,
+        mut usize outAnchor,
+        mut usize outCaret,
+        mut u64 inOutSelectionGeneration,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration
+    ){
+        if(!IsEditBoundary(boundaries, anchor) || !IsEditBoundary(boundaries, caret))
+            return false;
+        EditCompositionRules compositionRules;
+        compositionRules.cancel(
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration
+        );
+        outAnchor = anchor;
+        outCaret = caret;
+        ++inOutSelectionGeneration;
+        return true;
+    }
+
+    public b8 move(
+        in StringView text,
+        in Span<usize> boundaries,
+        in EditTextMode textMode,
+        in EditMove movement,
+        in b8 extend,
+        mut usize inOutAnchor,
+        mut usize inOutCaret,
+        mut u64 inOutSelectionGeneration,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration
+    ){
+        const Expected<usize> target = TryResolveEditMoveTarget(text, boundaries, textMode, inOutAnchor, inOutCaret, movement, extend);
+        if(!target.has_value())
+            return false;
+        EditCompositionRules compositionRules;
+        compositionRules.cancel(
+            inOutPreedit,
+            outPreeditAnchor,
+            outPreeditCaret,
+            outCompositionAnchor,
+            outCompositionCaret,
+            inOutCompositionActive,
+            inOutCompositionGeneration
+        );
+        if(!extend)
+            inOutAnchor = target.value();
+        inOutCaret = target.value();
+        ++inOutSelectionGeneration;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

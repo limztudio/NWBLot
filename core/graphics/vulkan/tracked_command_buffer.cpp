@@ -76,200 +76,23 @@ Expected<void, VkResult> TrackedCommandBuffer::initialize(const u32 queueFamilyI
 }
 
 TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
-    for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        if(claim.query.get() == &query)
-            return claim;
-    }
-
-    m_resourceReferences.retainResource(query);
-    m_timerQueryRecordingClaims.push_back(TimerQueryRecordingClaim{ .query = MakeNotNull(&query), .queue = {}, .resetAuthorizationSubmission = {}, .prerequisiteSubmission = {}, .queryIncarnation = query.m_incarnation, });
-    return m_timerQueryRecordingClaims.back();
+    return m_timerQueryClaims.findOrAppendTimerQueryRecordingClaim(query);
 }
 
 TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQueryRecordingClaim(TimerQuery& query, const u64 generation)noexcept{
-    for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        if(claim.query.get() == &query && claim.queryIncarnation == query.m_incarnation && claim.generation == generation && claim.recordingID == m_recordingID)
-            return &claim;
-    }
-    return nullptr;
+    return m_timerQueryClaims.findTimerQueryRecordingClaim(query, generation);
 }
 
-b8 TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
-    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        if(claim.query.get() == &query && claim.generation == generation && claim.recordingID == m_recordingID && claim.recordsBegin)
-            return true;
-    }
-    return false;
-}
-
-TrackedCommandBuffer::TimerQueryClaimOwnerMatches TrackedCommandBuffer::resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept{
-    return {
-        .resetOwnerMatches =
-            query.m_resetRecordingOwner.commandBuffer == this
-            && query.m_resetRecordingOwner.recordingID == claim.recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-            && query.m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration,
-        .beginOwnerMatches = query.m_beginRecordingOwner.commandBuffer == this && query.m_beginRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation,
-        .endOwnerMatches = query.m_endRecordingOwner.commandBuffer == this && query.m_endRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation,
-    };
-}
-
-b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(
-    const Queue& submissionQueue,
-    const Span<const QueueSubmissionWait> localWaits,
-    const Span<const NotNull<TrackedCommandBuffer*>> precedingCommandBuffers
-)const noexcept{
-    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        TimerQuery& query = *claim.query;
-        if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation || claim.recordingID == 0u || claim.recordingID != m_recordingID || claim.queue != submissionQueue.m_physicalQueue)
-            return false;
-
-        NothrowScopedLock queryLock(query.m_mutex);
-        const QueueSubmissionToken currentPrerequisite = query.prerequisiteSubmissionWithinLock();
-        const b8 prerequisiteMatches = currentPrerequisite == claim.prerequisiteSubmission;
-        if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits)))
-            return false;
-        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
-        if(claim.recordsReset && !claim.recordsBegin && !ownerMatches.resetOwnerMatches)
-            return false;
-        if(
-            claim.recordsBegin
-            && (
-                !ownerMatches.beginOwnerMatches
-                || query.m_cycleInvalidated
-                || query.m_cycleQueue != claim.queue
-                || (
-                    claim.consumesResetAuthorization
-                    && (
-                        !query.m_resetAuthorizationAvailable
-                        || query.m_resetAuthorizationGeneration != claim.consumedResetAuthorizationGeneration
-                        || query.m_resetAuthorizationSubmission != claim.resetAuthorizationSubmission
-                    )
-                )
-            )
-        )
-            return false;
-        if(claim.recordsEnd){
-            if(!ownerMatches.endOwnerMatches || query.m_cycleInvalidated || query.m_cycleQueue != claim.queue)
-                return false;
-            if(query.m_beginAccepted || claim.recordsBegin)
-                continue;
-
-            b8 orderedAfterBatchBegin = false;
-            for(usize precedingIndex = 0u; precedingIndex < precedingCommandBuffers.size(); ++precedingIndex){
-                TrackedCommandBuffer& preceding = *precedingCommandBuffers[precedingIndex];
-                if(&preceding == query.m_beginRecordingOwner.commandBuffer && preceding.m_recordingID == query.m_beginRecordingOwner.recordingID && preceding.recordsTimerQueryBegin(query, claim.generation)){
-                    orderedAfterBatchBegin = true;
-                    break;
-                }
-            }
-            if(!orderedAfterBatchBegin)
-                return false;
-        }
-    }
-    return true;
+b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(const Queue& submissionQueue, const Span<const QueueSubmissionWait> localWaits, const Span<const NotNull<TrackedCommandBuffer*>> precedingCommandBuffers)const noexcept{
+    return m_timerQueryClaims.validateTimerQueryRecordingClaims(submissionQueue, localWaits, precedingCommandBuffers);
 }
 
 void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept{
-    static_assert(noexcept(m_timerQueryRecordingClaims.clear()), "accepted timer-query claim release must be non-throwing");
-    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        TimerQuery& query = *claim.query;
-        if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation || claim.recordingID == 0u || claim.recordingID != m_recordingID || (!claim.recordsReset && !claim.recordsBegin && !claim.recordsEnd))
-            TerminateInvariant();
-
-        NothrowScopedLock queryLock(query.m_mutex);
-        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
-
-        if(claim.recordsReset && !claim.recordsBegin){
-            if(!ownerMatches.resetOwnerMatches)
-                TerminateInvariant();
-            query.m_resetRecordingOwner = {};
-            query.m_resetAuthorizationGeneration = query.m_resetRecordingAuthorizationGeneration;
-            query.m_resetRecordingAuthorizationGeneration = 0u;
-            query.m_timestampQueue = {};
-            query.m_timestampValidBits = 0u;
-            query.m_completedCycleSubmission = {};
-            query.m_completedCycleGeneration = 0u;
-            query.m_resetAuthorizationSubmission = submissionToken;
-            query.m_resetAuthorizationAvailable = true;
-            query.m_recordingActive = false;
-        }
-        if(claim.recordsBegin){
-            if(!ownerMatches.beginOwnerMatches)
-                TerminateInvariant();
-            query.m_beginRecordingOwner = {};
-            query.m_beginAccepted = true;
-            query.m_lastAcceptedRecordingGeneration = claim.generation;
-            query.m_timestampQueue = query.m_cycleQueue;
-            query.m_timestampValidBits = query.m_cycleValidBits;
-            query.m_completedCycleSubmission = {};
-            query.m_completedCycleGeneration = 0u;
-            query.m_resetAuthorizationSubmission = {};
-            query.m_resetAuthorizationGeneration = 0u;
-            query.m_resetAuthorizationAvailable = false;
-            query.m_recordingActive = true;
-        }
-        if(claim.recordsEnd){
-            if(!ownerMatches.endOwnerMatches || (!query.m_beginAccepted && !claim.recordsBegin))
-                TerminateInvariant();
-            query.m_endRecordingOwner = {};
-            query.m_recordingActive = false;
-            query.m_completedCycleSubmission = submissionToken;
-            query.m_completedCycleGeneration = claim.generation;
-            query.m_cycleBaselineQueue = {};
-            query.m_cycleQueue = {};
-            query.m_cycleBaselineValidBits = 0u;
-            query.m_cycleValidBits = 0u;
-            query.m_cycleBaselineCompletion = {};
-            query.m_cycleBaselineCompletionGeneration = 0u;
-            query.m_cycleBaselineActive = false;
-            query.m_beginRecordingOwner = {};
-            query.m_cycleGeneration = 0u;
-            query.m_beginAccepted = false;
-            query.m_cycleInvalidated = false;
-        }
-    }
-    m_timerQueryRecordingClaims.clear();
+    m_timerQueryClaims.commitTimerQueryRecordingClaims(submissionToken);
 }
 
 void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
-    static_assert(noexcept(m_timerQueryRecordingClaims.clear()), "timer-query claim discard must be non-throwing");
-    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
-        TimerQuery& query = *claim.query;
-        if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation)
-            continue;
-        NothrowScopedLock queryLock(query.m_mutex);
-        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
-        if(claim.recordsReset && !claim.recordsBegin && ownerMatches.resetOwnerMatches){
-            query.m_resetRecordingOwner = {};
-            query.m_resetRecordingAuthorizationGeneration = 0u;
-        }
-        if(claim.recordsEnd && ownerMatches.endOwnerMatches){
-            query.m_endRecordingOwner = {};
-        }
-        if(claim.recordsBegin && ownerMatches.beginOwnerMatches){
-            query.m_timestampQueue = query.m_cycleBaselineQueue;
-            query.m_timestampValidBits = query.m_cycleBaselineValidBits;
-            query.m_completedCycleSubmission = query.m_cycleBaselineCompletion;
-            query.m_completedCycleGeneration = query.m_cycleBaselineCompletionGeneration;
-            query.m_recordingActive = query.m_cycleBaselineActive;
-            query.m_beginRecordingOwner = {};
-            query.m_beginAccepted = false;
-            query.m_cycleInvalidated = query.m_endRecordingOwner.commandBuffer != nullptr;
-        }
-        if(query.m_cycleGeneration == claim.generation && !query.m_beginRecordingOwner.commandBuffer && !query.m_endRecordingOwner.commandBuffer && !query.m_beginAccepted){
-            query.m_cycleBaselineQueue = {};
-            query.m_cycleQueue = {};
-            query.m_cycleBaselineValidBits = 0u;
-            query.m_cycleValidBits = 0u;
-            query.m_cycleBaselineCompletion = {};
-            query.m_cycleBaselineCompletionGeneration = 0u;
-            query.m_cycleBaselineActive = false;
-            query.m_cycleGeneration = 0u;
-            query.m_cycleInvalidated = false;
-        }
-    }
-    m_timerQueryRecordingClaims.clear();
+    m_timerQueryClaims.discardTimerQueryRecordingClaims();
 }
 
 void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
@@ -296,150 +119,36 @@ void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
     m_retainedTextureStateCommits.clear();
 }
 
-b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
-    AccelStruct& accelStruct,
-    const VkAccelerationStructureTypeKHR accelStructType,
-    const VkBuildAccelerationStructureFlagsKHR buildFlags,
-    const Span<const AccelStructGeometryBuildSignature> geometrySignatures,
-    const Span<const RayTracingInstanceDesc> instances
-){
-    NWB_ASSERT(geometrySignatures.size() <= UINT32_MAX);
-    NWB_ASSERT(geometrySignatures.empty() || geometrySignatures.data());
-
-    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = accelStruct.acquireBuildSignatureRole();
-    if(!preparedRole)
-        return false;
-
-    preparedRole->accelStructType = accelStructType;
-    preparedRole->buildFlags = buildFlags;
-    preparedRole->geometrySignatures.clear();
-    if(!geometrySignatures.empty()){
-        preparedRole->geometrySignatures.reserve(geometrySignatures.size());
-        preparedRole->geometrySignatures.assign(geometrySignatures.begin(), geometrySignatures.end());
-    }
-
-    if(instances.data() && !instances.empty()){
-        AccelStructBottomLevelReferenceControl* references = nullptr;
-        if(preparedRole->bottomLevelReferences && preparedRole->bottomLevelReferences->getReferenceCount() == 1u){
-            references = preparedRole->bottomLevelReferences.get();
-            references->resources.clear();
-        }
-        else{
-            references = NewArenaObject<AccelStructBottomLevelReferenceControl>(m_context.objectArena, m_context.objectArena);
-            if(!references)
-                return false;
-            preparedRole->bottomLevelReferences = AccelStructBottomLevelReferenceHandle(references, AccelStructBottomLevelReferenceHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
-        }
-        references->resources.reserve(instances.size());
-        for(const RayTracingInstanceDesc& instance : instances){
-            if(AccelStruct* const bottomLevel = instance.bottomLevelAS)
-                references->resources.emplace_back(bottomLevel, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-        }
-    }
-    else if(preparedRole->bottomLevelReferences){
-        if(preparedRole->bottomLevelReferences->getReferenceCount() == 1u)
-            preparedRole->bottomLevelReferences->resources.clear();
-        else
-            preparedRole->bottomLevelReferences = nullptr;
-    }
-
-    m_resourceReferences.retainResource(accelStruct);
-    retainBottomLevelReferenceSet(preparedRole->bottomLevelReferences);
-    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{ .accelStruct = MakeNotNull(&accelStruct), .preparedRole = preparedRole.get(), });
-    preparedRole.release();
-    return true;
+b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(AccelStruct& accelStruct, const VkAccelerationStructureTypeKHR accelStructType, const VkBuildAccelerationStructureFlagsKHR buildFlags, const Span<const AccelStructGeometryBuildSignature> geometrySignatures, const Span<const RayTracingInstanceDesc> instances){
+    return m_accelStructJournal.appendPendingAccelStructBuildCommit(accelStruct, accelStructType, buildFlags, geometrySignatures, instances);
 }
 
 Expected<NotNull<const AccelStructBuildSignatureRole*>> TrackedCommandBuffer::getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept{
-    for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
-        const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
-        if(commit.accelStruct.get() == &accelStruct){
-            if(!commit.preparedRole)
-                return MakeUnexpected(Failure{});
-
-            return MakeNotNull<const AccelStructBuildSignatureRole*>(commit.preparedRole);
-        }
-    }
-
-    return MakeUnexpected(Failure{});
+    return m_accelStructJournal.getPendingAccelStructBuildSignature(accelStruct);
 }
 
 b8 TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{
-    for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
-        if(!commit.preparedRole || commit.displacedRole)
-            return false;
-    }
-    return true;
+    return m_accelStructJournal.validatePendingAccelStructBuildCommits();
 }
 
 void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
-    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
-        if(!commit.preparedRole || commit.displacedRole)
-            TerminateInvariant();
-
-        AccelStruct& accelStruct = *commit.accelStruct;
-        NothrowScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
-        commit.displacedRole = accelStruct.m_acceptedBuildSignatureRole;
-        accelStruct.m_acceptedBuildSignatureRole = commit.preparedRole;
-        commit.preparedRole = nullptr;
-    }
+    m_accelStructJournal.commitPendingAccelStructBuildCommits();
 }
 
 void TrackedCommandBuffer::retainTopLevelAccelStruct(AccelStruct& accelStruct){
-    for(const RayTracingAccelStructHandle& retained : m_referencedTopLevelAccelStructs){
-        if(retained.get() == &accelStruct)
-            return;
-    }
-    m_referencedTopLevelAccelStructs.emplace_back(&accelStruct, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-}
-
-void TrackedCommandBuffer::retainBottomLevelReferenceSet(const AccelStructBottomLevelReferenceHandle& references){
-    if(!references || references->resources.empty())
-        return;
-    for(const AccelStructBottomLevelReferenceHandle& retained : m_referencedBottomLevelReferenceSets){
-        if(retained.get() == references.get())
-            return;
-    }
-    m_referencedBottomLevelReferenceSets.push_back(references);
+    m_accelStructJournal.retainTopLevelAccelStruct(accelStruct);
 }
 
 void TrackedCommandBuffer::retainAcceptedTopLevelAccelStructReferences(){
-    for(const RayTracingAccelStructHandle& accelStruct : m_referencedTopLevelAccelStructs){
-        ScopedLock lock(accelStruct->m_acceptedBuildSignatureMutex);
-
-        if(accelStruct->m_acceptedBuildSignatureRole)
-            retainBottomLevelReferenceSet(accelStruct->m_acceptedBuildSignatureRole->bottomLevelReferences);
-    }
+    m_accelStructJournal.retainAcceptedTopLevelAccelStructReferences();
 }
 
 void TrackedCommandBuffer::retainPendingTopLevelAccelStructReferences(const TrackedCommandBuffer& buildCommandBuffer){
-    for(const PendingAccelStructBuildCommit& commit : buildCommandBuffer.m_pendingAccelStructBuildCommits){
-        if(!commit.preparedRole || !commit.preparedRole->bottomLevelReferences)
-            continue;
-        for(const RayTracingAccelStructHandle& accelStruct : m_referencedTopLevelAccelStructs){
-            if(commit.accelStruct.get() == accelStruct.get()){
-                retainBottomLevelReferenceSet(commit.preparedRole->bottomLevelReferences);
-                break;
-            }
-        }
-    }
+    m_accelStructJournal.retainPendingTopLevelAccelStructReferences(buildCommandBuffer.m_accelStructJournal);
 }
 
 void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
-    static_assert(noexcept(m_pendingAccelStructBuildCommits.clear()), "abandoned acceleration-structure journal release must be non-throwing");
-    static_assert(noexcept(DeclVal<AccelStructBottomLevelReferenceHandle&>() = nullptr), "abandoned build references must release without throwing");
-    m_referencedBottomLevelReferenceSets.clear();
-    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
-        if(commit.preparedRole){
-            commit.accelStruct->retireBuildSignatureRole(*commit.preparedRole);
-            commit.preparedRole = nullptr;
-        }
-        if(commit.displacedRole){
-            commit.accelStruct->retireBuildSignatureRole(*commit.displacedRole);
-            commit.displacedRole = nullptr;
-        }
-    }
-    m_pendingAccelStructBuildCommits.clear();
+    m_accelStructJournal.abandonPendingAccelStructBuildCommits();
 }
 
 void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
@@ -483,8 +192,7 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     m_descriptorBufferManager = nullptr;
     m_descriptorBufferGeneration = 0u;
 
-    m_referencedBottomLevelReferenceSets.clear();
-    m_referencedTopLevelAccelStructs.clear();
+    m_accelStructJournal.clearTrackedReferences();
     m_resourceReferences.clear();
     m_referencedStagingBuffers.clear();
 }

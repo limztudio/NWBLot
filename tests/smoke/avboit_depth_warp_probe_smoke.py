@@ -13,7 +13,8 @@ from uuid import uuid4
 
 from window_capture_outcome import WindowsDesktopUnavailable
 from smoke_failure_reporting import write_failure_report
-from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_termination import CaptureProcessTermination
+from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_expected_log_text
 
 LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 600.0
@@ -108,7 +109,7 @@ def acquire(args, output):
             process.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired as error:
             raise SmokeFailure("depth-warp probe did not self-exit before timeout") from error
-        code, tail = terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
+        code, tail = CaptureProcessTermination.terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
         process = None
         (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
         require_normal_process_exit(code, tail, LIT_AVBOIT_DEPTH_WARP_PROBE)
@@ -124,7 +125,7 @@ def acquire(args, output):
         errors = []
         if process is not None:
             try:
-                _, tail = terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
+                _, tail = CaptureProcessTermination.terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
                 (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
             except Exception as error:
                 errors.append(f"probe cleanup: {error}")
@@ -135,7 +136,7 @@ def acquire(args, output):
                 logserver = None
             except Exception as error:
                 errors.append(f"failure log collection: {error}")
-        finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate_process, write_json)
+        finish_logserver_cleanup(logserver, output, errors, primary_failure, CaptureProcessTermination.terminate_process, write_json)
 
 
 def parse_args(argv=None):

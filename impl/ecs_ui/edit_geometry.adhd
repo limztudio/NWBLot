@@ -1,0 +1,143 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_click_tracker.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiEditGeometry{
+    public i32x4 nativeCaretBounds(in Rect caret, in DisplayMetrics display)const{
+        const VectorSingle physical = VectorSingle(caret.x, caret.y, caret.width, caret.height) * VectorSingle(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
+        const VectorSingle origin = floor(VectorSingle(physical.x, physical.y, 0.0f, 0.0f));
+        const VectorSingle size = ceil(VectorSingle(physical.z, physical.w, 0.0f, 0.0f));
+        const f64 minI32 = cast<f64>(i32.min);
+        const f64 maxI32 = cast<f64>(i32.max);
+        const VectorDouble coordinate = clamp(VectorDouble(cast<f64>(origin.x), cast<f64>(origin.y), cast<f64>(size.x), cast<f64>(size.y)), minI32, maxI32);
+        return i32x4(cast<i32>(coordinate.x), cast<i32>(coordinate.y), max(1, cast<i32>(coordinate.z)), max(1, cast<i32>(coordinate.w)));
+    }
+
+    private Expected<Point> localTextPosition(
+        in u64 generation,
+        in Span<EditBoxCaretStop> stops,
+        in Span<EditCaretLine> lines,
+        in u64 geometryModelGeneration,
+        in PopupToken geometryPopup,
+        in EditTextMode textMode,
+        in EditBoxPlacement placement,
+        in UiTextEditOwner owner,
+        in PopupToken popup,
+        in Point position
+    )const{
+        if(
+            generation == 0u || stops.empty() || lines.empty()
+            || geometryModelGeneration != owner.modelGeneration || geometryPopup != popup
+            || (textMode != EditTextMode::SingleLine && textMode != EditTextMode::Multiline)
+            || (textMode == EditTextMode::SingleLine && lines.size() != 1u)
+        )
+            return makeUnexpected(Failure());
+        return Point(position.x - placement.textOrigin.x, position.y - placement.textOrigin.y);
+    }
+
+    public Expected<usize> hitCaret(
+        in UiEditBoxGeometry geometry,
+        in UiTextEditOwner owner,
+        in PopupToken popup,
+        in Point position
+    )const{
+        const Expected<Point> local = this.localTextPosition(
+            geometry.generation,
+            geometry.stops,
+            geometry.lines,
+            geometry.modelGeneration,
+            geometry.popup,
+            geometry.textMode,
+            geometry.placement,
+            owner,
+            popup,
+            position
+        );
+        if(!local.has_value())
+            return makeUnexpected(Failure());
+        return HitEditCaretGeometry(geometry.lines, geometry.stops, local.value());
+    }
+
+    public Expected<usize> hitWord(
+        in UiEditBoxGeometry geometry,
+        in UiTextEditOwner owner,
+        in PopupToken popup,
+        in Point position
+    )const{
+        const Expected<Point> local = this.localTextPosition(
+            geometry.generation,
+            geometry.stops,
+            geometry.lines,
+            geometry.modelGeneration,
+            geometry.popup,
+            geometry.textMode,
+            geometry.placement,
+            owner,
+            popup,
+            position
+        );
+        if(!local.has_value())
+            return makeUnexpected(Failure());
+        return TryHitEditWordCaretGeometry(geometry.lines, geometry.stops, local.value());
+    }
+
+    public void publish(
+        in PopupToken popup,
+        in EditBoxPlacement placement,
+        in Span<EditBoxCaretStop> stops,
+        in Span<EditCaretLine> lines,
+        in EditTextMode textMode,
+        in EditBoxOptions options,
+        in u64 generation,
+        in u64 revision,
+        in u64 externalRevision,
+        in u64 modelGeneration,
+        mut UiEditBoxGeometry outCandidate
+    )const{
+        outCandidate.popup = popup;
+        outCandidate.placement = placement;
+        outCandidate.stops.clear();
+        outCandidate.stops.reserve(stops.size());
+        for(in EditBoxCaretStop stop : stops)
+            outCandidate.stops.push_back(stop);
+        outCandidate.lines.clear();
+        outCandidate.lines.reserve(lines.size());
+        for(in EditCaretLine line : lines)
+            outCandidate.lines.push_back(line);
+        outCandidate.textMode = textMode;
+        outCandidate.options = options;
+        outCandidate.generation = generation;
+        outCandidate.revision = revision;
+        outCandidate.externalRevision = externalRevision;
+        outCandidate.modelGeneration = modelGeneration;
+    }
+
+    public void commit(in u64 generation, mut UiEditBoxGeometry inOutCandidate, mut UiEditBoxGeometry inOutDisplayed)const{
+        if(inOutCandidate.generation == generation){
+            inOutDisplayed = inOutCandidate;
+            inOutCandidate.generation = 0u;
+        }
+    }
+
+    public b8 focusedReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup)const{
+        return displayed.generation != 0u
+            && displayed.options.enabled
+            && displayed.modelGeneration == owner.modelGeneration
+            && displayed.popup == popup;
+    }
+
+    public b8 sessionReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup)const{
+        return displayed.generation != 0u
+            && displayed.modelGeneration == owner.modelGeneration
+            && displayed.popup == popup;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

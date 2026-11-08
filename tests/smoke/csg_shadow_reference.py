@@ -4,6 +4,7 @@
 import math
 
 from window_capture_smoke import SmokeFailure
+from csg_shadow_geometry import CsgShadowGeometry
 
 LIT_REFERENCE = "reference"
 LIT_CUT = "cut"
@@ -37,72 +38,18 @@ LIT_SPHERE_UNION_CENTER = "sphere_union_center"
 
 ARMS = (LIT_REFERENCE, LIT_CUT, LIT_UNCUT, LIT_MOVED, LIT_CAMERA_SHIFT)
 ANALYTIC_ARMS = (LIT_CUT, LIT_UNCUT)
-TRANSMISSION = (0.25, 0.5, 0.75)
 BYTE_TOLERANCE = 12.0
 # Constant-thickness sample regions holding name, receiver xy, and cut or uncut optical lengths.
 REGIONS = ((LIT_CLEAR, 0.0, 0.0, 0.0, 0.0), (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None), ("opaque_old_hole", -2.3, 1.0, None, None), ("opaque_rim", -2.5, 1.0, None, None), ("opaque_cap", 0.0, 1.0, None, None), (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
     (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0), ("glass_old_hole", -2.3, -1.0, 2.0, 2.0), ("glass_rim", -2.5, -1.0, 2.0, 2.0), (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0), ("glass_control", 2.0, -1.0, 2.0, 2.0),)
 
 
-def expected_rgb(length, world_x, world_y, light):
-    if length is None:
-        return (0.0, 0.0, 0.0)
-    if light == LIT_POINT:
-        length *= math.sqrt(12.0 ** 2 + world_x ** 2 + world_y ** 2) / 12.0
-    linear = [channel ** length for channel in TRANSMISSION]
-    return tuple(255.0 * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1.0 / 2.4) - 0.055) for value in linear)
 
 
-def ray_box(origin, direction, lower, upper):
-    near, far = 0.0, math.inf
-    for axis in range(3):
-        if direction[axis] == 0.0:
-            if origin[axis] < lower[axis] or origin[axis] > upper[axis]:
-                return None
-            continue
-        first = (lower[axis] - origin[axis]) / direction[axis]
-        second = (upper[axis] - origin[axis]) / direction[axis]
-        near, far = max(near, min(first, second)), min(far, max(first, second))
-    return (near, far) if far > near else None
 
 
-def reference_optical_length(x, y, arm, light):
-    """Intersect mathematical solids, subtract cutter intervals, then sum each volume independently."""
-    origin = (x, y, 0.0)
-    distance = math.sqrt(x * x + y * y + 144.0)
-    direction = (-x / distance, -y / distance, -12.0 / distance) if light == LIT_POINT else (0.0, 0.0, -1.0)
-    scale = 0.5 if light == LIT_POINT else 1.0
-    length = 0.0
-    for slot in range(6):
-        center_x, center_y = ((slot % 3) - 1) * 2.0 * scale, (1.0 if slot < 3 else -1.0) * scale
-        for copy in range(2 if slot == 4 else 1):
-            z_shift = -0.5 * copy
-            lower = (center_x - 0.7 * scale, center_y - 0.7 * scale, -7.0 + z_shift)
-            upper = (center_x + 0.7 * scale, center_y + 0.7 * scale, -5.0 + z_shift)
-            solid = ray_box(origin, direction, lower, upper)
-            if solid is None:
-                continue
-            remaining = solid[1] - solid[0]
-            if arm != LIT_UNCUT and slot != 5:
-                if slot in (0, 3):
-                    half_width = 0.36 if light == LIT_POINT else 0.24
-                    cut_lower = (center_x + 0.3 * scale - half_width, center_y - 0.4 * scale, -7.2)
-                    cut_upper = (center_x + 0.3 * scale + half_width, center_y + 0.4 * scale, -4.8)
-                else:
-                    cut_lower = (center_x - 1.0, center_y - 1.0, -6.0 + z_shift)
-                    cut_upper = (center_x + 1.0, center_y + 1.0, -4.8 + z_shift)
-                cut = ray_box(origin, direction, cut_lower, cut_upper)
-                if cut:
-                    remaining -= max(0.0, min(solid[1], cut[1]) - max(solid[0], cut[0]))
-            if remaining > 1e-9 and slot < 2:
-                return None
-            length += max(remaining, 0.0)
-    return length
 
 
-def expected_sample_rgb(x, y, arm, light):
-    # The slab solver already returns Euclidean distance, including the point-light ray angle.
-    return expected_rgb(reference_optical_length(x, y, arm, light), x, y, LIT_DIRECTIONAL)
 
 
 def project_receiver(x, y, width, height, camera_x=0.0):
@@ -129,7 +76,7 @@ def measure_frame(frame, arm, light):
         name, world_x, world_y, _, _ = region
         pixels = region_pixels(region, width, height, camera_x)
         rgb = tuple(sum(rows[y][x][channel] for x, y in pixels) / len(pixels) for channel in range(3))
-        expected = expected_sample_rgb(world_x, world_y, arm, light)
+        expected = CsgShadowGeometry.expected_sample_rgb(world_x, world_y, arm, light)
         error = max(abs(a - b) for a, b in zip(rgb, expected))
         if error > BYTE_TOLERANCE:
             raise SmokeFailure(f"{arm}/{name}: shadow disagrees with carved-box/Beer oracle; RGB={rgb}, expected={expected}, error={error:.3f}")
@@ -162,44 +109,8 @@ ANALYTIC_REGIONS = ((LIT_CLEAR, 0.0, 0.0), (LIT_PLANE_LEFT, -2.3, 1.0), ("plane_
     (LIT_AXIAL_CAPSULE_CENTER, -2.0, -1.0), ("axial_capsule_offset", -1.82, -1.0), (LIT_SPHERE_UNION_CENTER, 0.0, -1.0), ("sphere_union_offset", 0.3, -1.0), ("uncut_control", 2.0, -1.0),)
 
 
-def clipped_union_length(intervals, lower=-7.0, upper=-5.0):
-    intervals = sorted((max(lower, start), min(upper, end)) for start, end in intervals if min(upper, end) > max(lower, start))
-    total, previous_end = 0.0, lower
-    for start, end in intervals:
-        total += max(0.0, end - max(start, previous_end))
-        previous_end = max(previous_end, end)
-    return total
 
 
-def analytic_optical_length(x, y, arm):
-    """World-space cross sections of six glass boxes; no engine transforms or ray solver are reused."""
-    for slot in range(6):
-        dx, dy = x - ((slot % 3) - 1) * 2.0, y - (1.0 if slot < 3 else -1.0)
-        if abs(dx) > 0.7 or abs(dy) > 0.7:
-            continue
-        if arm == LIT_UNCUT or slot == 5:
-            return 2.0
-        if slot == 0:
-            # Cut the tilted half-space 0.5 * dx + z + 6 <= 0.
-            cuts = [(-math.inf, -6.0 - 0.5 * dx)]
-        elif slot == 1:
-            radial = (dx / 0.5) ** 2 + (dy / 0.45) ** 2
-            half_chord = 0.75 * math.sqrt(max(0.0, 1.0 - radial))
-            cuts = [(-6.0 - half_chord, -6.0 + half_chord)]
-        elif slot == 2:
-            # The distance to the transverse Y segment separates body and hemispherical endcaps.
-            segment_distance = max(0.0, abs(dy) - 0.25)
-            half_chord = math.sqrt(max(0.0, 0.35 ** 2 - dx ** 2 - segment_distance ** 2))
-            cuts = [(-6.0 - half_chord, -6.0 + half_chord)]
-        elif slot == 3:
-            radial_squared = dx ** 2 + dy ** 2
-            half_chord = 0.4 + math.sqrt(0.3 ** 2 - radial_squared) if radial_squared <= 0.3 ** 2 else 0.0
-            cuts = [(-6.0 - half_chord, -6.0 + half_chord)]
-        else:
-            half_chord = math.sqrt(max(0.0, 0.55 ** 2 - dx ** 2 - dy ** 2))
-            cuts = [(center - half_chord, center + half_chord) for center in (-6.25, -5.75)]
-        return 2.0 - clipped_union_length(cuts)
-    return 0.0
 
 
 def receiver_pixel_world(x, y, width, height):
@@ -217,8 +128,8 @@ def measure_analytic_frame(frame, arm):
         expected_pixels = []
         for x, y in pixels:
             world_x, world_y = receiver_pixel_world(x, y, width, height)
-            length = analytic_optical_length(world_x, world_y, arm)
-            expected_pixels.append(expected_rgb(length, world_x, world_y, LIT_DIRECTIONAL))
+            length = CsgShadowGeometry.analytic_optical_length(world_x, world_y, arm)
+            expected_pixels.append(CsgShadowGeometry.expected_rgb(length, world_x, world_y, LIT_DIRECTIONAL))
         rgb = tuple(sum(rows[y][x][channel] for x, y in pixels) / len(pixels) for channel in range(3))
         expected = tuple(sum(value[channel] for value in expected_pixels) / len(pixels) for channel in range(3))
         error = max(abs(a - b) for a, b in zip(rgb, expected))

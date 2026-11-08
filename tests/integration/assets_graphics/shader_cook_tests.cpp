@@ -3,6 +3,7 @@
 
 
 #include "assets_graphics_fixture.h"
+#include "assets_graphics_shader_archive_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -243,7 +244,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
 
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-    auto recordsLoadResult = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
+    auto recordsLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsLoadResult);
     records = Move(*recordsLoadResult);
     ASSERT_EQ(records.size(), 2u);
@@ -262,19 +263,19 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     EXPECT_EQ(logger.errorCount(), 0u);
 
     u64 originalChecksum = 0u;
-    auto originalChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
+    auto originalChecksumLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
     ASSERT_TRUE(originalChecksumLoadResult);
     originalChecksum = *originalChecksumLoadResult;
     options.inputs.emplace_back(PathToString(testArena.arena, conflictingBuilt));
     EXPECT_FALSE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
     EXPECT_GT(logger.errorCount(), 0u);
     records.clear();
-    auto recordsLoadResult2 = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
+    auto recordsLoadResult2 = AssetsGraphicsFixture::ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsLoadResult2);
     records = Move(*recordsLoadResult2);
     ASSERT_EQ(records.size(), 2u);
     u64 preservedChecksum = 0u;
-    auto preservedChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
+    auto preservedChecksumLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
     ASSERT_TRUE(preservedChecksumLoadResult);
     preservedChecksum = *preservedChecksumLoadResult;
     EXPECT_EQ(preservedChecksum, originalChecksum);

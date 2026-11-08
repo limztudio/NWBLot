@@ -1,0 +1,174 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LightSpaceCsgContextPacker{
+    private void appendU32(in u32 value, mut Vector<u8> outBinary)const{
+        outBinary.push_back(cast<u8>(value & 0xffu));
+        outBinary.push_back(cast<u8>((value >> 8u) & 0xffu));
+        outBinary.push_back(cast<u8>((value >> 16u) & 0xffu));
+        outBinary.push_back(cast<u8>((value >> 24u) & 0xffu));
+    }
+
+    private void appendF32(in f32 value, mut Vector<u8> outBinary)const{
+        this.appendU32(bit_cast<u32>(value), outBinary);
+    }
+
+    private void appendVector4(in VectorSingle value, mut Vector<u8> outBinary)const{
+        this.appendF32(value.x, outBinary);
+        this.appendF32(value.y, outBinary);
+        this.appendF32(value.z, outBinary);
+        this.appendF32(value.w, outBinary);
+    }
+
+    private void appendMatrix34(in MatrixSingle value, mut Vector<u8> outBinary)const{
+        this.appendVector4(value[0u], outBinary);
+        this.appendVector4(value[1u], outBinary);
+        this.appendVector4(value[2u], outBinary);
+    }
+
+    private void appendHeader(in LightSpaceCsgContextHeader header, mut Vector<u8> outBinary)const{
+        this.appendU32(header.instanceCount, outBinary);
+        this.appendU32(header.rangeByteOffset, outBinary);
+        this.appendU32(header.cutterByteOffset, outBinary);
+        this.appendU32(header.cutterCount, outBinary);
+        this.appendU32(header.instanceByteOffset, outBinary);
+        this.appendU32(header.activeReceiverByteOffset, outBinary);
+        this.appendU32(header.activeReceiverCount, outBinary);
+        this.appendU32(header.rayFailureFlags, outBinary);
+    }
+
+    private void appendReceiverRange(in CsgShadowReceiverRangeGpu range, in u32 solidTriangleWordOffset, mut Vector<u8> outBinary)const{
+        this.appendU32(range.firstCutter, outBinary);
+        this.appendU32(range.cutterCount, outBinary);
+        this.appendU32(range.flags, outBinary);
+        this.appendU32(solidTriangleWordOffset, outBinary);
+    }
+
+    private void appendCutter(in CsgCutterGpuData cutter, mut Vector<u8> outBinary)const{
+        this.appendU32(cutter.shapeType, outBinary);
+        this.appendF32(cutter.worldToShapeScaleBound, outBinary);
+        this.appendU32(cutter.padding0, outBinary);
+        this.appendU32(cutter.padding1, outBinary);
+        this.appendMatrix34(MatrixSingle(cutter.worldToShape), outBinary);
+        this.appendVector4(VectorSingle(cutter.parameter0), outBinary);
+        this.appendVector4(VectorSingle(cutter.parameter1), outBinary);
+    }
+
+    private void appendInstance(in LightSpaceCsgInstanceGpu instance, mut Vector<u8> outBinary)const{
+        this.appendMatrix34(MatrixSingle(instance.worldToObject), outBinary);
+        this.appendU32(instance.runtimeBoundsSlot, outBinary);
+        this.appendU32(instance.primitiveCount, outBinary);
+        this.appendU32(instance.meshRootSlot, outBinary);
+        this.appendU32(instance.padding, outBinary);
+        this.appendVector4(VectorSingle(instance.localMin), outBinary);
+        this.appendVector4(VectorSingle(instance.localMax), outBinary);
+    }
+
+    public b8 pack(
+        in Span<CsgShadowReceiverRangeGpu> receiverRanges,
+        in Span<CsgCutterGpuData> cutters,
+        in Span<LightSpaceCsgInstanceGpu> instances,
+        in Span<Span<u32>> solidTriangleMasks,
+        mut Vector<u8> outBytes
+    )const{
+        if(receiverRanges.size() != instances.size() || solidTriangleMasks.size() != instances.size())
+            return false;
+
+        const usize rangeBytes = receiverRanges.size() * 16u;
+        const usize cutterBytes = cutters.size() * 96u;
+        const usize instanceBytes = instances.size() * 96u;
+        u32 activeReceiverCount = 0u;
+        for(in CsgShadowReceiverRangeGpu range : receiverRanges){
+            if((range.flags & s_CsgRayReceiverActive) != 0u)
+                ++activeReceiverCount;
+        }
+        const usize activeReceiverBytes = cast<usize>(activeReceiverCount) * 4u;
+        const usize activeReceiverOffset = cast<usize>(s_LightSpaceCsgRayContextBytes) + rangeBytes + cutterBytes + instanceBytes;
+        usize totalBytes = activeReceiverOffset + activeReceiverBytes;
+        if(totalBytes > cast<usize>(u32.max))
+            return false;
+        const usize membershipOffset = totalBytes;
+        for(usize index = 0u; index < instances.size(); ++index){
+            if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
+                continue;
+            const Span<u32> words = solidTriangleMasks[index];
+            const u32 requiredWords = divideUpWrappingU32(instances[index].primitiveCount, 32u);
+            const usize wordBytes = words.size() * 4u;
+            if(words.size() != cast<usize>(requiredWords) || words.empty() || wordBytes > cast<usize>(u32.max) - totalBytes){
+                error("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity");
+                return false;
+            }
+            totalBytes += wordBytes;
+        }
+
+        outBytes.clear();
+        outBytes.reserve(totalBytes);
+        const LightSpaceCsgContextHeader header = this.buildHeader(
+            instances.size(),
+            rangeBytes,
+            cutterBytes,
+            cutters.size(),
+            activeReceiverOffset,
+            activeReceiverCount
+        );
+        this.appendHeader(header, outBytes);
+
+        usize maskOffset = membershipOffset;
+        for(usize index = 0u; index < receiverRanges.size(); ++index){
+            const CsgShadowReceiverRangeGpu range = receiverRanges[index];
+            u32 wordOffset = range.solidTriangleWordOffset;
+            if((range.flags & s_CsgRayReceiverActive) != 0u){
+                wordOffset = cast<u32>(maskOffset);
+                maskOffset += solidTriangleMasks[index].size() * 4u;
+            }
+            this.appendReceiverRange(range, wordOffset, outBytes);
+        }
+        for(in CsgCutterGpuData cutter : cutters)
+            this.appendCutter(cutter, outBytes);
+        for(in LightSpaceCsgInstanceGpu instance : instances)
+            this.appendInstance(instance, outBytes);
+        for(u32 index = 0u; index < cast<u32>(receiverRanges.size()); ++index){
+            if((receiverRanges[cast<usize>(index)].flags & s_CsgRayReceiverActive) != 0u)
+                this.appendU32(index, outBytes);
+        }
+        for(usize index = 0u; index < receiverRanges.size(); ++index){
+            if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
+                continue;
+            for(in u32 word : solidTriangleMasks[index])
+                this.appendU32(word, outBytes);
+        }
+        return true;
+    }
+
+    private LightSpaceCsgContextHeader buildHeader(
+        in usize instanceCount,
+        in usize rangeBytes,
+        in usize cutterBytes,
+        in usize cutterCount,
+        in usize activeReceiverOffset,
+        in u32 activeReceiverCount
+    )const{
+        LightSpaceCsgContextHeader header;
+        header.instanceCount = cast<u32>(instanceCount);
+        header.rangeByteOffset = s_LightSpaceCsgRayContextBytes;
+        header.cutterByteOffset = cast<u32>(cast<usize>(s_LightSpaceCsgRayContextBytes) + rangeBytes);
+        header.cutterCount = cast<u32>(cutterCount);
+        header.instanceByteOffset = cast<u32>(cast<usize>(s_LightSpaceCsgRayContextBytes) + rangeBytes + cutterBytes);
+        header.activeReceiverByteOffset = cast<u32>(activeReceiverOffset);
+        header.activeReceiverCount = activeReceiverCount;
+        header.rayFailureFlags = 0u;
+        return header;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

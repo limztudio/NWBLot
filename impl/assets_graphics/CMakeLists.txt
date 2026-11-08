@@ -39,6 +39,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/runtime*.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_components.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/csg_evaluator_dependencies.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_validation.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/shader_*.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare.cpp"

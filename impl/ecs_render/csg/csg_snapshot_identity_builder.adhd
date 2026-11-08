@@ -1,0 +1,172 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/csg/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgSnapshotIdentityBuilder{
+    public u64 updateFnv64BoolValue(in u64 hash, in b8 value)const{
+        u8 byteValue = 0u;
+        if(value)
+            byteValue = 1u;
+        return updateFnv64Byte(hash, byteValue);
+    }
+
+    public u64 updateFnv64ByteSpan(in u64 hash, in Span<u8> bytes)const{
+        u64 result = updateFnv64U64(hash, cast<u64>(bytes.size()));
+        for(in u8 byte : bytes)
+            result = updateFnv64Byte(result, byte);
+        return result;
+    }
+
+    public u64 updateFnv64Vector4Bits(in u64 hash, in VectorSingle value)const{
+        u64 result = updateFnv64U32(hash, bit_cast<u32>(value.x));
+        result = updateFnv64U32(result, bit_cast<u32>(value.y));
+        result = updateFnv64U32(result, bit_cast<u32>(value.z));
+        return updateFnv64U32(result, bit_cast<u32>(value.w));
+    }
+
+    public u64 updateFnv64Float3UBits(in u64 hash, in f32x3u value)const{
+        u64 result = updateFnv64U32(hash, bit_cast<u32>(value.x));
+        result = updateFnv64U32(result, bit_cast<u32>(value.y));
+        return updateFnv64U32(result, bit_cast<u32>(value.z));
+    }
+
+    public u64 updateFnv64Matrix34Bits(in u64 hash, in MatrixSingle value)const{
+        u64 result = this.updateFnv64Vector4Bits(hash, value[0u]);
+        result = this.updateFnv64Vector4Bits(result, value[1u]);
+        return this.updateFnv64Vector4Bits(result, value[2u]);
+    }
+
+    public u64 updateFnv64ShadowReceiverRangeGpu(in u64 hash, in CsgShadowReceiverRangeGpu range)const{
+        u64 result = updateFnv64U32(hash, range.firstCutter);
+        result = updateFnv64U32(result, range.cutterCount);
+        result = updateFnv64U32(result, range.flags);
+        return updateFnv64U32(result, range.solidTriangleWordOffset);
+    }
+
+    public void updateCsgFrameStateCutterSignature(
+        in EntityID entity,
+        in CsgCutterComponent cutter,
+        mut u64 inOutContentHash
+    )const{
+        inOutContentHash = updateFnv64U32(inOutContentHash, entity.id);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.active);
+        inOutContentHash = updateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
+        inOutContentHash = updateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
+        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.worldToShape));
+        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.shapeToWorld));
+        inOutContentHash = this.updateFnv64ByteSpan(inOutContentHash, cutter.parameterBytes);
+    }
+
+    public void updateCsgFrameStateReceiverSignature(
+        in EntityID entity,
+        in CsgReceiverComponent receiver,
+        in b8 hasRenderer,
+        in b8 rendererVisible,
+        in Name materialName,
+        in b8 hasMesh,
+        in Name meshName,
+        in b8 hasRuntimeMeshBinding,
+        in b8 hasTransform,
+        in VectorSingle position,
+        in VectorSingle rotation,
+        in VectorSingle scale,
+        mut u64 inOutContentHash,
+        mut b8 inOutCacheable
+    )const{
+        inOutContentHash = updateFnv64U32(inOutContentHash, entity.id);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.enabled);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.affectOpaquePass);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.affectTransparentPass);
+        inOutContentHash = updateFnv64NameHash(inOutContentHash, receiver.receiverGroup.hash());
+
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, hasRenderer);
+        if(hasRenderer){
+            inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, rendererVisible);
+            inOutContentHash = updateFnv64NameHash(inOutContentHash, materialName.hash());
+        }
+
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, hasMesh);
+        if(hasMesh)
+            inOutContentHash = updateFnv64NameHash(inOutContentHash, meshName.hash());
+        else if(receiver.enabled && hasRenderer)
+            inOutCacheable = false;
+
+        if(receiver.enabled && hasRenderer && rendererVisible && hasRuntimeMeshBinding)
+            inOutCacheable = false;
+
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, hasTransform);
+        if(hasTransform){
+            inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, position);
+            inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, rotation);
+            inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, scale);
+        }
+    }
+
+    public void initializeShadowCutterSnapshotHashes(
+        in u64 shapeRegistryRevision,
+        in usize receiverCount,
+        mut u64 outContentIdentity,
+        mut u64 outIdentity
+    )const{
+        u64 seed = updateFnv64U64(14695981039346656037ul, shapeRegistryRevision);
+        seed = updateFnv64U64(seed, cast<u64>(receiverCount));
+        outContentIdentity = seed;
+        outIdentity = seed;
+    }
+
+    public void updateShadowReceiverSnapshotHeaderHashes(
+        in CsgShadowReceiverInput receiver,
+        in b8 drawStateActive,
+        mut u64 inOutContentIdentity,
+        mut u64 inOutIdentity
+    )const{
+        inOutContentIdentity = updateFnv64U32(inOutContentIdentity, receiver.entity.id);
+        inOutContentIdentity = updateFnv64Byte(inOutContentIdentity, cast<u8>(receiver.receiverPass));
+        inOutIdentity = updateFnv64U32(inOutIdentity, receiver.entity.id);
+        inOutIdentity = updateFnv64Byte(inOutIdentity, cast<u8>(receiver.receiverPass));
+        if(drawStateActive){
+            inOutIdentity = this.updateFnv64BoolValue(inOutIdentity, receiver.boundsValid);
+            if(receiver.boundsValid){
+                inOutIdentity = this.updateFnv64Float3UBits(inOutIdentity, receiver.worldMin);
+                inOutIdentity = this.updateFnv64Float3UBits(inOutIdentity, receiver.worldMax);
+            }
+        }
+    }
+
+    public void updateShadowCutterSnapshotHashes(
+        in EntityID entity,
+        in Name shapeType,
+        in MatrixSingle worldToShape,
+        in MatrixSingle shapeToWorld,
+        in Span<u8> parameters,
+        mut u64 inOutContentIdentity,
+        mut u64 inOutIdentity
+    )const{
+        inOutContentIdentity = updateFnv64U32(inOutContentIdentity, entity.id);
+        inOutContentIdentity = updateFnv64NameHash(inOutContentIdentity, shapeType.hash());
+        inOutContentIdentity = this.updateFnv64ByteSpan(inOutContentIdentity, parameters);
+        inOutIdentity = updateFnv64U32(inOutIdentity, entity.id);
+        inOutIdentity = updateFnv64NameHash(inOutIdentity, shapeType.hash());
+        inOutIdentity = this.updateFnv64Matrix34Bits(inOutIdentity, worldToShape);
+        inOutIdentity = this.updateFnv64Matrix34Bits(inOutIdentity, shapeToWorld);
+        inOutIdentity = this.updateFnv64ByteSpan(inOutIdentity, parameters);
+    }
+
+    public void updateShadowReceiverSnapshotRangeHashes(
+        in CsgShadowReceiverRangeGpu range,
+        mut u64 inOutContentIdentity,
+        mut u64 inOutIdentity
+    )const{
+        inOutIdentity = this.updateFnv64ShadowReceiverRangeGpu(inOutIdentity, range);
+        inOutContentIdentity = this.updateFnv64ShadowReceiverRangeGpu(inOutContentIdentity, range);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

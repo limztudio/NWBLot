@@ -8,6 +8,7 @@
 
 #include <core/common/name_symbols.h>
 
+#include <global/name_hash_text.h>
 #include <global/diagnostics.h>
 
 
@@ -143,9 +144,9 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
     const Name runtimeName{AStringView("Runtime\\Generated")};
-    Array<char, s_DebugHashTextLength + 1u> hashText = {};
-    HashToDebugString(hashText.data(), sizeof(hashText), runtimeName.identityHash());
-    const AStringView hashView(hashText.data(), s_DebugHashTextLength);
+    Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
+    NameHashTextCodec::Format(hashText.data(), sizeof(hashText), runtimeName.identityHash());
+    const AStringView hashView(hashText.data(), NameHashTextCodec::s_TextLength);
     const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
 #if defined(NWB_DEBUG)
@@ -179,8 +180,8 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
     );
 
     EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), s_Authored).view(), s_Authored.logText());
-    Array<char, s_DebugHashTextLength + 1u> hashText = {};
-    HashToDebugString(hashText.data(), sizeof(hashText), binary.identityHash());
+    Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
+    NameHashTextCodec::Format(hashText.data(), sizeof(hashText), binary.identityHash());
     EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), binary).view(), AStringView(hashText.data()));
     EXPECT_EQ(probe.recordCount, 0u);
     EXPECT_EQ(probe.resolveCount, 0u);
@@ -343,10 +344,10 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
 
 TEST(Global, NameHashDebugTextRejectsInvalidHex){
     const NameHash source = ComputeNameHash(MakeNotNull("global_name_hash_debug_text"));
-    Array<char, s_DebugHashTextLength + 1u> hashText = {};
-    HashToDebugString(hashText.data(), sizeof(hashText), source);
+    Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
+    NameHashTextCodec::Format(hashText.data(), sizeof(hashText), source);
     hashText[0u] = 'g';
-    EXPECT_FALSE(DecodeDebugHashText(AStringView(hashText.data())));
+    EXPECT_FALSE(NameHashTextCodec::Decode(AStringView(hashText.data())));
 }
 
 

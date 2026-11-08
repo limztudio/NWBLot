@@ -37,52 +37,15 @@ Texture* BackendContext::getBackBuffer(u32 index)const noexcept{
 }
 
 QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexcept{
-    NothrowScopedLock presentationLock(m_framePresentationMutex);
-    if(!m_framePresentationClaimsEnabled || !m_rhiDevice || !m_frameAcquired || m_framePresentationSignalState != FramePresentationSignalState::Idle || !m_swapChain || m_swapChainIndex >= m_presentSemaphores.size())
-        return {};
-
-    const VkSemaphore semaphore = m_presentSemaphores[m_swapChainIndex];
-    if(semaphore == VK_NULL_HANDLE)
-        return {};
-    if(m_framePresentationClaimIdentityExhausted || m_nextFramePresentationClaimIdentity == Limit<u64>::s_Max)
-        return {};
-
-    m_framePresentationSemaphore = semaphore;
-    m_framePresentationSwapChainIndex = m_swapChainIndex;
-    m_framePresentationQueue = {};
-    m_framePresentationSubmission = {};
-    ++m_nextFramePresentationClaimIdentity;
-    if(m_nextFramePresentationClaimIdentity == Limit<u64>::s_Max)
-        m_framePresentationClaimIdentityExhausted = true;
-    m_framePresentationClaimIdentity = m_nextFramePresentationClaimIdentity;
-    m_framePresentationSignalState = FramePresentationSignalState::Claimed;
-    return QueueSubmissionPreSubmitHook{ .context = this, .identity = m_framePresentationClaimIdentity, .invoke = &BackendContext::InvokeFramePresentationSignalPreparation, .resolved = &BackendContext::InvokeFramePresentationSignalResolution, };
+    return m_framePresentation.claimFramePresentationSignal();
 }
 
 b8 BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
-    NothrowScopedLock presentationLock(m_framePresentationMutex);
-    return
-        m_framePresentationClaimsEnabled
-        && claim.context == this
-        && claim.identity != 0u
-        && claim.identity == m_framePresentationClaimIdentity
-        && claim.invoke == &BackendContext::InvokeFramePresentationSignalPreparation
-        && claim.resolved == &BackendContext::InvokeFramePresentationSignalResolution
-        && m_framePresentationSignalState == FramePresentationSignalState::Accepted
-        && token.valid()
-        && token == m_framePresentationSubmission
-    ;
+    return m_framePresentation.confirmFramePresentationSignal(claim, token);
 }
 
 b8 BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    const b8 result = cancelFramePresentationSignalDeferred(&claim, lifecycleLock);
-    DeviceHandle device = m_rhiDevice;
-    if(lifecycleLock.owns_lock())
-        lifecycleLock.unlock();
-    if(!result && device && device->isDeviceLost())
-        device->captureDeviceLoss(VulkanArenaScope::s_PresentationSignalCancellationContext);
-    return result;
+    return m_framePresentation.cancelFramePresentationSignal(claim);
 }
 
 void BackendContext::clearSemaphores(SemaphoreVector& semaphores)noexcept{
@@ -228,207 +191,23 @@ b8 BackendContext::createFrameSyncQueries(){
 }
 
 Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
-    NothrowScopedLock presentationLock(m_framePresentationMutex);
-    QueueSubmissionNativeSignal signal;
-    if(
-        !m_framePresentationClaimsEnabled
-        || !m_rhiDevice
-        || !m_frameAcquired
-        || m_framePresentationSignalState != FramePresentationSignalState::Claimed
-        || identity == 0u
-        || identity != m_framePresentationClaimIdentity
-        || !executionQueue.valid()
-        || !m_swapChain
-        || m_framePresentationSemaphore == VK_NULL_HANDLE
-        || m_framePresentationSwapChainIndex != m_swapChainIndex
-        || m_swapChainIndex >= m_presentSemaphores.size()
-        || m_presentSemaphores[m_swapChainIndex] != m_framePresentationSemaphore
-    )
-        return MakeUnexpected(Failure{});
-
-    const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(executionQueue);
-    const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-    if(!VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo))
-        return MakeUnexpected(Failure{});
-
-#if VK_USE_64_BIT_PTR_DEFINES
-    signal.semaphore = Object(static_cast<void*>(m_framePresentationSemaphore));
-#else
-    signal.semaphore = Object(static_cast<u64>(m_framePresentationSemaphore));
-#endif
-    signal.value = 0u;
-    if(!signal.valid())
-        return MakeUnexpected(Failure{});
-
-    m_framePresentationQueue = executionQueue;
-    m_framePresentationSignalState = FramePresentationSignalState::Queued;
-    return signal;
+    return m_framePresentation.prepareFramePresentationSignal(identity, executionQueue);
 }
 
 b8 BackendContext::resolveFramePresentationSignal(const u64 identity, const QueueSubmissionToken& token)noexcept{
-    b8 resolved = false;
-    {
-        NothrowScopedLock presentationLock(m_framePresentationMutex);
-        if(
-            !m_framePresentationClaimsEnabled
-            || !m_rhiDevice
-            || !m_frameAcquired
-            || m_framePresentationSignalState != FramePresentationSignalState::Queued
-            || identity == 0u
-            || identity != m_framePresentationClaimIdentity
-            || m_framePresentationSwapChainIndex != m_swapChainIndex
-            || m_swapChainIndex >= m_presentSemaphores.size()
-            || m_presentSemaphores[m_swapChainIndex] != m_framePresentationSemaphore
-        )
-            return false;
-
-        if(!token.valid()){
-            m_framePresentationQueue = {};
-            m_framePresentationSignalState = FramePresentationSignalState::Rejected;
-            resolved = true;
-        }
-        else{
-            const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(m_framePresentationQueue);
-            const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-            if(token.queue != CommandQueue::Graphics || !token.matchesPhysicalQueue(m_framePresentationQueue.index, m_framePresentationQueue.deviceGeneration) || !VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo)){
-                m_framePresentationSignalState = FramePresentationSignalState::Failed;
-                m_rhiDevice->quarantineDevice();
-                resolved = false;
-            }
-            else{
-                m_framePresentationSubmission = token;
-                m_framePresentationSignalState = FramePresentationSignalState::Accepted;
-                resolved = true;
-            }
-        }
-    }
-    m_framePresentationCondition.notify_all();
-    return resolved;
+    return m_framePresentation.resolveFramePresentationSignal(identity, token);
 }
 
 b8 BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
-    if(!m_vulkanDevice || m_framePresentationSemaphore == VK_NULL_HANDLE || m_framePresentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore)
-        return false;
-
-    VkSemaphoreCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VkSemaphore replacement = VK_NULL_HANDLE;
-    const VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &createInfo, nullptr, &replacement);
-    if(result != VK_SUCCESS){
-        if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)
-            m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
-        return false;
-    }
-
-    m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, m_framePresentationSemaphore, nullptr);
-    m_presentSemaphores[m_framePresentationSwapChainIndex] = replacement;
-    return true;
+    return m_framePresentation.replaceFramePresentationSemaphoreAfterIdle();
 }
 
 void BackendContext::resetFramePresentationSignal()noexcept{
-    m_framePresentationSemaphore = VK_NULL_HANDLE;
-    m_framePresentationQueue = {};
-    m_framePresentationSubmission = {};
-    m_framePresentationClaimIdentity = 0u;
-    m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
-    m_framePresentationSignalState = FramePresentationSignalState::Idle;
+    m_framePresentation.resetFramePresentationSignal();
 }
 
 b8 BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* const claim, UniqueLock<Futex>& lifecycleLock){
-    if(!lifecycleLock.owns_lock() || m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_lifecycleDrainActive)
-        return false;
-
-    UniqueLock<Futex> presentationLock(m_framePresentationMutex);
-    if(
-        !m_framePresentationClaimsEnabled
-        || (
-            claim
-            && (
-                claim->context != this
-                || claim->identity == 0u
-                || claim->identity != m_framePresentationClaimIdentity
-                || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation
-                || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution
-            )
-        )
-    )
-        return false;
-    m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
-        return m_framePresentationSignalState != FramePresentationSignalState::Queued;
-    });
-    if(claim && (claim->identity != m_framePresentationClaimIdentity || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution))
-        return false;
-    if(m_framePresentationSignalState == FramePresentationSignalState::Idle)
-        return claim == nullptr;
-
-    if(m_framePresentationSignalState == FramePresentationSignalState::Claimed || m_framePresentationSignalState == FramePresentationSignalState::Rejected){
-        resetFramePresentationSignal();
-        return true;
-    }
-
-    if(m_framePresentationSignalState != FramePresentationSignalState::Accepted && m_framePresentationSignalState != FramePresentationSignalState::Failed)
-        return false;
-
-    DeviceHandle device = m_rhiDevice;
-    if(!device || device->requiresRecreation()){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return false;
-    }
-    const u64 lifecycleEpoch = m_swapChainLifecycleEpoch;
-    const VkDevice vulkanDevice = m_vulkanDevice;
-    const VkSwapchainKHR swapChain = m_swapChain;
-    const VkSemaphore presentationSemaphore = m_framePresentationSemaphore;
-    const QueueSubmissionToken presentationSubmission = m_framePresentationSubmission;
-    const u64 presentationClaimIdentity = m_framePresentationClaimIdentity;
-    const u32 presentationSwapChainIndex = m_framePresentationSwapChainIndex;
-    const u32 swapChainIndex = m_swapChainIndex;
-    const b8 frameAcquired = m_frameAcquired;
-    if(!frameAcquired || presentationSemaphore == VK_NULL_HANDLE || presentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore)
-        return false;
-
-    // Retiring blocks new presentation claims while queue locks join in canonical order.
-    m_framePresentationSignalState = FramePresentationSignalState::Retiring;
-    m_swapChainLifecycleState = SwapChainLifecycleState::RetiringPresentation;
-    presentationLock.unlock();
-    lifecycleLock.unlock();
-
-    const VkResult idleResult = device->waitForNativeIdle();
-    if(idleResult == VK_ERROR_DEVICE_LOST)
-        device->markDeviceLost();
-
-    lifecycleLock.lock();
-    presentationLock.lock();
-    const b8 retirementIdentityMatches =
-        m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation
-        && m_swapChainLifecycleEpoch == lifecycleEpoch
-        && m_rhiDevice.get() == device.get()
-        && m_vulkanDevice == vulkanDevice
-        && m_swapChain == swapChain
-        && m_frameAcquired == frameAcquired
-        && m_swapChainIndex == swapChainIndex
-        && m_framePresentationSignalState == FramePresentationSignalState::Retiring
-        && m_framePresentationSemaphore == presentationSemaphore
-        && m_framePresentationSubmission == presentationSubmission
-        && m_framePresentationClaimIdentity == presentationClaimIdentity
-        && m_framePresentationSwapChainIndex == presentationSwapChainIndex
-        && presentationSwapChainIndex < m_presentSemaphores.size()
-        && m_presentSemaphores[presentationSwapChainIndex] == presentationSemaphore
-    ;
-    if(!retirementIdentityMatches || idleResult != VK_SUCCESS){
-        if(m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation)
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        device->quarantineDevice();
-        return false;
-    }
-    if(!replaceFramePresentationSemaphoreAfterIdle()){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        device->quarantineDevice();
-        return false;
-    }
-    resetFramePresentationSignal();
-    m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    return true;
+    return m_framePresentation.cancelFramePresentationSignalDeferred(claim, lifecycleLock);
 }
 
 

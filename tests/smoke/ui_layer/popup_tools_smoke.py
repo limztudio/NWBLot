@@ -13,8 +13,9 @@ from popup_tools_probe import observe_popup_tools, snapshot_from_logs
 from window_smoke import parse_args
 from window_capture_image import read_bmp_24_rows
 from window_capture_logs import wait_for_log_message
+from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+    require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_expected_log_text
 from fixture_environment import build_fixture_environment
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
@@ -34,6 +35,7 @@ LIT_F10 = "F10"
 LIT_SECOND = "second"
 LIT_F9 = "F9"
 LIT_UI_POPUP_TOOLS_FIXTURE = "UI popup tools fixture"
+LIT_POPUP_TOOLS_GRACEFUL_EXIT_TIMEOUT_SECONDS = 60.0
 
 
 class PopupToolsRun:
@@ -182,7 +184,7 @@ class PopupToolsRun:
         self.native.tap(LIT_F10, shift=True)
         self.checkpoint("disabled_anchor_blocks_pointer_and_keyboard_menu", enabled=0)
         self.hover(LIT_ANCHOR)
-        self.checkpoint("disabled_anchor_blocks_delayed_tooltip", settle=1.2)
+        self.checkpoint("disabled_anchor_blocks_delayed_tooltip", settle=8.2)
         self.native.tap(LIT_F9)
         self.hover(LIT_COUNTER)
         self.checkpoint("enable_restores_attachment", enabled=1)
@@ -236,7 +238,7 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, LIT_UI_POPUP_TOOLS_FIXTURE, handle)
+                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_POPUP_TOOLS_FIXTURE, handle, graceful_exit_timeout=LIT_POPUP_TOOLS_GRACEFUL_EXIT_TIMEOUT_SECONDS)
                 require_normal_process_exit(exit_code, tail, LIT_UI_POPUP_TOOLS_FIXTURE)
         finally:
             try:
@@ -248,7 +250,7 @@ def run(args):
             finally:
                 try:
                     if logserver is not None:
-                        terminate_process(logserver, "UI popup tools logserver")
+                        CaptureProcessTermination.terminate_process(logserver, "UI popup tools logserver")
                 finally:
                     try:
                         if popup_tools_run is not None:

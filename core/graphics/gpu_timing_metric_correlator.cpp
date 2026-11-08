@@ -38,7 +38,7 @@ inline constexpr u64 s_PendingMetricRetentionFrames = static_cast<u64>(s_MaxFram
 GpuTimingMetricCorrelator::GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, Perf::TimingSink& timing)noexcept
     : m_arena(arena)
     , m_timing(timing)
-    , m_overlapRecords(arena)
+    , m_overlapMetrics(arena, timing)
     , m_pendingPacketEnvelopeMetrics(arena)
     , m_packetEnvelopeMetricOutputRoles(arena)
 {}
@@ -56,35 +56,7 @@ b8 GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, const
             return false;
     }
 
-    Name canonicalFirstScope = firstScope;
-    Name canonicalSecondScope = secondScope;
-    if(canonicalSecondScope < canonicalFirstScope)
-        Swap(canonicalFirstScope, canonicalSecondScope);
-
-    for(const OverlapRecord& record : m_overlapRecords){
-        if(record.outputScopeName == canonicalFirstScope || record.outputScopeName == canonicalSecondScope)
-            return false;
-        if(outputScope == record.firstScope || outputScope == record.secondScope)
-            return false;
-
-        const b8 sameInputs = record.firstScope == canonicalFirstScope && record.secondScope == canonicalSecondScope;
-        if(sameInputs)
-            return record.outputScopeName == outputScope && record.outputScope.valid();
-        if(record.outputScopeName == outputScope)
-            return false;
-    }
-
-    const auto output = m_timing.registerScope(outputScope);
-    if(!output)
-        return false;
-
-    m_overlapRecords.emplace_back(m_arena);
-    OverlapRecord& record = m_overlapRecords.back();
-    record.firstScope = canonicalFirstScope;
-    record.secondScope = canonicalSecondScope;
-    record.outputScopeName = outputScope;
-    record.outputScope = *output;
-    return true;
+    return m_overlapMetrics.prepare(firstScope, secondScope, outputScope);
 }
 
 b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
@@ -161,19 +133,8 @@ b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
             return false;
     }
 
-    for(const OverlapRecord& overlap : m_overlapRecords){
-        for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-            if(scopes[scopeIndex].scopeName == overlap.outputScopeName)
-                return false;
-        }
-        if(queueOverlapScope == overlap.firstScope || queueOverlapScope == overlap.secondScope || queueOverlapScope == overlap.outputScopeName)
-            return false;
-        for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
-            const Name& outputName = queueOutputs[outputIndex].internalIdleScopeName;
-            if(outputName == overlap.firstScope || outputName == overlap.secondScope || outputName == overlap.outputScopeName)
-                return false;
-        }
-    }
+    if(m_overlapMetrics.conflicts(scopeInputs, queueOverlapScope, queueOutputInputs))
+        return false;
 
     for(const PendingPacketEnvelopeMetric& pending : m_pendingPacketEnvelopeMetrics){
         for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
@@ -247,54 +208,7 @@ b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
 }
 
 void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, const u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples){
-    for(OverlapRecord& record : m_overlapRecords){
-        if(scopeName != record.firstScope && scopeName != record.secondScope)
-            continue;
-
-        for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ){
-            if(frameIndex > it->frameIndex && frameIndex - it->frameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames)
-                it = record.pendingFrames.erase(it);
-            else
-                ++it;
-        }
-
-        PendingOverlapFrame* frame = nullptr;
-        for(PendingOverlapFrame& candidate : record.pendingFrames){
-            if(candidate.frameIndex == frameIndex){
-                frame = &candidate;
-                break;
-            }
-        }
-        if(!frame){
-            record.pendingFrames.emplace_back();
-            frame = &record.pendingFrames.back();
-            frame->frameIndex = frameIndex;
-        }
-
-        if(scopeName == record.firstScope){
-            frame->first = range;
-            frame->hasFirst = true;
-        }
-        else{
-            frame->second = range;
-            frame->hasSecond = true;
-        }
-
-        if(!frame->hasFirst || !frame->hasSecond)
-            continue;
-
-        if(const auto overlapTicks = TryComputeGpuTimestampOverlap(frame->first, frame->second)){
-            const f64 overlapSeconds = static_cast<f64>(*overlapTicks) * frame->first.secondsPerTick;
-            performanceSamples.reserve(performanceSamples.size() + 1u);
-            performanceSamples.push_back(GpuTimingSinkSample{ .scope = record.outputScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = frameIndex, });
-        }
-        for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ++it){
-            if(&*it == frame){
-                record.pendingFrames.erase(it);
-                break;
-            }
-        }
-    }
+    m_overlapMetrics.record(scopeName, frameIndex, range, __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames, performanceSamples);
 
     for(auto it = m_pendingPacketEnvelopeMetrics.begin(); it != m_pendingPacketEnvelopeMetrics.end(); ){
         if(frameIndex > it->sourceFrameIndex && frameIndex - it->sourceFrameIndex > __hidden_gpu_timing_metric_correlator::s_PendingMetricRetentionFrames){
@@ -359,10 +273,8 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
 }
 
 b8 GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const noexcept{
-    for(const OverlapRecord& record : m_overlapRecords){
-        if(record.outputScopeName == scopeName)
-            return true;
-    }
+    if(m_overlapMetrics.hasOutputRole(scopeName))
+        return true;
     for(const PacketEnvelopeMetricOutputRoleRecord& outputRole : m_packetEnvelopeMetricOutputRoles){
         if(outputRole.scopeName == scopeName)
             return true;
@@ -371,13 +283,12 @@ b8 GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const noexcept
 }
 
 void GpuTimingMetricCorrelator::discardPendingRanges()noexcept{
-    for(OverlapRecord& record : m_overlapRecords)
-        record.pendingFrames.clear();
+    m_overlapMetrics.discardPendingRanges();
     m_pendingPacketEnvelopeMetrics.clear();
 }
 
 void GpuTimingMetricCorrelator::reset()noexcept{
-    m_overlapRecords.clear();
+    m_overlapMetrics.reset();
     m_pendingPacketEnvelopeMetrics.clear();
     m_packetEnvelopeMetricOutputRoles.clear();
 }

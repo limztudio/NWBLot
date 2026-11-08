@@ -1,9 +1,7 @@
 import argparse
 import ctypes
-import importlib.util
 import os
 import platform
-import re
 import subprocess
 import sys
 import tempfile
@@ -18,20 +16,15 @@ from launcher import constants as launcher
 from launcher.build import BuildController
 from launcher.cli import LauncherCli
 from launcher.cmake_settings import CmakeSettings
-from launcher.discovery import LauncherDiscovery
+from launcher.cmake_file_api import CmakeFileApi
 from launcher.host import HostProbe
 from launcher.process import ProcessLauncher
 from launcher.profile import ProfileSessionController
-from launcher import repository_windows_process  # noqa: E402
-from repository_launcher_test_support import FakeSpawnedProcess
+from repository_launcher_windows_process_tests import LauncherWindowsProcessTests
+from repository_name_symbol_capture_tests import NameSymbolCaptureBoundaryTests
+from repository_launcher_discovery_tests import LauncherDiscoveryFailureTests, LauncherDiscoveryTests
 
 
-LIT_WINDOWSPROCESSAPI = "WindowsProcessApi"
-LIT_REALPATH = "realpath"
-LIT_GETPID = "getpid"
-LIT_TERMINATE_PROCESS = "terminate_process"
-LIT_GROUP = "group"
-LIT_SOURCE = "source"
 LIT_NAN = "nan"
 LIT_INF = "inf"
 LIT_INF_2 = "-inf"
@@ -40,17 +33,6 @@ LIT_STOP_EXISTING_PROCESS = "stop_existing_process"
 LIT_ABSENT_RUNTIME = "absent_runtime"
 LIT_RESOLVE_PROFILE_LOG_PORT = "resolve_profile_log_port"
 LIT_RESOLVE_EXECUTABLE_PATH = "resolve_executable_path"
-LIT_UNUSED = "unused"
-LIT_RUN_WORKLOADS = "run_workloads"
-LIT_LOG = "log"
-LIT_OPEN = "open"
-LIT_CLOSE = "close"
-LIT_WAIT = "wait"
-LIT_FORCE = "force"
-LIT_RELEASE = "release"
-LIT_TERMINATE = "terminate"
-LIT_KILL = "kill"
-LIT_NATIVE_WAIT = "native_wait"
 LIT_WINDOWS = "windows"
 LIT_WINDOWS_2 = "Windows"
 LIT_AMD64 = "AMD64"
@@ -60,38 +42,13 @@ LIT_SYSTEM = "system"
 LIT_MACHINE = "machine"
 LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME = "query_windows_native_machine_name"
 LIT_REPO = "repo"
-LIT_BUILD = "build"
 LIT_FULL = "full"
 LIT_DBG = "dbg"
 LIT_TESTBED = "testbed"
 LIT_UTF_8 = "utf-8"
 LIT_RUN = "run"
-LIT_C_BUILD_ARM64_VIEWER_EXE = r"C:\build\arm64\viewer.exe"
 LIT_POPEN = "Popen"
-LIT_HOST_PLATFORM_NAME = "host_platform_name"
-LIT_LAUNCH_PY = "launch.py"
-LIT_TESTS = "tests"
-LIT_SMOKE = "smoke"
-LIT_LAUNCHER_PY = "launcher.py"
-LIT_AB = "ab"
-LIT_ASYNC_SHADOW_M4 = "async_shadow_m4"
-LIT_COMMAND_IR = "command_ir"
-LIT_FRAME_LAGGED_ASYNC_LIGHTING = "frame_lagged_async_lighting"
-LIT_RUN_PY = "run.py"
-LIT_HARDWARE_SHADOW_BOUNDARY = "hardware_shadow_boundary"
-LIT_TRANSFER_QUEUE = "transfer_queue"
-LIT_UTILITIES = "utilities"
-LIT_TEX_CONV = "tex_conv"
-LIT_ASYNC_SHADOW_M4_2 = "async-shadow-m4"
-LIT_SAME_NAME = "same_name"
-LIT_A = r"\A"
-LIT_Z = r"\Z"
-LIT_CONFIG = "--config"
-LIT_OPT = "opt"
 LIT_MAIN = "__main__"
-LIT_SKIP_BUILD = "--skip-build"
-LIT_BUILD_DIR = "--build-dir"
-LIT_CONFIGURE_PRESET = "--configure-preset"
 LIT_WINDOWS_DLL = "WinDLL"
 LIT_WINDOWS_LAST_ERROR = "get_last_error"
 LIT_WINDOWS_ENV_ARCH6432 = "PROCESSOR_ARCHITEW6432"
@@ -102,85 +59,6 @@ LIT_CHILD_STDERR = "launcher child error"
 LIT_PYTHON_COMMAND = "-c"
 LIT_READ_WRITE_TEXT = "w+"
 LIT_CHILD_STREAMS_PROGRAM = (f"import sys; print({LIT_CHILD_STDOUT!r}, flush=True); " f"print({LIT_CHILD_STDERR!r}, file=sys.stderr, flush=True); sys.exit(23)")
-
-
-NAME_SYMBOL_CAPTURE_SPEC = importlib.util.spec_from_file_location("nwb_test_generate_name_symbols", ROOT / "tests" / "name_symbols" / "generate_name_symbols.py")
-if NAME_SYMBOL_CAPTURE_SPEC is None or NAME_SYMBOL_CAPTURE_SPEC.loader is None:
-    raise ImportError("Could not load the test-owned name-symbol capture helper")
-generate_name_symbols = importlib.util.module_from_spec(NAME_SYMBOL_CAPTURE_SPEC)
-NAME_SYMBOL_CAPTURE_SPEC.loader.exec_module(generate_name_symbols)
-
-
-class FakeWindowsProcessApi:
-    def __init__(self, image_paths, wait_results):
-        self.image_paths = image_paths
-        self.wait_results = {pid: list(results) for pid, results in wait_results.items()}
-        self.handles = {}
-        self.events = []
-
-    def process_ids(self):
-        return tuple(self.image_paths)
-
-    def open_process(self, pid):
-        handle = object()
-        self.handles[pid] = handle
-        self.events.append((LIT_OPEN, pid, handle))
-        return handle
-
-    def query_process_image_path(self, handle):
-        self.events.append(("query", handle))
-        return self.image_paths[next(pid for pid, value in self.handles.items() if value is handle)]
-
-    def request_close(self, pid):
-        self.events.append((LIT_CLOSE, pid))
-        return True
-
-    def wait_for_exit(self, handle, timeout_seconds):
-        self.events.append((LIT_WAIT, handle, timeout_seconds))
-        pid = next(pid for pid, value in self.handles.items() if value is handle)
-        return self.wait_results[pid].pop(0)
-
-    def force_terminate(self, handle):
-        self.events.append((LIT_FORCE, handle))
-        return True
-
-    def exit_code(self, handle):
-        return 0
-
-    def close_process(self, handle):
-        self.events.append((LIT_RELEASE, handle))
-
-
-class FakeBoundedProcessApi:
-    def __init__(self, wait_results, events, can_terminate=True):
-        self.wait_results = list(wait_results)
-        self.events = events
-        self.handle = object()
-        self.can_terminate = can_terminate
-
-    def open_process(self, pid):
-        self.events.append((LIT_OPEN, pid, self.handle))
-        return self.handle
-
-    def request_close(self, pid):
-        self.events.append((LIT_CLOSE, pid))
-        return True
-
-    def wait_for_exit(self, handle, timeout_seconds):
-        self.events.append((LIT_NATIVE_WAIT, handle, timeout_seconds))
-        return self.wait_results.pop(0)
-
-    def force_terminate(self, handle):
-        self.assert_retained_handle(handle)
-        self.events.append((LIT_FORCE, handle))
-        return self.can_terminate
-
-    def close_process(self, handle):
-        self.events.append((LIT_RELEASE, handle))
-
-    def assert_retained_handle(self, handle):
-        if handle is not self.handle:
-            raise AssertionError("hard termination did not use the retained process handle")
 
 
 class LauncherPlatformTests(unittest.TestCase):
@@ -233,138 +111,6 @@ class LauncherPlatformTests(unittest.TestCase):
             CmakeSettings.resolve_launch_settings(args, LIT_FULL)
 
 
-    def test_windows_handle_wrapper_failure_closes_unpublished_native_handle(self):
-        for can_terminate in (False, True):
-            with self.subTest(can_terminate=can_terminate):
-                kernel32 = mock.Mock()
-                kernel32.OpenProcess.side_effect = [707] if can_terminate else [0, 707]
-                with mock.patch.object(ctypes, LIT_WINDOWS_DLL, side_effect=[kernel32, mock.Mock(), mock.Mock()], create=True):
-                    api = repository_windows_process.WindowsProcessApi()
-                failure = MemoryError("handle wrapper allocation failed")
-
-                with mock.patch.object(repository_windows_process, "WindowsProcessHandle", side_effect=failure), self.assertRaises(MemoryError) as result:
-                    api.open_process(708)
-
-                self.assertIs(failure, result.exception)
-                access = repository_windows_process.PROCESS_QUERY_WAIT_AND_TERMINATE_ACCESS
-                expected = [mock.call(access, False, 708)]
-                if not can_terminate:
-                    expected.append(mock.call(repository_windows_process.PROCESS_QUERY_AND_WAIT_ACCESS, False, 708))
-                self.assertEqual(expected, kernel32.OpenProcess.call_args_list)
-                kernel32.CloseHandle.assert_called_once_with(707)
-
-    def test_windows_image_query_failure_only_ignores_an_exited_process(self):
-        kernel32 = mock.Mock()
-        kernel32.QueryFullProcessImageNameW.return_value = 0
-        with mock.patch.object(ctypes, LIT_WINDOWS_DLL, side_effect=[kernel32, mock.Mock(), mock.Mock()], create=True):
-            api = repository_windows_process.WindowsProcessApi()
-        handle = repository_windows_process.WindowsProcessHandle(707, False)
-        with mock.patch.object(ctypes, LIT_WINDOWS_LAST_ERROR, return_value=5, create=True):
-            kernel32.WaitForSingleObject.return_value = repository_windows_process.WAIT_OBJECT_0
-            self.assertIsNone(api.query_process_image_path(handle))
-            kernel32.WaitForSingleObject.return_value = repository_windows_process.WAIT_TIMEOUT
-            with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "image query.*Windows error 5"):
-                api.query_process_image_path(handle)
-
-    def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
-        x64_image = r"C:\Build\x64\viewer.exe"
-        arm64_image = r"C:\Build\arm64\viewer.exe"
-        api = FakeWindowsProcessApi({ 101: x64_image, 202: r"c:\build\ARM64\viewer.exe", }, {202: [True]},)
-
-        with (mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=api), mock.patch.object(os.path, LIT_REALPATH, side_effect=lambda path: path), mock.patch.object(os, LIT_GETPID, return_value=999)):
-            results = repository_windows_process.stop_processes_by_image_path(arm64_image, 3.0, 2.0)
-
-        self.assertEqual((202,), tuple(result.pid for result in results))
-        self.assertIn((LIT_CLOSE, 202), api.events)
-        self.assertNotIn((LIT_CLOSE, 101), api.events)
-        self.assertFalse(any(event[0] == LIT_FORCE for event in api.events))
-
-    def test_windows_enum_failure_does_not_force_existing_process(self):
-        api = FakeWindowsProcessApi({202: LIT_C_BUILD_ARM64_VIEWER_EXE}, {})
-        user32 = mock.Mock()
-        user32.EnumWindows.return_value = 0
-        native_api = object.__new__(repository_windows_process.WindowsProcessApi)
-        native_api._user32 = user32
-        api.request_close = native_api.request_close
-        with (mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=api), mock.patch.object(os.path, LIT_REALPATH, side_effect=lambda path: path), mock.patch.object(os, LIT_GETPID, return_value=999),
-            mock.patch.object(ctypes, LIT_WINDOWS_LAST_ERROR, return_value=5, create=True)):
-            with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "EnumWindows failed: Windows error 5"):
-                repository_windows_process.stop_processes_by_image_path(LIT_C_BUILD_ARM64_VIEWER_EXE, 3.0, 2.0)
-        self.assertIn((LIT_RELEASE, api.handles[202]), api.events)
-        self.assertFalse(any(event[0] == LIT_FORCE for event in api.events))
-
-    def test_windows_existing_forced_shutdown_uses_retained_process_handle(self):
-        api = FakeWindowsProcessApi({202: LIT_C_BUILD_ARM64_VIEWER_EXE}, {202: [False, True]},)
-
-        with (mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=api), mock.patch.object(os.path, LIT_REALPATH, side_effect=lambda path: path), mock.patch.object(os, LIT_GETPID, return_value=999)):
-            results = repository_windows_process.stop_processes_by_image_path(LIT_C_BUILD_ARM64_VIEWER_EXE, 3.0, 2.0)
-
-        retained_handle = api.handles[202]
-        self.assertTrue(results[0].forced)
-        self.assertIn((LIT_FORCE, retained_handle), api.events)
-
-    def test_windows_query_only_handle_can_still_complete_gracefully(self):
-        events = []
-        process = FakeSpawnedProcess(302, 23, events)
-
-        with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, True], events, can_terminate=False)):
-            result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
-
-        self.assertEqual(23, result.exit_code)
-        self.assertFalse(result.forced)
-        self.assertFalse(any(event[0] == LIT_FORCE for event in events))
-        self.assertNotIn((LIT_TERMINATE, 302), events)
-        self.assertNotIn((LIT_KILL, 302), events)
-
-    def test_windows_query_only_handle_reports_live_process_at_hard_boundary(self):
-        events = []
-        process = FakeSpawnedProcess(306, 0, events)
-
-        with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "did not grant terminate access"):
-            with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, False, False], events, can_terminate=False)):
-                repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
-
-        retained_handle = next(event[2] for event in events if event[0] == LIT_OPEN)
-        self.assertIn((LIT_FORCE, retained_handle), events)
-        self.assertEqual(1, sum(event[0] == LIT_OPEN for event in events))
-
-    def test_windows_bounded_shutdown_forces_exact_process_only_after_grace_timeout(self):
-        events = []
-        process = FakeSpawnedProcess(404, 7, events)
-
-        with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, False, True], events)):
-            result = repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0)
-
-        self.assertEqual(7, result.exit_code)
-        self.assertTrue(result.forced)
-        self.assertEqual([(LIT_OPEN, 404, mock.ANY), (LIT_NATIVE_WAIT, mock.ANY, 9.0), (LIT_CLOSE, 404), (LIT_NATIVE_WAIT, mock.ANY, 5.0), (LIT_FORCE, mock.ANY), (LIT_NATIVE_WAIT, mock.ANY, 2.0), (LIT_WAIT, None), (LIT_RELEASE, mock.ANY),], events,)
-
-    def test_windows_bounded_shutdown_rejects_success_status_after_forced_termination(self):
-        events = []
-        process = FakeSpawnedProcess(405, 0, events)
-
-        with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "forced process .* successful"):
-            with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, False, True], events)):
-                repository_windows_process.run_bounded_process(process, 9.0, 5.0, 2.0)
-
-        grace_wait_index = next(index for index, event in enumerate(events) if event[0] == LIT_NATIVE_WAIT and event[2] == 5.0)
-        force_index = next(index for index, event in enumerate(events) if event[0] == LIT_FORCE)
-        self.assertLess(grace_wait_index, force_index)
-
-    def test_launcher_propagates_bounded_windows_process_exit_status(self):
-        events = []
-        process = FakeSpawnedProcess(406, 23, events)
-        args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=False, run_seconds=9.0,)
-        run_result = repository_windows_process.WindowsBoundedRunResult(406, 23, True, True, False)
-
-        with (mock.patch.object(subprocess, LIT_POPEN, return_value=process), mock.patch.object(HostProbe, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS),
-            mock.patch.object(repository_windows_process, "run_bounded_process", return_value=run_result) as bounded, mock.patch.object(ProcessLauncher, LIT_TERMINATE_PROCESS) as generic_terminate,):
-            exit_code = ProcessLauncher.launch_process(args, Path(LIT_C_BUILD_ARM64_VIEWER_EXE), Path(r"C:\build\arm64"), {}, (), paths_validated=True,)
-
-        self.assertEqual(23, exit_code)
-        bounded.assert_called_once_with(process, 9.0, launcher.APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, launcher.APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
-        generic_terminate.assert_not_called()
-
     def test_owned_child_output_reaches_redirected_parent_streams(self):
         args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=False, run_seconds=None,)
 
@@ -382,76 +128,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertNotIn(LIT_CHILD_STDERR, stdout_lines)
         self.assertEqual([LIT_CHILD_STDERR], stderr_lines)
 
-    def test_directory_discovery_only_returns_direct_children(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            paths = (root / LIT_TESTS / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCHER_PY, root / LIT_TESTS / LIT_SMOKE / LIT_RUN_PY,)
-            for path in paths:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("", encoding=LIT_UTF_8)
-
-            tests_launchers = LauncherDiscovery.discover_directory_launchers(Path(LIT_TESTS), root)
-            ab_launchers = LauncherDiscovery.discover_directory_launchers(Path(LIT_TESTS) / LIT_AB, root)
-
-        self.assertEqual({LIT_AB, LIT_SMOKE}, set(tests_launchers))
-        self.assertNotIn(LIT_ASYNC_SHADOW_M4_2, tests_launchers)
-        self.assertIn(LIT_ASYNC_SHADOW_M4_2, ab_launchers)
-
-    def test_generated_source_copies_do_not_hide_current_authored_launchers(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            category = root / LIT_TESTS
-            authored = (category / LIT_LAUNCH_PY, category / LIT_SMOKE / LIT_LAUNCH_PY, category / LIT_GROUP / LIT_LAUNCH_PY, category / LIT_GROUP / LIT_SOURCE / LIT_LAUNCH_PY)
-            generated = tuple(path for artifact in launcher.LAUNCHER_ARTIFACT_DIRECTORIES for path in (category / artifact / LIT_LAUNCH_PY, category / artifact / "frozen" / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
-                category / LIT_SMOKE / artifact / "old" / LIT_LAUNCH_PY))
-            for path in (*authored, *generated):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("", encoding=LIT_UTF_8)
-            generated_bytes = {path: path.read_bytes() for path in generated}
-
-            direct = LauncherDiscovery.discover_directory_launchers(Path(LIT_TESTS), root)
-            leaves = LauncherDiscovery.discover_repo_launchers(root)
-
-            self.assertEqual({LIT_SMOKE, LIT_GROUP}, set(direct))
-            self.assertEqual({LIT_SMOKE, LIT_SOURCE}, set(leaves))
-            self.assertEqual(Path(LIT_TESTS) / LIT_GROUP / LIT_SOURCE / LIT_LAUNCH_PY, leaves[LIT_SOURCE].script)
-            self.assertEqual(generated_bytes, {path: path.read_bytes() for path in generated})
-
-    def test_duplicate_launch_commands_are_rejected(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            for category in (root / LIT_TESTS, root / LIT_UTILITIES):
-                category.mkdir(parents=True)
-                (category / LIT_LAUNCH_PY).write_text("", encoding=LIT_UTF_8)
-            for path in (root / LIT_TESTS / LIT_SAME_NAME / LIT_LAUNCH_PY, root / LIT_UTILITIES / LIT_SAME_NAME / LIT_LAUNCH_PY,):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("", encoding=LIT_UTF_8)
-
-            with self.assertRaisesRegex(SystemExit, "duplicate launch command 'same-name'"):
-                LauncherDiscovery.discover_repo_launchers(root)
-
-    def test_category_with_leaf_launchers_requires_a_router(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            path = root / LIT_UTILITIES / LIT_TEX_CONV / LIT_LAUNCH_PY
-            path.parent.mkdir(parents=True)
-            path.write_text("", encoding=LIT_UTF_8)
-
-            with self.assertRaisesRegex(SystemExit, LIT_A + re.escape(f"missing category launcher: {Path(LIT_UTILITIES) / LIT_LAUNCH_PY}") + LIT_Z,):
-                LauncherDiscovery.discover_repo_launchers(root)
-
-    def test_nested_leaf_requires_an_intermediate_router(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            for path in (root / LIT_TESTS / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("", encoding=LIT_UTF_8)
-
-            with self.assertRaisesRegex(SystemExit, LIT_A + re.escape(f"missing directory launcher: {Path(LIT_TESTS) / LIT_AB / LIT_LAUNCH_PY}") + LIT_Z,):
-                LauncherDiscovery.discover_repo_launchers(root)
-
 
 class LauncherCmakeReadFailureTests(unittest.TestCase):
     def test_unreadable_cache_does_not_look_missing(self):
@@ -462,77 +138,11 @@ class LauncherCmakeReadFailureTests(unittest.TestCase):
             self.assertIsNone(CmakeSettings.read_cmake_cache_value(Path("build"), "NWB_OUTPUT_DOMAIN"))
 
     def test_unreadable_file_api_directory_does_not_look_missing(self):
-        with mock.patch("launcher.cmake_settings.os.scandir", side_effect=PermissionError("reply denied")):
+        with mock.patch("launcher.cmake_file_api.os.scandir", side_effect=PermissionError("reply denied")):
             with self.assertRaisesRegex(PermissionError, "reply denied"):
-                CmakeSettings.latest_file_api_index(Path("build"))
-        with mock.patch("launcher.cmake_settings.os.scandir", side_effect=FileNotFoundError):
-            self.assertIsNone(CmakeSettings.latest_file_api_index(Path("build")))
-
-
-class LauncherDiscoveryFailureTests(unittest.TestCase):
-    def test_failed_walk_and_directory_scan_do_not_return_partial_lists(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            search = root / LIT_TESTS
-            search.mkdir()
-
-            with mock.patch("launcher.discovery.os.scandir", side_effect=PermissionError("walk denied")):
-                with self.assertRaisesRegex(PermissionError, "walk denied"):
-                    LauncherDiscovery.discover_leaf_launchers(search, root)
-            with mock.patch("launcher.discovery.os.scandir", side_effect=PermissionError("scan denied")):
-                with self.assertRaisesRegex(PermissionError, "scan denied"):
-                    LauncherDiscovery.discover_directory_launchers(search, root)
-            self.assertEqual({}, LauncherDiscovery.discover_leaf_launchers(root / "missing", root))
-
-    def test_entry_type_failure_does_not_hide_a_subtree(self):
-        entry = mock.Mock()
-        entry.is_symlink.return_value = False
-        entry.is_dir.side_effect = PermissionError("entry denied")
-        scan = mock.MagicMock()
-        scan.__enter__.return_value = iter([entry])
-        with mock.patch("launcher.discovery.os.scandir", return_value=scan):
-            with self.assertRaisesRegex(PermissionError, "entry denied"):
-                LauncherDiscovery._launcher_scripts(Path("ignored"))
-
-    def test_ignored_artifacts_are_not_inspected(self):
-        entry = mock.Mock()
-        entry.name = next(iter(launcher.LAUNCHER_ARTIFACT_DIRECTORIES))
-        entry.is_dir.side_effect = PermissionError("artifact denied")
-        scan = mock.MagicMock()
-        scan.__enter__.return_value = iter([entry])
-        with mock.patch("launcher.discovery.os.scandir", return_value=scan):
-            self.assertEqual([], LauncherDiscovery._launcher_scripts(Path("ignored")))
-        entry.is_dir.assert_not_called()
-
-    def test_unrelated_directory_link_target_is_not_inspected(self):
-        entry = mock.Mock()
-        entry.name = "external"
-        entry.is_symlink.return_value = True
-        entry.is_dir.side_effect = PermissionError("link target denied")
-        scan = mock.MagicMock()
-        scan.__enter__.return_value = iter([entry])
-        with mock.patch("launcher.discovery.os.scandir", return_value=scan):
-            self.assertEqual([], LauncherDiscovery._launcher_scripts(Path("ignored")))
-        entry.is_dir.assert_not_called()
-
-    def test_launcher_symlink_is_kept_unless_it_points_to_a_directory(self):
-        for is_directory in (False, True):
-            entry = mock.Mock()
-            entry.name = LIT_LAUNCH_PY
-            entry.path = str(Path("ignored") / LIT_LAUNCH_PY)
-            entry.is_symlink.return_value = True
-            entry.is_dir.return_value = is_directory
-            scan = mock.MagicMock()
-            scan.__enter__.return_value = iter([entry])
-            with self.subTest(is_directory=is_directory), mock.patch("launcher.discovery.os.scandir", return_value=scan):
-                self.assertEqual([] if is_directory else [Path(entry.path)], LauncherDiscovery._launcher_scripts(Path("ignored")))
-
-    def test_inspection_errors_are_not_reported_as_absent(self):
-        with mock.patch.object(Path, "stat", side_effect=PermissionError("stat denied")):
-            with self.assertRaisesRegex(PermissionError, "stat denied"):
-                LauncherDiscovery._is_directory(Path("unreadable"))
-            with self.assertRaisesRegex(PermissionError, "stat denied"):
-                LauncherDiscovery._is_file(Path("unreadable"))
+                CmakeFileApi.latest_file_api_index(Path("build"))
+        with mock.patch("launcher.cmake_file_api.os.scandir", side_effect=FileNotFoundError):
+            self.assertIsNone(CmakeFileApi.latest_file_api_index(Path("build")))
 
 
 class LauncherDurationBoundaryTests(unittest.TestCase):
@@ -572,45 +182,6 @@ class LauncherDurationBoundaryTests(unittest.TestCase):
                 port.assert_not_called()
                 resolve.assert_not_called()
                 spawn.assert_not_called()
-
-
-class NameSymbolCaptureBoundaryTests(unittest.TestCase):
-    def test_stale_sidecar_cleanup_failure_blocks_workloads_and_preserves_publication(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            capture = root / "capture"
-            destination = root / "published"
-            capture.mkdir()
-            destination.mkdir()
-            stale = capture / "probe.namesym"
-            published = destination / stale.name
-            stale_bytes = b"stale source symbols"
-            published_bytes = b"previous valid symbols"
-            fresh_bytes = b"freshly captured symbols"
-            stale.write_bytes(stale_bytes)
-            published.write_bytes(published_bytes)
-            arguments = ["--source-dir", str(root), LIT_CONFIGURE_PRESET, LIT_UNUSED, "--build-preset", LIT_UNUSED, LIT_BUILD_DIR, str(root / LIT_BUILD), LIT_CONFIG, LIT_OPT,
-                "--buildmode-bin-dir", str(capture), "--dest", str(destination), "--run", "probe", LIT_SKIP_BUILD,]
-            removal_error = PermissionError("sidecar is locked")
-            with (mock.patch.object(generate_name_symbols.os, "remove", side_effect=removal_error) as remove, mock.patch.object(generate_name_symbols, LIT_RUN_WORKLOADS) as workloads,
-                mock.patch.object(generate_name_symbols, "collect_sidecars", wraps=generate_name_symbols.collect_sidecars) as collect, mock.patch.object(generate_name_symbols, LIT_LOG) as log,):
-                self.assertEqual(1, generate_name_symbols.main(arguments))
-                remove.assert_called_once_with(str(stale))
-                workloads.assert_not_called()
-                collect.assert_not_called()
-                log.assert_any_call(generate_name_symbols.MSG_STALE_REMOVE_FAIL.format(str(stale), removal_error))
-            self.assertEqual(stale_bytes, stale.read_bytes())
-            self.assertEqual(published_bytes, published.read_bytes())
-            self.assertEqual([published], list(destination.iterdir()))
-
-            def capture_fresh_sidecar(_arguments):
-                self.assertFalse(stale.exists())
-                stale.write_bytes(fresh_bytes)
-
-            with (mock.patch.object(generate_name_symbols, LIT_RUN_WORKLOADS, side_effect=capture_fresh_sidecar) as workloads, mock.patch.object(generate_name_symbols, LIT_LOG),):
-                self.assertEqual(0, generate_name_symbols.main(arguments))
-                workloads.assert_called_once()
-            self.assertEqual(fresh_bytes, published.read_bytes())
 
 
 if __name__ == LIT_MAIN:

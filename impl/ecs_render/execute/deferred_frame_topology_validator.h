@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/avboit/task_graph_stage.h>
+#include <impl/ecs_render/execute/types.adhd.h>
+
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererFramePipeline;
+struct FrameExecuteTimingState;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeferredFrameTopologyResult{
+    Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTasks;
+    usize graphicsPrefixUniquePacketCount = 0u;
+    RendererAvboitTaskGraphValidation avboitValidation;
+    Core::GpuTaskId terminalPresentationTask;
+    const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
+    const Core::GpuPhysicalQueueInfo* laggedLightingHistoryQueue = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredFrameTopologyValidator final : NoCopy{
+public:
+    explicit DeferredFrameTopologyValidator(const RendererFramePipeline& pipeline)noexcept
+        : m_pipeline(pipeline)
+    {}
+
+
+public:
+    [[nodiscard]] b8 validate(
+        const Core::GpuCompiledGraph::ReadView& deferredCompiledPlan,
+        const Core::GpuTaskGraph::DeclarationReadView& deferredTaskGraphView,
+        FrameExecuteTimingState& timing,
+        Core::GpuPhysicalQueueId primaryGraphicsQueue,
+        b8 deferredGraphScheduled,
+        b8 captureLaggedLightingHistory,
+        b8 hardwareShadowSupported,
+        b8 hasOpaqueCsgFrameWork,
+        b8 hasTransparentRenderers,
+        b8 clearAvboitTargets,
+        b8 laggedAsyncLightingSchedule,
+        b8 laggedLightingHistoryWriterWaitPending,
+        b8 surfelCounterReadbackCompletionValid,
+        DeferredFrameTopologyResult& outResult
+    )const noexcept;
+
+
+private:
+    const RendererFramePipeline& m_pipeline;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

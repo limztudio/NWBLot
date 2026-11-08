@@ -54,7 +54,7 @@ struct OpaqueIntervalReadiness{
     const b8 hasDeferredDrawItems = !readiness.opaqueDrawItems.empty();
     const b8 deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
     readiness.csgResourcesReady = deferredResourcesReady && (!readiness.csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(readiness.csgFrameData)));
-    readiness.csgReceiverSurfaceDrawResourcesReady = readiness.csgResourcesReady && (readiness.opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(readiness.opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
+    readiness.csgReceiverSurfaceDrawResourcesReady = readiness.csgResourcesReady && (readiness.opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.drawRecorder().materialPassDrawResourcesReady(readiness.opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
     return readiness;
 }
 
@@ -125,7 +125,7 @@ b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList&
     const __hidden_opaque_interval_tasks::OpaqueIntervalReadiness readiness = __hidden_opaque_interval_tasks::ResolveOpaqueIntervalReadiness(payload, materialSystem);
     const MaterialPassDrawItemPartitionsView& opaqueDrawItems = readiness.opaqueDrawItems;
     const CsgFrameGpuDataView& csgFrameData = readiness.csgFrameData;
-    const b8 csgDrawResourcesReady = readiness.csgResourcesReady && (opaqueDrawItems.csg.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg, payload.frameBindings));
+    const b8 csgDrawResourcesReady = readiness.csgResourcesReady && (opaqueDrawItems.csg.empty() || materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.csg, payload.frameBindings));
     const b8 csgReceiverSurfaceDrawResourcesReady = readiness.csgReceiverSurfaceDrawResourcesReady;
     // Retire the reservation on later disagreement; never leave it stale.
     if(payload.csgComputeEmulationOutputStatesGraphOwned && payload.opaqueCsgComputeEmulationTiming->has_value() && !csgDrawResourcesReady){
@@ -152,14 +152,14 @@ b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList&
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){
-                materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
                 payload.opaqueCsgComputeEmulationTiming->value().finishTiming(commandList);
                 payload.opaqueCsgComputeEmulationTiming->reset();
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, graphics.getDevice(), commandList);
 
-                materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
             }
         }
         if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)

@@ -9,6 +9,7 @@
 #include <core/crash/package_names.h>
 #include <core/global.h>
 
+#include <global/filesystem/executable_paths.h>
 #include <global/filesystem/operations.h>
 
 #include <gtest/gtest.h>
@@ -45,7 +46,7 @@ inline constexpr AStringView s_SpoolDirectoryName = "spool";
 
 
 [[nodiscard]] inline CrashTestPath CrashRootDirectory(Core::Alloc::GlobalArena& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
+    const auto executableDirectory = ExecutablePaths(arena).directory();
     if(executableDirectory)
         return *executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
 

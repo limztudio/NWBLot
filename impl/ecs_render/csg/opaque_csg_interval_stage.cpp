@@ -10,6 +10,7 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/csg/types.adhd.h>
 
 #include <core/common/log.h>
 
@@ -61,6 +62,37 @@ void OpaqueCsgIntervalStage::capturePayloads(
 Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const OpaqueCsgIntervalStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ObjectGeometryCacheGraph& objectGeometry){
     using namespace RendererTaskGraphDetail;
 
+    const Core::TextureSubresourceSet csgPeelSubresources(0u, 1u, 0u, inputs.targets.csgPeelLayerCount);
+    const Core::TextureSubresourceSet csgReceiverEventDataSubresources(0u, 1u, 0u, inputs.targets.csgReceiverEventLayerCount);
+    const Core::TextureSubresourceSet csgReceiverEventCountSubresources(0u, 1u, 0u, 1u);
+    const Core::TextureSubresourceSet csgReceiverSpanDataSubresources(0u, 1u, 0u, inputs.targets.csgReceiverSpanLayerCount);
+    const Core::TextureSubresourceSet csgReceiverSpanCountSubresources(0u, 1u, 0u, 1u);
+    Array<Core::GpuTaskResourceUse, s_CsgReceiverSpanResourceUseCapacity> csgReceiverSpanResourceUses = {};
+    usize csgReceiverSpanResourceUseCount = 0u;
+    Array<Core::GpuTaskResourceUse, s_CsgIntervalCombineResourceUseCapacity> csgIntervalCombineResourceUses = {};
+    usize csgIntervalCombineResourceUseCount = 0u;
+    csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(inputs.resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess);
+    csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(inputs.resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess);
+    if(inputs.hasCsgFrameGpuWork){
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
+    }
+    csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(inputs.resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
+    csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(inputs.resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(inputs.resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(inputs.resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(inputs.resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(inputs.resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(inputs.resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
+    if(inputs.hasCsgFrameGpuWork){
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
+    }
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(inputs.resources.csgRemovedIntervalDepth, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(inputs.resources.csgRemovedIntervalCapNormal, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(inputs.resources.csgRemovedIntervalData, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+    csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(inputs.resources.csgRemovedIntervalCount, inputs.removedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
+
     OpaqueCsgIntervalStageTasks tasks;
     Core::GpuGraphResourceSetId opaqueCsgIntervalSampleComputeEmulationOutputSet;
     Core::GpuTaskSchedulingHint csgReceiverSpanScheduling;
@@ -74,7 +106,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         .setMarkerLabel("Opaque CSG Receiver Span")
         .setScheduling(csgReceiverSpanScheduling)
         .setDependencies({ &inputs.dependencyTask, 1u })
-        .setResourceUses(inputs.receiverSpanResourceUses)
+        .setResourceUses({ csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUseCount })
     ;
     const auto receiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::CsgReceiverSpanBuildGraphTask >(csgReceiverSpanDesc, Move(m_receiverSpanPayload));
     if(!receiverSpanTaskResult){
@@ -95,7 +127,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         .setMarkerLabel("Opaque CSG Interval Combine")
         .setScheduling(csgIntervalCombineScheduling)
         .setDependencies({ &tasks.receiverSpanTask, 1u })
-        .setResourceUses(inputs.intervalCombineResourceUses)
+        .setResourceUses({ csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUseCount })
     ;
     const auto intervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::CsgIntervalCombineGraphTask >(csgIntervalCombineDesc, Move(m_intervalCombinePayload));
     if(!intervalCombineTaskResult){

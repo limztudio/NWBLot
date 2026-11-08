@@ -7,6 +7,7 @@
 
 #include "numeric_edit_snapshot.h"
 
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/edit/integer_model.h>
 #include <impl/ecs_ui/toolkit/edit/float_model.h>

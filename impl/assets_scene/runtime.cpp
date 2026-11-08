@@ -4,6 +4,8 @@
 
 #include "asset.h"
 
+#include <impl/assets_scene/scene_asset_binary_codec.adhd.h>
+
 #include <core/assets/auto_registration.h>
 
 
@@ -49,7 +51,7 @@ b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 b8 EntityAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
     Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    if(!DeserializeEntityAssetBinaryHashes(binary, componentHashes))
+    if(!SceneAssetBinaryCodec().deserializeEntity(binary, componentHashes))
         return false;
 
     auto& assetArena = m_components.get_allocator().arena();
@@ -73,7 +75,7 @@ b8 ProjectAsset::validatePayload()const{
 }
 
 b8 ProjectAsset::loadBinary(const Span<const u8> binary){
-    if(!DeserializeProjectAssetBinary(binary, m_startScene.virtualPath))
+    if(!SceneAssetBinaryCodec().deserializeProject(binary, m_startScene.virtualPath))
         return false;
     return validatePayload();
 }
@@ -101,7 +103,7 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
     Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
-    if(!DeserializeSceneAssetBinaryPayload(binary, subsystemHashes, entityHashes, assetEntries))
+    if(!SceneAssetBinaryCodec().deserializeScene(binary, subsystemHashes, entityHashes, assetEntries))
         return false;
 
     auto& assetArena = m_subsystems.get_allocator().arena();

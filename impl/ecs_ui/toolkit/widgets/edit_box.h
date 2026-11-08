@@ -6,8 +6,10 @@
 
 
 #include "edit_caret_geometry.h"
+#include <impl/ecs_ui/toolkit/widgets/edit_box_snapshot_builder.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd.h>
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
 
 
@@ -42,7 +44,7 @@ public:
 
 public:
     [[nodiscard]] b8 snapshot(const EditModel& model){
-        return CommitEditBoxSnapshot(
+        return EditBoxSnapshotBuilder{}.commit(
             model.text(),
             model.graphemeBoundaries(),
             model.composition(),

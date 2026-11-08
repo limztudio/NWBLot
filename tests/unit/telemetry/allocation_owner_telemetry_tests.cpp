@@ -12,6 +12,7 @@
 
 #include <logger/telemetry/report.h>
 
+#include <global/name_hash_text.h>
 #include <global/atomic.h>
 #include <global/text_utils.h>
 
@@ -120,8 +121,8 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
 }
 
 [[nodiscard]] static AStringView FindOwnerJsonRecord(const AStringView json, const Name& owner, const AStringView sourceField){
-    Array<char, s_DebugHashTextLength + 1u> identityText = {};
-    HashToDebugString(identityText.data(), sizeof(identityText), owner.hash());
+    Array<char, NameHashTextCodec::s_TextLength + 1u> identityText = {};
+    NameHashTextCodec::Format(identityText.data(), sizeof(identityText), owner.hash());
     usize cursor = json.find("\"memoryRecords\": [");
     while(cursor != AStringView::npos && cursor < json.size()){
         const usize nextLine = json.find('\n', cursor);
@@ -524,12 +525,12 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     const Name firstOwner(firstHash);
     const Name secondOwner(secondHash);
     const Name unknownOwner(unknownHash);
-    Array<char, s_DebugHashTextLength + 1u> firstHashText = {};
-    Array<char, s_DebugHashTextLength + 1u> secondHashText = {};
-    Array<char, s_DebugHashTextLength + 1u> unknownHashText = {};
-    HashToDebugString(firstHashText.data(), sizeof(firstHashText), firstHash);
-    HashToDebugString(secondHashText.data(), sizeof(secondHashText), secondHash);
-    HashToDebugString(unknownHashText.data(), sizeof(unknownHashText), unknownHash);
+    Array<char, NameHashTextCodec::s_TextLength + 1u> firstHashText = {};
+    Array<char, NameHashTextCodec::s_TextLength + 1u> secondHashText = {};
+    Array<char, NameHashTextCodec::s_TextLength + 1u> unknownHashText = {};
+    NameHashTextCodec::Format(firstHashText.data(), sizeof(firstHashText), firstHash);
+    NameHashTextCodec::Format(secondHashText.data(), sizeof(secondHashText), secondHash);
+    NameHashTextCodec::Format(unknownHashText.data(), sizeof(unknownHashText), unknownHash);
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());

@@ -334,6 +334,37 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     EXPECT_NE(newPage->binding().atlasIdentity, oldPage->binding().atlasIdentity);
 }
 
+TEST_F(TextFontTests, AtlasWrapsToNextRowWithoutChangingExistingGlyphs){
+    auto layoutResult = m_service.layout({ s_WideGlyphText });
+    ASSERT_TRUE(layoutResult);
+    m_layout = Move(*layoutResult);
+    ASSERT_FALSE(m_layout.glyphs().empty());
+    const PlacedGlyph& glyph = m_layout.glyphs()[0];
+    GlyphAtlas atlas(m_arena);
+    ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 24u));
+    const AtlasGlyph* first = atlas.find(glyph.face, glyph.glyphId, 24u);
+    ASSERT_NE(first, nullptr);
+    const Rect firstPixels = first->pixels;
+    b8 wrapped = false;
+    for(u32 size = 25u; size <= 120u; ++size){
+        ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, size));
+        const AtlasGlyph* record = atlas.find(glyph.face, glyph.glyphId, size);
+        ASSERT_NE(record, nullptr);
+        if(record->pageIndex == 0u && record->pixels.y > firstPixels.y){
+            EXPECT_FLOAT_EQ(record->pixels.x, 1.0f);
+            wrapped = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(wrapped);
+    first = atlas.find(glyph.face, glyph.glyphId, 24u);
+    ASSERT_NE(first, nullptr);
+    EXPECT_FLOAT_EQ(first->pixels.x, firstPixels.x);
+    EXPECT_FLOAT_EQ(first->pixels.y, firstPixels.y);
+    EXPECT_FLOAT_EQ(first->pixels.width, firstPixels.width);
+    EXPECT_FLOAT_EQ(first->pixels.height, firstPixels.height);
+}
+
 TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
     {
         auto layoutResult = m_service.layout({ s_WideGlyphText });

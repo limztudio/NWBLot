@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "swap_chain_surface_policy.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,68 +58,7 @@ DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(const R
     return DirectPresentTransitionPolicy::Invalid;
 }
 
-Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const Span<const VkSurfaceFormatKHR> supportedFormats, const Format::Enum requestedSdrFormat, const b8 hdr10Allowed)noexcept{
-    SwapChainSurfaceFormatSelection selection;
-    if(!supportedFormats.data() || supportedFormats.empty())
-        return MakeUnexpected(Failure{});
 
-    if(hdr10Allowed){
-        for(const VkSurfaceFormatKHR& supported : supportedFormats){
-            if(!SurfaceFormatSupports(supported, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT))
-                continue;
-
-            selection.surfaceFormat = supported;
-            selection.surfaceFormat.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT;
-            selection.backBufferFormat = Format::R10G10B10A2_UNORM;
-            selection.outputMode = SwapChainOutputMode::HDR10;
-            return selection;
-        }
-    }
-
-    struct SdrCandidate{
-        VkFormat format = VK_FORMAT_UNDEFINED;
-        Format::Enum rhiFormat = Format::UNKNOWN;
-    };
-    const VkFormat requestedVkFormat = VulkanDetail::ConvertFormat(requestedSdrFormat);
-    const Array<SdrCandidate, 3> candidates = {{
-        { requestedVkFormat, requestedSdrFormat },
-        // RGBA8/BGRA8 sRGB are interchangeable presentation fallbacks for the engine's default request.
-        { VK_FORMAT_B8G8R8A8_SRGB, Format::BGRA8_UNORM_SRGB },
-        { VK_FORMAT_R8G8B8A8_SRGB, Format::RGBA8_UNORM_SRGB },
-    }};
-    for(const SdrCandidate& candidate : candidates){
-        if(candidate.format == VK_FORMAT_UNDEFINED)
-            continue;
-        // Respect a caller's non-default SDR format. The two portable fallbacks are only for the engine default.
-        if(candidate.rhiFormat != requestedSdrFormat && requestedSdrFormat != Format::RGBA8_UNORM_SRGB && requestedSdrFormat != Format::BGRA8_UNORM_SRGB)
-            continue;
-
-        for(const VkSurfaceFormatKHR& supported : supportedFormats){
-            if(!SurfaceFormatSupports(supported, candidate.format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR))
-                continue;
-
-            selection.surfaceFormat = supported;
-            selection.surfaceFormat.format = candidate.format;
-            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-            selection.backBufferFormat = candidate.rhiFormat;
-            selection.outputMode = SwapChainOutputMode::SDR;
-            return selection;
-        }
-    }
-
-    return MakeUnexpected(Failure{});
-}
-
-VkExtent2D ResolveSwapChainSurfaceExtent(const VkSurfaceCapabilitiesKHR& surfaceCaps, const u32 requestedWidth, const u32 requestedHeight)noexcept{
-    if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX)
-        return surfaceCaps.currentExtent;
-
-    return VkExtent2D{
-        .width = Clamp(requestedWidth, surfaceCaps.minImageExtent.width, surfaceCaps.maxImageExtent.width),
-        .height = Clamp(requestedHeight, surfaceCaps.minImageExtent.height, surfaceCaps.maxImageExtent.height),
-    };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -229,7 +169,7 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const auto surfaceFormatSelection = VulkanDetail::SelectSurfaceFormat(surfaceFormats, requestedSdrFormat, hdr10Allowed);
+    const auto surfaceFormatSelection = SwapChainSurfacePolicy::selectFormat(surfaceFormats, requestedSdrFormat, hdr10Allowed);
     if(!surfaceFormatSelection){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
         return false;
@@ -261,7 +201,7 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
     }
 
-    const VkExtent2D extent = VulkanDetail::ResolveSwapChainSurfaceExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    const VkExtent2D extent = SwapChainSurfacePolicy::resolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     if(extent.width == 0 || extent.height == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
         return false;
@@ -284,49 +224,16 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const VkPresentModeKHR requestedPresentMode = m_swapChainState.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-    VkPresentModeKHR selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-    b8 requestedPresentModeFound = false;
-    b8 fifoPresentModeFound = false;
-    for(const auto& mode : presentModes){
-        if(mode == requestedPresentMode){
-            selectedPresentMode = requestedPresentMode;
-            requestedPresentModeFound = true;
-            break;
-        }
-        if(mode == VK_PRESENT_MODE_FIFO_KHR)
-            fifoPresentModeFound = true;
-    }
-    if(!requestedPresentModeFound && !fifoPresentModeFound){
-        if(presentModes.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
-            return false;
-        }
-        selectedPresentMode = presentModes[0];
+    const auto selectedPresentMode = SwapChainSurfacePolicy::selectPresentMode(presentModes, m_swapChainState.vsyncEnabled);
+    if(!selectedPresentMode){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
+        return false;
     }
 
-    u32 selectedImageCount = Max(m_deviceParams.swapChainBufferCount, surfaceCaps.minImageCount);
-    if(surfaceCaps.maxImageCount > 0)
-        selectedImageCount = Min(selectedImageCount, surfaceCaps.maxImageCount);
-
-    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfaceCaps.currentTransform;
-
-    VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    b8 compositeAlphaFound = false;
-    const Array<VkCompositeAlphaFlagBitsKHR, 4> compositeAlphaCandidates = {{
-        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
-    }};
-    for(const auto candidate : compositeAlphaCandidates){
-        if(surfaceCaps.supportedCompositeAlpha & candidate){
-            selectedCompositeAlpha = candidate;
-            compositeAlphaFound = true;
-            break;
-        }
-    }
-    if(!compositeAlphaFound){
+    const u32 selectedImageCount = SwapChainSurfacePolicy::imageCount(surfaceCaps, m_deviceParams.swapChainBufferCount);
+    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = SwapChainSurfacePolicy::preTransform(surfaceCaps);
+    const auto selectedCompositeAlpha = SwapChainSurfacePolicy::selectCompositeAlpha(surfaceCaps);
+    if(!selectedCompositeAlpha){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface supports no compatible composite alpha mode."));
         return false;
     }
@@ -366,8 +273,8 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<u32>(queueFamilyIndices.size()) : 0u;
     desc.pQueueFamilyIndices = enableSwapChainSharing ? queueFamilyIndices.data() : nullptr;
     desc.preTransform = selectedPreTransform;
-    desc.compositeAlpha = selectedCompositeAlpha;
-    desc.presentMode = selectedPresentMode;
+    desc.compositeAlpha = *selectedCompositeAlpha;
+    desc.presentMode = *selectedPresentMode;
     desc.clipped = VK_TRUE;
     desc.oldSwapchain = VK_NULL_HANDLE;
 
@@ -474,8 +381,8 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
            << "\n    color space: " << VulkanDetail::ColorSpaceToString(m_swapChainFormat.colorSpace)
            << " (" << static_cast<i32>(m_swapChainFormat.colorSpace) << ")"
            << "\n    output mode: " << (m_swapChainState.outputMode == SwapChainOutputMode::HDR10 ? "HDR10/PQ" : "SDR/sRGB")
-           << "\n    present mode: " << VulkanDetail::PresentModeToString(selectedPresentMode)
-           << " (" << static_cast<i32>(selectedPresentMode) << ")"
+           << "\n    present mode: " << VulkanDetail::PresentModeToString(*selectedPresentMode)
+           << " (" << static_cast<i32>(*selectedPresentMode) << ")"
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
            << "\n    created images: " << imageCount
            << "\n    mutable format: " << BoolToYesNoText(m_swapChainMutableFormatSupported)
@@ -510,7 +417,7 @@ void BackendContext::commitPreparedSwapChainDestruction()noexcept{
     resetDirectPresentCommandList();
 
     {
-        NothrowScopedLock presentationLock(m_framePresentationMutex);
+        NothrowScopedLock presentationLock(m_framePresentation.m_framePresentationMutex);
         resetFramePresentationSignal();
     }
     m_frameAcquired = false;

@@ -7,6 +7,7 @@
 
 #include "expected.h"
 #include "name_hash.h"
+#include "name_hash_text.h"
 #include "name_symbol.h"
 #include "optional.h"
 
@@ -142,7 +143,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        HashToDebugString(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
+        NameHashTextCodec::Format(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
 #endif
     }
     explicit constexpr Name(const NameText<char> text)
@@ -186,8 +187,8 @@ public:
             return text.substr(0u, text.find('\0'));
         }
 
-        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf.data(), s_DebugHashTextLength);
+        NameHashTextCodec::Format(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), NameHashTextCodec::s_TextLength);
 #endif
     }
 
@@ -204,7 +205,7 @@ public:
             return buf.data();
         }
 
-        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        NameHashTextCodec::Format(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
         return buf.data();
 #endif
     }
@@ -215,8 +216,8 @@ public:
         return AStringView(m_debugName.data());
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf.data(), s_DebugHashTextLength);
+        NameHashTextCodec::Format(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), NameHashTextCodec::s_TextLength);
 #endif
     }
 

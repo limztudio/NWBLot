@@ -54,8 +54,9 @@ b8 TryMoveRouterFocusForTraversal(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
     in b8 reverse,
-    mut Vector<PopupRecord> popups,
-    mut Vector<PopupDismissal> popupDismissals,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut PopupDismissRequest popupDismissRequest,
     mut Vector<CommandSource> commandSources,
     mut WidgetId inOutFocus,
     mut u64 inOutFocusDeclaration,
@@ -129,16 +130,18 @@ b8 TryMoveRouterFocusForTraversal(
         nextDeclaration = target.declarationGeneration;
         break;
     }
-    if(!TryDismissRouterPopup(PopupDismissReason::FocusTraversal, popups, popupDismissals))
+    const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::FocusTraversal);
+    if(!dismissal.has_value())
         return true;
-    PopupRecord closing = popups.back();
-    closing.restoreFocus = nextFocus;
-    closing.restoreDeclaration = nextDeclaration;
-    closing.restorePopup = parent;
-    popups[popups.size() - 1u] = closing;
+    popupDismissRequest = dismissal.value();
+    popupDismissRequest.restoreFocus = nextFocus;
+    popupDismissRequest.restoreDeclaration = nextDeclaration;
+    popupDismissRequest.restorePopup = parent;
+    popupDismissRequest.replaceRestore = true;
     outDismissedPopup = true;
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

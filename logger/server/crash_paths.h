@@ -10,6 +10,8 @@
 #include <core/alloc/scratch.h>
 #include <core/crash/package_names.h>
 
+#include <global/filesystem/executable_paths.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,11 +34,11 @@ inline constexpr StringView s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
 inline constexpr StringView s_ServerSymbolicationFileName = "server_symbolication.txt";
 
 [[nodiscard]] inline CrashScratchPath CrashDefaultRootDirectory(Core::Alloc::ScratchArena& arena){
-    return ResolveDefaultStorageDirectory(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
+    return ExecutablePaths(arena).defaultStorageDirectory(Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] inline CrashScratchPath CrashStorageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
-    return ResolveStorageDirectory(arena, configuredStorageDirectory, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
+    return ExecutablePaths(arena).storageDirectory(configuredStorageDirectory, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] inline CrashScratchPath CrashRawDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){

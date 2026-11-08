@@ -11,7 +11,10 @@
 #include "collision_sdf.h"
 #include "collision_aabb.h"
 #include "collision_triangle.h"
-#include "bounding_shape_decls.h"
+#include "bounding_sphere_types.h"
+#include "bounding_box_types.h"
+#include "bounding_oriented_box_types.h"
+#include "bounding_frustum_types.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

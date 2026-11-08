@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/global.h>
 #include <impl/ecs_ui/edit_types.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model_snapshot.h>

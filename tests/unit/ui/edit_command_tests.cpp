@@ -4,6 +4,7 @@
 
 #include "edit_fixture.h"
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/commands.h>
 #include <impl/ecs_ui/toolkit/input/bindings.h>
 

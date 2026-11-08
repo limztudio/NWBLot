@@ -139,11 +139,6 @@ inline b8 CookSingleMeshMeta(const AStringView metaText, const CookCase& cookCas
 }
 Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, AStringView assetDirectory, AStringView assetFilename);
 b8 CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, const CookCase& cookCase, TestArena& testArena);
-b8 CookMinimalMeshWithMaterialBind(const AStringView bindText, const CookCase& cookCase, TestArena& testArena);
-Expected<NWB::Impl::MaterialBindEntry> ParseMaterialBindFromText(const AStringView bindText, const Path& root, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena);
-#if defined(NWB_FINAL)
-[[nodiscard]] Expected<Path> EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
-#endif
 template<typename EntryT>
 Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena, NWB::Impl::ShaderCook& shaderCook){
     NWB::Core::Metascript::Document document(testArena.arena);
@@ -159,15 +154,9 @@ Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& te
     }
 }
 
-b8 WriteMaterialBindShaderProbeSource(TestArena& testArena, const Path& assetRoot, AStringView shaderAssetType, AStringView metaFilename, AStringView sourceFilename, const AStringView sourceText);
 
-b8 WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText);
 
-b8 CookMaterialBindMaterialIntegrationWithPixelSource(const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText, const CookCase& cookCase, TestArena& testArena);
 
-inline b8 CookMaterialBindMaterialIntegration(const AStringView bindText, const AStringView materialText, const CookCase& cookCase, TestArena& testArena){
-    return CookMaterialBindMaterialIntegrationWithPixelSource(bindText, materialText, s_MaterialBindShaderProbeSource, cookCase, testArena);
-}
 // Only volumes selecting graphics metadata or materials include a shader archive index.
 template<typename AssetCodecT>
 Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount, TestArena& testArena){
@@ -199,7 +188,6 @@ Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(const Path& outpu
 inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName){
     return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(outputDirectory, assetName, 0u, testArena);
 }
-Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadCookedShaderArchiveRecords(TestArena& testArena, const Path& outputDirectory);
 
 template<typename T>
 b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
@@ -219,7 +207,6 @@ b8 EncodeTestMeshletRefs(
     NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
 );
 [[nodiscard]] Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(Span<const u8> binary)noexcept;
-Expected<u64> FindShaderArchiveSourceChecksum(Span<const NWB::Core::ShaderArchive::Record> records, const Name shaderName, const Name stageName)noexcept;
 template<typename CodecT>
 void CheckCodecRejectsBinary(const CodecT& codec, const Name& virtualPath, const Span<const u8> binary, TestArena& testArena){
     EXPECT_FALSE(codec.deserialize(virtualPath, binary, testArena.arena));

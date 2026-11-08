@@ -2,7 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
 #include "type_checker.h"
+
+#include "type_comparator.h"
+#include "type_layout_analyzer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +59,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
             else{
                 const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
                 const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
-                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(IsIntegralOrBoolScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
+                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
                     reportError(errors, param.span, "non-type template parameter must have an integer, b8, enum, or flag value type");
                     ok = false;
                 }
@@ -65,7 +72,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
             const TypeRef* resolvedBound = m_symbols.unwrapTypeAlias(boundRef);
             const MStringView boundName = resolvedBound ? resolvedBound->name : boundRef->name;
             for(usize prevB = 0u; prevB < bIdx; ++prevB){
-                if(param.interfaceBounds[prevB] && AreTypeRefsEquivalent(param.interfaceBounds[prevB], boundRef, m_symbols)){
+                if(param.interfaceBounds[prevB] && TypeComparator(m_symbols).areEquivalent(param.interfaceBounds[prevB], boundRef)){
                     reportError(errors, param.span, "duplicate interface bound on template parameter");
                     ok = false;
                     break;
@@ -101,7 +108,7 @@ b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& re
     cleanReq.refMode = ParamPassingMode::None;
 
     if(cleanIface.name == cleanReq.name){
-        if(cleanReq.templateArgs.empty() || AreTypeRefsEquivalent(&cleanIface, &cleanReq, m_symbols))
+        if(cleanReq.templateArgs.empty() || TypeComparator(m_symbols).areEquivalent(&cleanIface, &cleanReq))
             return true;
     }
 
@@ -151,15 +158,15 @@ b8 TypeChecker::checkTemplateArgBounds(const Span<const TemplateParamDecl> param
             }
             const MStringView ctext = TrimView(arg.constantText);
             const MStringView paramConstBase = m_symbols.resolveBaseTypeName(param.constValueType->name);
-            const b8 isBoolLit = IsBoolLiteralText(ctext);
-            if(IsBoolScalarType(paramConstBase) && !isBoolLit && !HasConstValueTemplateParam(enclosingClass, enclosingMethod, ctext)){
+            const b8 isBoolLit = KeywordSemantics::IsBoolLiteralText(ctext);
+            if(BuiltinTypeSemantics::IsBoolScalarType(paramConstBase) && !isBoolLit && !HasConstValueTemplateParam(enclosingClass, enclosingMethod, ctext)){
                 const Stmt* gc = m_symbols.findGlobalConstant(ctext);
-                if(!gc || !gc->varType || !IsBoolScalarType(m_symbols.resolveBaseTypeName(gc->varType->name))){
+                if(!gc || !gc->varType || !BuiltinTypeSemantics::IsBoolScalarType(m_symbols.resolveBaseTypeName(gc->varType->name))){
                     reportError(errors, span, "expected boolean constant value argument for 'const b8' template parameter");
                     ok = false;
                 }
             }
-            else if(!IsBoolScalarType(paramConstBase) && isBoolLit){
+            else if(!BuiltinTypeSemantics::IsBoolScalarType(paramConstBase) && isBoolLit){
                 reportError(errors, span, "cannot pass boolean literal for non-'b8' template value parameter");
                 ok = false;
             }
@@ -306,7 +313,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
                 && NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols);
             if(validCapacity){
                 const MStringView capText = TrimView(typeRef.templateArgs[1].constantText);
-                if(IsBoolLiteralText(capText) || (!capText.empty() && capText[0] == '-') || IsValidScopedEnumTemplateArg(capText, m_symbols)){
+                if(KeywordSemantics::IsBoolLiteralText(capText) || (!capText.empty() && capText[0] == '-') || IsValidScopedEnumTemplateArg(capText, m_symbols)){
                     validCapacity = false;
                 }
                 else if(!HasConstValueTemplateParam(enclosingClass, enclosingMethod, capText)){
@@ -360,14 +367,14 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             if(allowsDirectSimdValueArg && argIdx == 0u){
                 if(unwrappedArg){
                     for(const TypeArg& nestedArg : unwrappedArg->templateArgs){
-                        if(nestedArg.type && TypeContainsSimdRegisterType(*nestedArg.type, m_symbols)){
+                        if(nestedArg.type && TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*nestedArg.type)){
                             invalidSimdHold = true;
                             break;
                         }
                     }
                 }
             }
-            else if(TypeContainsSimdRegisterType(*argType, m_symbols)){
+            else if(TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*argType)){
                 invalidSimdHold = true;
             }
             if(invalidSimdHold){

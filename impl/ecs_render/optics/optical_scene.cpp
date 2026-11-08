@@ -4,6 +4,9 @@
 
 #include "optical_scene.h"
 
+#include <impl/ecs_render/optics/optical_bounds_evaluator.adhd.h>
+#include <impl/ecs_render/optics/optical_scene_identity_builder.adhd.h>
+
 #include <impl/ecs_render/components.adhd.h>
 
 #include <global/hash_utils.h>
@@ -60,14 +63,14 @@ void RayTracingOpticalSceneGather::markIncomplete()noexcept{
 }
 
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
-    u64 hash = ComputeRayTracingOpticalSceneBaseHash(
+    u64 hash = OpticalSceneIdentityBuilder{}.baseHash(
         header,
         Span<const RayTracingOpticalInstanceGpu>(instances.data(), instances.size()),
         !runtimeBounds.empty(),
         boundsCompleteExceptRuntime
     );
     for(const auto& bounds : runtimeBounds)
-        hash = UpdateRayTracingOpticalRuntimeBoundsHash(hash, LoadFloat(bounds.objectToWorld), bounds.instanceIndex);
+        hash = OpticalSceneIdentityBuilder{}.updateRuntimeBounds(hash, LoadFloat(bounds.objectToWorld), bounds.instanceIndex);
     return hash;
 }
 
@@ -77,7 +80,7 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 
 Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
     OpticalWorldBounds bounds{};
-    if(!TryComputeOpticalWorldBounds(objectToWorld, localMin, localMax, bounds.minimum, bounds.maximum))
+    if(!OpticalBoundsEvaluator{}.computeWorldBounds(objectToWorld, localMin, localMax, bounds.minimum, bounds.maximum))
         return MakeUnexpected(Failure{});
     return bounds;
 }

@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "compiler_internal.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+class GpuTaskGraphOwnershipValidator{
+public:
+    [[nodiscard]] static b8 validateCompletionQueues(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology);
+    [[nodiscard]] static b8 validateInitialOwnership(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, Alloc::ScratchArena& scratchArena);
+};
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

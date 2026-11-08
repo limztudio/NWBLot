@@ -8,6 +8,7 @@
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
+#include <core/task/gpu/inferred_dependency_collector.h>
 
 #include <gtest/gtest.h>
 
@@ -373,6 +374,40 @@ TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicat
             EXPECT_TRUE(analysis.inferredEdges().empty());
         }
     }
+}
+
+TEST(GpuTaskGraphAnalysis, InferredReasonPromotionKeepsPriorReasonsAndExplicitPriority){
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(s_AnalysisScratchArena);
+    Core::GraphicsVector<Core::GpuTaskDependencyEdge> edges(testArena.arena);
+    Core::GraphicsVector<Core::GpuTaskDependencyEdge> inferred(testArena.arena);
+    usize explicitCount = 0u;
+    usize inferredCount = 0u;
+    usize versionCount = 0u;
+    Core::GpuInferredDependencyCollector collector(scratchArena, edges, inferred, explicitCount, inferredCount, versionCount);
+    collector.reserve(20u);
+    Core::GpuTaskDependencyEdge edge{};
+    edge.producer = { 1u, 0u };
+    edge.consumer = { 1u, 1u };
+    edge.hazard = Core::GpuTaskHazardType::ReadAfterWrite;
+    for(u32 index = 0u; index < 10u; ++index){
+        edge.resource = { 1u, index };
+        collector.appendInferred(edge);
+    }
+    for(u32 index = 0u; index < 10u; ++index){
+        edge.resource = { 1u, index };
+        collector.appendInferred(edge);
+    }
+    ASSERT_EQ(inferred.size(), 10u);
+    ASSERT_EQ(edges.size(), 1u);
+    EXPECT_EQ(inferredCount, 1u);
+    EXPECT_EQ(versionCount, 0u);
+    edge.resource = {};
+    edge.hazard = Core::GpuTaskHazardType::Explicit;
+    collector.appendRaw(edge);
+    EXPECT_EQ(edges.size(), 1u);
+    EXPECT_EQ(edges[0].hazard, Core::GpuTaskHazardType::Explicit);
+    EXPECT_EQ(explicitCount, 1u);
 }
 
 TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgePriority){

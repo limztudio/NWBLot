@@ -5,11 +5,11 @@
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
 
 
@@ -28,20 +28,6 @@ namespace __hidden_avboit_pass{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All)noexcept{
-    Core::BlendState::RenderTarget target;
-    target
-        .enableBlend()
-        .setSrcBlend(Core::BlendFactor::One)
-        .setDestBlend(Core::BlendFactor::One)
-        .setBlendOp(Core::BlendOp::Add)
-        .setSrcBlendAlpha(Core::BlendFactor::One)
-        .setDestBlendAlpha(Core::BlendFactor::One)
-        .setBlendOpAlpha(Core::BlendOp::Add)
-        .setColorWriteMask(colorWriteMask)
-    ;
-    return target;
-}
 
 static void DispatchAvboitCompute(const AvboitFrameTargets& targets, const u32 groupCountX, const b8 hdr10OutputActive, Core::CommandList& commandList, Core::ComputePipeline& pipeline, Core::GpuDescriptorHeap& heap){
     NWB_ASSERT(heap.isInitialized());
@@ -67,62 +53,6 @@ static void DispatchAvboitCompute(const AvboitFrameTargets& targets, const u32 g
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 2> s_Candidates = { Core::Format::RGBA16_FLOAT, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
-
-    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 5> s_Candidates = { Core::Format::R16_FLOAT, Core::Format::R32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
-
-    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 1> s_Candidates = { NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample | Core::FormatSupport::ShaderUavStore;
-
-    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 2> s_Candidates = { Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
-
-    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept{
-    Core::RenderState renderState;
-    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-    renderState.rasterState.enableDepthClip().setCullBack();
-    renderState.blendState.targets[0].setColorWriteMask(Core::ColorMask::None);
-    return renderState;
-}
-
-Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept{
-    Core::RenderState renderState;
-    renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
-    renderState.rasterState.enableDepthClip().setCullBack();
-    renderState.blendState
-        .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget())
-        .setRenderTarget(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget(Core::ColorMask::Red))
-        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget())
-        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget(Core::ColorMask::Red))
-    ;
-    return renderState;
-}
-
-Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept{
-    Core::RenderState renderState;
-    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
-    renderState.rasterState.enableDepthClip().setCullBack();
-    // Nearest fragment wins; no attachment blends.
-    return renderState;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,7 +98,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
 
     // The native step only consumes graph-owned data; never rebuild it.
     const b8 drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
-    const b8 receiverSurfaceDrawResourcesReady = m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
+    const b8 receiverSurfaceDrawResourcesReady = m_materialSystem.drawRecorder().materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
     if(!drawBuffersReady || !receiverSurfaceDrawResourcesReady){
         // Preserve the short interval; drop the unfinished reservation.
         if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
@@ -184,7 +114,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     m_csgSystem.dispatchCsgIntervalPeels(commandList, targets, csgFrameData, csgResources, frameBindings);
 
     const MaterialPassDrawContext csgReceiverSurfaceDrawContext{ commandList, targets.framebuffer.get(), nullptr, viewportState, &csgResources, frameBindings, MaterialPipelinePass::CsgReceiverSurface, true, materialGeometryStatesGraphOwned, false };
-    m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, receiverSurfaceDrawItems);
+    m_materialSystem.drawRecorder().renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, receiverSurfaceDrawItems);
 
     // Span and Combine are separate graph tasks; the aggregate endpoint remains open.
     if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))

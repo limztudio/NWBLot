@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -201,7 +202,7 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
         maximumLabel.y = Max(maximumLabel.y, textBounds->height);
         frame.m_labels.push_back({ Move(*label), *textBounds });
     }
-    if(!m_skin || !TryResolveRadioGroupStyleMetrics(*m_skin, frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
+    if(!m_skin || !ControlStyleMetrics().radioGroupMetrics(*m_skin, frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
     return radioGroupMatches(frame);
 }

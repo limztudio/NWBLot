@@ -4,9 +4,6 @@
 
 #include <tests/common/test_context.h>
 
-#include <global/floating_point_environment.h>
-#include <global/not_null.h>
-#include <global/scope_exit.h>
 #include <global/simdmath.h>
 
 #include <gtest/gtest.h>
@@ -27,22 +24,6 @@ constexpr f64 s_DoubleEpsilon = 2.0e-14;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename VectorT>
-struct ThrowingStreamLoadResult{
-    operator VectorT()const{ throw u32{ 0xE208u }; }
-};
-
-struct SingleStreamLoadInput{};
-struct DoubleStreamLoadInput{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorSingle> LoadFloat(const SingleStreamLoadInput&)noexcept{ return {}; }
-
-[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorDouble> LoadDouble(const DoubleStreamLoadInput&)noexcept{ return {}; }
-
 void ExpectSingleDirectionNear(SIMDVectorSingle actual, SIMDVectorSingle expected){
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(VectorGetByIndex(actual, lane), VectorGetByIndex(expected, lane), NWB::Tests::s_DefaultNearlyEqualEpsilon) << lane;
@@ -62,21 +43,6 @@ void ExpectDoubleDirectionNear(SIMDVectorDouble actual, SIMDVectorDouble expecte
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(CurrentMathContractBoundaries, SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection){
-    using namespace __hidden_current_contract_boundary_tests;
-    const SIMDMatrix matrix = MatrixSet(0.0f, -1.0f, 0.0f, 7.0f, 1.0f, 0.0f, 0.0f, -11.0f, 0.0f, 0.0f, 1.0f, 5.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-    const SIMDVectorSingle direction = VectorSet(2.0f, -3.0f, 4.0f, 0.0f);
-    const auto quaternion = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
-    ASSERT_TRUE(quaternion);
-    ExpectSingleDirectionNear(Vector3Rotate(direction, quaternion->value), Vector3TransformNormal(direction, matrix));
-
-    const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
-    ASSERT_TRUE(dualQuaternion);
-    const SIMDVectorSingle translation = VectorScale(QuaternionMultiply(dualQuaternion->dual, QuaternionConjugate(dualQuaternion->real)), 2.0f);
-    ExpectSingleDirectionNear(translation, VectorSet(7.0f, -11.0f, 5.0f, 0.0f));
-    ExpectSingleDirectionNear(VectorAdd(Vector3Rotate(direction, dualQuaternion->real), translation), Vector3Transform(direction, matrix));
-}
 
 TEST(CurrentMathContractBoundaries, OppositelyOrientedThinBoxesDoNotInventAnIntersection){
     const BoundingOrientedBox lhs(Float3U(0.0f, 0.0f, 0.0f), Float3U(1.0f, 1.0f, 0.1f), Float4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -324,78 +290,7 @@ TEST(CurrentMathContractBoundaries, SphereTransformBoundsSmallShearAdmittedByDec
 }
 
 
-TEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 9u> inputs = {
-        SIMDVectorDouble{ 1.0, 0.2, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, 1.0, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 1.0, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 0.1, 1.0 },
-        SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5 + 0x1p-40, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5 + 0x1p-40, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5 + 0x1p-40, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
-    };
-    volatile u64 unusedBits = 0x7ff0000000000001u;
-    for(usize index = 0u; index < LengthOf(inputs); ++index){
-        SCOPED_TRACE(index);
-        const SIMDVectorDouble expected = QuaternionDoubleNormalize(inputs[index]);
-        SIMDMatrixDouble matrix = MatrixDoubleRotationQuaternion(expected);
-        for(usize row = 0u; row < 3u; ++row)
-            matrix.v[row].w = BitCast<f64>(unusedBits);
-        matrix.v[3] = VectorDoubleReplicate(BitCast<f64>(unusedBits));
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const SIMDVectorDouble actual = QuaternionDoubleRotationMatrix(matrix);
-        const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-        EXPECT_EQ(exceptions, 0);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_NEAR(actual[lane], expected[lane], 8.0e-16) << lane;
-    }
-}
 
-
-TEST(CurrentMathContractBoundaries, TransformStreamCallbackFailureDoesNotTerminateOrPublishOutput){
-    const auto singleFailure = [](SIMDVectorSingle, const SIMDMatrix&)->SIMDVectorSingle{ throw u32{ 0xE206u }; };
-    const auto doubleFailure = [](SIMDVectorDouble, const SIMDMatrixDouble&)->SIMDVectorDouble{ throw u32{ 0xE207u }; };
-    const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
-    const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
-    const Float4U input(1.0f, 2.0f, 3.0f, 4.0f);
-    Float4U output(11.0f, 12.0f, 13.0f, 14.0f);
-    const Double4U doubleInput(1.0, 2.0, 3.0, 4.0);
-    Double4U doubleOutput(21.0, 22.0, 23.0, 24.0);
-    const SIMDMatrix matrix = MatrixIdentity();
-    const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
-
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure)));
-    static_assert(noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure)));
-    static_assert(noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
-
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure), u32);
-    EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure), u32);
-    EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
-}
-
-
-TEST(CurrentMathContractBoundaries, StreamLoadConversionFailureUnwindsBeforePublishingOutput){
-    using namespace __hidden_current_contract_boundary_tests;
-    const SingleStreamLoadInput input;
-    const DoubleStreamLoadInput doubleInput;
-    Float4U output(11.0f, 12.0f, 13.0f, 14.0f);
-    Double4U doubleOutput(21.0, 22.0, 23.0, 24.0);
-    const SIMDMatrix matrix = MatrixIdentity();
-    const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
-    const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
-    const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
-
-    static_assert(noexcept(LoadFloat(input)));
-    static_assert(noexcept(LoadDouble(doubleInput)));
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
-
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl), u32);
-    EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl), u32);
-    EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

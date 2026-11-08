@@ -139,67 +139,8 @@ bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel
     return true;
 }
 
-uint nwbLightSpaceBoundaryMode(const uint instance){
-    if(instance >= g_NwbSwShadowMaterialContextSlots.materialSlots.z)
-        return NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
-    return nwbHeapRawBuffer(g_NwbSwShadowMaterialContextSlots.materialSlots.y).Load(NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
-}
-
 #if NWB_LIGHT_SPACE_OCCLUDER != NWB_SW_SHADOW_OCCLUDER_OPAQUE
-// Mixed receivers integrate retained open surfaces independently of their closed solid and cap boundaries.
-void nwbLightSpaceIntegrateInstance(const uint pixelIndex, const uint end, const uint instance, const float receiverDepth, const uint4 csgRange, const bool closed, inout uint index, inout half3 opticalDepth, inout half interfaceProduct){
-    const bool csg = (csgRange.z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
-    half3 absorption = half3(0.0h);
-    half transmission = half(1.0h);
-    float chord = 0.0;
-    float start = 0.0;
-    float first = 0.0;
-    float last = 0.0;
-    uint crossings = 0u;
-    bool inside = false;
-    while(index < end){
-        const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, index);
-        if((event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance)
-            break;
-        ++index;
-        if(event.depth >= receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE)
-            continue;
-        if(csg && nwbCsgShadowEventClosed(csgRange, event.primitive) != closed)
-            continue;
-        const float distance = receiverDepth - event.depth;
-        uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? NWB_SHADOW_FACING_ENTERING : NWB_SHADOW_FACING_EXITING;
-        while(index < end){
-            const NwbLightSpaceEvent next = nwbLightSpaceLoadEvent(pixelIndex, index);
-            if((next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance || !nwbShadowCrossingMatchesEndpoint(distance, receiverDepth - next.depth))
-                break;
-            if(!csg || nwbCsgShadowEventClosed(csgRange, next.primitive) == closed)
-                facing |= (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? NWB_SHADOW_FACING_ENTERING : NWB_SHADOW_FACING_EXITING;
-            ++index;
-        }
-        if(closed && facing == NWB_SHADOW_FACING_BOTH)
-            continue;
-        if(crossings == 0u){
-            absorption = half3(half(f16tof32(event.absorptionRG & NWB_HALF_BITS_MASK)), half(f16tof32(event.absorptionRG >> NWB_HALF_BIT_COUNT)), half(f16tof32(event.absorptionBInterface & NWB_HALF_BITS_MASK)));
-            first = distance;
-            if(closed && facing == NWB_SHADOW_FACING_EXITING)
-                inside = true;
-        }
-        last = distance;
-        transmission *= half(f16tof32(event.absorptionBInterface >> NWB_HALF_BIT_COUNT));
-        if(inside)
-            chord += max(distance - start, 0.0);
-        else
-            start = distance;
-        inside = !inside;
-        ++crossings;
-    }
-    if(closed && inside)
-        chord += max(receiverDepth - start, 0.0);
-    else if(!closed && (crossings & 1u) != 0u)
-        chord = crossings > 1u ? max(last - first, 0.0) : 0.0;
-    opticalDepth += half3(float3(absorption) * chord);
-    interfaceProduct *= lerp(half(1.0h), transmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord)));
-}
+#include "light_space_optical_integration.slangi"
 #endif
 
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, const float projectedDepth, out half3 visibility){
@@ -218,38 +159,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
     visibility = depth < projectedDepth || csgBlocked ? half3(0.0h) : half3(1.0h);
     return true;
 #else
-    const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
-    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
-    if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
-        return false;
-    // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.
-    for(uint record = 0u; record < count; ++record){
-        const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, record);
-        if(!isfinite(event.depth) || (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) >= g_NwbLightSpacePush.instanceCount)
-            return false;
-    }
-    // Bounded (0, 1) transmittance math stays half; depth/distance/chord geometry remains float.
-    half3 opticalDepth = half3(0.0h);
-    half interfaceProduct = half(1.0h);
-    uint index = 0u;
-    while(index < count){
-        const NwbLightSpaceEvent firstEvent = nwbLightSpaceLoadEvent(pixelIndex, index);
-        const uint instance = firstEvent.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
-        const uint4 csgRange = nwbCsgShadowRange(instance);
-        if((csgRange.z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u){
-            const uint begin = index;
-            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, receiverDepth, csgRange, true, index, opticalDepth, interfaceProduct);
-            uint openIndex = begin;
-            nwbLightSpaceIntegrateInstance(pixelIndex, index, instance, receiverDepth, csgRange, false, openIndex, opticalDepth, interfaceProduct);
-        }
-        else{
-            const uint mode = nwbLightSpaceBoundaryMode(instance);
-            const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
-            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, receiverDepth, csgRange, closed, index, opticalDepth, interfaceProduct);
-        }
-    }
-    visibility = saturate(interfaceProduct * exp(-opticalDepth));
-    return all(isfinite(visibility));
+    return NwbLightSpaceOpticalIntegration.sample(view, pixel, receiverDepth, visibility);
 #endif
 }
 

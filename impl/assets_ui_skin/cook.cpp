@@ -10,6 +10,9 @@
 
 #include "cook.h"
 
+#include <impl/assets_ui_skin/validation.adhd.h>
+#include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
+
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -31,7 +34,7 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!skin.validatePayload())
         return false;
 
-    return SerializeUiSkinBinaryPayload(
+    return UiSkinBinaryCodec().serialize(
         skin.texture(),
         skin.atlasWidth(),
         skin.atlasHeight(),

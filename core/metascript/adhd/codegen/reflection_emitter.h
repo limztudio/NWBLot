@@ -34,8 +34,6 @@ public:
 private:
     void emitClassReflectionMembers(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> fields, b8 inlineBodies)const;
     void emitAssetDependencyMethods(MString& out, Span<const FieldDecl* const> fields)const;
-    void emitDeserializeNwbMethod(MString& out, Span<const FieldDecl* const> fields)const;
-    void emitExtractNwbAssetDependenciesMethod(MString& out, Span<const FieldDecl* const> fields)const;
 
 
 private:

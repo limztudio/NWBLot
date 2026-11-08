@@ -5,6 +5,7 @@
 #include "prepared_scene_bvh_upload.h"
 
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/raytrace/scene_bvh_upload_policy.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
 
@@ -43,7 +44,7 @@ b8 PreparedSceneBvhUpload::capture(
     if(nodeCount == 0u || instanceCount == 0u || !validStorage)
         return false;
 
-    CaptureSceneBvhUploadBytes(nodes, instances, m_nodeBytes, m_instanceBytes);
+    SceneBvhUploadPolicy().captureBytes(nodes, instances, m_nodeBytes, m_instanceBytes);
     m_nodeBuffer = state.m_sceneBvhNodeBuffer;
     m_instanceBuffer = state.m_sceneInstanceBuffer;
     m_nodeHeapHandle = state.m_sceneBvhNodeHeapHandle;
@@ -106,7 +107,7 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
     if(!m_ready)
         return result;
 
-    if(!ValidatePreparedSceneBvhRetainState(
+    if(!SceneBvhUploadPolicy().validateRetainState(
         storageMatches(state),
         StorageReady(state, m_nodeCount, m_instanceCount),
         m_uploadRequired,
@@ -134,7 +135,7 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
 }
 
 b8 PreparedSceneBvhUpload::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
-    return PublishAcceptedSceneBvhUpload(
+    return SceneBvhUploadPolicy().publishAcceptedUpload(
         m_ready,
         m_uploadRequired,
         m_static,
@@ -156,7 +157,7 @@ b8 PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state)c
 }
 
 b8 PreparedSceneBvhUpload::snapshotAccepted(const RendererRayTracingState& state)const noexcept{
-    return IsPreparedSceneBvhSnapshotAccepted(
+    return SceneBvhUploadPolicy().snapshotAccepted(
         m_uploadRequired,
         m_static,
         state.m_sceneSwBvhStaticSceneHashValid,

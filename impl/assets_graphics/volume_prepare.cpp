@@ -12,9 +12,13 @@
 
 #include <impl/assets_csg/asset.h>
 #include <impl/assets_csg/cook.h>
+#include <impl/assets_csg/shape_module_writer.h>
+#include <impl/assets_material/material_shadow_dispatch.h>
+#include <impl/assets_material/material_avboit_shader_generator.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_subsystem/cook.h>
 
+#include <core/assets/asset_file_discovery.h>
 #include <core/assets/volume/volume_prepare_registry.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -165,7 +169,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 }
 
 static b8 ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& inOutGraphicsMetadata){
-    const auto bindFiles = Core::Assets::DiscoverFilesWithExtension(context.resolvedPaths.assetRoots, s_MaterialBindSourceExtensionText, context.arena, context.scratchArena);
+    const auto bindFiles = Core::Assets::AssetFileDiscovery::discover(context.resolvedPaths.assetRoots, s_MaterialBindSourceExtensionText, context.arena, context.scratchArena);
     if(!bindFiles)
         return false;
 
@@ -236,7 +240,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
             return false;
     }
 
-    auto csgShapeIncludeRootResult = AssetsCsgCook::EmitCsgShapeModuleIncludes(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.csgShapeEntries, context.scratchArena);
+    auto csgShapeIncludeRootResult = AssetsCsgCook::CsgShapeModuleWriter().emit(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.csgShapeEntries, context.scratchArena);
     if(!csgShapeIncludeRootResult)
         return false;
     Path& csgShapeIncludeRoot = *csgShapeIncludeRootResult;
@@ -260,7 +264,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
     const Path& deferredBxdfIncludeRoot = *deferredBxdfIncludeRootResult;
 
     // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
-    auto shadowSurfaceIncludeRootResult = EmitShadowSurfaceDispatchModule(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena);
+    auto shadowSurfaceIncludeRootResult = ShadowSurfaceDispatchGenerator().emit(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena);
     if(!shadowSurfaceIncludeRootResult)
         return false;
     const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
@@ -278,16 +282,16 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         return false;
 
     // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitAccumulatePixelShadersResult = MaterialAvboitShaderGenerator::emitAccumulate(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitAccumulatePixelShadersResult)
         return false;
 
     // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitOccupancyPixelShadersResult = MaterialAvboitShaderGenerator::emitOccupancy(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitOccupancyPixelShadersResult)
         return false;
 
-    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitExtinctionPixelShadersResult = MaterialAvboitShaderGenerator::emitExtinction(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
@@ -343,7 +347,6 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         materialEntries,
         context.arena,
         context.scratchArena,
-        graphicsMetadata.shaderCook,
         graphicsMetadata.shaderEntries
     );
     if(!preparedPlan)
@@ -363,7 +366,6 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
             metadata.preparedPlan.preparedEntries,
             context.arena,
             writeScratchArena,
-            metadata.shaderCook,
             manifest,
             seenVirtualPathHashes
         );

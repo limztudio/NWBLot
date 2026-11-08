@@ -4,6 +4,8 @@
 
 #include "optical_scene_upload.h"
 
+#include <impl/ecs_render/optics/optical_scene_binary_codec.adhd.h>
+
 #include <core/graphics/backend_selection/backend.h>
 
 
@@ -19,7 +21,7 @@ NWB_IMPL_BEGIN
 RayTracingOpticalSceneUpload::RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather)
     : bytes(arena)
 {
-    SerializeRayTracingOpticalSceneGatherBytes(
+    OpticalSceneBinaryCodec{}.serialize(
         gather.header,
         Span<const RayTracingOpticalInstanceGpu>(gather.instances.data(), gather.instances.size()),
         bytes,

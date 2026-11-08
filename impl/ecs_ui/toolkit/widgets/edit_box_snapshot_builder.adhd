@@ -1,0 +1,159 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_box_style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditBoxSnapshotBuilder{
+    private b8 resolveSizes(
+        in usize committedBytes,
+        in EditCompositionView composition,
+        mut usize outReplaced,
+        mut usize outPreeditBytes,
+        mut usize outDisplayBytes
+    )const{
+        outReplaced = 0u;
+        outPreeditBytes = 0u;
+        outDisplayBytes = 0u;
+        if(composition.active){
+            outReplaced = composition.replacementEnd - composition.replacementStart;
+            outPreeditBytes = composition.text.size();
+        }
+        if(committedBytes > s_TextMaxBytes || outPreeditBytes > s_TextMaxBytes - (committedBytes - outReplaced))
+            return false;
+        outDisplayBytes = (committedBytes - outReplaced) + outPreeditBytes;
+        return true;
+    }
+
+    private EditCaretMapping makeCaretMapping(in usize committedByte, in usize displayByte)const{
+        EditCaretMapping item;
+        item.committedByte = committedByte;
+        item.displayByte = displayByte;
+        return item;
+    }
+
+    private b8 buildInto(
+        in StringView committed,
+        in Span<usize> graphemeBoundaries,
+        in EditCompositionView composition,
+        in EditTextMode textMode,
+        mut String outDisplay,
+        mut Vector<EditCaretMapping> outStops,
+        mut usize outPreeditBytes
+    )const{
+        usize replaced = 0u;
+        usize preeditBytes = 0u;
+        usize displayBytes = 0u;
+        if(!this.resolveSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
+            return false;
+        outDisplay.clear();
+        outDisplay.reserve(displayBytes);
+        if(composition.active){
+            outDisplay.append(committed.substr(0u, composition.replacementStart));
+            if(preeditBytes != 0u)
+                outDisplay.append(composition.text.substr(0u, preeditBytes));
+            outDisplay.append(committed.substr(composition.replacementEnd, committed.size() - composition.replacementEnd));
+        }
+        else if(!committed.empty())
+            outDisplay.assign(committed);
+        if(!ValidateEditTextForMode(outDisplay, textMode))
+            return false;
+        outStops.clear();
+        outStops.reserve(graphemeBoundaries.size() + 1u);
+        for(in usize boundary : graphemeBoundaries){
+            if(!composition.active || boundary <= composition.replacementStart)
+                outStops.push_back(this.makeCaretMapping(boundary, boundary));
+            if(composition.active && boundary >= composition.replacementEnd)
+                outStops.push_back(this.makeCaretMapping(boundary, boundary - replaced + preeditBytes));
+        }
+        outPreeditBytes = preeditBytes;
+        return true;
+    }
+
+    private void resolveRanges(
+        in EditCompositionView composition,
+        in usize preeditBytes,
+        in usize modelSelectionStart,
+        in usize modelSelectionEnd,
+        in usize modelCaret,
+        mut EditBoxRange outPreedit,
+        mut EditBoxRange outReplacement,
+        mut EditBoxRange outSelection,
+        mut usize outCaret
+    )const{
+        outPreedit = EditBoxRange();
+        outReplacement = EditBoxRange();
+        outSelection = EditBoxRange();
+        outCaret = modelCaret;
+        if(composition.active){
+            outPreedit.begin = composition.replacementStart;
+            outPreedit.end = composition.replacementStart + preeditBytes;
+            outReplacement.begin = composition.replacementStart;
+            outReplacement.end = composition.replacementEnd;
+            outSelection.begin = outPreedit.begin + min(composition.anchor, composition.caret);
+            outSelection.end = outPreedit.begin + max(composition.anchor, composition.caret);
+            outCaret = outPreedit.begin + composition.caret;
+        }
+        else{
+            outSelection.begin = modelSelectionStart;
+            outSelection.end = modelSelectionEnd;
+        }
+    }
+
+    public b8 commit(
+        in StringView committed,
+        in Span<usize> graphemeBoundaries,
+        in EditCompositionView composition,
+        in EditTextMode textMode,
+        in usize selectionStart,
+        in usize selectionEnd,
+        in usize modelCaret,
+        in u64 modelRevision,
+        mut String outDisplay,
+        mut Vector<EditCaretMapping> outMapping,
+        mut EditBoxRange outSelection,
+        mut EditBoxRange outPreedit,
+        mut EditBoxRange outReplacement,
+        mut usize outCaret,
+        mut usize outCommittedBytes,
+        mut u64 outRevision,
+        mut EditTextMode outTextMode,
+        mut b8 outComposing,
+        mut b8 outReady
+    )const{
+        String display;
+        Vector<EditCaretMapping> stops;
+        usize preeditBytes = 0u;
+        if(!this.buildInto(committed, graphemeBoundaries, composition, textMode, display, stops, preeditBytes))
+            return false;
+        outDisplay.assign(display);
+        outMapping.clear();
+        outMapping.reserve(stops.size());
+        for(in EditCaretMapping stop : stops)
+            outMapping.push_back(stop);
+        outComposing = composition.active;
+        this.resolveRanges(
+            composition,
+            preeditBytes,
+            selectionStart,
+            selectionEnd,
+            modelCaret,
+            outPreedit,
+            outReplacement,
+            outSelection,
+            outCaret
+        );
+        outCommittedBytes = committed.size();
+        outRevision = modelRevision;
+        outTextMode = textMode;
+        outReady = false;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,8 @@
 
 
 #include "renderer.h"
+#include "image_cache.h"
+#include "sampled_texture_resources.h"
 
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
@@ -65,22 +67,7 @@ inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxImages + s_GpuRasterFixedResourceUses>;
 using GpuSampledGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
-
-struct GpuSampledTextureImportDesc{
-    Name readyPrefix;
-    AStringView readyMarkerLabel;
-    TStringView completionLabel;
-    Core::QueueSubmissionToken readinessToken;
-    Name texturePrefix;
-    AStringView textureMarkerLabel;
-    Core::TextureHandle texture;
-    usize index = 0u;
-};
-
-template<typename T>
-using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
 
 template<typename T, typename... Args>
 [[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<RefCounter<T>, Args...>()){
@@ -90,22 +77,8 @@ template<typename T, typename... Args>
     return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-struct GpuPageTextureUploadDesc{
-    Name name;
-    const void* data = nullptr;
-    usize dataSize = 0u;
-    usize rowPitch = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    Core::Format::Enum format = Core::Format::UNKNOWN;
-};
-
 void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
-[[nodiscard]] b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
-[[nodiscard]] b8 CreateAndUploadGpuPageTexture(Core::GraphicsRuntime& graphics, const GpuPageTextureUploadDesc& desc, Core::TextureHandle& outTexture, Core::QueueSubmissionToken& outReadinessToken);
 [[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
-[[nodiscard]] Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpuSampledTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -145,9 +118,6 @@ public:
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
 };
-
-using GpuGlyphVersion = GpuPageVersion<SharedGlyphPage>;
-using GpuSdfAtlasVersion = GpuPageVersion<SharedSdfAtlasPage>;
 
 class GpuTextureImageVersion : NoCopy{
 public:
@@ -336,9 +306,6 @@ public:
 class GpuRendererState final : NoCopy{
 public:
     [[nodiscard]] static b8 MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
-    [[nodiscard]] static b8 ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static b8 ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static b8 ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
 
 
 public:
@@ -348,17 +315,6 @@ public:
 public:
     [[nodiscard]] b8 createResources();
     [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> createTarget(u32 width, u32 height);
-    [[nodiscard]] Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(const SharedGlyphPage& page);
-    [[nodiscard]] b8 prepareGlyphPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSampledGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page);
-    [[nodiscard]] b8 prepareSdfPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSampledGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(const SharedImageSource& source);
-    [[nodiscard]] b8 prepareTextureImages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSampledGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    void trimImageCache(const DrawSnapshot& snapshot);
-    void evictImageCacheEntry()noexcept;
     [[nodiscard]] b8 prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] b8 prepareOutputPipeline(const Core::FramebufferInfo& info);
     [[nodiscard]] b8 prepare(const Core::AcquiredPresentationFrame& acquired);
@@ -374,9 +330,7 @@ public:
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     GpuVersion<GpuSharedResources> m_resources;
     GpuVersion<GpuSkinVersion> m_skin;
-    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
-    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
-    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
+    GpuImageCache m_imageCache;
     Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
     Array<GpuFrame, s_GpuFrameCount> m_frames;
     GpuFrame m_pending;

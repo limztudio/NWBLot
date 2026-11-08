@@ -12,6 +12,8 @@
 #include <core/task/cpu/scheduler.h>
 
 #include "swap_chain_presentation.h"
+#include "frame_presentation_coordinator.h"
+#include "swap_chain_lifecycle.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,6 +26,8 @@ NWB_VULKAN_BEGIN
 
 
 class BackendContext final{
+    friend class SwapChainLifecycle;
+    friend class FramePresentationCoordinator;
 private:
     struct ExtensionNameHasher{
         using is_transparent = void;
@@ -91,31 +95,6 @@ private:
 
 private:
     using AcquireSyncSlotVector = GraphicsVector<AcquireSyncSlot>;
-
-
-private:
-    struct FramePresentationSignalState{
-        enum Enum : u8{
-            Idle,
-            Claimed,
-            Queued,
-            Rejected,
-            Accepted,
-            Failed,
-            Retiring,
-        };
-    };
-    struct SwapChainLifecycleState{
-        enum Enum : u8{
-            Ready,
-            RetiringPresentation,
-            Preparing,
-            PreparedResize,
-            PreparedDestroy,
-            NeedsDestroy,
-            Destroyed,
-        };
-    };
 
 
 private:
@@ -229,7 +208,6 @@ private:
         i32 secondaryTransferQueueFamily
     );
     b8 createVulkanSwapChain(Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 createSwapChainResources(Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 prepareSwapChainImageRevocation();
     void commitPreparedSwapChainDestruction()noexcept;
     [[nodiscard]] b8 destroySwapChainAfterCreateFailure();
@@ -248,7 +226,6 @@ private:
     [[nodiscard]] b8 replaceFramePresentationSemaphoreAfterIdle();
     void resetFramePresentationSignal()noexcept;
     [[nodiscard]] b8 cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* claim, UniqueLock<Futex>& lifecycleLock);
-    [[nodiscard]] b8 validPreparedTicket(const SwapChainTransitionTicket& ticket, SwapChainTransitionKind::Enum kind)const noexcept;
 
 
 private:
@@ -298,33 +275,18 @@ private:
     // Created once with swap-chain resources and reopened per use; present() never creates a command list so the frame path stays allocation-free.
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
-    GpuPhysicalQueueId m_framePresentationQueue;
-    VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
-    QueueSubmissionToken m_framePresentationSubmission;
-    u64 m_nextFramePresentationClaimIdentity = 0u;
-    u64 m_framePresentationClaimIdentity = 0u;
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
     u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSyncSlotIndex = 0u;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
-    u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
-    Futex m_swapChainLifecycleMutex;
-    // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
-    // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
-    Futex m_framePresentationMutex;
-    u64 m_swapChainLifecycleEpoch = 0u;
-    ConditionVariableAny m_framePresentationCondition;
-    b8 m_framePresentationClaimIdentityExhausted = false;
+    SwapChainLifecycle m_swapChainLifecycle;
+    FramePresentationCoordinator m_framePresentation;
     b8 m_frameAcquired = false;
     b8 m_frameAbandonmentComplete = false;
-    FramePresentationSignalState::Enum m_framePresentationSignalState = FramePresentationSignalState::Idle;
-    SwapChainLifecycleState::Enum m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    b8 m_lifecycleDrainActive = false;
     b8 m_swapChainMutableFormatSupported = false;
     b8 m_hdr10ColorSpaceExtensionEnabled = false;
-    b8 m_framePresentationClaimsEnabled = true;
     b8 m_bufferDeviceAddressSupported = false;
     b8 m_hostQueryResetFeatureEnabled = false;
     b8 m_textureCompressionBcFeatureEnabled = false;

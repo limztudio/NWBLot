@@ -17,6 +17,7 @@ from launcher import constants as launcher
 from launcher.build import BuildController
 from launcher.cli import LauncherCli
 from launcher.cmake_settings import CmakeSettings
+from launcher.cmake_file_api import CmakeFileApi
 from launcher.dispatch import DispatchRouter
 from launcher.host import HostProbe
 from launcher.models import LaunchSettings
@@ -92,7 +93,7 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         self.output = output_patch.start()
         self.addCleanup(output_patch.stop)
         for owner, operation, options in ((CmakeSettings, LIT_CMAKE_COMMAND, {LIT_RETURN_VALUE: (LIT_CMAKE_EXECUTABLE,)}), (HostProbe, LIT_HOST_PLATFORM_NAME, {LIT_RETURN_VALUE: LIT_WINDOWS}), (HostProbe, "host_arch_name", {LIT_RETURN_VALUE: LIT_ARM64}),
-            (CmakeSettings, LIT_ENSURE_FILE_API_QUERY, {"wraps": CmakeSettings.ensure_file_api_query}), (subprocess, LIT_RUN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
+            (CmakeFileApi, LIT_ENSURE_FILE_API_QUERY, {"wraps": CmakeFileApi.ensure_file_api_query}), (subprocess, LIT_RUN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
             patcher = mock.patch.object(owner, operation, **options)
             result = patcher.start()
             self.addCleanup(patcher.stop)

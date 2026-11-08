@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "texture_image_policy.h"
+#include "texture_shape_policy.h"
 #include "selected_texture_copy_contract.h"
+#include "texture_transfer_layout.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +36,7 @@ namespace VulkanTextureDetail{
 
 Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept{
     TextureCopyContract contract{};
-    if(!IsTextureDescShapeValid(sourceDesc) || !IsTextureDescShapeValid(destinationDesc))
+    if(!TextureShapePolicy::isValid(sourceDesc) || !TextureShapePolicy::isValid(destinationDesc))
         return MakeUnexpected(Failure{});
 
     if(
@@ -52,8 +55,8 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     const auto formatLayout = VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(sourceDesc.format));
     if(!formatLayout)
         return MakeUnexpected(Failure{});
-    const auto resolvedSource = VulkanDetail::ResolveTextureSlice(sourceDesc, sourceSlice, *formatLayout);
-    const auto resolvedDestination = VulkanDetail::ResolveTextureSlice(destinationDesc, destinationSlice, *formatLayout);
+    const auto resolvedSource = VulkanDetail::TextureTransferLayout::resolveSlice(sourceDesc, sourceSlice, *formatLayout);
+    const auto resolvedDestination = VulkanDetail::TextureTransferLayout::resolveSlice(destinationDesc, destinationSlice, *formatLayout);
     if(!resolvedSource || !resolvedDestination)
         return MakeUnexpected(Failure{});
     contract.sourceSlice = *resolvedSource;
@@ -62,8 +65,8 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     if(sourceDesc.sampleCount != 1u){
         if(
             *sourceImageType != VK_IMAGE_TYPE_2D
-            || (PickImageFlags(sourceDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
-            || (PickImageFlags(destinationDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
+            || (TextureImagePolicy::pickImageFlags(sourceDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
+            || (TextureImagePolicy::pickImageFlags(destinationDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
             || sourceDesc.mipLevels != 1u
             || destinationDesc.mipLevels != 1u
             || formatLayout->blockWidth != 1u

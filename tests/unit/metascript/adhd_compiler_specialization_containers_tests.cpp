@@ -4,6 +4,9 @@
 
 #include "adhd_compiler_test_common.h"
 
+#include <core/metascript/adhd/ast/ast_common.h>
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -189,9 +192,9 @@ TEST(AdhdCompiler, ByteBuiltinsCheckContainerTypesAndAlignmentUsesSize){
 }
 
 
-static_assert(NWB::Core::Metascript::Adhd::FindBuiltinScalarType("u32")->byteSize == 4u);
-static_assert(NWB::Core::Metascript::Adhd::FindBuiltinScalarType("f64")->isFloat);
-static_assert(NWB::Core::Metascript::Adhd::FindBuiltinScalarType("unknown") == nullptr);
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("u32")->byteSize == 4u);
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("f64")->isFloat);
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("unknown") == nullptr);
 
 
 TEST(AdhdCompiler, NumericGrammarAndBoundBuiltinsCheckArguments){

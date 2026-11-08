@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "skinning_culling_runtime_provider.h"
+#include "skinning_benchmark_pose_animator.h"
+#include "skinning_benchmark_scene.h"
 #include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -46,19 +49,9 @@ using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
-using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::LoadSmokeSkeletonBindJoints;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
-using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 using NWB::Tests::Smoke::TickSmokeWorld;
-
-namespace BenchmarkMode{
-    enum Enum : u8{
-        NoCulling,
-        FrustumOnly,
-        FrustumCone,
-    };
-};
 
 namespace BenchmarkView{
     enum Enum : u8{
@@ -88,16 +81,11 @@ static constexpr u32 s_FastSmokeCharacterCount = 1u;
 static constexpr u32 s_FastSmokeWarmupFrameCount = 1u;
 static constexpr u32 s_FastSmokeSampleFrameCount = 3u;
 static constexpr u32 s_FastSmokeFinishDrainFrameCount = 1u;
-static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
-static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
-static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_FrontCameraDistance = 3.2f;
 static constexpr f32 s_BackCameraDistance = 3.2f;
 static constexpr f32 s_CloseCameraDistance = 1.65f;
 static constexpr f32 s_FarCameraDistance = 5.6f;
 static constexpr f32 s_CameraHeight = 1.1f;
-static constexpr u32 s_AnimatedJointModulo = 16u;
-static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr BenchmarkModelRef s_BenchmarkModel{"project/characters/body/model"};
 static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke/skinning_culling_benchmark/materials/solid"};
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
@@ -144,126 +132,6 @@ static constexpr usize s_BenchmarkCaseCount = s_BenchmarkCases.size();
     }
 }
 
-[[nodiscard]] static u32 RandomJointSeed(const u32 jointIndex, const u32 characterIndex)noexcept{
-    u32 seed = jointIndex * 747796405u + characterIndex * 2891336453u + 277803737u;
-    seed = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
-    return (seed >> 22u) ^ seed;
-}
-
-[[nodiscard]] static b8 ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const b8 staticPreview)noexcept{
-    const u32 modulo = staticPreview ? s_StaticPreviewAnimatedJointModulo : s_AnimatedJointModulo;
-    return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
-}
-
-static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const b8 staticPreview, SIMDMatrix& outMatrix)noexcept{
-    outMatrix = bindJoint;
-    if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
-        return;
-
-    const u32 seed = RandomJointSeed(jointIndex, characterIndex);
-    const SIMDVectorSingle phaseCandidates = VectorMultiply(VectorSet(static_cast<f32>(seed & 255u), static_cast<f32>(characterIndex), 0.0f, 0.0f), VectorSet(0.0245436926f, 1.04719758f, 0.0f, 0.0f));
-    const SIMDVectorSingle phase = staticPreview ? VectorSplatX(phaseCandidates) : VectorSplatY(phaseCandidates);
-    const f32 primarySpeed = staticPreview ? 1.15f : 0.34f;
-    const f32 secondarySpeed = staticPreview ? 0.83f : 0.21f;
-    const f32 baseAngle = staticPreview ? 0.20f : 0.024f;
-    const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
-    const f32 rollBase = staticPreview ? 0.045f : 0.006f;
-    const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
-    SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f), VectorAndInt(phase, s_SIMDMaskXY));
-    wavePhases = VectorAdd(wavePhases, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
-    const SIMDVectorSingle waves = VectorSin(wavePhases);
-    const SIMDVectorSingle coefficientIndices = VectorSet(static_cast<f32>((seed >> 16u) % 5u), static_cast<f32>((seed >> 3u) & 3u), static_cast<f32>((seed >> 6u) & 3u), static_cast<f32>((seed >> 9u) & 3u));
-    const SIMDVectorSingle coefficients = VectorMultiplyAddExpression(coefficientIndices, VectorSet(angleJitter, 0.035f, 0.04f, rollJitter), VectorSet(baseAngle, 0.18f, 0.58f, rollBase));
-    const SIMDVectorSingle angle = VectorMultiply(VectorSplatX(waves), VectorSplatX(coefficients));
-    const SIMDVectorSingle rotationAngles = VectorMergeX(VectorMultiply(angle, VectorSplatY(coefficients)), VectorMultiply(angle, VectorSplatZ(coefficients)), VectorMultiply(VectorSplatY(waves), VectorSplatW(coefficients)), VectorZero());
-
-    SIMDMatrix matrix = MatrixRotationRollPitchYawFromVector(rotationAngles);
-    matrix = MatrixMultiply(bindJoint, matrix);
-    if(!MatrixIsInvertibleAffine(matrix, NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonJointDeterminantEpsilon))
-        return;
-
-    outMatrix = matrix;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class BenchmarkRuntimeMeshProvider final : public NWB::Impl::IRuntimeMeshProvider{
-public:
-    BenchmarkRuntimeMeshProvider()noexcept = default;
-    virtual ~BenchmarkRuntimeMeshProvider()noexcept override{
-        uninstall();
-    }
-
-
-public:
-    void install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::MeshSkinningSystem& meshSkinningSystem){
-        if(m_registered)
-            return;
-
-        m_meshSystem = &meshSystem;
-        m_meshSkinningSystem = &meshSkinningSystem;
-        m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
-        m_meshSystem->registerRuntimeMeshProvider(*this);
-        m_registered = true;
-    }
-
-    void uninstall(){
-        if(!m_registered || !m_meshSystem || !m_meshSkinningSystem)
-            return;
-
-        m_meshSystem->unregisterRuntimeMeshProvider(*this);
-        m_meshSystem->registerRuntimeMeshProvider(*m_meshSkinningSystem);
-        m_meshSystem = nullptr;
-        m_meshSkinningSystem = nullptr;
-        m_registered = false;
-    }
-
-    void setMode(const BenchmarkMode::Enum mode)noexcept{
-        m_mode = mode;
-    }
-
-    virtual Expected<NWB::Impl::RuntimeMeshDesc> resolveRuntimeMesh(const NWB::Core::ECS::EntityID entity)override{
-        if(!m_meshSkinningSystem)
-            return MakeUnexpected(Failure{});
-        auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
-        if(!mesh)
-            return MakeUnexpected(Failure{});
-
-        switch(m_mode){
-        case BenchmarkMode::NoCulling:
-            mesh->dynamicMeshletBoundsFresh = false;
-            mesh->dynamicMeshletConesFresh = false;
-            return Move(*mesh);
-        case BenchmarkMode::FrustumOnly:
-            mesh->dynamicMeshletBoundsFresh = true;
-            mesh->dynamicMeshletConesFresh = false;
-            return Move(*mesh);
-        case BenchmarkMode::FrustumCone:
-        default:
-            mesh->dynamicMeshletBoundsFresh = true;
-            mesh->dynamicMeshletConesFresh = true;
-            return Move(*mesh);
-        }
-    }
-
-    virtual void markLiveRuntimeMeshes(NWB::Impl::RuntimeMeshRequestSet& requests)override{
-        if(m_meshSkinningSystem)
-            m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
-    }
-
-    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const noexcept override{
-        return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
-    }
-
-
-private:
-    NWB::Impl::MeshSystem* m_meshSystem = nullptr;
-    NWB::Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
-    BenchmarkMode::Enum m_mode = BenchmarkMode::FrustumCone;
-    b8 m_registered = false;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -303,51 +171,11 @@ public:
 
         m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
 
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
-        m_cameraEntity = activeCamera.camera;
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
-
-        if(!activeCamera.camera.valid() || !directionalLight.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+        const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
+        if(!NWB::Tests::Smoke::SkinningBenchmarkScene::Populate(characterCount, m_staticPreview, s_BenchmarkModel, s_SkinningBenchmarkMaterial,
+            s_ModelSkeletonObject, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f), *m_world, m_entities, m_cameraEntity)){
             requestQuit();
             return true;
-        }
-
-        const BenchmarkModelRef& model = s_BenchmarkModel;
-        const BenchmarkMaterialRef& material = s_SkinningBenchmarkMaterial;
-        const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
-        m_entities.reserve(characterCount);
-        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/skinning_culling/model_owners"));
-        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::ScratchArena> modelOwners(scratchArena);
-        modelOwners.reserve(characterCount);
-
-        for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
-            auto entity = m_world->createEntity();
-            auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-            const SIMDVectorSingle position = m_staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
-            StoreFloat(position, transform.position);
-            transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-
-            auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-            modelComponent.model = model;
-
-            auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-            renderer.material = material;
-            modelOwners.push_back(entity.id());
-        }
-
-        SyncSmokeModelRuntimes(*m_world);
-        for(const NWB::Core::ECS::EntityID owner : modelOwners){
-            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton, *m_world);
-            if(!skeletonEntity.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
-                requestQuit();
-                return true;
-            }
-
-            m_entities.push_back(skeletonEntity);
         }
 
         if(m_staticPreview){
@@ -386,7 +214,7 @@ public:
 
         if(m_staticPreview){
             m_totalTimeSeconds = m_totalTimeSeconds + static_cast<f64>(safeDelta);
-            animatePoses();
+            NWB::Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(*m_world, { m_entities.data(), m_entities.size() }, { m_bindJoints.data(), m_bindJoints.size() }, static_cast<f32>(m_totalTimeSeconds), m_staticPreview);
             if(!TickSmokeWorld(safeDelta, *m_world))
                 return false;
             ++m_caseRenderedFrames;
@@ -398,7 +226,7 @@ public:
             return true;
 
         m_totalTimeSeconds = m_totalTimeSeconds + static_cast<f64>(safeDelta);
-        animatePoses();
+        NWB::Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(*m_world, { m_entities.data(), m_entities.size() }, { m_bindJoints.data(), m_bindJoints.size() }, static_cast<f32>(m_totalTimeSeconds), m_staticPreview);
         if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
         ++m_caseRenderedFrames;
@@ -515,20 +343,7 @@ private:
         configureCase();
     }
 
-    void animatePoses()noexcept{
-        const f32 timeSeconds = static_cast<f32>(m_totalTimeSeconds);
-        for(usize entityIndex = 0u; entityIndex < m_entities.size(); ++entityIndex){
-            auto* pose = m_world->tryGetComponent<NWB::Impl::SkeletonPoseComponent>(m_entities[entityIndex]);
-            if(!pose)
-                continue;
 
-            for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size(); ++jointIndex){
-                SIMDMatrix animatedJoint;
-                BuildAnimatedJointMatrix(LoadFloat(m_bindJoints[jointIndex]), jointIndex, static_cast<u32>(entityIndex), timeSeconds, m_staticPreview, animatedJoint);
-                StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
-            }
-        }
-    }
 
 
 private:

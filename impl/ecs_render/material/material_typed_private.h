@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -188,3 +189,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

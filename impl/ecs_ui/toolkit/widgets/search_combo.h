@@ -7,6 +7,7 @@
 
 #include "combo.h"
 #include "edit_box_state.h"
+#include "search_combo_filter.adhd.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +35,7 @@ public:
 
 class SearchComboState final : NoCopy{
     friend class Builder;
+    friend class ComboCoordinator;
     friend class SearchComboBehavior;
 
 
@@ -92,7 +94,7 @@ public:
         if(full.generation == 0u || full.revision == 0u || !Matches(state, query, comboGeneration, previewGeneration))
             return false;
         const StringView cachedQuery(state.m_filteredQuery.data(), state.m_filteredQuery.size());
-        const b8 rebuild = EvaluateSearchComboRebuildNeed(
+        const b8 rebuild = SearchComboFilterRules().evaluateSearchComboRebuildNeed(
             state.m_filterValid,
             state.m_sourceGeneration,
             state.m_sourceRevision,
@@ -116,18 +118,18 @@ public:
         const IListDataSource& view = source.filtered();
         const SearchComboSourceSnapshot filtered(view.instanceGeneration(), view.revision(), view.rowCount());
         if(
-            !ValidateSearchComboFilteredSnapshot(full, filtered)
+            !SearchComboFilterRules().validateSearchComboFilteredSnapshot(full, filtered)
             || !ListBehavior::SourceMatches(view, filtered.generation, filtered.revision, filtered.count)
             || !ListBehavior::SourceMatches(source, full.generation, full.revision, full.count)
             || !Matches(state, query, comboGeneration, previewGeneration)
         )
             return false;
-        if(ShouldResetSearchComboPreviewOnFilter(rebuild, state.m_filterValid, state.m_queryGeneration, state.m_queryExternalRevision, query)){
+        if(SearchComboFilterRules().shouldResetSearchComboPreviewOnFilter(rebuild, state.m_filterValid, state.m_queryGeneration, state.m_queryExternalRevision, query)){
             if(!state.m_combo.m_list.scrollTo(0.0))
                 return false;
             state.m_combo.m_list.select(state.m_combo.selectedKey());
         }
-        CommitSearchComboFilterState(
+        SearchComboFilterRules().commitSearchComboFilterState(
             rebuild,
             AStringView(candidate.data(), candidate.size()),
             full,

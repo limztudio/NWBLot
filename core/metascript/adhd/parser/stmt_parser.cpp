@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
 #include "stmt_parser.h"
 
 
@@ -76,12 +80,12 @@ Stmt* StmtParser::parseStatement(){
 
     if(m_cursor.check(TokenType::Identifier)){
         const MStringView tokText = m_cursor.current().text;
-        const MStringView prohibitedErr = FindProhibitedStmtKeywordError(tokText);
+        const MStringView prohibitedErr = KeywordSemantics::FindProhibitedStmtKeywordError(tokText);
         if(!prohibitedErr.empty()){
             m_cursor.error(prohibitedErr);
             return nullptr;
         }
-        if(IsNestedTypeKeyword(tokText)){
+        if(KeywordSemantics::IsNestedTypeKeyword(tokText)){
             m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope");
             return nullptr;
         }
@@ -109,7 +113,7 @@ Stmt* StmtParser::parseStatement(){
 
     if(m_cursor.check(TokenType::Identifier)){
         DiagnosticKind::Enum diagKind = DiagnosticKind::Assert;
-        if(TryParseDiagnosticKind(m_cursor.current().text, diagKind)){
+        if(KeywordSemantics::TryParseDiagnosticKind(m_cursor.current().text, diagKind)){
             m_cursor.advance();
             return parseDiagnosticStatement(span, diagKind, attributes);
         }
@@ -119,8 +123,8 @@ Stmt* StmtParser::parseStatement(){
         return nullptr;
 
     if(m_cursor.check(TokenType::Identifier)){
-        const b8 startsWithRefOrProhibitedType = ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None
-            || !FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
+        const b8 startsWithRefOrProhibitedType = KeywordSemantics::ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None
+            || !KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
         if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
@@ -135,7 +139,7 @@ Stmt* StmtParser::parseStatement(){
                 const MStringView firstIdent = cp.current.text;
                 while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
                     m_cursor.advance();
-                if(IsBuiltinTypeName(firstIdent))
+                if(BuiltinTypeSemantics::IsBuiltinTypeName(firstIdent))
                     return nullptr;
                 if(m_cursor.check(TokenType::Identifier)){
                     m_cursor.advance();
@@ -145,7 +149,7 @@ Stmt* StmtParser::parseStatement(){
             }
             else if(m_cursor.check(TokenType::LeftBracket)){
                 const MStringView firstIdent = cp.current.text;
-                if(IsBuiltinTypeName(firstIdent))
+                if(BuiltinTypeSemantics::IsBuiltinTypeName(firstIdent))
                     return nullptr;
                 u32 bracketDepth = 1u;
                 m_cursor.advance();

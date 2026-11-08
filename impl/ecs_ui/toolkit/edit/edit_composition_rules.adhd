@@ -1,0 +1,121 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditCompositionRules{
+    private b8 canUpdate(
+        in b8 compositionActive,
+        in StringView value,
+        in usize anchor,
+        in usize caret,
+        in usize textSize,
+        in usize compositionAnchor,
+        in usize compositionCaret,
+        in usize maxBytes
+    ){
+        if(!compositionActive || value.size() > maxBytes)
+            return false;
+        if(!isUtf8ScalarBoundary(value, anchor) || !isUtf8ScalarBoundary(value, caret))
+            return false;
+        const usize replacedBytes = max(compositionAnchor, compositionCaret) - min(compositionAnchor, compositionCaret);
+        const usize retainedBytes = textSize - replacedBytes;
+        return retainedBytes <= maxBytes - value.size();
+    }
+
+    public void cancel(
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration
+    ){
+        if(inOutCompositionActive)
+            ++inOutCompositionGeneration;
+        inOutPreedit.clear();
+        outPreeditAnchor = 0u;
+        outPreeditCaret = 0u;
+        outCompositionAnchor = 0u;
+        outCompositionCaret = 0u;
+        inOutCompositionActive = false;
+    }
+
+    public b8 begin(
+        in usize anchor,
+        in usize caret,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut usize outCompositionAnchor,
+        mut usize outCompositionCaret,
+        mut b8 inOutCompositionActive,
+        mut u64 inOutCompositionGeneration
+    ){
+        if(inOutCompositionActive)
+            return true;
+        outCompositionAnchor = anchor;
+        outCompositionCaret = caret;
+        inOutPreedit.clear();
+        outPreeditAnchor = 0u;
+        outPreeditCaret = 0u;
+        inOutCompositionActive = true;
+        ++inOutCompositionGeneration;
+        return true;
+    }
+
+    public b8 update(
+        in b8 compositionActive,
+        in StringView value,
+        in usize anchor,
+        in usize caret,
+        in usize textSize,
+        in usize compositionAnchor,
+        in usize compositionCaret,
+        in usize maxBytes,
+        in EditTextMode textMode,
+        mut String inOutPreedit,
+        mut usize outPreeditAnchor,
+        mut usize outPreeditCaret,
+        mut u64 inOutCompositionGeneration
+    ){
+        if(!this.canUpdate(compositionActive, value, anchor, caret, textSize, compositionAnchor, compositionCaret, maxBytes) || !ValidateEditTextForMode(value, textMode))
+            return false;
+        String candidate;
+        if(!value.empty())
+            candidate.assign(value);
+        inOutPreedit.assign(candidate);
+        outPreeditAnchor = anchor;
+        outPreeditCaret = caret;
+        ++inOutCompositionGeneration;
+        return true;
+    }
+
+    public EditCompositionView view(
+        in StringView preedit,
+        in usize preeditAnchor,
+        in usize preeditCaret,
+        in usize compositionAnchor,
+        in usize compositionCaret,
+        in b8 compositionActive
+    ){
+        return EditCompositionView(
+            preedit,
+            preeditAnchor,
+            preeditCaret,
+            min(compositionAnchor, compositionCaret),
+            max(compositionAnchor, compositionCaret),
+            compositionActive
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

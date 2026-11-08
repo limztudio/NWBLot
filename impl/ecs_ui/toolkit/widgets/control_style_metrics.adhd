@@ -1,0 +1,304 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+
+native{
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ControlStyleMetrics{
+    public Insets skinRegionsMaxPadding(in UiSkin skin, in Insets initial, in Span<Name> names, in Name fallback)const{
+        Insets result = initial;
+        for(in Name name : names){
+            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, fallback);
+            if(found.has_value()){
+                const Insets regionPadding(
+                    found.value().padding.left,
+                    found.value().padding.top,
+                    found.value().padding.right,
+                    found.value().padding.bottom
+                );
+                result = MaxUiPadding(result, regionPadding);
+            }
+        }
+        return result;
+    }
+
+    public void buttonMetrics(in UiSkin skin, in WidgetStyle style, mut Point outSize, mut Insets outPadding)const{
+        Array<Name, 4> names;
+        names[0u] = style.button;
+        names[1u] = style.buttonHover;
+        names[2u] = style.buttonPressed;
+        names[3u] = style.buttonDisabled;
+        for(in Name name : names){
+            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.button);
+            if(!found.has_value())
+                continue;
+            AccumulateButtonRegionMetrics(found.value(), outSize, outPadding);
+        }
+    }
+
+    public Expected<f32> checkboxExtent(in UiSkin skin, in WidgetStyle style)const{
+        if(!skin.hasRegion(style.checkbox))
+            return makeUnexpected(Failure());
+        Array<Name, 4> names;
+        names[0u] = style.checkbox;
+        names[1u] = style.checkboxHover;
+        names[2u] = style.checkboxChecked;
+        names[3u] = style.checkboxDisabled;
+        f32 checkboxExtent = style.checkboxExtent;
+        for(in Name name : names){
+            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.checkbox);
+            if(!found.has_value())
+                return makeUnexpected(Failure());
+            checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, found.value());
+        }
+        return checkboxExtent;
+    }
+
+    public Point editMinimumSize(in UiSkin skin, in EditBoxStyle editStyle)const{
+        Point minimum = Point(s_StyleMinimumFieldWidth, 0.0f);
+        Array<Name, 4> names;
+        names[0u] = editStyle.normal;
+        names[1u] = editStyle.hover;
+        names[2u] = editStyle.focused;
+        names[3u] = editStyle.disabled;
+        for(in Name name : names){
+            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, editStyle.fallback);
+            if(found.has_value())
+                AccumulateEditRegionMinimumSize(found.value(), minimum);
+        }
+        return minimum;
+    }
+
+    public Insets editPadding(in UiSkin skin, in EditBoxStyle editStyle)const{
+        Array<Name, 4> names;
+        names[0u] = editStyle.normal;
+        names[1u] = editStyle.hover;
+        names[2u] = editStyle.focused;
+        names[3u] = editStyle.disabled;
+        Name fallback = editStyle.fallback;
+        if(skin.hasRegion(editStyle.normal))
+            fallback = editStyle.normal;
+        return this.skinRegionsMaxPadding(skin, editStyle.padding, names, fallback);
+    }
+
+    public b8 comboMetrics(
+        in UiSkin skin,
+        in ComboStyle style,
+        mut Point outMinimumSize,
+        mut Insets outPadding,
+        mut f32 outArrowExtent
+    )const{
+        Point minimumSize;
+        Array<Name, 5> names;
+        names[0u] = style.normal;
+        names[1u] = style.hover;
+        names[2u] = style.open;
+        names[3u] = style.focused;
+        names[4u] = style.disabled;
+        for(in Name name : names){
+            const Expected<UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
+            if(!skinRegion.has_value())
+                return false;
+            minimumSize = Point(max(minimumSize.x, skinRegion.value().minimumWidth), max(minimumSize.y, skinRegion.value().minimumHeight));
+        }
+        const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
+        if(!arrow.has_value())
+            return false;
+        outMinimumSize = minimumSize;
+        outPadding = this.skinRegionsMaxPadding(skin, style.padding, names, style.fallback);
+        outArrowExtent = ResolveUiSkinSquareExtent(style.arrowExtent, arrow.value());
+        return true;
+    }
+
+    private b8 accumulateRadioIndicator(
+        in UiSkin skin,
+        in Name regionName,
+        in f32 referenceDensity,
+        mut f32 inOutIndicatorExtent
+    )const{
+        UiSkinRegion skinRegion;
+        if(!skin.tryFindRegion(regionName, skinRegion))
+            return true;
+        const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(skinRegion, referenceDensity);
+        if(!minimum.has_value())
+            return false;
+        inOutIndicatorExtent = max(inOutIndicatorExtent, max(minimum.value().x, minimum.value().y));
+        return true;
+    }
+
+    public b8 radioGroupMetrics(
+        in UiSkin skin,
+        in u32 choiceCount,
+        in Point maximumLabel,
+        in RadioGroupOptions options,
+        mut RadioGroupStyle inOutStyle,
+        mut RadioGroupMetrics outMetrics
+    )const{
+        const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.fallback);
+        const Expected<UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
+        const Expected<UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
+        const f32 referenceDensity = skin.referenceDensity();
+        if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !isFinite(referenceDensity) || referenceDensity <= 0.0f)
+            return false;
+        const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
+        const Expected<Point> checkedMinimum = TryResolveSkinRegionMinimumSize(checked.value(), referenceDensity);
+        if(!normalMinimum.has_value() || !checkedMinimum.has_value())
+            return false;
+        f32 indicatorExtent = inOutStyle.indicatorExtent;
+        indicatorExtent = max(indicatorExtent, max(normalMinimum.value().x, normalMinimum.value().y));
+        indicatorExtent = max(indicatorExtent, max(checkedMinimum.value().x, checkedMinimum.value().y));
+        if(
+            !this.accumulateRadioIndicator(skin, inOutStyle.hover, referenceDensity, indicatorExtent)
+            || !this.accumulateRadioIndicator(skin, inOutStyle.pressed, referenceDensity, indicatorExtent)
+            || !this.accumulateRadioIndicator(skin, inOutStyle.disabled, referenceDensity, indicatorExtent)
+        )
+            return false;
+        inOutStyle.indicatorExtent = indicatorExtent;
+        const Expected<RadioGroupMetrics> metrics = MeasureRadioGroup(choiceCount, maximumLabel, options, inOutStyle);
+        if(!metrics.has_value())
+            return false;
+        outMetrics = metrics.value();
+        return true;
+    }
+
+    private b8 accumulateSliderThumb(
+        in UiSkin skin,
+        in Name regionName,
+        in f32 referenceDensity,
+        mut Point inOutThumbExtent
+    )const{
+        UiSkinRegion thumb;
+        if(!skin.tryFindRegion(regionName, thumb))
+            return true;
+        const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(thumb, referenceDensity);
+        if(!minimum.has_value())
+            return false;
+        inOutThumbExtent = Point(max(inOutThumbExtent.x, minimum.value().x), max(inOutThumbExtent.y, minimum.value().y));
+        return true;
+    }
+
+    public b8 sliderMetrics(
+        in UiSkin skin,
+        in SliderOptions options,
+        mut SliderStyle inOutStyle,
+        mut SliderMetrics outMetrics
+    )const{
+        const f32 referenceDensity = skin.referenceDensity();
+        if(!isFinite(referenceDensity) || referenceDensity <= 0.0f)
+            return false;
+        const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+        const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
+        if(!track.has_value() || !normal.has_value())
+            return false;
+        const Expected<Point> trackMinimum = TryResolveSkinRegionMinimumSize(track.value(), referenceDensity);
+        const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
+        if(!trackMinimum.has_value() || !normalMinimum.has_value())
+            return false;
+        inOutStyle.trackHeight = max(inOutStyle.trackHeight, trackMinimum.value().y);
+        Point thumbExtent = Point(max(inOutStyle.thumbExtent.x, normalMinimum.value().x), max(inOutStyle.thumbExtent.y, normalMinimum.value().y));
+        if(
+            !this.accumulateSliderThumb(skin, inOutStyle.hover, referenceDensity, thumbExtent)
+            || !this.accumulateSliderThumb(skin, inOutStyle.pressed, referenceDensity, thumbExtent)
+            || !this.accumulateSliderThumb(skin, inOutStyle.disabled, referenceDensity, thumbExtent)
+        )
+            return false;
+        inOutStyle.thumbExtent = thumbExtent;
+        const Expected<SliderMetrics> metrics = MeasureSlider(options, inOutStyle);
+        if(!metrics.has_value())
+            return false;
+        SliderMetrics resolvedMetrics = metrics.value();
+        const Expected<f32> contentWidth = TryResolveSliderTrackContentWidth(resolvedMetrics, trackMinimum.value().x);
+        if(!contentWidth.has_value())
+            return false;
+        resolvedMetrics.contentSize.x = contentWidth.value();
+        outMetrics = resolvedMetrics;
+        return true;
+    }
+
+    public b8 progressMetrics(
+        in UiSkin skin,
+        in f64 fraction,
+        in ProgressOptions options,
+        mut ProgressStyle inOutStyle,
+        mut ProgressMetrics outMetrics
+    )const{
+        if(!isFinite(fraction))
+            return false;
+        const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+        const Expected<UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);
+        if(!track.has_value() || !fill.has_value())
+            return false;
+        const Expected<ProgressMetrics> metrics = MeasureProgress(options, inOutStyle, track.value(), fill.value(), skin.referenceDensity());
+        if(!metrics.has_value())
+            return false;
+        inOutStyle.track = track.value().name;
+        inOutStyle.fill = fill.value().name;
+        outMetrics = metrics.value();
+        return true;
+    }
+
+    public b8 imageMetrics(
+        in UiSkin skin,
+        in Name regionName,
+        in ImageOptions options,
+        mut ImageMetrics outMetrics,
+        mut Name outRegion
+    )const{
+        UiSkinRegion skinRegion;
+        if(!skin.tryFindRegion(regionName, skinRegion))
+            return false;
+        const Expected<ImageMetrics> metrics = MeasureImage(options, skinRegion, skin.referenceDensity());
+        if(!metrics.has_value())
+            return false;
+        outMetrics = metrics.value();
+        outRegion = skinRegion.name;
+        return true;
+    }
+
+    public b8 windowMetrics(
+        in UiSkin skin,
+        in WidgetStyle style,
+        in WindowOptions options,
+        in Point titleExtent,
+        mut WindowMetrics outMetrics
+    )const{
+        UiSkinRegion frame;
+        UiSkinRegion header;
+        if(!skin.tryFindRegion(style.window, frame) || !skin.tryFindRegion(style.windowTitle, header))
+            return false;
+        UiSkinRegion collapse;
+        const b8 hasCollapse = skin.tryFindRegion(style.windowCollapse, collapse);
+        if(options.collapsible && !hasCollapse)
+            return false;
+        UiSkinRegion resize;
+        const b8 hasResize = skin.tryFindRegion(style.windowResize, resize);
+        if(options.resizable && !hasResize && !skin.hasRegion(style.white))
+            return false;
+        const Expected<WindowMetrics> metrics = MeasureWindow(frame, header, collapse, resize, style, options, titleExtent, skin.referenceDensity());
+        if(!metrics.has_value())
+            return false;
+        outMetrics = metrics.value();
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,7 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/keyword_semantics.h>
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
 #include "type_checker.h"
+#include "constructor_argument_checker.h"
+
+#include "borrow_lifetime_analyzer.h"
+#include "callable_declaration_linker.h"
+#include "type_layout_analyzer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +61,7 @@ namespace __hidden_adhd_type_checker{
         return true;
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
         DiagnosticKind::Enum diagKind = DiagnosticKind::Assert;
-        if(TryParseDiagnosticKind(expr->lhs->text, diagKind))
+        if(KeywordSemantics::TryParseDiagnosticKind(expr->lhs->text, diagKind))
             return true;
     }
     if(ExprUsesOutOfLineConstruct(expr->lhs) || ExprUsesOutOfLineConstruct(expr->rhs))
@@ -140,7 +149,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     if(!m_symbols.build(unit, errors))
         ok = false;
 
-    if(!linkOutOfLineMethods(unit, errors))
+    if(!CallableDeclarationLinker(m_arena, m_symbols).link(unit, errors))
         ok = false;
 
     for(const EnumDecl* enumDecl : unit.enums){
@@ -186,7 +195,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                             entry.valueExpr->kind == ExprKind::FloatLiteral
                             || entry.valueExpr->kind == ExprKind::DoubleLiteral
                             || entry.valueExpr->kind == ExprKind::StringLiteral
-                            || IsFloatScalarType(valType)
+                            || BuiltinTypeSemantics::IsFloatScalarType(valType)
                             || SymbolTable::IsStringSwitchType(valType)
                             || !TryEvaluateEnumEntryConstant(*enumDecl, entry.name, m_symbols, 0u, evalConstVal)
                         ){
@@ -291,11 +300,11 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 }
             }
         }
-        if(gc->varType && !gc->varType->isAuto && TypeContainsSimdRegisterType(*gc->varType, m_symbols)){
+        if(gc->varType && !gc->varType->isAuto && TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*gc->varType)){
             reportError(errors, gc->span, "file-level 'const' cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
             ok = false;
         }
-        if(!checkConstructorInitArguments(
+        if(!ConstructorArgumentChecker(*this).check(
             nullptr,
             gc->isCtorInit ? gc->varType : nullptr,
             emptyScope,
@@ -349,247 +358,6 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     return ok;
 }
 
-b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors){
-    b8 ok = true;
-
-    for(MethodDecl* ool : unit.outOfLineMethods){
-        ClassDecl* cls = m_symbols.findClass(ool->ownerClassName);
-        if(!cls){
-            reportError(errors, ool->span, "out-of-line method references unknown class");
-            ok = false;
-            continue;
-        }
-
-        if(cls->templateParams.size() != ool->ownerTemplateParams.size()){
-            reportError(errors, ool->span, "out-of-line method owner class template parameter count does not match class declaration");
-            ok = false;
-            continue;
-        }
-        b8 ownerTemplateNamesMatch = true;
-        for(usize tIdx = 0u; tIdx < cls->templateParams.size(); ++tIdx){
-            if(cls->templateParams[tIdx].name != ool->ownerTemplateParams[tIdx]){
-                reportError(errors, ool->span, "out-of-line method owner class template parameter name does not match class declaration");
-                ok = false;
-                ownerTemplateNamesMatch = false;
-                break;
-            }
-            if(tIdx < ool->ownerTemplateParamDecls.size()){
-                const TemplateParamDecl& clsTp = cls->templateParams[tIdx];
-                const TemplateParamDecl& oolOwnerTp = ool->ownerTemplateParamDecls[tIdx];
-                if(
-                    (clsTp.constValueType != nullptr) != (oolOwnerTp.constValueType != nullptr)
-                    || (clsTp.constValueType && oolOwnerTp.constValueType && !AreTypeRefsEquivalent(clsTp.constValueType, oolOwnerTp.constValueType, m_symbols))
-                    || clsTp.interfaceBounds.size() != oolOwnerTp.interfaceBounds.size()
-                ){
-                    reportError(errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
-                    ok = false;
-                    ownerTemplateNamesMatch = false;
-                    break;
-                }
-                for(usize bIdx = 0u; bIdx < clsTp.interfaceBounds.size(); ++bIdx){
-                    if(!AreTypeRefsEquivalent(clsTp.interfaceBounds[bIdx], oolOwnerTp.interfaceBounds[bIdx], m_symbols)){
-                        reportError(errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
-                        ok = false;
-                        ownerTemplateNamesMatch = false;
-                        break;
-                    }
-                }
-                if(!ownerTemplateNamesMatch)
-                    break;
-            }
-        }
-        if(!ownerTemplateNamesMatch)
-            continue;
-
-        MethodDecl* matched = nullptr;
-        MethodDecl* paramMatched = nullptr;
-        for(MethodDecl* m : cls->methods){
-            if(m->isConstructor == ool->isConstructor && m->isDestructor == ool->isDestructor && m->isOperator == ool->isOperator && m->name == ool->name && m->params.size() == ool->params.size()){
-                if(!matched || m->templateParams.size() == ool->templateParams.size())
-                    matched = m;
-                if(m->templateParams.size() == ool->templateParams.size() && DoParamListsMatch(m->params, ool->params, m_symbols)){
-                    paramMatched = m;
-                    if(m->isConst == ool->isConst)
-                        break;
-                }
-            }
-        }
-        if(paramMatched)
-            matched = paramMatched;
-
-        if(!matched){
-            reportError(errors, ool->span, "out-of-line method is not declared in class");
-            ok = false;
-            continue;
-        }
-
-        if(matched->templateParams.size() != ool->templateParams.size()){
-            reportError(errors, ool->span, "out-of-line method template parameter count does not match class declaration");
-            ok = false;
-            continue;
-        }
-        b8 methodTemplateParamsMatch = true;
-        for(usize tIdx = 0u; tIdx < matched->templateParams.size(); ++tIdx){
-            const TemplateParamDecl& declTp = matched->templateParams[tIdx];
-            const TemplateParamDecl& oolTp = ool->templateParams[tIdx];
-            if(declTp.name != oolTp.name){
-                reportError(errors, ool->span, "out-of-line method template parameter name does not match class declaration");
-                ok = false;
-                methodTemplateParamsMatch = false;
-                break;
-            }
-            if(
-                (declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr)
-                || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols))
-                || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size()
-            ){
-                reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
-                ok = false;
-                methodTemplateParamsMatch = false;
-                break;
-            }
-            for(usize bIdx = 0u; bIdx < declTp.interfaceBounds.size(); ++bIdx){
-                if(!AreTypeRefsEquivalent(declTp.interfaceBounds[bIdx], oolTp.interfaceBounds[bIdx], m_symbols)){
-                    reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
-                    ok = false;
-                    methodTemplateParamsMatch = false;
-                    break;
-                }
-            }
-            if(!methodTemplateParamsMatch)
-                break;
-        }
-        if(!methodTemplateParamsMatch)
-            continue;
-
-        if(matched->isConst != ool->isConst){
-            reportError(errors, ool->span, "out-of-line method 'const' qualifier does not match class declaration");
-            ok = false;
-            continue;
-        }
-
-        if(ool->isOverride && !matched->isOverride){
-            reportError(errors, ool->span, "out-of-line method cannot specify 'override' when class declaration is not marked 'override'");
-            ok = false;
-            continue;
-        }
-
-        if(!matched->isConstructor && !matched->isDestructor){
-            if(!AreTypeRefsEquivalent(matched->returnType, ool->returnType, m_symbols)){
-                reportError(errors, ool->span, "out-of-line method return type does not match class declaration");
-                ok = false;
-                continue;
-            }
-        }
-
-        b8 paramsMatch = true;
-        for(usize pIdx = 0u; pIdx < matched->params.size(); ++pIdx){
-            const ParamDecl& declP = matched->params[pIdx];
-            const ParamDecl& oolP = ool->params[pIdx];
-            if(declP.mode != oolP.mode || !AreTypeRefsEquivalent(declP.type, oolP.type, m_symbols)){
-                reportError(errors, oolP.span, "out-of-line parameter 'in'/'mut' mode or type does not match class declaration");
-                ok = false;
-                paramsMatch = false;
-                break;
-            }
-        }
-        if(!paramsMatch)
-            continue;
-
-        if(matched->hasBody){
-            reportError(errors, ool->span, "method already has an inline body in class declaration");
-            ok = false;
-            continue;
-        }
-
-        if(!ool->templateParams.empty())
-            matched->templateParams = ool->templateParams;
-        matched->params = ool->params;
-        matched->hasBody = true;
-        matched->isOutOfLine = true;
-        matched->body = ool->body;
-        if(ool->isReflect){
-            matched->isReflect = true;
-            cls->isReflect = true;
-        }
-        if(!ool->isImported)
-            matched->isImported = false;
-    }
-
-    for(usize i = 0u; i < unit.freeFunctions.size(); ++i){
-        MethodDecl* fn = unit.freeFunctions[i];
-        if(!fn)
-            continue;
-        for(usize j = 0u; j < i; ++j){
-            MethodDecl* prev = unit.freeFunctions[j];
-            if(!prev || prev->name != fn->name || prev->templateParams.size() != fn->templateParams.size())
-                continue;
-            if(!DoParamListsMatch(prev->params, fn->params, m_symbols))
-                continue;
-            b8 fnTemplateParamsMatch = true;
-            for(usize tIdx = 0u; tIdx < prev->templateParams.size(); ++tIdx){
-                const TemplateParamDecl& prevTp = prev->templateParams[tIdx];
-                const TemplateParamDecl& curTp = fn->templateParams[tIdx];
-                if(
-                    prevTp.name != curTp.name
-                    || (prevTp.constValueType != nullptr) != (curTp.constValueType != nullptr)
-                    || (prevTp.constValueType && curTp.constValueType && !AreTypeRefsEquivalent(prevTp.constValueType, curTp.constValueType, m_symbols))
-                    || prevTp.interfaceBounds.size() != curTp.interfaceBounds.size()
-                ){
-                    reportError(errors, fn->span, "free function template parameter list does not match previous declaration");
-                    ok = false;
-                    fnTemplateParamsMatch = false;
-                    break;
-                }
-                for(usize bIdx = 0u; bIdx < prevTp.interfaceBounds.size(); ++bIdx){
-                    if(!AreTypeRefsEquivalent(prevTp.interfaceBounds[bIdx], curTp.interfaceBounds[bIdx], m_symbols)){
-                        reportError(errors, fn->span, "free function template parameter constraints do not match previous declaration");
-                        ok = false;
-                        fnTemplateParamsMatch = false;
-                        break;
-                    }
-                }
-                if(!fnTemplateParamsMatch)
-                    break;
-            }
-            if(!fnTemplateParamsMatch)
-                continue;
-            if(!AreTypeRefsEquivalent(prev->returnType, fn->returnType, m_symbols)){
-                reportError(errors, fn->span, "conflicting return type for free function declaration");
-                ok = false;
-                continue;
-            }
-            if(prev->hasBody && fn->hasBody){
-                reportError(errors, fn->span, "duplicate free function definition with identical signature");
-                ok = false;
-                continue;
-            }
-            if(!prev->hasBody && fn->hasBody){
-                if(!prev->isImported){
-                    prev->params = fn->params;
-                    prev->hasBody = true;
-                    prev->isOutOfLine = true;
-                    prev->body = fn->body;
-                    fn->isImported = true;
-                    fn->hasBody = false;
-                }
-                else{
-                    fn->isOutOfLine = true;
-                    prev->hasBody = true;
-                }
-            }
-            else if(prev->hasBody && !fn->hasBody){
-                fn->isImported = true;
-            }
-            else if(!prev->hasBody && !fn->hasBody){
-                fn->isImported = true;
-            }
-        }
-    }
-
-    return ok;
-}
-
 void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
     outArgTypes.clear();
     outArgIsMut.clear();
@@ -612,12 +380,17 @@ void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDec
     }
 }
 
-MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const noexcept{
+MStringView ResolveScopedVarBaseType(const SymbolTable& symbols, const ScopedVarInfo& var)noexcept{
     if(!var.inferredTypeName.empty())
         return var.inferredTypeName;
     if(var.type)
-        return m_symbols.resolveBaseTypeName(var.type->name);
+        return symbols.resolveBaseTypeName(var.type->name);
     return {};
+}
+
+
+MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const noexcept{
+    return ResolveScopedVarBaseType(m_symbols, var);
 }
 
 b8 TypeChecker::isThisConstInScope(const MethodDecl& method, const Span<const ScopedVarInfo> scope)const noexcept{
@@ -649,7 +422,7 @@ b8 TypeChecker::isRvalueTemporaryExpr(const ClassDecl* ownerClass, const MethodD
     if(IsAlwaysRvalueExprKind(expr.kind))
         return true;
     const TypeRef* retType = inferExprTypeRef(ownerClass, method, expr, scope);
-    return m_symbols.resolveRefMode(retType) == ParamPassingMode::None && isTemporaryOwnerExpr(ownerClass, method, expr, scope);
+    return m_symbols.resolveRefMode(retType) == ParamPassingMode::None && BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, method, expr, scope);
 }
 
 const MethodDecl* TypeChecker::resolveCustomOperator(

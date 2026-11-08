@@ -4,6 +4,8 @@
 
 #include "atlas.h"
 
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd.h>
+
 #include <global/atomic_identity.h>
 
 
@@ -93,12 +95,12 @@ b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
         return false;
     const u32 paddedWidth = m_bitmap.width + s_GlyphAtlasGlyphGutter;
     const u32 paddedHeight = m_bitmap.height + s_GlyphAtlasGlyphGutter;
-    GlyphAtlasPlacement placement;
+    Placement placement;
     usize pageIndex = 0u;
     while(pageIndex < m_pages.size()){
         const AtlasPage& page = m_pages[pageIndex];
         if(page.face.get() == face.get()){
-            const auto placed = TryPlaceGlyphInAtlasPage(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
+            const auto placed = tryPlace(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
             if(placed){
                 placement = *placed;
                 break;
@@ -148,6 +150,20 @@ Expected<SharedGlyphPage> GlyphAtlas::page(u32 index){
     }
     return page.published;
 }
+
+Expected<GlyphAtlas::Placement> GlyphAtlas::tryPlace(const u32 cursorX, const u32 cursorY, const u32 rowHeight, const u32 width, const u32 height)noexcept{
+    Placement placement{ cursorX, cursorY, rowHeight };
+    if(placement.x + width > s_GlyphAtlasPageExtent){
+        placement.x = 0u;
+        placement.y += placement.rowHeight;
+        placement.rowHeight = 0u;
+    }
+    if(placement.y + height > s_GlyphAtlasPageExtent)
+        return MakeUnexpected(Failure{});
+    placement.rowHeight = Max(placement.rowHeight, height);
+    return placement;
+}
+
 
 void GlyphAtlas::appendGlyph(AtlasGlyph&& record){
     const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };

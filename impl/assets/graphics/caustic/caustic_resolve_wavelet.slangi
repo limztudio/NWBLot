@@ -1,0 +1,151 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CAUSTIC_RESOLVE_WAVELET_SLANGI
+#define NWB_CAUSTIC_RESOLVE_WAVELET_SLANGI
+
+
+#include "caustic_resolve_common.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCausticWaveletSpatialParameters{
+    float3 centerWorld;
+    float invTwoSigmaWorldSq;
+};
+
+NwbCausticWaveletSpatialParameters nwbCausticWaveletSpatialParameters(const int2 texel, const int halfWidth, const int step){
+    NwbCausticWaveletSpatialParameters parameters;
+    parameters.centerWorld = float3(nwbCausticResolveWorldAtHalf(texel));
+    const int2 rightTexel = int2(min(texel.x + 1, halfWidth - 1), texel.y);
+    const float pixelSpacing = max(length(float3(nwbCausticResolveWorldAtHalf(rightTexel)) - parameters.centerWorld), NWB_CAUSTIC_RESOLVE_MIN_PIXEL_SPACING);
+    const float sigmaWorld = pixelSpacing * (float)step * NWB_CAUSTIC_RESOLVE_WAVELET_SIGMA_SCALE;
+    parameters.invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
+    return parameters;
+}
+
+half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, const uint3 groupID){
+    const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
+    const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
+    const int2 texel = int2(pixel);
+    const bool inBounds = pixel.x < (uint)hw && pixel.y < (uint)hh;
+    const int step = (int)NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
+
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+    // All threads must complete the cooperative load and barriers before any bounds-dependent return.
+    if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
+        const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + NWB_CAUSTIC_RESOLVE_KERNEL_SPAN * step;
+        const int2 tileOrigin = int2(groupID.xy) * NWB_CAUSTIC_RESOLVE_GROUP_SIZE - int2(NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS * step, NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS * step);
+        const uint threadCount = NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
+        const uint tileTexels = (uint)(tileW * tileW);
+        if(threadIndex == 0u)
+            g_NwbCausticResolveTileActive = 0u;
+        GroupMemoryBarrierWithGroupSync();
+
+        for(uint i = threadIndex; i < tileTexels; i += threadCount){
+            const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
+            half3 tapColor = half3(0.0h, 0.0h, 0.0h);
+            half3 tapWorld = half3(0.0h, 0.0h, 0.0h);
+            uint tapValid = 0u;
+            if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
+                if(nwbCausticResolveValidAtHalf(t)){
+                    tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
+                    tapWorld = nwbCausticResolveWorldAtHalf(t);
+                    tapValid = 1u;
+                    if(any(tapColor > half3(0.0h, 0.0h, 0.0h)))
+                        InterlockedOr(g_NwbCausticResolveTileActive, 1u);
+                }
+            }
+            g_NwbCausticResolveTileColor[i] = tapColor;
+            g_NwbCausticResolveTileWorld[i] = tapWorld;
+            g_NwbCausticResolveTileValid[i] = tapValid;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(g_NwbCausticResolveTileActive == 0u){
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
+        }
+
+        if(!inBounds)
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
+        if(!nwbCausticResolveValidAtHalf(texel)){
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
+        }
+
+        const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
+
+        // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
+        half3 sum = half3(0.0h, 0.0h, 0.0h);
+        half weightSum = half(0.0h);
+        [unroll] for(int ky = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ky <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++ky){
+            [unroll] for(int kx = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; kx <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++kx){
+                const uint idx = (uint)((int(groupThreadID.y) + (ky + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS) * step) * tileW + (int(groupThreadID.x) + (kx + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS) * step));
+                if(g_NwbCausticResolveTileValid[idx] == 0u)
+                    continue;
+                const float3 d = float3(g_NwbCausticResolveTileWorld[idx]) - parameters.centerWorld;
+                const half weight = NWB_CAUSTIC_RESOLVE_KERNEL[kx + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * NWB_CAUSTIC_RESOLVE_KERNEL[ky + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * half(exp(-dot(d, d) * parameters.invTwoSigmaWorldSq));
+                sum += weight * g_NwbCausticResolveTileColor[idx];
+                weightSum += weight;
+            }
+        }
+        return (weightSum > half(0.0h)) ? half4(sum / weightSum, 1.0h) : half4(0.0h, 0.0h, 0.0h, 1.0h);
+    }
+#endif
+
+    if(!inBounds)
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
+    if(!nwbCausticResolveValidAtHalf(texel)){
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
+    }
+
+    const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
+
+    half3 sum = half3(0.0h, 0.0h, 0.0h);
+    half weightSum = half(0.0h);
+    [unroll] for(int ky = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ky <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++ky){
+        [unroll] for(int kx = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; kx <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++kx){
+            const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
+            if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
+                continue;
+            if(!nwbCausticResolveValidAtHalf(tap))
+                continue;
+            const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - parameters.centerWorld;
+            const half weight = NWB_CAUSTIC_RESOLVE_KERNEL[kx + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * NWB_CAUSTIC_RESOLVE_KERNEL[ky + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * half(exp(-dot(d, d) * parameters.invTwoSigmaWorldSq));
+            const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+            sum += weight * tapColor;
+            weightSum += weight;
+        }
+    }
+
+    return (weightSum > half(0.0h)) ? half4(sum / weightSum, 1.0h) : half4(0.0h, 0.0h, 0.0h, 1.0h);
+}
+
+
+struct NwbCausticResolveWavelet{
+    static void run(const uint3 dispatchThreadID, const uint3 groupThreadID, const uint3 groupID){
+        const uint2 pixel = dispatchThreadID.xy;
+        const bool inBounds = pixel.x < g_NwbCausticResolvePushConstants.halfWidth && pixel.y < g_NwbCausticResolvePushConstants.halfHeight;
+        const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
+        half4 result = half4(0.0h, 0.0h, 0.0h, 1.0h);
+        if(!nwbCausticResolveInputInactive(groupID.xy, threadIndex))
+            result = nwbCausticResolveWavelet(pixel, groupThreadID, groupID);
+        if(inBounds)
+            g_NwbCausticResolveOutput[pixel] = result;
+        // Every invocation, including partial-group lanes and invalid receivers, participates in publication.
+        nwbCausticResolvePublishActivity(result.rgb, inBounds, groupID.xy, threadIndex);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

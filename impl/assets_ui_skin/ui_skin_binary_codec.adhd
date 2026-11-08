@@ -1,0 +1,234 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_ui_skin/validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiSkinBinaryCodec{
+    private UiSkinHeaderBinary makeHeader(
+        in NameHash textureNameHash,
+        in u32 atlasWidth,
+        in u32 atlasHeight,
+        in f32 referenceDensity,
+        in u32 regionCount
+    )const{
+        UiSkinHeaderBinary header;
+        header.textureNameHash = textureNameHash;
+        header.atlasWidth = atlasWidth;
+        header.atlasHeight = atlasHeight;
+        header.referenceDensity = referenceDensity;
+        header.regionCount = regionCount;
+        return header;
+    }
+
+    private UiSkinRegionBinary packRegion(in UiSkinRegion region)const{
+        UiSkinRegionBinary packed;
+        packed.nameHash = region.name.hash();
+        packed.x = region.rectangle.x;
+        packed.y = region.rectangle.y;
+        packed.width = region.rectangle.width;
+        packed.height = region.rectangle.height;
+        packed.sliceLeft = region.sliceInsets.left;
+        packed.sliceTop = region.sliceInsets.top;
+        packed.sliceRight = region.sliceInsets.right;
+        packed.sliceBottom = region.sliceInsets.bottom;
+        packed.paddingLeft = region.padding.left;
+        packed.paddingTop = region.padding.top;
+        packed.paddingRight = region.padding.right;
+        packed.paddingBottom = region.padding.bottom;
+        packed.minimumWidth = region.minimumWidth;
+        packed.minimumHeight = region.minimumHeight;
+        packed.drawMode = cast<u32>(region.drawMode);
+        return packed;
+    }
+
+    private UiSkinRegion unpackRegion(in UiSkinRegionBinary packed)const{
+        UiSkinRegion region;
+        region.name = Name(packed.nameHash);
+        region.rectangle.x = packed.x;
+        region.rectangle.y = packed.y;
+        region.rectangle.width = packed.width;
+        region.rectangle.height = packed.height;
+        region.sliceInsets.left = packed.sliceLeft;
+        region.sliceInsets.top = packed.sliceTop;
+        region.sliceInsets.right = packed.sliceRight;
+        region.sliceInsets.bottom = packed.sliceBottom;
+        region.padding.left = packed.paddingLeft;
+        region.padding.top = packed.paddingTop;
+        region.padding.right = packed.paddingRight;
+        region.padding.bottom = packed.paddingBottom;
+        region.minimumWidth = packed.minimumWidth;
+        region.minimumHeight = packed.minimumHeight;
+        if(packed.drawMode == cast<u32>(UiSkinDrawMode::NineSlice))
+            region.drawMode = UiSkinDrawMode::NineSlice;
+        else
+            region.drawMode = UiSkinDrawMode::Sprite;
+        return region;
+    }
+
+    private b8 isValidHeaderFlags(in UiSkinHeaderBinary header)const{
+        return header.reserved0 == 0u && header.reserved1 == 0u;
+    }
+
+    private b8 isValidRegionFlags(in UiSkinRegionBinary packed)const{
+        return packed.reserved == 0u && packed.drawMode <= cast<u32>(UiSkinDrawMode::NineSlice);
+    }
+
+    private b8 validateHeader(in UiSkinHeaderBinary header, in usize remainingBytes, in usize regionBinaryBytes)const{
+        if(header.version != s_UiSkinBinaryVersion){
+            error("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required", header.version);
+            return false;
+        }
+        if(!this.isValidHeaderFlags(header)){
+            error("UiSkin::loadBinary failed: header contains unsupported flags");
+            return false;
+        }
+        if(header.regionCount > s_UiSkinMaxRegionCount){
+            error("UiSkin::loadBinary failed: region count {} exceeds schema limit {}", header.regionCount, s_UiSkinMaxRegionCount);
+            return false;
+        }
+        if(header.regionCount == 0u || cast<usize>(header.regionCount) > remainingBytes / regionBinaryBytes){
+            error("UiSkin::loadBinary failed: region count is empty or exceeds the payload");
+            return false;
+        }
+        return true;
+    }
+
+    private Expected<UiSkinRegion> tryUnpackRegion(in UiSkinRegionBinary packed, in u32 index)const{
+        if(!this.isValidRegionFlags(packed)){
+            error("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags", index);
+            return makeUnexpected(Failure());
+        }
+        return this.unpackRegion(packed);
+    }
+
+    private b8 readRegionsPaletteAndTypography(
+        in Span<u8> binary,
+        in u32 regionCount,
+        mut usize inOutCursor,
+        mut Vector<UiSkinRegion> outRegions,
+        mut UiSkinPalette outPalette,
+        mut UiSkinTypography outTypography
+    )const{
+        outRegions.clear();
+        outRegions.reserve(cast<usize>(regionCount));
+        for(u32 index = 0u; index < regionCount; ++index){
+            const Expected<UiSkinRegionBinary> packedResult = ReadPOD<UiSkinRegionBinary>(binary, inOutCursor);
+            if(!packedResult.has_value()){
+                error("UiSkin::loadBinary failed: malformed region {}", index);
+                return false;
+            }
+            const Expected<UiSkinRegion> unpacked = this.tryUnpackRegion(packedResult.value(), index);
+            if(!unpacked.has_value())
+                return false;
+
+            outRegions.push_back(unpacked.value());
+        }
+        for(u32 index = 0u; index < s_UiSkinPaletteColorCount; ++index){
+            const Expected<UiSkinColor> packedResult = ReadPOD<UiSkinColor>(binary, inOutCursor);
+            if(!packedResult.has_value()){
+                error("UiSkin::loadBinary failed: malformed palette color {}", index);
+                return false;
+            }
+            outPalette.colors[cast<usize>(index)] = packedResult.value();
+        }
+        const Expected<UiSkinTypography> typographyResult = ReadPOD<UiSkinTypography>(binary, inOutCursor);
+        if(!typographyResult.has_value()){
+            error("UiSkin::loadBinary failed: malformed typography payload");
+            return false;
+        }
+        outTypography = typographyResult.value();
+        return true;
+    }
+
+    public b8 serialize(
+        in AssetRef<Texture> texture,
+        in u32 atlasWidth,
+        in u32 atlasHeight,
+        in f32 referenceDensity,
+        in Span<UiSkinRegion> regions,
+        in UiSkinPalette palette,
+        in UiSkinTypography typography,
+        mut Vector<u8> outBinary
+    )const{
+        usize reserveBytes = s_UiSkinHeaderBinaryBytes;
+        if(!AddBinaryRepeatedReserveBytes(reserveBytes, regions.size(), s_UiSkinRegionBinaryBytes)){
+            error("UiSkinAssetCodec::serialize failed: payload size overflows");
+            return false;
+        }
+        if(!AddBinaryRepeatedReserveBytes(reserveBytes, cast<usize>(s_UiSkinPaletteColorCount), s_UiSkinColorBytes)){
+            error("UiSkinAssetCodec::serialize failed: palette payload size overflows");
+            return false;
+        }
+        if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, s_UiSkinTypographyBytes)){
+            error("UiSkinAssetCodec::serialize failed: typography payload size overflows");
+            return false;
+        }
+
+        const UiSkinHeaderBinary header = this.makeHeader(
+            texture.name().hash(),
+            atlasWidth,
+            atlasHeight,
+            referenceDensity,
+            cast<u32>(regions.size())
+        );
+
+        outBinary.clear();
+        outBinary.reserve(reserveBytes);
+        AppendPOD(outBinary, header);
+        for(in UiSkinRegion region : regions)
+            AppendPOD(outBinary, this.packRegion(region));
+        for(in UiSkinColor color : palette.colors)
+            AppendPOD(outBinary, color);
+        AppendPOD(outBinary, typography);
+        return true;
+    }
+
+    public b8 deserialize(
+        in Span<u8> binary,
+        mut AssetRef<Texture> outTexture,
+        mut u32 outAtlasWidth,
+        mut u32 outAtlasHeight,
+        mut f32 outReferenceDensity,
+        mut Vector<UiSkinRegion> outRegions,
+        mut Vector<u32> outRegionIndex,
+        mut UiSkinPalette outPalette,
+        mut UiSkinTypography outTypography
+    )const{
+        usize cursor = 0u;
+        const Expected<UiSkinHeaderBinary> headerResult = ReadPOD<UiSkinHeaderBinary>(binary, cursor);
+        if(!headerResult.has_value()){
+            error("UiSkin::loadBinary failed: malformed header");
+            return false;
+        }
+        const UiSkinHeaderBinary header = headerResult.value();
+        if(header.magic != s_UiSkinBinaryMagic){
+            error("UiSkin::loadBinary failed: invalid UI skin asset format; recook required");
+            return false;
+        }
+        if(!this.validateHeader(header, binary.size() - cursor, s_UiSkinRegionBinaryBytes))
+            return false;
+
+        outTexture.virtualPath = Name(header.textureNameHash);
+        outAtlasWidth = header.atlasWidth;
+        outAtlasHeight = header.atlasHeight;
+        outReferenceDensity = header.referenceDensity;
+        if(!this.readRegionsPaletteAndTypography(binary, header.regionCount, cursor, outRegions, outPalette, outTypography))
+            return false;
+        if(cursor != binary.size()){
+            error("UiSkin::loadBinary failed: trailing bytes detected");
+            return false;
+        }
+        RebuildUiSkinRegionIndex(outRegions, outRegionIndex);
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

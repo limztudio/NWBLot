@@ -65,19 +65,6 @@ namespace __hidden_gpu_task_graph_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskGraph::ResourcePointerKey GpuTaskGraph::MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept{
-    switch(resource.type){
-    case GpuGraphResourceType::Texture:
-        return { resource.texture.get(), resource.type };
-    case GpuGraphResourceType::Buffer:
-        return { resource.buffer.get(), resource.type };
-    case GpuGraphResourceType::AccelStruct:
-        return { resource.accelStruct.get(), resource.type };
-    default:
-        return {};
-    }
-}
-
 Expected<GpuGraphResourceId> GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
@@ -86,7 +73,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importResource(const GpuGraphResource
     if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::Count)
         return MakeUnexpected(Failure{});
 
-    const u32 resourceIndex = findResourceIdentity(desc.identity);
+    const u32 resourceIndex = m_resourceImportIndexes.findResourceIdentity(m_resources, desc.identity);
     if(resourceIndex != s_InvalidImportIndex){
         if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
             return MakeUnexpected(Failure{});
@@ -122,7 +109,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& te
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = textureDesc.queueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture });
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture });
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
@@ -154,7 +141,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importBuffer(const BufferHandle& buff
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = bufferDesc.queueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer });
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer });
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
@@ -171,14 +158,14 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importBuffer(const BufferHandle& buff
 GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedTexture(const TextureHandle& texture)const noexcept{
     if(!m_graph || !texture)
         return {};
-    const auto match = m_graph->findResourceImportMatch(nullptr, { texture.get(), GpuGraphResourceType::Texture });
+    const auto match = m_graph->m_resourceImportIndexes.findResourceImportMatch(m_graph->m_resources, nullptr, { texture.get(), GpuGraphResourceType::Texture });
     return match.index == GpuTaskGraph::s_InvalidImportIndex ? GpuGraphResourceId{} : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
 GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedBuffer(const BufferHandle& buffer)const noexcept{
     if(!m_graph || !buffer)
         return {};
-    const auto match = m_graph->findResourceImportMatch(nullptr, { buffer.get(), GpuGraphResourceType::Buffer });
+    const auto match = m_graph->m_resourceImportIndexes.findResourceImportMatch(m_graph->m_resources, nullptr, { buffer.get(), GpuGraphResourceType::Buffer });
     return match.index == GpuTaskGraph::s_InvalidImportIndex ? GpuGraphResourceId{} : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
@@ -222,7 +209,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importAccelStruct(const RayTracingAcc
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = creationQueueSharing;
 
-    const ResourceImportMatch match = findResourceImportMatch(&resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct });
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct });
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
@@ -250,7 +237,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::importResourceSet(const GpuGraphRe
     if(!desc.identity || desc.markerLabel.empty() || (desc.memberCount != 0u && !desc.members))
         return MakeUnexpected(Failure{});
 
-    const u32 resourceSetIndex = findResourceSetIdentity(desc.identity);
+    const u32 resourceSetIndex = m_resourceImportIndexes.findResourceSetIdentity(m_resourceSets, desc.identity);
     if(resourceSetIndex != s_InvalidImportIndex){
         const GpuTaskGraphResourceSetView existing = resourceSetAt(resourceSetIndex);
         if(existing.memberCount != desc.memberCount)
@@ -283,124 +270,6 @@ b8 GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 GpuTaskGraph::findResourceIdentity(const Name& identity)const noexcept{
-    const NameHash& key = identity.identityHash();
-    if(m_resourceIdentityIndex){
-        const auto found = m_resourceIdentityIndex->find(key);
-        return found == m_resourceIdentityIndex->end() ? s_InvalidImportIndex : found.value();
-    }
-    for(usize index = 0u; index < m_resources.size(); ++index){
-        if(m_resources[index].identity.identityHash() == key)
-            return static_cast<u32>(index);
-    }
-    return s_InvalidImportIndex;
-}
-
-GpuTaskGraph::ResourceImportMatch GpuTaskGraph::findResourceImportMatch(const NameHash* const identity, const ResourcePointerKey& pointer)const noexcept{
-    if(!pointer.pointer)
-        return {};
-    if(m_resourceIdentityIndex){
-        ResourceImportMatch match;
-        if(m_resourcePointerIndex){
-            const auto found = m_resourcePointerIndex->find(pointer);
-            if(found != m_resourcePointerIndex->end())
-                match = { found.value(), true };
-        }
-        if(identity){
-            const auto found = m_resourceIdentityIndex->find(*identity);
-            // At the same ordinal the typed pointer wins.
-            // An earlier identity conflict still rejects before a later pointer match, matching the original ordered import validation.
-            if(found != m_resourceIdentityIndex->end() && found.value() < match.index)
-                return { found.value(), false };
-        }
-        return match;
-    }
-    for(usize index = 0u; index < m_resources.size(); ++index){
-        const GpuGraphResourceNode& resource = m_resources[index];
-        if(resource.type == pointer.type){
-            const void* typedPointer = nullptr;
-            switch(resource.type){
-            case GpuGraphResourceType::Texture:
-                typedPointer = resource.texture.get();
-                break;
-            case GpuGraphResourceType::Buffer:
-                typedPointer = resource.buffer.get();
-                break;
-            case GpuGraphResourceType::AccelStruct:
-                typedPointer = resource.accelStruct.get();
-                break;
-            default:
-                break;
-            }
-            if(typedPointer == pointer.pointer)
-                return { static_cast<u32>(index), true };
-        }
-        if(identity && resource.identity.identityHash() == *identity)
-            return { static_cast<u32>(index), false };
-    }
-    return {};
-}
-
-u32 GpuTaskGraph::findResourceSetIdentity(const Name& identity)const noexcept{
-    const NameHash& key = identity.identityHash();
-    if(m_resourceSetIdentityIndex){
-        const auto found = m_resourceSetIdentityIndex->find(key);
-        return found == m_resourceSetIdentityIndex->end() ? s_InvalidImportIndex : found.value();
-    }
-    for(usize index = 0u; index < m_resourceSets.size(); ++index){
-        if(m_resourceSets[index].identity.identityHash() == key)
-            return static_cast<u32>(index);
-    }
-    return s_InvalidImportIndex;
-}
-
-void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPointer){
-    if(!m_resourceIdentityIndex){
-        if(m_resources.size() < s_InlineImportIndexCount)
-            return;
-
-        const usize identityCount = AddSize(m_resources.size(), 1u);
-        ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
-        usize pointerCount = pendingPointer.pointer ? 1u : 0u;
-        for(usize index = 0u; index < m_resources.size(); ++index){
-            const GpuGraphResourceNode& resource = m_resources[index];
-            // Insertion retains the first ordinal; later declarations must never replace earlier lookup priority.
-            identities.emplace(resource.identity.identityHash(), static_cast<u32>(index));
-            if(MakeResourcePointerKey(resource).pointer)
-                ++pointerCount;
-        }
-        Optional<ResourcePointerIndex> pointers;
-        if(pointerCount != 0u){
-            pointers.emplace(AddSize(pointerCount, pointerCount), m_arena);
-            for(usize index = 0u; index < m_resources.size(); ++index){
-                const ResourcePointerKey key = MakeResourcePointerKey(m_resources[index]);
-                if(key.pointer)
-                    pointers->emplace(key, static_cast<u32>(index));
-            }
-        }
-
-        // Build both tables before publishing either. Both hold published ordinals only.
-        static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
-        static_assert(IsNothrowMoveConstructible_V<ResourcePointerIndex>);
-        m_resourceIdentityIndex.emplace(Move(identities));
-        if(pointers)
-            m_resourcePointerIndex.emplace(Move(*pointers));
-    }
-    else if(pendingPointer.pointer && !m_resourcePointerIndex)
-        m_resourcePointerIndex.emplace(s_InitialPointerIndexBucketCount, m_arena);
-}
-
-void GpuTaskGraph::prepareResourceSetIndex(){
-    if(m_resourceSetIdentityIndex || m_resourceSets.size() < s_InlineImportIndexCount)
-        return;
-    const usize identityCount = AddSize(m_resourceSets.size(), 1u);
-    ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
-    // emplace intentionally keeps the first ordinal for the exact identity.
-    for(usize index = 0u; index < m_resourceSets.size(); ++index)
-        identities.emplace(m_resourceSets[index].identity.identityHash(), static_cast<u32>(index));
-    static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
-    m_resourceSetIdentityIndex.emplace(Move(identities));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

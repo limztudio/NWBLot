@@ -10,7 +10,33 @@ import sys
 import tempfile
 import unittest
 
-LIT_SFNT_UINT16_BIG_ENDIAN = ">H"
+from font_package_evidence import (
+    FontPackageEvidence,
+    LIT_ADVANCE_UNITS,
+    LIT_CHANNEL,
+    LIT_DRAWABLE,
+    LIT_FACE_INDEX,
+    LIT_FONT_HASH,
+    LIT_GLYPHS,
+    LIT_GROUP,
+    LIT_GROUPS,
+    LIT_GUARD,
+    LIT_HEIGHT,
+    LIT_ID,
+    LIT_PLANE_BOTTOM,
+    LIT_PLANE_LEFT,
+    LIT_PLANE_RIGHT,
+    LIT_PLANE_TOP,
+    LIT_PPEM,
+    LIT_SFNT,
+    LIT_SFNT_UINT16_BIG_ENDIAN,
+    LIT_TABLES,
+    LIT_UNITS_PER_EM,
+    LIT_WIDTH,
+    LIT_X,
+    LIT_Y,
+)
+
 LIT_METADATA_SUFFIX = ".nwb"
 LIT_FONT_SUFFIX = ".font"
 LIT_FLOAT32_LITTLE_ENDIAN = "<f"
@@ -23,28 +49,6 @@ LIT_FONT_BUILDER_TIMEOUT_SECONDS = 180
 
 LIT_PACKAGE_PROBE_TIMEOUT_SECONDS = 120
 
-LIT_SFNT = "sfnt"
-LIT_GROUPS = "groups"
-LIT_FONT_HASH = "font_hash"
-LIT_FACE_INDEX = "face_index"
-LIT_ID = "id"
-LIT_GROUP = "group"
-LIT_CHANNEL = "channel"
-LIT_X = "x"
-LIT_Y = "y"
-LIT_WIDTH = "width"
-LIT_HEIGHT = "height"
-LIT_PLANE_LEFT = "plane_left"
-LIT_PLANE_TOP = "plane_top"
-LIT_PLANE_RIGHT = "plane_right"
-LIT_PLANE_BOTTOM = "plane_bottom"
-LIT_ADVANCE_UNITS = "advance_units"
-LIT_DRAWABLE = "drawable"
-LIT_UNITS_PER_EM = "units_per_em"
-LIT_PPEM = "ppem"
-LIT_GUARD = "guard"
-LIT_GLYPHS = "glyphs"
-LIT_TABLES = "tables"
 LIT_BODY_NWB = "body.nwb"
 LIT_ATLAS_BIN = "atlas.bin"
 LIT_UTF_8 = "utf-8"
@@ -54,105 +58,6 @@ LIT_PPEM_2 = "--ppem"
 LIT_EXTENT = "--extent"
 LIT_OVERWRITE = "--overwrite"
 LIT_B_OWNED_BY_ANOTHER_OPERATION = b"owned by another operation"
-
-
-FONT_HEADER = struct.Struct("<IIIIII32s")
-ATLAS_HEADER = struct.Struct("<IIII64s32sIIIIIIIfffIII")
-GLYPH_RECORD = struct.Struct("<IIIIIIIfffffI")
-GROUP_HEADER = struct.Struct("<IIII32s")
-TABLE_HEADER = struct.Struct("<II32s")
-TABLE_TAGS = {0x6B65726E: "kern", 0x47504F53: "GPOS", 0x47444546: "GDEF"}
-
-
-def read_prepared_font(path):
-    data = path.read_bytes()
-    if len(data) < FONT_HEADER.size:
-        raise AssertionError("truncated FON2 header")
-    magic, version, face_index, byte_count, group_count, reserved, digest = FONT_HEADER.unpack_from(data)
-    if (magic, version, face_index, reserved) != (0x324E4F46, 1, 0, 0):
-        raise AssertionError("invalid FON2 header")
-    if not (0 < byte_count <= 32 * 1024 * 1024 and 0 < group_count <= 8):
-        raise AssertionError("invalid FON2 counts")
-    cursor = FONT_HEADER.size
-    directory = []
-    for _ in range(group_count):
-        width, height, channels, pixel_bytes, pixel_hash = GROUP_HEADER.unpack_from(data, cursor)
-        if not (0 < width <= 2048 and 0 < height <= 2048 and 1 <= channels <= 4):
-            raise AssertionError("invalid FON2 image dimensions")
-        if pixel_bytes != width * height * channels:
-            raise AssertionError("invalid FON2 image byte count")
-        directory.append((width, height, channels, pixel_bytes, pixel_hash))
-        cursor += GROUP_HEADER.size
-    sfnt = data[cursor:cursor + byte_count]
-    if len(sfnt) != byte_count or hashlib.sha256(sfnt).digest() != digest:
-        raise AssertionError("invalid FON2 font digest")
-    cursor += byte_count
-    groups = []
-    for width, height, channels, pixel_bytes, pixel_hash in directory:
-        pixels = data[cursor:cursor + pixel_bytes]
-        if len(pixels) != pixel_bytes or hashlib.sha256(pixels).digest() != pixel_hash:
-            raise AssertionError("invalid FON2 pixel digest")
-        groups.append((width, height, channels, pixels))
-        cursor += pixel_bytes
-    if cursor != len(data):
-        raise AssertionError("trailing FON2 bytes")
-    return {LIT_SFNT: sfnt, LIT_GROUPS: groups, LIT_FONT_HASH: digest, LIT_FACE_INDEX: face_index}
-
-
-def source_bytes(path):
-    return read_prepared_font(path)[LIT_SFNT]
-
-
-def sfnt_tables(data):
-    count = struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, data, 4)[0]
-    tables = {}
-    for index in range(count):
-        tag, _checksum, offset, length = struct.unpack_from(">4sIII", data, 12 + index * 16)
-        tables[tag.decode("ascii")] = data[offset:offset + length]
-    return tables
-
-
-def read_atlas(data):
-    if len(data) < ATLAS_HEADER.size:
-        raise AssertionError("truncated FTA1 header")
-    (magic, version, encoding, reserved, identity, font_hash, face_index, units_per_em, source_glyph_count, ppem, spread, guard, raster, ascender, descender, line_gap, glyph_count, group_count, table_count) = ATLAS_HEADER.unpack_from(data)
-    if (magic, version, encoding, reserved) != (0x31415446, 2, 1, 0):
-        raise AssertionError("invalid FTA1 header")
-    if not (glyph_count == source_glyph_count and 0 < group_count <= 8 and table_count <= 3):
-        raise AssertionError("invalid FTA1 counts")
-    cursor = ATLAS_HEADER.size
-    glyphs = []
-    for _ in range(glyph_count):
-        values = GLYPH_RECORD.unpack_from(data, cursor)
-        glyphs.append({LIT_ID: values[0], LIT_GROUP: values[1], LIT_CHANNEL: values[2], LIT_X: values[3], LIT_Y: values[4], LIT_WIDTH: values[5], LIT_HEIGHT: values[6], LIT_PLANE_LEFT: values[7], LIT_PLANE_TOP: values[8], LIT_PLANE_RIGHT: values[9], LIT_PLANE_BOTTOM: values[10],
-                       LIT_ADVANCE_UNITS: values[11], LIT_DRAWABLE: values[12]})
-        cursor += GLYPH_RECORD.size
-    groups = []
-    for _ in range(group_count):
-        width, height, channels, byte_count, digest = GROUP_HEADER.unpack_from(data, cursor)
-        cursor += GROUP_HEADER.size
-        pixels = data[cursor:cursor + byte_count]
-        if not (0 < width <= 2048 and 0 < height <= 2048 and 1 <= channels <= 4):
-            raise AssertionError("invalid compact group dimensions or channels")
-        if len(pixels) != byte_count or byte_count != width * height * channels:
-            raise AssertionError("invalid compact group length")
-        if hashlib.sha256(pixels).digest() != digest:
-            raise AssertionError("invalid compact group hash")
-        groups.append((width, height, channels, pixels))
-        cursor += byte_count
-    tables = {}
-    for _ in range(table_count):
-        tag, byte_count, digest = TABLE_HEADER.unpack_from(data, cursor)
-        cursor += TABLE_HEADER.size
-        raw = data[cursor:cursor + byte_count]
-        if tag not in TABLE_TAGS or len(raw) != byte_count or hashlib.sha256(raw).digest() != digest:
-            raise AssertionError("invalid positioning table")
-        tables[TABLE_TAGS[tag]] = raw
-        cursor += byte_count
-    if cursor != len(data):
-        raise AssertionError("trailing FTA1 bytes")
-    return {LIT_FONT_HASH: font_hash, "identity": identity, LIT_FACE_INDEX: face_index, LIT_UNITS_PER_EM: units_per_em, LIT_PPEM: ppem, "spread": spread, LIT_GUARD: guard, "raster": raster, "ascender": ascender, "descender": descender, "line_gap": line_gap,
-            LIT_GLYPHS: glyphs, LIT_GROUPS: groups, LIT_TABLES: tables}
 
 
 class FontBuilderCli(unittest.TestCase):
@@ -165,7 +70,7 @@ class FontBuilderCli(unittest.TestCase):
         cls.output = cls.root / "latin" / LIT_BODY_NWB
         cls.invoke(cls.latin, cls.output)
         cls.payloads = cls.decode_package(cls.output)
-        cls.atlas = read_atlas(cls.payloads[LIT_ATLAS_BIN])
+        cls.atlas = FontPackageEvidence.read_atlas(cls.payloads[LIT_ATLAS_BIN])
 
     @classmethod
     def tearDownClass(cls):
@@ -198,13 +103,13 @@ class FontBuilderCli(unittest.TestCase):
         for obsolete in ("schema_version", "sha256", "source", ".atlas", LIT_FACE_INDEX, LIT_UNITS_PER_EM, "glyph_count", "guard_texels", "atlas.groups", LIT_PLANE_RIGHT, LIT_PLANE_BOTTOM, LIT_DRAWABLE):
             self.assertNotIn(obsolete, text)
         payloads = self.decode_package(output) if payloads is None else payloads
-        atlas = read_atlas(payloads[LIT_ATLAS_BIN])
-        prepared = read_prepared_font(output.with_suffix(LIT_FONT_SUFFIX))
+        atlas = FontPackageEvidence.read_atlas(payloads[LIT_ATLAS_BIN])
+        prepared = FontPackageEvidence.read_prepared_font(output.with_suffix(LIT_FONT_SUFFIX))
         self.assertEqual(prepared[LIT_GROUPS], atlas[LIT_GROUPS])
         self.assertEqual(prepared[LIT_FONT_HASH], atlas[LIT_FONT_HASH])
         self.assertEqual(prepared[LIT_SFNT], payloads[LIT_SOURCE_SFNT])
         self.assertEqual(atlas[LIT_FACE_INDEX], prepared[LIT_FACE_INDEX])
-        source_tables = sfnt_tables(prepared[LIT_SFNT])
+        source_tables = FontPackageEvidence.sfnt_tables(prepared[LIT_SFNT])
         self.assertEqual(atlas[LIT_UNITS_PER_EM], struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, source_tables["head"], 18)[0])
         self.assertEqual(len(atlas[LIT_GLYPHS]), struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, source_tables[LIT_MAXP], 4)[0])
         metadata_glyphs = self.metadata_list(text, LIT_GLYPHS)
@@ -276,7 +181,7 @@ class FontBuilderCli(unittest.TestCase):
             for channel in range(channels):
                 self.assertGreater(max(pixels[channel::channels]), 128)
                 self.assertLess(min(pixels[channel::channels]), 128)
-        source = sfnt_tables(source_bytes(self.latin))
+        source = FontPackageEvidence.sfnt_tables(FontPackageEvidence.source_bytes(self.latin))
         self.assertIn("GPOS", atlas[LIT_TABLES])
         for tag, raw in atlas[LIT_TABLES].items():
             self.assertEqual(raw, source[tag])
@@ -292,7 +197,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assertTrue(any(dimension & (dimension - 1) for group in atlas[LIT_GROUPS] for dimension in group[:2]))
         self.assertTrue(all(width <= 1023 and height <= 1023 for width, height, _, _ in atlas[LIT_GROUPS]))
         self.assertLess(sum(len(group[3]) for group in atlas[LIT_GROUPS]), len(atlas[LIT_GROUPS]) * 1023 * 1023 * 4)
-        self.assertEqual(payloads, { LIT_ATLAS_BIN: payloads[LIT_ATLAS_BIN], LIT_SOURCE_SFNT: source_bytes(self.latin), **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas[LIT_GROUPS])},
+        self.assertEqual(payloads, { LIT_ATLAS_BIN: payloads[LIT_ATLAS_BIN], LIT_SOURCE_SFNT: FontPackageEvidence.source_bytes(self.latin), **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas[LIT_GROUPS])},
             **{f"table_{tag}.bin": raw for tag, raw in atlas[LIT_TABLES].items()}})
 
     def test_overwrite_and_failed_capacity_preserve_complete_pair(self):
@@ -315,7 +220,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assertFalse(output.parent.exists() and list(output.parent.iterdir()))
 
     def test_old_font_envelope_and_corrupt_source_hash_are_rejected(self):
-        sfnt = source_bytes(self.latin)
+        sfnt = FontPackageEvidence.source_bytes(self.latin)
         old = self.root / "old.font"
         old.write_bytes(struct.pack("<IIIIQ", 0x464F4E31, 1, 0, 0, len(sfnt)) + sfnt)
         output = self.root / "rejected_source" / LIT_BODY_NWB
@@ -386,13 +291,13 @@ class FontBuilderCli(unittest.TestCase):
         atlas = self.assert_pair(output)
         self.assert_compact_groups(atlas)
         self.assertEqual(atlas[LIT_GROUPS][-1][2], 1)
-        original = source_bytes(self.korean)
-        glyph_count = struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, sfnt_tables(original)[LIT_MAXP], 4)[0]
+        original = FontPackageEvidence.source_bytes(self.korean)
+        glyph_count = struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, FontPackageEvidence.sfnt_tables(original)[LIT_MAXP], 4)[0]
         self.assertEqual(len(atlas[LIT_GLYPHS]), glyph_count)
         self.assertEqual(atlas[LIT_FONT_HASH], hashlib.sha256(original).digest())
         self.assertGreater(len(atlas[LIT_GROUPS]), 1)
         self.assertLessEqual(len(atlas[LIT_GROUPS]), 8)
-        source = sfnt_tables(original)
+        source = FontPackageEvidence.sfnt_tables(original)
         for tag, raw in atlas[LIT_TABLES].items():
             self.assertEqual(raw, source[tag])
 

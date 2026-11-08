@@ -1,14 +1,21 @@
 nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_report_composer_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/logclient_shutdown_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/logger_protocol_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/telemetry_publication_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logger_producer_contract_tests.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_archive_extractor.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_manifest_validator.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_report_composer.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_android.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_linux.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/linux_frame_symbol_resolver.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_rgd.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_aftermath.cpp"
 )
@@ -29,7 +36,10 @@ endif()
 if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/logger/server/clipboard_text.cpp"
+        "${PROJECT_SOURCE_DIR}/logger/server/log_row_painter.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/log_row_painter_tests.cpp"
         "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_win32.cpp"
+        "${PROJECT_SOURCE_DIR}/logger/server/minidump_image.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/minidump_boundary_tests.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
     )

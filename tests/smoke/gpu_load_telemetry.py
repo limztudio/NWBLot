@@ -8,86 +8,27 @@ alignment is approximate; raw timestamps and invalid samples remain available.
 import ctypes
 from datetime import datetime, timezone
 import json
-import math
 import os
 from pathlib import Path
-import re
-import shutil
-import statistics
-import subprocess
 import threading
 import time
 
+from gpu_load_analysis import GpuLoadAnalysis, VALID_STATUSES
 from window_capture_smoke import SmokeFailure, write_status
 
 COUNTER_PATH = r"\GPU Engine(*)\Utilization Percentage"
-PID_INSTANCE = re.compile(r"^pid_(\d+)_(luid_.+_phys_\d+_eng_\d+_engtype_.+)$", re.IGNORECASE)
-VALID_STATUSES = (0, 1)
 MORE_DATA = 0x800007D2
 NO_DATA = 0x800007D5
 INVALID_DATA = 0xC0000BC6
 CSTATUS_INVALID_DATA = 0xC0000BBA
 
 
-def host_inventory():
-    if os.name != "nt":
-        raise SmokeFailure("passive GPU-engine profiling requires Windows host inventory")
-    shell = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
-    if shell is None:
-        raise SmokeFailure("Windows host inventory requires PowerShell")
-    script = r"""$ErrorActionPreference='Stop'
-$gpu=Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion
-$sets=Get-Counter -ListSet '*GPU*' -ErrorAction SilentlyContinue
-$paths=@($sets | ForEach-Object {$_.Paths})
-$vendor=Get-Command nvidia-smi -ErrorAction SilentlyContinue
-[ordered]@{gpu=@($gpu);gpu_counter_paths=$paths;gpu_clock_counter_candidates=@($paths | Where-Object {$_ -match 'clock|frequency'});nvidia_smi=if($vendor){$vendor.Source}else{$null};clock_values_collected=$false;gpu_temperature_values_collected=$false} | ConvertTo-Json -Depth 8 -Compress
-"""
-    result = subprocess.run([shell, "-NoProfile", "-NonInteractive", "-Command", script], check=True, capture_output=True, text=True, timeout=30,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    return json.loads(result.stdout.lstrip("\ufeff"))
 
 
-def reduce_instances(items, fixture_pid):
-    """Keep per-engine sums separate; engines execute concurrently."""
-    engines, invalid, unmatched = {}, [], []
-    for item in items:
-        name, status, value = item["instance"], item["status"], item.get("value")
-        if status not in VALID_STATUSES or value is None or not math.isfinite(value) or value < 0:
-            invalid.append(item)
-            continue
-        match = PID_INSTANCE.fullmatch(name)
-        if match is None:
-            unmatched.append(item)
-            continue
-        pid, engine = int(match[1]), match[2].lower()
-        row = engines.setdefault(engine, {"fixture_percent": 0., "other_processes_percent": 0.})
-        row["fixture_percent" if pid == fixture_pid else "other_processes_percent"] += value
-    return {"engines": engines, "invalid_instances": invalid, "unmatched_instances": unmatched,
-        "fixture_busiest_engine_percent": max((row["fixture_percent"] for row in engines.values()), default=None),
-        "other_processes_busiest_engine_percent": max((row["other_processes_percent"] for row in engines.values()), default=None),
-        "fixture_instances_present": any(PID_INSTANCE.fullmatch(item["instance"]) and int(PID_INSTANCE.fullmatch(item["instance"])[1]) == fixture_pid
-            and item["status"] in VALID_STATUSES and item.get("value") is not None and math.isfinite(item["value"]) and item["value"] >= 0 for item in items)}
 
 
-def retained_publication_bounds(observations, start, stop, durations):
-    if start < 0 or stop <= start or stop > len(observations) or stop > len(durations):
-        raise SmokeFailure("telemetry lacks retained publication-header observations")
-    if any(not math.isfinite(value) or value <= 0 for value in durations[start:stop]):
-        raise SmokeFailure("telemetry retained publication durations must be finite and positive")
-    # Log headers arrive after their publication interval.
-    return observations[start] - durations[start], observations[stop - 1]
 
 
-def summarize_samples(samples, bounds):
-    start, stop = bounds
-    selected = [sample for sample in samples if start <= sample["monotonic_seconds"] <= stop]
-    valid = [sample for sample in selected if sample.get("query_status") == 0 and sample.get("fixture_instances_present")]
-    result = {"retained_publication_bounds_monotonic_seconds": [start, stop], "retained_samples": len(selected), "valid_fixture_samples": len(valid),
-        "eligible": len(valid) >= 2, "interpretation": "1 Hz host observations aligned approximately to timing publication windows. Per-engine process sums may exceed 100%; concurrent engines are not summed into a GPU percentage. No GPU clock or causal DVFS inference."}
-    for field in ("fixture_busiest_engine_percent", "other_processes_busiest_engine_percent"):
-        values = [sample[field] for sample in valid if sample.get(field) is not None]
-        result[field] = {"mean": statistics.fmean(values), "minimum": min(values), "maximum": max(values)} if values else None
-    return result
 
 
 class PdhEngineQuery:
@@ -180,7 +121,7 @@ class WindowsGpuTelemetry:
                     begin = time.monotonic()
                     status, instances = self.query.collect()
                     sample = {"monotonic_seconds": begin, "utc": datetime.now(timezone.utc).isoformat(), "fixture_pid": self.fixture_pid,
-                        "query_status": status, "counter_instances": instances, **reduce_instances(instances, self.fixture_pid)}
+                        "query_status": status, "counter_instances": instances, **GpuLoadAnalysis.reduce_instances(instances, self.fixture_pid)}
                     self.samples.append(sample)
                     stream.write(json.dumps(sample, allow_nan=False) + "\n")
                     stream.flush()
@@ -199,11 +140,11 @@ class WindowsGpuTelemetry:
 
     def finish(self, start, stop, durations):
         self.close()
-        bounds = retained_publication_bounds(self.header_observations, start, stop, durations)
+        bounds = GpuLoadAnalysis.retained_publication_bounds(self.header_observations, start, stop, durations)
         result = {"provider": "Windows PDH GPU Engine / Utilization Percentage", "counter_path": COUNTER_PATH, "sample_period_seconds": self.period,
             "gpu_frequency": {"available": False, "reason": "This sampler records engine load only. No frequency values are acquired; consult the campaign host inventory for exposed counters and tools."},
             "gpu_temperature": {"available": False, "reason": "Available ACPI thermal zones do not identify the GPU."},
-            "errors": self.errors, "header_observations_monotonic_seconds": self.header_observations, **summarize_samples(self.samples, bounds),
+            "errors": self.errors, "header_observations_monotonic_seconds": self.header_observations, **GpuLoadAnalysis.summarize_samples(self.samples, bounds),
             "raw_samples": str(self.directory / "gpu_load.jsonl")}
         result["eligible"] = result["eligible"] and not self.errors
         (self.directory / "gpu_load_summary.json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")

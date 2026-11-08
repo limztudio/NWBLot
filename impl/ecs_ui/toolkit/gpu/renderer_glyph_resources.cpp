@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "renderer_internal.h"
+#include "image_resources.h"
 
 #include <core/common/log.h>
 
@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuImageResources::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& pages = snapshot.glyphPages();
@@ -34,10 +34,10 @@ b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     return ValidateDrawCommandGlyphBindings(snapshot.commands(), pages.size());
 }
 
-Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const SharedGlyphPage& page){
-    usize replaceIndex = m_glyphCache.size();
-    for(usize index = 0u; index < m_glyphCache.size(); ++index){
-        const auto& existing = m_glyphCache[index];
+Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const SharedGlyphPage& page){
+    usize replaceIndex = m_imageCache.glyphs().size();
+    for(usize index = 0u; index < m_imageCache.glyphs().size(); ++index){
+        const auto& existing = m_imageCache.glyphs()[index];
         if(!SameGlyphPageKey(existing->m_page->binding(), page->binding()))
             continue;
         replaceIndex = index;
@@ -46,9 +46,9 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         if(!SameGlyphPageVersion(existing->m_page->binding(), existing->m_page->pixels(), page->binding(), page->pixels(), existing->m_page.get() == page.get()))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuGlyphVersion> reused = existing;
-        m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));
-        m_glyphCache.push_back(reused);
-        if(!PrepareGpuSampledImageDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
+        m_imageCache.glyphs().erase(m_imageCache.glyphs().begin() + static_cast<isize>(index));
+        m_imageCache.glyphs().push_back(reused);
+        if(!GpuSampledTextures::prepareDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -61,7 +61,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
     GpuVersion<GpuGlyphVersion> version = Move(*versionResult);
     const GlyphPageBinding& binding = page->binding();
     // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
-    if(!CreateAndUploadGpuPageTexture(
+    if(!GpuSampledTextures::createAndUploadPage(
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuGlyphPageTextureName,
@@ -77,18 +77,18 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
     ))
         return MakeUnexpected(Failure{});
     // Frames retain superseded versions; evicting a cache entry never overwrites an image or frees a live frame's descriptor.
-    if(replaceIndex < m_glyphCache.size())
-        m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(replaceIndex));
-    else if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() == s_PaintMaxImages)
-        evictImageCacheEntry();
-    m_glyphCache.push_back(version);
+    if(replaceIndex < m_imageCache.glyphs().size())
+        m_imageCache.glyphs().erase(m_imageCache.glyphs().begin() + static_cast<isize>(replaceIndex));
+    else if(m_imageCache.glyphs().size() + m_imageCache.sdfs().size() + m_imageCache.textures().size() == s_PaintMaxImages)
+        m_imageCache.evict();
+    m_imageCache.glyphs().push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
-    if(!PrepareGpuSampledImageDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
+    if(!GpuSampledTextures::prepareDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
 
-b8 GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
+b8 GpuImageResources::prepareGlyphPages(GpuFrameData& frame){
     const auto& pages = frame.m_snapshot.glyphPages();
     frame.m_glyphPages.reserve(pages.size());
     // Retain successful earlier uploads if preparation fails partway through the page set.
@@ -101,7 +101,7 @@ b8 GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuSampledGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
@@ -109,7 +109,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareGlyphPages(Core::Gpu
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
         const auto& page = frame->m_glyphPages[index];
-        const auto texture = ImportGpuSampledTexture(
+        const auto texture = GpuSampledTextures::importTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuGlyphPageReadyPrefix,
                 .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,

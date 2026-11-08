@@ -9,6 +9,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke  # noqa: E402
+from stress_launch_environment import StressLaunchEnvironment
+import stress_presentation_evidence as presentation  # noqa: E402
+import stress_csg_profile as csg  # noqa: E402
+import stress_shadow_evidence as shadow  # noqa: E402
 from stress_timing_test_support import shadow_record, valid_log  # noqa: E402
 
 LIT_N = "\n"
@@ -23,17 +27,17 @@ LIT_PRECEDE = "precede"
 LIT_MAIN = "__main__"
 
 
-PROFILE = (smoke.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 " "half_x=4.5 half_y=0.08 half_z=0.65 center_y=0.9 amplitude_y=0.1 front_z=-0.55 back_z=0.55 motion=crowd_yaw")
+PROFILE = (csg.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 " "half_x=4.5 half_y=0.08 half_z=0.65 center_y=0.9 amplitude_y=0.1 front_z=-0.55 back_z=0.55 motion=crowd_yaw")
 DISABLED = "Loader: hardware ray tracing disabled before device creation"
 
 
 def csg_log(hardware=True):
-    capability = (smoke.CSG_DEVICE + f"meshlets=0 rayquery={int(hardware)} raypipeline={int(hardware)} " f"accelstruct={int(hardware)} wavelanes=64 renderer=fixture")
-    dispatch = smoke.CSG_DISPATCH + f"(hardware_compose={int(hardware)}, 25 instances)"
+    capability = (csg.CSG_DEVICE + f"meshlets=0 rayquery={int(hardware)} raypipeline={int(hardware)} " f"accelstruct={int(hardware)} wavelanes=64 renderer=fixture")
+    dispatch = csg.CSG_DISPATCH + f"(hardware_compose={int(hardware)}, 25 instances)"
     setup = capability + LIT_N + PROFILE + LIT_N + dispatch
     if not hardware:
         setup += LIT_N + DISABLED
-    return shadow_record() + LIT_N + valid_log().replace(smoke.START, smoke.START + LIT_N + setup)
+    return shadow_record() + LIT_N + valid_log().replace(presentation.START, presentation.START + LIT_N + setup)
 
 
 class StressCsgProfileTests(unittest.TestCase):
@@ -47,11 +51,11 @@ class StressCsgProfileTests(unittest.TestCase):
 
     def test_strips_inherited_csg_and_rejects_unrequested_work(self):
         args = smoke.parse_args(self.argv)
-        environment = smoke.launch_environment({LIT_NWB_STRESS_CSG_PROFILE: LIT_WAIST_BANDS}, args, self.output)
+        environment = StressLaunchEnvironment.launch_environment({LIT_NWB_STRESS_CSG_PROFILE: LIT_WAIST_BANDS}, args, self.output)
         self.assertEqual(environment[LIT_NWB_STRESS_CSG_PROFILE], LIT_NONE)
-        self.assertFalse(smoke.verify_csg_profile(valid_log(), args)["enabled"])
+        self.assertFalse(csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(valid_log())["enabled"])
         with self.assertRaisesRegex(smoke.SmokeFailure, "unrequested CSG"):
-            smoke.verify_csg_profile(csg_log(), args)
+            csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(csg_log())
 
     def test_cli_requires_complete_twenty_body_map_profile(self):
         arguments = self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS]
@@ -64,44 +68,44 @@ class StressCsgProfileTests(unittest.TestCase):
             args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS, "--software-shadow-capture-cadence", name])
             text = csg_log().replace("capture_cadence=0", f"capture_cadence={requested}")
             with self.assertRaisesRegex(smoke.SmokeFailure, "accepted light-space capture reuse"):
-                smoke.verify_software_shadow_settings(text, args)
-            marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + f"(cadence={effective})"
-            verified = smoke.verify_software_shadow_settings(text + LIT_N + marker, args)
+                shadow.ShadowEvidence(args).verify_software(text)
+            marker = shadow.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + f"(cadence={effective})"
+            verified = shadow.ShadowEvidence(args).verify_software(text + LIT_N + marker)
             self.assertTrue(verified["accepted_reuse_verified"])
-            self.assertTrue(smoke.verify_csg_profile(text, args)[LIT_VERIFIED])
+            self.assertTrue(csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(text)[LIT_VERIFIED])
 
     def test_hardware_and_requested_software_routes_are_verified(self):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
-        hardware = smoke.verify_csg_profile(csg_log(), args)
+        hardware = csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(csg_log())
         self.assertTrue(hardware[LIT_HARDWARE_COMPOSE])
         args.application_arg.append("--disable-hardware-ray-tracing")
-        software = smoke.verify_csg_profile(csg_log(False), args)
+        software = csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(csg_log(False))
         self.assertFalse(software[LIT_HARDWARE_COMPOSE])
         with self.assertRaisesRegex(smoke.SmokeFailure, LIT_SOFTWARE_POLICY_OR_ROUTE):
-            smoke.verify_csg_profile(csg_log(), args)
+            csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(csg_log())
         with self.assertRaisesRegex(smoke.SmokeFailure, LIT_SOFTWARE_POLICY_OR_ROUTE):
-            smoke.verify_csg_profile(csg_log(False).replace(DISABLED, ""), args)
+            csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(csg_log(False).replace(DISABLED, ""))
 
     def test_missing_or_partial_csg_work_cannot_qualify(self):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
         original = csg_log()
         for text in (valid_log(), original.replace(PROFILE, ""), original.replace(PROFILE, PROFILE + LIT_N + PROFILE),
             original.replace("receivers=20", "receivers=10"), original.replace("transparent=10 opaque=10 cutters=2", "transparent=9 opaque=10 cutters=2"), original.replace("cutters=2", "cutters=1"), original.replace("half_y=0.08", "half_y=0"),
-            original.replace("amplitude_y=0.1", "amplitude_y=nan"), original.replace("25 instances", "19 instances"), original.replace("hardware_compose=1", "hardware_compose=0"), original.replace(smoke.CSG_DISPATCH, "NotDispatched: "),
-            original.replace(smoke.CSG_DEVICE, "NotCapabilities: ")):
+            original.replace("amplitude_y=0.1", "amplitude_y=nan"), original.replace("25 instances", "19 instances"), original.replace("hardware_compose=1", "hardware_compose=0"), original.replace(csg.CSG_DISPATCH, "NotDispatched: "),
+            original.replace(csg.CSG_DEVICE, "NotCapabilities: ")):
             with self.subTest(text=text[:100]), self.assertRaises(smoke.SmokeFailure):
-                smoke.verify_csg_profile(text, args)
+                csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(text)
 
     def test_profile_must_be_installed_before_measuring(self):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
         original = csg_log()
-        late = original.replace(PROFILE, "").replace(smoke.SHUTDOWN, PROFILE + LIT_N + smoke.SHUTDOWN)
+        late = original.replace(PROFILE, "").replace(presentation.SHUTDOWN, PROFILE + LIT_N + presentation.SHUTDOWN)
         with self.assertRaisesRegex(smoke.SmokeFailure, LIT_PRECEDE):
-            smoke.verify_csg_profile(late, args)
-        dispatch = smoke.CSG_DISPATCH + "(hardware_compose=1, 25 instances)"
-        late_dispatch = original.replace(dispatch, "").replace(smoke.DONE, dispatch + LIT_N + smoke.DONE)
+            csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(late)
+        dispatch = csg.CSG_DISPATCH + "(hardware_compose=1, 25 instances)"
+        late_dispatch = original.replace(dispatch, "").replace(presentation.DONE, dispatch + LIT_N + presentation.DONE)
         with self.assertRaisesRegex(smoke.SmokeFailure, LIT_PRECEDE):
-            smoke.verify_csg_profile(late_dispatch, args)
+            csg.CsgProfileEvidence(args, presentation.INTERVAL, presentation.DONE).verify(late_dispatch)
 
 
 if __name__ == LIT_MAIN:

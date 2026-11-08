@@ -3,6 +3,7 @@
 
 
 #include "renderer_gather_benchmark_probe.h"
+#include "renderer_gather_benchmark_scene.h"
 #include "renderer_compiler_statistics_probe.h"
 #include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
@@ -39,14 +40,7 @@ constexpr AStringView s_MemoryMode = "memory";
 using namespace NWB;
 using namespace NWB::Tests::Smoke;
 
-static constexpr SmokeMeshRef s_Mesh("project/meshes/octahedron");
-static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
-static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
-static constexpr SmokeMaterialRef s_Glass("project/smoke/gather_benchmark/materials/glass_00");
-static constexpr SmokeModelRef s_Model("project/characters/body/model");
-static constexpr AStringView s_Interface = "project/shaders/smoke_surface";
 static constexpr f32 s_FixedDelta = 0.016666667f;
-static constexpr u32 s_ObjectCount = 64u;
 static constexpr u32 s_InFlightRanges = 32u;
 
 
@@ -88,6 +82,7 @@ public:
     explicit RendererGatherBenchmarkProject(ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateSmokeWorldOrDie(NWB_TEXT("RendererGatherBenchmark"), context))
+        , m_scene(*m_world)
         , m_timingPass(context.graphics)
         , m_probe(context.objectArena)
         , m_compilerProbe(context.graphics, context.objectArena)
@@ -139,59 +134,8 @@ public:
             return false;
         renderer.setRefractionEnabled(true);
         renderer.setRefractionHardwareTracingEnabled(true);
-        const auto cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, *m_world);
-        if(!cameraEntity.valid())
+        if(!m_scene.build(workload, m_runtime, scratchArena))
             return false;
-        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
-        m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
-        if(!createBackdrop())
-            return false;
-        for(u32 index = 0u; index < s_ObjectCount; ++index){
-            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.0f, 0.0f), VectorSet(3.5f, 0.0f, 0.0f, 0.0f));
-            const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.0f, 0.0f));
-            Float4 position;
-            StoreFloat(VectorAdd(VectorSet(0.0f, 0.7f, 0.0f, 0.0f), spacing), position);
-            if(m_runtime && index % 8u == 0u){
-                if(!createRuntime(index, position))
-                    return false;
-                continue;
-            }
-            const b8 opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
-            SmokeMeshRef mesh = s_Mesh;
-            SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
-            if(workload == s_UniqueWorkload){
-                const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
-                const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
-                const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
-                if(!meshReference)
-                    return false;
-                mesh = *meshReference;
-                const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
-                if(!materialReference)
-                    return false;
-                material = *materialReference;
-            }
-            auto entity = m_world->createEntity();
-            auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-            transform.position = position;
-            transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
-            entity.addComponent<NWB::Impl::MeshComponent>().mesh = mesh;
-            auto& component = entity.addComponent<NWB::Impl::RendererComponent>();
-            component.material = material;
-            if(!opaque){
-                component.opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
-                ++m_transparentRenderers;
-            }
-            ++m_renderers;
-            if(workload == s_OverridesWorkload){
-                entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
-                const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
-                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
-                    return false;
-            }
-        }
-        if(m_runtime)
-            SyncSmokeModelRuntimes(*m_world);
         if(!m_timingPass.prepareQueries())
             return false;
         m_context.graphics.addRenderPassToBack(m_timingPass);
@@ -218,7 +162,7 @@ public:
         m_compilerProbe.stop();
         if(!m_compilerProbe.write())
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
-        if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_renderers, m_runtimeRenderers, m_transparentRenderers, m_runtimeOwners))
+        if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers, m_scene.counts().runtimeOwners))
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
@@ -243,45 +187,10 @@ public:
 
 
 private:
-    [[nodiscard]] b8 createBackdrop(){
-        const auto backdrop = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f), *m_world);
-        if(!backdrop.valid())
-            return false;
-        auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
-        const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
-        const Half roughness = ConvertFloatToHalf(0.0f);
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))))
-            return false;
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(roughness)))
-            return false;
-        ++m_renderers;
-        return true;
-    }
-
-    [[nodiscard]] b8 createRuntime(const u32 index, const Float4& position){
-        const auto modelResult = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f), *m_world);
-        const auto owner = modelResult.entity;
-        if(!owner.valid() || !modelResult.tintApplied)
-            return false;
-        SyncSmokeModelRuntimes(*m_world);
-        const auto skeleton = FindSpawnedModelObject(owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, *m_world);
-        if(!skeleton.valid())
-            return false;
-        auto& pose = m_world->entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
-        if(pose.localJoints.size() < 2u)
-            return false;
-        const f32 yaw = (index & 8u) != 0u ? 0.08f : -0.08f;
-        StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
-        // Held real skeletal pose: runtime preparation stays live, with no animation-phase difference between arms.
-        ++m_runtimeOwners;
-        return true;
-    }
-
     [[nodiscard]] b8 readActualCounts(){
         NWB::Impl::MeshSystem& meshes = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
-        m_renderers = 0u;
-        m_runtimeRenderers = 0u;
+        m_scene.counts().renderers = 0u;
+        m_scene.counts().runtimeRenderers = 0u;
         auto view = m_world->view<NWB::Impl::RendererComponent>();
         for(auto&& [entity, renderer] : view){
             if(!renderer.visible)
@@ -290,15 +199,15 @@ private:
             if(!meshResult)
                 continue;
             const auto& mesh = *meshResult;
-            ++m_renderers;
+            ++m_scene.counts().renderers;
             if(mesh.runtime)
-                ++m_runtimeRenderers;
+                ++m_scene.counts().runtimeRenderers;
         }
-        if(m_renderers != 65u || (m_runtime && (m_runtimeRenderers != 8u || m_runtimeOwners != 8u)) || (!m_runtime && m_runtimeRenderers != 0u)){
+        if(m_scene.counts().renderers != 65u || (m_runtime && (m_scene.counts().runtimeRenderers != 8u || m_scene.counts().runtimeOwners != 8u)) || (!m_runtime && m_scene.counts().runtimeRenderers != 0u)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_renderers, m_runtimeRenderers, m_transparentRenderers);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers);
         return true;
     }
 
@@ -321,15 +230,12 @@ private:
 private:
     ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    RendererGatherBenchmarkScene m_scene;
     TimingPass m_timingPass;
     RendererGatherBenchmarkProbe m_probe;
     RendererCompilerStatisticsProbe m_compilerProbe;
     SmokeEnvironmentString m_workload;
     SmokeEnvironmentString m_output;
-    u32 m_renderers = 0u;
-    u32 m_runtimeRenderers = 0u;
-    u32 m_runtimeOwners = 0u;
-    u32 m_transparentRenderers = 0u;
     b8 m_runtime = false;
     b8 m_memoryEnabled = false;
     b8 m_worldReady = false;

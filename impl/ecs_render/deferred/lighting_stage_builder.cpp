@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/shadow/rt_shadow_state.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 

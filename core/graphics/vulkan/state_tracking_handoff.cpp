@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "texture_image_policy.h"
 #include "backend.h"
 #include "buffer_resource_detail.h"
 #include "state_tracking_detail.h"
@@ -54,11 +55,11 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
     NWB_ASSERT(states.m_valid);
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
-        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state))))
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
-        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state))))
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){

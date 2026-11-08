@@ -23,36 +23,8 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AmdBreadcrumbRingLayout{
-    usize physicalQueueCount = 0u;
-    usize slotsPerQueue = 0u;
-    usize totalSlotCount = 0u;
-    VkDeviceSize totalByteSize = 0u;
-    u16 deviceGeneration = 0u;
-};
-
-struct AmdBreadcrumbRingSlot{
-    usize flatSlot = 0u;
-    VkDeviceSize byteOffset = 0u;
-};
-
-struct AmdBreadcrumbReservation{
-    u64 serial = 0u;
-    usize localSlot = 0u;
-    u32 marker = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] b8 HasBufferDeviceWriteState(ResourceStates::Mask states)noexcept;
 [[nodiscard]] VkBufferMemoryBarrier2 BuildHostReadBufferBarrier(VkBuffer buffer)noexcept;
-void CollectUniquePhysicalQueueFamilyIndices(const GpuPhysicalQueueTopology& topology, Vector<u32, Alloc::ScratchArena>& familyIndices);
-[[nodiscard]] Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(const GpuPhysicalQueueTopology& topology, usize slotsPerQueue)noexcept;
-[[nodiscard]] Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(const AmdBreadcrumbRingLayout& layout, const GpuPhysicalQueueId& queue, usize localSlot)noexcept;
-[[nodiscard]] Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(u64 currentSerial, usize slotsPerQueue)noexcept;
-[[nodiscard]] b8 MatchesAmdBreadcrumbObservation(u32 observedMarker, u32 reservedMarker)noexcept;
 
 class HostReadbackBarrierTracker final : NoCopy{
 public:

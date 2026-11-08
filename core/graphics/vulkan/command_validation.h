@@ -38,12 +38,6 @@ namespace VulkanDetail{
     }
 }
 
-[[nodiscard]] b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept;
-
-[[nodiscard]] b8 IsImplicitScissorValid(const Viewport& viewport)noexcept;
-
-[[nodiscard]] Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept;
-
 [[nodiscard]] constexpr b8 TextureSubresourceRangesOverlap(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     const u64 lhsMipEnd = static_cast<u64>(lhs.baseMipLevel) + lhs.numMipLevels;
     const u64 rhsMipEnd = static_cast<u64>(rhs.baseMipLevel) + rhs.numMipLevels;

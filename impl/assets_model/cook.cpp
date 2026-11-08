@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include <impl/assets_model/model_binary_codec.adhd.h>
+
 #include <impl/assets_skeleton/cook_matrix.h>
 
 #include <core/assets/binary_payload_io.h>
@@ -178,7 +180,7 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(!model.validatePayload(scratchArena))
         return false;
 
-    return SerializeModelAssetBinary(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
+    return ModelBinaryCodec().serialize(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
 Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

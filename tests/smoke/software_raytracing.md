@@ -248,12 +248,8 @@ CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 | `overlapping_spans` | Span state, static, natural, 8, with overlapping receivers |
 | `overlapping_spans_software` | Span state, static, software, 8, with overlapping receivers |
 
-The lighting sequences enable the quality gate; normal/position sequences enable
-the geometry gate; cap-state sequences enable the cap-state gate; overlapping
-span-state sequences enable the span gate. All ask for card proof. They use the match run root and log-server when near. They wipe only their own known grab files. They line up display use through the test resource lock. Unsupported capture
-environments may skip with exit 77. A passing gate verifies those finite
-regression conditions on the actual run; broader optical correctness and
-performance still require their own matched comparisons. Interval-1 GPU
+The light runs arm the grade gate. Straight/spot runs arm the shape gate. Cap-state runs arm the cap-state gate. Lap span runs arm the span gate. All ask for card proof. They use the match run root and log-server when near. They wipe only their own known grab files. They line up display use through the test resource lock. Unsupported capture
+environments may skip with exit 77. A won gate proves those set backslide checks on the true run. Wider look right and speed still need their own match weigh. Interval-1 GPU
 timings describe the serialized capture workload.
 
 CSG performance qualification also needs a matched scene containing no CSG

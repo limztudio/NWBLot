@@ -259,7 +259,7 @@ only owned geometry, text, resources, copied keys and lifetime tokens.
 
 The model and visual state remain lent through the enclosing panel/window or outermost popup end. Separate typed loan records validate both numeric epochs and draft text/selection/composition epochs around preparation, publication and the final callback-free family pass. Frozen paint and hit targets own their data. Application changes to a live loan reject that frame candidate while preserving the application change. Numeric controls use the existing skin's edit states and text/caret/selection colors.
 
-Numeric and searchable-combo declaration loans also include the edit model's monotonic selection generation. A callback that changes and restores a caret, or accepts an identical selection, invalidates the earlier loan even when text and byte positions match again. The multiline content/command foundation uses the same model with canonical LF. Shared multiline geometry is described below. The Builder text-area control uses this model and geometry.
+Numeric and searchable-combo declaration loans also include the edit model's monotonic selection generation. A call that moves and brings back a caret breaks the old loan. This holds still when text and byte spots match again. A same pick take does the same. The multiline content/command foundation uses the same model with canonical LF. Shared multiline geometry is described below. The Builder text-area control uses this model and geometry.
 
 ## Shared multiline edit geometry
 

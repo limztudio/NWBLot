@@ -2,7 +2,7 @@
 
 `nwb_ui_layer_smoke` creates an ECS world with only `UiLayerSystem` and one `UiPaintComponent`, loads `engine/ui/skins/default/atlas`, and selects `UiLayerPresentation::Standalone`. It renders through the custom GPU layer and acquired backbuffer. The project has no scene renderer or ImGui system.
 
-The first two sent snaps are blank. They use the cleared see-through coat with no shape yet. The fixed scene then holds solid bulks, half-see lap, a quarter-strength straight gray, a tinted white book shot, three named nine-cut zones, a clear arrow shot, and nested clips. Shape uses fixed true units. So first and grown spans both show with the same in-side probes.
+The first two sent snaps are blank. They use the cleared see-through coat with no shape yet. The fixed scene then holds solid bulks, half-see lap, and a quarter-strength straight gray. It holds a tinted white book shot, three named nine-cut zones, a clear arrow shot, and nested clips. Shape uses fixed true units. So first and grown spans both show with the same in-side probes.
 
 The CMake target cooks the engine asset root and this fixture's isolated `assets` root into `Testing/ui_layer_runtime/<configuration>/res`. The fixture root uses the existing `project/` virtual asset namespace. The Testbed cooker and the engine default skin are unchanged. The source files separate startup configuration, callback lifecycle, ECS world ownership, and paint scene construction. Capture orchestration and pixel acceptance remain separate Python files.
 

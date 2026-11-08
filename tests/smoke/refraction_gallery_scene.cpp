@@ -6,6 +6,9 @@
 #include "smoke_project_helpers.h"
 #include "csg_smoke_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/refraction_gallery_values.adhd.h>
+
 #include <impl/ecs_csg/shape_registry.h>
 
 #include <global/expected.h>
@@ -46,59 +49,59 @@ constexpr SmokeMaterialRef s_OpticalVolume{"project/smoke/reflection/materials/o
 constexpr SmokeMaterialRef s_Preview{"project/smoke/refraction/materials/gallery_preview"};
 constexpr SmokeMaterialRef s_Opaque{"project/smoke/refraction/materials/opaque"};
 constexpr SmokeMaterialRef s_Transparent{"project/smoke/refraction/materials/transparent"};
-constexpr AStringView s_Interface = "project/shaders/smoke_surface";
-constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
-constexpr Name s_DuplicateOpticalGroup("project/smoke/refraction/gallery_duplicate_volume");
-constexpr f32 s_GalleryCameraDistance = 6.f;
-constexpr f32 s_IdentityForeignFront = -0.0005f;
+constexpr AStringView s_Interface = ::NWB::Tests::Smoke::s_RefractionGalleryInterface;
+constexpr AStringView s_OpticalInterface = ::NWB::Tests::Smoke::s_RefractionGalleryOpticalInterface;
+constexpr Name s_DuplicateOpticalGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeRefractionGalleryDuplicateVolume;
+constexpr f32 s_GalleryCameraDistance = ::NWB::Tests::Smoke::s_RefractionGalleryCameraDistance;
+constexpr f32 s_IdentityForeignFront = ::NWB::Tests::Smoke::s_RefractionGalleryIdentityForeignFront;
 // Place the near plane between the foreign entry and the primary z=0 entry.
-constexpr f32 s_IdentityNearPlane = s_GalleryCameraDistance - 0.00025f;
+constexpr f32 s_IdentityNearPlane = ::NWB::Tests::Smoke::s_RefractionGalleryIdentityNearPlane;
 // Camera, objects and backdrop share this height.
-constexpr f32 s_GalleryCenterHeight = 1.4f;
-constexpr f32 s_SlabFaceScale = 2.6f;
-constexpr f32 s_PreviewAlpha = 0.48f;
-constexpr f32 s_OpticalIor = 1.5f;
+constexpr f32 s_GalleryCenterHeight = ::NWB::Tests::Smoke::s_RefractionGalleryCenterHeight;
+constexpr f32 s_SlabFaceScale = ::NWB::Tests::Smoke::s_RefractionGallerySlabFaceScale;
+constexpr f32 s_PreviewAlpha = ::NWB::Tests::Smoke::s_RefractionGalleryPreviewAlpha;
+constexpr f32 s_OpticalIor = ::NWB::Tests::Smoke::s_RefractionGalleryOpticalIor;
 // The slab tint and its unit transmission use the same color.
 constexpr Float4 s_OpticalTransmission(0.45f, 0.8f, 0.95f, 0.f);
-constexpr f32 s_TintedCoverage = 0.3f;
-constexpr f32 s_DuplicateSphereRadius = 1.1f;
-constexpr i32 s_WinningOpticalPriority = 10;
-constexpr f32 s_BackdropDepth = 4.5f;
-constexpr f32 s_BackdropHalfHeight = 5.0f;
-constexpr f32 s_DepthMarkerAlpha = 0.70f;
+constexpr f32 s_TintedCoverage = ::NWB::Tests::Smoke::s_RefractionGalleryTintedCoverage;
+constexpr f32 s_DuplicateSphereRadius = ::NWB::Tests::Smoke::s_RefractionGalleryDuplicateSphereRadius;
+constexpr i32 s_WinningOpticalPriority = ::NWB::Tests::Smoke::s_RefractionGalleryWinningOpticalPriority;
+constexpr f32 s_BackdropDepth = ::NWB::Tests::Smoke::s_RefractionGalleryBackdropDepth;
+constexpr f32 s_BackdropHalfHeight = ::NWB::Tests::Smoke::s_RefractionGalleryBackdropHalfHeight;
+constexpr f32 s_DepthMarkerAlpha = ::NWB::Tests::Smoke::s_RefractionGalleryDepthMarkerAlpha;
 
-constexpr AStringView s_CaseCsgReference = "csg_reference";
-constexpr AStringView s_CaseCsgCap = "csg_cap";
-constexpr AStringView s_CaseCsgMiddle = "csg_middle";
-constexpr AStringView s_CaseCsgUncut = "csg_uncut";
-constexpr AStringView s_CaseIdentityReference = "identity_reference";
-constexpr AStringView s_CaseIdentitySameIor = "identity_same_ior";
-constexpr AStringView s_CaseIdentityDifferentIor = "identity_different_ior";
-constexpr AStringView s_CaseCrossingOverflow = "crossing_overflow";
-constexpr AStringView s_CaseNearAirOrdinary = "near_air_ordinary";
-constexpr AStringView s_CaseNearAirCsg = "near_air_csg";
-constexpr AStringView s_CaseSingle = "single";
-constexpr AStringView s_CaseSeparate = "separate";
-constexpr AStringView s_CaseStacked = "stacked";
-constexpr AStringView s_CaseIntersecting = "intersecting";
-constexpr AStringView s_CaseNested = "nested";
-constexpr AStringView s_CaseDuplicateSingleCool = "duplicate_single_cool";
-constexpr AStringView s_CaseDuplicateSingleWarm = "duplicate_single_warm";
-constexpr AStringView s_CaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
-constexpr AStringView s_CaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
-constexpr AStringView s_CaseCoincident = "coincident";
-constexpr AStringView s_CaseCoincidentTinted = "coincident_tinted";
-constexpr AStringView s_CaseCoincidentReversed = "coincident_reversed";
-constexpr AStringView s_CaseCoincidentTintedReversed = "coincident_tinted_reversed";
-constexpr AStringView s_CaseCoincidentPrioritySwap = "coincident_priority_swap";
-constexpr AStringView s_CaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
-constexpr AStringView s_CaseCoincidentIdentical = "coincident_identical";
-constexpr AStringView s_CaseCoincidentTintedIdentical = "coincident_tinted_identical";
-constexpr AStringView s_CaseNearCoincident = "near_coincident";
-constexpr AStringView s_CaseCoincidentPreserved = "coincident_preserved";
-constexpr AStringView s_CaseTorus = "torus";
-constexpr AStringView s_CaseSameMesh = "same_mesh";
-constexpr AStringView s_CasePrism = "prism";
+constexpr AStringView s_CaseCsgReference = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgReference;
+constexpr AStringView s_CaseCsgCap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgCap;
+constexpr AStringView s_CaseCsgMiddle = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgMiddle;
+constexpr AStringView s_CaseCsgUncut = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgUncut;
+constexpr AStringView s_CaseIdentityReference = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentityReference;
+constexpr AStringView s_CaseIdentitySameIor = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentitySameIor;
+constexpr AStringView s_CaseIdentityDifferentIor = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentityDifferentIor;
+constexpr AStringView s_CaseCrossingOverflow = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCrossingOverflow;
+constexpr AStringView s_CaseNearAirOrdinary = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearAirOrdinary;
+constexpr AStringView s_CaseNearAirCsg = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearAirCsg;
+constexpr AStringView s_CaseSingle = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSingle;
+constexpr AStringView s_CaseSeparate = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSeparate;
+constexpr AStringView s_CaseStacked = ::NWB::Tests::Smoke::s_RefractionGalleryCaseStacked;
+constexpr AStringView s_CaseIntersecting = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIntersecting;
+constexpr AStringView s_CaseNested = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNested;
+constexpr AStringView s_CaseDuplicateSingleCool = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleCool;
+constexpr AStringView s_CaseDuplicateSingleWarm = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleWarm;
+constexpr AStringView s_CaseDuplicateSingleCoolTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleCoolTinted;
+constexpr AStringView s_CaseDuplicateSingleWarmTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleWarmTinted;
+constexpr AStringView s_CaseCoincident = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincident;
+constexpr AStringView s_CaseCoincidentTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTinted;
+constexpr AStringView s_CaseCoincidentReversed = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentReversed;
+constexpr AStringView s_CaseCoincidentTintedReversed = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedReversed;
+constexpr AStringView s_CaseCoincidentPrioritySwap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentPrioritySwap;
+constexpr AStringView s_CaseCoincidentTintedPrioritySwap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedPrioritySwap;
+constexpr AStringView s_CaseCoincidentIdentical = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentIdentical;
+constexpr AStringView s_CaseCoincidentTintedIdentical = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedIdentical;
+constexpr AStringView s_CaseNearCoincident = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearCoincident;
+constexpr AStringView s_CaseCoincidentPreserved = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentPreserved;
+constexpr AStringView s_CaseTorus = ::NWB::Tests::Smoke::s_RefractionGalleryCaseTorus;
+constexpr AStringView s_CaseSameMesh = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSameMesh;
+constexpr AStringView s_CasePrism = ::NWB::Tests::Smoke::s_RefractionGalleryCasePrism;
 
 
 class GalleryBuilder final{
@@ -177,7 +180,7 @@ public:
             return MakeUnexpected(Failure{});
         if(caseName != s_CaseCsgCap && !middle)
             return entity;
-        const Name group("smoke/refraction/csg_optics");
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionCsgOptics;
         AddStaticCsgMeshReceiver(entity, group, false, true, m_world);
         // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
         for(u32 index = 0u; index < (middle ? 2u : 1u); ++index){
@@ -198,7 +201,7 @@ public:
     b8 identitySlab(const AStringView caseName){
         if(caseName != s_CaseIdentityReference){
             // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
-            constexpr f32 s_ForeignExit = 0.25f;
+            constexpr f32 s_ForeignExit = ::NWB::Tests::Smoke::s_RefractionGalleryForeignExit;
             const auto foreign = CreateTintedStaticMeshEntity(
                 s_Cube,
                 m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
@@ -224,7 +227,7 @@ public:
             return false;
         if(!opticalParameters(*primary, s_OpticalIor, s_OpticalTransmission))
             return false;
-        const Name group("smoke/refraction/identity");
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionIdentity;
         if(!farPlaneReceiver(*primary, group))
             return false;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: full primary entity identity {}"), primary->id);
@@ -255,7 +258,7 @@ public:
         );
         if(!entity.valid())
             return false;
-        const Name group("smoke/refraction/csg_crossing_overflow");
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionCsgCrossingOverflow;
         if(!farPlaneReceiver(entity, group))
             return false;
         return true;
@@ -276,7 +279,7 @@ public:
             return false;
         if(!csg)
             return true;
-        const Name group("smoke/refraction/near_air");
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionNearAir;
         if(!farPlaneReceiver(entity, group))
             return false;
         return true;

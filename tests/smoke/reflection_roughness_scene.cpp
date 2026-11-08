@@ -183,7 +183,7 @@ b8 ReflectionRoughnessScene::createDeformingSource(){
     if(!m_red.valid() || !redModel.tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);
-    m_skeleton = FindSpawnedModelObject(m_red, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    m_skeleton = FindSpawnedModelObject(m_red, s_SmokeNameSkeleton, NWB::Impl::ModelObjectKind::Skeleton, m_world);
     return m_skeleton.valid();
 }
 

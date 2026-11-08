@@ -6,6 +6,8 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/material/material_instance.h>
@@ -25,6 +27,7 @@ using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 using SoftShadowModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using SoftShadowMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
@@ -36,28 +39,27 @@ static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/tran
 static constexpr SoftShadowMaterialRef s_TimingOpaqueMaterial{"project/smoke/soft_shadow/materials/timing_opaque"};
 static constexpr SoftShadowMaterialRef s_TimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
 static constexpr SoftShadowMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
-static constexpr f32 s_GroundScale = 8.0f;
+static constexpr f32 s_GroundScale = NWB::Tests::Smoke::s_SoftShadowGroundScale;
 
-static constexpr f32 s_CameraDistance = 3.2f;
-static constexpr f32 s_CameraHeight = 1.5f;
-static constexpr f32 s_CameraPitch = 0.30f;
+static constexpr f32 s_CameraDistance = NWB::Tests::Smoke::s_SoftShadowCameraDistance;
+static constexpr f32 s_CameraHeight = NWB::Tests::Smoke::s_SoftShadowCameraHeight;
+static constexpr f32 s_CameraPitch = NWB::Tests::Smoke::s_SoftShadowCameraPitch;
 
 // Low sun angle casts long shadows that soften with distance.
-static constexpr f32 s_DirectionalLightPitch = 0.65f;
-static constexpr f32 s_DirectionalLightYaw = 1.4f;
-static constexpr f32 s_DirectionalLightIntensity = 2.0f;
+static constexpr f32 s_DirectionalLightPitch = NWB::Tests::Smoke::s_SoftShadowDirectionalLightPitch;
+static constexpr f32 s_DirectionalLightYaw = NWB::Tests::Smoke::s_SoftShadowDirectionalLightYaw;
+static constexpr f32 s_DirectionalLightIntensity = NWB::Tests::Smoke::s_SoftShadowDirectionalLightIntensity;
 
 // Different light colors and directions separate their overlapping penumbras.
-static constexpr f32 s_PointLightIntensity = 10.0f;
-static constexpr f32 s_PointLightRange = 14.0f;
-static constexpr f32 s_SpotLightIntensity = 13.0f;
-static constexpr f32 s_SpotLightRange = 16.0f;
-static constexpr f32 s_SpotLightPitch = 1.5f;
-static constexpr f32 s_SpotLightYaw = 0.0f;
-static constexpr f32 s_SpotInnerConeCos = 0.85f;
-static constexpr f32 s_SpotOuterConeCos = 0.55f;
+static constexpr f32 s_PointLightIntensity = NWB::Tests::Smoke::s_SoftShadowPointLightIntensity;
+static constexpr f32 s_PointLightRange = NWB::Tests::Smoke::s_SoftShadowPointLightRange;
+static constexpr f32 s_SpotLightIntensity = NWB::Tests::Smoke::s_SoftShadowSpotLightIntensity;
+static constexpr f32 s_SpotLightRange = NWB::Tests::Smoke::s_SoftShadowSpotLightRange;
+static constexpr f32 s_SpotLightPitch = NWB::Tests::Smoke::s_SoftShadowSpotLightPitch;
+static constexpr f32 s_SpotLightYaw = NWB::Tests::Smoke::s_SoftShadowSpotLightYaw;
+static constexpr f32 s_SpotInnerConeCos = NWB::Tests::Smoke::s_SoftShadowSpotInnerConeCos;
+static constexpr f32 s_SpotOuterConeCos = NWB::Tests::Smoke::s_SoftShadowSpotOuterConeCos;
 
 
 };
@@ -151,3 +153,4 @@ void NWB::Tests::Smoke::SoftShadowScene::spinCasters(NWB::Core::ECS::World& worl
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

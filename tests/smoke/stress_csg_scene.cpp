@@ -8,6 +8,9 @@
 #include "smoke_environment.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 
 #include <core/alloc/scratch.h>
@@ -31,8 +34,8 @@ namespace __hidden_stress_csg_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<Name, 2> s_Groups = { Name("stress/csg/transparent"), Name("stress/csg/opaque") };
-static constexpr Name s_MeshObject("mesh");
+static constexpr Array<Name, 2> s_Groups = { Name(NWB::Tests::Smoke::s_SmokeNameStressCsgTransparent), Name(NWB::Tests::Smoke::s_SmokeNameStressCsgOpaque) };
+static constexpr Name s_MeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
 static constexpr usize s_BodyCount = 20u;
 static constexpr Float4 s_CutterHalfExtents(4.5f, 0.08f, 0.65f, 0.0f);
 static constexpr f32 s_CutterHeight = 0.9f;
@@ -78,7 +81,7 @@ b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, cons
         auto entity = world.createEntity();
         auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
         cutter.receiverGroup = __hidden_stress_csg_scene::s_Groups[row];
-        cutter.shapeType = Name("engine/csg/box");
+        cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
         Impl::CsgBoxShapeParameters parameters;
         parameters.halfExtents = __hidden_stress_csg_scene::s_CutterHalfExtents;
         AssignCsgCutterParameters(parameters, cutter);

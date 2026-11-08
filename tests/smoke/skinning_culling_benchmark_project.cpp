@@ -10,6 +10,8 @@
 #include "smoke_skinned_scene_helpers.h"
 #include "gpu_pass_timing_probe.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_model/asset.h>
@@ -91,7 +93,7 @@ static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
 static constexpr StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
-static constexpr Name s_ModelSkeletonObject("skeleton");
+static constexpr Name s_ModelSkeletonObject = NWB::Tests::Smoke::s_SmokeNameSkeleton;
 
 static constexpr Array<BenchmarkCase, 12> s_BenchmarkCases = {{
     { BenchmarkMode::NoCulling, BenchmarkView::Front },

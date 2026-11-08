@@ -9,6 +9,8 @@
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_render/module.h>

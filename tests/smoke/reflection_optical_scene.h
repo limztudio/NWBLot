@@ -7,6 +7,8 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,13 +24,6 @@ namespace Tests::Smoke{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct ReflectionCsgContextEntities{
-    Core::ECS::EntityID smallReceiver = Core::ECS::s_InvalidEntityId;
-    Core::ECS::EntityID denseReceiver = Core::ECS::s_InvalidEntityId;
-    Core::ECS::EntityID smallCutter = Core::ECS::s_InvalidEntityId;
-    Core::ECS::EntityID denseCutter = Core::ECS::s_InvalidEntityId;
-};
 
 [[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world);
 

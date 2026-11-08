@@ -5,6 +5,8 @@
 #include "reflection_smoke_configuration.h"
 #include "smoke_environment.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_render/module.h>
 
 #include <core/common/log.h>
@@ -29,7 +31,7 @@ namespace Tests::Smoke{
 
 
 namespace __hidden_reflection_smoke_configuration{
-inline constexpr AStringView s_HardwareRoute = "hardware";
+inline constexpr AStringView s_HardwareRoute = s_ReflectionSmokeHardwareRoute;
 };
 
 

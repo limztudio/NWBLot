@@ -34,15 +34,15 @@ namespace Tests::Smoke{
 
 
 namespace {
-constexpr AStringView s_CsgTransitionEnvironment = "NWB_SKINNED_CAUSTIC_CSG_TRANSITION";
-constexpr AStringView s_CsgLaggedEnvironment = "NWB_SKINNED_CAUSTIC_CSG_LAGGED";
-constexpr AStringView s_CsgNoPhotonsEnvironment = "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS";
-constexpr Name s_ModelMeshObject("mesh");
-constexpr Name s_TransitionReceiverGroup("project/smoke/skinned_caustic/transition_receiver");
-constexpr u64 s_TransitionMinimumFrame = 360u;
-constexpr f64 s_TransitionWarmupSeconds = 30.0;
-constexpr u64 s_TransitionCaptureInterval = 32u;
-constexpr u32 s_TransitionSampleCount = 8u;
+constexpr AStringView s_CsgTransitionEnvironment = s_SkinnedCausticCsgTransitionEnvironment;
+constexpr AStringView s_CsgLaggedEnvironment = s_SkinnedCausticCsgLaggedEnvironment;
+constexpr AStringView s_CsgNoPhotonsEnvironment = s_SkinnedCausticCsgNoPhotonsEnvironment;
+constexpr Name s_ModelMeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
+constexpr Name s_TransitionReceiverGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver;
+constexpr u64 s_TransitionMinimumFrame = s_SkinnedCausticTransitionMinimumFrame;
+constexpr f64 s_TransitionWarmupSeconds = s_SkinnedCausticTransitionWarmupSeconds;
+constexpr u64 s_TransitionCaptureInterval = s_SkinnedCausticTransitionCaptureInterval;
+constexpr u32 s_TransitionSampleCount = s_SkinnedCausticTransitionSampleCount;
 };
 
 
@@ -95,7 +95,7 @@ b8 SkinnedCausticTransition::installTransitionCutter(const Core::ECS::EntityID c
     auto entity = world.createEntity();
     auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = s_TransitionReceiverGroup;
-    cutter.shapeType = Name("engine/csg/plane");
+    cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
     cutter.active = false;
     NWB::Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = Float4(1.0f, 0.0f, 0.0f, 0.0f);
@@ -132,7 +132,7 @@ void SkinnedCausticTransition::recordTransitionRoute(const u64 frame, Core::ECS:
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(m_context.objectArena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(m_context.objectArena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(m_context.objectArena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/skinned_caustic_frame_graph"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeSkinnedCausticFrameGraph)};
     NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
     if(!renderer.appendFrameGraph(builder)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: could not capture public accepted-queue telemetry"));
@@ -142,7 +142,7 @@ void SkinnedCausticTransition::recordTransitionRoute(const u64 frame, Core::ECS:
     const auto primaryGraphics = m_context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     for(const auto& node : nodes){
         if(
-            node.name != Name("render.hardware_caustics.photons") || !node.queueAssignment.present
+            node.name != Name(NWB::Tests::Smoke::s_SmokeTimingNameRenderHardwareCausticsPhotons) || !node.queueAssignment.present
             || !node.compiledTask.present || !node.queueAssignment.acceptedQueue.valid()
             || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted
         )
@@ -202,8 +202,8 @@ void SkinnedCausticTransition::updateTransitionState(Core::ECS::World& world, f6
         m_transitionPhase = phase;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: phase {} csg={} graphics frame {}"), phase, cutter.active ? 1u : 0u, frame);
     }
-    foldTransitionTiming(Name("render.caustic_photons"), m_lastPhotonPublication, m_phasePhotonSamples);
-    foldTransitionTiming(Name("mesh_skinning.skinning"), m_lastSkinningPublication, m_phaseSkinningSamples);
+    foldTransitionTiming(Name(NWB::Tests::Smoke::s_SmokeTimingNameRenderCausticPhotons), m_lastPhotonPublication, m_phasePhotonSamples);
+    foldTransitionTiming(Name(NWB::Tests::Smoke::s_SmokeTimingNameMeshSkinningSkinning), m_lastSkinningPublication, m_phaseSkinningSamples);
     recordTransitionRoute(frame, world);
 }
 

@@ -4,6 +4,8 @@
 
 #include "bitmap_capture_writer.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/common/log.h>
 
 #include <global/filesystem/operations.h>
@@ -24,15 +26,15 @@ namespace __hidden_bitmap_capture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_BitmapFileHeaderSize = 14u;
-static constexpr usize s_BitmapInfoHeaderSize = 40u;
+static constexpr usize s_BitmapFileHeaderSize = Tests::Smoke::s_BitmapFileHeaderSize;
+static constexpr usize s_BitmapInfoHeaderSize = Tests::Smoke::s_BitmapInfoHeaderSize;
 static constexpr usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
-static constexpr usize s_BitmapBytesPerPixel = 3u;
-static constexpr usize s_SourceBytesPerPixel = 4u;
-static constexpr u32 s_ByteMask = 0xffu;
-static constexpr u32 s_Byte1Shift = 8u;
-static constexpr u32 s_Byte2Shift = 16u;
-static constexpr u32 s_Byte3Shift = 24u;
+static constexpr usize s_BitmapBytesPerPixel = Tests::Smoke::s_BitmapBytesPerPixel;
+static constexpr usize s_SourceBytesPerPixel = Tests::Smoke::s_BitmapSourceBytesPerPixel;
+static constexpr u32 s_ByteMask = Tests::Smoke::s_BitmapByteMask;
+static constexpr u32 s_Byte1Shift = Tests::Smoke::s_BitmapByte1Shift;
+static constexpr u32 s_Byte2Shift = Tests::Smoke::s_BitmapByte2Shift;
+static constexpr u32 s_Byte3Shift = Tests::Smoke::s_BitmapByte3Shift;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,125 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/paint.h>
+
+namespace NWB::Tests::Smoke{
+using SnapshotRect = Impl::Ui::Rect;
+using SnapshotDisplay = Impl::Ui::DisplayMetrics;
+using SnapshotPoint = Impl::Ui::Point;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_UiSmokeNameWhite = "white";
+const Name s_UiSmokeNamePanelNormal = "panel.normal";
+const Name s_UiSmokeNameButtonNormal = "button.normal";
+const Name s_UiSmokeNameButtonHover = "button.hover";
+const Name s_UiSmokeNameComboArrow = "combo.arrow";
+const Name s_UiSmokeNameTestsUiLayerPersistentState = "tests/ui_layer/persistent_state";
+const Name s_UiSmokeNameTestsUiLayerPersistentStateBuffer = "tests/ui_layer/persistent_state_buffer";
+const Name s_UiSmokeNameProgressFill = "progress.fill";
+
+
+// Snapshot of copied image declaration inputs and expected display geometry.
+class UiImageSnapshot{
+    public Array<u64, 10u> values;
+    public Array<SnapshotRect, 16u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u64 sequence = 0u;
+}
+
+
+// Snapshot of copied slider values and expected geometry.
+class UiSliderSnapshot{
+    public Array<u64, 16u> values;
+    public Array<u64, 4u> bits;
+    public Array<SnapshotRect, 29u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u64 sequence = 0u;
+}
+
+
+// Copied post-scope observations and the GPU markers share this immutable sequence.
+class UiRadioGroupSnapshot{
+    public Array<u64, 22u> values;
+    public Array<SnapshotRect, 41u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u32 sequence = 0u;
+}
+
+
+// Snapshot of copied progress declaration inputs and expected display geometry.
+class UiProgressSnapshot{
+    public Array<u64, 8u> values;
+    public Array<u64, 2u> bits;
+    public Array<SnapshotRect, 15u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u64 sequence = 0u;
+}
+
+
+// One owned observation is encoded in pixels after the enclosing Builder scope has ended.
+class UiNumericEditSnapshot{
+    public Array<u64, 30u> values;
+    public Array<SnapshotRect, 12u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u32 sequence = 0u;
+}
+
+
+// The fixture records copied source generations, displayed markers and expected passive geometry.
+class UiTextureImageSnapshot{
+    public Array<u64, 16u> values;
+    public Array<u64, 3u> generations;
+    public Array<SnapshotRect, 17u> rectangles;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public u64 sequence = 0u;
+}
+
+
+// One owned observation follows the completed Builder scope and travels with the same GPU marker sequence.
+class UiTextAreaSnapshot{
+    public Array<u64, 25u> values;
+    public Array<SnapshotRect, 16u> rectangles;
+    public Array<SnapshotRect, 32u> selections;
+    public SnapshotDisplay display = SnapshotDisplay();
+    public SnapshotPoint scroll = SnapshotPoint();
+    public SnapshotPoint measure = SnapshotPoint();
+    public SnapshotPoint maximum = SnapshotPoint();
+    public f32 lineHeight = 0.0f;
+    public u32 selectionCount = 0u;
+    public u32 sequence = 0u;
+}
+
+
+
+class PassiveSmokeColumns{
+    public f32 mainWidth = 0.0f;
+    public f32 rightColumn = 0.0f;
+    public f32 rightWidth = 0.0f;
+}
+
+class PassiveSmokeTargetObservation{
+    public u32 focusCode = 0u;
+    public u32 passiveTargets = 0u;
+}
+
+class PassiveSmokeSnapshotUpdate{
+    public b8 published = false;
+    public b8 displayChanged = false;
+}
+
+class UiSearchComboRange{
+    public u64 first = 0u;
+    public u64 past = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

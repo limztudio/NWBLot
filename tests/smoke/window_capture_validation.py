@@ -2,7 +2,7 @@
 
 
 from window_capture_outcome import SmokeFailure  # noqa: E402
-from window_capture_logs import collect_log_delta  # noqa: E402
+from window_capture_logs import collect_log_delta, full_log_scope  # noqa: E402
 
 
 FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"
@@ -93,6 +93,7 @@ def validate_expected_log_messages(log_directory, log_baseline, log_pattern, req
     if not log_directory:
         raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
 
+    log_baseline, log_pattern = full_log_scope(log_baseline, log_pattern)
     return validate_expected_log_text(collect_log_delta(log_directory, log_baseline, log_pattern), required_needles, rejected_needles, skip_needles, skip_blocking_needles,)
 
 

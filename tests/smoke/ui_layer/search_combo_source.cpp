@@ -133,7 +133,7 @@ b8 UiSearchComboSmokeSource::filter(const AStringView query){
 void UiSearchComboSmokeSource::addRange(const u64 first, const u64 past)noexcept{
     if(first >= past || m_rangeCount >= m_ranges.size())
         return;
-    m_ranges[m_rangeCount] = { first, past };
+    m_ranges[m_rangeCount] = { .first = first, .past = past };
     ++m_rangeCount;
     m_filteredCount += past - first;
     if(removedKey() >= first && removedKey() < past)

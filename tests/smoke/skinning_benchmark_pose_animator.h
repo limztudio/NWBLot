@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/ecs/world.h>
@@ -35,8 +37,8 @@ private:
     static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, u32 jointIndex, u32 characterIndex, f32 timeSeconds, b8 staticPreview, SIMDMatrix& outMatrix)noexcept;
 
 private:
-    static constexpr u32 s_AnimatedJointModulo = 16u;
-    static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
+    static constexpr u32 s_AnimatedJointModulo = s_SkinningBenchmarkAnimatedJointModulo;
+    static constexpr u32 s_StaticPreviewAnimatedJointModulo = s_SkinningBenchmarkStaticPreviewAnimatedJointModulo;
 };
 
 

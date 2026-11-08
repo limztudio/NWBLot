@@ -8,6 +8,8 @@
 #include "csg_shadow_mode.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,7 +22,7 @@ NWB_BEGIN
 
 namespace Tests::Smoke{
 
-inline constexpr AStringView s_CsgShadowMaterialInterface = "project/shaders/csg_shadow";
+inline constexpr AStringView s_CsgShadowMaterialInterface = s_ShadowSmokeMaterialInterface;
 
 
 class CsgShadowAtlas final{

@@ -4,6 +4,8 @@
 
 #include "stress_frame_graph_snapshot_writer.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,10 +23,10 @@ namespace Tests::Smoke{
 
 
 void StressFrameGraphSnapshotWriter::WriteJsonText(const AStringView text, OutputFileStream& output){
-    constexpr AStringView s_HexDigits = "0123456789abcdef";
-    constexpr u8 s_JsonControlCharLimit = 0x20u;
-    constexpr u8 s_NibbleBits = 4u;
-    constexpr u8 s_NibbleMask = 0x0fu;
+    constexpr AStringView s_HexDigits = s_StressSnapshotHexDigits;
+    constexpr u8 s_JsonControlCharLimit = s_StressSnapshotJsonControlCharLimit;
+    constexpr u8 s_NibbleBits = s_StressSnapshotNibbleBits;
+    constexpr u8 s_NibbleMask = s_StressSnapshotNibbleMask;
     output << '"';
     for(const char ch : text){
         switch(ch){
@@ -179,5 +181,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

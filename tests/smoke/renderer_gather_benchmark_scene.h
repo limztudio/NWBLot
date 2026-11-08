@@ -19,12 +19,7 @@ namespace Tests::Smoke{
 
 class RendererGatherBenchmarkScene final : NoCopy{
 public:
-    struct Counts{
-        u32 renderers = 0u;
-        u32 runtimeRenderers = 0u;
-        u32 runtimeOwners = 0u;
-        u32 transparentRenderers = 0u;
-    };
+    using Counts = RendererGatherBenchmarkSceneCounts;
 
 
 public:
@@ -52,3 +47,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

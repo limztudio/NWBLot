@@ -7,6 +7,8 @@
 
 #include "list_source.h"
 
+#include <tests/smoke/ui_layer/snapshots.adhd.h>
+
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
 
@@ -28,10 +30,7 @@ namespace Tests::Smoke{
 // A numeric prefix is a maximum of six disjoint decimal intervals, independent of the 100000-row count.
 class UiSearchComboSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
 private:
-    struct Range{
-        u64 first = 0u;
-        u64 past = 0u;
-    };
+    using Range = UiSearchComboRange;
 
     class View final : public Impl::Ui::IListDataSource, NoCopy{
     public:

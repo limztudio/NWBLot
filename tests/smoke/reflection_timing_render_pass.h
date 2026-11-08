@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/graphics/runtime/render_pass.h>
 
 
@@ -25,7 +27,7 @@ namespace Tests::Smoke{
 
 class ReflectionTimingRenderPass final : public Core::IRenderPass{
 private:
-    static constexpr u32 s_InFlightRanges = 32u;
+    static constexpr u32 s_InFlightRanges = s_ReflectionTimingInFlightRanges;
 
 
 public:

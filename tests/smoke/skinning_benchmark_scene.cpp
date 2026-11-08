@@ -49,7 +49,7 @@ b8 SkinningBenchmarkScene::Populate(
     }
 
     skeletonEntities.reserve(characterCount);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/skinning_culling/model_owners"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSkinningCullingModelOwners)};
     Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> modelOwners(scratchArena);
     modelOwners.reserve(characterCount);
     for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){

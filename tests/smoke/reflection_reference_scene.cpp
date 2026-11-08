@@ -4,6 +4,8 @@
 
 #include "reflection_reference_scene.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
@@ -30,8 +32,8 @@ static constexpr SmokeMeshRef s_SphereMesh{"project/meshes/caustic_sphere"};
 static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/reflection/materials/opaque"};
 static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/reflection/materials/glass"};
 static constexpr SmokeMaterialRef s_TransparentMaterial{"project/smoke/refraction/materials/transparent"};
-static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surface";
-static constexpr f32 s_GlassIor = 3.8f;
+static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
+static constexpr f32 s_GlassIor = s_ReflectionReferenceGlassIor;
 static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / ((s_GlassIor + 1.0f) * (s_GlassIor + 1.0f));
 
 

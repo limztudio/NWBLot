@@ -8,6 +8,10 @@ if(TARGET nwb_logserver AND Python3_Interpreter_FOUND)
     unset(_nwb_logger_busy_spin_smoke_timeout_seconds)
 endif()
 
+nwb_declare_static_library(nwb_presentation_smoke_types)
+nwb_target_adhd_sources(nwb_presentation_smoke_types NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/presentation_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/scene_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_values.adhd")
+target_link_libraries(nwb_presentation_smoke_types PUBLIC nwb_common nwb_test_common_names nwb_loader_runtime_constants)
+
 nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
 target_sources(nwb_presentation_fps_probe_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
@@ -16,7 +20,7 @@ target_sources(nwb_presentation_fps_probe_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
 )
-target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common)
+target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common nwb_presentation_smoke_types)
 
 
 nwb_declare_gtest_executable(nwb_skinning_benchmark_pose_tests)
@@ -25,7 +29,7 @@ target_sources(nwb_skinning_benchmark_pose_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_animator.h"
     "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_tests.cpp"
 )
-target_link_libraries(nwb_skinning_benchmark_pose_tests PRIVATE nwb_ecs_skeleton nwb_ecs nwb_common nwb_alloc)
+target_link_libraries(nwb_skinning_benchmark_pose_tests PRIVATE nwb_ecs_skeleton nwb_ecs nwb_common nwb_alloc nwb_presentation_smoke_types)
 
 nwb_declare_gtest_executable(nwb_csg_shadow_mode_tests)
 target_sources(nwb_csg_shadow_mode_tests PRIVATE
@@ -33,7 +37,7 @@ target_sources(nwb_csg_shadow_mode_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode_tests.cpp"
 )
-target_link_libraries(nwb_csg_shadow_mode_tests PRIVATE nwb_common nwb_alloc)
+target_link_libraries(nwb_csg_shadow_mode_tests PRIVATE nwb_common nwb_alloc nwb_presentation_smoke_types)
 
 if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)
@@ -148,7 +152,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         endif()
         set_target_properties("${TARGET_NAME}" PROPERTIES DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}")
         nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics)
-        target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics ${ARGN})
+        target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_input nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics nwb_presentation_smoke_types ${ARGN})
         if(TARGET nwb_logserver)
             add_dependencies("${TARGET_NAME}" nwb_logserver)
         endif()
@@ -331,7 +335,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.h"
         )
         target_sources(nwb_csg_visible_scene_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.cpp")
-        target_link_libraries(nwb_csg_visible_scene_tests PRIVATE nwb_ecs_csg nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_common nwb_alloc)
+        target_link_libraries(nwb_csg_visible_scene_tests PRIVATE nwb_ecs_csg nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_input nwb_common nwb_alloc nwb_presentation_smoke_types)
         nwb_add_fixture_smoke_assets(nwb_csg_visible_smoke_assets csg_visible "${_nwb_csg_visible_runtime_root}" "CSG visible" csg_visible_assets)
         add_dependencies(nwb_csg_visible_smoke nwb_csg_visible_smoke_assets)
 

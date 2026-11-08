@@ -6,6 +6,8 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -36,6 +38,7 @@ using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 
 using StressModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using StressMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -52,33 +55,32 @@ static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transpar
 static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr StressMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
-static constexpr u32 s_CharacterTintCount = 5u;
-static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight so neighbours' shadows overlap
+static constexpr u32 s_CharacterTintCount = NWB::Tests::Smoke::s_StressCrowdCharacterTintCount;
+static constexpr f32 s_CharacterSpacingX = NWB::Tests::Smoke::s_StressCrowdCharacterSpacingX; // tight so neighbours' shadows overlap
 static constexpr f32 s_TransparentRowZ = -0.55f;
-static constexpr f32 s_OpaqueRowZ = 0.55f;
-static constexpr f32 s_CharacterLift = 0.0f;
+static constexpr f32 s_OpaqueRowZ = NWB::Tests::Smoke::s_StressCrowdOpaqueRowZ;
+static constexpr f32 s_CharacterLift = NWB::Tests::Smoke::s_StressCrowdCharacterLift;
 
 // Lanes are side half-width and depth half-width.
 static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);
-static constexpr f32 s_BoxHeight = 4.0f;
+static constexpr f32 s_BoxHeight = NWB::Tests::Smoke::s_StressCrowdBoxHeight;
 static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;
 
-static constexpr f32 s_ComparisonCameraDistance = 4.8f;
-static constexpr f32 s_ComparisonCameraHeight = 1.8f;
-static constexpr f32 s_ComparisonCameraPitch = 0.2f;
-static constexpr f32 s_CameraDistance = 7.2f;
-static constexpr f32 s_CameraHeight = 2.7f;
-static constexpr f32 s_CameraPitch = 0.25f;
+static constexpr f32 s_ComparisonCameraDistance = NWB::Tests::Smoke::s_StressCrowdComparisonCameraDistance;
+static constexpr f32 s_ComparisonCameraHeight = NWB::Tests::Smoke::s_StressCrowdComparisonCameraHeight;
+static constexpr f32 s_ComparisonCameraPitch = NWB::Tests::Smoke::s_StressCrowdComparisonCameraPitch;
+static constexpr f32 s_CameraDistance = NWB::Tests::Smoke::s_StressCrowdCameraDistance;
+static constexpr f32 s_CameraHeight = NWB::Tests::Smoke::s_StressCrowdCameraHeight;
+static constexpr f32 s_CameraPitch = NWB::Tests::Smoke::s_StressCrowdCameraPitch;
 
-static constexpr f32 s_DirectionalLightPitch = 0.9f;
-static constexpr f32 s_DirectionalLightYaw = 0.65f;
-static constexpr f32 s_DirectionalLightIntensity = 2.0f;
+static constexpr f32 s_DirectionalLightPitch = NWB::Tests::Smoke::s_StressCrowdDirectionalLightPitch;
+static constexpr f32 s_DirectionalLightYaw = NWB::Tests::Smoke::s_StressCrowdDirectionalLightYaw;
+static constexpr f32 s_DirectionalLightIntensity = NWB::Tests::Smoke::s_StressCrowdDirectionalLightIntensity;
 
-static constexpr f32 s_PointLightHeight = 2.6f;
-static constexpr f32 s_PointLightIntensity = 9.0f;
-static constexpr f32 s_PointLightRange = 16.0f;
+static constexpr f32 s_PointLightHeight = NWB::Tests::Smoke::s_StressCrowdPointLightHeight;
+static constexpr f32 s_PointLightIntensity = NWB::Tests::Smoke::s_StressCrowdPointLightIntensity;
+static constexpr f32 s_PointLightRange = NWB::Tests::Smoke::s_StressCrowdPointLightRange;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,7 +170,7 @@ b8 StressCrowdScene::initialize([[maybe_unused]] ProjectRuntimeContext& context,
     for(usize index = 0u; index < m_characterOwners.size(); ++index){
         if(m_opaqueOnly || index % 2u != 0u)
             continue;
-        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_characterOwners[index], Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh, m_world);
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_characterOwners[index], Name(NWB::Tests::Smoke::s_SmokeNameMesh), NWB::Impl::ModelObjectKind::SkinnedMesh, m_world);
         auto* const renderer = m_world.tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: closed refractor renderer is unavailable (index {})"), index);

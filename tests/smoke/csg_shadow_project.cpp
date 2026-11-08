@@ -15,8 +15,11 @@
 #include "csg_caustic_timing_probe.h"
 #endif
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/module.h>
@@ -41,10 +44,10 @@ namespace __hidden_csg_shadow_smoke{
 
 constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProject");
 
-static constexpr AStringView s_Directional = "directional";
-static constexpr AStringView s_Point = "point";
-static constexpr AStringView s_Hard = "hard";
-static constexpr AStringView s_Finite = "finite";
+static constexpr AStringView s_Directional = NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+static constexpr AStringView s_Point = NWB::Tests::Smoke::s_ShadowSmokePoint;
+static constexpr AStringView s_Hard = NWB::Tests::Smoke::s_ShadowSmokeHard;
+static constexpr AStringView s_Finite = NWB::Tests::Smoke::s_ShadowSmokeFinite;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,8 +63,8 @@ static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_caustic/ma
 #else
 static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
 #endif
-static constexpr f32 s_CameraDepth = -4.0f;
-static constexpr u32 s_MoveUpdate = 40u;
+static constexpr f32 s_CameraDepth = NWB::Tests::Smoke::s_ShadowSmokeCameraDepth;
+static constexpr u32 s_MoveUpdate = NWB::Tests::Smoke::s_ShadowSmokeMoveUpdate;
 
 
 
@@ -139,7 +142,7 @@ public:
             , hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
-        constexpr u32 s_DefaultCaptureFrameCount = 120u;
+        constexpr u32 s_DefaultCaptureFrameCount = NWB::Tests::Smoke::s_ShadowSmokeDefaultCaptureFrameCount;
         auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(s_ProjectName, s_DefaultCaptureFrameCount, {});
         if(!capture)
             return false;

@@ -5,6 +5,8 @@
 #include "reflection_optical_scene.h"
 #include "reflection_optical_csg_builder.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
@@ -141,7 +143,7 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(const b8 csg, Core:
         return MakeUnexpected(Failure{});
     if(!csg)
         return OpticalReceiverEntities{ .receiver = receiver };
-    const Name group("smoke/reflection/csg_dense");
+    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgDense;
     const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, true, false, Float4(-1.f, 0.f, 0.f, 11.f));
     return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
 }
@@ -151,7 +153,7 @@ static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(const SmokeMe
     const auto receiver = CreateBoundary(mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f), Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, world, mode);
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
-    const Name group("smoke/reflection/csg_optics");
+    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgOptics;
     const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(0.f, 0.f, -1.f, -9.f));
     return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
 }
@@ -173,7 +175,7 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
             return false;
         if(ordinary)
             return true;
-        const Name group("smoke/reflection/csg_group_entry");
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgGroupEntry;
         Tests::Smoke::ReflectionOpticalCsgBuilder(world).addBox(receiver, group, Float4(13.f, 10.f, 3.5e-6f, 0.f), VectorSet(0.f, 1.4f, -9.0000085f, 0.f));
         return true;
     }
@@ -301,7 +303,7 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
         if(duplicate){
             auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
             renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
-            renderer.opticalVolumeGroup = Name("smoke/reflection/optical_duplicate");
+            renderer.opticalVolumeGroup = Name(NWB::Tests::Smoke::s_SmokeNameSmokeReflectionOpticalDuplicate);
             renderer.opticalVolumePriority = selected ? 20 : 10;
         }
     }
@@ -334,7 +336,12 @@ Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS
     const auto dense = CreateDenseReceiver(true, world);
     if(!dense)
         return MakeUnexpected(dense.error());
-    return ReflectionCsgContextEntities{ .smallReceiver = small->receiver, .denseReceiver = dense->receiver, .smallCutter = small->cutter, .denseCutter = dense->cutter, };
+    ReflectionCsgContextEntities entities;
+    entities.smallReceiver = small->receiver;
+    entities.denseReceiver = dense->receiver;
+    entities.smallCutter = small->cutter;
+    entities.denseCutter = dense->cutter;
+    return entities;
 }
 
 b8 CreateReflectionOpticalScene(const AStringView caseName, Core::ECS::World& world){

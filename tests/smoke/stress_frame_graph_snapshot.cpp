@@ -4,7 +4,9 @@
 
 #include "stress_frame_graph_snapshot.h"
 #include "stress_frame_graph_snapshot_writer.h"
+
 #include <tests/common/frame_graph_snapshot_validation.h>
+#include <tests/smoke/presentation_types.adhd.h>
 
 #include <loader/project_entry.h>
 
@@ -130,7 +132,7 @@ b8 CaptureStressFrameGraphSnapshot(const AStringView outputPath, const u64 compl
     }
     // Capture the completed frame before runFrame advances the frame index.
     const u64 sourceFrame = graphicsFrame - 1u;
-    Core::Telemetry::TelemetryArena arena(Name("tests/smoke/frame_graph_snapshot"));
+    Core::Telemetry::TelemetryArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshot)};
     Core::Telemetry::CaptureSession session(arena);
     session.setCaptureOptions(Core::Telemetry::CaptureOptions::FrameGraphOnly());
     session.setFrameIndex(sourceFrame);
@@ -143,7 +145,7 @@ b8 CaptureStressFrameGraphSnapshot(const AStringView outputPath, const u64 compl
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
         return false;
     }
-    Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/frame_graph_snapshot_scratch"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshotScratch)};
     const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
     if(!payload){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: frame graph payload parse failed source_frame={} payload_bytes={}"), sourceFrame, event->payload.size());

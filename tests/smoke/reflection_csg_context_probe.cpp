@@ -5,6 +5,9 @@
 #include "reflection_csg_context_probe.h"
 #include "smoke_capture_factory.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
@@ -36,14 +39,14 @@ void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, 
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/reflection_frame_graph"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeScratchNameTestsSmokeReflectionFrameGraph)};
     NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
     const b8 graphAvailable = renderer.appendFrameGraph(builder);
     const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     u64 planGeneration = 0u;
     b8 runtimePresent = false;
     for(const auto& node : nodes){
-        if(node.name == Name("ecs_render/frame") && node.runtimeStatistics.present){
+        if(node.name == Name(NWB::Tests::Smoke::s_SmokeTimingNameEcsRenderFrame) && node.runtimeStatistics.present){
             // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
             runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
             planGeneration = node.runtimeStatistics.planGeneration;
@@ -57,7 +60,7 @@ void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, 
     sliceIdentities.reserve(expectedSlices);
     for(u32 slice = 0u; slice < expectedSlices; ++slice){
         if(!csg){
-            sliceIdentities.push_back(Name("render.reflection.hardware"));
+            sliceIdentities.push_back(Name(NWB::Tests::Smoke::s_SmokeTimingNameRenderReflectionHardware));
             continue;
         }
         const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);

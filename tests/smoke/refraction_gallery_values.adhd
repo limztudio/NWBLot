@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RefractionGalleryInterface = "project/shaders/smoke_surface";
+const StringView s_RefractionGalleryOpticalInterface = "project/shaders/reflection_optical";
+const f32 s_RefractionGalleryCameraDistance = 6.0f;
+const f32 s_RefractionGalleryIdentityForeignFront = -0.0005f;
+const f32 s_RefractionGalleryIdentityNearPlane = s_RefractionGalleryCameraDistance - 0.00025f;
+const f32 s_RefractionGalleryCenterHeight = 1.4f;
+const f32 s_RefractionGallerySlabFaceScale = 2.6f;
+const f32 s_RefractionGalleryPreviewAlpha = 0.48f;
+const f32 s_RefractionGalleryOpticalIor = 1.5f;
+const f32 s_RefractionGalleryTintedCoverage = 0.3f;
+const f32 s_RefractionGalleryDuplicateSphereRadius = 1.1f;
+const i32 s_RefractionGalleryWinningOpticalPriority = 10;
+const f32 s_RefractionGalleryBackdropDepth = 4.5f;
+const f32 s_RefractionGalleryBackdropHalfHeight = 5.0f;
+const f32 s_RefractionGalleryDepthMarkerAlpha = 0.70f;
+const StringView s_RefractionGalleryCaseCsgReference = "csg_reference";
+const StringView s_RefractionGalleryCaseCsgCap = "csg_cap";
+const StringView s_RefractionGalleryCaseCsgMiddle = "csg_middle";
+const StringView s_RefractionGalleryCaseCsgUncut = "csg_uncut";
+const StringView s_RefractionGalleryCaseIdentityReference = "identity_reference";
+const StringView s_RefractionGalleryCaseIdentitySameIor = "identity_same_ior";
+const StringView s_RefractionGalleryCaseIdentityDifferentIor = "identity_different_ior";
+const StringView s_RefractionGalleryCaseCrossingOverflow = "crossing_overflow";
+const StringView s_RefractionGalleryCaseNearAirOrdinary = "near_air_ordinary";
+const StringView s_RefractionGalleryCaseNearAirCsg = "near_air_csg";
+const StringView s_RefractionGalleryCaseSingle = "single";
+const StringView s_RefractionGalleryCaseSeparate = "separate";
+const StringView s_RefractionGalleryCaseStacked = "stacked";
+const StringView s_RefractionGalleryCaseIntersecting = "intersecting";
+const StringView s_RefractionGalleryCaseNested = "nested";
+const StringView s_RefractionGalleryCaseDuplicateSingleCool = "duplicate_single_cool";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarm = "duplicate_single_warm";
+const StringView s_RefractionGalleryCaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
+const StringView s_RefractionGalleryCaseCoincident = "coincident";
+const StringView s_RefractionGalleryCaseCoincidentTinted = "coincident_tinted";
+const StringView s_RefractionGalleryCaseCoincidentReversed = "coincident_reversed";
+const StringView s_RefractionGalleryCaseCoincidentTintedReversed = "coincident_tinted_reversed";
+const StringView s_RefractionGalleryCaseCoincidentPrioritySwap = "coincident_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentIdentical = "coincident_identical";
+const StringView s_RefractionGalleryCaseCoincidentTintedIdentical = "coincident_tinted_identical";
+const StringView s_RefractionGalleryCaseNearCoincident = "near_coincident";
+const StringView s_RefractionGalleryCaseCoincidentPreserved = "coincident_preserved";
+const StringView s_RefractionGalleryCaseTorus = "torus";
+const StringView s_RefractionGalleryCaseSameMesh = "same_mesh";
+const StringView s_RefractionGalleryCasePrism = "prism";
+const f32 s_RefractionGalleryForeignExit = 0.25f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -12,8 +12,12 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
@@ -76,8 +80,8 @@ static constexpr SkinnedCausticMaterialRef s_GlassMaterial{"project/smoke/transp
 static constexpr SkinnedCausticMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SkinnedCausticMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr Name s_ModelSkeletonObject("skeleton");
-static constexpr Name s_ModelMeshObject("mesh");
+static constexpr Name s_ModelSkeletonObject = NWB::Tests::Smoke::s_SmokeNameSkeleton;
+static constexpr Name s_ModelMeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
 static constexpr u64 s_TransitionPhaseFrames = NWB::Tests::Smoke::SkinnedCausticTransition::s_TransitionPhaseFrames;
 
 static constexpr f32 s_CameraDistance = 2.6f;

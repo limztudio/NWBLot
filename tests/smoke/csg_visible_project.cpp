@@ -10,8 +10,11 @@
 #include "smoke_capture_teardown.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/system.h>

@@ -5,6 +5,8 @@
 #include "csg_shadow_mode.h"
 #include "smoke_environment.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,13 +23,20 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_AnalyticAtlas = "analytic";
-static constexpr AStringView s_OpenAtlas = "open";
-static constexpr AStringView s_Directional = "directional";
-static constexpr AStringView s_Point = "point";
-static constexpr AStringView s_Hard = "hard";
-static constexpr AStringView s_Finite = "finite";
-static constexpr Array<AStringView, 6> s_OpenCaseNames = { "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65", };
+static constexpr AStringView s_AnalyticAtlas = NWB::Tests::Smoke::s_ShadowSmokeAnalyticAtlas;
+static constexpr AStringView s_OpenAtlas = NWB::Tests::Smoke::s_ShadowSmokeOpenAtlas;
+static constexpr AStringView s_Directional = NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+static constexpr AStringView s_Point = NWB::Tests::Smoke::s_ShadowSmokePoint;
+static constexpr AStringView s_Hard = NWB::Tests::Smoke::s_ShadowSmokeHard;
+static constexpr AStringView s_Finite = NWB::Tests::Smoke::s_ShadowSmokeFinite;
+static constexpr Array<AStringView, 6> s_OpenCaseNames = {
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseReference,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseRetained,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseClippedReference,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseClipped,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseBoundary64,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseTerminal65,
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

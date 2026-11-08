@@ -8,11 +8,14 @@
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/system.h>
@@ -68,9 +71,9 @@ static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/transpa
 static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
 #endif
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
-static constexpr Name s_ModelMeshObject("mesh");
-static constexpr Name s_CutterAnchorBoneName("hip");
+static constexpr Name s_ReceiverGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
+static constexpr Name s_ModelMeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
+static constexpr Name s_CutterAnchorBoneName = NWB::Tests::Smoke::s_SmokeNameHip;
 static constexpr f32 s_CameraDistance = 1.75f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
@@ -307,9 +310,9 @@ private:
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_ReceiverGroup;
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        cutter.shapeType = Name("engine/csg/sphere");
+        cutter.shapeType = Name(NWB::Impl::s_CsgSphereShapeName);
 #else
-        cutter.shapeType = Name("engine/csg/capsule");
+        cutter.shapeType = Name(NWB::Impl::s_CsgCapsuleShapeName);
 #endif
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)

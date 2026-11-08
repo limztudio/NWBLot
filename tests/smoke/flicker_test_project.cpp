@@ -9,6 +9,8 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -154,7 +156,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_transparentOwner, Name(NWB::Tests::Smoke::s_SmokeNameMesh), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));

@@ -24,7 +24,7 @@ PassiveSmokeColumns ResolvePassiveSmokeColumns(const Impl::Ui::DisplayMetrics& d
     const f32 mainWidth = Max(300.0f, display.logicalWidth * 0.5f - 40.0f);
     const f32 rightColumn = 24.0f + mainWidth + 32.0f;
     const f32 rightWidth = Max(220.0f, display.logicalWidth - rightColumn - 24.0f);
-    return { mainWidth, rightColumn, rightWidth };
+    return { .mainWidth = mainWidth, .rightColumn = rightColumn, .rightWidth = rightWidth };
 }
 
 b8 HandlePassiveSmokeKeyboard(const i32 key, const i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{

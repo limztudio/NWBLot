@@ -28,7 +28,7 @@ namespace __hidden_renderer_gather_benchmark_probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr f64 s_MillisecondsPerSecond = 1000.0;
+constexpr f64 s_MillisecondsPerSecond = s_PresentationPacingMsPerSecond;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,10 +69,10 @@ b8 RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, c
         return true;
     if((m_hasPublication && frame.publishFrameIndex < m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
         return false;
-    const auto& failedPreparation = report.cpuTiming.stats(Name("graphics.prepare_resources_failed"));
+    const auto& failedPreparation = report.cpuTiming.stats(Name(s_PresentationTimingNamePrepareResourcesFailed));
     if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex)
         return false;
-    const auto& preamble = report.cpuTiming.stats(Name("graphics.frame_preamble"));
+    const auto& preamble = report.cpuTiming.stats(Name(s_PresentationTimingNameFramePreamble));
     if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && m_successfulFrames == 0u)
         return true; // Initial hidden-window maintenance is not a rendered frame or part of warm-up.
     CpuSample sample;

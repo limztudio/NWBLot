@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_render/avboit/avboit.h>
 
 
@@ -25,11 +27,11 @@ namespace Tests::Smoke{
 
 class AvboitDepthWarpOracle final{
 public:
-    static constexpr u32 s_MaxVirtualCount = 257u;
+    static constexpr u32 s_MaxVirtualCount = s_AvboitMaxVirtualCount;
     static constexpr u32 s_CoverageWords = (s_MaxVirtualCount + 31u) / 32u;
-    static constexpr u32 s_BoundaryCaseCount = 1050u;
-    static constexpr u32 s_ExhaustiveCaseCount = 2550u;
-    static constexpr u32 s_RandomCaseCount = 512u;
+    static constexpr u32 s_BoundaryCaseCount = s_AvboitBoundaryCaseCount;
+    static constexpr u32 s_ExhaustiveCaseCount = s_AvboitExhaustiveCaseCount;
+    static constexpr u32 s_RandomCaseCount = s_AvboitRandomCaseCount;
     static constexpr u32 s_TotalCaseCount = s_BoundaryCaseCount + s_ExhaustiveCaseCount + s_RandomCaseCount;
 
     struct Case{

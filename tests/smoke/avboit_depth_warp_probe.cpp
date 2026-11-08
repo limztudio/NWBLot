@@ -6,8 +6,11 @@
 #include "refraction_tile_probe.h"
 #include "avboit_depth_warp_oracle.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
@@ -43,7 +46,7 @@ inline constexpr u32 s_BoundaryCaseCount = AvboitDepthWarpOracle::s_BoundaryCase
 inline constexpr u32 s_ExhaustiveCaseCount = AvboitDepthWarpOracle::s_ExhaustiveCaseCount;
 inline constexpr u32 s_RandomCaseCount = AvboitDepthWarpOracle::s_RandomCaseCount;
 inline constexpr u32 s_TotalCaseCount = AvboitDepthWarpOracle::s_TotalCaseCount;
-inline constexpr Name s_ProbeName("AvboitDepthWarpProbe");
+inline constexpr Name s_ProbeName = NWB::Tests::Smoke::s_SmokeNameAvboitDepthWarpProbe;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,22 +260,22 @@ public:
             m_pipeline = Move(*pipelineResult);
         else
             m_pipeline.reset();
-        auto coverageResult = CreateBuffer(Name("DepthWarpProbeCoverage"), s_CoverageWords, false, graphics);
+        auto coverageResult = CreateBuffer(Name(NWB::Tests::Smoke::s_SmokeNameDepthWarpProbeCoverage), s_CoverageWords, false, graphics);
         if(coverageResult)
             m_coverage = Move(*coverageResult);
         else
             m_coverage.reset();
-        auto warpResult = CreateBuffer(Name("DepthWarpProbeWarp"), s_WarpWords, false, graphics);
+        auto warpResult = CreateBuffer(Name(NWB::Tests::Smoke::s_SmokeNameDepthWarpProbeWarp), s_WarpWords, false, graphics);
         if(warpResult)
             m_warp = Move(*warpResult);
         else
             m_warp.reset();
-        auto controlResult = CreateBuffer(Name("DepthWarpProbeControl"), s_ControlWords, false, graphics);
+        auto controlResult = CreateBuffer(Name(NWB::Tests::Smoke::s_SmokeNameDepthWarpProbeControl), s_ControlWords, false, graphics);
         if(controlResult)
             m_control = Move(*controlResult);
         else
             m_control.reset();
-        auto readbackResult = CreateBuffer(Name("DepthWarpProbeReadback"), s_BatchSize * s_ResultWords, true, graphics);
+        auto readbackResult = CreateBuffer(Name(NWB::Tests::Smoke::s_SmokeNameDepthWarpProbeReadback), s_BatchSize * s_ResultWords, true, graphics);
         if(readbackResult)
             m_readback = Move(*readbackResult);
         else
@@ -296,7 +299,7 @@ public:
         slots.avboitDepthWarp = m_descriptors[1].slot();
         slots.avboitControl = m_descriptors[2].slot();
         Core::GraphicsStandaloneService::BufferSetupDesc slotsDesc;
-        slotsDesc.bufferDesc.setDebugName(Name("DepthWarpProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
+        slotsDesc.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameDepthWarpProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
         slotsDesc.data = &slots;
         slotsDesc.dataSize = sizeof(slots);
         slotsDesc.queue = Core::CommandQueue::Graphics;

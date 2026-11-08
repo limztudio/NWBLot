@@ -7,6 +7,8 @@
 #include "world.h"
 #include "../framebuffer_capture.h"
 
+#include <tests/smoke/ui_layer/snapshots.adhd.h>
+
 #include <impl/ecs_ui/layer_system.h>
 
 #include <core/common/log.h>
@@ -33,9 +35,9 @@ namespace Tests::Smoke{
 inline constexpr u64 s_ResizePreparationPresentations = 4u;
 
 static b8 CheckPersistentStateSelfFilter(ProjectRuntimeContext& context){
-    Core::Alloc::ScratchArena scratch(Name("tests/ui_layer/persistent_state"));
+    Core::Alloc::ScratchArena scratch{Name(s_UiSmokeNameTestsUiLayerPersistentState)};
     Core::BufferDesc desc;
-    desc.setDebugName(Name("tests/ui_layer/persistent_state_buffer")).setByteSize(16u);
+    desc.setDebugName(Name(s_UiSmokeNameTestsUiLayerPersistentStateBuffer)).setByteSize(16u);
     const auto first = context.graphics.createBuffer(desc);
     const auto second = context.graphics.createBuffer(desc);
     auto& device = context.graphics.getDevice();

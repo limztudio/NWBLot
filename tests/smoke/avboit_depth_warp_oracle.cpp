@@ -132,12 +132,12 @@ void AvboitDepthWarpOracle::BuildCases(Vector<ProbeCase, Core::Alloc::GlobalAren
             }
         }
     }
-    constexpr u32 s_RandomCaseInitialSeed = 0x6b47c2d1u;
-    constexpr u32 s_RandomVirtualCountStride = 73u;
-    constexpr u32 s_RandomScenarioId = 11u;
-    constexpr u32 s_XorShift1 = 13u;
-    constexpr u32 s_XorShift2 = 17u;
-    constexpr u32 s_XorShift3 = 5u;
+    constexpr u32 s_RandomCaseInitialSeed = s_AvboitRandomCaseInitialSeed;
+    constexpr u32 s_RandomVirtualCountStride = s_AvboitRandomVirtualCountStride;
+    constexpr u32 s_RandomScenarioId = s_AvboitRandomScenarioId;
+    constexpr u32 s_XorShift1 = s_AvboitXorShift1;
+    constexpr u32 s_XorShift2 = s_AvboitXorShift2;
+    constexpr u32 s_XorShift3 = s_AvboitXorShift3;
     u32 random = s_RandomCaseInitialSeed;
     for(u32 index = 0u; index < s_RandomCaseCount; ++index){
         ProbeCase probe;

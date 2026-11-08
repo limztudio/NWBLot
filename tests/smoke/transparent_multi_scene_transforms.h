@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/ecs/entity_id.h>
 #include <global/simdmath.h>
 
@@ -28,7 +30,7 @@ namespace Tests::Smoke{
 
 class TransparentMultiSceneTransforms final{
 public:
-    static constexpr f32 s_CameraTargetY = 0.85f;
+    static constexpr f32 s_CameraTargetY = s_TransparentMultiCameraTargetY;
     static constexpr Float4 s_TransparentLeftShapeBasePosition{ -0.68f, s_CameraTargetY, 0.02f, 0.0f };
     static constexpr Float4 s_TransparentCenterShapeBasePosition{ 0.0f, s_CameraTargetY, 0.0f, 0.0f };
     static constexpr Float4 s_TransparentRightShapeBasePosition{ 0.68f, s_CameraTargetY, 0.04f, 0.0f };

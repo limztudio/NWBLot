@@ -103,9 +103,9 @@ Use the repository launcher and test configuration documented in [the test guide
 
 Cover dependency/capture/descendant lifetimes, late prerequisites, node reuse, cancellation history, nested handle/scope joins, cycle rejection, main-thread targets, cost/priority placement, and concurrent producers. Scope-search coverage includes unrelated ready prefixes, shared continuation chains, sibling frontiers, publication invalidation, repeated/concurrent same-scope waiters, and different-scope controls. Completion coverage includes capture-destructor reentry and notification races at handle, scope, and scheduler joins. Topology coverage uses actual allowed processor identities and restrictions.
 
-Join checks run ECS and Frame hold, picked-back note, hand-store loans, loader/plan shut, tool and cook APIs, and home graphics smoke through public contracts. Preserve the distinction between CPU retirement and GPU completion. Exercise zero-worker owner-driven execution and native workers independently. Physical heterogeneous-class placement requires suitable hardware.
+Join checks run ECS and Frame hold. They run picked-back note, hand-store loans, loader/plan shut, tool and cook APIs, and home card smoke. They use open deals. Preserve the distinction between CPU retirement and GPU completion. Exercise zero-worker owner-driven execution and native workers independently. Physical heterogeneous-class placement requires suitable hardware.
 
-Profiling checks cover disabled collection, label/frame attribution, bounded buffer overflow, stale epochs, native idle lanes, foreign labels, zero capacity, concurrent capture changes, owner-thread delivery, and bounded adapter draining. Native graphics tests must state which queue/extension capabilities actually executed.
+Grade checks span off reads, mark/frame give, capped store flood, old ages, home idle lanes, far marks, zero room, side-by-side capture changes, owner-thread delivery, and bounded adapter draining. Native graphics tests must state which queue/extension capabilities actually executed.
 
 ## Measurement procedure and tradeoffs
 

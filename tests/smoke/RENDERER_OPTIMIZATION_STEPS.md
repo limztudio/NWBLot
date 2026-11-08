@@ -28,7 +28,7 @@ The native headless fixtures mentioned in historical steps below were retired wi
 
 ## Benchmark preparation
 
-The transparent smoke fixture has an opt-in `NWB_AVBOIT_SMOKE_TIMING=1` pass that reserves 32 complete in-flight timing ranges for the frame, six AVBOIT passes, and five deferred/control passes. It also requests the existing unfocused-render policy. Normal smoke behavior is unchanged when the flag is absent. The helper belongs to `tests/smoke`.
+The clear smoke set has a spare `NWB_AVBOIT_SMOKE_TIMING=1` pass. It holds 32 full in-flight time spans for the frame, six AVBOIT passes, and five deferred/control passes. It also requests the existing unfocused-render policy. Normal smoke behavior is unchanged when the flag is absent. The helper belongs to `tests/smoke`.
 Production scheduling and timing policy are unchanged.
 
 `renderer_ab_benchmark.py` accepts set frozen baseline/candidate executables, separate runtime directories, physical source snapshots with SHA256 manifests, and a shared logserver. The initial `transparent-multi` workload fixes 1280x900, yaw zero, fixed delta 1/60, and diagnostics/capture off. It base-forms to eight kept AB/BA blocks (16 starts). It needs two warm notes, 11 or more good read notes, and 100 done card frames per try. All 12 required scopes must satisfy the two-range-or-2% publication-skew bound. Timings use summed GPU durations divided by actual completed samples.
@@ -66,7 +66,7 @@ Evidence: `__artifacts/reflection_optimization_steps/step1/benchmark/{plan,trial
 After restoration, the optimized build, full ECS graphics target, benchmark analysis target, and ordinary transparency capture passed. The recooked authored-volume hash exactly matches the baseline above. See __artifacts/reflection_optimization_steps/step1_restored_opt_junit.xml. The rejected candidate is absent from tracked production code.
 ## Step 2: omit temporal recording when history cannot change
 
-`TemporalTask::Record` resolves the existing late hardware-readiness/history outcome and returns before native render-pass termination, binding, push constants, timing or dispatch when history is not reusable or its sample cap is one. Classification and hardware resolve already populated the current bank. The graph task, resource declarations, reservation and accepted/discarded callbacks remain intact, so accepted frames still publish the correct bank and sample sequence. No shader or public setting changed.
+The `TemporalTask::Record` call settles the old late card-ready/past end. It comes back first, with no home draw-pass end, tie, push sets, time or dispatch when history is not reusable or its sample cap is one. Classification and hardware resolve already populated the current bank. The graph task, resource declarations, reservation and accepted/discarded callbacks remain intact, so accepted frames still publish the correct bank and sample sequence. No shader or public setting changed.
 
 The cap-aware benchmark contract requires zero temporal ranges for cap one and normal temporal coverage for reusable history. A dedicated smoke test checks every finalized timing report, including warm-up and shutdown, and preserves unique output directories and failed runs. It freezes sources, executable dependencies and authored resources before/after both launches. Missing unrelated GPU scopes, publication skew, changed identities and cleanup failures cannot masquerade as successful omission or an unsupported-device skip.
 
@@ -132,7 +132,7 @@ Build `nwb_ecs_graphics_tests` with `python -m launcher build nwb_ecs_graphics_t
 
 ## CPU measurement prerequisite: correct asynchronous source-frame bounds
 
-While preparing the CPU gathering comparison, review found that reused GPU query slots can publish source frame 51 before frame 50 in one timing batch. The performance accumulator previously used arrival endpoints as its frame bounds, producing 51..50. Other arrival orders could produce an apparently valid interval that omitted an earlier source frame. That could misattribute a batch at a warm-up or measurement boundary.
+While readying the CPU take weigh, review saw that reused card ask slots can post true frame 51 first, past frame 50, in one time batch. The performance accumulator previously used arrival endpoints as its frame bounds, producing 51..50. Other arrival orders could produce an apparently valid interval that omitted an earlier source frame. That could misattribute a batch at a warm-up or measurement boundary.
 
 The performance owner now maintains the minimum and maximum source frames. Sample delivery order, duration totals, minimum/maximum durations, last-arrival duration, publication index, binary layout and allocation behavior are unchanged. No sorting or renderer policy change is involved.
 

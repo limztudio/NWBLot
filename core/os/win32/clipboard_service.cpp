@@ -5,6 +5,7 @@
 #include "clipboard_service.h"
 
 #include <core/common/log.h>
+#include <core/os/platform_values.adhd.h>
 
 #include <global/text_utils.h>
 
@@ -26,7 +27,7 @@ namespace __hidden_win32_clipboard_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_LifecycleCategory = "win32_clipboard_lifecycle";
+static constexpr StringView s_LifecycleCategory = ::NWB::Core::s_OsWin32ClipboardServiceLifecycleCategory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +100,7 @@ Win32ClipboardService::Win32ClipboardService(Alloc::GlobalArena& arena, const No
 {}
 
 ClipboardCapabilities Win32ClipboardService::capabilities(const ClipboardChannel::Enum channel)const noexcept{
-    return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ .readText = true, .writeText = true } : ClipboardCapabilities{};
+    return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities(true, true) : ClipboardCapabilities{};
 }
 
 void Win32ClipboardService::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView text){

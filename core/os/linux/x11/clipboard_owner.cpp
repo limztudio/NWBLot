@@ -5,6 +5,7 @@
 #include "clipboard_service.h"
 
 #include <core/common/log.h>
+#include <core/os/platform_values.adhd.h>
 
 #include <global/bit.h>
 
@@ -90,8 +91,8 @@ b8 X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const
     X11CheckedOperation checked(m_display);
     if(target == m_targetsAtom){
         // XA_STRING is the last target and is offered only when Latin-1 text is available.
-        constexpr usize s_TargetCount = 7u;
-        constexpr usize s_TargetCountWithoutLatin1 = s_TargetCount - 1u;
+        constexpr usize s_TargetCount = ::NWB::Core::s_OsLinuxX11ClipboardOwnerTargetCount;
+        constexpr usize s_TargetCountWithoutLatin1 = ::NWB::Core::s_OsLinuxX11ClipboardOwnerTargetCountWithoutLatin1;
         Array<Atom, s_TargetCount> targets{ m_targetsAtom, m_timestampAtom, m_multipleAtom, m_utf8Atom, m_utf8MimeAtom, m_textAtom, XA_STRING };
         const int count = static_cast<int>(selection.latin1Available ? s_TargetCount : s_TargetCountWithoutLatin1);
         XChangeProperty(&m_display, event.requestor, property, XA_ATOM, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(targets.data()), count);

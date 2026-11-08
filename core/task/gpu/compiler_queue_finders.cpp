@@ -5,6 +5,8 @@
 #include "compiler_internal.h"
 #include "timing_decision.h"
 
+#include <core/task/gpu/queue_assignment.adhd.h>
+
 #include <global/overflow.h>
 
 
@@ -24,7 +26,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 [[nodiscard]] b8 AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowTimingFeedbackRouting && (task.scheduling.allowSameClassQueueRouting || task.scheduling.allowCrossClassTimingFeedbackRouting) && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing;
+    return TimingFeedbackRoutingAllowed(task);
 }
 
 // Same-class routing retains its independent physical-queue opt-in.

@@ -1,0 +1,67 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_GpuTaskDeclarationScratchName = "core/task/gpu/declaration_scratch";
+
+
+class GpuMarkerLabelRange{
+    public u32 offset = 0u;
+    public u32 size = 0u;
+}
+
+
+const usize s_GpuGraphInlineImportIndexCount = 32u;
+const usize s_GpuGraphInitialPointerIndexBucketCount = 2u;
+const usize s_GpuPacketLinearStateCountLimit = 8u;
+const usize s_GpuPacketMaxCommandLists = 12u;
+const usize s_GpuPacketMinOverlapPacketCount = 2u;
+const usize s_GpuPacketMinParallelRecordingPacketCount = 2u;
+const usize s_GpuPacketMaxSeedSubsetBatch = 8u;
+const usize s_GpuPacketInlineQueueCount = 8u;
+const usize s_GpuSchedulerInlineCallbackCount = 8u;
+const u64 s_GpuSchedulerPendingSubmissionCost = 4u;
+const usize s_GpuSchedulerInlineBindingCount = 8u;
+const usize s_GpuClearTextureTaskDescExpectedByteSize = 136u;
+const usize s_GpuGraphStorageInlineMemberCount = 32u;
+const usize s_GpuTimingFeedbackLinearHistoryCount = 16u;
+const usize s_GpuTimingFeedbackHistoryIndexBucketsPerEntry = 4u;
+const u64 s_GpuTimingFeedbackMinFramesBetweenSwitches = 30u;
+const u32 s_GpuTimingFeedbackMinSwitchSamples = 8u;
+const u32 s_GpuTimingFeedbackDefaultHistorySampleCount = 32u;
+const u8 s_GpuTaskGraphTelemetryEdgeFlagNoneBaseValue = 0u;
+const u8 s_GpuTaskGraphTelemetryNodeFlagNoneBaseValue = 0u;
+const usize s_GpuCompiledBarrierExpectedByteSize = 72u;
+
+
+class GpuTaskGraphRecordFailure{
+    public b8 recordThunkInvoked = false;
+}
+
+
+class GpuGraphResourceImportPublication{
+    public b8 identity = false;
+    public b8 pointer = false;
+}
+
+
+class GpuGraphResourceImportMatch{
+    public u32 index = u32.max;
+    public b8 samePointer = false;
+}
+
+
+class GpuGraphPipelineImportMatch{
+    public u32 index = u32.max;
+    public b8 samePointer = false;
+}
+
+
+class GpuTaskTimingPacketChain{
+    public usize first = usize.max;
+    public usize last = usize.max;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

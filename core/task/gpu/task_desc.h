@@ -6,6 +6,7 @@
 
 
 #include "types.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 
 #include <core/graphics/rhi/device.h>
 #include <global/span.h>
@@ -446,7 +447,7 @@ struct GpuClearTextureTaskDesc{
     UIntColor uintValue{};
     IntColor intValue{};
 };
-static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
+static constexpr usize s_GpuClearTextureTaskDescByteSize = s_GpuClearTextureTaskDescExpectedByteSize;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
 // Rectangular uint clear: same CopyDest/lifecycle contract as the general texture clear, plus work-region bounds.

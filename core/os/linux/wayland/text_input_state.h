@@ -6,6 +6,7 @@
 
 
 #include <core/os/text_input.h>
+#include <core/os/platform_values.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,14 +81,11 @@ private:
 // Delayed current-session commits/preedit survive ring eviction; deletion requires a retained revision.
 class WaylandTextInputSerialTracker final{
 private:
-    struct Record{
-        u32 serial = 0u;
-        u64 revision = 0u;
-    };
+    using Record = ::NWB::Core::WaylandTextInputSerialRecord;
 
 
 public:
-    static constexpr usize s_MaxRecords = 64u;
+    static constexpr usize s_MaxRecords = ::NWB::Core::s_OsLinuxWaylandTextInputStateMaxRecords;
 
 
 public:

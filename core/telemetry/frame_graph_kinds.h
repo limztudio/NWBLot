@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/telemetry/frame_graph_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,8 +19,8 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u16 s_FrameGraphPayloadVersion = 10u;
-inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
+inline constexpr u16 s_FrameGraphPayloadVersion = NWB::Core::Telemetry::s_FrameGraphWirePayloadVersion;
+inline constexpr u32 s_FrameGraphPayloadMagic = NWB::Core::Telemetry::s_FrameGraphWirePayloadMagic; // NWFG
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,8 +45,8 @@ namespace FrameGraphEdgeKind{
 };
 
 namespace FrameGraphQueueClass{
-    static constexpr u8 s_FrameGraphQueueClassUnknownBase = 0u;
-    static constexpr u8 s_FrameGraphQueueClassCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueClassUnknownBase = NWB::Core::Telemetry::s_FrameGraphWireQueueClassUnknownBase;
+    static constexpr u8 s_FrameGraphQueueClassCountValue = NWB::Core::Telemetry::s_FrameGraphWireQueueClassCountValue;
     enum Enum : u8{
         Unknown = s_FrameGraphQueueClassUnknownBase,
         Graphics,
@@ -56,8 +58,8 @@ namespace FrameGraphQueueClass{
 };
 
 namespace FrameGraphQueueAssignmentReason{
-    static constexpr u8 s_FrameGraphQueueAssignmentReasonUnknownBase = 0u;
-    static constexpr u8 s_FrameGraphQueueAssignmentReasonCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueAssignmentReasonUnknownBase = NWB::Core::Telemetry::s_FrameGraphWireQueueAssignmentReasonUnknownBase;
+    static constexpr u8 s_FrameGraphQueueAssignmentReasonCountValue = NWB::Core::Telemetry::s_FrameGraphWireQueueAssignmentReasonCountValue;
     enum Enum : u8{
         Unknown = s_FrameGraphQueueAssignmentReasonUnknownBase,
         RequiredGraphics,
@@ -69,7 +71,7 @@ namespace FrameGraphQueueAssignmentReason{
 };
 
 namespace FrameGraphQueueAssignmentModifier{
-    static constexpr u8 s_FrameGraphQueueAssignmentModifierNoneBase = 0u;
+    static constexpr u8 s_FrameGraphQueueAssignmentModifierNoneBase = NWB::Core::Telemetry::s_FrameGraphWireQueueAssignmentModifierNoneBase;
     enum Mask : u8{
         None = s_FrameGraphQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
@@ -87,8 +89,8 @@ namespace FrameGraphQueueAssignmentModifier{
 };
 
 namespace FrameGraphQueueAssignmentAcceptance{
-    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceNotAcceptedBase = 0u;
-    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceNotAcceptedBase = NWB::Core::Telemetry::s_FrameGraphWireQueueAssignmentAcceptanceNotAcceptedBase;
+    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceCountValue = NWB::Core::Telemetry::s_FrameGraphWireQueueAssignmentAcceptanceCountValue;
     enum Enum : u8{
         NotAccepted = s_FrameGraphQueueAssignmentAcceptanceNotAcceptedBase,
         First,
@@ -100,8 +102,8 @@ namespace FrameGraphQueueAssignmentAcceptance{
 };
 
 namespace FrameGraphTaskPacketizationDecision{
-    static constexpr u8 s_FrameGraphTaskPacketizationDecisionUnknownBase = 0u;
-    static constexpr u8 s_FrameGraphTaskPacketizationDecisionCountValue = 12u;
+    static constexpr u8 s_FrameGraphTaskPacketizationDecisionUnknownBase = NWB::Core::Telemetry::s_FrameGraphWireTaskPacketizationDecisionUnknownBase;
+    static constexpr u8 s_FrameGraphTaskPacketizationDecisionCountValue = NWB::Core::Telemetry::s_FrameGraphWireTaskPacketizationDecisionCountValue;
     enum Enum : u8{
         Unknown = s_FrameGraphTaskPacketizationDecisionUnknownBase,
         FirstTask,
@@ -137,15 +139,6 @@ inline constexpr b8 operator==(const FrameGraphPhysicalQueueId& lhs, const Frame
 inline constexpr b8 operator!=(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
     return !(lhs == rhs);
 }
-
-struct FrameGraphQueueAssignmentScore{
-    i32 overlap = 0;
-    i32 queueLoad = 0;
-    i32 incomingCrossings = 0;
-    i32 outgoingCrossings = 0;
-    i32 ownershipTransfers = 0;
-    i32 total = 0;
-};
 
 struct FrameGraphQueueAssignment{
     FrameGraphPhysicalQueueId initialQueue;

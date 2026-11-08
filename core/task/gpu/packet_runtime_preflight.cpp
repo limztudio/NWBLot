@@ -333,8 +333,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             range.byteOffset, range.end(), Span<const CommandListResourceStateHandoff::BufferState>(initialStates->m_bufferStates),
             [buffer](const auto& state)noexcept{ return state.buffer == buffer && state.state != ResourceStates::Unknown; },
             [](const auto& state)noexcept{ return state.range.byteOffset; },
-            [](const auto& state)noexcept{ return state.range.end(); }
-        ) && range.hasExtent();
+            [](const auto& state)noexcept{ return state.range.end(); }) && range.hasExtent();
     };
 
     const auto validateBarrierList = [&](const Span<const GpuCompiledBarrier> barriers)noexcept{

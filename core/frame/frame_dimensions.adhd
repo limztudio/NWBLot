@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+i32 ComputeFrameLogicalDimensionForPixels(in u16 pixelDimension, in i32 bufferScale){
+    if(pixelDimension == 0u)
+        return divideUp(1, max(bufferScale, 1));
+    return divideUp(cast<i32>(pixelDimension), max(bufferScale, 1));
+}
+
+u16 ComputeFrameClampedInitialWindowDimension(in u16 requestedDimension, in i32 availableDimension){
+    if(availableDimension <= 0)
+        return requestedDimension;
+    return cast<u16>(min(min(cast<u32>(requestedDimension), cast<u32>(availableDimension)), cast<u32>(s_MaxU16)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

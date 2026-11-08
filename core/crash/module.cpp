@@ -5,7 +5,9 @@
 #include "module.h"
 #include "diagnostic_capture_policy.h"
 #include "internal.h"
-#include "arena_names.h"
+
+#include <core/crash/arena_names.adhd.h>
+#include <core/crash/internal_values.adhd.h>
 
 #include <global/filesystem/executable_paths.h>
 #include <global/diagnostics.h>
@@ -28,8 +30,8 @@ namespace __hidden_crash_module{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
-inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
+inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = ::NWB::Core::Crash::CrashTypes::s_DiagnosticCaptureCallstackFramesToSkip;
+inline constexpr usize s_LifecycleFailureTextCapacity = ::NWB::Core::Crash::CrashTypes::s_LifecycleFailureTextCapacity;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

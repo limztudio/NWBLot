@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_SignalReasonKind = "signal";
+const StringView s_WindowsExceptionReasonKind = "windows_exception";
+const StringView s_TerminateReasonKind = "terminate";
+const StringView s_ManualDumpReasonKind = "manual_dump";
+const StringView s_GpuCrashReasonKind = "gpu_crash";
+const StringView s_UnknownReasonKind = "unknown";
+const StringView s_WindowsPlatformName = "windows";
+const StringView s_LinuxPlatformName = "linux";
+const StringView s_AndroidPlatformName = "android";
+const StringView s_UnknownPlatformName = "unknown";
+const u32 s_WindowsExceptionBreakpointCode = 0x80000003u;
+const u32 s_WindowsExceptionAccessViolationCode = 0xC0000005u;
+const u32 s_WindowsExceptionIllegalInstructionCode = 0xC000001Du;
+const u32 s_WindowsExceptionArrayBoundsExceededCode = 0xC000008Cu;
+const u32 s_WindowsExceptionFloatDenormalOperandCode = 0xC000008Du;
+const u32 s_WindowsExceptionFloatDivideByZeroCode = 0xC000008Eu;
+const u32 s_WindowsExceptionFloatInexactResultCode = 0xC000008Fu;
+const u32 s_WindowsExceptionFloatInvalidOperationCode = 0xC0000090u;
+const u32 s_WindowsExceptionFloatOverflowCode = 0xC0000091u;
+const u32 s_WindowsExceptionFloatStackCheckCode = 0xC0000092u;
+const u32 s_WindowsExceptionFloatUnderflowCode = 0xC0000093u;
+const u32 s_WindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
+const u32 s_WindowsExceptionIntegerOverflowCode = 0xC0000095u;
+const u32 s_WindowsExceptionStackOverflowCode = 0xC00000FDu;
+
+StringView WindowsExceptionName(in u64 exceptionCode){
+    switch(exceptionCode){
+    case s_WindowsExceptionBreakpointCode: return "breakpoint";
+    case s_WindowsExceptionAccessViolationCode: return "access_violation";
+    case s_WindowsExceptionIllegalInstructionCode: return "illegal_instruction";
+    case s_WindowsExceptionArrayBoundsExceededCode: return "array_bounds_exceeded";
+    case s_WindowsExceptionFloatDenormalOperandCode: return "float_denormal_operand";
+    case s_WindowsExceptionFloatDivideByZeroCode: return "float_divide_by_zero";
+    case s_WindowsExceptionFloatInexactResultCode: return "float_inexact_result";
+    case s_WindowsExceptionFloatInvalidOperationCode: return "float_invalid_operation";
+    case s_WindowsExceptionFloatOverflowCode: return "float_overflow";
+    case s_WindowsExceptionFloatStackCheckCode: return "float_stack_check";
+    case s_WindowsExceptionFloatUnderflowCode: return "float_underflow";
+    case s_WindowsExceptionIntegerDivideByZeroCode: return "integer_divide_by_zero";
+    case s_WindowsExceptionIntegerOverflowCode: return "integer_overflow";
+    case s_WindowsExceptionStackOverflowCode: return "stack_overflow";
+    default: return s_WindowsExceptionReasonKind;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,6 +7,7 @@
 
 #include <core/graphics/rhi/command.h>
 #include <core/telemetry/frame_graph_kinds.h>
+#include <core/task/gpu/telemetry_queue_class.adhd.h>
 
 #include <global/expected.h>
 
@@ -29,16 +30,10 @@ namespace GpuTaskTelemetryDetail{
 // Command queue identity maps one-to-one onto the frame-graph telemetry queue class.
 // Unknown and sentinel values fail closed so unmapped classes cannot silently join a queue bucket.
 [[nodiscard]] inline Expected<Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const CommandQueue::Enum queueClass)noexcept{
-    switch(queueClass){
-    case CommandQueue::Graphics:
-        return Telemetry::FrameGraphQueueClass::Graphics;
-    case CommandQueue::Compute:
-        return Telemetry::FrameGraphQueueClass::Compute;
-    case CommandQueue::Transfer:
-        return Telemetry::FrameGraphQueueClass::Transfer;
-    default:
+    const auto mapped = MapTaskQueueTelemetryClass(queueClass);
+    if(mapped == Telemetry::FrameGraphQueueClass::Unknown)
         return MakeUnexpected(Failure{});
-    }
+    return mapped;
 }
 
 

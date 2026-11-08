@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TelemetryDiagnosticPayloadTextFieldCount = 5u;
+const StringView s_TelemetryDiagnosticLifecycleCategory = "telemetry_diagnostic_lifecycle";
+const u64 s_TelemetryFrameGraphContributorOwnerNodeShift = 32u;
+const u64 s_TelemetryFrameGraphContributorQueueIndexShift = 16u;
+const f64 s_TelemetryFrameGraphStatisticsCodecSubmissionRoundingLimit = 0.5;
+const f64 s_TelemetryFrameGraphStatisticsCodecSubmissionRoundingScale = 2.0;
+const usize s_TelemetryFrameGraphStatisticsValidatorRuntimeScalarDurationCount = 21u;
+const usize s_TelemetryFrameGraphStatisticsValidatorPhysicalQueueScalarDurationCount = 5u;
+const usize s_TelemetryFrameGraphStatisticsValidatorRuntimePackedDurationCount = 6u;
+const usize s_TelemetryFrameGraphStatisticsValidatorPhysicalQueuePackedDurationCount = 2u;
+const usize s_TelemetryFrameGraphStatisticsValidatorOwnerPackedDurationCount = 7u;
+const u64 s_TelemetryFrameGraphStatisticsValidatorDoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
+const u64 s_TelemetryFrameGraphStatisticsValidatorDoubleInfinityBits = 0x7FF0000000000000ull;
+const u64 s_TelemetryFrameGraphStatisticsValidatorDoubleMinimumNormalBits = 0x0010000000000000ull;
+const f64 s_TelemetryFrameGraphStatisticsCodecDoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

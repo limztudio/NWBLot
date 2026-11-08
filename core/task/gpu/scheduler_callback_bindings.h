@@ -6,6 +6,7 @@
 
 
 #include "compiled_graph.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 #include "task_graph.h"
 
 #include <core/alloc/scratch.h>
@@ -36,7 +37,7 @@ namespace GpuTaskSubmissionDetail{
 template<typename TaskCallback>
 class TaskCallbackBindings final : NoCopy{
 private:
-    static constexpr usize s_InlineCallbackCount = 8u;
+    static constexpr usize s_InlineCallbackCount = s_GpuSchedulerInlineCallbackCount;
 
 
 public:

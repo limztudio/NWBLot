@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> DumpDetailMode{
+    Small = 0,
+    Full,
+    kCount
+}
+
+enum<u8> CrashDumpStatus{
+    NotInstalled = 0,
+    RequestFailed,
+    RequestQueued,
+    RequestTimedOut,
+    PackageWriteFailed,
+    PackageWritten,
+    AttachmentWriteFailed,
+    kCount
+}
+
+enum<u8> GpuCrashDumpKind{
+    None = 0,
+    Aftermath,
+    RadeonGpuDetective,
+    kCount
+}
+
+const u32 s_DefaultMaxDiagnosticDumpsPerProcess = 8u;
+const u32 s_DefaultMaxDiagnosticDumpsPerSite = 1u;
+const usize s_DefaultMaxPendingCrashPackages = 128u;
+const usize s_DefaultMaxUploadedCrashPackages = 256u;
+const usize s_DefaultMaxFailedCrashPackages = 64u;
+const usize s_DefaultMaxUploadingCrashPackages = 64u;
+
+
+class CrashCapturePolicy{
+    public u32 maxDiagnosticDumpsPerProcess = s_DefaultMaxDiagnosticDumpsPerProcess;
+    public u32 maxDiagnosticDumpsPerSite = s_DefaultMaxDiagnosticDumpsPerSite;
+    public b8 captureAssertions = true;
+    public b8 captureFatalAssertions = true;
+    public b8 captureLoggerErrors = true;
+    public b8 captureLoggerFatals = true;
+}
+
+
+class CrashSpoolRetentionConfig{
+    public usize maxPendingPackages = s_DefaultMaxPendingCrashPackages;
+    public usize maxUploadedPackages = s_DefaultMaxUploadedCrashPackages;
+    public usize maxFailedPackages = s_DefaultMaxFailedCrashPackages;
+    public usize maxUploadingPackages = s_DefaultMaxUploadingCrashPackages;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

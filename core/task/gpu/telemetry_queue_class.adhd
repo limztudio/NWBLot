@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/graphics/rhi/command.h>
+#include <core/telemetry/frame_graph_kinds.h>
+namespace NWB::Core{
+using TaskQueueClassValue = CommandQueue::Enum;
+using FrameQueueClassValue = Telemetry::FrameGraphQueueClass::Enum;
+constexpr TaskQueueClassValue s_TaskQueueGraphics = CommandQueue::Graphics;
+constexpr TaskQueueClassValue s_TaskQueueCompute = CommandQueue::Compute;
+constexpr TaskQueueClassValue s_TaskQueueTransfer = CommandQueue::Transfer;
+constexpr FrameQueueClassValue s_FrameQueueGraphics = Telemetry::FrameGraphQueueClass::Graphics;
+constexpr FrameQueueClassValue s_FrameQueueCompute = Telemetry::FrameGraphQueueClass::Compute;
+constexpr FrameQueueClassValue s_FrameQueueTransfer = Telemetry::FrameGraphQueueClass::Transfer;
+constexpr FrameQueueClassValue s_FrameQueueUnknown = Telemetry::FrameGraphQueueClass::Unknown;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+FrameQueueClassValue MapTaskQueueTelemetryClass(in TaskQueueClassValue queueClass){
+    switch(queueClass){
+    case s_TaskQueueGraphics: return s_FrameQueueGraphics;
+    case s_TaskQueueCompute: return s_FrameQueueCompute;
+    case s_TaskQueueTransfer: return s_FrameQueueTransfer;
+    default: return s_FrameQueueUnknown;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

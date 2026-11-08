@@ -10,6 +10,7 @@
 
 #include "asset_volume_writer.h"
 
+#include <core/assets/volume/cook_types.adhd.h>
 #include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
 #include <core/common/log.h>
@@ -30,11 +31,11 @@ namespace __hidden_asset_volume_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
-static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
-static constexpr u64 s_SegmentGrowthFactor = 2ull;
+static constexpr u64 s_DefaultSegmentSize = ::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeWriterDefaultSegmentSize;
+static constexpr u64 s_DefaultMetadataSize = ::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeWriterDefaultMetadataSize;
+static constexpr u64 s_SegmentGrowthFactor = ::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeWriterSegmentGrowthFactor;
 static constexpr char s_StagedVolumePathTokenSeparator = '_';
-static constexpr usize s_StagedVolumePathTokenSeparatorCount = 2u;
+static constexpr usize s_StagedVolumePathTokenSeparatorCount = ::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeWriterStagedVolumePathTokenSeparatorCount;
 static constexpr usize s_StagedVolumePathHashDigits = sizeof(u64) * 2u;
 
 static_assert(AssetsVolumeCookDetail::s_AssetVolumeName.size() <= ACompactString::s_MaxLength, "asset volume name must fit ACompactString");
@@ -64,7 +65,7 @@ static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount)noexcept{
         return MakeUnexpected(Failure{});
     u64 totalBytes = *metadataBytes;
 
-    constexpr u64 s_MetadataPaddingBytes = 4ull * 1024ull;
+    constexpr u64 s_MetadataPaddingBytes = ::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeWriterMetadataPaddingBytes;
     if(totalBytes <= Limit<u64>::s_Max - s_MetadataPaddingBytes)
         totalBytes += s_MetadataPaddingBytes;
 

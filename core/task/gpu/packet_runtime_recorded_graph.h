@@ -6,8 +6,10 @@
 
 
 #include "compiled_graph.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 #include "task_graph.h"
 
+#include <core/task/gpu/packet_runtime_names.adhd.h>
 #include <core/alloc/scratch.h>
 #include <core/graphics/rhi/device.h>
 
@@ -41,7 +43,7 @@ namespace GpuPacketRuntimeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_PacketStateFanInScratchArena("core/task/gpu/packet_state_fan_in");
+using ::NWB::Core::s_PacketStateFanInScratchArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +56,7 @@ inline constexpr Name s_PacketStateFanInScratchArena("core/task/gpu/packet_state
 
 
 struct GpuRecordedPacket{
-    static constexpr usize s_MaxCommandLists = 12u;
+    static constexpr usize s_MaxCommandLists = s_GpuPacketMaxCommandLists;
 
     GpuSubmissionPacketId packet;
     // Native recording retains its acquired lists through submission.

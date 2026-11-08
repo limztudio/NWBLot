@@ -14,6 +14,7 @@
 #include <core/assets/global.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_paths.h>
+#include <core/assets/volume/cook_types.adhd.h>
 #include <core/alloc/scratch.h>
 #include <core/filesystem/volume_staging.h>
 
@@ -28,13 +29,6 @@ NWB_ASSETS_BEGIN
 
 
 namespace AssetsVolumeCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_AssetVolumeName = "graphics";
-inline constexpr AStringView s_AssetVolumeLogPrefix = "AssetVolume";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

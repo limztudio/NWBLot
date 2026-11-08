@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/os/clipboard.h>
+
+namespace NWB::Core{
+using ClipboardPipeStatus = ClipboardStatus::Enum;
+constexpr ClipboardPipeStatus s_PipeStatusNativeFailure = ClipboardStatus::NativeFailure;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ClipboardPipe{
+    public i32 readFd = -1;
+    public i32 writeFd = -1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ClipboardPipeReadFailure{
+    public ClipboardPipeStatus status;
+    public b8 finished;
+
+    public ClipboardPipeReadFailure(){
+        this.status = s_PipeStatusNativeFailure;
+        this.finished = false;
+    }
+
+    public ClipboardPipeReadFailure(in ClipboardPipeStatus status){
+        this.status = status;
+        this.finished = false;
+    }
+
+    public ClipboardPipeReadFailure(in ClipboardPipeStatus status, in b8 finished){
+        this.status = status;
+        this.finished = finished;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

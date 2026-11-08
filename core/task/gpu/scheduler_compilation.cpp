@@ -3,6 +3,7 @@
 
 
 #include "scheduler.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 #include "compiler_internal.h"
 #include "packet_runtime_internal.h"
 #include "scheduler_callback_bindings.h"
@@ -28,7 +29,7 @@ namespace __hidden_gpu_task_scheduler_compilation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 s_PendingSubmissionCost = 4u;
+inline constexpr u64 s_PendingSubmissionCost = s_GpuSchedulerPendingSubmissionCost;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

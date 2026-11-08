@@ -5,40 +5,13 @@
 #include "command_ir_raster.h"
 #include "command_ir_internal.h"
 
+#include <core/task/gpu/capture/opcode_mapping.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_command_ir_raster_reader{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static GpuCommandIrWireOpcode::Enum BuiltinWireOpcode(const GpuCommandIrOpcode::Enum opcode)noexcept{
-    switch(opcode){
-    case GpuCommandIrOpcode::CopyBuffer: return GpuCommandIrWireOpcode::CopyBuffer;
-    case GpuCommandIrOpcode::CopyTexture: return GpuCommandIrWireOpcode::CopyTexture;
-    case GpuCommandIrOpcode::ClearBuffer: return GpuCommandIrWireOpcode::ClearBuffer;
-    case GpuCommandIrOpcode::ClearTexture: return GpuCommandIrWireOpcode::ClearTexture;
-    case GpuCommandIrOpcode::ClearTextureRectUInt: return GpuCommandIrWireOpcode::ClearTextureRectUInt;
-    case GpuCommandIrOpcode::UploadBuffer: return GpuCommandIrWireOpcode::UploadBuffer;
-    case GpuCommandIrOpcode::UploadTexture: return GpuCommandIrWireOpcode::UploadTexture;
-    default: return GpuCommandIrWireOpcode::Count;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +24,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         const auto builtin = nextBuiltinTask();
         if(!builtin)
             return MakeUnexpected(builtin.error());
-        return GpuCommandIrDecodedRecord{ .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
+        return GpuCommandIrDecodedRecord{ .opcode = MapGpuCommandIrBuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
     }
 
     const usize recordOffset = m_cursor;
@@ -66,7 +39,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         const auto builtin = nextBuiltinTask();
         if(!builtin)
             return MakeUnexpected(builtin.error());
-        return GpuCommandIrDecodedRecord{ .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
+        return GpuCommandIrDecodedRecord{ .opcode = MapGpuCommandIrBuiltinWireOpcode(builtin->opcode), .builtin = *builtin, .raster = {}, };
     }
 
     usize expectedByteSize = 0u;

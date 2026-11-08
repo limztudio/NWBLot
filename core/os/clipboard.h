@@ -7,6 +7,8 @@
 
 #include <core/alloc/general.h>
 
+#include <core/os/clipboard_types.adhd.h>
+
 #include <global/expected.h>
 
 
@@ -20,37 +22,55 @@ NWB_CORE_BEGIN
 
 
 namespace ClipboardChannel{
-    enum Enum : u8{ Clipboard, PrimarySelection };
+    enum Enum : u8{
+        Clipboard = NWB::Core::OsClipboardTypes::ClipboardChannel::Clipboard,
+        PrimarySelection = NWB::Core::OsClipboardTypes::ClipboardChannel::PrimarySelection,
+    };
 };
 
 namespace ClipboardOperation{
-    enum Enum : u8{ ReadText, WriteText };
+    enum Enum : u8{
+        ReadText = NWB::Core::OsClipboardTypes::ClipboardOperation::ReadText,
+        WriteText = NWB::Core::OsClipboardTypes::ClipboardOperation::WriteText,
+    };
 };
 
 namespace ClipboardStatus{
-    enum Enum : u8{ Success, Unsupported, Unavailable, InvalidText, TooLarge, NativeFailure };
+    enum Enum : u8{
+        Success = NWB::Core::OsClipboardTypes::ClipboardStatus::Success,
+        Unsupported = NWB::Core::OsClipboardTypes::ClipboardStatus::Unsupported,
+        Unavailable = NWB::Core::OsClipboardTypes::ClipboardStatus::Unavailable,
+        InvalidText = NWB::Core::OsClipboardTypes::ClipboardStatus::InvalidText,
+        TooLarge = NWB::Core::OsClipboardTypes::ClipboardStatus::TooLarge,
+        NativeFailure = NWB::Core::OsClipboardTypes::ClipboardStatus::NativeFailure,
+    };
 };
 
 namespace ClipboardAdmission{
-    enum Enum : u8{ WrongThread, QueueFull };
+    enum Enum : u8{
+        WrongThread = NWB::Core::OsClipboardTypes::ClipboardAdmission::WrongThread,
+        QueueFull = NWB::Core::OsClipboardTypes::ClipboardAdmission::QueueFull,
+    };
 };
 
 namespace ClipboardPollResult{
-    enum Enum : u8{ InvalidRequest, Pending, Completed, WrongThread };
+    enum Enum : u8{
+        InvalidRequest = NWB::Core::OsClipboardTypes::ClipboardPollResult::InvalidRequest,
+        Pending = NWB::Core::OsClipboardTypes::ClipboardPollResult::Pending,
+        Completed = NWB::Core::OsClipboardTypes::ClipboardPollResult::Completed,
+        WrongThread = NWB::Core::OsClipboardTypes::ClipboardPollResult::WrongThread,
+    };
 };
 
-inline constexpr usize s_ClipboardMaxOutstandingRequests = 32u;
-inline constexpr usize s_ClipboardMaxTextBytes = 16u * 1024u * 1024u;
-inline constexpr usize s_ClipboardChannelCount = 2u;
+inline constexpr usize s_ClipboardMaxOutstandingRequests = NWB::Core::OsClipboardTypes::s_ClipboardMaxOutstandingRequests;
+inline constexpr usize s_ClipboardMaxTextBytes = NWB::Core::OsClipboardTypes::s_ClipboardMaxTextBytes;
+inline constexpr usize s_ClipboardChannelCount = NWB::Core::OsClipboardTypes::s_ClipboardChannelCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ClipboardCapabilities{
-    b8 readText = false;
-    b8 writeText = false;
-};
+using ClipboardCapabilities = NWB::Core::OsClipboardTypes::ClipboardCapabilities;
 
 struct ClipboardRequestToken{
     u64 service = 0u;

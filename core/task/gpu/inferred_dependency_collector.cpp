@@ -13,7 +13,7 @@ NWB_CORE_BEGIN
 
 namespace __hidden_inferred_dependency_collector{
 inline constexpr usize s_IndexedInferredEdges = Limit<usize>::s_Max - 1u;
-inline constexpr usize s_InlineInferredReasonCount = 8u;
+inline constexpr usize s_InlineInferredReasonCount = s_GpuTaskInlineInferredReasonCount;
 };
 using namespace __hidden_inferred_dependency_collector;
 
@@ -55,7 +55,7 @@ void GpuInferredDependencyCollector::appendRaw(const GpuTaskDependencyEdge& edge
 
 GpuInferredDependencyCollector::DependencyPairIndices& GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& edge){
     const u64 pairKey = PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index);
-    auto [pair, inserted] = m_dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ m_edges.size() });
+    auto [pair, inserted] = m_dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ .rawEdge = m_edges.size() });
     if(inserted){
         m_edges.push_back(edge);
         if(edge.hazard == GpuTaskHazardType::Explicit)
@@ -117,3 +117,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

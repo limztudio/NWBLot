@@ -6,6 +6,7 @@
 
 
 #include <core/global.h>
+#include <core/input/input_codes.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ NWB_CORE_BEGIN
 
 
 namespace InputAction{
-    static constexpr auto s_InputActionReleaseBase = 0;
+    static constexpr auto s_InputActionReleaseBase = NWB::Core::InputCodeValues::s_InputCodeValueInputActionReleaseBase;
     enum Enum : i32{
         Release = s_InputActionReleaseBase,
         Press,
@@ -27,12 +28,12 @@ namespace InputAction{
 };
 
 namespace InputModifier{
-    static constexpr i32 s_ModifierShiftBits = 0x0001;
-    static constexpr i32 s_ModifierControlBits = 0x0002;
-    static constexpr i32 s_ModifierAltBits = 0x0004;
-    static constexpr i32 s_ModifierSuperBits = 0x0008;
-    static constexpr i32 s_ModifierCapsLockBits = 0x0010;
-    static constexpr i32 s_ModifierNumLockBits = 0x0020;
+    static constexpr i32 s_ModifierShiftBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierShiftBits;
+    static constexpr i32 s_ModifierControlBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierControlBits;
+    static constexpr i32 s_ModifierAltBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierAltBits;
+    static constexpr i32 s_ModifierSuperBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierSuperBits;
+    static constexpr i32 s_ModifierCapsLockBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierCapsLockBits;
+    static constexpr i32 s_ModifierNumLockBits = NWB::Core::InputCodeValues::s_InputCodeValueModifierNumLockBits;
     enum Enum : i32{
         Shift = s_ModifierShiftBits,
         Control = s_ModifierControlBits,
@@ -44,7 +45,7 @@ namespace InputModifier{
 };
 
 namespace MouseButton{
-    static constexpr auto s_MouseButtonLeftBase = 0;
+    static constexpr auto s_MouseButtonLeftBase = NWB::Core::InputCodeValues::s_InputCodeValueMouseButtonLeftBase;
     enum Enum : i32{
         Left = s_MouseButtonLeftBase,
         Right,
@@ -58,22 +59,22 @@ namespace MouseButton{
 };
 
 namespace Key{
-    static constexpr i32 s_KeyUnknownCode = -1;
-    static constexpr i32 s_KeySpaceAscii = 32;
-    static constexpr i32 s_KeyWorld1Code = 161;
-    static constexpr i32 s_KeyWorld2Code = 162;
-    static constexpr i32 s_KeyLeftShiftCode = 340;
-    static constexpr i32 s_KeyKeypad0Code = 320;
-    static constexpr i32 s_KeyF1Code = 290;
-    static constexpr i32 s_KeyCapsLockCode = 280;
-    static constexpr i32 s_KeyEscapeCode = 256;
-    static constexpr i32 s_KeyGraveAccentCode = 96;
-    static constexpr i32 s_KeyLeftBracketCode = 91;
-    static constexpr i32 s_KeyACode = 65;
-    static constexpr i32 s_KeyEqualCode = 61;
-    static constexpr i32 s_KeySemicolonCode = 59;
-    static constexpr i32 s_KeyCommaCode = 44;
-    static constexpr i32 s_KeyApostropheCode = 39;
+    static constexpr i32 s_KeyUnknownCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyUnknownCode;
+    static constexpr i32 s_KeySpaceAscii = NWB::Core::InputCodeValues::s_InputCodeValueKeySpaceAscii;
+    static constexpr i32 s_KeyWorld1Code = NWB::Core::InputCodeValues::s_InputCodeValueKeyWorld1Code;
+    static constexpr i32 s_KeyWorld2Code = NWB::Core::InputCodeValues::s_InputCodeValueKeyWorld2Code;
+    static constexpr i32 s_KeyLeftShiftCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyLeftShiftCode;
+    static constexpr i32 s_KeyKeypad0Code = NWB::Core::InputCodeValues::s_InputCodeValueKeyKeypad0Code;
+    static constexpr i32 s_KeyF1Code = NWB::Core::InputCodeValues::s_InputCodeValueKeyF1Code;
+    static constexpr i32 s_KeyCapsLockCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyCapsLockCode;
+    static constexpr i32 s_KeyEscapeCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyEscapeCode;
+    static constexpr i32 s_KeyGraveAccentCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyGraveAccentCode;
+    static constexpr i32 s_KeyLeftBracketCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyLeftBracketCode;
+    static constexpr i32 s_KeyACode = NWB::Core::InputCodeValues::s_InputCodeValueKeyACode;
+    static constexpr i32 s_KeyEqualCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyEqualCode;
+    static constexpr i32 s_KeySemicolonCode = NWB::Core::InputCodeValues::s_InputCodeValueKeySemicolonCode;
+    static constexpr i32 s_KeyCommaCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyCommaCode;
+    static constexpr i32 s_KeyApostropheCode = NWB::Core::InputCodeValues::s_InputCodeValueKeyApostropheCode;
     enum Enum : i32{
         Unknown = s_KeyUnknownCode,
 
@@ -243,3 +244,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -117,8 +117,7 @@ b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, Sc
         registry,
         functions,
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook dependency registration function")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook dependency type")); }
-    );
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook dependency type")); });
 }
 
 

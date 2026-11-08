@@ -9,6 +9,9 @@
 #include "compiler_resource_history.h"
 #include "compiler_task_use_index.h"
 
+#include <core/task/gpu/queue_assignment.adhd.h>
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -155,10 +158,7 @@ class GpuTaskSchedulingReachability final : NoCopy{
 
 
 private:
-    struct WordRange{
-        usize begin = 0u;
-        usize end = 0u;
-    };
+    using WordRange = ::NWB::Core::GpuTaskReachabilityWordRange;
 
 
 public:
@@ -222,12 +222,7 @@ public:
     [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, Span<const GpuTaskQueueAssignment> members)const noexcept;
 };
 
-struct GpuTaskQueueScoreExclusions{
-    usize assignmentOffset = 0u;
-    usize assignmentCount = 0u;
-    u64 totalCost = 0u;
-    u64 candidateQueueCost = 0u;
-};
+using GpuTaskQueueScoreExclusions = ::NWB::Core::GpuTaskQueueScoreExclusionsValue;
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,

@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> ClipboardChannel{
+    Clipboard = 0,
+    PrimarySelection,
+    kCount
+}
+
+enum<u8> ClipboardOperation{
+    ReadText = 0,
+    WriteText,
+    kCount
+}
+
+enum<u8> ClipboardStatus{
+    Success = 0,
+    Unsupported,
+    Unavailable,
+    InvalidText,
+    TooLarge,
+    NativeFailure,
+    kCount
+}
+
+enum<u8> ClipboardAdmission{
+    WrongThread = 0,
+    QueueFull,
+    kCount
+}
+
+enum<u8> ClipboardPollResult{
+    InvalidRequest = 0,
+    Pending,
+    Completed,
+    WrongThread,
+    kCount
+}
+
+const usize s_ClipboardMaxOutstandingRequests = 32u;
+const usize s_ClipboardMaxTextBytes = 16u * 1024u * 1024u;
+const usize s_ClipboardChannelCount = 2u;
+
+
+class ClipboardCapabilities{
+    public b8 readText = false;
+    public b8 writeText = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

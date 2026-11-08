@@ -13,6 +13,9 @@
 
 #include "cook.h"
 
+#include <core/assets/bunch/bunch_constants.adhd.h>
+#include <core/assets/bunch/bunch_names.adhd.h>
+
 #include <global/not_null.h>
 
 
@@ -31,8 +34,6 @@ namespace AssetsBunchCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_AssetBunchTypeName("asset_bunch");
-inline constexpr Name s_MetadataDeclarationTypeName("metadata");
 inline constexpr TStringView s_AssetBunchDiagnosticPrefix = NWB_TEXT("Asset bunch");
 inline constexpr TStringView s_CompositeAssetDiagnosticPrefix = NWB_TEXT("Composite asset");
 
@@ -56,7 +57,7 @@ private:
 
 
 private:
-    static constexpr usize s_InlineCapacity = 16u;
+    static constexpr usize s_InlineCapacity = s_DeclarationLookupInlineCapacity;
 
 
 public:

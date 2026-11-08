@@ -4,6 +4,8 @@
 
 #include "text_input_text.h"
 
+#include "text_input_validation.adhd.h"
+
 #include <global/utf8_text.h>
 
 
@@ -23,9 +25,8 @@ TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usi
 }
 
 b8 IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
-    if(rect.width <= 0 || rect.height <= 0)
-        return false;
-    return rect.x <= Limit<i32>::s_Max - rect.width && rect.y <= Limit<i32>::s_Max - rect.height;
+    static_assert(s_MaxI32 == Limit<i32>::s_Max);
+    return ValidTextInputCaretCoordinates(rect.x, rect.y, rect.width, rect.height);
 }
 
 Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, Array<char, s_Utf8MaxSequenceBytes>& bytes)noexcept{

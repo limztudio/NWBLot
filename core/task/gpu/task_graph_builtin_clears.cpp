@@ -148,8 +148,7 @@ struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
                     NWB_ASSERT(false);
                     break;
                 }
-            }
-        );
+            });
     }
 };
 
@@ -165,8 +164,7 @@ struct ClearTextureRectUIntTask : HookedTextureClearTaskBase<GpuClearTextureRect
             },
             [&](){
                 commandList.clearTextureRectUInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.rect, payload.clearDesc.uintValue);
-            }
-        );
+            });
     }
 };
 

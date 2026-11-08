@@ -5,6 +5,7 @@
 #include "frame_graph.h"
 
 #include <core/alloc/scratch.h>
+#include <core/telemetry/local_values.adhd.h>
 
 #include <global/algorithm.h>
 #include <global/binary.h>
@@ -27,17 +28,17 @@ namespace __hidden_frame_graph_statistics_validators{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_RuntimeScalarDurationCount = 21u;
-inline constexpr usize s_PhysicalQueueScalarDurationCount = 5u;
-inline constexpr usize s_RuntimePackedDurationCount = 6u;
-inline constexpr usize s_PhysicalQueuePackedDurationCount = 2u;
-inline constexpr usize s_OwnerPackedDurationCount = 7u;
+inline constexpr usize s_RuntimeScalarDurationCount = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorRuntimeScalarDurationCount;
+inline constexpr usize s_PhysicalQueueScalarDurationCount = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorPhysicalQueueScalarDurationCount;
+inline constexpr usize s_RuntimePackedDurationCount = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorRuntimePackedDurationCount;
+inline constexpr usize s_PhysicalQueuePackedDurationCount = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorPhysicalQueuePackedDurationCount;
+inline constexpr usize s_OwnerPackedDurationCount = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorOwnerPackedDurationCount;
 
 
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
-inline constexpr u64 s_DoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
-inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
-inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
+inline constexpr u64 s_DoubleMagnitudeBitsMask = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorDoubleMagnitudeBitsMask;
+inline constexpr u64 s_DoubleInfinityBits = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorDoubleInfinityBits;
+inline constexpr u64 s_DoubleMinimumNormalBits = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsValidatorDoubleMinimumNormalBits;
 
 [[nodiscard]] NWB_INLINE b8 HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
     const Array<f64, 4u> lanes = { pack[0], pack[1], pack[2], pack[3] };

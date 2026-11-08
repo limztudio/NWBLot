@@ -8,6 +8,8 @@
 #include "compiler.h"
 #include "dependency_pair_hash.h"
 
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
+
 #include <global/hash_utils.h>
 
 
@@ -19,10 +21,10 @@ NWB_CORE_BEGIN
 
 class GpuInferredDependencyCollector final : NoCopy{
 private:
-    struct DependencyPairIndices{
-        usize rawEdge = 0u;
-        usize firstInferredEdge = Limit<usize>::s_Max;
-    };
+    using DependencyPairIndices = GpuTaskDependencyPairIndices;
+
+
+private:
     struct InferredDependencyHasher{
         NotNull<const GraphicsVector<GpuTaskDependencyEdge>*> edges;
         [[nodiscard]] usize operator()(usize index)const noexcept;
@@ -56,3 +58,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

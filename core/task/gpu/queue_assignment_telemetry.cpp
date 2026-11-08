@@ -5,45 +5,13 @@
 #include "queue_assignment_telemetry.h"
 
 #include "packet_runtime.h"
+#include "queue_assignment.adhd.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_queue_assignment_telemetry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 MatchesAssignment(const GpuTaskQueueAssignment& lhs, const GpuTaskQueueAssignment& rhs)noexcept{
-    return
-        lhs.task == rhs.task
-        && lhs.initialQueue == rhs.initialQueue
-        && lhs.queue == rhs.queue
-        && lhs.score.overlap == rhs.score.overlap
-        && lhs.score.queueLoad == rhs.score.queueLoad
-        && lhs.score.incomingCrossings == rhs.score.incomingCrossings
-        && lhs.score.outgoingCrossings == rhs.score.outgoingCrossings
-        && lhs.score.ownershipTransfers == rhs.score.ownershipTransfers
-        && lhs.queueClass == rhs.queueClass
-        && lhs.reason == rhs.reason
-        && lhs.modifiers == rhs.modifiers
-        && lhs.dedicated == rhs.dedicated
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,7 +168,7 @@ b8 GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::Dec
     for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
         const GpuTaskQueueAssignment* const assignment = assignments.find(task.id);
-        if(!assignment || m_current[taskIndex].assignment.task != task.id || !__hidden_queue_assignment_telemetry::MatchesAssignment(m_current[taskIndex].assignment, *assignment))
+        if(!assignment || m_current[taskIndex].assignment.task != task.id || !MatchesGpuTaskQueueAssignment(m_current[taskIndex].assignment, *assignment))
             return false;
     }
     return true;

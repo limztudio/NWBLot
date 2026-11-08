@@ -38,8 +38,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
         codecFactories, [](const NotNull<AssetCodecFactory> factory){ return (*factory)(); },
         [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: codec factory returned null codec")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: failed to register codec")); }
-    );
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: failed to register codec")); });
 }
 
 

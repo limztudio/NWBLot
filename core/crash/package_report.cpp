@@ -22,10 +22,10 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_ManifestReserveBytes = 2048u;
-inline constexpr StringView s_InstructionPointerFieldPrefix = "\ninstruction_pointer=";
-inline constexpr StringView s_StackPointerFieldPrefix = "\nstack_pointer=";
-inline constexpr StringView s_FramePointerFieldPrefix = "\nframe_pointer=";
+inline constexpr usize s_ManifestReserveBytes = ::NWB::Core::Crash::PackageValues::s_ManifestReserveBytes;
+inline constexpr StringView s_InstructionPointerFieldPrefix = ::NWB::Core::Crash::PackageValues::s_InstructionPointerFieldPrefix;
+inline constexpr StringView s_StackPointerFieldPrefix = ::NWB::Core::Crash::PackageValues::s_StackPointerFieldPrefix;
+inline constexpr StringView s_FramePointerFieldPrefix = ::NWB::Core::Crash::PackageValues::s_FramePointerFieldPrefix;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -286,5 +286,4 @@ NWB_CRASH_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

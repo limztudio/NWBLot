@@ -13,6 +13,7 @@
 
 #if defined(NWB_PLATFORM_LINUX)
 
+#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/linux/x11/text_input_key_history.h>
 #include <X11/Xlib.h>
 
@@ -45,7 +46,7 @@ public:
 
 
 private:
-    static constexpr usize s_KeyStateCount = 256u;
+    static constexpr usize s_KeyStateCount = FrameDetail::s_FramePlatformKeyStateCount;
     static void DispatchText(InputDispatcher& input, XKeyEvent keyEvent, i32 mods);
     static void Dispatch(Frame& frame, const XKeyEvent& keyEvent, i32 action, b8 dispatchText, b8 dispatchPhysical = true);
 

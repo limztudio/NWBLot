@@ -5,6 +5,8 @@
 #include "package_internal.h"
 #include "package_report.h"
 
+#include <core/crash/package_values.adhd.h>
+
 #include <global/diagnostics.h>
 #include <global/error_code.h>
 #include <global/fixed_buffer.h>
@@ -31,8 +33,8 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
-inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
+inline constexpr usize s_LinuxProcPathTextCapacity = ::NWB::Core::Crash::PackageValues::s_LinuxProcPathTextCapacity;
+inline constexpr usize s_LinuxCopyBufferBytes = ::NWB::Core::Crash::PackageValues::s_LinuxCopyBufferBytes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +48,7 @@ inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
 #if defined(NWB_PLATFORM_WINDOWS)
 template<typename ArenaT>
 static b8 WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
-    constexpr AStringView s_CloseDumpProcessOperation = "close_dump_process";
+    constexpr AStringView s_CloseDumpProcessOperation = ::NWB::Core::Crash::PackageValues::s_CloseDumpProcessOperation;
 
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE, FALSE, request.processId);
@@ -102,7 +104,7 @@ static b8 WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 template<typename ArenaT>
 static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const AStringView sourcePath, const AStringView outputName){
-    constexpr StringView s_OptionalArtifactCategory = "crash_package";
+    constexpr StringView s_OptionalArtifactCategory = ::NWB::Core::Crash::PackageValues::s_OptionalArtifactCategory;
 
     InputFileStream input(sourcePath.data(), s_FileOpenBinary);
     if(!input.is_open())

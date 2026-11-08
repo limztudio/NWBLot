@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_GpuTaskAnalysisInvalidIndex = ~cast<usize>(0u);
+const usize s_GpuTaskInlineInferredReasonCount = 8u;
+const u32 s_GpuTaskConcurrentSharingAdviceSignatureThreshold = 2u;
+const usize s_GpuTaskTopologyScanBudgetMultiplier = 2u;
+const u8 s_GpuTaskTopologyVisitNotStarted = 0u;
+const u8 s_GpuTaskTopologyVisitOnStack = 1u;
+const u8 s_GpuTaskTopologyVisitFinished = 2u;
+const usize s_GpuTaskInlineTerminalDependencyCount = 8u;
+const usize s_GpuTaskOverlapQueueMinimum = 2u;
+const u64 s_GpuTaskTinyQueueCostWeight = 1u;
+const u64 s_GpuTaskSmallQueueCostWeight = 2u;
+const u64 s_GpuTaskMediumQueueCostWeight = 4u;
+const u64 s_GpuTaskLargeQueueCostWeight = 8u;
+const usize s_GpuTaskSmallDenseWordCount = 4u;
+const usize s_GpuTaskCompactBudgetReserveDivisor = 4u;
+const usize s_GpuTaskMinDenseBoundsReuseWordsPerRow = 64u;
+const usize s_GpuTaskLinearDuplicateCheckUseLimit = 8u;
+
+
+class GpuTaskDependencyPairIndices{
+    public usize rawEdge = 0u;
+    public usize firstInferredEdge = s_GpuTaskAnalysisInvalidIndex;
+}
+
+
+class GpuOwnershipResourceStatistics{
+    public usize lastAdviceQueueIndex = s_GpuTaskAnalysisInvalidIndex;
+    public u8 avoidableSignatureCount = 0u;
+}
+
+
+class GpuTaskResourceLinks{
+    public usize first = s_GpuTaskAnalysisInvalidIndex;
+    public usize last = s_GpuTaskAnalysisInvalidIndex;
+}
+
+
+class GpuTaskStateLinks{
+    public usize previous = s_GpuTaskAnalysisInvalidIndex;
+    public usize next = s_GpuTaskAnalysisInvalidIndex;
+}
+
+
+class GpuTaskCycleTraversalFrame{
+    public usize nextAdjacencyIndex = 0u;
+    public u32 taskIndex = 0u;
+}
+
+
+class GpuTaskReachabilityWordRange{
+    public usize begin = 0u;
+    public usize end = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -163,8 +163,7 @@ b8 RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena
     Vector<NotNull<CookEntryRegistrationFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(
         QueryAssetAutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetsArenaScope::s_AutoRegistrationQueueArena>(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
-    );
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); });
 }
 
 

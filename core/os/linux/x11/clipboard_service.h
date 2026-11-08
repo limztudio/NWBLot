@@ -9,6 +9,7 @@
 #include "x11_checked.h"
 
 #include <core/os/clipboard_service.h>
+#include <core/os/platform_values.adhd.h>
 #include <core/os/clipboard_text.h>
 
 #include <global/timer.h>
@@ -63,13 +64,13 @@ private:
 
 
 public:
-    static constexpr usize s_MaxTransfers = 8u;
-    static constexpr u32 s_TransferTimeoutMs = 5000u;
-    static constexpr usize s_MaxMultipleAtoms = 256u;
-    static constexpr usize s_AtomPairLength = 2u;
-    static constexpr long s_RequestReserveWords = 64;
-    static constexpr usize s_MaxChunkBytes = 65536u;
-    static constexpr usize s_FallbackChunkBytes = 1024u;
+    static constexpr usize s_MaxTransfers = ::NWB::Core::s_OsLinuxX11ClipboardServiceMaxTransfers;
+    static constexpr u32 s_TransferTimeoutMs = ::NWB::Core::s_OsLinuxX11ClipboardServiceTransferTimeoutMs;
+    static constexpr usize s_MaxMultipleAtoms = ::NWB::Core::s_OsLinuxX11ClipboardServiceMaxMultipleAtoms;
+    static constexpr usize s_AtomPairLength = ::NWB::Core::s_OsLinuxX11ClipboardServiceAtomPairLength;
+    static constexpr long s_RequestReserveWords = ::NWB::Core::s_OsLinuxX11ClipboardServiceRequestReserveWords;
+    static constexpr usize s_MaxChunkBytes = ::NWB::Core::s_OsLinuxX11ClipboardServiceMaxChunkBytes;
+    static constexpr usize s_FallbackChunkBytes = ::NWB::Core::s_OsLinuxX11ClipboardServiceFallbackChunkBytes;
 
 
 public:

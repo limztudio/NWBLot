@@ -1,4 +1,18 @@
 nwb_declare_static_library(nwb_os)
+nwb_target_adhd_sources(nwb_os
+    NAMESPACE "NWB::Core"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/clipboard_pipe.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/platform_values.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_key_history_types.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/text_input_validation.adhd"
+)
+nwb_declare_static_library(nwb_os_win32_input)
+nwb_target_adhd_sources(nwb_os_win32_input
+    NAMESPACE "NWB::Core::OsWin32InputMessage"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/win32/input_message.adhd"
+)
 target_sources(nwb_os PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/*.cc"
@@ -20,6 +34,13 @@ target_sources(nwb_os PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/text_input_state.cpp"
 )
 target_link_libraries(nwb_os PUBLIC nwb_alloc PRIVATE nwb_common)
+nwb_declare_static_library(nwb_os_text_input_types)
+nwb_target_adhd_sources(nwb_os_text_input_types NAMESPACE "NWB::Core::OsTextInputTypes" SOURCES "${CMAKE_CURRENT_LIST_DIR}/text_input_types.adhd")
+nwb_declare_static_library(nwb_os_clipboard_types)
+nwb_target_adhd_sources(nwb_os_clipboard_types NAMESPACE "NWB::Core::OsClipboardTypes" SOURCES "${CMAKE_CURRENT_LIST_DIR}/clipboard_types.adhd")
+target_link_libraries(nwb_os PUBLIC nwb_os_win32_input)
+target_link_libraries(nwb_os PUBLIC nwb_os_text_input_types)
+target_link_libraries(nwb_os PUBLIC nwb_os_clipboard_types)
 if(WIN32)
     target_sources(nwb_os PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/win32/*.c"

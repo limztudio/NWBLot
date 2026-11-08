@@ -15,6 +15,7 @@
 #include "task_graph_submission_binding.h"
 
 #include <core/alloc/scratch.h>
+#include <core/task/gpu/task_graph_types.adhd.h>
 
 #include <global/arena_object.h>
 #include <global/sync.h>
@@ -72,9 +73,7 @@ public:
 
 
 private:
-    struct RecordTaskFailure final{
-        b8 recordThunkInvoked;
-    };
+    using RecordTaskFailure = GpuTaskGraphRecordFailure;
 
     class RecordThunkClaimGuard;
     class RecordingAttemptResolutionGuard;
@@ -183,10 +182,10 @@ private:
 
 
 private:
-    static constexpr usize s_InlineImportIndexCount = 32u;
-    static constexpr usize s_InitialPointerIndexBucketCount = 2u;
+    static constexpr usize s_InlineImportIndexCount = s_GpuGraphInlineImportIndexCount;
+    static constexpr usize s_InitialPointerIndexBucketCount = s_GpuGraphInitialPointerIndexBucketCount;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
-    static inline constexpr Name s_DeclarationScratchArena{ "core/task/gpu/declaration_scratch" };
+    static inline constexpr Name s_DeclarationScratchArena = NWB::Core::s_GpuTaskDeclarationScratchName;
 
 
 private:

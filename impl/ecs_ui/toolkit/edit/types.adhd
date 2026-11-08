@@ -259,5 +259,85 @@ EditLimits ClampEditLimits(in EditLimits limits){
     return bounded;
 }
 
+b8 MatchesEditModelSnapshotSurroundingValues(
+    in StringView modelText,
+    in TextAreaModelStamp current,
+    in StringView expectedText,
+    in TextAreaModelStamp expectedStamp
+){
+    return current.revision == expectedStamp.revision
+        && current.externalRevision == expectedStamp.externalRevision
+        && current.selectionGeneration == expectedStamp.selectionGeneration
+        && modelText == expectedText
+        && current.anchor == expectedStamp.anchor
+        && current.caret == expectedStamp.caret;
+}
+
+b8 MatchesEditModelSnapshotValues(
+    in StringView modelText,
+    in TextAreaModelStamp currentStamp,
+    in EditCompositionView currentComposition,
+    in StringView expectedText,
+    in StringView expectedPreedit,
+    in EditCompositionView expectedComposition,
+    in TextAreaModelStamp expectedStamp
+){
+    return currentStamp == expectedStamp
+        && modelText == expectedText
+        && currentComposition.active == expectedComposition.active
+        && currentComposition.text == expectedPreedit
+        && currentComposition.anchor == expectedComposition.anchor
+        && currentComposition.caret == expectedComposition.caret
+        && currentComposition.replacementStart == expectedComposition.replacementStart
+        && currentComposition.replacementEnd == expectedComposition.replacementEnd;
+}
+
+void ClearEditModelSnapshotValues(
+    mut String expectedText,
+    mut String expectedPreedit,
+    mut EditCompositionView expectedComposition,
+    mut TextAreaModelStamp expectedStamp,
+    mut u64 expectedRevision,
+    mut u64 expectedExternalRevision
+){
+    expectedText.clear();
+    expectedPreedit.clear();
+    expectedComposition = EditCompositionView();
+    expectedStamp = TextAreaModelStamp();
+    expectedRevision = 0u;
+    expectedExternalRevision = 0u;
+}
+
+void CaptureEditModelSnapshotSurroundingValues(
+    in StringView text,
+    in TextAreaModelStamp stamp,
+    mut String expectedText,
+    mut TextAreaModelStamp expectedStamp,
+    mut u64 expectedRevision,
+    mut u64 expectedExternalRevision
+){
+    expectedText.assign(text);
+    expectedStamp = stamp;
+    expectedRevision = stamp.revision;
+    expectedExternalRevision = stamp.externalRevision;
+}
+
+void CaptureEditModelSnapshotValues(
+    in StringView text,
+    in TextAreaModelStamp stamp,
+    in EditCompositionView composition,
+    mut String expectedText,
+    mut String expectedPreedit,
+    mut EditCompositionView expectedComposition,
+    mut TextAreaModelStamp expectedStamp,
+    mut u64 expectedRevision,
+    mut u64 expectedExternalRevision
+){
+    CaptureEditModelSnapshotSurroundingValues(text, stamp, expectedText, expectedStamp, expectedRevision, expectedExternalRevision);
+    expectedComposition = composition;
+    expectedPreedit.assign(composition.text);
+    expectedComposition.text = "";
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

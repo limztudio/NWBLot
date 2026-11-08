@@ -198,6 +198,10 @@ b8 TextAreaCoordinator::paintTextAreaScrollbars(const Item& item, const ScrollVi
     return true;
 }
 
+b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
+    return TextAreaCoordinator(*this).paintTextArea(item, box);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

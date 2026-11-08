@@ -176,6 +176,18 @@ class PopupDismissRequest{
     public b8 replaceRestore = false;
 }
 
+class InputPopupRetirement{
+    public PopupRecord restore;
+    public b8 top = false;
+}
+
+class InputPointerRouteEffects{
+    public PopupDismissRequest popupDismissal;
+    public b8 advanceHover = false;
+    public b8 dismissedPopup = false;
+    public b8 ok = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

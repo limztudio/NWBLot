@@ -28,23 +28,20 @@ public:
 
 public:
     [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept{
-        const TextAreaModelStamp current = model.stamp();
-        return current.revision == m_expectedStamp.revision && current.externalRevision == m_expectedStamp.externalRevision && current.selectionGeneration == m_expectedStamp.selectionGeneration
-            && model.text() == AStringView(m_expectedText) && current.anchor == m_expectedStamp.anchor && current.caret == m_expectedStamp.caret;
+        return MatchesEditModelSnapshotSurroundingValues(model.text(), model.stamp(), AStringView(m_expectedText), m_expectedStamp);
     }
     [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
-        const EditCompositionView current = model.composition();
-        return model.stamp() == m_expectedStamp && model.text() == AStringView(m_expectedText) && current.active == m_expectedComposition.active && current.text == AStringView(m_expectedPreedit)
-            && current.anchor == m_expectedComposition.anchor && current.caret == m_expectedComposition.caret && current.replacementStart == m_expectedComposition.replacementStart && current.replacementEnd == m_expectedComposition.replacementEnd;
+        return MatchesEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), AStringView(m_expectedText), AStringView(m_expectedPreedit), m_expectedComposition, m_expectedStamp);
     }
-    void captureSurrounding(const EditModel& model);
-    void capture(const EditModel& model);
-    void clear()noexcept;
-
-
-private:
-    void captureSurroundingValues(AStringView text, const TextAreaModelStamp& stamp)noexcept;
-    void captureValues(AStringView text, const TextAreaModelStamp& stamp, const EditCompositionView& composition)noexcept;
+    void captureSurrounding(const EditModel& model){
+        CaptureEditModelSnapshotSurroundingValues(model.text(), model.stamp(), m_expectedText, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
+    }
+    void capture(const EditModel& model){
+        CaptureEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), m_expectedText, m_expectedPreedit, m_expectedComposition, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
+    }
+    void clear()noexcept{
+        ClearEditModelSnapshotValues(m_expectedText, m_expectedPreedit, m_expectedComposition, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
+    }
 
 
 public:

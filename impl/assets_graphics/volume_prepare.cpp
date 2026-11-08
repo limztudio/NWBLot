@@ -10,6 +10,7 @@
 
 #include "shader_cook_plan.h"
 
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/assets_csg/asset.h>
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_csg/shape_module_writer.h>

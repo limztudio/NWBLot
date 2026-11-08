@@ -113,6 +113,10 @@ b8 ListCoordinator::paintListRows(const Item& item, const ListFrame& frame, cons
     return m_builder.listMatches(frame);
 }
 
+b8 Builder::paintList(const Item& item, const LayoutBox& box){
+    return ListCoordinator(*this).paintList(item, box);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

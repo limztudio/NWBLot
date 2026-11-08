@@ -72,7 +72,13 @@ public:
 
 
 private:
-    [[nodiscard]] static b8 ApplyGesture(ListState& state, const PointerGesture& gesture)noexcept;
+    [[nodiscard]] static b8 ApplyGesture(ListState& state, const PointerGesture& gesture)noexcept{
+        const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture);
+        if(!offset)
+            return false;
+        state.m_ensureCursor = false;
+        return state.m_scroll.setOffset(*offset);
+    }
 
 
 private:

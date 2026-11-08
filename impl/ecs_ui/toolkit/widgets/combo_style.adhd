@@ -117,6 +117,32 @@ Rect ResolveComboQueryBoxAndAdvanceContent(in f32 measuredHeight, in f32 queryHe
     return queryRect;
 }
 
+b8 MatchesComboFrameStateValues(
+    in b8 popupAncestorsVisible,
+    in u64 stateInputGeneration,
+    in u64 expectedInstanceGeneration,
+    in u64 listInputGeneration,
+    in u64 expectedListInstanceGeneration,
+    in b8 isOpen,
+    in b8 expectedOpen,
+    in u64 popupInstanceGeneration,
+    in u64 expectedPopupInstanceGeneration,
+    in u64 popupOpenGeneration,
+    in u64 expectedPopupOpenGeneration,
+    in PopupToken popupParent,
+    in PopupToken expectedParentToken,
+    in b8 queryMatches
+){
+    return popupAncestorsVisible
+        && stateInputGeneration == expectedInstanceGeneration
+        && listInputGeneration == expectedListInstanceGeneration
+        && isOpen == expectedOpen
+        && popupInstanceGeneration == expectedPopupInstanceGeneration
+        && popupOpenGeneration == expectedPopupOpenGeneration
+        && popupParent == expectedParentToken
+        && queryMatches;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

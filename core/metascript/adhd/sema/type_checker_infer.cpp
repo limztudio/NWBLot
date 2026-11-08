@@ -81,35 +81,37 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
                     return memberInfo->returnTypeName;
             }
         }
-        if(expr.lhs->kind == ExprKind::Identifier && !expr.arguments.empty() && expr.arguments[0]){
+        if(expr.lhs->kind == ExprKind::Identifier){
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType)
                     return fnInfo->returnTypeName;
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar){
-                    const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
-                    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(argType))
-                        return vecInfo->xyzScalarType;
-                    return argType;
-                }
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply){
-                    const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
-                    if(expr.arguments.size() == 2u && expr.arguments[1]){
-                        const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
-                        u32 rhsLanes = 0u;
-                        if(SymbolTable::IsSimdMatrixType(lhsT) && SymbolTable::IsSimdVectorType(rhsT, rhsLanes))
-                            return rhsT;
+                if(!expr.arguments.empty() && expr.arguments[0]){
+                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar){
+                        const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                        if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(argType))
+                            return vecInfo->xyzScalarType;
+                        return argType;
                     }
-                    return lhsT;
-                }
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd){
-                    for(const Expr* arg : expr.arguments){
-                        if(!arg)
-                            continue;
-                        const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
-                        if(SymbolTable::IsSimdType(argT))
-                            return argT;
+                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply){
+                        const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                        if(expr.arguments.size() == 2u && expr.arguments[1]){
+                            const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
+                            u32 rhsLanes = 0u;
+                            if(SymbolTable::IsSimdMatrixType(lhsT) && SymbolTable::IsSimdVectorType(rhsT, rhsLanes))
+                                return rhsT;
+                        }
+                        return lhsT;
                     }
-                    return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd){
+                        for(const Expr* arg : expr.arguments){
+                            if(!arg)
+                                continue;
+                            const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
+                            if(SymbolTable::IsSimdType(argT))
+                                return argT;
+                        }
+                        return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                    }
                 }
             }
         }

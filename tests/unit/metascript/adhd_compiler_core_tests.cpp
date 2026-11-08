@@ -681,6 +681,29 @@ TEST(AdhdCompiler, LiteralOnlyUnitsAvoidEngineDependenciesAndComplexUnitsKeepThe
 }
 
 
+TEST(AdhdCompiler, TerminateInvariantBuiltinLowersAndRejectsArguments){
+    AdhdTestArena arena;
+    constexpr MStringView s_TerminateInvariant =
+        "void checkInvariant(in b8 ok){\r\n"
+        "    if(!ok)\r\n"
+        "        terminateInvariant();\r\n"
+        "}\r\n";
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_TerminateInvariant, "impl/invariant.adhd", arena.arena, result));
+    const MStringView header(result.generatedHeader.data(), result.generatedHeader.size());
+    const MStringView source(result.generatedSource.data(), result.generatedSource.size());
+    EXPECT_NE(header.find("#include <global/termination.h>"), MStringView::npos);
+    EXPECT_NE(source.find("::TerminateInvariant()"), MStringView::npos);
+
+    constexpr MStringView s_BadTerminateInvariantArg =
+        "void badInvariant(){\r\n"
+        "    terminateInvariant(1u);\r\n"
+        "}\r\n";
+    CompileResult badResult(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadTerminateInvariantArg, "impl/bad_invariant.adhd", arena.arena, badResult));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

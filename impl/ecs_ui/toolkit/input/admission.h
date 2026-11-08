@@ -21,18 +21,33 @@ NWB_IMPL_UI_BEGIN
 
 class InputAdmission final : NoCopy{
 public:
-    explicit InputAdmission(Core::Alloc::GlobalArena& arena);
+    explicit InputAdmission(Core::Alloc::GlobalArena& arena)
+        : m_bindings(arena)
+        , m_boundSources(arena)
+        , m_pointerBindings(arena)
+        , m_events(arena)
+    {
+        m_boundSources.reserve(s_InputSourceReserve);
+        m_pointerBindings.reserve(s_InputSourceReserve);
+        m_events.reserve(s_InputMaxEvents);
+    }
 
 
 public:
-    [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
-    [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
-    [[nodiscard]] b8 setBindings(Span<const InputKeyBinding> bindings);
-    void restoreDefaultBindings();
+    [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event){
+        return TryQueueRouterInputEvent(m_bindings.bindings(), event, m_pointerBindings, m_boundSources, m_events);
+    }
+    [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input){
+        return TryQueueRouterPointerInput(m_bindings.bindings(), input, m_pointerBindings, m_boundSources, m_events);
+    }
+    [[nodiscard]] b8 setBindings(const Span<const InputKeyBinding> bindings){ return m_bindings.set(bindings); }
+    void restoreDefaultBindings(){ m_bindings.restoreDefaults(); }
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
     [[nodiscard]] Span<const InputEvent> events()const noexcept{ return m_events; }
     void clear()noexcept{ m_events.clear(); }
-    void cancelDevice(u64 device, Vector<PointerSource, Core::Alloc::GlobalArena>& pointerSources, Vector<CommandSource, Core::Alloc::GlobalArena>& commandSources)noexcept;
+    void cancelDevice(const u64 device, Vector<PointerSource, Core::Alloc::GlobalArena>& pointerSources, Vector<CommandSource, Core::Alloc::GlobalArena>& commandSources)noexcept{
+        EraseRouterDeviceInputs(device, pointerSources, m_pointerBindings, commandSources, m_boundSources, m_events);
+    }
 
 
 private:

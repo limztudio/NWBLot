@@ -112,6 +112,7 @@ NWB_ADHD_EXPORT_FUNCTION("alignUp",                "::AlignUp",                2
 NWB_ADHD_EXPORT_FUNCTION("hashValue",              "::HashValue",              1u, FixedType,      "usize",      "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("hashCombineValue",       "::HashCombineValue",       2u, FixedType,      "usize",      "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("makeUnexpected",         "::MakeUnexpected",         1u, Unexpected,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("terminateInvariant",     "::TerminateInvariant",     0u, FixedType,      "void",       "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("isUnicodeWhitespace", "::IsUnicodeWhitespace", 1u, FixedType, "b8", "", Integer, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION("isAsciiPunctuation", "::IsAsciiPunctuation", 1u, FixedType, "b8", "", Integer, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION("computeFnv64AsciiLowerText", "::ComputeFnv64AsciiLowerText", 1u, FixedType, "u64", "", TextView, Any, Any)

@@ -181,6 +181,19 @@ void TextAreaCoordinator::snapshotTextArea(TextAreaFrame& frame)noexcept{
     frame.modelStamp = frame.model->stamp();
 }
 
+EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
+    return TextAreaCoordinator(*this).declareTextArea(stableKey, model, state, options);
+}
+
+b8 Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
+    return
+        popupAncestorsVisible() && frame.model && frame.state
+        && frame.state->revision() == frame.stateRevision && frame.state->navigation().matches(frame.navigation)
+        && frame.model->matchesStamp(frame.modelStamp)
+        && frame.state->m_visual.matchesStamp(frame.modelStamp, frame.focused)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

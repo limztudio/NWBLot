@@ -296,5 +296,96 @@ void ReconcileRouterAllTargets(
     );
 }
 
+Expected<InputEvent> TryQueueRouterInputEvent(
+    in Span<InputKeyBinding> bindings,
+    in InputEvent event,
+    mut Vector<PointerBinding> pointerBindings,
+    mut Vector<BoundSource> boundSources,
+    mut Vector<InputEvent> events
+){
+    if(events.size() == s_InputMaxEvents || cast<u8>(event.type) > cast<u8>(InputEventType::CommandUp))
+        return makeUnexpected(Failure());
+    const Expected<InputEvent> pointer = TryResolveRouterPointerEvent(event, pointerBindings);
+    if(!pointer.has_value())
+        return makeUnexpected(Failure());
+    const Expected<InputEvent> candidate = TryResolveRouterSourceEvent(bindings, pointer.value(), boundSources);
+    if(!candidate.has_value())
+        return makeUnexpected(Failure());
+    events.push_back(candidate.value());
+    return candidate.value();
+}
+
+Expected<InputEvent> TryQueueRouterPointerInput(
+    in Span<InputKeyBinding> bindings,
+    in PointerInput input,
+    mut Vector<PointerBinding> pointerBindings,
+    mut Vector<BoundSource> boundSources,
+    mut Vector<InputEvent> events
+){
+    const Expected<InputEvent> event = TryMakePointerInputEvent(input);
+    if(!event.has_value())
+        return makeUnexpected(Failure());
+    return TryQueueRouterInputEvent(bindings, event.value(), pointerBindings, boundSources, events);
+}
+
+b8 CanPublishRouterTargetTable(in usize count, in u64 generation, in u64 currentGeneration){
+    return count <= s_InputMaxTargets && generation > currentGeneration;
+}
+
+b8 PublishRouterTargetTable(
+    in Span<HitTarget> targets,
+    in Span<PopupRecord> stagedPopups,
+    in u64 generation,
+    mut Vector<HitTarget> committedTargets,
+    mut Vector<HitTarget> stagedTargets,
+    mut Vector<TargetLookup> committedLookup,
+    mut Vector<TargetLookup> stagedLookup,
+    mut u64 inOutGeneration
+){
+    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup))
+        return false;
+    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups))
+        return false;
+    committedTargets.swap(stagedTargets);
+    committedLookup.swap(stagedLookup);
+    inOutGeneration = generation;
+    return true;
+}
+
+b8 InvalidateRouterTargetTable(in WidgetId id, mut Vector<TargetLookup> lookup, mut Vector<HitTarget> targets){
+    if(!EraseInvalidatedRouterTargets(id, lookup, targets))
+        return false;
+    RebuildRouterTargetLookup(targets, lookup);
+    return true;
+}
+
+Optional<InputPopupRetirement> RetireRouterTargetTablePopup(
+    in WidgetId id,
+    mut Vector<PopupRecord> popups,
+    mut Vector<HitTarget> targets,
+    mut Vector<PopupDismissal> dismissals,
+    mut Vector<TargetLookup> lookup
+){
+    InputPopupRetirement retirement;
+    if(!TryRetireRouterPopupSubtree(id, popups, targets, dismissals, retirement.top, retirement.restore))
+        return Optional<InputPopupRetirement>();
+    RebuildRouterTargetLookup(targets, lookup);
+    return Optional<InputPopupRetirement>(retirement);
+}
+
+void ResetRouterTargetTable(
+    mut Vector<HitTarget> targets,
+    mut Vector<HitTarget> stagedTargets,
+    mut Vector<TargetLookup> lookup,
+    mut Vector<TargetLookup> stagedLookup,
+    mut u64 outGeneration
+){
+    targets.clear();
+    stagedTargets.clear();
+    lookup.clear();
+    stagedLookup.clear();
+    outGeneration = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

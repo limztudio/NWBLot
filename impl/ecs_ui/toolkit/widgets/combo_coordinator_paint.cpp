@@ -125,6 +125,14 @@ b8 ComboCoordinator::paintComboPopup(ComboFrame& frame){
     return painted && overlayEnded && scopeEnded;
 }
 
+b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
+    return ComboCoordinator(*this).paintCombo(item, box);
+}
+
+b8 Builder::paintCombos(){
+    return ComboCoordinator(*this).paintCombos();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

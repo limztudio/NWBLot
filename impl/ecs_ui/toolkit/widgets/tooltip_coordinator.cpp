@@ -107,6 +107,14 @@ b8 TooltipCoordinator::paintTooltips(){
     return true;
 }
 
+b8 Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
+    return TooltipCoordinator(*this).declareTooltip(stableKey, anchorKey, text, state, options);
+}
+
+b8 Builder::paintTooltips(){
+    return TooltipCoordinator(*this).paintTooltips();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

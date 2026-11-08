@@ -194,5 +194,17 @@ void ReconcileRouterCommandPresses(
     }
 }
 
+void ClearRouterCommandFocusState(
+    mut Vector<CommandSource> commandSources,
+    mut WidgetId outFocus,
+    mut u64 outFocusDeclaration,
+    mut ControlToken outFocusControl
+){
+    RetireRouterCommandFocus(commandSources);
+    outFocus = WidgetId();
+    outFocusDeclaration = 0u;
+    outFocusControl = ControlToken();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

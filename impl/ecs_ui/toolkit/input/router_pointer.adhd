@@ -176,6 +176,122 @@ b8 RouteRouterPrimary(
     return true;
 }
 
+InputPointerRouteEffects RouteRouterPrimaryWithEffects(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    in b8 secondaryDown,
+    in b8 secondarySequenceConsumed,
+    in u64 layoutGeneration,
+    in InputSource activePointerSource,
+    in Point interactionPosition,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<InputAction> actions,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut u64 inOutNextActionSequence,
+    mut b8 inOutPrimaryDown,
+    mut b8 inOutPointerSubmitArmed,
+    mut b8 inOutPointerSequenceConsumed,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut InputRoutingResult inOutResult
+){
+    InputPointerRouteEffects effects;
+    effects.ok = RouteRouterPrimary(
+        targets,
+        lookup,
+        event,
+        hasHit,
+        hit,
+        secondaryDown,
+        secondarySequenceConsumed,
+        layoutGeneration,
+        activePointerSource,
+        interactionPosition,
+        popups,
+        canAppendPopupDismissal,
+        effects.popupDismissal,
+        commandSources,
+        actions,
+        controlActions,
+        pointerGestures,
+        inOutActiveGestureSequence,
+        inOutNextActionSequence,
+        inOutPrimaryDown,
+        inOutPointerSubmitArmed,
+        inOutPointerSequenceConsumed,
+        inOutFocus,
+        inOutFocusDeclaration,
+        inOutFocusControl,
+        inOutCapture,
+        inOutCapturePopup,
+        inOutCaptureDeclaration,
+        inOutCaptureControl,
+        inOutResult,
+        effects.advanceHover,
+        effects.dismissedPopup
+    );
+    return effects;
+}
+
+InputPointerRouteEffects RouteRouterSecondaryWithEffects(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in b8 windowFocused,
+    in u64 layoutGeneration,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    in b8 primaryDown,
+    in b8 pointerSequenceConsumed,
+    in Span<PopupRecord> popups,
+    in b8 canAppendPopupDismissal,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut u64 inOutNextActionSequence,
+    mut b8 inOutSecondaryDown,
+    mut b8 inOutSecondarySequenceConsumed,
+    mut TargetOwner inOutSecondaryOwner,
+    mut Point inOutSecondaryPosition,
+    mut InputRoutingResult inOutResult
+){
+    InputPointerRouteEffects effects;
+    RouteRouterSecondary(
+        targets,
+        lookup,
+        windowFocused,
+        layoutGeneration,
+        event,
+        hasHit,
+        hit,
+        primaryDown,
+        pointerSequenceConsumed,
+        popups,
+        canAppendPopupDismissal,
+        effects.popupDismissal,
+        contextMenuActions,
+        inOutNextActionSequence,
+        inOutSecondaryDown,
+        inOutSecondarySequenceConsumed,
+        inOutSecondaryOwner,
+        inOutSecondaryPosition,
+        inOutResult,
+        effects.advanceHover,
+        effects.dismissedPopup
+    );
+    return effects;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

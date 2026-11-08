@@ -121,6 +121,46 @@ void UpdateRouterHoverTarget(
         outHover = WidgetId();
 }
 
+void AdvanceRouterHoverActivity(mut u64 inOutActivityGeneration){
+    if(inOutActivityGeneration == u64.max)
+        terminateInvariant();
+    ++inOutActivityGeneration;
+}
+
+void ClearRouterHoverTarget(mut WidgetId outTarget, mut HoverIdentity outIdentity){
+    outTarget = WidgetId();
+    outIdentity = HoverIdentity();
+}
+
+void ForgetRouterHoverSource(
+    mut u64 inOutActivityGeneration,
+    mut WidgetId outTarget,
+    mut HoverIdentity outIdentity,
+    mut b8 outKnown,
+    mut InputSource outSource
+){
+    AdvanceRouterHoverActivity(inOutActivityGeneration);
+    ClearRouterHoverTarget(outTarget, outIdentity);
+    outKnown = false;
+    outSource = InputSource();
+}
+
+void SetRouterHoverTarget(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 hasHovered,
+    in HitTarget hovered,
+    mut u64 inOutActivityGeneration,
+    mut HoverIdentity inOutHoverIdentity,
+    mut WidgetId outHover
+){
+    b8 changedOwner = false;
+    UpdateRouterHoverTarget(targets, lookup, popups, hasHovered, hovered, inOutHoverIdentity, outHover, changedOwner);
+    if(changedOwner)
+        AdvanceRouterHoverActivity(inOutActivityGeneration);
+}
+
 void RouteRouterSecondary(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,

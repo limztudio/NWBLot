@@ -115,5 +115,41 @@ class UiScopeDescriptorFactory{
     }
 };
 
+b8 MatchesContextMenuFrameStateValues(
+    in b8 popupAncestorsVisible,
+    in u64 stateRevision,
+    in u64 expectedRevision,
+    in b8 isOpen,
+    in b8 expectedOpen,
+    in u64 popupInstanceGeneration,
+    in u64 expectedPopupInstanceGeneration,
+    in u64 popupOpenGeneration,
+    in u64 expectedPopupOpenGeneration,
+    in PopupToken popupParent,
+    in PopupToken expectedParentToken,
+    in u64 listInputGeneration,
+    in u64 expectedListInstanceGeneration,
+    in WidgetId owner,
+    in WidgetId expectedOwner,
+    in u64 ownerDeclaration,
+    in u64 expectedOwnerDeclaration,
+    in WidgetId anchorWidget,
+    in WidgetId expectedAnchorWidget,
+    in u64 anchorDeclaration,
+    in u64 expectedAnchorDeclaration
+){
+    return popupAncestorsVisible
+        && stateRevision == expectedRevision
+        && isOpen == expectedOpen
+        && popupInstanceGeneration == expectedPopupInstanceGeneration
+        && popupOpenGeneration == expectedPopupOpenGeneration
+        && popupParent == expectedParentToken
+        && listInputGeneration == expectedListInstanceGeneration
+        && owner == expectedOwner
+        && ownerDeclaration == expectedOwnerDeclaration
+        && anchorWidget == expectedAnchorWidget
+        && anchorDeclaration == expectedAnchorDeclaration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

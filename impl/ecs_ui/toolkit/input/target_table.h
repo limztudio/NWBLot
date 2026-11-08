@@ -17,32 +17,47 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct InputPopupRetirement{
-    PopupRecord restore;
-    b8 top = false;
-};
-
-
 class InputTargetTable final : NoCopy{
 public:
-    explicit InputTargetTable(Core::Alloc::GlobalArena& arena);
+    explicit InputTargetTable(Core::Alloc::GlobalArena& arena)
+        : m_targets(arena)
+        , m_stagedTargets(arena)
+        , m_lookup(arena)
+        , m_stagedLookup(arena)
+    {
+        m_targets.reserve(s_InputMaxTargets);
+        m_stagedTargets.reserve(s_InputMaxTargets);
+        m_lookup.reserve(s_InputMaxTargets);
+        m_stagedLookup.reserve(s_InputMaxTargets);
+    }
 
 
 public:
-    [[nodiscard]] b8 canPublish(usize count, u64 generation)const noexcept;
-    [[nodiscard]] b8 publish(Span<const HitTarget> targets, Span<const PopupRecord> stagedPopups, u64 generation);
-    [[nodiscard]] const HitTarget* find(WidgetId id, u64 declarationGeneration)const noexcept;
-    [[nodiscard]] b8 invalidate(WidgetId id);
-    [[nodiscard]] b8 fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
-    [[nodiscard]] Optional<InputPopupRetirement> retirePopup(WidgetId id, Vector<PopupRecord, Core::Alloc::GlobalArena>& popups, Vector<PopupDismissal, Core::Alloc::GlobalArena>& dismissals);
-    void reset()noexcept;
+    [[nodiscard]] b8 canPublish(const usize count, const u64 generation)const noexcept{
+        return CanPublishRouterTargetTable(count, generation, m_generation);
+    }
+    [[nodiscard]] b8 publish(const Span<const HitTarget> targets, const Span<const PopupRecord> stagedPopups, const u64 generation){
+        return PublishRouterTargetTable(targets, stagedPopups, generation, m_targets, m_stagedTargets, m_lookup, m_stagedLookup, m_generation);
+    }
+    [[nodiscard]] const HitTarget* find(const WidgetId id, const u64 declarationGeneration)const noexcept{
+        const auto index = FindTargetIndexInTable(m_targets, m_lookup, id, declarationGeneration);
+        return index ? &m_targets[*index] : nullptr;
+    }
+    [[nodiscard]] b8 invalidate(const WidgetId id){
+        return InvalidateRouterTargetTable(id, m_lookup, m_targets);
+    }
+    [[nodiscard]] b8 fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
+        return FenceRouterControlTargets(host, declarationGeneration, token, m_lookup, m_targets);
+    }
+    [[nodiscard]] Optional<InputPopupRetirement> retirePopup(const WidgetId id, Vector<PopupRecord, Core::Alloc::GlobalArena>& popups, Vector<PopupDismissal, Core::Alloc::GlobalArena>& dismissals){
+        return RetireRouterTargetTablePopup(id, popups, m_targets, dismissals, m_lookup);
+    }
+    void reset()noexcept{
+        ResetRouterTargetTable(m_targets, m_stagedTargets, m_lookup, m_stagedLookup, m_generation);
+    }
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] const Vector<HitTarget, Core::Alloc::GlobalArena>& targets()const noexcept{ return m_targets; }
     [[nodiscard]] Span<const TargetLookup> lookup()const noexcept{ return m_lookup; }
-
-
-private:
-    void rebuildLookup();
 
 
 private:

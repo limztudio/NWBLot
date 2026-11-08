@@ -19,22 +19,30 @@ NWB_IMPL_UI_BEGIN
 
 class InputPopupState final : NoCopy{
 public:
-    explicit InputPopupState(Core::Alloc::GlobalArena& arena);
+    explicit InputPopupState(Core::Alloc::GlobalArena& arena)
+        : m_popups(arena)
+        , m_stagedPopups(arena)
+        , m_popupDismissals(arena)
+    {
+        m_popups.reserve(s_InputMaxPopups);
+        m_stagedPopups.reserve(s_InputMaxPopups);
+        m_popupDismissals.reserve(s_InputMaxPopups);
+    }
 
 
 public:
-    [[nodiscard]] b8 stage(Span<const PopupScope> scopes)noexcept;
+    [[nodiscard]] b8 stage(const Span<const PopupScope> scopes)noexcept{ return TryStageRouterPopups(scopes, m_popups, m_stagedPopups); }
     [[nodiscard]] Span<const PopupRecord> staged()const noexcept{ return m_stagedPopups; }
     [[nodiscard]] Span<const PopupRecord> records()const noexcept{ return m_popups; }
     [[nodiscard]] b8 canAppendDismissal()const noexcept{ return m_popupDismissals.size() != s_InputMaxPopups; }
-    [[nodiscard]] b8 apply(const PopupDismissRequest& request)noexcept;
-    [[nodiscard]] Expected<PopupDismissReason::Enum> consumeDismissal(const PopupToken& token)noexcept;
-    [[nodiscard]] b8 dismiss(PopupDismissReason::Enum reason)noexcept;
-    void close(const PopupToken& token)noexcept;
-    void fence(const PopupToken& token)noexcept;
-    void cancelFocus()noexcept;
-    void reset()noexcept;
-    [[nodiscard]] Optional<InputPopupRetirement> retire(InputTargetTable& targets, WidgetId id);
+    [[nodiscard]] b8 apply(const PopupDismissRequest& request)noexcept{ return ApplyRouterPopupDismissRequest(request, m_popups, m_popupDismissals); }
+    [[nodiscard]] Expected<PopupDismissReason::Enum> consumeDismissal(const PopupToken& token)noexcept{ return TryConsumeRouterPopupDismissal(token, m_popupDismissals); }
+    [[nodiscard]] b8 dismiss(const PopupDismissReason::Enum reason)noexcept{ return TryDismissRouterPopup(reason, m_popups, m_popupDismissals); }
+    void close(const PopupToken& token)noexcept{ CloseRouterPopupSubtree(token, m_popups); }
+    void fence(const PopupToken& token)noexcept{ FenceRouterPopup(token, m_popups); }
+    void cancelFocus()noexcept{ CancelRouterPopupFocus(m_popups, m_popupDismissals); }
+    void reset()noexcept{ ResetRouterPopupState(m_popups, m_stagedPopups, m_popupDismissals); }
+    [[nodiscard]] Optional<InputPopupRetirement> retire(InputTargetTable& targets, const WidgetId id){ return targets.retirePopup(id, m_popups, m_popupDismissals); }
     void install(
         const Span<const HitTarget> targets,
         const Span<const TargetLookup> lookup,
@@ -45,7 +53,9 @@ public:
         WidgetId& inOutFocus,
         u64& inOutFocusDeclaration,
         ControlToken& inOutFocusControl
-    )noexcept;
+    )noexcept{
+        InstallRouterPopups(targets, lookup, windowFocused, focusLossGeneration, expectedFocusLossGeneration, m_popupDismissals, m_stagedPopups, m_popups, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+    }
 
 
 private:

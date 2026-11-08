@@ -89,7 +89,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                     expr.isBuiltinCall = true;
                     calledMemberName = expr.lhs->text;
-                    if(fnInfo->arity > 0u && callArgCount != fnInfo->arity){
+                    if(callArgCount != fnInfo->arity){
                         reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
                         ok = false;
                     }

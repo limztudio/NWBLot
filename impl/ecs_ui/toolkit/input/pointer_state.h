@@ -5,7 +5,12 @@
 #pragma once
 
 
+#include "command_state.h"
+#include "popup_state.h"
+#include "target_table.h"
+
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
+#include <impl/ecs_ui/toolkit/input/router_pointer_source_admission.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,33 +22,29 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class InputTargetTable;
-class InputPopupState;
-class InputCommandState;
-
-
-struct InputPointerRouteEffects{
-    PopupDismissRequest popupDismissal;
-    b8 advanceHover = false;
-    b8 dismissedPopup = false;
-    b8 ok = true;
-};
-
-
 class InputPointerState final : NoCopy{
 public:
-    explicit InputPointerState(Core::Alloc::GlobalArena& arena);
+    explicit InputPointerState(Core::Alloc::GlobalArena& arena)
+        : m_pointerSources(arena)
+        , m_pointerGestures(arena)
+    {}
 
 
 public:
-    void reserveSources();
-    void reserveGestures();
-    [[nodiscard]] b8 accepts(const InputSource& source)const noexcept;
-    [[nodiscard]] b8 owns(const InputSource& source, PointerIntent::Enum intent)const noexcept;
-    [[nodiscard]] b8 wants(b8 hasPopup, WidgetId hover)const noexcept;
-    [[nodiscard]] InputPointerRouteEffects routePrimary(const InputEvent& event, const HitTarget* hit, InputTargetTable& targets, InputPopupState& popups, InputCommandState& commands, Vector<InputAction, Core::Alloc::GlobalArena>& actions, Vector<ControlAction, Core::Alloc::GlobalArena>& controlActions, u64& nextActionSequence, InputRoutingResult& result);
-    [[nodiscard]] InputPointerRouteEffects routeSecondary(const InputEvent& event, const HitTarget* hit, InputTargetTable& targets, InputPopupState& popups, b8 windowFocused, Vector<ContextMenuAction, Core::Alloc::GlobalArena>& contextMenuActions, u64& nextActionSequence, InputRoutingResult& result);
-    void routeWheel(const InputEvent& event, const HitTarget* hit, InputTargetTable& targets, InputPopupState& popups, Vector<ControlAction, Core::Alloc::GlobalArena>& controlActions, u64& nextActionSequence, InputRoutingResult& result);
+    void reserveSources(){ m_pointerSources.reserve(s_InputSourceReserve); }
+    void reserveGestures(){ m_pointerGestures.reserve(s_InputMaxPointerGestures); }
+    [[nodiscard]] b8 accepts(const InputSource& source)const noexcept{ return AcceptsRouterPointerSource(m_activePointerSource, m_pointerSources, source); }
+    [[nodiscard]] b8 owns(const InputSource& source, const PointerIntent::Enum intent)const noexcept{ return OwnsRouterPointerSource(m_pointerSources, source, intent); }
+    [[nodiscard]] b8 wants(const b8 hasPopup, const WidgetId hover)const noexcept{ return WantsRouterPointer(m_pointerSources, hasPopup, hover); }
+    [[nodiscard]] InputPointerRouteEffects routePrimary(const InputEvent& event, const HitTarget* const hit, InputTargetTable& targets, InputPopupState& popups, InputCommandState& commands, Vector<InputAction, Core::Alloc::GlobalArena>& actions, Vector<ControlAction, Core::Alloc::GlobalArena>& controlActions, u64& nextActionSequence, InputRoutingResult& result){
+        return RouteRouterPrimaryWithEffects(targets.targets(), targets.lookup(), event, hit != nullptr, hit != nullptr ? *hit : HitTarget{}, m_secondaryDown, m_secondarySequenceConsumed, targets.generation(), m_activePointerSource, m_interactionPosition, popups.records(), popups.canAppendDismissal(), commands.records(), actions, controlActions, m_pointerGestures, m_activeGestureSequence, nextActionSequence, m_primaryDown, m_pointerSubmitArmed, m_pointerSequenceConsumed, commands.focus(), commands.declaration(), commands.control(), m_capture, m_capturePopup, m_captureDeclaration, m_captureControl, result);
+    }
+    [[nodiscard]] InputPointerRouteEffects routeSecondary(const InputEvent& event, const HitTarget* const hit, InputTargetTable& targets, InputPopupState& popups, const b8 windowFocused, Vector<ContextMenuAction, Core::Alloc::GlobalArena>& contextMenuActions, u64& nextActionSequence, InputRoutingResult& result){
+        return RouteRouterSecondaryWithEffects(targets.targets(), targets.lookup(), windowFocused, targets.generation(), event, hit != nullptr, hit != nullptr ? *hit : HitTarget{}, m_primaryDown, m_pointerSequenceConsumed, popups.records(), popups.canAppendDismissal(), contextMenuActions, nextActionSequence, m_secondaryDown, m_secondarySequenceConsumed, m_secondaryOwner, m_secondaryPosition, result);
+    }
+    void routeWheel(const InputEvent& event, const HitTarget* const hit, InputTargetTable& targets, InputPopupState& popups, Vector<ControlAction, Core::Alloc::GlobalArena>& controlActions, u64& nextActionSequence, InputRoutingResult& result){
+        RouteRouterWheel(targets.targets(), targets.lookup(), popups.records(), event, hit != nullptr, hit != nullptr ? *hit : HitTarget{}, m_primaryDown, m_pointerSequenceConsumed, m_secondaryDown, m_secondarySequenceConsumed, targets.generation(), controlActions, nextActionSequence, result);
+    }
     [[nodiscard]] Vector<PointerSource, Core::Alloc::GlobalArena>& sources()noexcept{ return m_pointerSources; }
     [[nodiscard]] const Vector<PointerSource, Core::Alloc::GlobalArena>& sources()const noexcept{ return m_pointerSources; }
     [[nodiscard]] Vector<PointerGestureRecord, Core::Alloc::GlobalArena>& gestures()noexcept{ return m_pointerGestures; }

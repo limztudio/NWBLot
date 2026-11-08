@@ -19,18 +19,26 @@ NWB_IMPL_UI_BEGIN
 
 class InputCommandState final : NoCopy{
 public:
-    explicit InputCommandState(Core::Alloc::GlobalArena& arena);
+    explicit InputCommandState(Core::Alloc::GlobalArena& arena)
+        : m_sources(arena)
+    {}
 
 
 public:
-    void reserve();
-    void clearFocus()noexcept;
-    [[nodiscard]] b8 wants(Span<const PopupRecord> popups)const noexcept;
-    [[nodiscard]] b8 owns(const InputSource& source)const noexcept;
-    [[nodiscard]] b8 canEdit(Span<const HitTarget> targets, Span<const TargetLookup> lookup, Span<const PopupRecord> popups, b8 windowFocused, const InputEvent& event)const noexcept;
-    [[nodiscard]] b8 canSubmit(Span<const HitTarget> targets, Span<const TargetLookup> lookup, Span<const PopupRecord> popups, b8 windowFocused, const InputEvent& event)const noexcept;
-    void cancelSubmit(WidgetId id)noexcept;
-    [[nodiscard]] b8 isPressed(Span<const HitTarget> targets, Span<const TargetLookup> lookup, Span<const PopupRecord> popups, b8 windowFocused, WidgetId id)const noexcept;
+    void reserve(){ m_sources.reserve(s_InputSourceReserve); }
+    void clearFocus()noexcept{ ClearRouterCommandFocusState(m_sources, m_focus, m_focusDeclaration, m_focusControl); }
+    [[nodiscard]] b8 wants(const Span<const PopupRecord> popups)const noexcept{ return WantsRouterCommands(popups, m_focus, m_sources); }
+    [[nodiscard]] b8 owns(const InputSource& source)const noexcept{ return OwnsRouterCommandSource(m_sources, source); }
+    [[nodiscard]] b8 canEdit(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const Span<const PopupRecord> popups, const b8 windowFocused, const InputEvent& event)const noexcept{
+        return CanRouterEditCommand(targets, lookup, popups, m_sources, windowFocused, m_focus, m_focusDeclaration, event);
+    }
+    [[nodiscard]] b8 canSubmit(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const Span<const PopupRecord> popups, const b8 windowFocused, const InputEvent& event)const noexcept{
+        return CanRouterSubmitCommand(targets, lookup, popups, m_sources, windowFocused, m_focus, m_focusDeclaration, event);
+    }
+    void cancelSubmit(const WidgetId id)noexcept{ CancelRouterSubmitCommands(id, m_sources); }
+    [[nodiscard]] b8 isPressed(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const Span<const PopupRecord> popups, const b8 windowFocused, const WidgetId id)const noexcept{
+        return IsRouterTargetPressedByCommand(targets, lookup, popups, m_sources, windowFocused, m_focus, m_focusDeclaration, id);
+    }
     [[nodiscard]] Vector<CommandSource, Core::Alloc::GlobalArena>& records()noexcept{ return m_sources; }
     [[nodiscard]] WidgetId& focus()noexcept{ return m_focus; }
     [[nodiscard]] WidgetId focus()const noexcept{ return m_focus; }

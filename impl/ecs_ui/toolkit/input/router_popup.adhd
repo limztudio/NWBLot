@@ -139,6 +139,36 @@ void RetireRouterCommandFocus(mut Vector<CommandSource> commandSources){
     }
 }
 
+void ResetRouterPopupState(
+    mut Vector<PopupRecord> popups,
+    mut Vector<PopupRecord> stagedPopups,
+    mut Vector<PopupDismissal> popupDismissals
+){
+    popups.clear();
+    stagedPopups.clear();
+    popupDismissals.clear();
+}
+
+b8 ApplyRouterPopupDismissRequest(
+    in PopupDismissRequest request,
+    mut Vector<PopupRecord> popups,
+    mut Vector<PopupDismissal> popupDismissals
+){
+    if(!request.requested || popups.empty() || popups.back().scope.token != request.expectedTop)
+        return false;
+    if(!TryDismissRouterPopup(request.reason, popups, popupDismissals))
+        return false;
+    if(request.replaceRestore){
+        const usize lastIndex = popups.size() - 1u;
+        PopupRecord closing = popups[lastIndex];
+        closing.restoreFocus = request.restoreFocus;
+        closing.restoreDeclaration = request.restoreDeclaration;
+        closing.restorePopup = request.restorePopup;
+        popups[lastIndex] = closing;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -33,6 +33,7 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <global/simdmath.h>\r\n");
         out.append("#include <global/inplace_function.h>\r\n");
         out.append("#include <global/not_null.h>\r\n");
+        out.append("#include <global/termination.h>\r\n");
         out.append("#include <core/alloc/global.h>\r\n");
         out.append("#include <core/alloc/general.h>\r\n");
         out.append("#include <core/alloc/scratch.h>\r\n");

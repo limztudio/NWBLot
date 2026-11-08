@@ -33,7 +33,7 @@ Interactive fixture controls are `NWB_REFRACTION_SMOKE_ENABLED=0` for the baseli
 and `NWB_REFRACTION_SMOKE_HARDWARE=0` for screen-space tracing. They call public
 renderer settings and exist only in the smoke project.
 
-The life smoke runs seven done app frame-mark shots in one run. The steps are bend off, live mid glass, glass moved to more tiles, glass cut by the right mark edge, glass moved off-shot, bend off once more, and bend back on. It uses a 967x727 mark and a wider bar back-wall. The last seven rows of the half 8x8 tile thus hold a weighed bent shot. The checks need both bar-move ways in the wide edge zone. They need a move of each well-shown base bar end in the half tile. They need the old glass zone fixed after move. They need plain blank and off frames. They need repeat on. They need the front red AVBOIT pane kept all through.
+The life smoke runs seven done app frame-mark shots in one run. The steps run bend off, live mid glass, glass moved to more tiles, glass cut by the right mark edge, glass moved off-shot, bend off once more, then bend back on. It uses a 967x727 mark and a wider bar back-wall. The last seven rows of the half 8x8 tile thus hold a weighed bent shot. The checks need both bar-move ways in the wide edge zone. They need a move of each well-shown base bar end in the half tile. They need the old glass zone fixed after move. They need plain blank and off frames. They need repeat on. They need the front red AVBOIT pane kept all through.
 
 The moved and edge weighs span the shown ball box. One more moved-zone check past the first ball shape proves new tiles turned live. Card trace must move the half tile seen bar end. When the run plainly tells screen trace, the half tile can instead match the clear sheet capped straight fall-back. The screen walk turns down off-shot or mixed depth cuts. Then it keeps the back-wall with two Fresnel rates. The fall-back weigh remakes the set IOR 1.5 Schlick pass and base Reinhard/sRGB show from the off base. It needs plain non-black fade in 1.5 coded steps at 95% or more of fit tail pixels. It needs a move of at least one step. Same, black, tinted, or too-dark tails fail. The full edge zone still needs bar move both ways on each path.
 
@@ -232,9 +232,7 @@ The report keeps whole-frame, resolve, scheduling/compositor aggregate, AVBOIT,
 opaque, shadow, lighting, presentation, per-position, and per-block values.
 Coverage scaling uses paired independent blocks with individual bootstrap
 intervals. A coverage change changes the optical workload; these values guide
-diagnostic attribution and do not prove an optimization speedup. Keep shader
-query/fallback counts in a separate diagnostic acquisition against the same
-scene and route, and measure timing with the uninstrumented frozen arm.
+diagnostic attribution and do not prove an optimization speedup. Keep shader ask/fall-back counts in a split note run past the same scene and path. Read time with the plain held arm.
 
 When the calling terminal has a shorter lifetime than a complete campaign, use
 `run_refraction_profile_supervised.ps1` from PowerShell 7 in a detached hidden

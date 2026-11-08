@@ -14,7 +14,7 @@ The harness excludes a five-second warmup and measures approximately thirty seco
 
 ## Implementation and tradeoffs
 
-The renderer reduces repeated high-detail geometry and optical work across rays and views while retaining GI and explicit fallback paths for unsupported or unresolved cases.
+The draw cuts same high-fine shape and look work past rays and looks. It keeps GI and set fall-back paths for lost or open cases.
 
 Eligible engine-owned shared mesh programs cache decoded object-space geometry and use an internal indexed vertex stage. Accepted source revisions and resource identities govern reuse. World transforms and projection remain current during rasterization. Current material selection requires a compatible indexed archive stage and either no CSG or the shared engine mesh program. Other supported geometry paths use compute emulation. Native mesh shaders are not enabled globally. Current GPU mesh roots also drive software scene-BVH leaf refit and internal-bound unions, preserving posed geometry coverage.
 
@@ -34,7 +34,7 @@ Header-first light-view lookup and shared FP32 shadow-resolve coefficients remai
 
 ## Defaults and explicit profiles
 
-Renderer settings remain conservative. Only the direct Stress application's base settings select the performance profile. Other smoke scenes retain their defaults. Explicit smoke environment values override that base. The Python stress harness writes every quality control itself, so its default acquisition remains the reference profile regardless of the direct application's base settings.
+Renderer settings remain conservative. Only the direct Stress application's base settings select the performance profile. Other smoke scenes retain their defaults. Explicit smoke environment values override that base. The Python stress rig writes each grade knob itself. So its base take stays the true shape, with no heed to the straight app base settings.
 
 | Setting | Renderer / harness reference | Direct Stress base / explicit performance run |
 | --- | --- | --- |

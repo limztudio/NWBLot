@@ -4,6 +4,8 @@
 
 #include "reflection_feedback_scene.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
@@ -27,7 +29,7 @@ namespace __hidden_reflection_feedback_scene{
 using namespace Tests::Smoke;
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
-static constexpr AStringView s_Interface = "project/shaders/smoke_surface";
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

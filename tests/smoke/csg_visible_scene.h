@@ -7,6 +7,8 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,8 +27,8 @@ namespace Tests::Smoke{
 
 class CsgVisibleScene final{
 public:
-    static constexpr f32 s_CameraTargetY = 0.75f;
-    static constexpr usize s_ShapeCount = 4u;
+    static constexpr f32 s_CameraTargetY = s_CsgVisibleCameraTargetY;
+    static constexpr usize s_ShapeCount = s_CsgVisibleShapeCount;
 
 
 public:

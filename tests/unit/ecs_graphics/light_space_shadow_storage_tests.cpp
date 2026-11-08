@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/light_space_shadow.h>
+#include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
 #include <impl/ecs_scene/components.adhd.h>
 
 #include <global/limit.h>
@@ -20,6 +21,34 @@ namespace __hidden_light_space_shadow_storage_tests{
 
 
 using namespace NWB::Impl;
+
+TEST(LightSpaceShadowStorage, GraphRequiresEachResourceAndValidTaskGeneration){
+    LightSpaceShadowGraph graph;
+    EXPECT_FALSE(graph.valid());
+    const NWB::Core::GpuGraphResourceId resource{ .generation = 1u, .index = 0u };
+    graph.counts = resource;
+    graph.events = resource;
+    graph.views = resource;
+    graph.depth = resource;
+    graph.ready = { .generation = 1u, .index = 0u };
+    ASSERT_TRUE(graph.valid());
+    const Array<NWB::Core::GpuGraphResourceId LightSpaceShadowGraph::*, 4> required = { &LightSpaceShadowGraph::counts, &LightSpaceShadowGraph::events, &LightSpaceShadowGraph::views, &LightSpaceShadowGraph::depth };
+    for(const auto field : required){
+        auto missing = graph;
+        missing.*field = {};
+        EXPECT_FALSE(missing.valid());
+    }
+    graph.ready.generation = 0u;
+    EXPECT_FALSE(graph.valid());
+}
+
+TEST(LightSpaceShadowStorage, PipelineSelectionRespectsCsgRangeBoundaries){
+    for(u32 index = 0u; index < 12u; ++index){
+        EXPECT_EQ(ShouldSkipLightSpacePipeline(index, false, false), index >= 6u && index <= 10u);
+        EXPECT_EQ(ShouldSkipLightSpacePipeline(index, true, true), index >= 9u && index <= 10u);
+        EXPECT_FALSE(ShouldSkipLightSpacePipeline(index, true, false));
+    }
+}
 
 TEST(LightSpaceShadowStorage, ReservesWholeCasterAndRoundedMeshletGroupDraws){
     Array<LightSpaceShadowCaster, 4> casters{};

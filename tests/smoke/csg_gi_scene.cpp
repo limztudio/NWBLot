@@ -9,6 +9,8 @@
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 
@@ -47,7 +49,7 @@ static constexpr SmokeMaterialRef s_MixedMaterial{"project/smoke/gi/materials/cs
 static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surface";
 static constexpr Float4 s_Black(0.0f, 0.0f, 0.0f, 1.0f);
 static constexpr Float4 s_White(1.0f, 1.0f, 1.0f, 1.0f);
-static constexpr Array<Name, 3> s_Groups = { Name("smoke/gi/passage"), Name("smoke/gi/cap"), Name("smoke/gi/mixed") };
+static constexpr Array<Name, 3> s_Groups = { Name(s_SmokeSceneNameSmokeGiPassage), Name(s_SmokeSceneNameSmokeGiCap), Name(s_SmokeSceneNameSmokeGiMixed) };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

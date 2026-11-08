@@ -5,6 +5,7 @@
 #include "task_graph_test_utils.h"
 
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
 
 
@@ -53,7 +54,7 @@ static void DeclareDenseDependencies(Core::GpuTaskGraph& graph, const usize task
     uses.reserve(scenario == Scenario::Explicit ? 0u : taskCount);
     if(scenario != Scenario::Explicit){
         for(usize index = 0u; index < taskCount; ++index){
-            const auto resourceNameResult = IndexedName(Name("tests/dense_dependencies/resource/"), index);
+            const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseDenseDependenciesResource), index);
             ASSERT_TRUE(resourceNameResult);
             const auto gpuTaskAdmission = AddHazardDomain(graph, *resourceNameResult, "Dense Hazard");
             ASSERT_TRUE(gpuTaskAdmission);
@@ -73,7 +74,7 @@ static void DeclareDenseDependencies(Core::GpuTaskGraph& graph, const usize task
                 });
             }
         }
-        const auto derivedNameResult = IndexedName(Name("tests/dense_dependencies/task/"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseDenseDependenciesTask), index);
         ASSERT_TRUE(derivedNameResult);
         const auto taskResult = AddTask(*derivedNameResult, "Dense Dependency Task", scenario == Scenario::Inferred ? Span<const Core::GpuTaskId>{} : Span(tasks.data(), tasks.size()), Span(uses.data(), uses.size()), {}, {}, {}, graph);
         ASSERT_TRUE(taskResult);
@@ -150,17 +151,17 @@ TEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingT
 
     TestArena arena;
     Core::GpuTaskGraph graph(arena.arena);
-    const auto rootResult = AddTask(Name("tests/reduction_gap/root"), "Root", {}, {}, {}, {}, {}, graph);
+    const auto rootResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseReductionGapRoot), "Root", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(rootResult);
     const auto root = *rootResult;
-    const auto leftResult = AddTask(Name("tests/reduction_gap/left"), "Left", Span(&root, 1u), {}, {}, {}, {}, graph);
+    const auto leftResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseReductionGapLeft), "Left", Span(&root, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(leftResult);
     const auto left = *leftResult;
-    const auto middleResult = AddTask(Name("tests/reduction_gap/middle"), "Middle", Span(&root, 1u), {}, {}, {}, {}, graph);
+    const auto middleResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseReductionGapMiddle), "Middle", Span(&root, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(middleResult);
     const auto middle = *middleResult;
     const Array<Core::GpuTaskId, 2> lastDependencies = { root, left };
-    const auto lastResult = AddTask(Name("tests/reduction_gap/last"), "Last", Span(lastDependencies), {}, {}, {}, {}, graph);
+    const auto lastResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseReductionGapLast), "Last", Span(lastDependencies), {}, {}, {}, {}, graph);
     ASSERT_TRUE(lastResult);
     const auto last = *lastResult;
     ASSERT_TRUE(root.valid());

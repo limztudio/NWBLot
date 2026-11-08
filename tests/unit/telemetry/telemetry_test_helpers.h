@@ -6,6 +6,9 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
+#include <logger/telemetry/report.h>
 
 #include <core/alloc/scratch.h>
 #include <core/telemetry/codec.h>
@@ -16,8 +19,6 @@
 #include <core/telemetry/recorder.h>
 #include <core/telemetry/session.h>
 #include <core/telemetry/text_log.h>
-
-#include <logger/telemetry/report.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +32,7 @@ namespace TelemetryTestDetail{
 
 using namespace NWB;
 
-inline constexpr Name s_TelemetryTestScratch("tests/telemetry/scratch");
+inline constexpr Name s_TelemetryTestScratch = NWB::Tests::TelemetryCases::s_TelemetryScratch;
 
 struct TestArena : NWB::Tests::TestArena<struct TelemetryTestsTag>{
     NWB::Core::Alloc::ScratchArena scratchArena{ s_TelemetryTestScratch };

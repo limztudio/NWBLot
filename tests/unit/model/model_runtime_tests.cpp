@@ -5,6 +5,7 @@
 #include "model_test_context.h"
 
 #include <tests/common/capturing_logger.h>
+#include <tests/unit/model/name_cases.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -33,7 +34,7 @@ TEST(ModelRuntime, RemovingMultipleModelsDestroysEveryOwnedObjectInOneSync){
     const auto retainedOwner = context.makeOwner();
     const auto retainedObject = context.makeObject(retainedOwner);
     const auto unrelated = world.createEntity().id();
-    Core::Alloc::ScratchArena scratchArena(Name("tests/model_runtime/removed_ids"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::ModelCases::s_ModelFixtureNameTestsModelRuntimeRemovedIds)};
     Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedOwners(scratchArena);
     removedOwners.reserve(4u);
     Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedObjects(scratchArena);

@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/shared/statistics_types.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/command.h>
@@ -42,11 +43,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct StatisticsPendingReadback{
-    StatisticsReservationKey key;
-    Core::QueueSubmissionToken token;
-};
 
 // CPU lifecycle shared by owner and leases; completion follows GPU token completion.
 template<typename StatisticsT>
@@ -114,7 +110,7 @@ public:
         const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
         if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
             return MakeUnexpected(Failure{});
-        return StatisticsPendingReadback{ .key = { slot.metadata.sequence, slot.metadata.generation, index }, .token = token };
+        return StatisticsPendingReadback(StatisticsReservationKey(slot.metadata.sequence, slot.metadata.generation, index), token);
     }
 
     [[nodiscard]] Expected<StatisticsT> tryGetLatestStatistics()const noexcept{

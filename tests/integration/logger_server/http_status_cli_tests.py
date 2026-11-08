@@ -14,7 +14,7 @@ import time
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
-from window_capture_logs import collect_log_delta
+from window_capture_logs import collect_log_delta, full_log_scope
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, create_capture_backend, launch_logserver, require_normal_process_exit
 
@@ -80,7 +80,8 @@ def run_case(executable, root, block_storage):
                 shutil.copy2(capture.path, runtime / "process_output.log")
             require_normal_process_exit(exit_code, tail, "logger HTTP test")
         if directory is not None:
-            (runtime / "logger.log").write_text(collect_log_delta(directory, baseline, pattern), encoding="utf-8")
+            full_baseline, full_pattern = full_log_scope(baseline, pattern)
+            (runtime / "logger.log").write_text(collect_log_delta(directory, full_baseline, full_pattern), encoding="utf-8")
     return results
 
 

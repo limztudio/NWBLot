@@ -7,6 +7,8 @@
 
 #include "module.h"
 
+#include <core/graphics/vulkan/heap_binding_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,13 +30,6 @@ namespace HeapBindingResourceClass{
         Buffer,
         OptimalImage,
     };
-};
-
-struct HeapBindingRange{
-    u64 localOffset = 0u;
-    u64 size = 0u;
-    u64 absoluteBegin = 0u;
-    u64 absoluteEnd = 0u;
 };
 
 

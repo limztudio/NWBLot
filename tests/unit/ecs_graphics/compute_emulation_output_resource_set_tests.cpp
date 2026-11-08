@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/avboit_compute_emulation_validator.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -23,7 +24,7 @@ namespace __hidden_compute_emulation_output_resource_set_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 using TestArena = Tests::TestArena<struct ComputeEmulationOutputResourceSetTestsTag>;
-inline constexpr Name s_SetIdentity("tests/compute_output_set/resources");
+inline constexpr Name s_SetIdentity = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsComputeOutputSetResources;
 inline constexpr AStringView s_SetLabel = "Compute Emulation Outputs";
 
 struct OutputContext{
@@ -38,7 +39,7 @@ struct OutputContext{
 
 TEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting){
     OutputContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/compute_output_set/empty"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsComputeOutputSetEmpty)};
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel));
     context.plan.captured = true;
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel));

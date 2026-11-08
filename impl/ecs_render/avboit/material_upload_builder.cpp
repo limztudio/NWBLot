@@ -4,6 +4,7 @@
 
 #include "material_upload_builder.h"
 
+#include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/csg/csg_system.h>
 
 #include <core/graphics/backend_selection/backend.h>
@@ -28,7 +29,14 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
 ){
     if(!inOutUploadTask.valid())
         return MakeUnexpected(Failure{});
-    if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData) || csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData) || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)){
+    if(!AvboitUploadCountsFit(
+        instanceData.size(),
+        csgFrameData.receiverRanges.size(),
+        csgFrameData.cutters.size(),
+        Limit<usize>::s_Max / sizeof(InstanceGpuData),
+        Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
+        Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+    )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
         return MakeUnexpected(Failure{});
     }

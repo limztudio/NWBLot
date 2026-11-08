@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_SolidCaseMeshSolidCodecCook = "tests/mesh/solid_codec/cook";
+const Name s_SolidCaseMeshSolidCodecTruncated = "tests/mesh/solid_codec/truncated";
+const Name s_SolidCaseMeshSolidCodecUnaddressableBounds = "tests/mesh/solid_codec/unaddressable_bounds";
+const Name s_SolidCaseMeshSolidCodecPadding = "tests/mesh/solid_codec/padding";
+const Name s_SolidCaseMeshSolidCodecCompactBounds = "tests/mesh/solid_codec/compact_bounds";
+const Name s_SolidCaseMeshSolidCodecPreviousEncoding = "tests/mesh/solid_codec/previous_encoding";
+const Name s_SolidCaseAssetsMeshSolidMembershipWordBoundary = "tests/assets_mesh/solid_membership_word_boundary";
+
+const Name s_OneOffNameTestsMeshSolidCodec = "tests/mesh/solid_codec";
+
+
+class MeshSolidVolumeCase{
+    public f32x3u origin = f32x3u(0.f, 0.f, 0.f);
+    public f32 size = 0.f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,6 +7,7 @@
 
 #include <core/global.h>
 #include <core/alloc/module.h>
+#include <core/graphics/vulkan/default_values.adhd.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #ifndef VK_USE_PLATFORM_WIN32_KHR
@@ -46,71 +47,71 @@ NWB_VULKAN_BEGIN
 inline constexpr u32 s_MinimumVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 3, 0));
 inline constexpr u32 s_AppVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
 inline constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
-inline constexpr StringView s_AppName = "NWB";
+inline constexpr StringView s_AppName = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultAppName;
 
 // Device memory and upload defaults.
-inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024;
-inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024;
-inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024;
-inline constexpr u64 s_DefaultAccelStructInputChunkSize = 4 * 1024 * 1024;
-inline constexpr u64 s_AccelStructInputMemoryLimit = 64 * 1024 * 1024;
-inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024;
-inline constexpr u64 s_BufferAlignmentBytes = 4;
-inline constexpr u64 s_BufferAlignmentMask = s_BufferAlignmentBytes - 1u;
+inline constexpr u64 s_DefaultUploadChunkSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDefaultUploadChunkSize;
+inline constexpr u64 s_DefaultScratchChunkSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDefaultScratchChunkSize;
+inline constexpr u64 s_ScratchMemoryLimit = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultScratchMemoryLimit;
+inline constexpr u64 s_DefaultAccelStructInputChunkSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDefaultAccelStructInputChunkSize;
+inline constexpr u64 s_AccelStructInputMemoryLimit = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultAccelStructInputMemoryLimit;
+inline constexpr u64 s_LargeBufferThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultLargeBufferThreshold;
+inline constexpr u64 s_BufferAlignmentBytes = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultBufferAlignmentBytes;
+inline constexpr u64 s_BufferAlignmentMask = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultBufferAlignmentMask;
 inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
 inline constexpr usize s_SpirvWordAlignmentMask = s_SpirvWordAlignmentBytes - 1u;
 inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 
 // Fixed-size, pre-reserved arena for GPU crash reports.
 // Captured on device-lost, so it must not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
-inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u;
-inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // aggregate cap across all queues and fault sections
-inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker truncation so one deep label cannot blow the budget
-inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // report.details capacity; keeps peak use under the arena (no reallocs)
-inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u; // vendor blob cap; large dumps are skipped on device-lost.
+inline constexpr usize s_GpuCrashReportArenaSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultGpuCrashReportArenaSize;
+inline constexpr u32 s_MaxGpuCrashCaptureEntries = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxGpuCrashCaptureEntries; // aggregate cap across all queues and fault sections
+inline constexpr usize s_MaxGpuCrashMarkerChars = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxGpuCrashMarkerChars; // per-marker truncation so one deep label cannot blow the budget
+inline constexpr usize s_MaxGpuCrashReportChars = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxGpuCrashReportChars; // report.details capacity; keeps peak use under the arena (no reallocs)
+inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxDeviceFaultVendorBinaryBytes; // vendor blob cap; large dumps are skipped on device-lost.
 // Slots in each exact physical queue's disjoint AMD breadcrumb ring.
-inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u;
-inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID; gates Radeon GPU Detective naming.
-inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID; gates NVIDIA-only Aftermath setup
+inline constexpr u32 s_MaxAmdBreadcrumbSlots = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxAmdBreadcrumbSlots;
+inline constexpr u32 s_AmdVendorId = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultAmdVendorId; // PCI vendor ID; gates Radeon GPU Detective naming.
+inline constexpr u32 s_NvidiaVendorId = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultNvidiaVendorId; // PCI vendor ID; gates NVIDIA-only Aftermath setup
 
 // Queue and swap chain defaults.
 // Local sentinel used until a compatible queue family is selected.
-inline constexpr i32 s_InvalidQueueFamilyIndex = -1;
-inline constexpr u32 s_GraphicsQueueIndex = 0;
-inline constexpr u32 s_SecondaryGraphicsQueueIndex = s_GraphicsQueueIndex + 1u;
-inline constexpr u32 s_ComputeQueueIndex = 0;
-inline constexpr u32 s_TransferQueueIndex = 0;
-inline constexpr u32 s_PresentQueueIndex = 0;
-inline constexpr u32 s_MaxMutableSwapChainFormats = 2;
+inline constexpr i32 s_InvalidQueueFamilyIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultInvalidQueueFamilyIndex;
+inline constexpr u32 s_GraphicsQueueIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultGraphicsQueueIndex;
+inline constexpr u32 s_SecondaryGraphicsQueueIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultSecondaryGraphicsQueueIndex;
+inline constexpr u32 s_ComputeQueueIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultComputeQueueIndex;
+inline constexpr u32 s_TransferQueueIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTransferQueueIndex;
+inline constexpr u32 s_PresentQueueIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultPresentQueueIndex;
+inline constexpr u32 s_MaxMutableSwapChainFormats = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMaxMutableSwapChainFormats;
 
 // Query and raster defaults.
-inline constexpr u32 s_TimerQueryTimestampCount = 2;
-inline constexpr u32 s_TimerQueryBeginIndex = 0;
-inline constexpr u32 s_TimerQueryEndIndex = 1;
-inline constexpr f32 s_DefaultRasterLineWidth = 1.0f;
-inline constexpr usize s_MeshletPipelineStageReserveCount = 3;
+inline constexpr u32 s_TimerQueryTimestampCount = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTimerQueryTimestampCount;
+inline constexpr u32 s_TimerQueryBeginIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTimerQueryBeginIndex;
+inline constexpr u32 s_TimerQueryEndIndex = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTimerQueryEndIndex;
+inline constexpr f32 s_DefaultRasterLineWidth = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDefaultRasterLineWidth;
+inline constexpr usize s_MeshletPipelineStageReserveCount = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultMeshletPipelineStageReserveCount;
 
 // CPU-side parallel tuning for Vulkan helper paths.
-inline constexpr usize s_ParallelAdapterThreshold = 4;
-inline constexpr usize s_ParallelCoopVecThreshold = 128;
-inline constexpr usize s_ParallelSpecializationThreshold = 256;
-inline constexpr usize s_ParallelInputLayoutThreshold = 128;
-inline constexpr usize s_InputLayoutGrainSize = 64;
-inline constexpr usize s_ParallelGeometryThreshold = 256;
-inline constexpr usize s_GeometryGrainSize = 64;
-inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
-inline constexpr usize s_TlasInstanceGrainSize = 256;
-inline constexpr usize s_DeviceSetupScratchArenaBytes = 32u * 1024u;
+inline constexpr usize s_ParallelAdapterThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelAdapterThreshold;
+inline constexpr usize s_ParallelCoopVecThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelCoopVecThreshold;
+inline constexpr usize s_ParallelSpecializationThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelSpecializationThreshold;
+inline constexpr usize s_ParallelInputLayoutThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelInputLayoutThreshold;
+inline constexpr usize s_InputLayoutGrainSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultInputLayoutGrainSize;
+inline constexpr usize s_ParallelGeometryThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelGeometryThreshold;
+inline constexpr usize s_GeometryGrainSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultGeometryGrainSize;
+inline constexpr usize s_ParallelTlasInstanceThreshold = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultParallelTlasInstanceThreshold;
+inline constexpr usize s_TlasInstanceGrainSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTlasInstanceGrainSize;
+inline constexpr usize s_DeviceSetupScratchArenaBytes = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDeviceSetupScratchArenaBytes;
 
 // Ray tracing helper defaults.
-inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;
-inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 3;
-inline constexpr u32 s_TrianglesPerPrimitive = 3;
-inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
+inline constexpr u64 s_DefaultTopLevelASBufferSize = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultDefaultTopLevelASBufferSize;
+inline constexpr u32 s_RayTracingHitGroupShaderStageCount = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultRayTracingHitGroupShaderStageCount;
+inline constexpr u32 s_TrianglesPerPrimitive = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultTrianglesPerPrimitive;
+inline constexpr u32 s_InstanceFieldMask24Bit = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultInstanceFieldMask24Bit;
 
 // Scratch arena presets for transient Vulkan-side CPU allocations.
-inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
-inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
+inline constexpr usize s_GraphicsPipelineScratchArenaBytes = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultGraphicsPipelineScratchArenaBytes;
+inline constexpr usize s_RayTracingScratchArenaBytes = NWB::Core::GraphicsBackend::VulkanDefaults::s_VulkanDefaultRayTracingScratchArenaBytes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

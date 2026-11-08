@@ -8,6 +8,7 @@
 #include "types.h"
 
 #include <core/alloc/scratch.h>
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,15 +40,8 @@ struct TrackedCompiledResourceState{
 // Only append() mutates the indexed history; collectors may borrow state pointers until the next append.
 class TrackedResourceStateHistory final : NoCopy{
 private:
-    struct ResourceLinks{
-        usize first = Limit<usize>::s_Max;
-        usize last = Limit<usize>::s_Max;
-    };
-
-    struct StateLinks{
-        usize previous = Limit<usize>::s_Max;
-        usize next = Limit<usize>::s_Max;
-    };
+    using ResourceLinks = GpuTaskResourceLinks;
+    using StateLinks = GpuTaskStateLinks;
 
 
 public:

@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +52,7 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuGraphResourceId resource;
     if(scenario != Scenario::Explicit){
-        const auto resourceTaskAdmission = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
+        const auto resourceTaskAdmission = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTelemetryScalingResource), "Telemetry Buffer");
         ASSERT_TRUE(resourceTaskAdmission);
         resource = *resourceTaskAdmission;
         ASSERT_TRUE(resource.valid());
@@ -58,7 +60,7 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     const Core::GpuTaskResourceUse resourceUse{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskId preceding;
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const auto identityNameResult = IndexedName(Name("tests/telemetry_scaling/task/"), taskIndex);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTelemetryScalingTask), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const b8 explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));

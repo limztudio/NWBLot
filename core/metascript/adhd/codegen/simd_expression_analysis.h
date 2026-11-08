@@ -13,7 +13,7 @@ NWB_ADHD_BEGIN
 
 class SimdExpressionAnalysis final{
 public:
-    [[nodiscard]] static b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB, const SymbolTable* symbols = nullptr)noexcept;
+    [[nodiscard]] static b8 IsSimdMulExpr(const Expr*& outMulA, const Expr*& outMulB, const Expr* expr, const SymbolTable* symbols = nullptr)noexcept;
     [[nodiscard]] static const Expr* TryUnwrapSimdSplatScalarArg(const Expr& expr, const SymbolTable& symbols)noexcept;
     [[nodiscard]] static b8 IsZeroScalarLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
     [[nodiscard]] static b8 IsPureSimdAddressExpr(const Expr& expr)noexcept;

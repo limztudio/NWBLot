@@ -1,4 +1,9 @@
 nwb_declare_executable(nwb_logserver)
+nwb_target_adhd_sources(nwb_logserver NAMESPACE "NWB::Log" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_auth.adhd" "${CMAKE_CURRENT_LIST_DIR}/crash_retention.adhd" "${CMAKE_CURRENT_LIST_DIR}/arena_names.adhd" "${CMAKE_CURRENT_LIST_DIR}/server_values.adhd")
+nwb_declare_static_library(nwb_logserver_crash_values)
+nwb_target_adhd_sources(nwb_logserver_crash_values NAMESPACE "NWB::Log::CrashValues" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_values.adhd")
+nwb_declare_static_library(nwb_logserver_crash_path_names)
+nwb_target_adhd_sources(nwb_logserver_crash_path_names NAMESPACE "NWB::Log::CrashPathNames" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_path_names.adhd")
 target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_android.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
@@ -38,6 +43,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif()
 target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_common nwb_alloc nwb_crash nwb_logtelemetry nwb::cli11_headers)
+target_link_libraries(nwb_logserver PUBLIC nwb_logserver_crash_path_names PRIVATE nwb_logserver_crash_values)
 target_link_libraries(nwb_logserver PRIVATE nwb::aftermath_headers)
 nwb_copy_aftermath_runtime(nwb_logserver)
 # Radeon GPU Detective in-process .rgd decoder.

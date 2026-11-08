@@ -12,8 +12,12 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
@@ -76,8 +80,8 @@ static constexpr SkinnedCausticMaterialRef s_GlassMaterial{"project/smoke/transp
 static constexpr SkinnedCausticMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SkinnedCausticMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr Name s_ModelSkeletonObject("skeleton");
-static constexpr Name s_ModelMeshObject("mesh");
+using NWB::Tests::Smoke::s_SmokeNameSkeleton;
+using NWB::Tests::Smoke::s_SmokeNameMesh;
 static constexpr u64 s_TransitionPhaseFrames = NWB::Tests::Smoke::SkinnedCausticTransition::s_TransitionPhaseFrames;
 
 static constexpr f32 s_CameraDistance = 2.6f;
@@ -161,7 +165,7 @@ public:
 
         m_character = createGlassCharacter();
         SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = FindSpawnedModelObject(m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
+        const auto meshEntity = FindSpawnedModelObject(m_character, s_SmokeNameMesh, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: closed refractor renderer is unavailable"));
@@ -169,7 +173,7 @@ public:
         }
         renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 
-        m_skeletonEntity = FindSpawnedModelObject(m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton, *m_world);
+        m_skeletonEntity = FindSpawnedModelObject(m_character, s_SmokeNameSkeleton, NWB::Impl::ModelObjectKind::Skeleton, *m_world);
 
         NWB_FATAL_ASSERT_MSG(activeCamera.camera.valid() && m_groundEntity.valid() && m_character.valid() && m_skeletonEntity.valid(), NWB_TEXT("SkinnedCausticSmokeProject failed to create all scene entities"));
 

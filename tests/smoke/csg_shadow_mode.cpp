@@ -5,6 +5,8 @@
 #include "csg_shadow_mode.h"
 #include "smoke_environment.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,13 +23,20 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_AnalyticAtlas = "analytic";
-static constexpr AStringView s_OpenAtlas = "open";
-static constexpr AStringView s_Directional = "directional";
-static constexpr AStringView s_Point = "point";
-static constexpr AStringView s_Hard = "hard";
-static constexpr AStringView s_Finite = "finite";
-static constexpr Array<AStringView, 6> s_OpenCaseNames = { "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65", };
+static constexpr AStringView s_AnalyticAtlas = NWB::Tests::Smoke::s_ShadowSmokeAnalyticAtlas;
+static constexpr AStringView s_OpenAtlas = NWB::Tests::Smoke::s_ShadowSmokeOpenAtlas;
+using NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+using NWB::Tests::Smoke::s_ShadowSmokePoint;
+using NWB::Tests::Smoke::s_ShadowSmokeHard;
+using NWB::Tests::Smoke::s_ShadowSmokeFinite;
+static constexpr Array<AStringView, 6> s_OpenCaseNames = {
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseReference,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseRetained,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseClippedReference,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseClipped,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseBoundary64,
+    NWB::Tests::Smoke::s_ShadowSmokeOpenCaseTerminal65,
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,15 +61,15 @@ b8 CsgShadowMode::read(const b8 caustic){
     }
     if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT")){
         const AStringView light(value->data(), value->size());
-        if(light != s_Directional && light != s_Point)
+        if(light != s_ShadowSmokeDirectional && light != s_ShadowSmokePoint)
             return false;
-        pointLight = light == s_Point;
+        pointLight = light == s_ShadowSmokePoint;
     }
     if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
         const AStringView source(value->data(), value->size());
-        if(source != s_Hard && source != s_Finite)
+        if(source != s_ShadowSmokeHard && source != s_ShadowSmokeFinite)
             return false;
-        finiteLightSource = source == s_Finite;
+        finiteLightSource = source == s_ShadowSmokeFinite;
     }
     if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ATLAS")){
         const AStringView atlas(value->data(), value->size());

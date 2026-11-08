@@ -158,8 +158,8 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
             .buffer = buffer,
             .identity = *identity,
             // Fresh buffers keep creation state; only normalized ones enter as ShaderResource.
-            .initialState = normalizedByAcceptedPacket ? Core::ResourceStates::ShaderResource : buffer->getCreationDescription().initialState, .roles = role, .normalizationPending = !normalizedByAcceptedPacket, }
-        );
+            .initialState = normalizedByAcceptedPacket ? Core::ResourceStates::ShaderResource : buffer->getCreationDescription().initialState, .roles = role, .normalizationPending = !normalizedByAcceptedPacket,
+        });
         record.preparedIndex = outPrepared.size() - 1u;
         return true;
     };

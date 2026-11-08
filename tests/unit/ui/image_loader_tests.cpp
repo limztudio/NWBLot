@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 #include <impl/assets_ui_skin/asset.h>
-
-#include <tests/common/capturing_logger.h>
 
 #include <global/binary.h>
 
@@ -113,7 +114,7 @@ public:
             return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
         }
         TextureAssetCodec codec;
-        return codec.deserialize(Name("tests/ui/image_loader/other_texture"), binary, arena);
+        return codec.deserialize(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageLoaderOtherTexture), binary, arena);
     }
 
 
@@ -129,7 +130,7 @@ class ImageLoaderTests : public testing::Test{
 public:
     ImageLoaderTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
-        , m_arena(Name("tests/ui/image_loader"))
+        , m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageLoader))
         , m_registry(m_arena)
         , m_source(m_arena)
         , m_assets(m_arena, m_registry, m_source)

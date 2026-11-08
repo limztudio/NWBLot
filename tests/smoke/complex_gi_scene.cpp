@@ -5,6 +5,8 @@
 #include "complex_gi_scene.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <global/simd/frame.h>
 #include <global/simd/constant.h>
 #include <global/simd/quaternion.h>
@@ -18,18 +20,18 @@ namespace __hidden_complex_gi_scene{
 using GiTestMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 
 static constexpr GiTestMeshRef s_BoxMesh{"project/meshes/cube_hard_edges"};
 static constexpr GiTestMaterialRef s_ComplexIndirectMaterial{"project/smoke/gi/materials/indirect"};
 static constexpr GiTestMaterialRef s_CoverageProbeMaterial{"project/smoke/gi/materials/coverage_probe"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Float4 s_NeutralPanelTint(0.76f, 0.76f, 0.76f, 1.0f);
 static constexpr Float4 s_WhiteReceiverTint(0.92f, 0.92f, 0.92f, 1.0f);
 static constexpr Float4 s_RedBounceTint(0.84f, 0.10f, 0.08f, 1.0f);
 static constexpr Float4 s_BlueBounceTint(0.08f, 0.14f, 0.86f, 1.0f);
 static constexpr Float4 s_BlackEnclosureTint = NWB::Tests::Smoke::ComplexGiScene::s_BlackEnclosureTint;
-static constexpr u32 s_ComplexRandomBodyCount = 20u;
-static constexpr u32 s_ComplexRandomBodySeed = 0x7A31C5E9u;
+static constexpr u32 s_ComplexRandomBodyCount = NWB::Tests::Smoke::s_ComplexGiRandomBodyCount;
+static constexpr u32 s_ComplexRandomBodySeed = NWB::Tests::Smoke::s_ComplexGiRandomBodySeed;
 
 struct ComplexSceneBox{
     Float4 position;

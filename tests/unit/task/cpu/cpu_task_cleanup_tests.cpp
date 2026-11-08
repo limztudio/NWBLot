@@ -4,6 +4,8 @@
 
 #include "cpu_task_scheduler_test_support.h"
 
+#include <tests/unit/task/cpu/cleanup_case_types.adhd.h>
+
 #include <loader/callback_shutdown.h>
 
 #include <core/task/cpu/scheduler.h>
@@ -40,11 +42,6 @@ inline constexpr u32 s_TaskTimeoutMS = 4000u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct TerminalTaskError{
-    int code;
-};
 
 
 struct ReentrantRetirementProbe{
@@ -127,9 +124,8 @@ public:
     virtual void onShutdown()override{
         const auto first = m_tasks.submit([this](){
             ++m_callbacks;
-            throw TerminalTaskError{ s_LoaderShutdownFailure };
-        }, { .target = CpuTaskTarget::MainThread }
-        );
+            throw TerminalTaskError{ .code = s_LoaderShutdownFailure };
+        }, { .target = CpuTaskTarget::MainThread });
         EXPECT_TRUE(first);
         if(!first)
             return;
@@ -179,16 +175,15 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 17 };
-        }, { .target = CpuTaskTarget::MainThread }
-        );
+            throw TerminalTaskError{ .code = 17 };
+        }, { .target = CpuTaskTarget::MainThread });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
         const auto secondCpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 29 };
+            throw TerminalTaskError{ .code = 29 };
         });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
@@ -198,8 +193,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         ++handled;
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         return error.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 17);
     EXPECT_EQ(handled, 1u);
     EXPECT_EQ(callbacks, 1u);
@@ -216,16 +210,15 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
         const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 37 };
-        }, { .target = CpuTaskTarget::MainThread }
-        );
+            throw TerminalTaskError{ .code = 37 };
+        }, { .target = CpuTaskTarget::MainThread });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
         const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 41 };
+            throw TerminalTaskError{ .code = 41 };
         });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
@@ -235,8 +228,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 37);
     EXPECT_EQ(callbacks, 1u);
 }
@@ -252,26 +244,24 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
         const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 53 };
-        }, { .target = CpuTaskTarget::MainThread }
-        );
+            throw TerminalTaskError{ .code = 53 };
+        }, { .target = CpuTaskTarget::MainThread });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
         const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
-            throw TerminalTaskError{ 59 };
+            throw TerminalTaskError{ .code = 59 };
         });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
-        throw TerminalTaskError{ 47 };
+        throw TerminalTaskError{ .code = 47 };
     }, [&](const TerminalTaskError& error){
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         return error.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 47);
     EXPECT_EQ(callbacks, 0u);
 }
@@ -302,9 +292,8 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
         ++canceledCallbacks;
-        throw TerminalTaskError{ 61 };
-    }, { .target = CpuTaskTarget::MainThread }
-    );
+        throw TerminalTaskError{ .code = 61 };
+    }, { .target = CpuTaskTarget::MainThread });
     EXPECT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         EXPECT_TRUE(secondCpuTaskAdmission->valid());
@@ -338,9 +327,8 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
             EXPECT_TRUE(probe.retirements != nullptr);
             EXPECT_TRUE((scope.parallelFor(0u, 16u, 1u, [&](usize){
                 ++callbacks;
-                throw TerminalTaskError{ 67 };
-            }
-            )));
+                throw TerminalTaskError{ .code = 67 };
+            })));
         });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
@@ -351,8 +339,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), 1u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 67);
     EXPECT_EQ(callbacks, 1u);
 }
@@ -410,8 +397,7 @@ TEST(CpuTaskCleanupTests, LoaderShutdownJoinsPostCallbackTasksBeforeCallbackOwne
         EXPECT_EQ(lateRetirements.load(MemoryOrder::acquire), 0u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, s_LoaderShutdownFailure);
     EXPECT_EQ(callbacks, 1u);
     scope.drain();

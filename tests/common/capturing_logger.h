@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/common/name_cases.adhd.h>
+
 #include <core/alloc/general.h>
 #include <core/common/log.h>
 
@@ -26,7 +28,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_CapturingLoggerArena("tests/common/capturing_logger");
+inline constexpr Name s_CapturingLoggerArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonCapturingLogger;
 
 class CapturingLogger final : public Core::Common::ILogger{
     using LogArena = Core::Common::LogArena;

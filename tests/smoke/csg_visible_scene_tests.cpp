@@ -64,13 +64,13 @@ TEST(CsgVisibleScene, MissingReceiverDoesNotStopOtherPoseUpdates){
     NWB::Core::ECS::EntityID remainingReceiver = {};
     NWB::Core::ECS::EntityID remainingCutter = {};
     world.view<NWB::Impl::StaticCsgMeshComponent>().each([&](const NWB::Core::ECS::EntityID entity, NWB::Impl::StaticCsgMeshComponent& receiver){
-        if(receiver.receiverGroup == Name("project/smoke/csg_visible/plane_receiver"))
+        if(receiver.receiverGroup == NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisiblePlaneReceiver)
             missingReceiver = entity;
-        if(receiver.receiverGroup == Name("project/smoke/csg_visible/sphere_receiver"))
+        if(receiver.receiverGroup == NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
             remainingReceiver = entity;
     });
     world.view<NWB::Impl::CsgCutterComponent>().each([&](const NWB::Core::ECS::EntityID entity, NWB::Impl::CsgCutterComponent& cutter){
-        if(cutter.receiverGroup == Name("project/smoke/csg_visible/sphere_receiver"))
+        if(cutter.receiverGroup == NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
             remainingCutter = entity;
     });
     ASSERT_TRUE(missingReceiver.valid());

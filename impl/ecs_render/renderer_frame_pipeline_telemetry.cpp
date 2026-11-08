@@ -10,7 +10,7 @@
 #include <impl/ecs_render/kernel/renderer_graph_runtime_label.h>
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/frame_graph_nodes.h>
+#include <core/graphics/frame_graph_nodes.adhd.h>
 
 
 
@@ -97,7 +97,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
     RendererDeviceDiagnosticsLabel::Append(m_graphics, m_frameGraphRendererLabel);
 
-    const Handle rendererFrame = builder.addPass(Name("ecs_render/frame"), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
+    const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
     for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
             NWB_ASSERT(false);
@@ -111,11 +111,11 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
             return false;
         }
     }
-    const Handle frameSetup = builder.addPass(Name("ecs_render/frame_setup"), "Frame Setup");
-    const Handle deferredTargets = builder.addResource(Name("ecs_render/deferred_targets"), "Deferred Targets");
-    const Handle meshViewBuffer = builder.addResource(Name("ecs_render/mesh_view_buffer"), "Mesh View Buffer");
-    const Handle sceneShadingBuffer = builder.addResource(Name("ecs_render/scene_shading_buffer"), "Scene Shading Buffer");
-    const Handle materialBuffers = builder.addResource(Name("ecs_render/material_draw_buffers"), "Material Draw Buffers");
+    const Handle frameSetup = builder.addPass(Name(s_FrameGraphNameEcsRenderFrameSetup), "Frame Setup");
+    const Handle deferredTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderDeferredTargets), "Deferred Targets");
+    const Handle meshViewBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderMeshViewBuffer), "Mesh View Buffer");
+    const Handle sceneShadingBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderSceneShadingBuffer), "Scene Shading Buffer");
+    const Handle materialBuffers = builder.addResource(Name(s_FrameGraphNameEcsRenderMaterialDrawBuffers), "Material Draw Buffers");
     const Handle backBuffer = builder.addExternal(Core::GraphicsFrameGraphNodes::s_Backbuffer, "Back Buffer");
 
     Handle lastPass = frameSetup;
@@ -138,7 +138,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
     Handle csgIntervalTargets;
     if(hasOpaqueCsgFrameWork){
-        csgIntervalTargets = builder.addResource(Name("ecs_render/csg_interval_targets"), "CSG Interval Targets");
+        csgIntervalTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderCsgIntervalTargets), "CSG Interval Targets");
 
         const Handle csgUpload = appendPass(RendererGpuTimingScope::s_CsgUpload, "CSG Upload");
         builder.addEdge(csgUpload, csgIntervalTargets, Edge::Writes);
@@ -182,7 +182,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
     Handle avboitTargets;
     if(hasAvboitWork){
-        avboitTargets = builder.addResource(Name("ecs_render/avboit_targets"), "AVBOIT Targets");
+        avboitTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderAvboitTargets), "AVBOIT Targets");
 
         const Handle avboitClear = appendPass(RendererGpuTimingScope::s_AvboitClear, "AVBOIT Clear");
         builder.addEdge(avboitClear, avboitTargets, Edge::Writes);

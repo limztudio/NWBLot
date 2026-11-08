@@ -2,11 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/glyph_shader_case_types.adhd.h>
+
 #include <impl/assets_font_atlas/model.h>
 
-#include <gtest/gtest.h>
-
 #include <global/simd/vector.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,18 +20,12 @@ namespace __hidden_ui_glyph_sdf_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ShaderFloat4{
-    f32 x;
-    f32 y;
-    f32 z;
-    f32 w;
-};
 using float4 = ShaderFloat4;
 using uint = u32;
 
 [[nodiscard]] ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
     const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
-    return { VectorGetX(scaled), VectorGetY(scaled), VectorGetZ(scaled), VectorGetW(scaled) };
+    return { .x = VectorGetX(scaled), .y = VectorGetY(scaled), .z = VectorGetZ(scaled), .w = VectorGetW(scaled) };
 }
 
 [[nodiscard]] f32 saturate(const f32 value)noexcept{

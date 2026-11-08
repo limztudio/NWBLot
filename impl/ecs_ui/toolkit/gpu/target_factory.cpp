@@ -50,16 +50,14 @@ public:
     const Core::GpuGraphResourceId color = *colorResult;
     const auto clearResult = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(s_GpuTargetInitClearTaskName).setMarkerLabel(s_GpuTargetInitClearMarkerLabel),
-        Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
-    );
+        Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), });
     if(!clearResult)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId clear = *clearResult;
     const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
     const auto readyResult = graph.addTask<TargetReadyTask>(
         Core::GpuTaskDesc().setIdentity(s_GpuTargetInitReadyTaskName).setMarkerLabel(s_GpuTargetInitReadyMarkerLabel).setDependencies({ &clear, 1u }).setResourceUses({ &use, 1u }),
-        TargetReadyTask::Payload{ target, color }
-    );
+        TargetReadyTask::Payload{ target, color });
     if(!readyResult)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId ready = *readyResult;

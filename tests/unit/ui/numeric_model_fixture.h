@@ -7,6 +7,8 @@
 
 #include "multiline_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/float_model.h>
 #include <impl/ecs_ui/toolkit/edit/integer_model.h>
@@ -36,7 +38,7 @@ template<typename Model>
 class NumericModelFixture : public testing::Test{
 public:
     NumericModelFixture()
-        : m_arena(Name("tests/ui/numeric_models"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiNumericModelsFixture))
         , m_model(m_arena)
     {}
 

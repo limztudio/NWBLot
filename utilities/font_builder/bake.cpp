@@ -23,14 +23,8 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 b8 ValidateOptions(const BakeOptions& options){
-    if(
-        !IsValidBakeNumericOptions(options.ppem, options.spread, options.extent, options.maxGroups)
-        || options.source.empty()
-        || options.output.empty()
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
+    if(!ValidateBakeInitialOptions(options.ppem, options.spread, options.extent, options.maxGroups, !options.source.empty(), !options.output.empty()))
         return false;
-    }
     if(options.output.extensionView() != NWB_TEXT(".nwb")){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;

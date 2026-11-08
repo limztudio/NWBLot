@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,14 +48,14 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         Core::GpuTaskGraph graph(testArena.arena);
         for(usize index = 0u; index < prefixCount; ++index){
             {
-                const auto prefixNameResult = IndexedName(Name("tests/import_scaling/completion_prefix/"), index);
+                const auto prefixNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseImportScalingCompletionPrefix), index);
                 ASSERT_TRUE(prefixNameResult);
                 const auto gpuTaskAdmission = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(*prefixNameResult).setMarkerLabel("Completion Prefix"));
                 ASSERT_TRUE(gpuTaskAdmission);
                 ASSERT_TRUE(gpuTaskAdmission->valid());
             }
         }
-        const Core::GpuExternalCompletionDesc metadata = Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/import_scaling/upgraded_completion")).setMarkerLabel("Original Completion");
+        const Core::GpuExternalCompletionDesc metadata = Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseImportScalingUpgradedCompletion)).setMarkerLabel("Original Completion");
         const auto idResult = graph.importExternalCompletion(metadata);
         ASSERT_TRUE(idResult);
         const Core::GpuExternalCompletionId id = *idResult;
@@ -98,7 +100,7 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         ++conflict.token.value;
         EXPECT_FALSE(graph.importExternalCompletion(conflict).has_value());
         Core::GpuExternalCompletionDesc differentGeneration = upgraded;
-        differentGeneration.identity = Name("tests/import_scaling/different_generation_completion");
+        differentGeneration.identity = Name(TaskGraphTestUtils::s_GpuCaseImportScalingDifferentGenerationCompletion);
         ++differentGeneration.token.deviceGeneration;
         EXPECT_FALSE(graph.importExternalCompletion(differentGeneration).has_value());
         {

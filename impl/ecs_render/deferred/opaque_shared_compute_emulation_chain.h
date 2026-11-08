@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
@@ -25,7 +26,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererMaterialSystem;
-struct DeferredGraphResourceImportResult;
+class DeferredGraphResourceImportResult;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,11 +53,6 @@ struct OpaqueSharedComputeEmulationChainInputs{
     b8 materialDrawBuffersUploaded = false;
     b8 materialFrameStatesGraphOwned = false;
     b8 materialGeometryStatesGraphOwned = false;
-};
-
-struct OpaqueSharedComputeEmulationChainResult{
-    Core::GpuTaskId completionTask;
-    usize taskCount = 0u;
 };
 
 

@@ -4,6 +4,8 @@
 
 #include "presentation_fps_probe.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <global/simplemath.h>
 
 
@@ -62,7 +64,7 @@ PresentationFpsStatus::Enum PresentationFpsProbe::observe(const u64 successfulPr
     m_total.wallSeconds = DurationInSeconds<f64>(now, m_measurementBegin);
     const f64 intervalSeconds = DurationInSeconds<f64>(now, m_intervalBegin);
     m_complete = m_measurementSeconds > 0.0 && m_total.wallSeconds >= m_measurementSeconds;
-    constexpr f64 s_ReportIntervalSeconds = 0.5;
+    constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
     if(!m_complete && intervalSeconds < s_ReportIntervalSeconds)
         return PresentationFpsStatus::Waiting;
 

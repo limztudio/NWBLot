@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_DefaultMaxExtractedCrashPackages = 256u;
+const usize s_DefaultMaxRawCrashArchives = 256u;
+const usize s_DefaultMaxInvalidCrashArchives = 64u;
+
+
+class CrashRetentionConfig{
+    public usize maxExtractedPackages = s_DefaultMaxExtractedCrashPackages;
+    public usize maxRawArchives = s_DefaultMaxRawCrashArchives;
+    public usize maxInvalidArchives = s_DefaultMaxInvalidCrashArchives;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

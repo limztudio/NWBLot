@@ -4,6 +4,8 @@
 
 #include "report_dot.h"
 
+#include <logger/telemetry/report_values.adhd.h>
+
 #include <global/name_hash_text.h>
 #include <global/dot_text.h>
 #include <global/hash_utils.h>
@@ -24,13 +26,13 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
-static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
-static constexpr usize s_TimedGraphDotBytesPerNode = 768u;
-static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
-static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
-static constexpr usize s_TimedGraphDotRuntimeStatisticsBytes = 192u;
-static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+static constexpr usize s_TimedGraphDotFixedReserveBytes = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotFixedReserveBytes;
+static constexpr usize s_TimedGraphDotBytesPerGraph = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotBytesPerGraph;
+static constexpr usize s_TimedGraphDotBytesPerNode = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotBytesPerNode;
+static constexpr usize s_TimedGraphDotBytesPerEdge = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotBytesPerEdge;
+static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotTimingLabelExtraBytes;
+static constexpr usize s_TimedGraphDotRuntimeStatisticsBytes = ::NWB::Log::s_LogTelemetryReportDotTimedGraphDotRuntimeStatisticsBytes;
+static constexpr f64 s_MillisecondsPerSecond = ::NWB::Log::s_LogTelemetryReportDotMillisecondsPerSecond;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

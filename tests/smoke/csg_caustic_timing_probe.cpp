@@ -4,6 +4,8 @@
 
 #include "csg_caustic_timing_probe.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/common/log.h>
@@ -31,11 +33,11 @@ static constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScop
 };
 
 static constexpr Array<Name, 5> s_CausticCpuTimingScopes = {
-    Name("graphics.frame"),
-    Name("graphics.prepare_resources"),
-    Name("graphics.render_passes"),
-    Name("graphics.begin_frame"),
-    Name("graphics.present"),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsFrame),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPrepareResources),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsRenderPasses),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsBeginFrame),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPresent),
 };
 
 

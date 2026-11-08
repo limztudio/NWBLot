@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +43,7 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
         const Core::GpuGraphResourceDesc desc = Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_queue_sharing_metadata"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidQueueSharingMetadata))
             .setMarkerLabel("Invalid Queue Sharing Metadata")
             .setType(resourceType)
             .setInitialState(resourceType == Core::GpuGraphResourceType::HazardDomain ? Core::ResourceStates::Unknown : Core::ResourceStates::Common)

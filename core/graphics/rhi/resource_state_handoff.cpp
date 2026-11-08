@@ -7,6 +7,7 @@
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/resource_state_selection.h>
+#include <core/graphics/rhi/ownership.adhd.h>
 
 #include <global/algorithm.h>
 #include <global/containers.h>
@@ -16,28 +17,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_resource_state_handoff{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 OwnershipMatches(const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)noexcept{
-    if(ownerQueue != expectedOwnerQueue)
-        return false;
-    return expectedOwnerQueue == expectedReleaseDestinationQueue ? !releaseDestinationQueue.valid() : releaseDestinationQueue == expectedReleaseDestinationQueue;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +55,6 @@ b8 CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourc
     const b8 hasBuffers = selection.bufferCount() != 0u;
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_resource_state_handoff;
         if(hasTextures){
             RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
@@ -192,7 +170,6 @@ b8 CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListRes
     m_permanentTextureStates.reserve(permanentTextureStateCount);
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_resource_state_handoff;
         RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
             return state.texture == texture && contains(state.mipLevel, state.arraySlice);
         });
@@ -246,7 +223,6 @@ b8 CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListReso
     m_permanentBufferStates.reserve(permanentBufferStateCount);
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_resource_state_handoff;
         RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
             return state.buffer == buffer && state.range.overlaps(resolvedRange);
         });
@@ -290,7 +266,7 @@ b8 CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* con
     for(const PermanentTextureState& state : m_permanentTextureStates){
         if(state.texture != texture)
             continue;
-        if(permanentState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+        if(permanentState || !MatchesResourceStateOwnership(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -305,7 +281,7 @@ b8 CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* con
             for(const TextureState& state : m_textureStates){
                 if(state.texture != texture || state.mipLevel != mipLevel || state.arraySlice != arraySlice)
                     continue;
-                if(matchingState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+                if(matchingState || !MatchesResourceStateOwnership(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                     return false;
                 matchingState = &state;
             }
@@ -328,7 +304,7 @@ b8 CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const buff
     for(const BufferState& state : m_permanentBufferStates){
         if(state.buffer != buffer)
             continue;
-        if(permanentState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+        if(permanentState || !MatchesResourceStateOwnership(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -343,7 +319,7 @@ b8 CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const buff
                 continue;
             if(state.releaseDestinationQueue.valid() && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription())))
                 return false;
-            if(!__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+            if(!MatchesResourceStateOwnership(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                 return false;
             if(state.range.byteOffset > coveredEnd || state.range.end() <= coveredEnd)
                 continue;

@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,23 +45,18 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
 
     const Path metadataPath = root / "shader.nwb";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
-    struct MetadataCase{
-        AStringView shaderAssetType;
-        AStringView fields;
-        b8 accepted;
-    };
-    constexpr Array<MetadataCase, 8u> s_Cases = {{
-        { "mesh_shader", "", true },
-        { "pixel_shader", "", true },
-        { "mesh_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "mesh_shader", "asset.mesh_object_vertex = \"\";\n", false },
-        { "compute_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "vertex_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "pixel_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
+    constexpr Array<AssetsGraphicsFixture::ShaderMetadataCase, 8u> s_Cases = {{
+        { .shaderAssetType = "mesh_shader", .fields = "", .accepted = true },
+        { .shaderAssetType = "pixel_shader", .fields = "", .accepted = true },
+        { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
+        { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_vertex = \"\";\n", .accepted = false },
+        { .shaderAssetType = "compute_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
+        { .shaderAssetType = "vertex_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
+        { .shaderAssetType = "pixel_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
+        { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", .accepted = false },
     }};
     Impl::ShaderCook shaderCook(testArena.arena);
-    for(const MetadataCase& testCase : s_Cases){
+    for(const AssetsGraphicsFixture::ShaderMetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.shaderAssetType);
         SCOPED_TRACE(testCase.fields);
         Impl::ShaderCook::CookString metadata(testCase.shaderAssetType, testArena.arena);

@@ -4,7 +4,7 @@ nwb_target_adhd_sources(nwb_assets_texture_types
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
-target_link_libraries(nwb_assets_texture_types PUBLIC nwb_assets)
+target_link_libraries(nwb_assets_texture_types PUBLIC nwb_assets nwb_graphics_backend_ray_policy)
 
 nwb_declare_static_library(nwb_assets_texture)
 target_sources(nwb_assets_texture PRIVATE

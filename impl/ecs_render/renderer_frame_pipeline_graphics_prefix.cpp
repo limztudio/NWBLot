@@ -36,6 +36,7 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -156,8 +157,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .shadowVisibilityTask = context.shadowVisibilityTask,
             .meshViewSetupReady = m_graphicsPrefixMeshViewSetupReady,
             .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
-        }
-    );
+        });
     if(!prefixSceneUploadResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
         return MakeUnexpected(Failure{});
@@ -175,7 +175,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     clearScheduling.mergeWithPrevious = true;
     const Core::GpuClearTextureTaskRecordHooks deferredClearHooks{ .context = &deferredClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     Core::GpuTaskDesc deferredClearDesc;
-    deferredClearDesc.setIdentity(Name("render.graphics_prefix.deferred_clear_opaque_color")).setMarkerLabel("Deferred Clear Opaque Color").setScheduling(clearScheduling).setDependencies({ &m_graphicsPrefixSceneShadingSetupTask, 1u });
+    deferredClearDesc.setIdentity(Name(s_FrameGraphNameRenderGraphicsPrefixDeferredClearOpaqueColor)).setMarkerLabel("Deferred Clear Opaque Color").setScheduling(clearScheduling).setDependencies({ &m_graphicsPrefixSceneShadingSetupTask, 1u });
     Core::GpuClearTextureTaskDesc opaqueColorClearDesc;
     opaqueColorClearDesc.destination = resources.opaqueColor;
     opaqueColorClearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
@@ -251,8 +251,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .csgClipContextSlots = resources.csgClipContextSlots,
             .csgIntervalSampleState = resources.csgIntervalSampleState,
             .dependencyTask = m_graphicsPrefixDeferredClearTask,
-        }
-    );
+        });
     if(!opaqueUploadChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
         return MakeUnexpected(Failure{});
@@ -460,7 +459,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     gbufferScheduling.allowMergeAcrossConsumerFrontier = opaqueComputeEmulationOutputStatesGraphOwned || opaqueSharedComputeEmulationOutputStatesGraphOwned || opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
     Core::GpuTaskDesc gbufferDesc;
     gbufferDesc
-        .setIdentity(Name("render.graphics_prefix.gbuffer"))
+        .setIdentity(Name(s_FrameGraphNameRenderGraphicsPrefixGbuffer))
         .setMarkerLabel("Opaque G-Buffer")
         .setScheduling(gbufferScheduling)
         .setDependencies({ &gbufferDependency, 1u })

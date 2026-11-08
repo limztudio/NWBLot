@@ -76,12 +76,14 @@ namespace __hidden_encode{
 
 
 Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
-    if(inputPaths.empty() || inputPaths.size() > Limit<u32>::s_Max)
+    if(!ValidateTexConvInputImageCount(
+        inputPaths.size(),
+        IsValidTextureDimension(dimension),
+        dimension == TextureDimension::Texture2D,
+        dimension == TextureDimension::TextureCube,
+        TextureFormat::s_TextureCubeFaceCount
+    ))
         return MakeUnexpected(Failure{});
-    if(!IsValidTextureDimension(dimension) || (dimension == TextureDimension::Texture2D && inputPaths.size() != 1u) || (dimension == TextureDimension::TextureCube && inputPaths.size() != TextureFormat::s_TextureCubeFaceCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture dimension and input image count do not match."));
-        return MakeUnexpected(Failure{});
-    }
     if(!IsValidAlphaSourceMode(alphaSource.mode)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
         return MakeUnexpected(Failure{});

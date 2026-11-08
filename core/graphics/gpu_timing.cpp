@@ -3,8 +3,9 @@
 
 
 #include "gpu_timing.h"
-
 #include "backend_selection.h"
+
+#include <core/graphics/internal_names.adhd.h>
 
 #include <global/atomic_identity.h>
 
@@ -25,7 +26,7 @@ namespace __hidden_gpu_timing{
 
 
 static Atomic<u64> s_NextSampleAttributionIdentity{ 1u };
-inline constexpr Name s_GpuTimingScratchArena("graphics.gpu_timing.scratch");
+using GraphicsInternalNames::s_GpuTimingScratchArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,11 +18,7 @@ NWB_IMPL_BEGIN
 
 
 RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const b8 rendererActive, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept{
-    RendererTaskTimingFeedbackPolicyTransition transition{
-        .previousPolicy = currentPolicy,
-        .requestedPolicy = requestedPolicy,
-        .action = ResolveRendererTaskTimingFeedbackCollectionAction(rendererActive, currentPolicy.enabled, requestedPolicy.enabled),
-    };
+    RendererTaskTimingFeedbackPolicyTransition transition(currentPolicy, requestedPolicy, ResolveRendererTaskTimingFeedbackCollectionAction(rendererActive, currentPolicy.enabled, requestedPolicy.enabled));
     if(transition.action != RendererTaskTimingFeedbackCollectionAction::Enable)
         currentPolicy = requestedPolicy;
     return transition;

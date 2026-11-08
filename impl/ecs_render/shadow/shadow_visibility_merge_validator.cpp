@@ -46,22 +46,19 @@ b8 PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadVi
 void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const noexcept{
     const RendererFramePipeline& pipeline = m_pipeline;
     outResult = ShadowVisibilityMergeValidationResult{};
-    outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(
-        compiledPlan,
-        PreparedShadowVisibilityTasks{
-            .terminal = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask,
-            .opaque = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask,
-            .opaqueFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask,
-            .opaqueResolve = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask,
-            .transparentTrace = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask,
-            .transparentTemporalMerge = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask,
-            .transparentFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask,
-            .diagnostics = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask,
-            .combinedUpsample = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedUpsample,
-            .combinedWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedWavelet,
-            .combinedTemporal = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedTemporal,
-        }
-    );
+    PreparedShadowVisibilityTasks tasks;
+    tasks.terminal = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask;
+    tasks.opaque = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask;
+    tasks.opaqueFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask;
+    tasks.opaqueResolve = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask;
+    tasks.transparentTrace = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask;
+    tasks.transparentTemporalMerge = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask;
+    tasks.transparentFirstWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask;
+    tasks.diagnostics = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask;
+    tasks.combinedUpsample = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedUpsample;
+    tasks.combinedWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedWavelet;
+    tasks.combinedTemporal = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedTemporal;
+    outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(compiledPlan, tasks);
     // Keep the all-lit clear in its packet; split-soft frames keep native clear.
     outResult.allLitClearMerged = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask.valid()
         ? !pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask.valid()

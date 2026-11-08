@@ -125,16 +125,13 @@ template<typename StoreTexelT>
 }
 
 [[nodiscard]] static b8 DecodeTextureSliceAsRgba(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, const Span<u8> outUploadBytes){
-    const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
-    if(texelCount > Limit<usize>::s_Max / s_TextureRgbaBytesPerTexel){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 fallback mip size exceeds addressable memory"));
+    const auto expectedUploadByteCount = TryComputeRgba8FallbackMipBytes(mip.width, mip.height);
+    if(!expectedUploadByteCount)
         return false;
-    }
-    const u64 expectedUploadByteCount = texelCount * s_TextureRgbaBytesPerTexel;
-    const auto source = expectedUploadByteCount == outUploadBytes.size()
+    const auto source = *expectedUploadByteCount == outUploadBytes.size()
         ? TryGetPrimaryUastcSlice(textureAsset.payloadBytes(), textureAsset.primaryPayloadByteCount(), mip, sliceIndex)
         : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
-    if(expectedUploadByteCount != outUploadBytes.size() || !source){
+    if(*expectedUploadByteCount != outUploadBytes.size() || !source){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid RGBA8 UASTC slice layout"));
         return false;
     }

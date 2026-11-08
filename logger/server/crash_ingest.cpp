@@ -7,6 +7,9 @@
 #include "crash_manifest_validator.h"
 #include "crash_paths.h"
 
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/crash_values.adhd.h>
+
 #include <global/binary.h>
 #include <global/filesystem/archive.h>
 #include <global/filesystem/retention.h>
@@ -30,7 +33,7 @@ namespace __hidden_logger_crash_ingest{
 
 using CrashText = CrashReportText;
 
-inline constexpr Name s_IngestScratchArenaName("logger/server/crash_ingest/scratch");
+inline constexpr Name s_IngestScratchArenaName = NWB::Log::s_LogServerArenaNameLoggerServerCrashIngestScratch;
 
 
 

@@ -6,6 +6,8 @@
 
 #include "report.h"
 
+#include <logger/telemetry/report_values.adhd.h>
+
 #include <core/common/name_symbols.h>
 
 #include <global/name_hash_text.h>
@@ -28,27 +30,27 @@ namespace __hidden_memory_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_ArenaSourceText = "arena";
-inline constexpr StringView s_HeapBackingSourceText = "heapBacking";
-inline constexpr StringView s_ExplicitScopeSourceText = "explicitScope";
-inline constexpr StringView s_LargestArenaPeakBasis = "largestArena";
-inline constexpr StringView s_SampledHeapPeakBasis = "sampledHeap";
-inline constexpr StringView s_ScopePeakBasis = "scope";
-inline constexpr StringView s_MemorySourcesSectionHeader = "    \"memorySources\": {\n";
-inline constexpr StringView s_MemorySourceEntryIndent = "      ";
-inline constexpr StringView s_PeakBasisKeyPrefix = ": {\"peakBasis\": ";
-inline constexpr StringView s_MemorySourceMetricsFormat = ", \"eventCount\": {}, \"maxUsedBytes\": {}, \"maxPeakUsedBytes\": {}, \"totalUsedDeltaBytes\": ";
-inline constexpr StringView s_MemorySourceDeltaFormat = "{}";
-inline constexpr StringView s_MemorySourcesSectionFooter = "    },\n";
-inline constexpr StringView s_JsonEntrySeparator = ",\n";
-inline constexpr StringView s_JsonEntryTerminator = "\n";
-inline constexpr StringView s_MemoryRecordSeparator = ",\n";
-inline constexpr StringView s_MemoryRecordOpen = "      {\"source\": ";
-inline constexpr StringView s_MemoryRecordPeakBasisKey = ", \"peakBasis\": ";
-inline constexpr StringView s_MemoryRecordScopeKey = ", \"scope\": ";
-inline constexpr StringView s_MemoryRecordIdentityKey = ", \"identity\": ";
-inline constexpr StringView s_MemoryRecordMetricsFormat = ", \"streamId\": {}, \"frameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, " "\"peakUsedBytes\": {}, \"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}, \"delta\": ";
-inline constexpr StringView s_MemoryDeltaMetricsFormat = "{{\"previousFrameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, \"peakUsedBytes\": {}, " "\"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}}}";
+inline constexpr StringView s_ArenaSourceText = ::NWB::Log::s_LogTelemetryMemoryReportArenaSourceText;
+inline constexpr StringView s_HeapBackingSourceText = ::NWB::Log::s_LogTelemetryMemoryReportHeapBackingSourceText;
+inline constexpr StringView s_ExplicitScopeSourceText = ::NWB::Log::s_LogTelemetryMemoryReportExplicitScopeSourceText;
+inline constexpr StringView s_LargestArenaPeakBasis = ::NWB::Log::s_LogTelemetryMemoryReportLargestArenaPeakBasis;
+inline constexpr StringView s_SampledHeapPeakBasis = ::NWB::Log::s_LogTelemetryMemoryReportSampledHeapPeakBasis;
+inline constexpr StringView s_ScopePeakBasis = ::NWB::Log::s_LogTelemetryMemoryReportScopePeakBasis;
+inline constexpr StringView s_MemorySourcesSectionHeader = ::NWB::Log::s_LogTelemetryMemoryReportMemorySourcesSectionHeader;
+inline constexpr StringView s_MemorySourceEntryIndent = ::NWB::Log::s_LogTelemetryMemoryReportMemorySourceEntryIndent;
+inline constexpr StringView s_PeakBasisKeyPrefix = ::NWB::Log::s_LogTelemetryMemoryReportPeakBasisKeyPrefix;
+inline constexpr StringView s_MemorySourceMetricsFormat = ::NWB::Log::s_LogTelemetryMemoryReportMemorySourceMetricsFormat;
+inline constexpr StringView s_MemorySourceDeltaFormat = ::NWB::Log::s_LogTelemetryMemoryReportMemorySourceDeltaFormat;
+inline constexpr StringView s_MemorySourcesSectionFooter = ::NWB::Log::s_LogTelemetryMemoryReportMemorySourcesSectionFooter;
+inline constexpr StringView s_JsonEntrySeparator = ::NWB::Log::s_LogTelemetryMemoryReportJsonEntrySeparator;
+inline constexpr StringView s_JsonEntryTerminator = ::NWB::Log::s_LogTelemetryMemoryReportJsonEntryTerminator;
+inline constexpr StringView s_MemoryRecordSeparator = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordSeparator;
+inline constexpr StringView s_MemoryRecordOpen = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordOpen;
+inline constexpr StringView s_MemoryRecordPeakBasisKey = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordPeakBasisKey;
+inline constexpr StringView s_MemoryRecordScopeKey = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordScopeKey;
+inline constexpr StringView s_MemoryRecordIdentityKey = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordIdentityKey;
+inline constexpr StringView s_MemoryRecordMetricsFormat = ::NWB::Log::s_LogTelemetryMemoryReportMemoryRecordMetricsFormat;
+inline constexpr StringView s_MemoryDeltaMetricsFormat = ::NWB::Log::s_LogTelemetryMemoryReportMemoryDeltaMetricsFormat;
 inline constexpr char s_JsonRecordClose = '}';
 
 

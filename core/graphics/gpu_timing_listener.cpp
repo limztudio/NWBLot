@@ -4,6 +4,8 @@
 
 #include "gpu_timing.h"
 
+#include <core/graphics/internal_names.adhd.h>
+
 #include <global/atomic_identity.h>
 #include <global/exception.h>
 
@@ -24,7 +26,7 @@ namespace __hidden_gpu_timing_listener{
 
 
 static Atomic<u64> s_NextSampleSubscriptionIdentity{ 1u };
-inline constexpr Name s_GpuTimingListenerScratchArena("graphics.gpu_timing.listener_scratch");
+using GraphicsInternalNames::s_GpuTimingListenerScratchArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

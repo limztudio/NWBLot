@@ -24,7 +24,7 @@ namespace __hidden_setup_upload_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_SetupUploadReadinessBridgeIdentity("graphics.setup_upload.readiness_bridge");
+using GraphicsInternalNames::s_SetupUploadReadinessBridgeIdentity;
 
 
 [[nodiscard]] static CommandQueue::Enum ResolveAvailableSetupConsumerQueue(GraphicsBackend::Device& device)noexcept{
@@ -233,5 +233,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

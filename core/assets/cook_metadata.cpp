@@ -177,7 +177,9 @@ b8 ParseAssetMetadata(
 
         if(useAssetCache){
             NwbFileAssetCacheRecord& cacheRecord = outMetadata.fileCacheRecords[fileIndex];
+#if !defined(NWB_BUILDMODE)
             const AStringView firstToken = ReadFirstIdentifierAfterCComments(AStringView(metaText));
+#endif
             CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
                 repoRoot,
                 assetCacheDirectory,

@@ -5,6 +5,7 @@
 #include "clipboard_service.h"
 
 #include <core/common/log.h>
+#include <core/os/platform_values.adhd.h>
 
 #include <X11/Xatom.h>
 
@@ -24,7 +25,7 @@ namespace __hidden_x11_clipboard_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_LifecycleCategory = "x11_clipboard_lifecycle";
+static constexpr StringView s_LifecycleCategory = ::NWB::Core::s_OsLinuxX11ClipboardServiceLifecycleCategory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

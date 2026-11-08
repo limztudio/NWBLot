@@ -1,0 +1,80 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using CsgGraphTaskId = Core::GpuTaskId;
+using CsgGraphResourceSetId = Core::GpuGraphResourceSetId;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_RenderNameEngineDeferredCsgCapBackNormal = "engine/deferred/csg_cap_back_normal";
+const Name s_RenderNameEngineDeferredCsgIntervalDepth = "engine/deferred/csg_interval_depth";
+const Name s_RenderNameEngineDeferredCsgIntervalId = "engine/deferred/csg_interval_id";
+const Name s_RenderNameEngineDeferredCsgReceiverEventData = "engine/deferred/csg_receiver_event_data";
+const Name s_RenderNameEngineDeferredCsgReceiverEventCount = "engine/deferred/csg_receiver_event_count";
+const Name s_RenderNameEngineDeferredCsgReceiverSpanData = "engine/deferred/csg_receiver_span_data";
+const Name s_RenderNameEngineDeferredCsgReceiverSpanCount = "engine/deferred/csg_receiver_span_count";
+const Name s_RenderNameEngineDeferredCsgRemovedIntervalDepth = "engine/deferred/csg_removed_interval_depth";
+const Name s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal = "engine/deferred/csg_removed_interval_cap_normal";
+const Name s_RenderNameEngineDeferredCsgRemovedIntervalData = "engine/deferred/csg_removed_interval_data";
+const Name s_RenderNameEngineDeferredCsgRemovedIntervalCount = "engine/deferred/csg_removed_interval_count";
+const Name s_RenderNameRenderAvboitIntervals = "render.avboit.intervals";
+const Name s_RenderNameRenderAvboitTransparentCsgReceiverSpan = "render.avboit.transparent_csg.receiver_span";
+const Name s_RenderNameRenderAvboitTransparentCsgIntervalCombine = "render.avboit.transparent_csg.interval_combine";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalClear = "render.graphics_prefix.csg_interval_clear";
+const Name s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear = "render.graphics_prefix.csg_receiver_event_count_clear";
+const Name s_RenderNameRenderGraphicsPrefixCsgReceiverSpan = "render.graphics_prefix.csg_receiver_span";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalCombine = "render.graphics_prefix.csg_interval_combine";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalSampleMaterialGeometry = "render.graphics_prefix.csg_interval_sample.material_geometry";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalSampleMaterialSampledTextures = "render.graphics_prefix.csg_interval_sample.material_sampled_textures";
+const Name s_RenderNameRenderGraphicsPrefixOpaqueCsgIntervalSampleComputeEmulationOutputs = "render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs";
+const Name s_RenderNameRenderGraphicsPrefixOpaqueCsgIntervalSampleComputeEmulation = "render.graphics_prefix.opaque_csg_interval_sample_compute_emulation";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalSample = "render.graphics_prefix.csg_interval_sample";
+const Name s_CsgContextDebug = "raytrace_csg_context";
+const Name s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialGeometry = "render.avboit.intervals.transparent_csg_material_geometry";
+const Name s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialSampledTextures = "render.avboit.intervals.transparent_csg_material_sampled_textures";
+const Name s_RenderNameRenderAvboitTransparentCsgMaterialInstancesUpload = "render.avboit.transparent_csg.material_instances_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgMaterialTypedUpload = "render.avboit.transparent_csg.material_typed_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgReceiverRangesUpload = "render.avboit.transparent_csg.receiver_ranges_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgCuttersUpload = "render.avboit.transparent_csg.cutters_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgClipContextSlotsUpload = "render.avboit.transparent_csg.clip_context_slots_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgIntervalSampleStateUpload = "render.avboit.transparent_csg.interval_sample_state_upload";
+const Name s_RenderNameRenderAvboitTransparentCsgIntervalClear = "render.avboit.transparent_csg.interval_clear";
+const Name s_RenderNameRenderAvboitTransparentCsgReceiverEventCountClear = "render.avboit.transparent_csg.receiver_event_count_clear";
+
+class TransparentCsgIntervalProducerResult{
+    public CsgGraphTaskId uploadTask = CsgGraphTaskId();
+    public CsgGraphResourceSetId materialGeometrySet = CsgGraphResourceSetId();
+    public CsgGraphResourceSetId materialSampledTextureSet = CsgGraphResourceSetId();
+}
+
+
+class OpaqueCsgIntervalStageTasks{
+    public CsgGraphTaskId receiverSpanTask = CsgGraphTaskId();
+    public CsgGraphTaskId intervalCombineTask = CsgGraphTaskId();
+    public CsgGraphTaskId intervalSampleComputeEmulationTask = CsgGraphTaskId();
+    public CsgGraphTaskId intervalSampleTask = CsgGraphTaskId();
+}
+
+
+class OpaqueCsgIntervalClearResult{
+    public CsgGraphTaskId clearTask = CsgGraphTaskId();
+    public CsgGraphTaskId clearFirstTask = CsgGraphTaskId();
+}
+
+
+class FrameGraphTransparentCsgTaskResult{
+    public CsgGraphTaskId intervalCompletionTask = CsgGraphTaskId();
+    public b8 intervalOutputsGraphOwned = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

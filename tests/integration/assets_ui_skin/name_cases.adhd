@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_UiLookupNameMissing = "missing";
+const Name s_UiLookupNameOld = "old";
+const Name s_UiLookupNameNew = "new";
+const Name s_UiLookupNameOther = "other";
+const Name s_UiLookupNameFirst = "first";
+const Name s_UiTestOld = "old";
+const Name s_UiTestNew = "new";
+const Name s_UiTestOther = "other";
+const Name s_UiTestDestination = "test/destination";
+const Name s_UiTestFirst = "first";
+const Name s_UiTitle = "window.title";
+const Name s_UiCheck = "checkbox.mark";
+const Name s_UiSelected = "list.row.selected";
+const Name s_UiArrow = "combo.arrow";
+const Name s_UiFill = "progress.fill";
+const Name s_UiFocus = "focus.overlay";
+const Name s_UiTestButtonHover = "button.hover";
+const Name s_UiTestCheckboxChecked = "checkbox.checked";
+const Name s_UiTestEditFocused = "edit.focused";
+const Name s_UiTestComboOpen = "combo.open";
+const Name s_UiTestSliderThumbHover = "slider.thumb.hover";
+const Name s_UiTestWindowResize = "window.resize";
+const Name s_UiTestPanelNormal = "panel.normal";
+const Name s_UiTestProjectOther = "project/other";
+
+const Name s_OneOffNameTestsIntegrationAssetsUiSkinToolkitContract = "tests/integration/assets_ui_skin/toolkit_contract";
+const Name s_OneOffNameTestsIntegrationAssetsUiSkinCook = "tests/integration/assets_ui_skin/cook";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

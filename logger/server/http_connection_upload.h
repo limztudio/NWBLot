@@ -6,7 +6,10 @@
 
 
 #include <logger/common.h>
+#include <logger/server/server_values.adhd.h>
+
 #include <core/alloc/module.h>
+
 #include <global/diagnostics.h>
 
 
@@ -19,8 +22,8 @@ NWB_LOG_BEGIN
 namespace LoggerServerImpl{
 
 
-inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
-inline constexpr AStringView s_UploadDiagnosticCategory = "logger_server_upload";
+inline constexpr usize s_ConnectionInitialBufferCapacity = ::NWB::Log::s_LogServerValueModuleConnectionInitialBufferCapacity;
+inline constexpr AStringView s_UploadDiagnosticCategory = ::NWB::Log::s_LogServerValueModuleUploadDiagnosticCategory;
 
 
 namespace ConnectionUploadKind{
@@ -132,3 +135,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

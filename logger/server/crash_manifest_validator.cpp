@@ -15,7 +15,7 @@ NWB_LOG_BEGIN
 
 namespace __hidden_crash_manifest_validator{
 
-inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
+inline constexpr usize s_GeneratedJsonNeedleReserveSlack = ::NWB::Log::CrashValues::s_CrashIngestGeneratedJsonNeedleReserveSlack;
 
 [[nodiscard]] static Expected<usize> FindGeneratedJsonValueCursor(Core::Alloc::ScratchArena& scratchArena, const AStringView manifest, const AStringView key){
     AString<Core::Alloc::ScratchArena> needle{scratchArena};
@@ -209,3 +209,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

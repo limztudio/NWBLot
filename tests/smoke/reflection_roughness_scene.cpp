@@ -5,6 +5,8 @@
 #include "reflection_roughness_scene.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/assets_skeleton/asset.h>
 
 #include <core/common/log.h>
@@ -36,7 +38,7 @@ static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
 static constexpr SmokeMaterialRef s_Lit("project/smoke/reflection/materials/roughness_lit");
 static constexpr SmokeModelRef s_Model("project/characters/body/model");
-static constexpr AStringView s_Interface = "project/shaders/smoke_surface";
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,7 +185,7 @@ b8 ReflectionRoughnessScene::createDeformingSource(){
     if(!m_red.valid() || !redModel.tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);
-    m_skeleton = FindSpawnedModelObject(m_red, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    m_skeleton = FindSpawnedModelObject(m_red, s_SmokeNameSkeleton, NWB::Impl::ModelObjectKind::Skeleton, m_world);
     return m_skeleton.valid();
 }
 

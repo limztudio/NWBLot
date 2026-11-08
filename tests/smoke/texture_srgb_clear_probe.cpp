@@ -4,6 +4,8 @@
 
 #include "texture_srgb_clear_probe.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
@@ -23,11 +25,11 @@ namespace __hidden_texture_srgb_clear_probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_ReadbackResourcePath = "tests.smoke.texture.srgb_edges.readback";
+constexpr AStringView s_ReadbackResourcePath = NWB::Tests::Smoke::s_TextureSrgbClearReadbackResourcePath;
 
-static constexpr u32 s_SRGBClearEdgeWidth = 6u;
-static constexpr u32 s_SRGBClearEdgeHeight = 4u;
-static constexpr u32 s_SRGBClearEdgeBytesPerPixel = 4u;
+static constexpr u32 s_SRGBClearEdgeWidth = NWB::Tests::Smoke::s_TextureSrgbClearEdgeWidth;
+static constexpr u32 s_SRGBClearEdgeHeight = NWB::Tests::Smoke::s_TextureSrgbClearEdgeHeight;
+static constexpr u32 s_SRGBClearEdgeBytesPerPixel = NWB::Tests::Smoke::s_TextureSrgbClearEdgeBytesPerPixel;
 static constexpr Array<NWB::Core::Color, 4> s_SRGBClearEdgeColors = {{
     { BitCast<f32>(BitCast<u32>(0.0031308f) - 1u), 0.0031308f, BitCast<f32>(BitCast<u32>(0.0031308f) + 1u), 0.25f },
     { BitCast<f32>(BitCast<u32>(0.21404114f) - 1u), 0.21404114f, BitCast<f32>(BitCast<u32>(0.21404114f) + 1u), 0.5f },
@@ -101,7 +103,8 @@ struct SRGBClearEdgeInputs{
 [[nodiscard]] static Expected<NWB::Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, NWB::Core::GpuTaskGraph& graph){
     using namespace NWB::Core;
     const auto& inputs = *MakeNotNull(static_cast<const SRGBClearEdgeInputs*>(userData));
-    const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges")).setMarkerLabel("sRGB clear edge texture").setType(GpuGraphResourceType::Texture).setInitialState(ResourceStates::Unknown));
+    const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeTextureSrgbEdges))
+        .setMarkerLabel("sRGB clear edge texture").setType(GpuGraphResourceType::Texture).setInitialState(ResourceStates::Unknown));
     const auto readback = graph.importHazardDomain(GpuGraphResourceDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("sRGB clear edge staging writes").setType(GpuGraphResourceType::HazardDomain));
     if(!texture || !readback)
         return MakeUnexpected(Failure{});
@@ -111,7 +114,7 @@ struct SRGBClearEdgeInputs{
     clear.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
     clear.valueType = GpuClearTextureTaskValueType::Float;
     clear.floatValue = Color(0.0f, 0.0f, 0.0f, 1.0f);
-    const auto initialized = graph.addClearTextureTask(GpuTaskDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.initialize")).setMarkerLabel("Initialize sRGB clear edge border"), clear);
+    const auto initialized = graph.addClearTextureTask(GpuTaskDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeTextureSrgbEdgesInitialize)).setMarkerLabel("Initialize sRGB clear edge border"), clear);
     if(!initialized)
         return MakeUnexpected(Failure{});
 
@@ -119,9 +122,8 @@ struct SRGBClearEdgeInputs{
         { .resource = *texture, .range = { .textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
     }};
     const auto bounded = graph.addTask<SRGBClearEdgeTask>(
-        GpuTaskDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.bounded")).setMarkerLabel("Clear bounded sRGB edge strips").setDependencies(Span(&*initialized, 1u)).setResourceUses(clearUse),
-        SRGBClearEdgeTask::Payload{ inputs.texture }
-    );
+        GpuTaskDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeTextureSrgbEdgesBounded)).setMarkerLabel("Clear bounded sRGB edge strips").setDependencies(Span(&*initialized, 1u)).setResourceUses(clearUse),
+        SRGBClearEdgeTask::Payload{ inputs.texture });
     if(!bounded)
         return MakeUnexpected(Failure{});
 
@@ -131,8 +133,7 @@ struct SRGBClearEdgeInputs{
     }};
     return graph.addTask<SRGBClearEdgeReadbackTask>(
         GpuTaskDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("Read back sRGB clear edge pixels").setDependencies(Span(&*bounded, 1u)).setResourceUses(readbackUses),
-        SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback }
-    );
+        SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback });
 }
 
 };

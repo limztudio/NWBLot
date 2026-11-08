@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +46,7 @@ using namespace TaskGraphTestUtils;
 }
 
 [[nodiscard]] static Expected<Core::GpuTaskId> AddPrelude(Core::GpuTaskGraph& graph){
-    return AddTaskWithCommands(Name("tests/task_graph/prelude"), "Normal Execution Prelude", PrimaryGraphicsRequirements(), PreludeScheduling(), { .policy = Core::GpuTaskTimingPolicy::PacketOnly }, {}, graph);
+    return AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPrelude), "Normal Execution Prelude", PrimaryGraphicsRequirements(), PreludeScheduling(), { .policy = Core::GpuTaskTimingPolicy::PacketOnly }, {}, graph);
 }
 
 [[nodiscard]] static b8 HasPacketDependency(const Core::GpuCompiledPacketView& consumer, const Core::GpuSubmissionPacketId producer)noexcept{
@@ -74,31 +76,31 @@ TEST(GpuTaskGraph, NormalExecutionPreludeGatesIndependentBranchesWithoutOrdering
     const Core::GpuTaskId prelude = *preludeResult;
     ASSERT_TRUE(prelude.valid());
     ASSERT_TRUE(graph.setNormalExecutionPrelude(prelude));
-    const auto sceneRootResult = AddTaskWithCommands(Name("tests/task_graph/prelude_scene_root"), "Scene Root", { .requiredCapabilities = Core::GpuQueueCapability::Graphics }, {}, {}, {}, graph);
+    const auto sceneRootResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeSceneRoot), "Scene Root", { .requiredCapabilities = Core::GpuQueueCapability::Graphics }, {}, {}, {}, graph);
     ASSERT_TRUE(sceneRootResult);
     const Core::GpuTaskId sceneRoot = *sceneRootResult;
-    const auto uiRootResult = AddTaskWithCommands(Name("tests/task_graph/prelude_ui_root"), "UI Upload Root", { .requiredCapabilities = Core::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }, {}, {}, {}, graph);
+    const auto uiRootResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeUiRoot), "UI Upload Root", { .requiredCapabilities = Core::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }, {}, {}, {}, graph);
     ASSERT_TRUE(uiRootResult);
     const Core::GpuTaskId uiRoot = *uiRootResult;
     ASSERT_TRUE(sceneRoot.valid());
     ASSERT_TRUE(uiRoot.valid());
-    const auto sceneTailResult = AddTaskWithCommands(Name("tests/task_graph/prelude_scene_tail"), "Scene Tail", { .requiredCapabilities = Core::GpuQueueCapability::Graphics }, {}, {}, Span(&sceneRoot, 1u), graph);
+    const auto sceneTailResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeSceneTail), "Scene Tail", { .requiredCapabilities = Core::GpuQueueCapability::Graphics }, {}, {}, Span(&sceneRoot, 1u), graph);
     ASSERT_TRUE(sceneTailResult);
     const Core::GpuTaskId sceneTail = *sceneTailResult;
-    const auto uiTailResult = AddTaskWithCommands(Name("tests/task_graph/prelude_ui_tail"), "UI Tail", { .requiredCapabilities = Core::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }, {}, {}, Span(&uiRoot, 1u), graph);
+    const auto uiTailResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeUiTail), "UI Tail", { .requiredCapabilities = Core::GpuQueueCapability::Transfer, .externalQueue = queues[1u].id }, {}, {}, Span(&uiRoot, 1u), graph);
     ASSERT_TRUE(uiTailResult);
     const Core::GpuTaskId uiTail = *uiTailResult;
     ASSERT_TRUE(sceneTail.valid());
     ASSERT_TRUE(uiTail.valid());
     const Array<Core::GpuTaskId, 2u> terminalDependencies = { sceneTail, uiTail };
-    const auto terminalResult = AddTaskWithCommands(Name("tests/task_graph/prelude_terminal"), "Presentation Terminal", PrimaryGraphicsRequirements(), {}, {}, Span(terminalDependencies), graph);
+    const auto terminalResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeTerminal), "Presentation Terminal", PrimaryGraphicsRequirements(), {}, {}, Span(terminalDependencies), graph);
     ASSERT_TRUE(terminalResult);
     const Core::GpuTaskId terminal = *terminalResult;
     ASSERT_TRUE(terminal.valid());
     Core::GpuTaskSchedulingHint recoveryScheduling = PreludeScheduling();
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
-    const auto recoveryResult = AddTaskWithCommands(Name("tests/task_graph/prelude_recovery"), "Recovery Frontier", PrimaryGraphicsRequirements(), recoveryScheduling, {}, {}, graph);
+    const auto recoveryResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeRecovery), "Recovery Frontier", PrimaryGraphicsRequirements(), recoveryScheduling, {}, {}, graph);
     ASSERT_TRUE(recoveryResult);
     const Core::GpuTaskId recovery = *recoveryResult;
     ASSERT_TRUE(recovery.valid());
@@ -171,13 +173,13 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsInvalidRegistrationAndClearsOnRe
     ASSERT_TRUE(prelude.valid());
     ASSERT_TRUE(graph.setNormalExecutionPrelude(prelude));
     EXPECT_FALSE(graph.setNormalExecutionPrelude(prelude));
-    const auto rootResult = AddTask(Name("tests/task_graph/prelude_root_before_reset"), "Root Before Reset", {}, {}, {}, {}, {}, graph);
+    const auto rootResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeRootBeforeReset), "Root Before Reset", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(rootResult);
     const Core::GpuTaskId root = *rootResult;
     ASSERT_TRUE(root.valid());
     graph.reset();
     EXPECT_FALSE(graph.setNormalExecutionPrelude(prelude));
-    const auto unguardedRootResult = AddTask(Name("tests/task_graph/prelude_root_after_reset"), "Root After Reset", {}, {}, {}, {}, {}, graph);
+    const auto unguardedRootResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeRootAfterReset), "Root After Reset", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(unguardedRootResult);
     const Core::GpuTaskId unguardedRoot = *unguardedRootResult;
     ASSERT_TRUE(unguardedRoot.valid());
@@ -197,7 +199,7 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
         Core::GpuTaskGraph graph(testArena.arena);
         Core::GpuTaskCommandRequirements transferOnly = PrimaryGraphicsRequirements();
         transferOnly.requiredCapabilities = Core::GpuQueueCapability::Transfer;
-        const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/prelude_transfer_only"), "Transfer Only Prelude", transferOnly, PreludeScheduling(), {}, {}, graph);
+        const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeTransferOnly), "Transfer Only Prelude", transferOnly, PreludeScheduling(), {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -207,7 +209,7 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
         Core::GpuTaskGraph graph(testArena.arena);
         Core::GpuTaskCommandRequirements external = PrimaryGraphicsRequirements();
         external.externalQueue = GraphicsQueue().id;
-        const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/prelude_external"), "External Queue Prelude", external, PreludeScheduling(), {}, {}, graph);
+        const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeExternal), "External Queue Prelude", external, PreludeScheduling(), {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -215,7 +217,7 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
     }
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/prelude_mergeable"), "Mergeable Prelude", PrimaryGraphicsRequirements(), {}, {}, {}, graph);
+        const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeMergeable), "Mergeable Prelude", PrimaryGraphicsRequirements(), {}, {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -223,13 +225,13 @@ TEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots){
     }
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto domainResult = AddHazardDomain(graph, Name("tests/task_graph/prelude_resource"), "Prelude Resource");
+        const auto domainResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeResource), "Prelude Resource");
         ASSERT_TRUE(domainResult);
         const Core::GpuGraphResourceId domain = *domainResult;
         ASSERT_TRUE(domain.valid());
         const Core::GpuTaskResourceUse use{ .resource = domain, .range = {}, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::ReadWrite, };
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/prelude_resource_use")).setMarkerLabel("Resource Using Prelude").setScheduling(PreludeScheduling()).setResourceUses(Span(&use, 1u));
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPreludeResourceUse)).setMarkerLabel("Resource Using Prelude").setScheduling(PreludeScheduling()).setResourceUses(Span(&use, 1u));
         const auto taskResult = graph.addTask(desc, PrimaryGraphicsRequirements());
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;

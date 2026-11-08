@@ -17,7 +17,7 @@ NWB_LOG_BEGIN
 namespace LoggerCrashSymbolicateDetail{
 
 
-inline constexpr AStringView s_CrashReportSectionOpen = "\n[";
+inline constexpr AStringView s_CrashReportSectionOpen = ::NWB::Log::CrashValues::s_CrashSymbolicateReportSectionOpen;
 
 
 [[nodiscard]] Expected<CrashReportComposer::ReportSectionRange> CrashReportComposer::FindReportSection(const AStringView report, const AStringView header, const AStringView headerWithLeadingNewline)noexcept{
@@ -145,3 +145,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

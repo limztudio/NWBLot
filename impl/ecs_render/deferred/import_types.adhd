@@ -1,0 +1,186 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+#include <core/graphics/rhi/resource.h>
+namespace NWB::Impl{
+using DeferredGraphResourceId = Core::GpuGraphResourceId;
+using DeferredGraphTextureRange = Core::TextureSubresourceSet;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady = "render.deferred_lighting.lagged_history_read_ready";
+const Name s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain = "render.deferred_lighting.lagged_history_writer_drain";
+const Name s_FrameGraphNameRenderFrameTimingBegin = "render.frame_timing_begin";
+const Name s_FrameGraphNameRenderGraphicsPrefixDeferredClearOpaqueColor = "render.graphics_prefix.deferred_clear_opaque_color";
+const Name s_GbufferMaterialGeometrySet = "render.graphics_prefix.gbuffer.material_geometry";
+const Name s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures = "render.graphics_prefix.gbuffer.material_sampled_textures";
+const Name s_FrameGraphNameRenderGraphicsPrefixOpaqueComputeEmulationOutputs = "render.graphics_prefix.opaque_compute_emulation.outputs";
+const Name s_FrameGraphNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulationOutputs = "render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs";
+const Name s_FrameGraphNameRenderGraphicsPrefixGbuffer = "render.graphics_prefix.gbuffer";
+const Name s_FrameGraphNameRenderGraphicsPrefixNormalize = "render.graphics_prefix.normalize";
+
+const Name s_RenderNameRenderLaggedHistoryCopy = "render.lagged_history_copy";
+const Name s_RenderNameRenderFrameRecoveryTiming = "render.frame_recovery.timing";
+const Name s_RenderNameRenderFrameRecovery = "render.frame_recovery";
+const Name s_RenderNameRenderLaggedLightingBindlessSlotsUpload = "render.lagged_lighting.bindless_slots_upload";
+const Name s_RenderNameRenderDeferredLighting = "render.deferred_lighting";
+const Name s_RenderNameRenderGraphicsPrefixOpaqueComputeEmulation = "render.graphics_prefix.opaque_compute_emulation";
+const Name s_RenderNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulation = "render.graphics_prefix.opaque_csg_receiver_compute_emulation";
+const Name s_RenderNameRenderGraphicsPrefixMaterialInstancesUpload = "render.graphics_prefix.material_instances_upload";
+const Name s_RenderNameRenderGraphicsPrefixMaterialTypedUpload = "render.graphics_prefix.material_typed_upload";
+const Name s_RenderNameRenderGraphicsPrefixCsgReceiverRangesUpload = "render.graphics_prefix.csg_receiver_ranges_upload";
+const Name s_RenderNameRenderGraphicsPrefixCsgCuttersUpload = "render.graphics_prefix.csg_cutters_upload";
+const Name s_RenderNameRenderGraphicsPrefixCsgClipContextSlotsUpload = "render.graphics_prefix.csg_clip_context_slots_upload";
+const Name s_RenderNameRenderGraphicsPrefixCsgIntervalSampleStateUpload = "render.graphics_prefix.csg_interval_sample_state_upload";
+const Name s_RenderNameRenderGraphicsPrefixMeshViewSetup = "render.graphics_prefix.mesh_view_setup";
+const Name s_RenderNameRenderGraphicsPrefixMeshViewUpload = "render.graphics_prefix.mesh_view_upload";
+const Name s_RenderNameRenderGraphicsPrefixMeshViewUploadCommit = "render.graphics_prefix.mesh_view_upload_commit";
+const Name s_RenderNameRenderGraphicsPrefixSceneLightsUpload = "render.graphics_prefix.scene_lights_upload";
+const Name s_RenderNameRenderGraphicsPrefixSceneShadingUpload = "render.graphics_prefix.scene_shading_upload";
+const Name s_RenderNameRenderGraphicsPrefixSceneShadingSetup = "render.graphics_prefix.scene_shading_setup";
+const Name s_RenderNameRenderDeferredCompositeCompositeColor = "render.deferred_composite.composite_color";
+const Name s_RenderNameRenderDeferredComposite = "render.deferred_composite";
+const Name s_RenderNameRenderDeferredPresentBackbufferAvailability = "render.deferred_present.backbuffer_availability";
+const Name s_RenderNameRenderDeferredPresentBackbuffer = "render.deferred_present.backbuffer";
+const Name s_RenderNameRenderDeferredPresent = "render.deferred_present";
+const Name s_RenderNameRenderFrameTimingEnd = "render.frame_timing_end";
+
+const u32 s_DeferredGraphInvalidIndex = 0xffffffffu;
+const Name s_DeferredImportNameRenderDeferredLightingAlbedo = "render.deferred_lighting.albedo";
+const Name s_DeferredImportNameRenderDeferredLightingNormal = "render.deferred_lighting.normal";
+const Name s_DeferredImportNameRenderDeferredLightingWorldPosition = "render.deferred_lighting.world_position";
+const Name s_DeferredImportNameRenderDeferredLightingSpecularRoughness = "render.deferred_lighting.specular_roughness";
+const Name s_DeferredImportNameRenderDeferredLightingDepth = "render.deferred_lighting.depth";
+const Name s_DeferredImportNameRenderDeferredCsgCapBackNormal = "render.deferred.csg_cap_back_normal";
+const Name s_DeferredImportNameRenderDeferredCsgIntervalDepth = "render.deferred.csg_interval_depth";
+const Name s_DeferredImportNameRenderDeferredCsgIntervalId = "render.deferred.csg_interval_id";
+const Name s_DeferredImportNameRenderDeferredCsgReceiverEventData = "render.deferred.csg_receiver_event_data";
+const Name s_DeferredImportNameRenderDeferredCsgReceiverEventCount = "render.deferred.csg_receiver_event_count";
+const Name s_DeferredImportNameRenderDeferredCsgReceiverSpanData = "render.deferred.csg_receiver_span_data";
+const Name s_DeferredImportNameRenderDeferredCsgReceiverSpanCount = "render.deferred.csg_receiver_span_count";
+const Name s_DeferredImportNameRenderDeferredCsgRemovedIntervalDepth = "render.deferred.csg_removed_interval_depth";
+const Name s_DeferredImportNameRenderDeferredCsgRemovedIntervalCapNormal = "render.deferred.csg_removed_interval_cap_normal";
+const Name s_DeferredImportNameRenderDeferredCsgRemovedIntervalData = "render.deferred.csg_removed_interval_data";
+const Name s_DeferredImportNameRenderDeferredCsgRemovedIntervalCount = "render.deferred.csg_removed_interval_count";
+const Name s_DeferredImportNameRenderDeferredLightingShadowVisibility = "render.deferred_lighting.shadow_visibility";
+const Name s_DeferredImportNameRenderDeferredLightingCausticIrradiance = "render.deferred_lighting.caustic_irradiance";
+const Name s_DeferredImportNameRenderDeferredLightingSurfelIrradiance = "render.deferred_lighting.surfel_irradiance";
+const Name s_DeferredImportNameRenderDeferredShadowVisibilityCurrentOutput = "render.deferred_shadow_visibility.current_output";
+const Name s_DeferredImportNameRenderDeferredEffectsCurrentCausticIrradiance = "render.deferred_effects.current_caustic_irradiance";
+const Name s_DeferredImportNameRenderDeferredSurfelGiCurrentIrradiance = "render.deferred_surfel_gi.current_irradiance";
+const Name s_DeferredImportNameRenderDeferredLightingOpaqueColor = "render.deferred_lighting.opaque_color";
+const Name s_DeferredImportNameRenderDeferredLightingSceneShading = "render.deferred_lighting.scene_shading";
+const Name s_DeferredImportNameRenderDeferredLightingLights = "render.deferred_lighting.lights";
+const Name s_DeferredImportNameRenderDeferredMaterialInstances = "render.deferred.material_instances";
+const Name s_DeferredImportNameRenderDeferredMaterialTyped = "render.deferred.material_typed";
+const Name s_DeferredImportNameRenderDeferredCsgReceiverRanges = "render.deferred.csg_receiver_ranges";
+const Name s_DeferredImportNameRenderDeferredCsgCutters = "render.deferred.csg_cutters";
+const Name s_DeferredImportNameRenderDeferredCsgClipContextSlots = "render.deferred.csg_clip_context_slots";
+const Name s_DeferredImportNameRenderDeferredCsgIntervalSampleState = "render.deferred.csg_interval_sample_state";
+const Name s_DeferredImportNameRenderDeferredCompositeBindlessSlots = "render.deferred_composite.bindless_slots";
+const Name s_DeferredImportNameRenderDeferredMaterialContextSlots = "render.deferred.material_context_slots";
+const Name s_DeferredImportNameRenderLaggedHistoryCopyHistoryShadowVisibility = "render.lagged_history_copy.history_shadow_visibility";
+const Name s_DeferredImportNameRenderLaggedHistoryCopyHistoryCausticIrradiance = "render.lagged_history_copy.history_caustic_irradiance";
+const Name s_DeferredImportNameRenderLaggedHistoryCopyHistorySurfelIrradiance = "render.lagged_history_copy.history_surfel_irradiance";
+const Name s_DeferredImportNameRenderAvboitLowRaster = "render.avboit.low_raster";
+const Name s_DeferredImportNameRenderAvboitAccumColor = "render.avboit.accum_color";
+const Name s_DeferredImportNameRenderAvboitAccumExtinction = "render.avboit.accum_extinction";
+const Name s_DeferredImportNameRenderAvboitRefractionDepth = "render.avboit.refractionDepth";
+const Name s_DeferredImportNameRenderAvboitRefractionNormalIor = "render.avboit.refractionNormalIor";
+const Name s_DeferredImportNameRenderAvboitRefractionTintCoverage = "render.avboit.refractionTintCoverage";
+const Name s_DeferredImportNameRenderAvboitRefractionInstance = "render.avboit.refractionInstance";
+const Name s_DeferredImportNameRenderAvboitRefractionSpecularRoughness = "render.avboit.refractionSpecularRoughness";
+const Name s_DeferredImportNameRenderAvboitRefractionResolve = "render.avboit.refractionResolve";
+const Name s_DeferredImportNameRenderAvboitAvboitForegroundColor = "render.avboit.avboitForegroundColor";
+const Name s_DeferredImportNameRenderAvboitAvboitForegroundExtinction = "render.avboit.avboitForegroundExtinction";
+const Name s_DeferredImportNameRenderAvboitTransmittance = "render.avboit.transmittance";
+const Name s_DeferredImportNameRenderAvboitCoverage = "render.avboit.coverage";
+const Name s_DeferredImportNameRenderAvboitControl = "render.avboit.control";
+const Name s_DeferredImportNameRenderAvboitExtinctionOverflow = "render.avboit.extinction_overflow";
+const Name s_DeferredImportNameRenderAvboitMaterialDomain = "render.avboit.material_domain";
+const Name s_DeferredImportNameRenderAvboitCsgDomain = "render.avboit.csg_domain";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredGraphResourceImportResult{
+    public DeferredGraphResourceId albedo = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId normal = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId worldPosition = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId specularRoughness = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId depth = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgCapBackNormal = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgIntervalDepth = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgIntervalId = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgReceiverEventData = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgReceiverEventCount = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgReceiverSpanData = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgReceiverSpanCount = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgRemovedIntervalDepth = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgRemovedIntervalCapNormal = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgRemovedIntervalData = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgRemovedIntervalCount = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId shadowVisibility = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId causticIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId surfelIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId currentShadowVisibility = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId currentCausticIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId currentSurfelIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId opaqueColor = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId sceneShading = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId lights = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId meshView = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId materialInstances = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId materialTyped = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgReceiverRanges = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgCutters = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgClipContextSlots = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId csgIntervalSampleState = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId bindlessSlots = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId currentBindlessSlots = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId materialContextSlots = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopyShadowVisibility = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopyCausticIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopySurfelIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopyDestinationShadowVisibility = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopyDestinationCausticIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId historyCopyDestinationSurfelIrradiance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitLowRaster = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitAccumColor = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitAccumExtinction = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionDepth = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionNormalIor = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionTintCoverage = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionInstance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionSpecularRoughness = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId refractionResolve = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitForegroundColor = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitForegroundExtinction = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitTransmittance = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitCoverage = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitDepthWarp = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitControl = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitExtinction = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitExtinctionOverflow = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitMaterialDomain = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphResourceId avboitCsgDomain = DeferredGraphResourceId(0u, s_DeferredGraphInvalidIndex);
+    public DeferredGraphTextureRange csgPeelSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgReceiverEventDataSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgReceiverEventCountSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgReceiverSpanDataSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgReceiverSpanCountSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgRemovedIntervalSubresources = DeferredGraphTextureRange();
+    public DeferredGraphTextureRange csgRemovedIntervalCountSubresources = DeferredGraphTextureRange();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

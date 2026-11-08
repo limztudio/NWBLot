@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 #include <core/perf/cpu_task_profile.h>
 #include <core/perf/session.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/telemetry/session.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -92,8 +93,8 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     perf.setCaptureOptions({ .enabled = true, .cpuTiming = true });
     perf.beginFrame(42u);
     CpuTaskScheduler scheduler(0u);
-    const Name taskName("cpu.task.tests.explicit");
-    const Name scopeName("cpu.task.tests.scope");
+    const Name taskName = NWB::Tests::TelemetryCases::s_CpuTaskTestsExplicit;
+    const Name scopeName = NWB::Tests::TelemetryCases::s_CpuTaskTestsScope;
     const CpuTaskProfileLabel taskLabel = scheduler.registerProfileLabel(taskName);
     const CpuTaskProfileLabel scopeLabel = scheduler.registerProfileLabel(scopeName);
     ASSERT_TRUE(taskLabel.valid());
@@ -190,7 +191,7 @@ TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThre
     config.workerCount = 1u;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
-    const Name taskName("cpu.task.tests.worker");
+    const Name taskName = NWB::Tests::TelemetryCases::s_CpuTaskTestsWorker;
     const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
     ASSERT_TRUE(label.valid());
     scheduler.setProfiling(true, 19u);

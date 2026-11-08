@@ -18,7 +18,7 @@ NWB_LOG_BEGIN
 namespace __hidden_crash_archive_extractor{
 
 using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
-inline constexpr AStringView s_MalformedFileFooterDetail = "malformed crash archive file footer";
+inline constexpr AStringView s_MalformedFileFooterDetail = ::NWB::Log::CrashValues::s_CrashIngestMalformedFileFooterDetail;
 
 struct ArchiveFileHeader{
     AStringView relativePath;
@@ -133,3 +133,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

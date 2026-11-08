@@ -4,6 +4,7 @@
 
 #include "material_system.h"
 
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
@@ -117,8 +118,8 @@ b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCou
 }
 
 b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
-    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
 #if defined(NWB_DEBUG)
+    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     const auto alignedByteCount = AlignUpChecked(requiredByteCount, sizeof(u32));
     if(!alignedByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
@@ -130,7 +131,7 @@ b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCo
         return false;
     }
 #else
-    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
+    const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
 #endif
     if(m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredByteCount)
         return true;

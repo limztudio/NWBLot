@@ -112,8 +112,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
         },
         [&](const ShaderBinaryPayload::VariantSignatureSegmentError::Enum, const AStringView){
             logInvalidVariant();
-        }
-    );
+        });
     if(!parsedAssignments)
         return MakeUnexpected(Failure{});
 
@@ -187,7 +186,7 @@ static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(con
 
 
 static b8 ValidateMaterialOpticalStageContract(const Path& nwbFilePath, const MaterialCookEntry& entry){
-    if(entry.stageShaders.empty() || !entry.surfaceSource.empty() || (!entry.transparent && !entry.refractive))
+    if(IsMaterialOpticalStageCombinationValid(!entry.stageShaders.empty(), !entry.surfaceSource.empty(), entry.transparent, entry.refractive))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': explicit 'shaders' cannot be used with transparent/refractive materials; author a project 'surface' hook so AVBOIT and shadow optical passes use the material contract"), PathToString<tchar>(nwbFilePath));

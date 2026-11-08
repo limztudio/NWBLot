@@ -1,0 +1,15 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RgdDecodeValueParseFailedError = "parse_failed";
+const StringView s_RgdDecodeValueRdfOpenFailedError = "rdf_open_failed";
+const StringView s_RgdDecodeValueRdfCloseFailedError = "rdf_close_failed";
+const StringView s_RgdDecodeValueMarkersInProgressDivider = "===================";
+const StringView s_RgdDecodeValueExecutionMarkerTreeDivider = "=====================";
+const StringView s_RgdDecodeValueLegendDivider = "======";
+const StringView s_RgdDecodeValuePageFaultSummaryDivider = "==================";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

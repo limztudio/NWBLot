@@ -32,6 +32,27 @@ class TexConvAlphaTransport{
     public u8 constantUnorm8 = 255u;
 }
 
+class TexConvAlphaAccumulator{
+    public b8 found = false;
+    public b8 constant = true;
+    public b8 opaque = true;
+    public u8 firstAlpha;
+
+    public TexConvAlphaAccumulator(in u8 initialAlpha){
+        this.firstAlpha = initialAlpha;
+    }
+
+    public void observe(in u8 alpha, in u8 opaqueAlpha){
+        if(!this.found){
+            this.firstAlpha = alpha;
+            this.found = true;
+        }
+        else if(alpha != this.firstAlpha)
+            this.constant = false;
+        this.opaque = this.opaque && alpha == opaqueAlpha;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,7 +73,7 @@ f32 ComputeVolumeMipZSlabOverlap(in VolumeMipZSlabRange range, in u32 sourceZ, i
 }
 
 Expected<u8> TryQuantizeTexConvMipAlpha(in VectorSingle color){
-    if(!isFinite(color.x) || !isFinite(color.y) || !isFinite(color.z) || !isFinite(color.w)){
+    if(!isFinite(color)){
         error("tex_conv: mip filtering produced non-finite values.");
         return makeUnexpected(Failure());
     }
@@ -160,3 +181,4 @@ Expected<TexConvAlphaTransport> TryResolveTexConvAlphaTransport(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

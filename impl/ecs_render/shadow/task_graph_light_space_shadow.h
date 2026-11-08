@@ -7,6 +7,8 @@
 
 #include "light_space_shadow.h"
 
+#include <impl/ecs_render/shadow/types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -48,30 +50,6 @@ struct LightSpaceShadowGraphInputs{
     Span<const Core::GpuTaskResourceUse> sceneReads{};
     Span<const Core::GpuTaskResourceSetUse> sceneReadSets{};
     Span<const Core::GpuTaskExternalStateSource> stateSources{};
-};
-
-struct LightSpaceShadowGraph{
-    Core::GpuGraphResourceId counts;
-    Core::GpuGraphResourceId events;
-    Core::GpuGraphResourceId views;
-    Core::GpuGraphResourceId drawArguments;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId csgContext;
-    Core::GpuGraphResourceId csgOpaqueDepth;
-    Core::GpuTaskId viewUpload;
-    Core::GpuTaskId countsClear;
-    Core::GpuTaskId viewFit;
-    Core::GpuTaskId drawCull;
-    Core::GpuTaskId opaqueCapture;
-    Core::GpuTaskId transparentCapture;
-    Core::GpuTaskId shade;
-    Core::GpuTaskId ready;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return counts.valid() && events.valid() && views.valid() && depth.valid() && ready.valid();
-    }
 };
 
 [[nodiscard]] Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context, Core::GpuTaskGraph& graph);

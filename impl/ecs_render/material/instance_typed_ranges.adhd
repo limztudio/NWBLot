@@ -189,6 +189,16 @@ b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u6
     return true;
 }
 
+usize ResolveMaterialTypedBufferByteCount(in usize byteCount, in usize wordSize){
+    return alignUp(max(byteCount, wordSize), wordSize);
+}
+
+usize ResolveMaterialTypedReserve(in usize rendererCount){
+    if(rendererCount <= usize.max / cast<usize>(s_MaterialTypedWordBytes))
+        return rendererCount * cast<usize>(s_MaterialTypedWordBytes);
+    return rendererCount;
+}
+
 usize ResolveMaterialTypedUploadByteCount(in Span<u8> materialTypedBytes){
     const usize uploadByteCount = materialTypedBytes.size();
     if(uploadByteCount == 0u || (uploadByteCount & (cast<usize>(s_MaterialTypedWordBytes) - 1u)) != 0u){

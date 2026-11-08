@@ -8,6 +8,8 @@
 #include "rt_private.h"
 #include "renderer_raytracing_state.h"
 
+#include <impl/ecs_render/raytrace/types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -162,7 +164,7 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer(){
         .setByteSize(sizeof(RayTraceMaterialContextSlots))
         .setIsConstantBuffer(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("raytrace_material_context_slots"))
+        .setDebugName(Name(s_RenderNameRaytraceMaterialContextSlots))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto rayTraceMaterialContextSlotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);

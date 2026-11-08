@@ -3,12 +3,13 @@
 
 
 #include <tests/common/test_context.h>
-
-#include <gtest/gtest.h>
+#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/gpu_timing_metric_correlator.h>
 #include <core/perf/timing.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +34,7 @@ namespace __hidden_gpu_timing_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct GpuTimingTestsTag>;
-inline constexpr Name s_GpuTimingMetricScratchArena("tests.gpu_timing.metric_scratch");
+inline constexpr Name s_GpuTimingMetricScratchArena = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingMetricScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,12 +85,12 @@ TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConf
     TestArena testArena;
     Core::Perf::TimingRecorder timing(testArena.arena);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope("tests/timing/overlap/first");
-    const Name secondScope("tests/timing/overlap/second");
-    const Name thirdScope("tests/timing/overlap/third");
-    const Name fourthScope("tests/timing/overlap/fourth");
-    const Name outputScope("tests/timing/overlap/output");
-    const Name alternateOutputScope("tests/timing/overlap/alternate_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSecond;
+    const Name thirdScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapThird;
+    const Name fourthScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapFourth;
+    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapOutput;
+    const Name alternateOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapAlternateOutput;
 
     EXPECT_FALSE(correlator.prepareOverlapMetric(s_NameNone, secondScope, outputScope));
     EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, s_NameNone, outputScope));
@@ -120,9 +121,9 @@ TEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample){
     Core::Perf::TimingRecorder timing(testArena.arena);
     timing.setEnabled(true);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope("tests/timing/overlap/sample_first");
-    const Name secondScope("tests/timing/overlap/sample_second");
-    const Name outputScope("tests/timing/overlap/sample_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleSecond;
+    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleOutput;
     Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
     const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
     const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 18u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
@@ -160,9 +161,9 @@ TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLas
     timing.setEnabled(true);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
     Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope("tests/timing/overlap/catch_up_first");
-    const Name secondScope("tests/timing/overlap/catch_up_second");
-    const Name outputScope("tests/timing/overlap/catch_up_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpSecond;
+    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpOutput;
     const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
     const Core::GpuComparableTimestampRange newerRange{ .beginTicks = 18u, .endTicks = 34u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
     Core::GpuComparableTimestampRange olderRange = newerRange;
@@ -199,11 +200,11 @@ TEST(GpuTimingOverlapRegistration, DiscardPreservesRegistrationAndResetClearsIt)
     timing.setEnabled(true);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
     Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope("tests/timing/overlap/lifecycle_first");
-    const Name secondScope("tests/timing/overlap/lifecycle_second");
-    const Name resetFirstScope("tests/timing/overlap/lifecycle_reset_first");
-    const Name resetSecondScope("tests/timing/overlap/lifecycle_reset_second");
-    const Name outputScope("tests/timing/overlap/lifecycle_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleSecond;
+    const Name resetFirstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleResetFirst;
+    const Name resetSecondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleResetSecond;
+    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleOutput;
     const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
     const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 18u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
 
@@ -246,12 +247,12 @@ TEST(GpuTimingPacketEnvelopeMetrics, PublishesCompleteOutOfOrderEnvelopeByPhysic
     timing.setEnabled(true);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
     Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope("tests/timing/envelope/first");
-    const Name secondScope("tests/timing/envelope/second");
-    const Name thirdScope("tests/timing/envelope/third");
-    const Name overlapScope("tests/timing/envelope/queue_overlap");
-    const Name firstQueueIdleScope("tests/timing/envelope/queue_0_internal_idle");
-    const Name secondQueueIdleScope("tests/timing/envelope/queue_1_internal_idle");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeSecond;
+    const Name thirdScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeThird;
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueueOverlap;
+    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueue0InternalIdle;
+    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueue1InternalIdle;
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 7u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 7u };
     const Array<Core::GpuPacketEnvelopeMetricScope, 3u> scopes = {
@@ -299,14 +300,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, RejectsOutputRoleAndPhysicalQueueCollisions
     TestArena testArena;
     Core::Perf::TimingRecorder timing(testArena.arena);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope("tests/timing/envelope/role_first");
-    const Name secondScope("tests/timing/envelope/role_second");
-    const Name overlapScope("tests/timing/envelope/role_overlap");
-    const Name alternateOverlapScope("tests/timing/envelope/role_alternate_overlap");
-    const Name firstQueueIdleScope("tests/timing/envelope/role_queue_0_idle");
-    const Name secondQueueIdleScope("tests/timing/envelope/role_queue_1_idle");
-    const Name alternateFirstQueueIdleScope("tests/timing/envelope/role_alternate_queue_0_idle");
-    const Name alternateSecondQueueIdleScope("tests/timing/envelope/role_alternate_queue_1_idle");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleSecond;
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleOverlap;
+    const Name alternateOverlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateOverlap;
+    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleQueue0Idle;
+    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleQueue1Idle;
+    const Name alternateFirstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue0Idle;
+    const Name alternateSecondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue1Idle;
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
     const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
@@ -343,14 +344,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, RetainsSuccessfulOutputRolesWhenSinkRegistr
     TestArena testArena;
     FailOnceTimingSink timing(2u);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope("tests/timing/envelope/failure_first");
-    const Name secondScope("tests/timing/envelope/failure_second");
-    const Name retryFirstScope("tests/timing/envelope/failure_retry_first");
-    const Name retrySecondScope("tests/timing/envelope/failure_retry_second");
-    const Name overlapScope("tests/timing/envelope/failure_overlap");
-    const Name firstQueueIdleScope("tests/timing/envelope/failure_queue_0_idle");
-    const Name secondQueueIdleScope("tests/timing/envelope/failure_queue_1_idle");
-    const Name alternateSecondQueueIdleScope("tests/timing/envelope/failure_alternate_queue_1_idle");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureSecond;
+    const Name retryFirstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureRetryFirst;
+    const Name retrySecondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureRetrySecond;
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureOverlap;
+    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureQueue0Idle;
+    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureQueue1Idle;
+    const Name alternateSecondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureAlternateQueue1Idle;
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 13u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 13u };
     const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
@@ -379,14 +380,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, IsolatesFramesRejectsWrongQueuesPrunesIncom
     timing.setEnabled(true);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
     Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope("tests/timing/envelope/isolation_first");
-    const Name secondScope("tests/timing/envelope/isolation_second");
-    const Name overlapScope("tests/timing/envelope/isolation_overlap");
-    const Name firstQueueIdleScope("tests/timing/envelope/isolation_queue_0_idle");
-    const Name secondQueueIdleScope("tests/timing/envelope/isolation_queue_1_idle");
-    const Name resetFirstOutputScope("tests/timing/envelope/isolation_reset_first_output");
-    const Name resetSecondInputScope("tests/timing/envelope/isolation_reset_second_input");
-    const Name resetSecondOutputScope("tests/timing/envelope/isolation_reset_second_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationFirst;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationSecond;
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationOverlap;
+    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationQueue0Idle;
+    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationQueue1Idle;
+    const Name resetFirstOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetFirstOutput;
+    const Name resetSecondInputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondInput;
+    const Name resetSecondOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondOutput;
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 11u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 11u };
     const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {

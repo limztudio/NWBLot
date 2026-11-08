@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.h>
 
@@ -25,7 +27,7 @@ using namespace NWB::Impl;
 
 
 TEST(OpaqueGbufferResourceUses, CsgSparseValidityKeepsReadWriteRangesWithoutOpaqueDraws){
-    Core::Alloc::ScratchArena scratch(Name("tests/opaque_gbuffer/csg_sparse"));
+    Core::Alloc::ScratchArena scratch(Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueGbufferCsgSparse);
     DeferredGraphResourceImportResult resources;
     resources.csgCapBackNormal = { .generation = 1u, .index = 1u };
     resources.csgIntervalDepth = { .generation = 1u, .index = 2u };

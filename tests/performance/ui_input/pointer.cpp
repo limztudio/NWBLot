@@ -4,6 +4,8 @@
 
 #include "benchmark.h"
 
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,7 +36,7 @@ static constexpr InputSource s_FirstSource{ 97u, 1u };
 class Workload final{
 public:
     Workload(const usize targetCount, const WorkloadKind::Enum kind, const usize contactCount = 1u)
-        : m_arena(Name("tests/performance/ui_input/pointer"))
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPointer))
         , m_router(m_arena)
         , m_targets(m_arena)
         , m_contactCount(contactCount)

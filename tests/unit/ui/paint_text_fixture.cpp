@@ -4,6 +4,8 @@
 
 #include "paint_text_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -41,12 +43,12 @@ void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
 
 
 PaintTextFixture::PaintTextFixture()
-    : m_arena(Name("tests/ui/paint_text"))
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintText))
     , m_skin(m_arena, Name(s_PaintTextSkinPath))
     , m_builder(m_arena)
 {
     UiSkin::RegionVector regions(m_arena);
-    regions.push_back({ Name("sprite"), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+    regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseSprite), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
     begin(7u);
 }

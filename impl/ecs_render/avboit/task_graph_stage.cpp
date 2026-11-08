@@ -50,11 +50,11 @@ void RendererAvboitTaskGraphStageState::reset()noexcept{
 }
 
 RendererTaskGraphTransparencyStage RendererAvboitTaskGraphStageState::transparencyStage()const noexcept{
-    return RendererTaskGraphTransparencyStage{
-        .firstTask = m_preTask,
-        .completionTask = m_accumulationFinalizeTask.valid() ? m_accumulationFinalizeTask : m_occupancyTask,
-        .hasTransparentTasks = m_depthWarpTask.valid(),
-    };
+    return RendererTaskGraphTransparencyStage(
+        m_preTask,
+        m_accumulationFinalizeTask.valid() ? m_accumulationFinalizeTask : m_occupancyTask,
+        m_depthWarpTask.valid()
+    );
 }
 
 

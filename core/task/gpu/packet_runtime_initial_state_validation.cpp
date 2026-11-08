@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime_initial_state_validation.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -24,7 +25,7 @@ namespace __hidden_gpu_packet_runtime_initial_state_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_LinearStateCountLimit = 8u;
+constexpr usize s_LinearStateCountLimit = s_GpuPacketLinearStateCountLimit;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,8 +93,7 @@ b8 GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_permanentTextureStates.size() > s_LinearStateCountLimit){
         if(!m_permanentTextureIndex)
             m_permanentTextureIndex.emplace(m_scratchArena);
-        BuildProjectedRecordIndex(*m_permanentTextureIndex, m_states.m_permanentTextureStates, textureResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Texture*>{}(lhs.texture, rhs.texture); }
-        );
+        BuildProjectedRecordIndex(*m_permanentTextureIndex, m_states.m_permanentTextureStates, textureResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Texture*>{}(lhs.texture, rhs.texture); });
         if(!DeduplicatePermanentIndex(*m_permanentTextureIndex, m_states.m_permanentTextureStates, textureResource))
             return false;
         m_permanentTexturesIndexed = true;
@@ -107,8 +107,7 @@ b8 GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_permanentBufferStates.size() > s_LinearStateCountLimit){
         if(!m_permanentBufferIndex)
             m_permanentBufferIndex.emplace(m_scratchArena);
-        BuildProjectedRecordIndex(*m_permanentBufferIndex, m_states.m_permanentBufferStates, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); }
-        );
+        BuildProjectedRecordIndex(*m_permanentBufferIndex, m_states.m_permanentBufferStates, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); });
         if(!DeduplicatePermanentIndex(*m_permanentBufferIndex, m_states.m_permanentBufferStates, bufferResource))
             return false;
         m_permanentBuffersIndexed = true;
@@ -196,8 +195,7 @@ b8 GpuInitialStateHandoffValidation::validate(){
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextureState(Texture* const texture)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentTexturesIndexed && texture){
-        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state)noexcept{ return state.texture; }
-        );
+        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state)noexcept{ return state.texture; });
     }
     for(const auto& state : m_states.m_permanentTextureStates){
         if(state.texture != texture)
@@ -214,8 +212,7 @@ Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextur
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentBuffersIndexed && buffer){
-        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state)noexcept{ return state.buffer; }
-        );
+        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state)noexcept{ return state.buffer; });
     }
     for(const auto& state : m_states.m_permanentBufferStates){
         if(state.buffer != buffer)

@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +37,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/fragment_fan_in_texture"), "Fragment Fan-In Texture");
+    const auto textureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFragmentFanInTexture), "Fragment Fan-In Texture");
     ASSERT_TRUE(textureResult);
     const Core::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
@@ -58,11 +60,11 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     const Core::GpuTaskResourceUse consumerUse{ .resource = texture, .range = broadRange, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
 
     Core::GpuTaskDesc transferDesc;
-    transferDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_transfer")).setMarkerLabel("Fragment Fan-In Transfer").setScheduling(scheduling).setResourceUses(Span(&transferUse, 1u));
+    transferDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFragmentFanInTransfer)).setMarkerLabel("Fragment Fan-In Transfer").setScheduling(scheduling).setResourceUses(Span(&transferUse, 1u));
     Core::GpuTaskDesc computeDesc;
-    computeDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_compute")).setMarkerLabel("Fragment Fan-In Compute").setScheduling(scheduling).setResourceUses(Span(&computeUse, 1u));
+    computeDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFragmentFanInCompute)).setMarkerLabel("Fragment Fan-In Compute").setScheduling(scheduling).setResourceUses(Span(&computeUse, 1u));
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_consumer")).setMarkerLabel("Fragment Fan-In Consumer").setScheduling(scheduling).setResourceUses(Span(&consumerUse, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFragmentFanInConsumer)).setMarkerLabel("Fragment Fan-In Consumer").setScheduling(scheduling).setResourceUses(Span(&consumerUse, 1u));
     const auto transferTaskResult = graph.addTask(transferDesc, transferCommands);
     ASSERT_TRUE(transferTaskResult);
     const Core::GpuTaskId transferTask = *transferTaskResult;

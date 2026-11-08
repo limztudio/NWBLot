@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/avboit/geometry_types.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 
@@ -27,23 +28,10 @@ class RendererMaterialSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared AVBOIT geometry preparation owns material geometry plus sampled-texture sets.
-struct AvboitGeometryPreparationInputs{
-    Span<const MaterialPassDrawItemsView> drawItemSets;
-    AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
-};
-
-struct AvboitGeometryPreparationResult{
-    Core::GpuGraphResourceSetId materialGeometrySet;
-    Core::GpuGraphResourceSetId materialSampledTextureSet;
-    b8 geometryOwned = false;
-    b8 sampledTexturesCollected = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Shared AVBOIT geometry preparation owns material geometry plus sampled-texture sets.
 class AvboitGeometryPreparationBuilder final : NoCopy{
 public:
     AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept

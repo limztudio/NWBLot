@@ -100,8 +100,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
                 return false;
             }
             return true;
-        }
-    );
+        });
     if(!textureResourceResult)
         return MakeUnexpected(textureResourceResult.error());
     const NotNull<TextureGpuResource*> textureResource = *textureResourceResult;
@@ -117,8 +116,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         &SamplerGpuResource::samplerHeapHandle,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
             return SamplerAssetLoader::Load(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource);
-        }
-    );
+        });
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());
     const NotNull<SamplerGpuResource*> samplerResource = *samplerResourceResult;
@@ -193,3 +191,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

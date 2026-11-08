@@ -4,6 +4,8 @@
 
 #include "multiline_view_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +55,7 @@ void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVe
 
 
 MultilineViewFixture::MultilineViewFixture()
-    : m_arena(Name("tests/ui/widgets/multiline_view"))
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsMultilineView))
     , m_model(m_arena, {}, EditTextMode::Multiline)
     , m_shaper(m_arena)
     , m_layoutBuilder(m_arena, m_shaper)

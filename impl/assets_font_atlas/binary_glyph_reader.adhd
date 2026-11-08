@@ -12,6 +12,23 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class FontAtlasBinaryDecodedHeader{
+    public u32 faceIndex = 0u;
+    public u32 unitsPerEm = 0u;
+    public u32 sourceGlyphCount = 0u;
+    public u32 bakePpem = s_FontAtlasDefaultBakePpem;
+    public u32 spreadPixels = s_FontAtlasDefaultSpreadPixels;
+    public u32 guardTexels = s_FontAtlasDefaultGuardTexels;
+    public FontAtlasRasterMode rasterMode = FontAtlasRasterMode::Bitmap;
+    public f32 ascenderUnits = 0.0f;
+    public f32 descenderUnits = 0.0f;
+    public f32 lineGapUnits = 0.0f;
+    public u32 glyphCount = 0u;
+    public u32 groupCount = 0u;
+    public u32 tableCount = 0u;
+}
+
+
 b8 IsValidFontAtlasBinaryPreamble(in u32 magic, in u32 version, in u32 encoding, in u32 reserved){
     return magic == s_FontAtlasBinaryMagic
         && version == s_FontAtlasBinaryVersion
@@ -165,22 +182,6 @@ b8 ValidateFontAtlasGlyphGroupRect(
 
     error("FontAtlas validation failed: glyph {} exceeds guarded page bounds", index);
     return false;
-}
-
-class FontAtlasBinaryDecodedHeader{
-    public u32 faceIndex = 0u;
-    public u32 unitsPerEm = 0u;
-    public u32 sourceGlyphCount = 0u;
-    public u32 bakePpem = s_FontAtlasDefaultBakePpem;
-    public u32 spreadPixels = s_FontAtlasDefaultSpreadPixels;
-    public u32 guardTexels = s_FontAtlasDefaultGuardTexels;
-    public FontAtlasRasterMode rasterMode = FontAtlasRasterMode::Bitmap;
-    public f32 ascenderUnits = 0.0f;
-    public f32 descenderUnits = 0.0f;
-    public f32 lineGapUnits = 0.0f;
-    public u32 glyphCount = 0u;
-    public u32 groupCount = 0u;
-    public u32 tableCount = 0u;
 }
 
 b8 TryReadFontAtlasBinaryPreambleAndIdentity(

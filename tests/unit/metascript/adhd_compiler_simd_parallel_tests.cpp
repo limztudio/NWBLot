@@ -347,6 +347,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     CompileResult optRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_SimdOptSource, "impl/sim/simd_opt.adhd", arena.arena, optRes));
     const MStringView optView(optRes.generatedSource.data(), optRes.generatedSource.size());
+    EXPECT_NE(optView.find("#pragma STDC FENV_ACCESS ON\r\n"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle negAxisZ = ::VectorAndInt(::s_SIMDNegativeOne, ::s_SIMDMaskZ);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle unitXW = ::VectorOrInt(::s_SIMDIdentityR0, ::s_SIMDIdentityR3);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle negZPosW = ::VectorPermute<0u, 1u, 6u, 3u>(::s_SIMDIdentityR3, ::s_SIMDNegativeOne);"), MStringView::npos);

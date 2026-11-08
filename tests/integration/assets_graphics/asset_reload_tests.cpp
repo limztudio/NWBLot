@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_skeleton/asset.h>
 
@@ -43,8 +45,8 @@ TEST(AssetsGraphics, SkinBinaryRejectsInvalidWeightsJointsMatricesAndReservedFie
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     SkinHeaderBinary header;
-    header.meshNameHash = Name("project/meshes/original").hash();
-    header.skeletonNameHash = Name("project/skeletons/original").hash();
+    header.meshNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesOriginal).hash();
+    header.skeletonNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectSkeletonsOriginal).hash();
     header.influenceCount = 1u;
     header.inverseBindMatrixCount = 1u;
     SkinInfluence4 influence;
@@ -54,12 +56,12 @@ TEST(AssetsGraphics, SkinBinaryRejectsInvalidWeightsJointsMatricesAndReservedFie
     AppendPOD(original, header);
     AppendPOD(original, influence);
     AppendPOD(original, originalMatrix);
-    Skin skin(testArena.arena, Name("project/skins/original"));
+    Skin skin(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSkinsOriginal));
     ASSERT_TRUE(skin.loadBinary(original));
     SkinAssetCodec codec;
     for(u32 invalidCase = 0u; invalidCase < 8u; ++invalidCase){
         SkinHeaderBinary malformedHeader = header;
-        malformedHeader.meshNameHash = Name("project/meshes/replacement").hash();
+        malformedHeader.meshNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesReplacement).hash();
         SkinInfluence4 malformedInfluence = influence;
         SkeletonJointMatrix matrix = originalMatrix;
         switch(invalidCase){
@@ -94,16 +96,16 @@ TEST(AssetsGraphics, ModelBinaryRejectsNonFiniteTransformsAndReservedFieldsWitho
     header.staticMeshObjectCount = 1u;
     header.skinnedMeshObjectCount = 1u;
     ModelSkeletonObjectBinary skeleton;
-    skeleton.nameHash = Name("rig").hash();
-    skeleton.skeletonNameHash = Name("project/skeletons/original").hash();
+    skeleton.nameHash = Name(AssetsGraphicsFixture::s_AssetCaseRig).hash();
+    skeleton.skeletonNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectSkeletonsOriginal).hash();
     skeleton.transform = MatrixIdentity<Float34>();
     ModelStaticMeshObjectBinary staticMesh;
-    staticMesh.nameHash = Name("prop").hash();
-    staticMesh.meshNameHash = Name("project/meshes/prop").hash();
+    staticMesh.nameHash = Name(AssetsGraphicsFixture::s_AssetCaseProp).hash();
+    staticMesh.meshNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesProp).hash();
     staticMesh.transform = MatrixIdentity<Float34>();
     ModelSkinnedMeshObjectBinary skinnedMesh;
-    skinnedMesh.nameHash = Name("body").hash();
-    skinnedMesh.skinNameHash = Name("project/skins/body").hash();
+    skinnedMesh.nameHash = Name(AssetsGraphicsFixture::s_AssetCaseBody).hash();
+    skinnedMesh.skinNameHash = Name(AssetsGraphicsFixture::s_AssetCaseProjectSkinsBody).hash();
     skinnedMesh.skeletonObjectNameHash = skeleton.nameHash;
     skinnedMesh.transform = MatrixIdentity<Float34>();
     Core::Assets::AssetBytes original(testArena.arena);
@@ -111,7 +113,7 @@ TEST(AssetsGraphics, ModelBinaryRejectsNonFiniteTransformsAndReservedFieldsWitho
     AppendPOD(original, skeleton);
     AppendPOD(original, staticMesh);
     AppendPOD(original, skinnedMesh);
-    Model model(testArena.arena, Name("project/models/original"));
+    Model model(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectModelsOriginal));
     ASSERT_TRUE(model.loadBinary(original));
     ModelAssetCodec codec;
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
@@ -149,19 +151,19 @@ TEST(AssetsGraphics, SkeletonBinaryRejectsNonFinitePosesInvalidParentsAndReserve
     SkeletonHeaderBinary header;
     header.jointCount = 1u;
     SkeletonJointBinary joint;
-    joint.nameHash = Name("root").hash();
+    joint.nameHash = Name(AssetsGraphicsFixture::s_AssetCaseRoot).hash();
     joint.parentIndex = s_SkeletonInvalidJointIndex;
     joint.localBindPose = MatrixIdentity<Float34>();
     Core::Assets::AssetBytes original(testArena.arena);
     AppendPOD(original, header);
     AppendPOD(original, joint);
-    Skeleton skeleton(testArena.arena, Name("project/skeletons/original"));
+    Skeleton skeleton(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSkeletonsOriginal));
     ASSERT_TRUE(skeleton.loadBinary(original));
     SkeletonAssetCodec codec;
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         auto malformedHeader = header;
         auto malformedJoint = joint;
-        malformedJoint.nameHash = Name("replacement").hash();
+        malformedJoint.nameHash = Name(AssetsGraphicsFixture::s_AssetCaseReplacement).hash();
         switch(invalidCase){
         case 0u: malformedHeader.padding0 = 1u; break;
         case 1u: malformedJoint.padding0 = 1u; break;
@@ -179,8 +181,8 @@ TEST(AssetsGraphics, SkeletonBinaryRejectsNonFinitePosesInvalidParentsAndReserve
         Core::Assets::AssetBytes retained(testArena.arena);
         ASSERT_TRUE(codec.serialize(skeleton, retained));
         EXPECT_EQ(retained, original) << invalidCase;
-        EXPECT_EQ(skeleton.findJointIndex(Name("root")), 0u);
-        EXPECT_EQ(skeleton.findJointIndex(Name("replacement")), s_SkeletonInvalidJointIndex);
+        EXPECT_EQ(skeleton.findJointIndex(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameRoot)), 0u);
+        EXPECT_EQ(skeleton.findJointIndex(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameReplacement)), s_SkeletonInvalidJointIndex);
     }
 }
 
@@ -204,3 +206,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

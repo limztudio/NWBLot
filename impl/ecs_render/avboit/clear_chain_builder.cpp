@@ -5,6 +5,7 @@
 #include "clear_chain_builder.h"
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/avboit/phase_identities.adhd.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
@@ -68,7 +69,7 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
         const auto avboitClearTaskResult = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name("render.avboit.clear.low_raster"), "AVBOIT Clear Low Raster", inputs.uploadTask),
+            makeAvboitClearTaskDesc(Name(s_AvboitClearLowRasterIdentity), "AVBOIT Clear Low Raster", inputs.uploadTask),
             makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
         );
         if(!avboitClearTaskResult){
@@ -77,14 +78,14 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         }
         avboitClearTask = *avboitClearTaskResult;
         m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        const auto avboitClearTaskResult2 = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name("render.avboit.clear.accum_color"), "AVBOIT Clear Accumulation Color", avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
+        const auto avboitClearTaskResult2 = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name(s_AvboitClearAccumColorIdentity), "AVBOIT Clear Accumulation Color", avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
         if(!avboitClearTaskResult2){
             avboitClearTask = {};
             return MakeUnexpected(Failure{});
         }
         avboitClearTask = *avboitClearTaskResult2;
         const auto avboitClearTaskResult3 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name("render.avboit.clear.accum_extinction"), "AVBOIT Clear Accumulation Extinction", avboitClearTask),
+            makeAvboitClearTaskDesc(Name(s_AvboitClearAccumExtinctionIdentity), "AVBOIT Clear Accumulation Extinction", avboitClearTask),
             makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack)
         );
         if(!avboitClearTaskResult3){
@@ -95,7 +96,7 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         const Array<Core::GpuGraphResourceId, 2u> foregroundClearTargets = { inputs.foregroundColor, inputs.foregroundExtinction };
         for(const auto target : foregroundClearTargets){
             const auto avboitClearTaskResult4 = m_graph.addClearTextureTask(
-                makeAvboitClearTaskDesc(target == inputs.foregroundColor ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"), "AVBOIT Clear Foreground", avboitClearTask),
+                makeAvboitClearTaskDesc(target == inputs.foregroundColor ? Name(s_AvboitClearForegroundColorIdentity) : Name(s_AvboitClearForegroundExtinctionIdentity), "AVBOIT Clear Foreground", avboitClearTask),
                 makeAvboitFloatClearDesc(target, transparentBlack)
             );
             if(!avboitClearTaskResult4){
@@ -114,15 +115,15 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
             return true;
         };
         if(
-            !appendAvboitBufferClear(Name("render.avboit.clear.coverage"), "AVBOIT Clear Coverage", inputs.coverage, 0u)
-            || !appendAvboitBufferClear(Name("render.avboit.clear.depth_warp"), "AVBOIT Clear Depth Warp", inputs.depthWarp, 0u)
-            || !appendAvboitBufferClear(Name("render.avboit.clear.control"), "AVBOIT Clear Control", inputs.control, 0u)
-            || !appendAvboitBufferClear(Name("render.avboit.clear.extinction"), "AVBOIT Clear Extinction", inputs.extinction, 0u)
-            || !appendAvboitBufferClear(Name("render.avboit.clear.extinction_overflow"), "AVBOIT Clear Extinction Overflow", inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
+            !appendAvboitBufferClear(Name(s_AvboitClearCoverageIdentity), "AVBOIT Clear Coverage", inputs.coverage, 0u)
+            || !appendAvboitBufferClear(Name(s_AvboitClearDepthWarpIdentity), "AVBOIT Clear Depth Warp", inputs.depthWarp, 0u)
+            || !appendAvboitBufferClear(Name(s_AvboitClearControlIdentity), "AVBOIT Clear Control", inputs.control, 0u)
+            || !appendAvboitBufferClear(Name(s_AvboitClearExtinctionIdentity), "AVBOIT Clear Extinction", inputs.extinction, 0u)
+            || !appendAvboitBufferClear(Name(s_AvboitClearExtinctionOverflowIdentity), "AVBOIT Clear Extinction Overflow", inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
         )
             return MakeUnexpected(Failure{});
         const auto avboitClearTaskResult5 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name("render.avboit.clear.transmittance"), "AVBOIT Clear Transmittance", avboitClearTask),
+            makeAvboitClearTaskDesc(Name(s_AvboitClearTransmittanceIdentity), "AVBOIT Clear Transmittance", avboitClearTask),
             makeAvboitFloatClearDesc(inputs.transmittance, Core::Color(1.f, 1.f, 1.f, 1.f), avboitClearEndHooks)
         );
         if(!avboitClearTaskResult5){

@@ -64,6 +64,20 @@ def snapshot_log_files(directory, pattern):
     return baseline
 
 
+class ScopedLogBaseline(dict):
+    def __init__(self, baseline, pattern, pid):
+        self.full_baseline = baseline
+        self.full_pattern = pattern
+        self.live_pattern = f"logserver_????????_??????_{pid}_*.log"
+        super().__init__((path, entry) for path, entry in baseline.items() if fnmatch.fnmatch(path.name, self.live_pattern))
+
+
+def full_log_scope(baseline, pattern):
+    if isinstance(baseline, ScopedLogBaseline):
+        return baseline.full_baseline, baseline.full_pattern
+    return baseline, pattern
+
+
 def read_log_delta(path, baseline):
     with path.open(LIT_RB) as log_file:
         info = os.fstat(log_file.fileno())

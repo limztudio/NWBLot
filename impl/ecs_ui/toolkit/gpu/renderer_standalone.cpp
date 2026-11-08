@@ -50,8 +50,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
         Core::GpuTaskDesc().setIdentity(s_GpuFrameTimingBeginTaskName).setMarkerLabel(s_GpuFrameTimingBeginMarkerLabel)
             .setScheduling(beginScheduling)
             .setTiming({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
-        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{}, }
-    );
+        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{}, });
     if(!beginResult || !graph.setNormalExecutionPrelude(*beginResult))
         return MakeUnexpected(Failure{});
     const auto layer = declare(graph, false);
@@ -88,8 +87,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
         Core::GpuTaskDesc().setIdentity(s_GpuOutputTaskName).setMarkerLabel(s_GpuStandaloneOutputMarkerLabel).setScheduling(scheduling)
             .setDependencies({ &layer->readyTask, 1u }).setResourceUses({ uses.data(), s_GpuOutputResourceUseCount }).setResourceVersionUses({ &consume, 1u })
             .setTiming({ 0u, ComputeGpuTimingResolutionHash(m_width, m_height), Core::GpuTaskTimingPolicy::Task }),
-        GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
-    );
+        GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode });
     if(!outputResult)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId output = *outputResult;
@@ -112,8 +110,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
         Core::GpuTaskDesc().setIdentity(s_GpuFrameTimingEndTaskName).setMarkerLabel(s_GpuFrameTimingEndMarkerLabel)
             .setScheduling(timingEndScheduling).setDependencies({ &timingEndDependency, 1u })
             .setTiming({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
-        GpuFrameTimingEndTask::Payload{ frameTimingTransaction }
-    );
+        GpuFrameTimingEndTask::Payload{ frameTimingTransaction });
     if(!terminalResult || !graph.declarePresentEndpoint({ *terminalResult, backBuffer }))
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId terminal = *terminalResult;

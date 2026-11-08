@@ -17,11 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 // AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
-struct AmdBreadcrumbSlotRecord{
-    u64 serial = 0u;
-    usize markerHash = 0u;
-    u32 marker = 0u;
-};
+using AmdBreadcrumbSlotRecord = VulkanDefaults::AmdBreadcrumbSlotRecord;
 struct AmdBreadcrumbStorage{
     struct Metadata{
         Alloc::PersistentArena arena;
@@ -63,3 +59,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

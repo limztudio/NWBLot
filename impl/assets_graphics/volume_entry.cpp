@@ -9,6 +9,16 @@
 
 
 #include "cook_components.h"
+#include <impl/assets_graphics/bvh_subsystem.adhd.h>
+#include <impl/assets_graphics/csg_subsystem.adhd.h>
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
+#include <impl/assets_graphics/gi_subsystem.adhd.h>
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets_graphics/cook_types.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>

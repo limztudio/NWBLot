@@ -4,6 +4,8 @@
 
 #include "compiler_analysis_internal.h"
 
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
+
 #include <global/bit.h>
 #include <global/hierarchical_index_set.h>
 
@@ -26,10 +28,7 @@ namespace __hidden_gpu_task_graph_compiler_analysis_topology{
 using namespace GpuTaskGraphCompilerDetail;
 
 
-struct TaskCycleTraversalFrame{
-    usize nextAdjacencyIndex = 0u;
-    u32 taskIndex = 0u;
-};
+using TaskCycleTraversalFrame = GpuTaskCycleTraversalFrame;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +89,7 @@ b8 BuildTopologicalOrder(
     outCycleEdges.clear();
     outOrder.reserve(taskCount);
     usize firstReadyCandidate = 0u;
-    constexpr usize s_ScanBudgetMultiplier = 2u;
+    constexpr usize s_ScanBudgetMultiplier = s_GpuTaskTopologyScanBudgetMultiplier;
     usize scanBudget = taskCount > Limit<usize>::s_Max / s_ScanBudgetMultiplier ? Limit<usize>::s_Max : taskCount * s_ScanBudgetMultiplier;
     HierarchicalIndexSet<Alloc::ScratchArena> readyIndex(scratchArena);
     for(usize emittedCount = 0u; emittedCount < taskCount; ++emittedCount){
@@ -129,9 +128,9 @@ b8 BuildTopologicalOrder(
     if(outOrder.size() == taskCount)
         return true;
 
-    constexpr u8 s_VisitNotStarted = 0u;
-    constexpr u8 s_VisitOnStack = 1u;
-    constexpr u8 s_VisitFinished = 2u;
+    constexpr u8 s_VisitNotStarted = s_GpuTaskTopologyVisitNotStarted;
+    constexpr u8 s_VisitOnStack = s_GpuTaskTopologyVisitOnStack;
+    constexpr u8 s_VisitFinished = s_GpuTaskTopologyVisitFinished;
     Vector<u8, Alloc::ScratchArena> visitState(taskCount, scratchArena);
     Vector<TaskCycleTraversalFrame, Alloc::ScratchArena> visitStack(scratchArena);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)

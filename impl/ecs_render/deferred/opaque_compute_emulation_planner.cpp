@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 
 #include <core/common/log.h>
 
@@ -57,7 +58,7 @@ void OpaqueComputeEmulationPlanner::capture(
             graph,
             m_regularPayload.plan,
             scratchArena,
-            Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
+            Name(s_FrameGraphNameRenderGraphicsPrefixOpaqueComputeEmulationOutputs),
             "Opaque Compute Emulation Outputs"
         );
         m_regularOutputOwned = opaqueComputeEmulationOutputSetResult.has_value();
@@ -103,7 +104,7 @@ void OpaqueComputeEmulationPlanner::capture(
             graph,
             m_csgPayload.plan,
             scratchArena,
-            Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
+            Name(s_FrameGraphNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulationOutputs),
             "Opaque CSG Receiver Compute Emulation Outputs"
         );
         m_csgOutputOwned = opaqueCsgReceiverComputeEmulationOutputSetResult.has_value();

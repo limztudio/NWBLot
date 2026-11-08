@@ -1,3 +1,11 @@
+nwb_declare_static_library(nwb_mesh_types)
+nwb_target_adhd_sources(nwb_mesh_types
+    NAMESPACE "NWB::Core"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/tangent_frame_types.adhd"
+)
+target_link_libraries(nwb_mesh_types PUBLIC nwb_common)
+
 nwb_declare_interface_library(nwb_mesh)
 target_sources(nwb_mesh INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
@@ -7,5 +15,5 @@ target_sources(nwb_mesh INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
-target_link_libraries(nwb_mesh INTERFACE nwb_common nwb_alloc)
+target_link_libraries(nwb_mesh INTERFACE nwb_common nwb_alloc nwb_mesh_types)
 

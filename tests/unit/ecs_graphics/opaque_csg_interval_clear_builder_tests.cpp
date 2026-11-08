@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.h>
 
 #include <core/task/gpu/task_graph.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -29,7 +30,7 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskDesc dependencyDesc;
-    dependencyDesc.setIdentity(Name("tests/opaque_csg_interval_clear/dependency")).setMarkerLabel("Incoming CSG Dependency");
+    dependencyDesc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("Incoming CSG Dependency");
     const auto dependencyResult = graph.addTask(dependencyDesc);
     ASSERT_TRUE(dependencyResult);
     const Core::GpuTaskId dependency = *dependencyResult;

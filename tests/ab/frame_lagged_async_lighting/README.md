@@ -1,15 +1,29 @@
 # Frame-lagged async-lighting smoke
 
-This is an opt-in target-hardware check for the one-frame-lagged async-lighting path through the selected graphics backend. It requires a visible native window and a GPU with a dedicated compute-only queue; the Graphics queue route exits with code `77` (skip), not a passing async result.
+This is an opt-in hardware check for the one-frame-late async-lighting path
+through the set graphics backend. It needs a real native window and a GPU
+with its own compute-only queue. The Graphics queue route exits with code
+`77` (skip), not a passing async result.
 
-From the repository root, use the build-aware launcher:
+From the repo root, use the build-aware launcher:
 
 ```text
 python -m launcher frame-lagged-async-lighting
 ```
 
-The launcher configures the required test targets, builds the smoke executable and cooked runtime assets, and starts GPU validation by default in `dbg` or `opt`. For a Final run, use `python -m launcher frame-lagged-async-lighting --config fin --no-gpu-validation`; the `fin` loader rejects `--gpudbg`. To pass a lifecycle-runner option, place it after `--`, for example `python -m launcher frame-lagged-async-lighting -- --transition-timeout 30`.
+The launcher sets up the test targets, builds the smoke exe and cooked assets,
+and starts GPU validation by default in `dbg` or `opt`. For a Final run, use
+`python -m launcher frame-lagged-async-lighting --config fin --no-gpu-validation`.
+The `fin` loader rejects `--gpudbg`. To pass a cycle-runner flag, place it
+after `--`. For example,
+`python -m launcher frame-lagged-async-lighting -- --transition-timeout 30`.
 
-The application starts with lagged lighting enabled. The runner accepts only GPU-submission transitions in this order: bootstrap, active history use, normal current-frame path after F1, then a second bootstrap and active-history use after F1 re-enables the option. It also rejects GPU validation, renderer recovery, and history-capture errors.
+The app starts with lagged lighting on. The runner only accepts GPU-submit
+moves in this order: start, active history use, normal current-frame path
+after F1, then a second start and active-history use after F1 turns the flag
+back on. It also rejects GPU validation, renderer fix-up, and history-capture
+faults.
 
-Run `python tests/ab/frame_lagged_async_lighting/run.py --self-test` to check lifecycle ordering, missing evidence, and failure cleanup without starting a graphics application. These checks are also registered with CTest.
+Run `python tests/ab/frame_lagged_async_lighting/run.py --self-test` to check
+cycle order, missing proof, and fail cleanup with no graphics app. CTest also
+runs these checks.

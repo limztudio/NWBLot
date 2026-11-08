@@ -1,0 +1,92 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_GpuTimingCaseLargeEnvelope = "tests/timing/large_envelope/";
+const Name s_GpuTimingCaseLargeIdle0 = "tests/timing/large_idle_0";
+const Name s_GpuTimingCaseLargeIdle1 = "tests/timing/large_idle_1";
+const Name s_GpuTimingCaseDuplicateEnvelopeFirst = "tests/timing/duplicate_envelope_first";
+const Name s_GpuTimingCaseDuplicateEnvelopeSecond = "tests/timing/duplicate_envelope_second";
+const Name s_GpuTimingCaseDuplicateIdle1 = "tests/timing/duplicate_idle_1";
+const Name s_GpuTimingCaseDuplicateIdle0 = "tests/timing/duplicate_idle_0";
+const Name s_GpuTimingCaseUnrelatedEnvelope = "tests/timing/unrelated_envelope";
+const Name s_GpuTimingCaseGrowingEnvelopeFirst = "tests/timing/growing_envelope_first";
+const Name s_GpuTimingCaseGrowingEnvelopeSecond = "tests/timing/growing_envelope_second";
+const Name s_GpuTimingCaseGrowingIdle0 = "tests/timing/growing_idle_0";
+const Name s_GpuTimingCaseGrowingIdle1 = "tests/timing/growing_idle_1";
+const Name s_GpuTimingCaseThrowingEnvelopeFirst = "tests/timing/throwing_envelope_first";
+const Name s_GpuTimingCaseThrowingEnvelopeSecond = "tests/timing/throwing_envelope_second";
+const Name s_GpuTimingCaseThrowingIdle0 = "tests/timing/throwing_idle_0";
+const Name s_GpuTimingCaseThrowingIdle1 = "tests/timing/throwing_idle_1";
+const Name s_GpuTimingCasePacketMetricsUnion = "tests/timing/packet_metrics/union";
+const Name s_GpuTimingCasePacketMetricsTriple = "tests/timing/packet_metrics/triple";
+const Name s_GpuTimingCasePacketMetricsPrecision = "tests/timing/packet_metrics/precision";
+const Name s_GpuTimingCasePacketMetricsZero = "tests/timing/packet_metrics/zero";
+const Name s_GpuTimingCasePacketMetricsRejection = "tests/timing/packet_metrics/rejection";
+
+const Name s_GpuTimingNameTestsTimingMetricCorrelatorScratch = "tests/timing/metric_correlator_scratch";
+const Name s_GpuTimingNameTestsTimingLargeEnvelopeOverlap = "tests/timing/large_envelope_overlap";
+const Name s_GpuTimingNameTestsTimingDuplicateEnvelopeOverlap = "tests/timing/duplicate_envelope_overlap";
+const Name s_GpuTimingNameTestsTimingGrowingEnvelopeOverlap = "tests/timing/growing_envelope_overlap";
+const Name s_GpuTimingNameTestsTimingThrowingEnvelopeOverlap = "tests/timing/throwing_envelope_overlap";
+const Name s_GpuTimingNameTestsGpuTimingMetricScratch = "tests.gpu_timing.metric_scratch";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackFirst = "tests.gpu_timing.feedback.first";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackShared = "tests.gpu_timing.feedback.shared";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackSecond = "tests.gpu_timing.feedback.second";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackMetricFirstInput = "tests.gpu_timing.feedback.metric_first_input";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackMetricSecondInput = "tests.gpu_timing.feedback.metric_second_input";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateFirstInput = "tests.gpu_timing.feedback.metric_alternate_first_input";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateSecondInput = "tests.gpu_timing.feedback.metric_alternate_second_input";
+const Name s_GpuTimingNameTestsGpuTimingFeedbackMetricOutput = "tests.gpu_timing.feedback.metric_output";
+const Name s_GpuTimingNameTestsTimingOverlapFirst = "tests/timing/overlap/first";
+const Name s_GpuTimingNameTestsTimingOverlapSecond = "tests/timing/overlap/second";
+const Name s_GpuTimingNameTestsTimingOverlapThird = "tests/timing/overlap/third";
+const Name s_GpuTimingNameTestsTimingOverlapFourth = "tests/timing/overlap/fourth";
+const Name s_GpuTimingNameTestsTimingOverlapOutput = "tests/timing/overlap/output";
+const Name s_GpuTimingNameTestsTimingOverlapAlternateOutput = "tests/timing/overlap/alternate_output";
+const Name s_GpuTimingNameTestsTimingOverlapSampleFirst = "tests/timing/overlap/sample_first";
+const Name s_GpuTimingNameTestsTimingOverlapSampleSecond = "tests/timing/overlap/sample_second";
+const Name s_GpuTimingNameTestsTimingOverlapSampleOutput = "tests/timing/overlap/sample_output";
+const Name s_GpuTimingNameTestsTimingOverlapCatchUpFirst = "tests/timing/overlap/catch_up_first";
+const Name s_GpuTimingNameTestsTimingOverlapCatchUpSecond = "tests/timing/overlap/catch_up_second";
+const Name s_GpuTimingNameTestsTimingOverlapCatchUpOutput = "tests/timing/overlap/catch_up_output";
+const Name s_GpuTimingNameTestsTimingOverlapLifecycleFirst = "tests/timing/overlap/lifecycle_first";
+const Name s_GpuTimingNameTestsTimingOverlapLifecycleSecond = "tests/timing/overlap/lifecycle_second";
+const Name s_GpuTimingNameTestsTimingOverlapLifecycleResetFirst = "tests/timing/overlap/lifecycle_reset_first";
+const Name s_GpuTimingNameTestsTimingOverlapLifecycleResetSecond = "tests/timing/overlap/lifecycle_reset_second";
+const Name s_GpuTimingNameTestsTimingOverlapLifecycleOutput = "tests/timing/overlap/lifecycle_output";
+const Name s_GpuTimingNameTestsTimingEnvelopeFirst = "tests/timing/envelope/first";
+const Name s_GpuTimingNameTestsTimingEnvelopeSecond = "tests/timing/envelope/second";
+const Name s_GpuTimingNameTestsTimingEnvelopeThird = "tests/timing/envelope/third";
+const Name s_GpuTimingNameTestsTimingEnvelopeQueueOverlap = "tests/timing/envelope/queue_overlap";
+const Name s_GpuTimingNameTestsTimingEnvelopeQueue0InternalIdle = "tests/timing/envelope/queue_0_internal_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeQueue1InternalIdle = "tests/timing/envelope/queue_1_internal_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleFirst = "tests/timing/envelope/role_first";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleSecond = "tests/timing/envelope/role_second";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleOverlap = "tests/timing/envelope/role_overlap";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleAlternateOverlap = "tests/timing/envelope/role_alternate_overlap";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleQueue0Idle = "tests/timing/envelope/role_queue_0_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleQueue1Idle = "tests/timing/envelope/role_queue_1_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue0Idle = "tests/timing/envelope/role_alternate_queue_0_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue1Idle = "tests/timing/envelope/role_alternate_queue_1_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureFirst = "tests/timing/envelope/failure_first";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureSecond = "tests/timing/envelope/failure_second";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureRetryFirst = "tests/timing/envelope/failure_retry_first";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureRetrySecond = "tests/timing/envelope/failure_retry_second";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureOverlap = "tests/timing/envelope/failure_overlap";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureQueue0Idle = "tests/timing/envelope/failure_queue_0_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureQueue1Idle = "tests/timing/envelope/failure_queue_1_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeFailureAlternateQueue1Idle = "tests/timing/envelope/failure_alternate_queue_1_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationFirst = "tests/timing/envelope/isolation_first";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationSecond = "tests/timing/envelope/isolation_second";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationOverlap = "tests/timing/envelope/isolation_overlap";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationQueue0Idle = "tests/timing/envelope/isolation_queue_0_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationQueue1Idle = "tests/timing/envelope/isolation_queue_1_idle";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationResetFirstOutput = "tests/timing/envelope/isolation_reset_first_output";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondInput = "tests/timing/envelope/isolation_reset_second_input";
+const Name s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondOutput = "tests/timing/envelope/isolation_reset_second_output";
+const u64 s_GpuTimingLargeTick = 9007199254740993u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

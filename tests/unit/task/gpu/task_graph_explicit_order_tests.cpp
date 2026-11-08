@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,10 +39,10 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResourceResult = AddHazardDomain(graph, Name("tests/task_graph/explicit_first_resource"), "Explicit First Resource");
+    const auto firstResourceResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExplicitFirstResource), "Explicit First Resource");
     ASSERT_TRUE(firstResourceResult);
     const Core::GpuGraphResourceId firstResource = *firstResourceResult;
-    const auto secondResourceResult = AddHazardDomain(graph, Name("tests/task_graph/explicit_second_resource"), "Explicit Second Resource");
+    const auto secondResourceResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExplicitSecondResource), "Explicit Second Resource");
     ASSERT_TRUE(secondResourceResult);
     const Core::GpuGraphResourceId secondResource = *secondResourceResult;
     ASSERT_TRUE(firstResource.valid());
@@ -61,13 +63,13 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
         graphGeneration = declarations.generation();
     }
     const Core::GpuTaskId futureThird{ .generation = graphGeneration, .index = 2u };
-    const auto firstResult = AddTask(Name("tests/task_graph/explicit_first"), "Explicit First", Span(&futureThird, 1u), Span(firstUses), {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExplicitFirst), "Explicit First", Span(&futureThird, 1u), Span(firstUses), {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(Name("tests/task_graph/explicit_second"), "Explicit Second", {}, Span(secondUses), {}, {}, {}, graph);
+    const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExplicitSecond), "Explicit Second", {}, Span(secondUses), {}, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
-    const auto thirdResult = AddTask(Name("tests/task_graph/explicit_third"), "Explicit Third", {}, Span(thirdUses), {}, {}, {}, graph);
+    const auto thirdResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExplicitThird), "Explicit Third", {}, Span(thirdUses), {}, {}, {}, graph);
     ASSERT_TRUE(thirdResult);
     const Core::GpuTaskId third = *thirdResult;
     ASSERT_TRUE(first.valid());
@@ -128,10 +130,10 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
         graphGeneration = declarations.generation();
     }
     const Core::GpuTaskId futureSecond{ .generation = graphGeneration, .index = 1u };
-    const auto firstResult = AddTask(Name("tests/task_graph/cycle_first"), "Cycle First", Span(&futureSecond, 1u), {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCycleFirst), "Cycle First", Span(&futureSecond, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(Name("tests/task_graph/cycle_second"), "Cycle Second", Span(&first, 1u), {}, {}, {}, {}, graph);
+    const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCycleSecond), "Cycle Second", Span(&first, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(first.valid());
@@ -148,13 +150,13 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     EXPECT_EQ(cycleAnalysis.diagnostic().relatedTask, cycleAnalysis.cycleEdges()[0].producer);
 
     graph.reset();
-    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/external")).setMarkerLabel("Prior Frame"));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternal)).setMarkerLabel("Prior Frame"));
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     const auto taskResult = [&](){
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/external_consumer")).setMarkerLabel("External Consumer").setExternalDependencies(Span(&completion, 1u));
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalConsumer)).setMarkerLabel("External Consumer").setExternalDependencies(Span(&completion, 1u));
         return graph.addTask(desc);
     }();
     ASSERT_TRUE(taskResult);
@@ -175,7 +177,7 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     }
 
     {
-        const auto gpuTaskAdmission = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/late_external")).setMarkerLabel("Late External"));
+        const auto gpuTaskAdmission = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphLateExternal)).setMarkerLabel("Late External"));
         EXPECT_TRUE(gpuTaskAdmission);
         if(gpuTaskAdmission)
             EXPECT_TRUE(gpuTaskAdmission->valid());
@@ -200,7 +202,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
         ASSERT_TRUE(declarations.valid());
         graphGeneration = declarations.generation();
     }
-    const Name taskBaseName("tests/task_graph/deep_cycle_task_");
+    const Name taskBaseName = NWB::Tests::TaskGraphTestUtils::s_TaskGraphDeepCycleTask;
     const Core::GpuTaskId futureLast{ .generation = graphGeneration, .index = static_cast<u32>(s_TaskCount - 1u), };
     const auto derivedNameResult = IndexedName(taskBaseName, 0u);
     ASSERT_TRUE(derivedNameResult);

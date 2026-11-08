@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
@@ -28,7 +30,7 @@ using namespace NWB::Impl;
 
 
 TEST(SoftShadowResolveDispatchBuilder, AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries){
-    Core::Alloc::GlobalArena arena(Name("tests/soft_shadow_resolve_dispatch_builder"));
+    Core::Alloc::GlobalArena arena(Tests::EcsGraphicsCases::s_EcsCaseTestsSoftShadowResolveDispatchBuilder);
     RendererRayTracingState state(arena);
     DeferredFrameTargets targets;
     targets.bindless.shadowHistB = Core::GpuDescriptorHandle(31u);

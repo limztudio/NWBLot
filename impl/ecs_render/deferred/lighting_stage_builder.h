@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -49,11 +50,6 @@ struct DeferredLightingStageInputs{
     b8 useLaggedLightingHistory = false;
     b8 declaresHardwareCaustics = false;
     b8 hasTransparentRenderers = false;
-};
-
-struct DeferredLightingStageResult{
-    Core::GpuTaskId lightingTask;
-    Core::GpuTaskId historySlotsUploadTask;
 };
 
 

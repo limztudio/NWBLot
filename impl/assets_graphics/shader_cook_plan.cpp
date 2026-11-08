@@ -107,11 +107,10 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
 
     PreparedShaderPlan plan(cookArena);
     // One shader entry can expand to itself and its mesh-compute shadow entry.
-    if(inOutShaderEntries.size() > Limit<usize>::s_Max / s_MaxPreparedEntriesPerShaderEntry){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: prepared shader entry reserve count overflows"));
+    const auto preparedEntryCapacity = TryComputePreparedShaderEntryCapacity(inOutShaderEntries.size());
+    if(!preparedEntryCapacity)
         return MakeUnexpected(Failure{});
-    }
-    plan.preparedEntries.reserve(inOutShaderEntries.size() * s_MaxPreparedEntriesPerShaderEntry);
+    plan.preparedEntries.reserve(*preparedEntryCapacity);
     plan.plannedFileCount = 1; // shader archive index
 
     const AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, scratchArena);
@@ -131,11 +130,10 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         ++implicitIncludeRootCount;
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
-        if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: implicit shader include root count overflows"));
+        const auto capacity = TryComputeImplicitShaderIncludeRootCapacity(implicitIncludeRootCount, resolvedPaths.assetRoots.size());
+        if(!capacity)
             return MakeUnexpected(Failure{});
-        }
-        implicitIncludeRootCount += resolvedPaths.assetRoots.size();
+        implicitIncludeRootCount = *capacity;
     }
     implicitIncludeRoots.reserve(implicitIncludeRootCount);
     if(!materialBindIncludeRoot.empty())

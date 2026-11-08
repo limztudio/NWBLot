@@ -7,6 +7,8 @@
 
 #include "framebuffer_capture.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <global/timer.h>
 
 
@@ -27,12 +29,12 @@ namespace Tests::Smoke{
 
 class SkinnedCausticTransition final : NoCopy{
 public:
-    static constexpr u64 s_TransitionPhaseFrames = 64u;
-    static constexpr f32 s_PoseAnimationSpeed = 1.1f;
+    static constexpr u64 s_TransitionPhaseFrames = s_SkinnedCausticTransitionPhaseFrames;
+    static constexpr f32 s_PoseAnimationSpeed = s_SkinnedCausticPoseAnimationSpeed;
 
 
 private:
-    static constexpr u32 s_TransitionPhaseCount = 4u;
+    static constexpr u32 s_TransitionPhaseCount = s_SkinnedCausticTransitionPhaseCount;
 
 
 private:

@@ -5,6 +5,14 @@
 const StringView s_DefaultGatherConfig = "default";
 const Name s_AssetGathererArena = "pipeline/asset_gatherer";
 
+b8 ValidateAssetGathererOutputDirectory(in b8 hasOutputDirectory){
+    if(!hasOutputDirectory){
+        error("AssetGatherer: output directory is empty");
+        return false;
+    }
+    return true;
+}
+
 b8 AreGatheredAssetPayloadsIdentical(in Span<u8> lhs, in Span<u8> rhs){
     if(lhs.size() != rhs.size())
         return false;

@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include <logger/common.h>
-
 #include "crash_symbolicate.h"
+
+#include <logger/common.h>
+#include <logger/server/crash_retention.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,17 +19,6 @@ NWB_LOG_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_DefaultMaxExtractedCrashPackages = 256u;
-inline constexpr usize s_DefaultMaxRawCrashArchives = 256u;
-inline constexpr usize s_DefaultMaxInvalidCrashArchives = 64u;
-
-
-struct CrashRetentionConfig{
-    usize maxExtractedPackages = s_DefaultMaxExtractedCrashPackages;
-    usize maxRawArchives = s_DefaultMaxRawCrashArchives;
-    usize maxInvalidArchives = s_DefaultMaxInvalidCrashArchives;
-};
 
 struct CrashIngestConfig{
     Path storageDirectory;

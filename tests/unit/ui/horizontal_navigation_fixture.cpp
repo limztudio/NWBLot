@@ -5,6 +5,7 @@
 #include "horizontal_navigation_fixture.h"
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +54,7 @@ PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{
 
 
 HorizontalNavigationFixture::HorizontalNavigationFixture()
-    : RouterTestFixture(Name("tests/ui/horizontal_navigation"))
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiHorizontalNavigation))
 {
     for(usize index = 0u; index < 2u; ++index){
         HitTarget& host = m_targets[index];

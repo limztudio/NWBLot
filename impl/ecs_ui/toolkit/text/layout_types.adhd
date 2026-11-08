@@ -78,7 +78,7 @@ Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
     )
         return makeUnexpected(Failure());
     const VectorSingle rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
-    if(!isFinite(rounded.x) || !isFinite(rounded.y) || !isFinite(rounded.z) || !isFinite(rounded.w) || !isFinite(rounded.x + rounded.z) || !isFinite(rounded.y + rounded.w))
+    if(!isFinite(rounded) || !isFinite(rounded.xy + rounded.zw))
         return makeUnexpected(Failure());
     return VectorDouble(rounded);
 }
@@ -220,3 +220,4 @@ TextGlyphIntersection EvaluateUnselectedAtlasGlyphCandidate(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

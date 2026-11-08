@@ -1,7 +1,7 @@
 # Project filesystems
 
 `core/filesystem/filesystem.h` defines `NWB::Core::Filesystem::IFilesystem`. Its implementation file contains
-only backend-independent cursor helpers. The separate `core/filesystem/factory.h/.cpp` composition module owns
+only backend-independent cursor helpers. The separate `core/filesystem/factory.h` and `core/filesystem/factory.cpp` composition module owns
 `FilesystemFactory` and `CreateFilesystem`, including selection of the default backend. The interface never
 includes or constructs a concrete filesystem. The default implementation is `VolumeFileSystem`, which reads and writes the engine's existing segmented volume format. Asset loading, shader
 archive loading, pipeline cache persistence, and asset gathering use the interface. The retired `VolumeSession`
@@ -9,7 +9,7 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace. The loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
 
 ```cpp
 #include "namespace.h"
@@ -90,7 +90,7 @@ custom implementation and may be a no-op.
 
 ## Reading and seeking
 
-`readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes; reading beyond EOF returns an unexpected failure. Check admission before reading the count; zero is a successful value. A nonzero capacity requires a valid buffer.
+`readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes. Reading beyond EOF returns an unexpected failure. Check admission before reading the count. Zero is a successful value. A nonzero capacity requires a valid buffer.
 
 `readFile(path, byteContainer)` obtains the file size, sizes the caller's container, and reads the complete
 payload through the virtual range operation. It clears the container on failure. Container overloads require

@@ -8,7 +8,8 @@
 #include <logger/common.h>
 
 #include <core/alloc/scratch.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
+#include <logger/server/crash_path_names.adhd.h>
 
 #include <global/filesystem/executable_paths.h>
 
@@ -24,14 +25,14 @@ NWB_LOG_BEGIN
 
 using CrashScratchPath = ::Path<Core::Alloc::ScratchArena>;
 
-inline constexpr StringView s_CrashRawDirectoryName = "raw";
-inline constexpr StringView s_CrashInvalidDirectoryName = "invalid";
-inline constexpr StringView s_CrashExtractedDirectoryName = "packages";
-inline constexpr StringView s_CrashInboxDirectoryName = "inbox";
-inline constexpr StringView s_CrashSymbolStoreDirectoryName = "symbols";
-inline constexpr StringView s_CrashUploadArchiveFilePrefix = "crash_";
-inline constexpr StringView s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
-inline constexpr StringView s_ServerSymbolicationFileName = "server_symbolication.txt";
+inline constexpr StringView s_CrashRawDirectoryName = NWB::Log::CrashPathNames::s_CrashRawDirectoryName;
+inline constexpr StringView s_CrashInvalidDirectoryName = NWB::Log::CrashPathNames::s_CrashInvalidDirectoryName;
+inline constexpr StringView s_CrashExtractedDirectoryName = NWB::Log::CrashPathNames::s_CrashExtractedDirectoryName;
+inline constexpr StringView s_CrashInboxDirectoryName = NWB::Log::CrashPathNames::s_CrashInboxDirectoryName;
+inline constexpr StringView s_CrashSymbolStoreDirectoryName = NWB::Log::CrashPathNames::s_CrashSymbolStoreDirectoryName;
+inline constexpr StringView s_CrashUploadArchiveFilePrefix = NWB::Log::CrashPathNames::s_CrashUploadArchiveFilePrefix;
+inline constexpr StringView s_CrashUploadArchiveFileExtension = NWB::Log::CrashPathNames::s_CrashUploadArchiveFileExtension;
+inline constexpr StringView s_ServerSymbolicationFileName = NWB::Log::CrashPathNames::s_ServerSymbolicationFileName;
 
 [[nodiscard]] inline CrashScratchPath CrashDefaultRootDirectory(Core::Alloc::ScratchArena& arena){
     return ExecutablePaths(arena).defaultStorageDirectory(Core::Crash::PackageNames::s_DefaultRootDirectoryName);

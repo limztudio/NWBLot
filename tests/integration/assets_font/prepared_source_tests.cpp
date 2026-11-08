@@ -5,6 +5,7 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_font/name_cases.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -186,7 +187,7 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
-    Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_output"));
+    Core::Alloc::GlobalArena outputArena{Name(NWB::Tests::FontCases::s_FontCaseTestsIntegrationAssetsFontPreparedOutput)};
     SourceFixture fixture(testArena.arena);
     auto binaryResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
@@ -300,7 +301,7 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
-    Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_serialize_output"));
+    Core::Alloc::GlobalArena outputArena{Name(NWB::Tests::FontCases::s_FontCaseTestsIntegrationAssetsFontPreparedSerializeOutput)};
     SourceFixture fixture(testArena.arena);
     auto outputResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, outputArena);
     ASSERT_TRUE(outputResult);

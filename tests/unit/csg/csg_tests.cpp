@@ -4,6 +4,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
+#include <tests/unit/csg/name_cases.adhd.h>
 
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_csg/deform_edit.h>
@@ -35,7 +36,7 @@ static constexpr AStringView s_EngineCsgCapsule = "engine/csg/capsule";
 
 using TestWorld = NWB::Tests::EcsTestWorld;
 
-inline constexpr Name s_ScratchArena("tests/csg/scratch");
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -222,7 +223,7 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         auto sphereCutterEntity = testWorld.world.createEntity();
         auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         sphereCutter.receiverGroup = Name(s_ProjectCsgGroupA);
-        sphereCutter.shapeType = Name("engine/csg/sphere");
+        sphereCutter.shapeType = Name(NWB::Tests::CsgCases::s_CsgInputNameEngineCsgSphere);
 
         auto inactiveCutterEntity = testWorld.world.createEntity();
         auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();

@@ -7,6 +7,8 @@
 
 #include "crash_ingest.h"
 
+#include <logger/server/server_values.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,7 +19,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
+inline constexpr usize s_MaxPendingCrashUploadPathText = ::NWB::Log::s_LogServerValueModuleMaxPendingCrashUploadPathText;
 
 struct PendingCrashUpload{
     Array<char, s_MaxPendingCrashUploadPathText> path = {};

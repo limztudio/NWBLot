@@ -1,5 +1,6 @@
 if(Python3_Interpreter_FOUND AND TARGET nwb_assets_texture_cook)
     nwb_declare_executable(nwb_tex_conv_prepared_decode)
+    nwb_target_adhd_sources(nwb_tex_conv_prepared_decode NAMESPACE "NWB::Tests::TextureDecodeCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd")
     target_compile_definitions(nwb_tex_conv_prepared_decode PRIVATE NWB_COOK=1)
     target_sources(nwb_tex_conv_prepared_decode PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/*.c"

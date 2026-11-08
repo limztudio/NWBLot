@@ -7,6 +7,8 @@
 
 #include "module.h"
 
+#include <core/crash/internal_values.adhd.h>
+
 #include <global/process.h>
 
 
@@ -25,19 +27,19 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
-inline constexpr u32 s_AckMagic = 0x4E574241u; // NWBA
-inline constexpr u32 s_RequestVersion = 2u;
-inline constexpr usize s_MaxMetadata = 32u;
-inline constexpr usize s_MaxBreadcrumbs = 128u;
-inline constexpr usize s_MaxCallstackFrames = 64u;
-inline constexpr usize s_MaxShortText = 64u;
-inline constexpr usize s_MaxMediumText = 256u;
-inline constexpr usize s_MaxPathText = 1024u;
-inline constexpr usize s_MaxUrlText = 1024u;
-inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
+inline constexpr u32 s_RequestMagic = ::NWB::Core::Crash::CrashTypes::s_RequestMagic; // NWBC
+inline constexpr u32 s_AckMagic = ::NWB::Core::Crash::CrashTypes::s_AckMagic; // NWBA
+inline constexpr u32 s_RequestVersion = ::NWB::Core::Crash::CrashTypes::s_RequestVersion;
+inline constexpr usize s_MaxMetadata = ::NWB::Core::Crash::CrashTypes::s_MaxMetadata;
+inline constexpr usize s_MaxBreadcrumbs = ::NWB::Core::Crash::CrashTypes::s_MaxBreadcrumbs;
+inline constexpr usize s_MaxCallstackFrames = ::NWB::Core::Crash::CrashTypes::s_MaxCallstackFrames;
+inline constexpr usize s_MaxShortText = ::NWB::Core::Crash::CrashTypes::s_MaxShortText;
+inline constexpr usize s_MaxMediumText = ::NWB::Core::Crash::CrashTypes::s_MaxMediumText;
+inline constexpr usize s_MaxPathText = ::NWB::Core::Crash::CrashTypes::s_MaxPathText;
+inline constexpr usize s_MaxUrlText = ::NWB::Core::Crash::CrashTypes::s_MaxUrlText;
+inline constexpr u32 s_ManualDumpExceptionCode = ::NWB::Core::Crash::CrashTypes::s_ManualDumpExceptionCode;
 #if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr u32 s_WindowsContextArchitectureMask = 0x00FF0000u;
+inline constexpr u32 s_WindowsContextArchitectureMask = ::NWB::Core::Crash::CrashTypes::s_WindowsContextArchitectureMask;
 inline constexpr u32 s_WindowsContextArchitecture = CONTEXT_CONTROL & s_WindowsContextArchitectureMask;
 inline constexpr u32 s_WindowsExtendedContextFlag = CONTEXT_XSTATE & ~s_WindowsContextArchitectureMask;
 #endif

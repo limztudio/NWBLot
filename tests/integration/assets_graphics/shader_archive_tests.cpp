@@ -28,9 +28,9 @@ namespace __hidden_shader_archive_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_Ps = "ps";
-static constexpr AStringView s_ProjectShadersTestShader = "project/shaders/test_shader";
-static constexpr AStringView s_Main = "main";
+static constexpr AStringView s_Ps = AssetsGraphicsFixture::s_ShaderStagePs;
+static constexpr AStringView s_ProjectShadersTestShader = AssetsGraphicsFixture::s_ProjectShadersTestShader;
+static constexpr AStringView s_Main = AssetsGraphicsFixture::s_ShaderEntryMain;
 
 using TestArena = AssetsGraphicsFixture::TestArena;
 
@@ -45,7 +45,7 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     defaultRecord.shaderName = Name(s_ProjectShadersTestShader);
     defaultRecord.variantName.assign(NWB::Core::ShaderArchive::s_DefaultVariant);
     defaultRecord.stage = Name(s_Ps);
-    defaultRecord.virtualPathHash = Name("shader/test_shader/default/ps").hash();
+    defaultRecord.virtualPathHash = Name(AssetsGraphicsFixture::s_AssetCaseShaderTestShaderDefaultPs).hash();
     records.push_back(Move(defaultRecord));
 
     Name virtualPath = s_NameNone;
@@ -69,10 +69,10 @@ TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmitting
     record.shaderName = Name(s_ProjectShadersTestShader);
     record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
     record.stage = Name(s_Ps);
-    record.virtualPathHash = Name("shader/unaligned/default/ps").hash();
+    record.virtualPathHash = Name(AssetsGraphicsFixture::s_AssetCaseShaderUnalignedDefaultPs).hash();
     record.sourceChecksum = 0x12345678u;
     records.push_back(Move(record));
-    Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/archive_admission"));
+    Core::Alloc::ScratchArena scratchArena{Name(AssetsGraphicsFixture::s_AssetCaseTestsAssetsGraphicsArchiveAdmission)};
     const auto encoded = Core::ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
     ASSERT_TRUE(encoded);
 
@@ -120,6 +120,24 @@ TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
     const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult4);
     EXPECT_EQ(entryPointResult4.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
+}
+
+TEST(AssetsGraphics, SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown){
+    constexpr Array<AssetsGraphicsFixture::SpirvModelStageCase, 4u> s_Models = {{
+        { .stage = Core::ShaderType::Amplification, .model = 5267u }, { .stage = Core::ShaderType::Mesh, .model = 5268u },
+        { .stage = Core::ShaderType::Amplification, .model = 5364u }, { .stage = Core::ShaderType::Mesh, .model = 5365u },
+    }};
+    Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+    for(const AssetsGraphicsFixture::SpirvModelStageCase& model : s_Models){
+        words[6u] = model.model;
+        const auto entry = Core::ResolveSpirvEntryPointName(words, s_Main, model.stage);
+        ASSERT_TRUE(entry) << model.model;
+        EXPECT_EQ(*entry, s_Main);
+    }
+    words[6u] = Limit<u32>::s_Max;
+    const auto unknown = Core::ResolveSpirvEntryPointName(words, s_Main, Core::ShaderType::Pixel);
+    ASSERT_FALSE(unknown);
+    EXPECT_EQ(unknown.error(), Core::SpirvEntryPointLookupResult::NotFound);
 }
 
 TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches){
@@ -191,3 +209,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

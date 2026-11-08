@@ -24,9 +24,9 @@ namespace __hidden_ecs_scheduler_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_SystemCompletionTimeoutMS = 2000u;
-constexpr u32 s_PollIntervalMS = 1u;
-constexpr u32 s_EntityWaitIntervalMS = 25u;
+constexpr u32 s_SystemCompletionTimeoutMS = __hidden_ecs_tests::s_EcsTestSystemCompletionTimeoutMS;
+constexpr u32 s_PollIntervalMS = __hidden_ecs_tests::s_EcsTestPollIntervalMS;
+constexpr u32 s_EntityWaitIntervalMS = __hidden_ecs_tests::s_EcsTestEntityWaitIntervalMS;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,21 +34,14 @@ constexpr u32 s_EntityWaitIntervalMS = 25u;
 
 using TestWorld = NWB::Tests::EcsTestWorld;
 
-inline constexpr Name s_EcsParallelTestArena("tests/ecs_parallel");
+inline constexpr Name s_EcsParallelTestArena = __hidden_ecs_tests::s_EcsTestParallelArenaName;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PositionComponent{
-    i32 x = 0;
-    i32 y = 0;
-};
-
-struct VelocityComponent{
-    i32 x = 0;
-    i32 y = 0;
-};
+using PositionComponent = __hidden_ecs_tests::PositionComponent;
+using VelocityComponent = __hidden_ecs_tests::VelocityComponent;
 
 
 class CountingSystem final : public NWB::Core::ECS::ISystem{
@@ -143,8 +136,8 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     NWB::Core::CpuTaskScheduler taskScheduler(3u);
     NWB::Core::ECS::World world(arena, taskScheduler);
 
-    static constexpr u32 s_EntityCount = 64u;
-    static constexpr usize s_OuterCount = 4u;
+    static constexpr u32 s_EntityCount = __hidden_ecs_tests::s_EcsTestNestedEntityCount;
+    static constexpr usize s_OuterCount = __hidden_ecs_tests::s_EcsTestNestedOuterCount;
     for(u32 i = 0u; i < s_EntityCount; ++i){
         auto entity = world.createEntity();
         auto& position = entity.addComponent<PositionComponent>();
@@ -155,10 +148,8 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&]([[maybe_unused]] usize outerIndex){
         EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, [[maybe_unused]] PositionComponent& position)noexcept{
             visits.fetch_add(1u, MemoryOrder::relaxed);
-        }
-        )));
-    }
-    )));
+        })));
+    })));
 
     EXPECT_EQ(visits.load(MemoryOrder::relaxed), s_EntityCount * static_cast<u32>(s_OuterCount));
 }
@@ -216,8 +207,7 @@ TEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents){
     ScheduledSystem transfer(testWorld.arena, {
         { positionType, NWB::Core::ECS::AccessMode::Read },
         { velocityType, NWB::Core::ECS::AccessMode::Write },
-    }, [&]()noexcept{ velocity = position + 1; }
-    );
+    }, [&]()noexcept{ velocity = position + 1; });
     ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{ observed = velocity; });
 
     NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
@@ -282,8 +272,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
         executedOnCaller = s_EcsCallerThread;
         EXPECT_EQ(value, 23);
         value = 29;
-    }, { .target = NWB::Core::CpuTaskTarget::MainThread }
-    );
+    }, { .target = NWB::Core::CpuTaskTarget::MainThread });
     ScheduledSystem consumer(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){ EXPECT_EQ(value, 29); });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
@@ -299,7 +288,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
     NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
-    static constexpr usize s_EntityCount = 512u;
+    static constexpr usize s_EntityCount = __hidden_ecs_tests::s_EcsTestDependentQueryEntityCount;
     for(usize i = 0u; i < s_EntityCount; ++i)
         world.createEntity().addComponent<PositionComponent>().x = static_cast<i32>(i);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
@@ -308,8 +297,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
         EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
             position.y = position.x + 1;
-        }
-        )));
+        })));
     });
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
         world.view<PositionComponent>().each([&](NWB::Core::ECS::EntityID, PositionComponent& position){

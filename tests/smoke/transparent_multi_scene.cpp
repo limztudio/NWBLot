@@ -61,12 +61,11 @@ static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octa
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
 static constexpr TransparentMeshRef s_ShadowPlaneMesh{"project/meshes/shadow_plane"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr TransparentMaterialRef s_TransparentSharedMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr TransparentMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr TransparentMaterialRef s_TransparentCsgMaterial{"project/smoke/transparent_multi/materials/csg_center"};
-static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
+static constexpr Name s_TransparentCsgReceiverGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeTransparentMultiCenterReceiver;
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -103,7 +102,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
-    cutter.shapeType = Name("engine/csg/plane");
+    cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
     cutter.active = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
 

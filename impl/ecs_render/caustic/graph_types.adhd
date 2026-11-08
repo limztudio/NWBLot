@@ -1,0 +1,125 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using CausticGraphTaskId = Core::GpuTaskId;
+using CausticGraphResourceId = Core::GpuGraphResourceId;
+using CausticLabelView = AStringView;
+using CausticWarnView = TStringView;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_RenderNameRenderHardwareCausticsPhotons = "render.hardware_caustics.photons";
+const Name s_RenderNameRenderSoftwareCausticsPhotons = "render.software_caustics.photons";
+const Name s_RenderNameCausticEmissionTargets = "caustic_emission_targets";
+
+const Name s_CausticsNameRenderHardwareCausticsAccumulator = "render.hardware_caustics.accumulator";
+const Name s_CausticsNameRenderHardwareCausticsHistory = "render.hardware_caustics.history";
+const Name s_CausticsNameRenderHardwareCausticsResolveHalf = "render.hardware_caustics.resolve_half";
+const Name s_CausticsNameRenderHardwareCausticsResolveGeometry = "render.hardware_caustics.resolve_geometry";
+const Name s_CausticsNameRenderHardwareCausticsSceneGeometry = "render.hardware_caustics.scene_geometry";
+const Name s_CausticsNameRenderSoftwareCausticsAccumulator = "render.software_caustics.accumulator";
+const Name s_CausticsNameRenderSoftwareCausticsHistory = "render.software_caustics.history";
+const Name s_CausticsNameRenderSoftwareCausticsResolveHalf = "render.software_caustics.resolve_half";
+const Name s_CausticsNameRenderSoftwareCausticsResolveGeometry = "render.software_caustics.resolve_geometry";
+const Name s_CausticsNameRenderSoftwareCausticsSceneGeometry = "render.software_caustics.scene_geometry";
+const Name s_CausticsNameRenderHardwareCausticsIrradianceClear = "render.hardware_caustics.irradiance_clear";
+const Name s_CausticsNameRenderSoftwareCausticsIrradianceClear = "render.software_caustics.irradiance_clear";
+const Name s_CausticsNameRenderHardwareCausticsAccumulatorBootstrapClear = "render.hardware_caustics.accumulator_bootstrap_clear";
+const Name s_CausticsNameRenderSoftwareCausticsAccumulatorBootstrapClear = "render.software_caustics.accumulator_bootstrap_clear";
+const Name s_CausticsNameRenderHardwareCausticsAccumulatorDecay = "render.hardware_caustics.accumulator_decay";
+const Name s_CausticsNameRenderSoftwareCausticsAccumulatorDecay = "render.software_caustics.accumulator_decay";
+const Name s_CausticsNameRenderHardwareCausticsGeometryDownsample = "render.hardware_caustics.geometry_downsample";
+const Name s_CausticsNameRenderSoftwareCausticsGeometryDownsample = "render.software_caustics.geometry_downsample";
+const Name s_CausticsNameRenderHardwareCausticsResolvePrepare = "render.hardware_caustics.resolve_prepare";
+const Name s_CausticsNameRenderHardwareCausticsResolveWavelet = "render.hardware_caustics.resolve_wavelet";
+const Name s_CausticsNameRenderHardwareCausticsResolveSecondWavelet = "render.hardware_caustics.resolve_second_wavelet";
+const Name s_CausticsNameRenderHardwareCausticsResolveThirdWavelet = "render.hardware_caustics.resolve_third_wavelet";
+const Name s_CausticsNameRenderHardwareCausticsResolveFourthWavelet = "render.hardware_caustics.resolve_fourth_wavelet";
+const Name s_CausticsNameRenderHardwareCausticsResolveFifthWavelet = "render.hardware_caustics.resolve_fifth_wavelet";
+const Name s_CausticsNameRenderHardwareCausticsResolveUpsample = "render.hardware_caustics.resolve_upsample";
+const Name s_CausticsNameRenderHardwareCausticsResolveTimingClose = "render.hardware_caustics.resolve_timing_close";
+const Name s_CausticsNameRenderSoftwareCausticsResolvePrepare = "render.software_caustics.resolve_prepare";
+const Name s_CausticsNameRenderSoftwareCausticsResolveWavelet = "render.software_caustics.resolve_wavelet";
+const Name s_CausticsNameRenderSoftwareCausticsResolveSecondWavelet = "render.software_caustics.resolve_second_wavelet";
+const Name s_CausticsNameRenderSoftwareCausticsResolveThirdWavelet = "render.software_caustics.resolve_third_wavelet";
+const Name s_CausticsNameRenderSoftwareCausticsResolveFourthWavelet = "render.software_caustics.resolve_fourth_wavelet";
+const Name s_CausticsNameRenderSoftwareCausticsResolveFifthWavelet = "render.software_caustics.resolve_fifth_wavelet";
+const Name s_CausticsNameRenderSoftwareCausticsResolveUpsample = "render.software_caustics.resolve_upsample";
+const Name s_CausticsNameRenderSoftwareCausticsResolveTimingClose = "render.software_caustics.resolve_timing_close";
+
+
+class CausticsStagePrefixResult{
+    public CausticGraphTaskId causticIrradianceClearTask = CausticGraphTaskId();
+    public CausticGraphTaskId causticAccumulatorBootstrapClearTask = CausticGraphTaskId();
+    public CausticGraphTaskId causticAccumulatorDecayTask = CausticGraphTaskId();
+    public CausticGraphTaskId photonDependencyTask = CausticGraphTaskId();
+    public b8 graphOwnsAccumulatorBootstrapClear = false;
+}
+
+
+class CausticsStageTargetNaming{
+    public Name accumulator;
+    public Name history;
+    public Name resolveHalf;
+    public Name resolveGeometry;
+    public Name sceneGeometryDomain;
+    public CausticLabelView sceneGeometryDomainLabel;
+    public CausticWarnView importWarnText;
+
+    public CausticsStageTargetNaming(){
+        this.accumulator = Name();
+        this.history = Name();
+        this.resolveHalf = Name();
+        this.resolveGeometry = Name();
+        this.sceneGeometryDomain = Name();
+        this.sceneGeometryDomainLabel = CausticLabelView();
+        this.importWarnText = CausticWarnView();
+    }
+
+    public CausticsStageTargetNaming(in Name accumulator, in Name history, in Name resolveHalf, in Name resolveGeometry, in Name sceneGeometryDomain, in CausticLabelView sceneGeometryDomainLabel, in CausticWarnView importWarnText){
+        this.accumulator = accumulator;
+        this.history = history;
+        this.resolveHalf = resolveHalf;
+        this.resolveGeometry = resolveGeometry;
+        this.sceneGeometryDomain = sceneGeometryDomain;
+        this.sceneGeometryDomainLabel = sceneGeometryDomainLabel;
+        this.importWarnText = importWarnText;
+    }
+}
+
+
+class CausticsStageTargets{
+    public CausticGraphResourceId causticAccumulator;
+    public CausticGraphResourceId causticHistory;
+    public CausticGraphResourceId causticResolveHalf;
+    public CausticGraphResourceId causticResolveGeometry;
+    public CausticGraphResourceId sceneGeometryDomain;
+
+    public CausticsStageTargets(){
+        this.causticAccumulator = CausticGraphResourceId();
+        this.causticHistory = CausticGraphResourceId();
+        this.causticResolveHalf = CausticGraphResourceId();
+        this.causticResolveGeometry = CausticGraphResourceId();
+        this.sceneGeometryDomain = CausticGraphResourceId();
+    }
+
+    public CausticsStageTargets(in CausticGraphResourceId causticAccumulator, in CausticGraphResourceId causticHistory, in CausticGraphResourceId causticResolveHalf, in CausticGraphResourceId causticResolveGeometry, in CausticGraphResourceId sceneGeometryDomain){
+        this.causticAccumulator = causticAccumulator;
+        this.causticHistory = causticHistory;
+        this.causticResolveHalf = causticResolveHalf;
+        this.causticResolveGeometry = causticResolveGeometry;
+        this.sceneGeometryDomain = sceneGeometryDomain;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

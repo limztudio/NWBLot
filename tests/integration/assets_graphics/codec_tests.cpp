@@ -4,7 +4,10 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
 
 #include <core/assets/input_list.h>
 #include <core/assets/cook_metadata_internal.h>
@@ -12,12 +15,11 @@
 
 #include <global/filesystem/executable_paths.h>
 #include <global/sha1.h>
-
-#include <gtest/gtest.h>
-
 #include <global/atomic.h>
 #include <global/sync.h>
 #include <global/thread.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,6 +55,15 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(AssetsGraphics, RendererOpticalVolumeGroupRejectsOnlyAsciiEdgePadding){
+    EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(""));
+    EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(" \t "));
+    EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(" group"));
+    EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("group\n"));
+    EXPECT_TRUE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("group\tname"));
+    EXPECT_TRUE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("\xc2\xa0group"));
+}
+
 TEST(AssetsGraphics, RendererComponentCookAndSerializePreservesOpticalFields){
     static constexpr AStringView s_RendererComponentMetadata =
         "renderer_component asset;\n"
@@ -72,7 +83,7 @@ TEST(AssetsGraphics, RendererComponentCookAndSerializePreservesOpticalFields){
     const Path& root = cookCase->root;
     const Path& outputDirectory = cookCase->outputDirectory;
     const Path assetRoot = root / s_AssetsDirectory;
-    const Name virtualPath("project/entities/lens/renderer");
+    const Name virtualPath = NWB::Tests::AssetsGraphicsFixture::s_ProjectEntitiesLensRenderer;
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "entities" / "lens" / "renderer.nwb", s_RendererComponentMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 1u));

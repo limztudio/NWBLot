@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "device_detail.h"
 
+#include <core/graphics/vulkan/pipeline_cache_types.adhd.h>
 #include <core/filesystem/factory.h>
 #include <core/filesystem/volume_staging.h>
 #include <core/filesystem/volume_naming.h>
@@ -28,13 +29,13 @@ namespace __hidden_vulkan_device_pipeline_cache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
-static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
-static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
-static constexpr usize s_PipelineCacheVersionOffset = 4u;
-static constexpr usize s_PipelineCacheVendorIdOffset = 8u;
-static constexpr usize s_PipelineCacheDeviceIdOffset = 12u;
-static constexpr usize s_PipelineCacheUuidOffset = 16u;
+static constexpr u64 s_PipelineCacheVolumeSegmentSize = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVolumeSegmentSize;
+static constexpr u64 s_PipelineCacheVolumeMetadataSize = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVolumeMetadataSize;
+static constexpr usize s_PipelineCacheDataMaxAttempts = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheDataMaxAttempts;
+static constexpr usize s_PipelineCacheVersionOffset = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVersionOffset;
+static constexpr usize s_PipelineCacheVendorIdOffset = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVendorIdOffset;
+static constexpr usize s_PipelineCacheDeviceIdOffset = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheDeviceIdOffset;
+static constexpr usize s_PipelineCacheUuidOffset = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheUuidOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

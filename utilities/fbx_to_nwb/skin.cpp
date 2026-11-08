@@ -81,10 +81,8 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             continue;
         }
 
-        if(inOutContext.joints.size() >= s_MaxSkeletonJointCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
+        if(!ValidateFbxNewSkeletonJointCapacity(inOutContext.joints.size()))
             return MakeUnexpected(Failure{});
-        }
 
         JointMatrix storedInverseBind{};
         JointMatrix storedBindPose{};
@@ -107,10 +105,8 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
 
 Expected<MeshSkinInfluence> LoadInfluence(const ufbx_skin_deformer& skin, const Span<const u16> clusterJoints, const u32 logicalVertex){
     MeshSkinInfluence result;
-    if(logicalVertex >= skin.vertices.count){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));
+    if(!ValidateFbxSkinLogicalVertex(logicalVertex, skin.vertices.count))
         return MakeUnexpected(Failure{});
-    }
 
     const ufbx_skin_vertex skinVertex = skin.vertices.data[logicalVertex];
     if(!ValidateFbxSkinVertexWeightRange(skinVertex.weight_begin, skinVertex.num_weights, skin.weights.count))
@@ -147,3 +143,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

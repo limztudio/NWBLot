@@ -30,22 +30,22 @@ namespace LoggerCrashSymbolicateDetail{
 namespace __hidden_linux_frame_symbol_resolver{
 
 
-inline constexpr AStringView s_LinuxUnknownSymbolText = "??";
-inline constexpr AStringView s_LinuxUnknownLocationPrefix = "??:";
-inline constexpr AStringView s_LinuxSymbolFrameSeparator = " <- ";
-inline constexpr AStringView s_LinuxSymbolLocationSeparator = " at ";
-inline constexpr AStringView s_LinuxSymbolLocationBarePrefix = "at ";
-inline constexpr AStringView s_LlvmSymbolizerTool = "llvm-symbolizer";
-inline constexpr AStringView s_Addr2LineTool = "addr2line";
-inline constexpr AStringView s_LlvmSymbolizerObjectPrefix = "--obj=";
-inline constexpr AStringView s_LlvmSymbolizerDemangleFlag = "--demangle";
-inline constexpr AStringView s_LlvmSymbolizerFunctionsFlag = "--functions";
-inline constexpr AStringView s_LlvmSymbolizerInliningFlag = "--inlining=true";
-inline constexpr AStringView s_Addr2LineFunctionsFlag = "-f";
-inline constexpr AStringView s_Addr2LineDemangleFlag = "-C";
-inline constexpr AStringView s_Addr2LineInlineFlag = "-i";
-inline constexpr AStringView s_Addr2LineExeFlag = "-e";
-inline constexpr usize s_SymbolizerResultReserveMultiplier = 3u;
+inline constexpr AStringView s_LinuxUnknownSymbolText = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLinuxUnknownSymbolText;
+inline constexpr AStringView s_LinuxUnknownLocationPrefix = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLinuxUnknownLocationPrefix;
+inline constexpr AStringView s_LinuxSymbolFrameSeparator = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator;
+inline constexpr AStringView s_LinuxSymbolLocationSeparator = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator;
+inline constexpr AStringView s_LinuxSymbolLocationBarePrefix = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix;
+inline constexpr AStringView s_LlvmSymbolizerTool = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLlvmSymbolizerTool;
+inline constexpr AStringView s_Addr2LineTool = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAddr2LineTool;
+inline constexpr AStringView s_LlvmSymbolizerObjectPrefix = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLlvmSymbolizerObjectPrefix;
+inline constexpr AStringView s_LlvmSymbolizerDemangleFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLlvmSymbolizerDemangleFlag;
+inline constexpr AStringView s_LlvmSymbolizerFunctionsFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLlvmSymbolizerFunctionsFlag;
+inline constexpr AStringView s_LlvmSymbolizerInliningFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxLlvmSymbolizerInliningFlag;
+inline constexpr AStringView s_Addr2LineFunctionsFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAddr2LineFunctionsFlag;
+inline constexpr AStringView s_Addr2LineDemangleFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAddr2LineDemangleFlag;
+inline constexpr AStringView s_Addr2LineInlineFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAddr2LineInlineFlag;
+inline constexpr AStringView s_Addr2LineExeFlag = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAddr2LineExeFlag;
+inline constexpr usize s_SymbolizerResultReserveMultiplier = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxSymbolizerResultReserveMultiplier;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

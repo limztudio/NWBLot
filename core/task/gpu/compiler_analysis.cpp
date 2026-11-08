@@ -10,6 +10,8 @@
 #include "resource_hazard_tracker.h"
 #include "presentation_endpoint_validator.h"
 
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
+
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
 #include <global/timer.h>

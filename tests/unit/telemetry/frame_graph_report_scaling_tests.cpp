@@ -4,6 +4,8 @@
 
 #include "frame_graph_test_helpers.h"
 
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 
 #include <global/arena_memory.h>
@@ -20,6 +22,8 @@ namespace __hidden_frame_graph_report_scaling_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
 
@@ -52,13 +56,13 @@ public:
 
 public:
     void addUnmeasuredNode(){
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/task"), .label = "Unmeasured task", .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_ReportTask), .label = "Unmeasured task", .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
     }
 
     void addOwner(const u32 packetCount, const u16 firstQueueIndex, const b8 includeQueues = true){
         const u32 ownerIndex = static_cast<u32>(nodes.size());
         const Telemetry::FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/owner"), .label = "Measured owner", .kind = Telemetry::FrameGraphNodeKind::Pass, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = owner, });
+        nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_ReportOwner), .label = "Measured owner", .kind = Telemetry::FrameGraphNodeKind::Pass, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = owner, });
         if(includeQueues){
             const u32 queueCount = packetCount > 1u ? 2u : packetCount;
             for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){

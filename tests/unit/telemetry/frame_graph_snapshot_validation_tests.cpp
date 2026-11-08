@@ -5,6 +5,7 @@
 #include "telemetry_test_helpers.h"
 
 #include <tests/common/frame_graph_snapshot_validation.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -17,6 +18,8 @@ namespace __hidden_frame_graph_snapshot_validation_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 using namespace TelemetryTestDetail;
 
@@ -35,7 +38,7 @@ public:
         runtime.submission.acceptedPacketCount = 2u;
         runtime.submission.rejectedTaskCount = 1u;
         runtime.submission.rejectedPacketCount = 1u;
-        const Array<Name, 4u> names{ Name("render.first"), Name("render.second"), Name("render.present"), Name("render.frame_recovery") };
+        const Array<Name, 4u> names{ Name(TestCases::s_RenderFirst), Name(TestCases::s_RenderSecond), Name(TestCases::s_RenderPresent), Name(TestCases::s_RenderFrameRecovery) };
         const Array<u32, 4u> packets{ 0u, 0u, 1u, 2u };
         for(usize index = 0u; index < names.size(); ++index){
             auto& node = payload.nodes.emplace_back();
@@ -106,9 +109,9 @@ TEST(FrameGraphSnapshotValidation, RejectsNativeFailureOrExecutedRecovery){
 
 TEST(FrameGraphSnapshotValidation, RejectsAMissingNormalTaskOrAcceptedRecoveryTask){
     Fixture fixture;
-    fixture.payload.nodes[3u].name = Name("render.normal_work");
+    fixture.payload.nodes[3u].name = Name(TestCases::s_TelemetryCaseRenderNormalWork);
     EXPECT_FALSE(fixture.valid());
-    fixture.payload.nodes[3u].name = Name("render.frame_recovery");
+    fixture.payload.nodes[3u].name = Name(TestCases::s_RenderFrameRecovery);
     fixture.payload.packetSubmissionStatistics[1u].packetIndex = 2u;
     EXPECT_FALSE(fixture.valid());
 }

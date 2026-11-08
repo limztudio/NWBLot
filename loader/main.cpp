@@ -6,12 +6,14 @@
 #include "crash_reporting.h"
 #include "resource_mount_resolver.h"
 
+#include <loader/runtime_constants.adhd.h>
+
 #include <logger/client/module.h>
 
 #include <core/alloc/module.h>
 #include <core/common/application_entry.h>
 #include <core/crash/module.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
 #include <core/assets/manager.h>
@@ -36,24 +38,8 @@ namespace __hidden_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace NWB::LoaderDetail;
 using CrashArena = NWB::Core::Alloc::PersistentArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
-inline constexpr Name s_CommandLineArena("loader/command_line");
-inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
-inline constexpr Name s_ProjectTaskProfileName("cpu.task.project");
-inline constexpr int s_LoaderExitSuccess = 0;
-inline constexpr int s_LoaderExitFailure = -1;
-inline constexpr u16 s_EmptyFrameClientExtent = 0u;
-inline constexpr u16 s_StandaloneLoggerPort = 0u;
-inline constexpr AStringView s_LoaderAppName = "loader";
-inline constexpr AStringView s_ForceSdrOutputFlag = "--sdr";
-inline constexpr AStringView s_DisableHardwareRayTracingFlag = "--disable-hardware-ray-tracing";
-inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,7 +175,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
             }
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to inspect {} '{}': {}; continuing with custom filesystem factory"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
         }
-        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? Move(*resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), NWB::LoaderDetail::ResourceMountResolver::s_ResourceDirectoryName);
+        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? Move(*resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), NWB::LoaderDetail::s_ResourceDirectoryName);
         if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
             return __hidden_loader::s_LoaderExitFailure;
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
@@ -203,7 +189,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
         NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
-        if(!graphicsMount.volumeName.assign(NWB::LoaderDetail::ResourceMountResolver::s_GraphicsVolumeName))
+        if(!graphicsMount.volumeName.assign(NWB::LoaderDetail::s_GraphicsVolumeName))
             return __hidden_loader::s_LoaderExitFailure;
         graphicsMount.mountDirectory = resourceMountDirectory;
         auto graphicsFilesystemResult = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
@@ -360,8 +346,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; }
-    );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; });
 }
 
 

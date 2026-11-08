@@ -4,6 +4,8 @@
 
 #include "cpu_task_scheduler_test_support.h"
 
+#include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/terminal_entry.h>
@@ -22,7 +24,7 @@ namespace __hidden_cpu_task_range_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_CompletionTimeoutMS = 10000u;
+constexpr u32 s_CompletionTimeoutMS = CpuTaskSchedulerTestSupport::s_CompletionTimeoutMS;
 using namespace NWB::Core;
 using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
 using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
@@ -63,8 +65,7 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
         ASSERT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             ASSERT_TRUE(cpuTaskAdmission->valid());
-    }
-    )));
+    })));
     EXPECT_EQ(callbacks, 3u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -79,8 +80,7 @@ TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
         EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
             EXPECT_EQ(scheduler.currentWorkerIndex(), worker);
             EXPECT_EQ(scheduler.currentWorkerAffinity(), affinity);
-        }
-        )));
+        })));
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto task = *cpuTaskAdmission;
@@ -113,8 +113,7 @@ TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
             ++callbacks;
             EXPECT_EQ(QueryCurrentThreadId(), owner);
             EXPECT_EQ(scheduler.currentWorkerIndex(), 0u);
-        }, { .target = CpuTaskTarget::MainThread }
-        )));
+        }, { .target = CpuTaskTarget::MainThread })));
         done.store(true, MemoryOrder::release);
     });
     PumpUntil(scheduler, done);
@@ -138,7 +137,7 @@ TEST(CpuTaskRangeTests, InvalidBatchOptionsPublishNoTasks){
 
 TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling){
     using namespace __hidden_cpu_task_range_tests;
-    struct Failure{ int code; };
+    using Failure = CpuTaskSchedulerTestSupport::InlineRangeFailure;
     struct Retirement{
         u32* count;
 
@@ -164,17 +163,15 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
             EXPECT_TRUE(cpuTaskAdmission);
             if(cpuTaskAdmission)
                 EXPECT_TRUE(cpuTaskAdmission->valid());
-            throw Failure{ 73 };
-        }
-        )));
+            throw Failure{ .code = 73 };
+        })));
         return 0;
     }, [&](const Failure& failure){
         EXPECT_EQ(retirements, 1u);
         EXPECT_EQ(callbacks, 0u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return failure.code;
-    }, []()noexcept{ return -1; }
-    );
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 73);
 }
 

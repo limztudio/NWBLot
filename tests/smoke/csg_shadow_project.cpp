@@ -15,8 +15,11 @@
 #include "csg_caustic_timing_probe.h"
 #endif
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/module.h>
@@ -41,10 +44,10 @@ namespace __hidden_csg_shadow_smoke{
 
 constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProject");
 
-static constexpr AStringView s_Directional = "directional";
-static constexpr AStringView s_Point = "point";
-static constexpr AStringView s_Hard = "hard";
-static constexpr AStringView s_Finite = "finite";
+using NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+using NWB::Tests::Smoke::s_ShadowSmokePoint;
+using NWB::Tests::Smoke::s_ShadowSmokeHard;
+using NWB::Tests::Smoke::s_ShadowSmokeFinite;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,8 +63,8 @@ static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_caustic/ma
 #else
 static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
 #endif
-static constexpr f32 s_CameraDepth = -4.0f;
-static constexpr u32 s_MoveUpdate = 40u;
+static constexpr f32 s_CameraDepth = NWB::Tests::Smoke::s_ShadowSmokeCameraDepth;
+static constexpr u32 s_MoveUpdate = NWB::Tests::Smoke::s_ShadowSmokeMoveUpdate;
 
 
 
@@ -126,7 +129,7 @@ public:
         lightComponent.enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , ConvertString(m_mode.finiteLightSource ? s_Finite : s_Hard)
+            , ConvertString(m_mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard)
             , static_cast<f64>(lightComponent.angularRadius)
             , static_cast<f64>(lightComponent.sourceRadius)
         );
@@ -135,11 +138,11 @@ public:
         const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_mode.arm)
-            , ConvertString(m_mode.pointLight ? s_Point : s_Directional)
+            , ConvertString(m_mode.pointLight ? s_ShadowSmokePoint : s_ShadowSmokeDirectional)
             , hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
-        constexpr u32 s_DefaultCaptureFrameCount = 120u;
+        constexpr u32 s_DefaultCaptureFrameCount = NWB::Tests::Smoke::s_ShadowSmokeDefaultCaptureFrameCount;
         auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(s_ProjectName, s_DefaultCaptureFrameCount, {});
         if(!capture)
             return false;

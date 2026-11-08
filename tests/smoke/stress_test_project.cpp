@@ -18,6 +18,8 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -115,7 +117,7 @@ private:
     }
 
     [[nodiscard]] static Expected<u32> ReadCharactersPerClass(){
-        NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
+        NWB::Core::Alloc::GlobalArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsStressWorkload)};
         const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
         if(!value){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(value.error().message()));

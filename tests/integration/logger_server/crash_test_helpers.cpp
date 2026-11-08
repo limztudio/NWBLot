@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <core/crash/package_internal.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 
 #include <global/environment.h>
 #include <global/error_code.h>

@@ -174,8 +174,7 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
     const ArenaMemoryStats disabled = testArena.arena.memoryStats();
     EXPECT_EQ(disabled.usedBytes, before.usedBytes);
     b8 builderCalled = false;
-    EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 2u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
-    ));
+    EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 2u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }));
     EXPECT_FALSE(builderCalled);
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, disabled.allocationCount);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
@@ -209,13 +208,11 @@ TEST(Telemetry, RecorderFailedAndThrowingBuildersRecycleWithoutAllocations){
     ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 13u));
     recorder.clear();
     const ArenaMemoryStats warmed = testArena.arena.memoryStats();
-    EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){ payload.resize(128u, 31u); return false; }
-    ));
+    EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){ payload.resize(128u, 31u); return false; }));
     EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 2u, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->b8{
                 payload.resize(128u, 47u);
                 throw PayloadBuildFailure{};
-            }
-        )), PayloadBuildFailure
+            })), PayloadBuildFailure
     );
     EXPECT_EQ(recorder.eventCount(), 0u);
     ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 59u));
@@ -303,8 +300,7 @@ TEST(Telemetry, RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReusedSlot
     const Array<Telemetry::EventKind::Enum, 2> invalidKinds = { Telemetry::EventKind::Unknown, static_cast<Telemetry::EventKind::Enum>(0xffffu), };
     b8 builderCalled = false;
     for(const auto kind : invalidKinds){
-        EXPECT_FALSE(recorder.recordBuiltPayload(kind, 1u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
-        ));
+        EXPECT_FALSE(recorder.recordBuiltPayload(kind, 1u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }));
         Telemetry::EventHeader header;
         header.kind = kind;
         header.payloadBytes = payload.size();

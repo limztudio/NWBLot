@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_OneOffNameTestsFrameInactiveLoopLogger = "tests/frame/inactive_loop_logger";
+const Name s_OneOffNameTestsFrameClampObserver = "tests/frame/clamp_observer";
+const Name s_OneOffNameTestsFrameRenderPassCollection = "tests/frame/render_pass_collection";
+const i32 s_FrameTestClampObserverFailure = 53;
+const i32 s_FrameTestUnexpectedFailure = 71;
+const u32 s_FrameTestInitializationAttempts = 2u;
+const u32 s_FrameTestInactiveLoopWatchdogMS = 1000u;
+const u32 s_FrameTestWatchdogPollMS = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

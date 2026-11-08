@@ -59,8 +59,8 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
     auto& traceResourceUses = result.traceResourceUses;
     auto& graphOwnsSurfelGiResolve = result.graphOwnsSurfelGiResolve;
 
-    const auto surfelIrradianceHalfResult = ImportExternalTexture(m_graph, deferredTargets.surfelIrradianceHalf, Name("render.surfel_gi.irradiance_half"), "Surfel Irradiance Half");
-    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), s_SceneGeometryDomainLabel));
+    const auto surfelIrradianceHalfResult = ImportExternalTexture(m_graph, deferredTargets.surfelIrradianceHalf, Name(s_SurfelGraphIrradianceHalf), "Surfel Irradiance Half");
+    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_SurfelGraphSceneGeometry), s_SceneGeometryDomainLabel));
     if(!surfelIrradianceHalfResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
@@ -130,15 +130,15 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         if(!surfelConstantsResult)
             return MakeUnexpected(Failure{});
         surfelConstants = *surfelConstantsResult;
-        const auto surfelPoolResult = appendOptionalBuffer(rayTracingSurfelResources.poolBuffer, Name("render.surfel_gi.pool"), "Surfel Pool", Core::ResourceStates::UnorderedAccess, true);
+        const auto surfelPoolResult = appendOptionalBuffer(rayTracingSurfelResources.poolBuffer, Name(s_SurfelGraphPool), "Surfel Pool", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelPoolResult)
             return MakeUnexpected(Failure{});
         surfelPool = *surfelPoolResult;
-        const auto surfelGuidePoolResult = appendOptionalBuffer(rayTracingSurfelResources.guidePoolBuffer, Name("render.surfel_gi.guide_pool"), "Surfel Guide Pool", Core::ResourceStates::UnorderedAccess, true);
+        const auto surfelGuidePoolResult = appendOptionalBuffer(rayTracingSurfelResources.guidePoolBuffer, Name(s_SurfelGraphGuidePool), "Surfel Guide Pool", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelGuidePoolResult)
             return MakeUnexpected(Failure{});
         surfelGuidePool = *surfelGuidePoolResult;
-        const auto surfelCellHeadResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadBuffer, Name("render.surfel_gi.cell_heads"), "Surfel Cell Heads", Core::ResourceStates::UnorderedAccess, true);
+        const auto surfelCellHeadResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadBuffer, Name(s_SurfelGraphCellHeads), "Surfel Cell Heads", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelCellHeadResult)
             return MakeUnexpected(Failure{});
         surfelCellHead = *surfelCellHeadResult;
@@ -146,15 +146,15 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         if(!surfelCounterResult)
             return MakeUnexpected(Failure{});
         surfelCounter = *surfelCounterResult;
-        const auto surfelFreeListResult = appendOptionalBuffer(rayTracingSurfelResources.freeListBuffer, Name("render.surfel_gi.free_list"), "Surfel Free List", Core::ResourceStates::UnorderedAccess, true);
+        const auto surfelFreeListResult = appendOptionalBuffer(rayTracingSurfelResources.freeListBuffer, Name(s_SurfelGraphFreeList), "Surfel Free List", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelFreeListResult)
             return MakeUnexpected(Failure{});
         surfelFreeList = *surfelFreeListResult;
-        const auto surfelPoolSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.poolSnapshotBuffer, Name("render.surfel_gi.pool_snapshot"), "Surfel Pool Snapshot", Core::ResourceStates::ShaderResource);
+        const auto surfelPoolSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.poolSnapshotBuffer, Name(s_SurfelGraphPoolSnapshot), "Surfel Pool Snapshot", Core::ResourceStates::ShaderResource);
         if(!surfelPoolSnapshotResult)
             return MakeUnexpected(Failure{});
         surfelPoolSnapshot = *surfelPoolSnapshotResult;
-        const auto surfelCellHeadSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadSnapshotBuffer, Name("render.surfel_gi.cell_head_snapshot"), "Surfel Cell Head Snapshot", Core::ResourceStates::ShaderResource);
+        const auto surfelCellHeadSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadSnapshotBuffer, Name(s_SurfelGraphCellHeadSnapshot), "Surfel Cell Head Snapshot", Core::ResourceStates::ShaderResource);
         if(!surfelCellHeadSnapshotResult)
             return MakeUnexpected(Failure{});
         surfelCellHeadSnapshot = *surfelCellHeadSnapshotResult;
@@ -171,7 +171,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
             resourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
     }
     if(optionalResourcesImported && rayTracingSurfelResources.traceIndirectArgsBuffer){
-        const auto surfelTraceIndirectArgsResult = ImportExternalBuffer(m_graph, rayTracingSurfelResources.traceIndirectArgsBuffer, Name("render.surfel_gi.trace_args"), "Surfel Trace Arguments");
+        const auto surfelTraceIndirectArgsResult = ImportExternalBuffer(m_graph, rayTracingSurfelResources.traceIndirectArgsBuffer, Name(s_SurfelGraphTraceArgs), "Surfel Trace Arguments");
         if(surfelTraceIndirectArgsResult)
             surfelTraceIndirectArgs = *surfelTraceIndirectArgsResult;
         optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();

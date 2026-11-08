@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -183,7 +184,7 @@ TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance)
 }
 
 TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
-    NWB::Core::Alloc::GlobalArena arena(Name{"tests/path/native_component_views"});
+    NWB::Core::Alloc::GlobalArena arena(Name{NWB::Tests::GlobalCases::s_GlobalCaseTestsPathNativeComponentViews});
     const Path<NWB::Core::Alloc::GlobalArena> path(arena, "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_í•œê¸€_ðŸ˜€/Third_component");
     const TStringView native = path.native();
     const ArenaMemoryStats before = arena.memoryStats();

@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
 
 #include <global/simdmath.h>
@@ -31,7 +33,7 @@ using namespace Impl::Ui;
 
 static UiSkinRegion NineSlice()noexcept{
     UiSkinRegion region;
-    region.name = Name("progress.test");
+    region.name = Name(NWB::Tests::UiCases::s_UiCaseProgressTest);
     region.rectangle = { 0u, 0u, 24u, 24u };
     region.sliceInsets = { 6u, 6u, 6u, 6u };
     region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };

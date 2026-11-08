@@ -241,7 +241,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(!SkipBytes(binary, fieldBytes, cursor))
         return MakeUnexpected(Failure{});
 
-    return MaterialBinaryTypedLayoutOffsets{ typedLayoutBegin, cursor };
+    return MaterialBinaryTypedLayoutOffsets{ .layoutHashOffset = typedLayoutBegin, .blockByteCountOffset = cursor };
 }
 
 

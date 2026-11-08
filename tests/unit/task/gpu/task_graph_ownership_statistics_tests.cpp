@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +42,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ declarationScratch };
     uses.reserve(resourceCount * 2u);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
-        const auto identityNameResult = IndexedName(Name("tests/ownership_statistics/resource/"), resourceIndex);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseOwnershipStatisticsResource), resourceIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Core::ResourceStates::Common, Core::ResourceQueueSharing::Exclusive);
@@ -53,7 +55,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     }
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
         Core::GpuTaskDesc desc;
-        const auto resourceNameResult = IndexedName(Name("tests/ownership_statistics/task/"), taskIndex);
+        const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseOwnershipStatisticsTask), taskIndex);
         ASSERT_TRUE(resourceNameResult);
         desc.setIdentity(*resourceNameResult).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses);
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();

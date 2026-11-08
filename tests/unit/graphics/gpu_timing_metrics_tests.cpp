@@ -2,9 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <gtest/gtest.h>
+#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
 
 #include <core/graphics/gpu_timing_metrics.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +31,7 @@ namespace __hidden_gpu_timing_metrics_tests{
 
 
 TEST(GpuPacketEnvelopeMetrics, UnionsSameQueueRangesAndOrdersEveryQueue){
-    Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/union"));
+    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsUnion)};
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 8u> ranges{{
         { .beginTicks = 40u, .endTicks = 50u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
@@ -55,7 +57,7 @@ TEST(GpuPacketEnvelopeMetrics, UnionsSameQueueRangesAndOrdersEveryQueue){
 }
 
 TEST(GpuPacketEnvelopeMetrics, CountsConcurrentQueueUnionOnceAtTripleOverlap){
-    Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/triple"));
+    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsTriple)};
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 3u> ranges{{
         { .beginTicks = 0u, .endTicks = 100u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 2u }, },
@@ -72,7 +74,7 @@ TEST(GpuPacketEnvelopeMetrics, CountsConcurrentQueueUnionOnceAtTripleOverlap){
 }
 
 TEST(GpuPacketEnvelopeMetrics, PreservesLargeAndNearLimitTickPrecision){
-    Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/precision"));
+    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsPrecision)};
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     static constexpr u64 s_LargeTick = 9007199254740993u;
     const Array<Core::GpuComparableTimestampRange, 3u> largeRanges{{
@@ -95,7 +97,7 @@ TEST(GpuPacketEnvelopeMetrics, PreservesLargeAndNearLimitTickPrecision){
 }
 
 TEST(GpuPacketEnvelopeMetrics, AcceptsCompleteZeroOverlapInputs){
-    Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/zero"));
+    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsZero)};
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 2u> touchingRanges{{
         { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 6u }, },
@@ -120,7 +122,7 @@ TEST(GpuPacketEnvelopeMetrics, AcceptsCompleteZeroOverlapInputs){
 }
 
 TEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs){
-    Core::Alloc::ScratchArena scratchArena(Name("tests/timing/packet_metrics/rejection"));
+    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsRejection)};
     Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
     const Array<Core::GpuComparableTimestampRange, 2u> validRanges{{
         { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, },

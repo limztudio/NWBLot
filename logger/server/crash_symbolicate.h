@@ -8,6 +8,7 @@
 #include "crash_paths.h"
 
 #include <logger/common.h>
+#include <logger/server/crash_values.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -23,7 +24,7 @@ NWB_LOG_BEGIN
 
 using CrashReportText = AString<LogArena>;
 
-inline constexpr AStringView s_ReportLineEnd = "\n";
+inline constexpr AStringView s_ReportLineEnd = ::NWB::Log::CrashValues::s_CrashSymbolicateReportLineEnd;
 
 struct CrashSymbolicationConfig{
     Path symbolStoreDirectory;

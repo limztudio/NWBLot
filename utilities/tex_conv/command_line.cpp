@@ -100,11 +100,8 @@ i32 Run(const i32 argc, char** argv){
             ::Vector<ScratchPath, Core::Alloc::ScratchArena> inputPaths(scratchArena);
             AlphaSource alphaSource(scratchArena);
 
-            const u32 modeCount = static_cast<u32>(!inputArgument.empty()) + static_cast<u32>(!cubeArguments.empty()) + static_cast<u32>(!volumeArguments.empty());
-            if(modeCount != s_SingleTextureInputModeCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
+            if(!ValidateTexConvInputModeCount(!inputArgument.empty(), !cubeArguments.empty(), !volumeArguments.empty()))
                 return s_TexConvExitFailure;
-            }
 
             if(!inputArgument.empty()){
                 const AStringView inputPathText(inputArgument);
@@ -166,8 +163,7 @@ i32 Run(const i32 argc, char** argv){
             NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report));
             return s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_TexConvExitFatal; }
-    );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_TexConvExitFatal; });
 }
 
 

@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 
 #include <gtest/gtest.h>
@@ -29,7 +31,7 @@ using namespace Impl::Ui;
 
 static UiSkinRegion Sprite()noexcept{
     UiSkinRegion region;
-    region.name = Name("image.test");
+    region.name = Name(NWB::Tests::UiCases::s_UiCaseImageTest);
     region.rectangle = { 10u, 20u, 200u, 100u };
     return region;
 }

@@ -7,6 +7,9 @@
 #include "../smoke_environment.h"
 #include "passive_scene_support.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/ui_layer/snapshots.adhd.h>
+
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_ui_skin/types.adhd.h>
 
@@ -35,7 +38,7 @@ namespace __hidden_ui_texture_image_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_AlternateSkinNickname("alternate_skin");
+inline constexpr Name s_AlternateSkinNickname = NWB::Tests::Smoke::s_SmokeNameAlternateSkin;
 inline constexpr TStringView s_OwnerName = NWB_TEXT("UiTextureImageSmokeScene");
 static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
@@ -231,7 +234,7 @@ b8 UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const f3
     const b8 popped = paint.popClip();
     if(!clipped || !popped)
         return false;
-    return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u]) && paint.drawRegion(Name("progress.fill"), rectangles[11u]);
+    return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u]) && paint.drawRegion(Name(s_UiSmokeNameProgressFill), rectangles[11u]);
 }
 
 b8 UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){

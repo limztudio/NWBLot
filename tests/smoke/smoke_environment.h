@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/alloc/general.h>
 #include <core/common/log.h>
@@ -24,7 +26,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_SmokeEnvironmentArena("tests/smoke/environment");
+inline constexpr Name s_SmokeEnvironmentArena = NWB::Tests::Smoke::s_SmokeNameSmokeEnvironment;
 
 using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
 

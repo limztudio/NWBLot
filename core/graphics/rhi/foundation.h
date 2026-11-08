@@ -116,18 +116,18 @@ using GpuDescriptorHeap = GraphicsBackend::GpuDescriptorHeap;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaxRenderTargets = 8;
-inline constexpr u32 s_MaxViewports = 16;
-inline constexpr u32 s_MaxVertexAttributes = 16;
-inline constexpr u32 s_MaxBindingLayouts = 8;
-inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
-inline constexpr u32 s_MaxPushConstantSize = 128;
-inline constexpr u32 s_PushConstantSizeAlignment = 4;
-inline constexpr u32 s_BackBufferWidth = 1280;
-inline constexpr u32 s_BackBufferHeight = 720;
-inline constexpr u32 s_SwapChainBufferCount = 3;
-inline constexpr u32 s_MaxFramesInFlight = 2;
-inline constexpr f32 s_DepthClearValue = 1.0f;
+inline constexpr u32 s_MaxRenderTargets = NWB::Core::HardwareRayTracingPolicy::s_MaxRenderTargets;
+inline constexpr u32 s_MaxViewports = NWB::Core::HardwareRayTracingPolicy::s_MaxViewports;
+inline constexpr u32 s_MaxVertexAttributes = NWB::Core::HardwareRayTracingPolicy::s_MaxVertexAttributes;
+inline constexpr u32 s_MaxBindingLayouts = NWB::Core::HardwareRayTracingPolicy::s_MaxBindingLayouts;
+inline constexpr u32 s_MaxBindlessRegisterSpaces = NWB::Core::HardwareRayTracingPolicy::s_MaxBindlessRegisterSpaces;
+inline constexpr u32 s_MaxPushConstantSize = NWB::Core::HardwareRayTracingPolicy::s_MaxPushConstantSize;
+inline constexpr u32 s_PushConstantSizeAlignment = NWB::Core::HardwareRayTracingPolicy::s_PushConstantSizeAlignment;
+inline constexpr u32 s_BackBufferWidth = NWB::Core::HardwareRayTracingPolicy::s_BackBufferWidth;
+inline constexpr u32 s_BackBufferHeight = NWB::Core::HardwareRayTracingPolicy::s_BackBufferHeight;
+inline constexpr u32 s_SwapChainBufferCount = NWB::Core::HardwareRayTracingPolicy::s_SwapChainBufferCount;
+inline constexpr u32 s_MaxFramesInFlight = NWB::Core::HardwareRayTracingPolicy::s_MaxFramesInFlight;
+inline constexpr f32 s_DepthClearValue = NWB::Core::HardwareRayTracingPolicy::s_DepthClearValue;
 
 using GraphicsArena = Alloc::GlobalArena;
 using GraphicsString = AString<GraphicsArena>;

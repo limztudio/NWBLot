@@ -104,15 +104,7 @@ private:
         u64 offset = 0u;
     };
 
-    struct ShaderRecordPreflight{
-        usize handleOffset = 0u;
-        u64 recordByteSize = 0u;
-        u64 allocationByteSize = 0u;
-        u32 groupIndex = 0u;
-        u32 handleSize = 0u;
-        u32 handleSizeAligned = 0u;
-        u32 baseAlignment = 0u;
-    };
+    using ShaderRecordPreflight = VulkanDefaults::VulkanShaderRecordPreflight;
 
 
 public:

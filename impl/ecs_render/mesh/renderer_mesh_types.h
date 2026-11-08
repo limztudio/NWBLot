@@ -57,6 +57,7 @@ static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * NWB_MESH_INSTANC
 static_assert(offsetof(InstanceGpuData, scale) + offsetof(Float3UInt, w) == sizeof(u32) * NWB_MESH_INSTANCE_ENTITY_ID_WORD_OFFSET, "InstanceGpuData full entity identity must follow scale.xyz");
 static_assert(offsetof(InstanceGpuData, geometryHeapSlots) == sizeof(f32) * NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET, "InstanceGpuData geometry heap slots must follow the transform payload");
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * NWB_MESH_INSTANCE_FLOAT_COUNT, "InstanceGpuData stride must match the mesh shaders");
+static_assert(sizeof(InstanceGpuData) == s_InstanceGpuDataByteSize, "InstanceGpuData byte size must match its payload");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
 

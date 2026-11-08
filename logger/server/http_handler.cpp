@@ -4,11 +4,12 @@
 
 #include "http_handler.h"
 #include "http_connection_upload.h"
-#include <logger/message_payload_codec.h>
-
-#include "crash_auth.h"
 #include "crash_paths.h"
 #include "module.h"
+
+#include <logger/message_payload_codec.h>
+#include <logger/server/crash_auth.adhd.h>
+#include <logger/server/arena_names.adhd.h>
 
 #include <core/alloc/module.h>
 
@@ -40,16 +41,16 @@ namespace LoggerServerImpl{
 
 
 inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
-inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
-inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
-inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = "/namesym";
+inline constexpr usize s_BytesPerMebibyte = ::NWB::Log::s_LogServerValueModuleBytesPerMebibyte;
+inline constexpr usize s_MaxCrashPackageUploadMebibytes = ::NWB::Log::s_LogServerValueModuleMaxCrashPackageUploadMebibytes;
+inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = ::NWB::Log::s_LogServerValueModuleUnsupportedNameSymbolUploadPath;
 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxCrashPackageUploadBytes = s_MaxCrashPackageUploadMebibytes * s_BytesPerMebibyte;
+inline constexpr usize s_MaxCrashPackageUploadBytes = ::NWB::Log::s_LogServerValueModuleMaxCrashPackageUploadBytes;
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
 
@@ -160,7 +161,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     });
     info.uploadKind = uploadKind;
     if(uploadKind == ConnectionUploadKind::Crash){
-        Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_upload/scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Log::s_LogServerArenaNameLoggerServerCrashUploadScratch)};
         const auto opened = OpenCrashUploadStream(server, info, scratchArena);
         if(!opened)
             return MakeUnexpected(opened.error());
@@ -288,7 +289,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
     u32 responseStatus = MHD_HTTP_OK;
     if(info->uploadKind == LoggerServerImpl::ConnectionUploadKind::Crash){
         if(info->closeCrashUploadStream() && info->crashUploadOwned){
-            Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_enqueue/scratch"));
+            Core::Alloc::ScratchArena scratchArena{Name(NWB::Log::s_LogServerArenaNameLoggerServerCrashEnqueueScratch)};
             const Path& storedPath = info->crashUploadPath;
             if(thisPtr->enqueueCrashUpload(storedPath, scratchArena)){
                 info->crashUploadOwned = false;

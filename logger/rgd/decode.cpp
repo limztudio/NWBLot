@@ -4,6 +4,9 @@
 
 #include "decode.h"
 
+#include <logger/rgd/arena_names.adhd.h>
+#include <logger/rgd/decode_values.adhd.h>
+
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
@@ -35,14 +38,14 @@ namespace Rgd{
 
 namespace __hidden_rgd_decode{
 
-inline constexpr Name s_RgdDecodeScratch("Log/RgdDecodeScratch");
-inline constexpr StringView s_ParseFailedError = "parse_failed";
-inline constexpr StringView s_RdfOpenFailedError = "rdf_open_failed";
-inline constexpr StringView s_RdfCloseFailedError = "rdf_close_failed";
-inline constexpr AStringView s_MarkersInProgressDivider = "===================";
-inline constexpr AStringView s_ExecutionMarkerTreeDivider = "=====================";
-inline constexpr AStringView s_LegendDivider = "======";
-inline constexpr AStringView s_PageFaultSummaryDivider = "==================";
+inline constexpr Name s_RgdDecodeScratch = NWB::Log::s_RgdArenaNameLogRgdDecodeScratch;
+inline constexpr StringView s_ParseFailedError = ::NWB::Log::s_RgdDecodeValueParseFailedError;
+inline constexpr StringView s_RdfOpenFailedError = ::NWB::Log::s_RgdDecodeValueRdfOpenFailedError;
+inline constexpr StringView s_RdfCloseFailedError = ::NWB::Log::s_RgdDecodeValueRdfCloseFailedError;
+inline constexpr AStringView s_MarkersInProgressDivider = ::NWB::Log::s_RgdDecodeValueMarkersInProgressDivider;
+inline constexpr AStringView s_ExecutionMarkerTreeDivider = ::NWB::Log::s_RgdDecodeValueExecutionMarkerTreeDivider;
+inline constexpr AStringView s_LegendDivider = ::NWB::Log::s_RgdDecodeValueLegendDivider;
+inline constexpr AStringView s_PageFaultSummaryDivider = ::NWB::Log::s_RgdDecodeValuePageFaultSummaryDivider;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

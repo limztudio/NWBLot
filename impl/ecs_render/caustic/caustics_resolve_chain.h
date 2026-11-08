@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
 #include <impl/ecs_render/caustic/caustic_resolve_state.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
@@ -80,24 +81,6 @@ struct CausticsResolveChainNaming{
     CausticsResolveStageNaming timingClose;
 };
 
-struct CausticsStageTargetNaming{
-    Name accumulator;
-    Name history;
-    Name resolveHalf;
-    Name resolveGeometry;
-    Name sceneGeometryDomain;
-    AStringView sceneGeometryDomainLabel;
-    TStringView importWarnText;
-};
-
-struct CausticsStageTargets{
-    Core::GpuGraphResourceId causticAccumulator;
-    Core::GpuGraphResourceId causticHistory;
-    Core::GpuGraphResourceId causticResolveHalf;
-    Core::GpuGraphResourceId causticResolveGeometry;
-    Core::GpuGraphResourceId sceneGeometryDomain;
-};
-
 struct CausticsStagePrefixInputs{
     DeferredFrameTargets& targets;
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
@@ -114,13 +97,6 @@ struct CausticsStagePrefixInputs{
     b8 hardwareCaustics = false;
 };
 
-struct CausticsStagePrefixResult{
-    Core::GpuTaskId causticIrradianceClearTask;
-    Core::GpuTaskId causticAccumulatorBootstrapClearTask;
-    Core::GpuTaskId causticAccumulatorDecayTask;
-    Core::GpuTaskId photonDependencyTask;
-    b8 graphOwnsAccumulatorBootstrapClear = false;
-};
 
 struct CausticsGeometryAndResolveInputs{
     DeferredFrameTargets& targets;

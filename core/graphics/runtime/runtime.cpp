@@ -5,8 +5,9 @@
 #include "runtime.h"
 #include "runtime_internal.h"
 #include "runtime_standalone_graph.h"
-#include "profile_names.h"
 
+#include <core/graphics/runtime/profile_names.adhd.h>
+#include <core/graphics/runtime/runtime_values.adhd.h>
 #include <core/graphics/backend_contract.h>
 #include <core/graphics/backend_selection.h>
 #include <core/common/log.h>
@@ -86,7 +87,7 @@ namespace __hidden_graphics_feature_queries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_DefaultWaveLaneCount = 64u;
+constexpr u32 s_DefaultWaveLaneCount = GraphicsRuntimeValues::s_DefaultWaveLaneCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

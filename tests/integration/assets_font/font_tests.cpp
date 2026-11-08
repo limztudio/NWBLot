@@ -2,13 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/asset.h>
-
-#include <core/alloc/scratch.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_font/name_cases.adhd.h>
+
+#include <impl/assets_font/asset.h>
+
+#include <core/alloc/scratch.h>
 
 #include <global/binary.h>
 #include <global/binary_big_endian.h>
@@ -71,7 +72,7 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
 [[nodiscard]] static Expected<Font> LoadLatin(FontTestArena& testArena){
     const Path path = DefaultBundledFontRoot(testArena) / "latin.font";
     Core::Assets::AssetBytes source(testArena.arena);
-    Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin/face"));
+    Font candidate(testArena.arena, Name(NWB::Tests::FontCases::s_FontCaseEngineUiFontsDefaultLatinFace));
     auto sourceResult = ReadBundledFontBytes(path, source.get_allocator().arena());
     if(!sourceResult)
         return MakeUnexpected(Failure{});
@@ -216,7 +217,7 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
     FontTestArena testArena;
     const Path bundledRoot = DefaultBundledFontRoot(testArena);
     static constexpr Array<AStringView, 2u> s_BundledNames = { "latin.font", "korean.font" };
-    static constexpr Array<Name, 2u> s_Names = { Name("engine/ui/fonts/default/latin/face"), Name("engine/ui/fonts/default/korean/face") };
+    static constexpr Array<Name, 2u> s_Names = { Name(NWB::Tests::FontCases::s_FontCaseEngineUiFontsDefaultLatinFace), Name(NWB::Tests::FontCases::s_FontCaseEngineUiFontsDefaultKoreanFace) };
     for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){
         const Path bundledPath = bundledRoot / s_BundledNames[index];
         Core::Assets::AssetBytes source(testArena.arena);
@@ -286,7 +287,7 @@ TEST(AssetsFont, OversizedCountIsRejectedBeforeSourceAllocation){
     header.byteCount = static_cast<u64>(s_FontMaxSourceBytes) + 1u;
     Core::Assets::AssetBytes binary(testArena.arena);
     AppendPOD(binary, header);
-    Font font(testArena.arena, Name("project/fonts/test"));
+    Font font(testArena.arena, Name(NWB::Tests::FontCases::s_FontCaseProjectFontsTest));
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("source size must be 1..33554432 bytes")));
@@ -389,7 +390,7 @@ TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocat
         AppendFixedBuffer(expectedCode, "-");
     const i64 signedCode = expectedNativeError;
     AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(signedCode < 0 ? -signedCode : signedCode));
-    constexpr Name s_DiagnosticScratch("tests/assets_font/native_validation_diagnostic");
+    constexpr Name s_DiagnosticScratch = NWB::Tests::FontCases::s_OneOffNameTestsAssetsFontNativeValidationDiagnostic;
     Core::Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
     const auto expectedDiagnostic = ConvertString(scratchArena, FixedBufferView(expectedCode));
     EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));

@@ -5,6 +5,7 @@
 #include <core/common/module.h>
 
 #include <tests/common/test_context.h>
+#include <tests/unit/math/case_types.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -154,9 +155,9 @@ TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
 }
 
 TEST(Math, AffineQueriesRejectNonrigidSingularOverflowAndProjectiveMatrices){
-    constexpr f32 s_AffineEpsilon = 0.000001f;
-    constexpr f32 s_DeterminantEpsilon = 0.000000000001f;
-    constexpr f32 s_RigidEpsilon = 0.001f;
+    constexpr f32 s_AffineEpsilon = NWB::Tests::MathCases::s_MathMatrixAffineEpsilon;
+    constexpr f32 s_DeterminantEpsilon = NWB::Tests::MathCases::s_MathMatrixDeterminantEpsilon;
+    constexpr f32 s_RigidEpsilon = NWB::Tests::MathCases::s_MathMatrixRigidEpsilon;
 
     const SIMDMatrix scaled = MatrixScaling(2.0f, 3.0f, 4.0f);
     EXPECT_FALSE(MatrixIsRigidAffine(scaled, s_AffineEpsilon, s_RigidEpsilon));

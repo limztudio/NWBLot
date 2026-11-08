@@ -7,6 +7,8 @@
 
 #include "soft_shadow_split_resource_uses.h"
 
+#include <impl/ecs_render/shadow/types.adhd.h>
+
 #include <core/graphics/gpu_timing.h>
 
 
@@ -70,17 +72,6 @@ struct SoftShadowSplitTaskChainInputs{
     Core::GpuTaskId prefixTask;
 };
 
-struct SoftShadowSplitTasks{
-    Core::GpuTaskId opaque;
-    Core::GpuTaskId opaqueFirstWavelet;
-    Core::GpuTaskId opaqueResolve;
-    Core::GpuTaskId transparentTrace;
-    Core::GpuTaskId transparentTemporalMerge;
-    Core::GpuTaskId transparentFirstWavelet;
-    Core::GpuTaskId fold;
-    Core::GpuTaskId diagnostics;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,10 +80,7 @@ struct SoftShadowSplitTasks{
 // Tasks declared before a failure stay in `tasks`.
 class SoftShadowSplitTaskChainBuilder final : NoCopy{
 private:
-    struct LightSpaceShadowMaps{
-        Core::GpuTaskId shadowTraceDependency;
-        Core::GpuGraphResourceId csgShadowContext;
-    };
+    using LightSpaceShadowMaps = SoftShadowLightSpaceMaps;
 
 
 public:

@@ -19,7 +19,7 @@ from window_capture_outcome import SmokeFailure, SmokeSkip, write_status  # noqa
 from window_capture_image import TRANSPARENT_CSG_REGIONS, read_bmp_24, validate_surfel_coverage_probe  # noqa: E402
 from window_capture_x11 import LinuxX11Capture  # noqa: E402
 from window_capture_win32 import WindowsCapture  # noqa: E402
-from window_capture_logs import READINESS_OPTION, choose_free_port, collect_log_delta, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_log_message, wait_for_tcp_port  # noqa: E402
+from window_capture_logs import READINESS_OPTION, ScopedLogBaseline, choose_free_port, collect_log_delta, full_log_scope, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_log_message, wait_for_tcp_port  # noqa: E402
 from window_capture_environment import application_capture_partial_path, build_launch_environment, executable_sibling, prepare_application_capture_environment  # noqa: E402
 from window_capture_validation import validate_application_capture_log_text, validate_capture_for_args, validate_expected_log_messages  # noqa: E402
 
@@ -205,7 +205,9 @@ def launch_logserver(args, executable, env):
             raise SmokeFailure(f"{error}\n{tail}") from error
         raise
 
-    return process, port, log_directory, log_baseline, log_pattern
+    # Poll the owned server; shutdown still checks the full log baseline.
+    log_baseline = ScopedLogBaseline(log_baseline, log_pattern, process.pid)
+    return process, port, log_directory, log_baseline, log_baseline.live_pattern
 
 
 def launch_testbed(args, executable, env, log_port):
@@ -261,6 +263,7 @@ def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdo
             exit_code, tail = CaptureProcessTermination.terminate_process(process, shutdown_name)
         require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
     wait_for_log_drain(directory, baseline, pattern)
+    baseline, pattern = full_log_scope(baseline, pattern)
     return collect_log_delta(directory, baseline, pattern) if directory else ""
 
 

@@ -62,6 +62,62 @@ const StringView s_GeneratedPixelShaderCookCacheLine = "// assembles this here, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ValidateMaterialBindIncludePath(in StringView virtualPath, in StringView source){
+    if(virtualPath.empty()){
+        error("Material bind include generation failed: virtual path is empty for '{}'", source);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateDeferredBxdfSource(in StringView materialPath, in StringView bxdfSource){
+    if(bxdfSource.empty()){
+        error("Material cook: material '{}' is missing a deferred bxdf", materialPath);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateDeferredBxdfCount(in usize count){
+    if(count > cast<usize>(u32.max)){
+        error("Material cook: too many unique deferred bxdfs");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMaterialSurfaceCount(in usize count){
+    if(count > cast<usize>(u32.max)){
+        error("Material cook: too many unique material surfaces");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateGeneratedMaterialMeshShader(in usize generatedCount, in Name meshShaderName){
+    if(generatedCount > 0u && meshShaderName == s_NameNone){
+        error("Material pixel shader generation: missing shared mesh shader name");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateTransparentMaterialInterface(in StringView materialPath, in StringView materialInterface, in StringView passLabel){
+    if(materialInterface.empty()){
+        error("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader", materialPath, passLabel);
+        return false;
+    }
+    return true;
+}
+
+b8 IsMaterialOpticalStageCombinationValid(in b8 hasExplicitShaders, in b8 hasSurface, in b8 transparent, in b8 refractive){
+    return !hasExplicitShaders || hasSurface || (!transparent && !refractive);
+}
+
+b8 IsMaterialResourceParameterCandidate(in StringView trimmedText){
+    return !trimmedText.empty() && !trimmedText.contains("(") && !trimmedText.contains(")");
+}
+
 b8 IsAllowedMaterialAssetField(in StringView fieldName){
     return fieldName == s_MaterialMetaInterfaceField
         || fieldName == s_MaterialMetaSurfaceField

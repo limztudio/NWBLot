@@ -22,8 +22,8 @@ NWB_CORE_BEGIN
 namespace Format{
     // Every ASTC block footprint has these three consecutive storage variants in Enum: UNORM, UNORM_SRGB, and HDR float.
     // Keep the classifier tied to those semantic layout values instead of the raw enum offsets.
-    inline constexpr u32 s_AstcVariantsPerBlockFootprint = 3u;
-    inline constexpr u32 s_AstcHdrVariantOffset = 2u;
+    inline constexpr u32 s_AstcVariantsPerBlockFootprint = NWB::Core::HardwareRayTracingPolicy::s_AstcVariantsPerBlockFootprint;
+    inline constexpr u32 s_AstcHdrVariantOffset = NWB::Core::HardwareRayTracingPolicy::s_AstcHdrVariantOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,7 +186,7 @@ namespace FormatKind{
 };
 
 struct FormatInfo{
-    static constexpr usize s_ByteSize = 16u;
+    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_FormatInfoByteSize;
 
     // Literal backing and a bounded length preserve the compact format metadata layout.
     NotNull<const char*> name;
@@ -322,7 +322,7 @@ struct TextureUploadAspectLayout{
 [[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, u32 arraySlice, u32 mipLevel, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect)noexcept;
 
 namespace FormatSupport{
-    static constexpr auto s_FormatSupportNoneBase = 0;
+    static constexpr auto s_FormatSupportNoneBase = NWB::Core::HardwareRayTracingPolicy::s_FormatSupportNoneBase;
     enum Mask : u32{
         None = s_FormatSupportNoneBase,
 

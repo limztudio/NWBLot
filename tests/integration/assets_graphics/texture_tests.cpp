@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_texture/texture_mip_decoder.h>
 
 #include <gtest/gtest.h>
@@ -70,7 +72,7 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
 }
 
 [[nodiscard]] static Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
-    Impl::Texture texture(testArena.arena, Name("project/textures/prepared"));
+    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesPrepared));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     Impl::TextureAssetCodec codec;
     Core::Assets::AssetBytes bytes(testArena.arena);
@@ -102,7 +104,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
-    NWB::Impl::Texture texture(testArena.arena, Name("project/textures/version_admission"));
+    NWB::Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesVersionAdmission));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     NWB::Impl::TextureAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
@@ -125,7 +127,7 @@ TEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
-    NWB::Impl::Texture texture(testArena.arena, Name("project/textures/invalid_alpha_mode"));
+    NWB::Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesInvalidAlphaMode));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
     EXPECT_FALSE(texture.validatePayload());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
@@ -167,7 +169,7 @@ TEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes){
     TestArena testArena;
     const auto original = MakeTextureTestUastcPayload(testArena);
     Impl::TextureCookEntry entry(testArena.arena);
-    entry.virtualPath = Name("project/textures/truncated_raw");
+    entry.virtualPath = Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesTruncatedRaw);
     entry.width = 7u;
     entry.height = 5u;
     entry.alphaMode = TextureAlphaMode::EmbeddedLdr;
@@ -209,7 +211,7 @@ TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAll
         CapturingLogger logger;
         Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
         Impl::TextureCookEntry entry(testArena.arena);
-        entry.virtualPath = Name("project/textures/overflowing_raw_layout");
+        entry.virtualPath = Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesOverflowingRawLayout);
         entry.dimension = layout.dimension;
         entry.width = layout.width;
         entry.height = layout.height;
@@ -248,7 +250,7 @@ TEST(AssetsGraphics, TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsB
     TestArena testArena;
     const auto prepared = MakeTextureTestRuntimeBinary(testArena);
     ASSERT_TRUE(prepared);
-    Impl::Texture texture(testArena.arena, Name("project/textures/linear_decode"));
+    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesLinearDecode));
     ASSERT_TRUE(texture.loadBinary(*prepared));
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     Impl::TextureMipDecoder decoder;

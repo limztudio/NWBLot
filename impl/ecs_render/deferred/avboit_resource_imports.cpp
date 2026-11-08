@@ -5,6 +5,8 @@
 #include "avboit_resource_imports.h"
 #include "graph_resource_import_builder.h"
 
+#include <impl/ecs_render/deferred/import_types.adhd.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -25,25 +27,25 @@ void DeferredAvboitResourceImports::capture(Core::GpuTaskGraph& graph, const Def
             : RendererTaskGraphDetail::ImportExternalTexture(graph, texture, identity, label)
         ;
     };
-    m_avboitLowRaster = importTexture(deferredTargets.avboit.lowRasterTarget, Name("render.avboit.low_raster"), "AVBOIT Low Raster");
-    m_avboitAccumColor = importTexture(deferredTargets.avboit.accumColor, Name("render.avboit.accum_color"), "AVBOIT Accumulated Color");
-    m_avboitAccumExtinction = importTexture(deferredTargets.avboit.accumExtinction, Name("render.avboit.accum_extinction"), "AVBOIT Accumulated Extinction");
-    m_refractionDepth = importTexture(deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
-    m_refractionNormalIor = importTexture(deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
-    m_refractionTintCoverage = importTexture(deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
-    m_refractionInstance = importTexture(deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
-    m_refractionSpecularRoughness = importTexture(deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
-    m_refractionResolve = importTexture(deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
-    m_avboitForegroundColor = importTexture(deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
-    m_avboitForegroundExtinction = importTexture(deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
-    m_avboitTransmittance = importTexture(deferredTargets.avboit.transmittanceTexture, Name("render.avboit.transmittance"), "AVBOIT Transmittance");
-    m_avboitCoverage = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.coverageBuffer, Name("render.avboit.coverage"), "AVBOIT Coverage");
+    m_avboitLowRaster = importTexture(deferredTargets.avboit.lowRasterTarget, Name(s_DeferredImportNameRenderAvboitLowRaster), "AVBOIT Low Raster");
+    m_avboitAccumColor = importTexture(deferredTargets.avboit.accumColor, Name(s_DeferredImportNameRenderAvboitAccumColor), "AVBOIT Accumulated Color");
+    m_avboitAccumExtinction = importTexture(deferredTargets.avboit.accumExtinction, Name(s_DeferredImportNameRenderAvboitAccumExtinction), "AVBOIT Accumulated Extinction");
+    m_refractionDepth = importTexture(deferredTargets.avboit.refractionDepth, Name(s_DeferredImportNameRenderAvboitRefractionDepth), "AVBOIT refractionDepth");
+    m_refractionNormalIor = importTexture(deferredTargets.avboit.refractionNormalIor, Name(s_DeferredImportNameRenderAvboitRefractionNormalIor), "AVBOIT refractionNormalIor");
+    m_refractionTintCoverage = importTexture(deferredTargets.avboit.refractionTintCoverage, Name(s_DeferredImportNameRenderAvboitRefractionTintCoverage), "AVBOIT refractionTintCoverage");
+    m_refractionInstance = importTexture(deferredTargets.avboit.refractionInstance, Name(s_DeferredImportNameRenderAvboitRefractionInstance), "AVBOIT refractionInstance");
+    m_refractionSpecularRoughness = importTexture(deferredTargets.avboit.refractionSpecularRoughness, Name(s_DeferredImportNameRenderAvboitRefractionSpecularRoughness), "AVBOIT Refraction Specular Roughness");
+    m_refractionResolve = importTexture(deferredTargets.avboit.refractionResolve, Name(s_DeferredImportNameRenderAvboitRefractionResolve), "AVBOIT refractionResolve");
+    m_avboitForegroundColor = importTexture(deferredTargets.avboit.foregroundAccumColor, Name(s_DeferredImportNameRenderAvboitAvboitForegroundColor), "AVBOIT avboitForegroundColor");
+    m_avboitForegroundExtinction = importTexture(deferredTargets.avboit.foregroundAccumExtinction, Name(s_DeferredImportNameRenderAvboitAvboitForegroundExtinction), "AVBOIT avboitForegroundExtinction");
+    m_avboitTransmittance = importTexture(deferredTargets.avboit.transmittanceTexture, Name(s_DeferredImportNameRenderAvboitTransmittance), "AVBOIT Transmittance");
+    m_avboitCoverage = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.coverageBuffer, Name(s_DeferredImportNameRenderAvboitCoverage), "AVBOIT Coverage");
     m_avboitDepthWarp = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.depthWarpBuffer, Name(RendererGpuPassText::s_AvboitDepthWarpName), RendererGpuPassText::s_AvboitDepthWarpLabel);
-    m_avboitControl = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.controlBuffer, Name("render.avboit.control"), "AVBOIT Control");
+    m_avboitControl = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.controlBuffer, Name(s_DeferredImportNameRenderAvboitControl), "AVBOIT Control");
     m_avboitExtinction = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.extinctionBuffer, Name(RendererGpuPassText::s_AvboitExtinctionName), RendererGpuPassText::s_AvboitExtinctionLabel);
-    m_avboitExtinctionOverflow = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.extinctionOverflowBuffer, Name("render.avboit.extinction_overflow"), "AVBOIT Extinction Overflow");
-    m_avboitMaterialDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry"));
-    m_avboitCsgDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
+    m_avboitExtinctionOverflow = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.extinctionOverflowBuffer, Name(s_DeferredImportNameRenderAvboitExtinctionOverflow), "AVBOIT Extinction Overflow");
+    m_avboitMaterialDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name(s_DeferredImportNameRenderAvboitMaterialDomain), "Transparent Materials and Geometry"));
+    m_avboitCsgDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name(s_DeferredImportNameRenderAvboitCsgDomain), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
 }
 
 b8 DeferredAvboitResourceImports::validRefractionInputs()const noexcept{

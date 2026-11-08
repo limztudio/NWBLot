@@ -4,7 +4,9 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 
 #include <logger/rgd/decode.h>
 
@@ -26,9 +28,9 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr AStringView s_GpuDetectiveSectionHeader = "\n[gpu_detective]\n";
-inline constexpr AStringView s_GpuDetectiveDecodeFailedStatus = "status=decode_failed\n";
-inline constexpr AStringView s_ReportDetailPrefix = "detail=";
+inline constexpr AStringView s_GpuDetectiveSectionHeader = ::NWB::Log::CrashValues::s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
+inline constexpr AStringView s_GpuDetectiveDecodeFailedStatus = ::NWB::Log::CrashValues::s_CrashSymbolicateRgdGpuDetectiveDecodeFailedStatus;
+inline constexpr AStringView s_ReportDetailPrefix = ::NWB::Log::CrashValues::s_CrashSymbolicateRgdReportDetailPrefix;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

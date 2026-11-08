@@ -4,7 +4,9 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 
 #if defined(NWB_WITH_AFTERMATH)
 #include <core/crash/aftermath_runtime.h>
@@ -36,12 +38,12 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr AStringView s_AftermathSectionHeader = "\n[aftermath]\n";
-inline constexpr AStringView s_AftermathSkippedReport = "status=skipped\ndetail=logserver built without the Aftermath SDK\n";
-inline constexpr AStringView s_AftermathCreateDecoderFailedReport = "status=decode_failed\ndetail=create_decoder\n";
-inline constexpr AStringView s_AftermathGenerateJsonFailedReport = "status=decode_failed\ndetail=generate_json\n";
-inline constexpr AStringView s_AftermathGetJsonFailedReport = "status=decode_failed\ndetail=get_json\n";
-inline constexpr AStringView s_AftermathLoadRuntimeOperation = "load_runtime";
+inline constexpr AStringView s_AftermathSectionHeader = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathSectionHeader;
+inline constexpr AStringView s_AftermathSkippedReport = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathSkippedReport;
+inline constexpr AStringView s_AftermathCreateDecoderFailedReport = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathCreateDecoderFailedReport;
+inline constexpr AStringView s_AftermathGenerateJsonFailedReport = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathGenerateJsonFailedReport;
+inline constexpr AStringView s_AftermathGetJsonFailedReport = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathGetJsonFailedReport;
+inline constexpr AStringView s_AftermathLoadRuntimeOperation = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathLoadRuntimeOperation;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +56,7 @@ inline constexpr AStringView s_AftermathLoadRuntimeOperation = "load_runtime";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_AftermathMaxJsonBytes = 8u * 1024u * 1024u; // decoded JSON (shader + warp state) can be large
+inline constexpr usize s_AftermathMaxJsonBytes = ::NWB::Log::CrashValues::s_CrashSymbolicateAftermathAftermathMaxJsonBytes; // decoded JSON (shader + warp state) can be large
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -31,9 +31,9 @@ public:
     [[nodiscard]] static b8 TryMatchSimdNegatedMulExpr(
     const Expr* expr,
     const MStringView simdType,
+    const SymbolTable& symbols,
     const Expr*& outA,
-    const Expr*& outB,
-    const SymbolTable& symbols
+    const Expr*& outB
 )noexcept;
     [[nodiscard]] static const Expr* TryGetSimdScalarOperand(const Expr& operand, const SymbolTable& symbols)noexcept;
     [[nodiscard]] static const Expr* TryMatchSimdSaturateCallArg(
@@ -53,3 +53,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -8,11 +8,14 @@
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/system.h>
@@ -67,10 +70,10 @@ static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/transpa
 #else
 static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
 #endif
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
-static constexpr Name s_ModelMeshObject("mesh");
-static constexpr Name s_CutterAnchorBoneName("hip");
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
+static constexpr Name s_ReceiverGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
+using NWB::Tests::Smoke::s_SmokeNameMesh;
+static constexpr Name s_CutterAnchorBoneName = NWB::Tests::Smoke::s_SmokeNameHip;
 static constexpr f32 s_CameraDistance = 1.75f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
@@ -78,7 +81,7 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.54f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CutterAnimationSpeed = 0.18f;
 static constexpr f32 s_ReceiverYawSpeed = 0.92f;
-static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
+constexpr f32 s_MaxAnimationDelta = NWB::Tests::Smoke::s_SmokeSpinMaxDelta;
 static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 static constexpr u16 s_FrameClientWidth = 1280u;
 static constexpr u16 s_FrameClientHeight = 900u;
@@ -243,7 +246,7 @@ private:
     }
 
     [[nodiscard]] b8 installCsgReceiverOnSpawnedModelObject(){
-        m_receiverObject = FindSpawnedModelObject(m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
+        m_receiverObject = FindSpawnedModelObject(m_receiver, s_SmokeNameMesh, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         if(!m_receiverObject.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
             return false;
@@ -307,9 +310,9 @@ private:
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_ReceiverGroup;
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        cutter.shapeType = Name("engine/csg/sphere");
+        cutter.shapeType = Name(NWB::Impl::s_CsgSphereShapeName);
 #else
-        cutter.shapeType = Name("engine/csg/capsule");
+        cutter.shapeType = Name(NWB::Impl::s_CsgCapsuleShapeName);
 #endif
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)

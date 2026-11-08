@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
 #include <gtest/gtest.h>
@@ -252,7 +254,7 @@ private:
 class UiSearchComboBehaviorTests : public testing::Test{
 public:
     UiSearchComboBehaviorTests()
-        : m_arena(Name("tests/ui/search_combo"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiSearchCombo))
         , m_state(m_arena)
         , m_source(m_arena, m_state)
     {}

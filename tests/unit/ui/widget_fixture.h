@@ -5,14 +5,15 @@
 #pragma once
 
 
-#include <tests/unit/ui/native_input.h>
 #include "arithmetic_fixture_rows.h"
 #include "paint_assertions.h"
 #include "widget_id_assertion.h"
 
-#include <impl/ecs_ui/toolkit/builder.h>
-
+#include <tests/unit/ui/native_input.h>
 #include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -41,7 +42,7 @@ using namespace Impl::Ui;
 inline constexpr AStringView s_TestSkinPath = "tests/ui/skin";
 inline constexpr AStringView s_TestLatinFontPath = "tests/ui/fonts/latin";
 inline constexpr AStringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
-inline constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch");
+inline constexpr Name s_FontScratchArenaName = NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 
 [[nodiscard]] Point Center(const Rect& bounds)noexcept;
 void ExpectRectExact(const Rect& actual, const Rect& expected);

@@ -15,6 +15,12 @@ const f32 s_FlyCameraPitchLimitRadians = s_FlyCameraPitchLimitDegrees * s_Degree
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class FlyCameraPointerDelta{
+    public f32 x = 0.0f;
+    public f32 y = 0.0f;
+}
+
+
 class FlyCameraMotion{
     public f32 sanitizeDelta(in f32 deltaSeconds)const{
         if(isFinite(deltaSeconds))
@@ -163,7 +169,7 @@ class FlyCameraMotion{
         in b8 boosted
     )const{
         VectorSingle outPosition(0.0f, 0.0f, 0.0f, 0.0f);
-        if(isFinite(currentPosition.x) && isFinite(currentPosition.y) && isFinite(currentPosition.z))
+        if(isFinite(currentPosition.xyz))
             outPosition = currentPosition;
 
         f32 axisX = 0.0f;
@@ -187,11 +193,11 @@ class FlyCameraMotion{
 
         const VectorSingle localMove = VectorSingle(axisX, 0.0f, axisY, 0.0f) * moveScale;
         const VectorSingle worldMove = this.rotateVector3(localMove, rotation);
-        if(!isFinite(worldMove.x) || !isFinite(worldMove.y) || !isFinite(worldMove.z))
+        if(!isFinite(worldMove.xyz))
             return outPosition;
 
         const VectorSingle newPosition = outPosition + worldMove;
-        if(isFinite(newPosition.x) && isFinite(newPosition.y) && isFinite(newPosition.z))
+        if(isFinite(newPosition.xyz))
             return newPosition;
         return outPosition;
     }
@@ -220,5 +226,4 @@ class FlyCameraMotion{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

@@ -5,6 +5,8 @@
 #include "internal.h"
 #include "posix_callstack_capture.h"
 
+#include <core/crash/internal_values.adhd.h>
+
 #include <global/algorithm.h>
 #include <global/blocking_io.h>
 #include <global/process_capture.h>
@@ -44,10 +46,10 @@ namespace __hidden_crash_posix{
 
 
 // CrashRequest is fixed-size and large; keep the alternate stack comfortably above the request snapshot size.
-inline constexpr usize s_SignalStackSize = 256u * 1024u;
-inline constexpr int s_AndroidEmergencyFileMode = 0644;
+inline constexpr usize s_SignalStackSize = ::NWB::Core::Crash::CrashTypes::s_SignalStackSize;
+inline constexpr int s_AndroidEmergencyFileMode = ::NWB::Core::Crash::CrashTypes::s_AndroidEmergencyFileMode;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
-inline constexpr int s_HandlerExecFailureExitCode = 127;
+inline constexpr int s_HandlerExecFailureExitCode = ::NWB::Core::Crash::CrashTypes::s_HandlerExecFailureExitCode;
 
 alignas(MaxAlign) static Array<u8, s_SignalStackSize> g_SignalStack = {};
 
@@ -138,7 +140,7 @@ static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanup
         return false;
     if(setsid() < 0)
         return false;
-    constexpr AStringView s_NullDevicePath = "/dev/null";
+    constexpr AStringView s_NullDevicePath = ::NWB::Core::Crash::CrashTypes::s_NullDevicePath;
 
     int nullDescriptor = open(s_NullDevicePath.data(), O_RDWR);
     if(nullDescriptor < 0)
@@ -224,9 +226,9 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
 static void WaitForOwnedChild(const b8 terminateImmediately, pid_t& child, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(child <= 0)
         return;
-    constexpr u32 s_WaitPollCount = 300u;
-    constexpr int s_WaitPollMilliseconds = 10;
-    constexpr u32 s_WaitPhaseCount = 2u;
+    constexpr u32 s_WaitPollCount = ::NWB::Core::Crash::CrashTypes::s_WaitPollCount;
+    constexpr int s_WaitPollMilliseconds = ::NWB::Core::Crash::CrashTypes::s_WaitPollMilliseconds;
+    constexpr u32 s_WaitPhaseCount = ::NWB::Core::Crash::CrashTypes::s_WaitPhaseCount;
     b8 terminated = terminateImmediately;
     for(u32 phase = 0u; phase < s_WaitPhaseCount; ++phase){
         if(phase != 0u || terminateImmediately){

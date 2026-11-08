@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +37,7 @@ using TaskGraphTestUtils::TestArena;
 
 static void BuildVersionChain(Core::GpuTaskGraph& graph, const Core::GpuGraphResourceVersionOrigin::Enum origin, const usize taskCount, const b8 disjointClobber, const b8 overlappingClobber){
     ASSERT_GE(taskCount, overlappingClobber ? 3u : 2u);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/analysis_optimization/version_buffer"), "Analysis Version Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationVersionBuffer), "Analysis Version Buffer");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -66,7 +68,7 @@ static void BuildVersionChain(Core::GpuTaskGraph& graph, const Core::GpuGraphRes
             physicalUse.access = Core::GpuTaskResourceAccess::Write;
         }
         Core::GpuTaskDesc desc;
-        const auto derivedNameResult = IndexedName(Name("tests/analysis_optimization/version_task"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationVersionTask), index);
         ASSERT_TRUE(derivedNameResult);
         desc.setIdentity(*derivedNameResult).setMarkerLabel("Analysis Version Task");
         if(previous.valid())
@@ -115,7 +117,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
         SCOPED_TRACE(reversed);
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto bufferResult = AddBufferMetadata(graph, Name("tests/analysis_optimization/ambiguous_version_buffer"), "Ambiguous Version Buffer");
+        const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationAmbiguousVersionBuffer), "Ambiguous Version Buffer");
         ASSERT_TRUE(bufferResult);
         const Core::GpuGraphResourceId buffer = *bufferResult;
         ASSERT_TRUE(buffer.valid());
@@ -138,7 +140,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
             };
             const Core::GpuTaskResourceVersionUse versionUse{ .version = versions[index % LengthOf(versions)], .role = producer ? Core::GpuTaskResourceVersionRole::Produce : Core::GpuTaskResourceVersionRole::Consume, };
             Core::GpuTaskDesc desc;
-            const auto resourceNameResult = IndexedName(Name("tests/analysis_optimization/ambiguous_version_task"), index);
+            const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationAmbiguousVersionTask), index);
             ASSERT_TRUE(resourceNameResult);
             desc.setIdentity(*resourceNameResult).setMarkerLabel("Ambiguous Version Task").setResourceUses(Span(&physicalUse, 1u)).setResourceVersionUses(Span(&versionUse, 1u));
             const Core::GpuTaskCommandRequirements commands{ Core::GpuQueueCapability::Compute };
@@ -177,8 +179,8 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
 TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSemanticCycles){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto buffersAdmission0 = AddBufferMetadata(graph, Name("tests/analysis_optimization/semantic_cycle_buffer_a"), "Semantic Cycle Buffer A");
-    const auto buffersAdmission1 = AddBufferMetadata(graph, Name("tests/analysis_optimization/semantic_cycle_buffer_b"), "Semantic Cycle Buffer B");
+    const auto buffersAdmission0 = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationSemanticCycleBufferA), "Semantic Cycle Buffer A");
+    const auto buffersAdmission1 = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationSemanticCycleBufferB), "Semantic Cycle Buffer B");
     ASSERT_TRUE(buffersAdmission0);
     ASSERT_TRUE(buffersAdmission1);
     const Array<Core::GpuGraphResourceId, 2> buffers = {
@@ -217,7 +219,7 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
             }
         }
         Core::GpuTaskDesc desc;
-        const auto derivedNameResult = IndexedName(Name("tests/analysis_optimization/semantic_cycle_task"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationSemanticCycleTask), index);
         ASSERT_TRUE(derivedNameResult);
         desc.setIdentity(*derivedNameResult).setMarkerLabel("Semantic Cycle Task");
         if(index != 0u)
@@ -232,7 +234,7 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
         tasks[index] = *taskAdmission;
         ASSERT_TRUE(tasks[index].valid());
     }
-    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/semantic_cycle_scratch"));
+    Core::Alloc::ScratchArena scratchArena{Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationSemanticCycleScratch)};
     Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -258,8 +260,8 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         SCOPED_TRACE(reversed);
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto buffersAdmission0 = AddBufferMetadata(graph, Name("tests/analysis_optimization/lifetime_buffer_a"), "Lifetime Buffer A");
-        const auto buffersAdmission1 = AddBufferMetadata(graph, Name("tests/analysis_optimization/lifetime_buffer_b"), "Lifetime Buffer B");
+        const auto buffersAdmission0 = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationLifetimeBufferA), "Lifetime Buffer A");
+        const auto buffersAdmission1 = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationLifetimeBufferB), "Lifetime Buffer B");
         ASSERT_TRUE(buffersAdmission0);
         ASSERT_TRUE(buffersAdmission1);
         const Array<Core::GpuGraphResourceId, 2> buffers = {
@@ -292,7 +294,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
                 Core::GpuTaskResourceVersionUse{ .version = versions[1u], .role = role },
             };
             Core::GpuTaskDesc desc;
-            const auto resourceNameResult = IndexedName(Name("tests/analysis_optimization/lifetime_task"), index);
+            const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationLifetimeTask), index);
             ASSERT_TRUE(resourceNameResult);
             desc.setIdentity(*resourceNameResult).setMarkerLabel("Lifetime Version Task").setResourceUses(physicalUses);
             if(index != 2u)
@@ -303,7 +305,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
             tasks[index] = *taskAdmission;
             ASSERT_TRUE(tasks[index].valid());
         }
-        Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/lifetime_edge_scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationLifetimeEdgeScratch)};
         Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -336,7 +338,7 @@ TEST(GpuTaskGraphAnalysis, ReportsEarlierUncoveredVersionUseBeforeLaterDuplicate
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/analysis_optimization/binding_failure_buffer"), "Version Binding Failure Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationBindingFailureBuffer), "Version Binding Failure Buffer");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -359,7 +361,7 @@ TEST(GpuTaskGraphAnalysis, ReportsEarlierUncoveredVersionUseBeforeLaterDuplicate
     const Core::GpuTaskCommandRequirements commands{ Core::GpuQueueCapability::Compute };
     const auto taskResult = graph.addTask(
         Core::GpuTaskDesc{}
-            .setIdentity(Name("tests/analysis_optimization/binding_failure_task"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseAnalysisOptimizationBindingFailureTask))
             .setMarkerLabel("Version Binding Failure Task")
             .setResourceUses(Span(&physicalUse, 1u))
             .setResourceVersionUses(versionUses),

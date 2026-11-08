@@ -1,0 +1,13 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 UploadRetainedStateMatches(in u32 initialState, in u32 graphInitialState, in u32 externalFinalState, in u32 uploadFinalState){
+    if(initialState == 0u || uploadFinalState != initialState || (externalFinalState != 0u && externalFinalState != initialState))
+        return false;
+    return graphInitialState == 0u || graphInitialState == initialState;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

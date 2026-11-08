@@ -8,6 +8,8 @@
 #include "texture_clear_contract.h"
 #include "arena_names.h"
 
+#include <core/graphics/vulkan/texture_clear_types.adhd.h>
+
 #include <global/algorithm.h>
 #include <global/simd/convert.h>
 #include <global/simdmath.h>
@@ -28,13 +30,13 @@ namespace VulkanTextureDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_TextureClearColorComponentCount = 3u;
-inline constexpr u32 s_TextureClearRGComponentCount = 2u;
-inline constexpr u32 s_TextureClearRGBAComponentCount = 4u;
-inline constexpr u32 s_TextureClearDepthPatternBytes = 4u;
-inline constexpr u32 s_TextureClearStencilPatternBytes = 1u;
-inline constexpr u32 s_TextureClearMaxPatternBytes = 16u;
-inline constexpr u32 s_TextureClearUploadAlignment = 4u;
+inline constexpr u32 s_TextureClearColorComponentCount = NWB::Core::s_TextureClearDataColorComponentCount;
+inline constexpr u32 s_TextureClearRGComponentCount = NWB::Core::s_TextureClearDataRGComponentCount;
+inline constexpr u32 s_TextureClearRGBAComponentCount = NWB::Core::s_TextureClearDataRGBAComponentCount;
+inline constexpr u32 s_TextureClearDepthPatternBytes = NWB::Core::s_TextureClearDataDepthPatternBytes;
+inline constexpr u32 s_TextureClearStencilPatternBytes = NWB::Core::s_TextureClearDataStencilPatternBytes;
+inline constexpr u32 s_TextureClearMaxPatternBytes = NWB::Core::s_TextureClearDataMaxPatternBytes;
+inline constexpr u32 s_TextureClearUploadAlignment = NWB::Core::s_TextureClearDataUploadAlignment;
 
 inline constexpr TStringView s_TextureNotLiveResourceReason = NWB_TEXT("texture must be a live resource owned by this device");
 inline constexpr TStringView s_TextureNotReadyForNativeClearReason = NWB_TEXT("texture is not ready for the requested native clear on this exact command queue");
@@ -139,20 +141,11 @@ inline b8 TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mipEx
     return (box.minX % blockWidth) == 0 && (box.minY % blockHeight) == 0 && (box.maxX == static_cast<i32>(mipExtent.width) || (box.maxX % blockWidth) == 0) && (box.maxY == static_cast<i32>(mipExtent.height) || (box.maxY % blockHeight) == 0);
 }
 
-inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TextureClearUploadLayout{
-    u64 uploadSize = 0ull;
-    u64 layerPitch = 0ull;
-    usize clearByteCount = 0u;
-    u32 copyOffsetAlignment = 0u;
-    u32 stagingAlignment = 0u;
-    b8 mergeArrayLayerCopies = false;
-};
+using TextureClearUploadLayout = ::NWB::Core::VulkanTextureClearUploadLayout;
 
 inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u64 elementCount, const u32 elementSize, const u64 arrayLayerCount)noexcept{
     if(elementCount == 0ull || elementSize == 0u || arrayLayerCount == 0ull || elementCount > Limit<u64>::s_Max / elementSize)
@@ -165,7 +158,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     const auto layerPitch = AlignUpChecked<u64>(uploadSize, *copyOffsetAlignment);
     if(!stagingAlignment || !layerPitch)
         return MakeUnexpected(Failure{});
-    const b8 mergeArrayLayerCopies = arrayLayerCount > 1ull && *layerPitch <= s_TextureClearMergedLayerUploadThreshold / arrayLayerCount;
+    const b8 mergeArrayLayerCopies = ShouldMergeTextureClearArrayLayers(arrayLayerCount, *layerPitch);
     if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize) / *layerPitch)
         return MakeUnexpected(Failure{});
     const u64 clearByteCount = mergeArrayLayerCopies ? *layerPitch * (arrayLayerCount - 1ull) + uploadSize : uploadSize;

@@ -16,6 +16,7 @@
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -90,7 +91,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             }
 
             const Array<MaterialPassDrawItemsView, 1u> transparentCsgMaterialGeometryDrawSets = { transparentCsgDrawItems.csgReceiverSurface, };
-            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name("render.avboit.intervals.transparent_csg_material_geometry"), "Transparent CSG Material Geometry", m_graph, scratchArena);
+            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name(s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialGeometry), "Transparent CSG Material Geometry", m_graph, scratchArena);
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = geometrySetResult.has_value();
             if(!geometrySetResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
@@ -100,7 +101,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             const auto sampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
                 m_materialSystem,
                 transparentCsgMaterialGeometryDrawSets,
-                Name("render.avboit.intervals.transparent_csg_material_sampled_textures"),
+                Name(s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialSampledTextures),
                 "Transparent CSG Material Sampled Textures",
                 m_graph,
                 scratchArena
@@ -183,8 +184,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(scheduling).setDependencies({ &result.uploadTask, 1u });
                 const auto uploadTaskResult = m_graph.addUploadBufferTask(
                     uploadDesc,
-                    Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, }
-                );
+                    Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, });
                 if(!uploadTaskResult){
                     result.uploadTask = {};
                     NWB_LOGGER_WARNING(warningMessage);
@@ -195,27 +195,27 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             };
             if(
                 !appendUploadTask(
-                    Name("render.avboit.transparent_csg.material_instances_upload"), "Transparent CSG Material Instances Upload", transparentCsgFirstUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgMaterialInstancesUpload), "Transparent CSG Material Instances Upload", transparentCsgFirstUploadScheduling,
                     transparentCsgInstanceBlob, inputs.materialInstances, NWB_TEXT("RendererSystem: could not declare transparent CSG material instance upload")
                 )
                 || !appendUploadTask(
-                    Name("render.avboit.transparent_csg.material_typed_upload"), "Transparent CSG Material Typed Upload", transparentCsgUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgMaterialTypedUpload), "Transparent CSG Material Typed Upload", transparentCsgUploadScheduling,
                     transparentCsgMaterialTypedBlob, inputs.materialTyped, NWB_TEXT("RendererSystem: could not declare transparent CSG material typed upload")
                 )
                 || !appendUploadTask(
-                    Name("render.avboit.transparent_csg.receiver_ranges_upload"), "Transparent CSG Receiver Ranges Upload", transparentCsgUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgReceiverRangesUpload), "Transparent CSG Receiver Ranges Upload", transparentCsgUploadScheduling,
                     transparentCsgReceiverRangesBlob, inputs.csgReceiverRanges, NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-range upload")
                 )
                 || !appendUploadTask(
-                    Name("render.avboit.transparent_csg.cutters_upload"), "Transparent CSG Cutters Upload", transparentCsgUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgCuttersUpload), "Transparent CSG Cutters Upload", transparentCsgUploadScheduling,
                     transparentCsgCuttersBlob, inputs.csgCutters, NWB_TEXT("RendererSystem: could not declare transparent CSG cutter upload")
                 )
                 || !appendUploadTask(
-                    Name("render.avboit.transparent_csg.clip_context_slots_upload"), "Transparent CSG Clip Context Slots Upload", transparentCsgUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgClipContextSlotsUpload), "Transparent CSG Clip Context Slots Upload", transparentCsgUploadScheduling,
                     transparentCsgClipContextSlotsBlob, inputs.csgClipContextSlots, NWB_TEXT("RendererSystem: could not declare transparent CSG clip-context upload")
                 )
                 || !appendUploadTask(
-                    Name("render.avboit.transparent_csg.interval_sample_state_upload"), "Transparent CSG Interval State Upload", transparentCsgUploadScheduling,
+                    Name(s_RenderNameRenderAvboitTransparentCsgIntervalSampleStateUpload), "Transparent CSG Interval State Upload", transparentCsgUploadScheduling,
                     transparentCsgIntervalSampleStateBlob, inputs.csgIntervalSampleState, NWB_TEXT("RendererSystem: could not declare transparent CSG interval-state upload")
                 )
             )
@@ -237,10 +237,10 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
     // Clear frozen rect after uploads so the graph owns CopyDest -> UAV ordering.
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         const CsgIntervalRectClearDesc clearDesc{
-            .intervalClearIdentity = Name("render.avboit.transparent_csg.interval_clear"),
+            .intervalClearIdentity = Name(s_RenderNameRenderAvboitTransparentCsgIntervalClear),
             .intervalClearMarkerLabel = "Transparent CSG Interval Id Clear",
             .intervalClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"),
-            .receiverEventClearIdentity = Name("render.avboit.transparent_csg.receiver_event_count_clear"),
+            .receiverEventClearIdentity = Name(s_RenderNameRenderAvboitTransparentCsgReceiverEventCountClear),
             .receiverEventClearMarkerLabel = "Transparent CSG Receiver Event Count Clear",
             .receiverEventClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG receiver-event clear"),
             .csgIntervalId = inputs.csgIntervalId,
@@ -274,3 +274,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/integration/font_builder/bake_name_cases.adhd.h>
+
 #include <utilities/font_builder/bake.h>
 
 #include <impl/assets_font_atlas/model.h>
-
-#include <tests/common/capturing_logger.h>
 
 #include <gtest/gtest.h>
 
@@ -64,12 +65,32 @@ FontAtlasPositioningTable ClassPairFixture(Core::Assets::AssetArena& arena){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(FontAtlasPacking, RejectsInvalidBakeBoundsAndMissingPaths){
+    using namespace __hidden_packing_tests;
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasOptions)};
+    BakeOptions options(arena);
+    options.source = AStringView("font.ttf");
+    options.output = AStringView("font.nwb");
+    options.ppem = s_FontAtlasMinBakePpem - 1u;
+    EXPECT_FALSE(ValidateOptions(options));
+    options.ppem = s_FontAtlasMinBakePpem;
+    options.source = AStringView();
+    EXPECT_FALSE(ValidateOptions(options));
+    options.source = AStringView("font.ttf");
+    options.output = AStringView();
+    EXPECT_FALSE(ValidateOptions(options));
+    EXPECT_EQ(logger.errorCount(), 3u);
+    EXPECT_EQ(ComputeBakePixelCapacity(2048u, 8u), 128ull * 1024ull * 1024ull);
+}
+
 TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/packing"));
-    Core::Alloc::ScratchArena scratch(Name("tests/font_atlas/packing/scratch"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasPacking)};
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasPackingScratch)};
     BakeOptions options(arena);
     options.extent = 32u;
     options.maxGroups = 2u;
@@ -116,8 +137,8 @@ TEST(FontAtlasPacking, RejectsCapacityWithoutDroppingGlyphs){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/capacity"));
-    Core::Alloc::ScratchArena scratch(Name("tests/font_atlas/capacity/scratch"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasCapacity)};
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasCapacityScratch)};
     BakeOptions options(arena);
     options.extent = 32u;
     options.maxGroups = 1u;
@@ -139,7 +160,7 @@ TEST(FontAtlasPositioning, LegacyPairsStayBoundedAndSorted){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/kern"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasKern)};
     FontAtlasPositioningTable table(arena);
     table.tag = s_FontAtlasKernTag;
     auto& bytes = table.bytes;
@@ -157,7 +178,7 @@ TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasGpos)};
     auto table = ClassPairFixture(arena);
     ASSERT_EQ(table.bytes.size(), 84u);
     EXPECT_TRUE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
@@ -172,7 +193,7 @@ TEST(FontAtlasPositioning, TruncatedGdefMarkGlyphSetsAreRejected){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gdef_truncated"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasGdefTruncated)};
     FontAtlasPositioningTable table(arena);
     table.tag = s_FontAtlasGdefTag;
     for(const u16 minor : { u16(2), u16(3) }){
@@ -191,7 +212,7 @@ TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos_malformed"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasGposMalformed)};
     auto table = ClassPairFixture(arena);
     table.bytes[8u] = 255u;
     EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
@@ -205,7 +226,7 @@ TEST(FontAtlasPositioning, PairSetDeviceOffsetsUseImmediateParent){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos_device"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::FontBakeCases::s_FontBakeNameTestsFontAtlasGposDevice)};
     auto table = ClassPairFixture(arena);
     auto& bytes = table.bytes;
     bytes.resize(38u);

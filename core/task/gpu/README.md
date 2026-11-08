@@ -1,62 +1,93 @@
-# Automatic queue placement
+# Auto queue place
 
-Task declarations describe work, resources, dependencies, and scheduling cost. The compiler chooses a legal physical Graphics, Compute, or Transfer queue before command recording, using command capabilities, resource sharing and ownership, dependency crossings, and opportunities for overlap. Tiny tasks favor locality, and compatible tasks that explicitly merge with their predecessor are placed together.
+Task notes state work, stores, needs, and run cost. The build step picks a
+good real Graphics, Compute, or Move queue before it writes calls. It uses
+call skills, store share and hold, need cross, and overlap gain. Small tasks
+lean to near. Fit tasks that ask to join their past task stay as one.
 
-Overlap scoring uses task-relation bitsets and per-queue cost groups instead of scanning every assignment for every candidate. Merged groups exclude the union of their members' ancestors, descendants, and members, so only work independent of the entire packet contributes overlap. Moving a task between queues updates the cost index before later scoring. Conditional recovery tasks contribute zero estimated normal overlap and queue load because they execute only after normal work fails; their queue requirements and accepted-frontier joins remain intact. Independent graphs and total-order chains retain their reachability shortcuts; graphs without relation rows allocate no cost-mask metadata.
+Overlap score uses task-link bit sets and per-queue cost groups. It does not
+scan each set for each pick. Joined groups drop the join of their part
+pasts, nexts, and parts. So only work free of the full pack adds overlap.
+A task move 'tween queues news the cost list before later score. If-fix tasks
+add zero set normal overlap and queue load, since they run only after normal
+work fails. Their queue needs and true-edge joins stay whole. Free graphs and
+full-order chains keep their reach short cuts. Graphs with no link rows make
+no cost-mask data.
 
-Partial graphs use compact per-row word spans when their storage plus temporary bounds and offsets saves roughly 25% of a full matrix. Small rows and broad spans retain dense storage; worst-case storage remains quadratic. Global task-bit positions are preserved. Both forms build the symmetric relation index in place using bounded 64-by-64 tiles, and topological ranks recover strict reachability direction. Separate ancestor and descendant extrema determine exact symmetric word spans before allocation. Closure OR loops snapshot row starts and lengths so writes do not inhibit vectorization, and compact symmetry visits only potentially occupied tiles. Dense rows of at least 64 words retain computed bounds through closure to avoid a second full-matrix bounds scan; smaller dense rows release that storage before matrix allocation. Placement policy and declaration opt-ins for parallel command recording remain explicit.
+Half graphs use tight per-row word runs when their store plus short edge and
+spot lists save near 25% of a full grid. Small rows and wide runs keep full
+store. Worst-case store stays square. World task-bit spots stay. Both forms
+build the two-way link list in place with capped 64-by-64 tiles, and rank
+order gets back firm reach line. Split past and next ends fix exact two-way
+word runs before make. End OR loops snap row starts and lengths, so writes do
+not block wide ops. Full rows of at least 64 words keep made ends through end
+run to skip a second full-grid end scan. Smaller full rows free that store
+before grid make. Place rules and note opt-ins for side-by-side call write
+stay clear.
 
-Dependency reduction stops traversing after the last direct consumer's topological rank or once every direct consumer is reached. Analysis and telemetry share a byte-mixed dependency-pair hash so dense sequential IDs do not trigger pathological hash-table growth. Stable topological sorting normally scans declaration IDs; excessive rescanning activates a hierarchical ready bitmap that preserves the exact lowest-ready-ID order. Ordinary producer-first graphs retain the scan path without bitmap allocation.
+Need trim stops past the last direct user rank, or once each direct user is
+met. Check and stream notes share a byte-mixed need-pair hash, so tight
+count IDs do not blow up the hash table. Firm rank order most often scans
+note IDs. Too much re-scan turns on a tier ready map that keeps the exact
+low-ready-ID order. Plain maker-first graphs keep the scan path with no map
+make.
 
-Queue assignment checks the union of physical queues capable of executing any placement group's command requirements before constructing dependency reachability. When at most one queue is capable, every legal static, same-class, or timing route uses that queue and every overlap diagnostic is zero; building the quadratic matrix cannot affect the result. The capability scan deliberately overestimates legal routes and stops after finding two queues. Edge-free graphs retain their existing path without this scan.
+Queue pick checks the join of real queues that can run any place group call
+need, before it builds need reach. When at most one queue can, each good set,
+same-kind, or time route uses that queue, and each overlap note is zero.
+A square grid build cannot change the result. The skill scan on purpose
+over-guesses good routes and stops after two queues. Edge-free graphs keep
+their old path with no scan.
 
-Recorded and accepted callback bindings are validated and indexed before execution. Arrays of at most eight callbacks use an allocation-free linear lookup; larger arrays use a scratch-backed index. Bindings remain immutable through the operation, while callback-owned context may change. Invocation stays in compiled task order, and lookup allocates nothing after native acceptance.
+Noted and true call-back links check and list before run. Lists of at most
+eight call-backs use a free straight find. Bigger lists use a scratch-made
+list. Links stay fixed through the job, while call-back-owned context may
+move. Calls stay in built task order, and find makes nothing after home
+take-in.
 
-Built-in copies, uploads, clears, and resolves derive their command requirements internally. A custom recorded task declares its implementation's requirements once:
+Built-in copy, up-load, clear, and fix jobs find their call needs in them.
+A plain noted task states its code needs once:
 
 ```cpp
 struct ExampleComputeTask{
     static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::Compute };
-
-    struct Payload{
-        // Task-specific data.
-    };
-
-    static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
 };
-
-const Expected<GpuTaskId> task = graph.addTask<ExampleComputeTask>(taskDesc, Move(payload));
-if(!task)
-    return MakeUnexpected(Failure{});
 ```
 
-When a task implementation records different command kinds depending on its payload, provide `static GpuTaskCommandRequirements CommandRequirements(const Payload&)` instead. Every required capability must be supported; each nonempty alternative mask additionally requires at least one alternative. Built-ins preserve native and hook alternatives independently. A task that records native commands must declare one of these contracts. The metadata-only `addTask` overload accepts command requirements for analysis and tooling.
+## Store states and blocks
 
-Explicit packet merging requires the same physical queue and mergeable tasks. Crossing an existing consumer frontier additionally requires the declared immediate-successor opt-in; consumers then wait for the complete packet. Per-task resource transitions and timing scopes remain inside the packet.
+Stores move through read and write states with queue-home pass. The state
+plan keeps each store form, last known state, and wait edges. Less state data
+does not mean less work. It means less repeat check.
 
-Framework contracts for presentation, existing external submission timelines, and imported ownership remain hard constraints. They express real synchronization requirements and are owned by the task implementation or resource import. `GpuGraphResourceDesc::directConsumerQueue` keeps an exclusive native resource in the family of a consumer that cannot process graph ownership handoffs.
+Home close of maps needs home shut to keep the stated state. Fit shader/depth
+reads use the picked back plain read-only plan. A block or ray-box back block
+may go back to a known make state on shut, since it has no image plan. A
+brought-in read seed then gets a clear local move from that true snap state.
+A later bad state or write still joins cross reads, and end outs keep the
+newest tracked state.
 
-Submission retains the complete dependency token array for validation and lifecycle ordering. A prior accepted native wait whose scope covers all commands on the exact consuming physical queue may cover a later wait on the same current-device producer timeline at no greater value. Rejected submissions publish no inherited coverage; binary and external synchronization remains explicit. Submission statistics keep emitted native `timelineWaitCount`, same-queue elisions, duplicate merges, and `inheritedTimelineWaitElisionCount` separate, with exact planned-token accounting.
+Read joins may stop at a full writer that has lined the old reads, or at a
+full-cover bad read time set by another task. Half edges and task-home state
+moves block that read-time cut.
 
-Compile options carry no per-task queue choice. Placement follows only declared commands, resource ownership and sharing, scheduling hints, scheduler queue loads, and timing history. Optional same-class and timing-history routing require their explicit scheduling opt-ins.
+Home block drop turns queue-held step/touch spans into closed caller-owned
+lists used by the write call. It does not copy those lists into short boxes
+or change plans, spans, hold, or draw-span care.
 
-# Shared read state sources
+# Start-state hand-offs
 
-Concurrently shared resources may fan out compatible reads from one immutable packet-final state snapshot. The source must cover the complete consumer range, admit every participating queue, and preserve its full anchor range through the rest of the source packet. Overlapping writes, a different source state, or an outgoing ownership barrier prevent reuse. Each consumer retains its exact declared state and the execution dependency on that source packet. A consumer that later writes or changes to an incompatible read state on an overlapping range inside the same task joins outstanding readers at task entry instead of borrowing an earlier shared-read anchor.
+Start-state hand-offs pack at most eight back-to-back sub sets from one
+fixed pack source. Each first span checks on its own, and source order stays
+'tween packs. Hung block frees on the now base or source use a straight fold.
+Join of good halves must not hide an old head fail that would cut a hung
+hold-free span. Short snap boxes use caller scratch. The hand-off call owns
+copied snap stuff in the graphics field.
 
-Textures require native close to preserve the declared state; compatible shader/depth reads use the selected provider's common read-only layout. A buffer or acceleration-structure backing buffer may restore a known creation state on close because it has no image layout; an imported read seed then receives an explicit local transition from that actual snapshot state. A later incompatible state or write still joins overlapping readers, and terminal exports retain the latest tracked state.
+# Block byte spans
 
-Reader joins may stop at a covering writer that already ordered the older readers, or at a fully covering incompatible read epoch established by another task. Partial boundaries and task-local state changes prevent that read-epoch cutoff.
-
-Native barrier lowering normalizes queue-supported stage/access scopes in private caller-owned arrays consumed by the recording call. It does not copy those arrays into temporary containers or change layouts, ranges, ownership, or rendering-scope handling.
-
-# Initial-state handoffs
-
-Initial-state handoffs batch at most eight consecutive subsets from one immutable packet source. Every original range is validated independently and source order is preserved between batches. Pending buffer releases on either the current base or source use a sequential fold: merging valid halves together must not hide an earlier prefix failure that would split a pending ownership-release interval. Temporary snapshot containers use caller scratch, while the handoff API owns copied snapshot contents in the graphics arena.
-
-# Buffer byte ranges
-
-GPU tasks synchronize the byte intervals declared in `GpuTaskResourceUse::range.bufferRange`:
+GPU tasks line up the byte spans noted in
+`GpuTaskResourceUse::range.bufferRange`:
 
 ```cpp
 const GpuTaskResourceUse use{
@@ -67,24 +98,32 @@ const GpuTaskResourceUse use{
 };
 ```
 
-This declaration covers bytes `[256, 384)`. Disjoint intervals do not create resource hazards; overlapping reads/writes retain the required ordering. State transitions, packet state seeds, terminal exports, and queue-family ownership transfers preserve the affected intervals, including when a consumer spans several producers.
+This note covers bytes `[256, 384)`. Split spans make no store risks. Cross
+reads/writes keep the needed order. State moves, pack state seeds, end outs,
+and queue-home hold moves keep the hit spans. This holds when a user spans
+many makers.
 
-Omitting the range keeps the whole-buffer default. `BufferRange(offset, BufferRange::s_AllBytes)` covers the remaining bytes from that offset. Empty, overflowing, and out-of-bounds task ranges are rejected. Acceleration structures retain whole-allocation synchronization.
+No span keeps the full-block default.
+`BufferRange(offset, BufferRange::s_AllBytes)` covers the rest bytes from that
+spot. Blank, run-past, and out-of-edge task spans fail. Ray-boxes keep
+full-pack line-up.
 
-The declaration must cover every byte touched by the task's commands and internal state transitions. For explicit native transitions, pass the same range as the last argument to `CommandList::setBufferState(buffer, state, forceMemoryDependency, range)`. Whole-buffer operations, including implicit vertex/index and graphics/mesh indirect binding state transitions, still require whole-buffer declarations. Compute indirect dispatch transitions only its argument structure at the dispatched offset. Built-in uploads and copies declare and transition their exact transfer intervals; buffer clears cover the whole buffer.
+The note must cover each byte hit by the task calls and in-task state moves.
+For clear home moves, pass the same span as the last flag to
+`CommandList::setBufferState(buffer, state, forceMemoryDependency, range)`.
+Full-block jobs, with set point/index and draw/mesh side-call state moves,
+still need full-block notes. Compute side-call send moves only its flag form
+at the sent spot. Built-in up-loads and copies note and move their exact move
+spans. Block clears cover the full block.
 
-A pending queue-family release must be acquired with its original byte interval. Handoff subset selection rejects clipping a pending release. Release separate intervals on the producer when consumers need independent ownership ranges.
+A hung queue-home free must join with its first byte span. Hand-off sub set
+pick turns down cut of a hung free. Free split spans on the maker when users
+need free hold spans.
 
-# CPU scaling coverage
+# CPU size cover
 
-CPU scaling behavior is covered by ordinary enabled unit tests in `tests/unit/task/gpu/` (no `DISABLED_*` cases): queue placement and scoring, timing-history routing, resource-version analysis, dependency inference, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Those tests carry correctness assertions and no wall-clock thresholds; they exercise the CPU pipeline, while native GPU frame performance requires a representative rendering workload. Run them with an optimized build:
-
-```sh
-python -m launcher run nwb_gpu_task_tests --config opt --working-directory . -- --gtest_output=xml:gpu_task_tests.xml
-```
-
-The launcher builds and runs the target; the test executable writes the XML report in the repository root.
-
-The partial-DAG placement cases in `tests/unit/task/gpu/task_graph_queue_partial_dag_tests.cpp` cover multiword score preservation across queue moves and rebuilds, sparse-row scratch bounds, relation-state reset on rebuild, assignment exclusion without local assignment, and mask-allocation avoidance for ordered/unused reachability. These complement the independent-task and serial-chain placement controls.
-
-Historical renderer M4 measurement evidence is preserved in the [renderer M4 qualification report](../../../tests/ab/async_shadow_m4/qualification_history.md).
+CPU size acts sit in plain on unit tests in `tests/unit/task/gpu/` (no
+`DISABLED_*` cases): queue place and score, time-past route, store-form
+check, need guess, store-state bits and end group, end needs, hold counts,
+start-state hand-off check, re-play pre-check, and sub task runs. New cover
+aims at past-bug edges through the picked public rules.

@@ -4,6 +4,7 @@
 
 #include "deferred_system.h"
 
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
 #include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
 
 #include <impl/ecs_render/caustic/rt_caustic_state.h>
@@ -216,8 +217,7 @@ b8 RendererDeferredSystem::createDeferredLightingPipeline(){
 Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
-        __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, }
-    );
+        __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, });
 }
 
 b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const b8 useLaggedLightingHistory){

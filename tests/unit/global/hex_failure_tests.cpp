@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/hex_case_types.adhd.h>
+
 #include <global/binary.h>
 #include <global/compact_string.h>
 #include <global/diagnostics.h>
@@ -24,18 +26,10 @@ namespace __hidden_hex_failure_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_HexCapacityFailure = 0xE20Au;
-inline constexpr u32 s_HexAppendFailure = 0xE20Bu;
-
-
 struct ThrowingHexCapacityPredicate{
     explicit operator b8()const{
         throw s_HexCapacityFailure;
     }
-};
-
-struct HexCapacityValue{
-    usize value = 0u;
 };
 
 [[nodiscard]] ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
@@ -51,9 +45,9 @@ public:
 
 
 public:
-    [[nodiscard]] HexCapacityValue size()const noexcept{ return { text.size() }; }
+    [[nodiscard]] HexCapacityValue size()const noexcept{ return { .value = text.size() }; }
 
-    [[nodiscard]] HexCapacityValue max_size()const noexcept{ return { text.max_size() }; }
+    [[nodiscard]] HexCapacityValue max_size()const noexcept{ return { .value = text.max_size() }; }
 
     void push_back(const char ch)noexcept{ text.push_back(ch); }
 };
@@ -121,5 +115,4 @@ TEST(NoexceptFailureTests, HexAppendCapacityAndOutputFailuresPreservePublishedCh
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

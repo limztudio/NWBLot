@@ -5,6 +5,8 @@
 #include "edit_caret_fixture.h"
 #include "fixture_text_shaping.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +74,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeReques
 
 
 EditCaretFixture::EditCaretFixture()
-    : m_arena(Name("tests/ui/widgets/edit_caret"))
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsEditCaret))
     , m_shaper(m_arena)
     , m_builder(m_arena, m_shaper)
     , m_geometry(m_arena)

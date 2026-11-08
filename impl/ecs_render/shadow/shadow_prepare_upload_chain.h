@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
@@ -51,37 +52,6 @@ struct ShadowPrepareUploadInputs{
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     Core::GpuGraphResourceId currentBindlessSlots;
     Core::GpuGraphResourceId materialContextSlots;
-};
-
-struct ShadowPrepareUploadTasks{
-    Core::GpuTaskId bindlessSlots;
-    Core::GpuTaskId rayTraceMaterialContextSlots;
-    Core::GpuTaskId csgTraceContext;
-    Core::GpuTaskId causticEmissionTargets;
-    Core::GpuTaskId surfelFrameConstants;
-    Core::GpuTaskId shadowInstanceMaterial;
-    Core::GpuTaskId shadowInstance;
-    Core::GpuTaskId shadowMaterialTyped;
-    Core::GpuTaskId sceneBvhNodes;
-    Core::GpuTaskId sceneBvhInstances;
-};
-
-struct ShadowPrepareUploadChain{
-    ShadowPrepareUploadTasks tasks;
-    // Last declared upload; Shadow Preparation depends on it.
-    Core::GpuTaskId completionTask;
-    // Upload destinations stay invalid when their preflighted buffer is absent.
-    Core::GpuGraphResourceId csgTraceContext;
-    Core::GpuGraphResourceId causticEmissionTargets;
-    Core::GpuGraphResourceId surfelFrameConstants;
-    Core::GpuGraphResourceId shadowInstanceMaterials;
-    Core::GpuGraphResourceId shadowInstances;
-    Core::GpuGraphResourceId shadowMaterialTyped;
-    Core::GpuGraphResourceId sceneBvhNodes;
-    Core::GpuGraphResourceId sceneBvhInstances;
-    b8 currentBindlessSlotsGraphOwned = false;
-    b8 shadowMaterialContextBatchGraphOwned = false;
-    b8 sceneBvhBatchGraphOwned = false;
 };
 
 

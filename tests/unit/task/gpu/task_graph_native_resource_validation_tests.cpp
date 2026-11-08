@@ -83,16 +83,16 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         EXPECT_EQ(recordCount, 0u);
     };
 
-    expectMissingTypedImport(Name("tests/task_graph/native_metadata_texture"), "Native Metadata Texture", Core::GpuGraphResourceType::Texture, Core::ResourceStates::ShaderResource);
-    expectMissingTypedImport(Name("tests/task_graph/native_metadata_buffer"), "Native Metadata Buffer", Core::GpuGraphResourceType::Buffer, Core::ResourceStates::ShaderResource);
-    expectMissingTypedImport(Name("tests/task_graph/native_metadata_accel_struct"), "Native Metadata Accel Struct", Core::GpuGraphResourceType::AccelStruct, Core::ResourceStates::AccelStructRead);
+    expectMissingTypedImport(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeMetadataTexture), "Native Metadata Texture", Core::GpuGraphResourceType::Texture, Core::ResourceStates::ShaderResource);
+    expectMissingTypedImport(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeMetadataBuffer), "Native Metadata Buffer", Core::GpuGraphResourceType::Buffer, Core::ResourceStates::ShaderResource);
+    expectMissingTypedImport(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeMetadataAccelStruct), "Native Metadata Accel Struct", Core::GpuGraphResourceType::AccelStruct, Core::ResourceStates::AccelStructRead);
 
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto unusedTextureResult = AddTextureMetadata(graph, Name("tests/task_graph/native_unused_metadata_texture"), "Native Unused Metadata Texture");
+        const auto unusedTextureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeUnusedMetadataTexture), "Native Unused Metadata Texture");
         ASSERT_TRUE(unusedTextureResult);
         const Core::GpuGraphResourceId unusedTexture = *unusedTextureResult;
-        const auto hazardDomainResult = AddHazardDomain(graph, Name("tests/task_graph/native_hazard_domain"), "Native Hazard Domain");
+        const auto hazardDomainResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeHazardDomain), "Native Hazard Domain");
         ASSERT_TRUE(hazardDomainResult);
         const Core::GpuGraphResourceId hazardDomain = *hazardDomainResult;
         ASSERT_TRUE(unusedTexture.valid());
@@ -100,7 +100,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         const Core::GpuTaskResourceUse use{ .resource = hazardDomain, .range = {}, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::Write, };
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/native_hazard_domain_task")).setMarkerLabel("Native Hazard Domain Task").setResourceUses(Span(&use, 1u));
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeHazardDomainTask)).setMarkerLabel("Native Hazard Domain Task").setResourceUses(Span(&use, 1u));
         u32 recordCount = 0u;
         const auto taskResult = graph.addTask<NativeRecordProbeTask>(desc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
         ASSERT_TRUE(taskResult);
@@ -123,7 +123,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         const Core::GpuTaskResourceUse invalidTypedUse{ .resource = unusedTexture, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Read, };
         Core::GpuTaskDesc invalidTypedDesc;
-        invalidTypedDesc.setIdentity(Name("tests/task_graph/native_unknown_typed_state_task")).setMarkerLabel("Native Unknown Typed State Task").setResourceUses(Span(&invalidTypedUse, 1u));
+        invalidTypedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNativeUnknownTypedStateTask)).setMarkerLabel("Native Unknown Typed State Task").setResourceUses(Span(&invalidTypedUse, 1u));
         const auto invalidTypedTaskResult = graph.addTask<NativeRecordProbeTask>(invalidTypedDesc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
         ASSERT_TRUE(invalidTypedTaskResult);
         const Core::GpuTaskId invalidTypedTask = *invalidTypedTaskResult;
@@ -147,13 +147,13 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointWithoutNativeBackBuffer){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     Core::GpuTaskGraph graph(testArena.arena);
     const auto resource = graph.importResource(Core::GpuGraphResourceDesc{}
-        .setIdentity(Name("tests/task_graph/present_metadata"))
+        .setIdentity(TaskGraphTestUtils::s_TaskGraphCasePresentMetadata)
         .setMarkerLabel("Present Metadata")
         .setType(Core::GpuGraphResourceType::Texture)
         .setInitialState(Core::ResourceStates::Unknown)
         .setExternalFinalState(Core::ResourceStates::Present));
     ASSERT_TRUE(resource);
-    const auto producer = AddTask(Name("tests/task_graph/present_metadata_producer"), "Present Metadata Producer", {}, {}, {}, {}, {}, graph);
+    const auto producer = AddTask(TaskGraphTestUtils::s_TaskGraphCasePresentMetadataProducer, "Present Metadata Producer", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(producer);
     ASSERT_TRUE(graph.declarePresentEndpoint({ *producer, *resource }));
 

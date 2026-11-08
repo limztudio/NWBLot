@@ -95,8 +95,7 @@ b8 ComboCoordinator::applyComboListInput(ComboFrame& frame, ComboResult& result)
             result.committed = true;
             m_builder.m_context.input().closePopup(frame.popupToken);
             return ListActionOutcome::Stop;
-        }
-    );
+        });
 }
 
 

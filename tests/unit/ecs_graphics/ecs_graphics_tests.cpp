@@ -5,6 +5,7 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
 #include <impl/ecs_mesh/system.h>
@@ -13,6 +14,8 @@
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/assets_mesh/meshlet_ref_encode.h>
+#include <impl/ecs_render/avboit/graph_types.adhd.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 
 #include <core/ecs/entity.h>
 
@@ -36,11 +39,33 @@ using CapturingLogger = NWB::Tests::CapturingLogger;
 using TestWorld = NWB::Tests::EcsTestWorld;
 using NWB::Tests::s_TriangleIndices;
 
-inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
+inline constexpr Name s_ScratchArena = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsEcsGraphicsScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(EcsGraphics, RuntimeMeshBufferByteCountRejectsOverflow){
+    constexpr usize s_Max = Limit<usize>::s_Max;
+    const auto largest = NWB::Impl::TryComputeRuntimeMeshBufferByteCount(s_Max / 16u, 16u);
+    ASSERT_TRUE(largest);
+    EXPECT_EQ(*largest, (s_Max / 16u) * 16u);
+    EXPECT_FALSE(NWB::Impl::TryComputeRuntimeMeshBufferByteCount(s_Max / 16u + 1u, 16u));
+    const auto zero = NWB::Impl::TryComputeRuntimeMeshBufferByteCount(s_Max, 0u);
+    ASSERT_TRUE(zero);
+    EXPECT_EQ(*zero, 0u);
+}
+
+TEST(EcsGraphics, AvboitUploadCountsRejectEachOverflowBoundary){
+    constexpr usize s_Max = Limit<usize>::s_Max;
+    constexpr usize s_InstanceLimit = s_Max / sizeof(NWB::Impl::InstanceGpuData);
+    constexpr usize s_ReceiverLimit = s_Max / sizeof(NWB::Impl::CsgReceiverRangeGpuData);
+    constexpr usize s_CutterLimit = s_Max / sizeof(NWB::Impl::CsgCutterGpuData);
+    EXPECT_TRUE(NWB::Impl::AvboitUploadCountsFit(s_InstanceLimit, s_ReceiverLimit, s_CutterLimit, s_InstanceLimit, s_ReceiverLimit, s_CutterLimit));
+    EXPECT_FALSE(NWB::Impl::AvboitUploadCountsFit(s_InstanceLimit + 1u, 0u, 0u, s_InstanceLimit, s_ReceiverLimit, s_CutterLimit));
+    EXPECT_FALSE(NWB::Impl::AvboitUploadCountsFit(0u, s_ReceiverLimit + 1u, 0u, s_InstanceLimit, s_ReceiverLimit, s_CutterLimit));
+    EXPECT_FALSE(NWB::Impl::AvboitUploadCountsFit(0u, 0u, s_CutterLimit + 1u, s_InstanceLimit, s_ReceiverLimit, s_CutterLimit));
+}
 
 TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes){
     NWB::Impl::AvboitFrameTargets targets;
@@ -118,7 +143,7 @@ TEST(EcsGraphics, MissingMeshDoesNotReplacePreviousResolution){
 
     auto entity = testWorld.world.createEntity();
     auto& mesh = entity.addComponent<NWB::Impl::MeshComponent>();
-    mesh.mesh.virtualPath = Name("project/meshes/static_mesh");
+    mesh.mesh.virtualPath = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseProjectMeshesStaticMesh);
 
     const auto resolvedMesh = meshSystem.resolveMesh(entity.id());
     ASSERT_TRUE(resolvedMesh);
@@ -129,6 +154,58 @@ TEST(EcsGraphics, MissingMeshDoesNotReplacePreviousResolution){
 }
 
 
+TEST(EcsGraphics, MaterialDrawCountRejectsAnOverflowingAddition){
+    constexpr usize s_Max = Limit<usize>::s_Max / 11u;
+    const auto exact = NWB::Impl::TryAccumulateMaterialDrawCount(s_Max - 1u, 1u, s_Max);
+    ASSERT_TRUE(exact);
+    EXPECT_EQ(*exact, s_Max);
+    EXPECT_FALSE(NWB::Impl::TryAccumulateMaterialDrawCount(s_Max - 1u, 2u, s_Max));
+    const auto empty = NWB::Impl::TryAccumulateMaterialDrawCount(s_Max, 0u, s_Max);
+    ASSERT_TRUE(empty);
+    EXPECT_EQ(*empty, s_Max);
+}
+
+TEST(EcsGraphics, MaterialTypedReserveFallsBackWhenMultiplicationWouldOverflow){
+    constexpr usize s_Max = Limit<usize>::s_Max;
+    EXPECT_EQ(NWB::Impl::ResolveMaterialTypedReserve(s_Max / 4u), (s_Max / 4u) * 4u);
+    EXPECT_EQ(NWB::Impl::ResolveMaterialTypedReserve(s_Max / 4u + 1u), s_Max / 4u + 1u);
+    EXPECT_EQ(NWB::Impl::ResolveMaterialTypedReserve(s_Max), s_Max);
+}
+
+TEST(EcsGraphics, SharedMaterialMeshShaderDistinguishesMissingAndEmptyNames){
+    using MeshAsset = NWB::Core::Assets::AssetRef<NWB::Impl::MeshShader>;
+    const Name shader = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsSharedMeshShader;
+    const Name emptyText = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameEmpty;
+    const MeshAsset matching(shader);
+    const MeshAsset emptyName(emptyText);
+    EXPECT_FALSE(NWB::Impl::UsesSharedMaterialMeshShader(s_NameNone, matching, "default", "default"));
+    EXPECT_TRUE(NWB::Impl::UsesSharedMaterialMeshShader(shader, matching, "default", "default"));
+    EXPECT_FALSE(NWB::Impl::UsesSharedMaterialMeshShader(shader, matching, "variant", "default"));
+    EXPECT_TRUE(NWB::Impl::UsesSharedMaterialMeshShader(emptyText, emptyName, "default", "default"));
+}
+
+TEST(EcsGraphics, MaterialPipelineReadinessRejectsUnknownPathsAndMissingHandles){
+    NWB::Impl::MaterialPipelineResources resources;
+    for(const auto path : { NWB::Impl::RenderPath::MeshShader, NWB::Impl::RenderPath::VertexIndexed, NWB::Impl::RenderPath::ComputeEmulation, static_cast<NWB::Impl::RenderPath::Enum>(255u) }){
+        resources.renderPath = path;
+        EXPECT_FALSE(resources.ready());
+    }
+}
+
+TEST(EcsGraphics, MaterialPipelineKeyDistinguishesFramebufferFormatsAndSamples){
+    NWB::Impl::MaterialPipelineKey first;
+    NWB::Impl::MaterialPipelineKey second;
+    const NWB::Impl::MaterialPipelineKeyEqualTo equal;
+    const NWB::Impl::MaterialPipelineKeyHasher hash;
+    ASSERT_TRUE(equal(first, second));
+    EXPECT_EQ(hash(first), hash(second));
+    second.framebufferInfo.sampleCount = 4u;
+    EXPECT_FALSE(equal(first, second));
+    second = first;
+    second.framebufferInfo.addColorFormat(NWB::Core::Format::RGBA8_UNORM);
+    EXPECT_FALSE(equal(first, second));
+}
+
 TEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude){
     using PipelineKey = NWB::Impl::MaterialPipelineKey;
     using PipelineMap = HashMap<PipelineKey, u32, NWB::Core::Alloc::GlobalArena, NWB::Impl::MaterialPipelineKeyHasher, NWB::Impl::MaterialPipelineKeyEqualTo>;
@@ -138,13 +215,13 @@ TEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude){
     ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     auto shape = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
     ASSERT_TRUE(shape);
-    shape->desc.shaderModule = Name("tests/csg/pipeline_evaluator");
+    shape->desc.shaderModule = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgPipelineEvaluator);
     shape->desc.shaderModuleInclude = "tests/csg/pipeline_evaluator_a.slangi";
     const auto registered = registry.registerShapeType(shape->desc, true);
     ASSERT_TRUE(registered);
 
     PipelineKey original;
-    original.material = Name("tests/csg/pipeline_material");
+    original.material = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgPipelineMaterial);
     original.csgMode = NWB::Impl::MaterialPipelineCsgMode::ClipOnly;
     original.csgEvaluatorVariant = shape->desc.shaderModule;
     original.csgShapeRegistryRevision = registry.revision();

@@ -1,0 +1,13 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FontPackageLookupNameFont = "font";
+const Name s_FontPackageLookupNameFontAtlas = "font_atlas";
+const Name s_FontPackageNameTestsIntegrationFontBuilderMetadata = "tests/integration/font_builder/metadata";
+const Name s_FontPackageNameTestsIntegrationFontBuilderScratch = "tests/integration/font_builder/scratch";
+const Name s_OneOffNameTestsIntegrationFontBuilderPackage = "tests/integration/font_builder/package";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

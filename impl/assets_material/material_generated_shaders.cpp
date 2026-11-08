@@ -65,10 +65,8 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     }
     generatedShaders.reserve(generatedShaderCount);
 
-    if(generatedShaderCount > 0u && !sharedMeshShaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: missing shared mesh shader name"));
+    if(!ValidateGeneratedMaterialMeshShader(generatedShaderCount, sharedMeshShaderName))
         return MakeUnexpected(Failure{});
-    }
 
     const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / "material_pixel_shaders";
     auto removeAllIfExistsResult = RemoveAllIfExists(generatedRoot);
@@ -160,3 +158,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

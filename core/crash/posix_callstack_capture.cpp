@@ -4,6 +4,8 @@
 
 #include "posix_callstack_capture.h"
 
+#include <core/crash/internal_values.adhd.h>
+
 #include <global/algorithm.h>
 #include <ucontext.h>
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -23,8 +25,8 @@ NWB_CRASH_BEGIN
 namespace __hidden_posix_callstack_capture{
 
 
-inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
-inline constexpr usize s_MaxFramePointerWalkBytes = 8u * 1024u * 1024u;
+inline constexpr usize s_AArch64FramePointerRegisterIndex = ::NWB::Core::Crash::CrashTypes::s_AArch64FramePointerRegisterIndex;
+inline constexpr usize s_MaxFramePointerWalkBytes = ::NWB::Core::Crash::CrashTypes::s_MaxFramePointerWalkBytes;
 
 
 struct FramePointerRecord{

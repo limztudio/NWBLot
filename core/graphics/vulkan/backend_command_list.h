@@ -49,7 +49,7 @@ inline constexpr TStringView s_BufferNotReadyForQueueReason = NWB_TEXT("buffer i
 inline constexpr TStringView s_MeshShaderUnavailableReason = NWB_TEXT("mesh shader feature or entry point is unavailable");
 
 // Index buffer and indirect-argument buffer states tracked next to the vertex buffers.
-inline constexpr u32 s_GraphicsExtraBufferStateCount = 2u;
+inline constexpr u32 s_GraphicsExtraBufferStateCount = VulkanDefaults::s_VulkanDefaultGraphicsExtraBufferStateCount;
 
 
 class CommandList final : public RefCounter<GraphicsResource>{
@@ -91,12 +91,12 @@ private:
 
 
 private:
-    static constexpr u8 s_GraphPublicationUnowned = 0u;
-    static constexpr u8 s_GraphPublicationRecording = 1u;
-    static constexpr u8 s_GraphPublicationRecorded = 2u;
-    static constexpr u8 s_GraphPublicationSubmitting = 3u;
-    static constexpr u8 s_GraphPublicationReading = 4u;
-    static constexpr u8 s_GraphPublicationRevoking = 5u;
+    static constexpr u8 s_GraphPublicationUnowned = VulkanDefaults::s_VulkanDefaultGraphPublicationUnowned;
+    static constexpr u8 s_GraphPublicationRecording = VulkanDefaults::s_VulkanDefaultGraphPublicationRecording;
+    static constexpr u8 s_GraphPublicationRecorded = VulkanDefaults::s_VulkanDefaultGraphPublicationRecorded;
+    static constexpr u8 s_GraphPublicationSubmitting = VulkanDefaults::s_VulkanDefaultGraphPublicationSubmitting;
+    static constexpr u8 s_GraphPublicationReading = VulkanDefaults::s_VulkanDefaultGraphPublicationReading;
+    static constexpr u8 s_GraphPublicationRevoking = VulkanDefaults::s_VulkanDefaultGraphPublicationRevoking;
 
 
 private:

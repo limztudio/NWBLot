@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/cook.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_ui_skin/name_cases.adhd.h>
+
+#include <impl/assets_ui_skin/cook.h>
 
 #include <gtest/gtest.h>
 
@@ -44,7 +45,7 @@ using namespace Impl;
 struct ToolkitSkinArenaTag{};
 using ToolkitSkinArena = TestArena<ToolkitSkinArenaTag>;
 
-static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/toolkit_contract");
+static constexpr Name s_ScratchArena = NWB::Tests::UiSkinCases::s_OneOffNameTestsIntegrationAssetsUiSkinToolkitContract;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +97,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     const UiSkin& source = sourceResult->skin;
     EXPECT_TRUE(sourceResult->complete);
 
-    const Array<Name, 6u> required = { Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"), Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
+    const Array<Name, 6u> required = { Name(UiSkinCases::s_UiTitle), Name(UiSkinCases::s_UiCheck), Name(UiSkinCases::s_UiSelected), Name(UiSkinCases::s_UiArrow), Name(UiSkinCases::s_UiFill), Name(UiSkinCases::s_UiFocus) };
     for(const Name& removed : required){
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(source, removed, testArena, candidate);
@@ -104,7 +105,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
         EXPECT_FALSE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
-    const Array<Name, 5u> optional = { Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"), Name("combo.open"), Name("slider.thumb.hover") };
+    const Array<Name, 5u> optional = { Name(UiSkinCases::s_UiTestButtonHover), Name(UiSkinCases::s_UiTestCheckboxChecked), Name(UiSkinCases::s_UiTestEditFocused), Name(UiSkinCases::s_UiTestComboOpen), Name(UiSkinCases::s_UiTestSliderThumbHover) };
     for(const Name& removed : optional){
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(source, removed, testArena, candidate);
@@ -119,7 +120,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     for(const UiSkinRegion& region : noResize.regions())
         regions.push_back(region);
     UiSkinRegion resize = *source.findRegion(Name(s_WhiteRegionName));
-    resize.name = Name("window.resize");
+    resize.name = Name(UiSkinCases::s_UiTestWindowResize);
     regions.push_back(resize);
     UiSkin explicitResize(testArena.arena, source.virtualPath());
     explicitResize.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), Move(regions));

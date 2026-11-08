@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <core/common/global.h>
 
 #include <global/simd/vector.h>
@@ -33,18 +35,6 @@ namespace PresentationFpsStatus{
         Complete,
         Invalid,
     };
-};
-
-struct PresentationFpsSample{
-    u64 firstPresentationCount = 0u;
-    u64 lastPresentationCount = 0u;
-    f64 wallSeconds = 0.0;
-
-
-public:
-    [[nodiscard]] u64 presentations()const noexcept{ return lastPresentationCount - firstPresentationCount; }
-
-    [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? static_cast<f64>(presentations()) / wallSeconds : 0.0; }
 };
 
 // Measure FPS from accepted presentation counts and steady-clock wall time.

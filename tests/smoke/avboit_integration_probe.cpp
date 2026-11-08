@@ -4,6 +4,9 @@
 
 #include "avboit_integration_probe.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
@@ -35,7 +38,7 @@ inline constexpr u32 s_SliceCount = 17u;
 inline constexpr u32 s_WordCount = DivideUp(s_SliceCount, NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_PixelCount;
 inline constexpr u32 s_PhaseCount = 5u;
 inline constexpr u32 s_FixedScale = 16u;
-inline constexpr Name s_ProbeName("AvboitIntegrationProbe");
+inline constexpr Name s_ProbeName = NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationProbe;
 
 struct ProbeTask{
     struct Payload{
@@ -128,7 +131,7 @@ public:
             .setInitialState(payload.volumeInitialState)
             .setExternalFinalState(Core::ResourceStates::CopyDest)
     );
-    const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name("AvboitIntegrationReadback")).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
+    const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationReadback)).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
     if(!volume || !readback)
         return MakeUnexpected(Failure{});
     const Array<Core::GpuTaskResourceUse, 6> uses = {{
@@ -248,9 +251,9 @@ b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsys
         desc.setDebugName(name).setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(!constant).setIsConstantBuffer(constant).enableAutomaticStateTracking(constant ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
     };
-    const auto extinction = createBuffer(Name("AvboitIntegrationExtinction"), s_WordCount * sizeof(u32), false);
-    const auto overflow = createBuffer(Name("AvboitIntegrationOverflow"), s_PixelCount * sizeof(u32), false);
-    const auto control = createBuffer(Name("AvboitIntegrationControl"), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
+    const auto extinction = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationExtinction), s_WordCount * sizeof(u32), false);
+    const auto overflow = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationOverflow), s_PixelCount * sizeof(u32), false);
+    const auto control = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationControl), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
     Core::TextureDesc textureDesc;
     textureDesc.setWidth(s_Width)
         .setHeight(s_Height)
@@ -290,7 +293,7 @@ b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsys
     slots.avboitControl = descriptors[2].slot();
     slots.avboitTransmittanceStorage = descriptors[3].slot();
     Core::GraphicsStandaloneService::BufferSetupDesc setup;
-    setup.bufferDesc.setDebugName(Name("AvboitIntegrationSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
+    setup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
     setup.data = &slots;
     setup.dataSize = sizeof(slots);
     setup.queue = Core::CommandQueue::Graphics;

@@ -3,10 +3,11 @@
 
 
 #include "text_visible_fixture.h"
+#include "baked_font_fixture.h"
+
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <global/simdmath.h>
-
-#include "baked_font_fixture.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +46,7 @@ protected:
 
 public:
     TextVisibleBakedTests()
-        : m_baked(m_arena, Name("tests/ui/fonts/visible_atlas"))
+        : m_baked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsVisibleAtlas))
     {}
 
 
@@ -103,7 +104,7 @@ protected:
             group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         }
         m_baked.setPayload(Move(payload));
-        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/visible_baked/validation_scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleBakedValidationScratch)};
         if(!m_baked.validatePayload(scratchArena))
             return false;
         const Array<FontSource, 2> sources{

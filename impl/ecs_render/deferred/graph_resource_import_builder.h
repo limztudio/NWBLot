@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
@@ -20,6 +21,9 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(Core::GpuGraphResourceId{}.generation == 0u && Core::GpuGraphResourceId{}.index == s_DeferredGraphInvalidIndex);
 
 
 struct RayTracingDeferredGraphResourceSnapshot;
@@ -38,76 +42,6 @@ struct DeferredGraphResourceImportInputs{
     b8 clearAvboitTargets = false;
     b8 capturesLaggedLightingHistory = false;
     b8 hasCsgFrameWork = false;
-};
-
-struct DeferredGraphResourceImportResult{
-    Core::GpuGraphResourceId albedo;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId specularRoughness;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId csgCapBackNormal;
-    Core::GpuGraphResourceId csgIntervalDepth;
-    Core::GpuGraphResourceId csgIntervalId;
-    Core::GpuGraphResourceId csgReceiverEventData;
-    Core::GpuGraphResourceId csgReceiverEventCount;
-    Core::GpuGraphResourceId csgReceiverSpanData;
-    Core::GpuGraphResourceId csgReceiverSpanCount;
-    Core::GpuGraphResourceId csgRemovedIntervalDepth;
-    Core::GpuGraphResourceId csgRemovedIntervalCapNormal;
-    Core::GpuGraphResourceId csgRemovedIntervalData;
-    Core::GpuGraphResourceId csgRemovedIntervalCount;
-    Core::GpuGraphResourceId shadowVisibility;
-    Core::GpuGraphResourceId causticIrradiance;
-    Core::GpuGraphResourceId surfelIrradiance;
-    Core::GpuGraphResourceId currentShadowVisibility;
-    Core::GpuGraphResourceId currentCausticIrradiance;
-    Core::GpuGraphResourceId currentSurfelIrradiance;
-    Core::GpuGraphResourceId opaqueColor;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId meshView;
-    Core::GpuGraphResourceId materialInstances;
-    Core::GpuGraphResourceId materialTyped;
-    Core::GpuGraphResourceId csgReceiverRanges;
-    Core::GpuGraphResourceId csgCutters;
-    Core::GpuGraphResourceId csgClipContextSlots;
-    Core::GpuGraphResourceId csgIntervalSampleState;
-    Core::GpuGraphResourceId bindlessSlots;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId materialContextSlots;
-    Core::GpuGraphResourceId historyCopyShadowVisibility;
-    Core::GpuGraphResourceId historyCopyCausticIrradiance;
-    Core::GpuGraphResourceId historyCopySurfelIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationShadowVisibility;
-    Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
-    Core::GpuGraphResourceId avboitLowRaster;
-    Core::GpuGraphResourceId avboitAccumColor;
-    Core::GpuGraphResourceId avboitAccumExtinction;
-    Core::GpuGraphResourceId refractionDepth;
-    Core::GpuGraphResourceId refractionNormalIor;
-    Core::GpuGraphResourceId refractionTintCoverage;
-    Core::GpuGraphResourceId refractionInstance;
-    Core::GpuGraphResourceId refractionSpecularRoughness;
-    Core::GpuGraphResourceId refractionResolve;
-    Core::GpuGraphResourceId avboitForegroundColor;
-    Core::GpuGraphResourceId avboitForegroundExtinction;
-    Core::GpuGraphResourceId avboitTransmittance;
-    Core::GpuGraphResourceId avboitCoverage;
-    Core::GpuGraphResourceId avboitDepthWarp;
-    Core::GpuGraphResourceId avboitControl;
-    Core::GpuGraphResourceId avboitExtinction;
-    Core::GpuGraphResourceId avboitExtinctionOverflow;
-    Core::GpuGraphResourceId avboitMaterialDomain;
-    Core::GpuGraphResourceId avboitCsgDomain;
-    Core::TextureSubresourceSet csgPeelSubresources{};
-    Core::TextureSubresourceSet csgReceiverEventDataSubresources{};
-    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
-    Core::TextureSubresourceSet csgReceiverSpanDataSubresources{};
-    Core::TextureSubresourceSet csgReceiverSpanCountSubresources{};
-    Core::TextureSubresourceSet csgRemovedIntervalSubresources{};
-    Core::TextureSubresourceSet csgRemovedIntervalCountSubresources{};
 };
 
 

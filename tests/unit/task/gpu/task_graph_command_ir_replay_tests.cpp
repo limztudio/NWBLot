@@ -5,6 +5,8 @@
 #include "task_graph_test_utils.h"
 #include "task_graph_command_ir_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,10 +54,10 @@ TEST(GpuCommandIrReplay, RequiresExactPhysicalQueueBeyondBroadQueueClass){
 TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto sourceResult = AddBufferMetadata(graph, Name("tests/command_ir_replay/source"), "Replay Source");
+    const auto sourceResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseCommandIrReplaySource), "Replay Source");
     ASSERT_TRUE(sourceResult);
     const Core::GpuGraphResourceId source = *sourceResult;
-    const auto destinationResult = AddBufferMetadata(graph, Name("tests/command_ir_replay/destination"), "Replay Destination");
+    const auto destinationResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseCommandIrReplayDestination), "Replay Destination");
     ASSERT_TRUE(destinationResult);
     const Core::GpuGraphResourceId destination = *destinationResult;
     ASSERT_TRUE(source.valid());
@@ -66,14 +68,14 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
         Core::GpuTaskResourceUse{ .resource = destination, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, },
     };
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/command_ir_replay/copy")).setMarkerLabel("Replay Copy").setResourceUses(uses);
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseCommandIrReplayCopy)).setMarkerLabel("Replay Copy").setResourceUses(uses);
     const auto taskResult = graph.addTask(desc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Transfer });
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
     const Array<Core::GpuTaskId, 1> secondDependencies = { task };
     Core::GpuTaskDesc secondDesc = desc;
-    secondDesc.setIdentity(Name("tests/command_ir_replay/copy_second")).setMarkerLabel("Replay Copy Second").setDependencies(secondDependencies);
+    secondDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseCommandIrReplayCopySecond)).setMarkerLabel("Replay Copy Second").setDependencies(secondDependencies);
     const auto secondTaskResult = graph.addTask(secondDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Transfer });
     ASSERT_TRUE(secondTaskResult);
     const Core::GpuTaskId secondTask = *secondTaskResult;

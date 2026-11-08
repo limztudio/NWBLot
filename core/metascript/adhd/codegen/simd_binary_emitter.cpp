@@ -120,18 +120,18 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             }
             const Expr* negMulA = nullptr;
             const Expr* negMulB = nullptr;
-            if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&lhs, simdType, negMulA, negMulB, m_emitter.m_symbols)){
+            if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&lhs, simdType, m_emitter.m_symbols, negMulA, negMulB)){
                 emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *negMulA, *negMulB, rhs);
                 return true;
             }
-            if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&rhs, simdType, negMulA, negMulB, m_emitter.m_symbols)){
+            if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&rhs, simdType, m_emitter.m_symbols, negMulA, negMulB)){
                 emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *negMulA, *negMulB, lhs);
                 return true;
             }
             const Expr* rhsMulA = nullptr;
             const Expr* rhsMulB = nullptr;
-            const b8 lhsIsMul = SimdExpressionAnalysis::IsSimdMulExpr(&lhs, mulA, mulB, &m_emitter.m_symbols);
-            const b8 rhsIsMul = SimdExpressionAnalysis::IsSimdMulExpr(&rhs, rhsMulA, rhsMulB, &m_emitter.m_symbols);
+            const b8 lhsIsMul = SimdExpressionAnalysis::IsSimdMulExpr(mulA, mulB, &lhs, &m_emitter.m_symbols);
+            const b8 rhsIsMul = SimdExpressionAnalysis::IsSimdMulExpr(rhsMulA, rhsMulB, &rhs, &m_emitter.m_symbols);
             if(lhsIsMul){
                 const Expr* negA = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_emitter.m_symbols);
                 const Expr* negB = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_emitter.m_symbols);
@@ -218,11 +218,11 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             out.push_back(')');
             return true;
         }
-        if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&rhs, simdType, mulA, mulB, m_emitter.m_symbols)){
+        if(SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&rhs, simdType, m_emitter.m_symbols, mulA, mulB)){
             emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplyAdd(" : "::VectorMultiplyAdd(", *mulA, *mulB, lhs);
             return true;
         }
-        if(SimdExpressionAnalysis::IsSimdMulExpr(&lhs, mulA, mulB, &m_emitter.m_symbols) && !SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&lhs, simdType, mulA, mulB, m_emitter.m_symbols)){
+        if(SimdExpressionAnalysis::IsSimdMulExpr(mulA, mulB, &lhs, &m_emitter.m_symbols) && !SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(&lhs, simdType, m_emitter.m_symbols, mulA, mulB)){
             const Expr* negA = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_emitter.m_symbols);
             const Expr* negB = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_emitter.m_symbols);
             if(negA && negB){
@@ -236,7 +236,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplySubtract(" : "::VectorMultiplySubtract(", *mulA, *mulB, rhs);
             return true;
         }
-        if(SimdExpressionAnalysis::IsSimdMulExpr(&rhs, mulA, mulB, &m_emitter.m_symbols)){
+        if(SimdExpressionAnalysis::IsSimdMulExpr(mulA, mulB, &rhs, &m_emitter.m_symbols)){
             const Expr* negA = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_emitter.m_symbols);
             const Expr* negB = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_emitter.m_symbols);
             if(negA && negB){
@@ -411,4 +411,12 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
     return false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

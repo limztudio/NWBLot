@@ -1,0 +1,74 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_LogTelemetryIngestStorageDirectoryName = "telemetry";
+const StringView s_LogTelemetryIngestRawDirectoryName = "raw";
+const StringView s_LogTelemetryIngestReportDirectoryName = "reports";
+const StringView s_LogTelemetryIngestRawStreamFileExtension = ".nwbs";
+const StringView s_LogTelemetryIngestJsonFileExtension = ".json";
+const StringView s_LogTelemetryIngestPerfCsvFileExtension = ".perf.csv";
+const StringView s_LogTelemetryIngestGraphFileExtension = ".graph.dot";
+const StringView s_LogTelemetryMemoryReportArenaSourceText = "arena";
+const StringView s_LogTelemetryMemoryReportHeapBackingSourceText = "heapBacking";
+const StringView s_LogTelemetryMemoryReportExplicitScopeSourceText = "explicitScope";
+const StringView s_LogTelemetryMemoryReportLargestArenaPeakBasis = "largestArena";
+const StringView s_LogTelemetryMemoryReportSampledHeapPeakBasis = "sampledHeap";
+const StringView s_LogTelemetryMemoryReportScopePeakBasis = "scope";
+const StringView s_LogTelemetryMemoryReportMemorySourcesSectionHeader = "    \"memorySources\": {\n";
+const StringView s_LogTelemetryMemoryReportMemorySourceEntryIndent = "      ";
+const StringView s_LogTelemetryMemoryReportPeakBasisKeyPrefix = ": {\"peakBasis\": ";
+const StringView s_LogTelemetryMemoryReportMemorySourceMetricsFormat = ", \"eventCount\": {}, \"maxUsedBytes\": {}, \"maxPeakUsedBytes\": {}, \"totalUsedDeltaBytes\": ";
+const StringView s_LogTelemetryMemoryReportMemorySourceDeltaFormat = "{}";
+const StringView s_LogTelemetryMemoryReportMemorySourcesSectionFooter = "    },\n";
+const StringView s_LogTelemetryMemoryReportJsonEntrySeparator = ",\n";
+const StringView s_LogTelemetryMemoryReportJsonEntryTerminator = "\n";
+const StringView s_LogTelemetryMemoryReportMemoryRecordSeparator = ",\n";
+const StringView s_LogTelemetryMemoryReportMemoryRecordOpen = "      {\"source\": ";
+const StringView s_LogTelemetryMemoryReportMemoryRecordPeakBasisKey = ", \"peakBasis\": ";
+const StringView s_LogTelemetryMemoryReportMemoryRecordScopeKey = ", \"scope\": ";
+const StringView s_LogTelemetryMemoryReportMemoryRecordIdentityKey = ", \"identity\": ";
+const StringView s_LogTelemetryMemoryReportJsonNullText = "null";
+const u64 s_LogTelemetryReportTimingSecondsExponentMask = 0x7FF0000000000000ull;
+const usize s_LogTelemetryReportPerfCsvFixedReserveBytes = 128u;
+const usize s_LogTelemetryReportPerfCsvBytesPerEvent = 128u;
+const usize s_LogTelemetryReportDotTimedGraphDotFixedReserveBytes = 96u;
+const usize s_LogTelemetryReportDotTimedGraphDotBytesPerGraph = 128u;
+const usize s_LogTelemetryReportDotTimedGraphDotBytesPerNode = 768u;
+const usize s_LogTelemetryReportDotTimedGraphDotBytesPerEdge = 40u;
+const usize s_LogTelemetryReportDotTimedGraphDotTimingLabelExtraBytes = 16u;
+const usize s_LogTelemetryReportDotTimedGraphDotRuntimeStatisticsBytes = 192u;
+const f64 s_LogTelemetryReportDotMillisecondsPerSecond = 1000.0;
+const StringView s_LogTelemetryReportDotUnknownReportField = "unknown";
+const StringView s_LogTelemetryReportJsonJsonQueueIndexFormat = "{{\"index\": {}, \"deviceGeneration\": {}}}";
+const StringView s_LogTelemetryReportJsonJsonInitialQueueKey = "{\"initialQueue\": ";
+const StringView s_LogTelemetryReportJsonJsonPlannedQueueKey = ", \"plannedQueue\": ";
+const StringView s_LogTelemetryReportJsonJsonAcceptedQueueKey = ", \"acceptedQueue\": ";
+const StringView s_LogTelemetryReportJsonJsonPreviousAcceptedQueueKey = ", \"previousAcceptedQueue\": ";
+const StringView s_LogTelemetryReportJsonJsonQueueClassKey = ", \"queueClass\": ";
+const StringView s_LogTelemetryReportJsonJsonReasonKey = ", \"reason\": ";
+const StringView s_LogTelemetryReportJsonJsonAcceptanceKey = ", \"acceptance\": ";
+const usize s_LogTelemetryReportJsonJsonReportReserveBytes = 1024u;
+const usize s_LogTelemetryReportJsonJsonReportBytesPerGraph = 128u;
+const usize s_LogTelemetryReportJsonJsonReportBytesPerNode = 896u;
+const usize s_LogTelemetryReportJsonJsonReportBytesPerEdge = 96u;
+const usize s_LogTelemetryReportJsonJsonReportRuntimeStatisticsBytes = 4096u;
+const usize s_LogTelemetryReportJsonJsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
+const usize s_LogTelemetryReportJsonJsonReportPacketSubmissionStatisticsBytes = 512u;
+const StringView s_LogTelemetryReportJsonJsonDocumentOpen = "{\n";
+const StringView s_LogTelemetryReportJsonJsonDocumentClose = "}\n";
+const StringView s_LogTelemetryReportJsonJsonSectionClose = "  },\n";
+const StringView s_LogTelemetryReportJsonJsonFieldEnd = ",\n";
+const StringView s_LogTelemetryReportJsonJsonLastFieldEnd = "\n";
+const StringView s_LogTelemetryReportJsonJsonRecordingKey = ", \"recording\": ";
+const StringView s_LogTelemetryReportJsonJsonSubmissionKey = ", \"submission\": ";
+const StringView s_LogTelemetryReportJsonJsonSecondsFormat = "{:.9}";
+const StringView s_LogTelemetryReportJsonJsonInheritedTimelineWaitElisionCountFormat = ", \"inheritedTimelineWaitElisionCount\": {}";
+const StringView s_LogTelemetryReportJsonJsonRecordingCountsFormat = "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, ";
+
+const StringView s_LogTelemetryMemoryReportMemoryRecordMetricsFormat = ", \"streamId\": {}, \"frameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, \"peakUsedBytes\": {}, \"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}, \"delta\": ";
+const StringView s_LogTelemetryMemoryReportMemoryDeltaMetricsFormat = "{{\"previousFrameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, \"peakUsedBytes\": {}, \"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}}}";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

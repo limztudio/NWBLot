@@ -10,8 +10,7 @@
 #include <tests/common/arena_owner_fixture.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
-
-#include <gtest/gtest.h>
+#include <tests/unit/task/gpu/case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/capture/command_ir.h>
@@ -22,6 +21,8 @@
 #include <core/telemetry/frame_graph_contributor.h>
 
 #include <global/text_utils.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +50,7 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTestsTag>;
 namespace Telemetry = Core::Telemetry;
 using NWB::Tests::ExpectMemoryStatsEqual;
 
-inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
+inline constexpr Name s_TaskGraphScratchArena = NWB::Tests::TaskGraphTestUtils::s_TaskGpuScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

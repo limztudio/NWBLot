@@ -13,7 +13,7 @@ import sys
 import time
 from types import SimpleNamespace
 
-from window_capture_logs import wait_for_log_message
+from window_capture_logs import full_log_scope, wait_for_log_message
 from window_capture_process_closer import WindowProcessCloser
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit,
@@ -216,7 +216,8 @@ def main(argv):
                     failures.append(f"shutdown: {error}")
         if directory:
             try:
-                log_text = collect_log_delta(directory, baseline, pattern)
+                full_baseline, full_pattern = full_log_scope(baseline, pattern)
+                log_text = collect_log_delta(directory, full_baseline, full_pattern)
                 (args.output_directory / "logger.log").write_text(log_text, encoding=LIT_UTF_8)
                 validate_expected_log_text(log_text, required_messages, LOG_FAILURE_MESSAGES)
                 evidence["log_diagnostics_checked"] = True

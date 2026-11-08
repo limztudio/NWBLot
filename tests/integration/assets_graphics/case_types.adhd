@@ -1,0 +1,231 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/graphics/rhi/shader.h>
+namespace NWB::Tests::AssetsGraphicsFixture{
+using ShaderStageMask = ::NWB::Core::ShaderType::Mask;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_AssetInputNameProjectSamplersFailing = "project/samplers/failing";
+const Name s_AssetInputNameRoot = "root";
+const Name s_AssetInputNameReplacement = "replacement";
+const Name s_AssetInputNameProjectExample = "project/example";
+const Name s_AssetInputNameExample = "example";
+const Name s_AssetInputNameTestsAssetConstructorImplicitName = "tests/asset_constructor/implicit_name";
+const Name s_AssetInputNameProjectTestsNameConversion = "project/tests/name_conversion";
+const Name s_AssetInputNameProjectTestsShaderNameConversion = "project/tests/shader_name_conversion";
+const Name s_AssetFixtureNameTestsAssetConstructorContextualComparison = "tests/asset_constructor/contextual_comparison";
+const Name s_AssetFixtureNameTestsMetadataExtensionAbsent = "tests/metadata_extension/absent";
+const Name s_AssetFixtureNameTestsMetadataExtensionInsertionUnwind = "tests/metadata_extension/insertion_unwind";
+const Name s_AssetCaseTestsAssetBunchMetadata = "tests/asset_bunch/metadata";
+const Name s_AssetCaseTestsAssetBunchOutput = "tests/asset_bunch/output";
+const Name s_AssetCaseTestsAssetBunchScratch = "tests/asset_bunch/scratch";
+const Name s_AssetCaseTestsAssetBunchLongPathScratch = "tests/asset_bunch/long_path_scratch";
+const Name s_AssetCaseTestsAssetPathInputs = "tests/asset_path/inputs";
+const Name s_AssetCaseTestsAssetPathMetadataDeclaration = "tests/asset_path/metadata_declaration";
+const Name s_AssetCaseTestsAssetPathRelativeInputs = "tests/asset_path/relative_inputs";
+const Name s_AssetCaseTestsAssetPathRelativeScratch = "tests/asset_path/relative_scratch";
+const Name s_AssetCaseTestsAssetPathSeparatorInputs = "tests/asset_path/separator_inputs";
+const Name s_AssetCaseTestsAssetPathSeparatorScratch = "tests/asset_path/separator_scratch";
+const Name s_AssetCaseTestsAssetPathDerivedScratch = "tests/asset_path/derived_scratch";
+const Name s_AssetCaseTestsAssetPathBorrowedSourceScratch = "tests/asset_path/borrowed_source_scratch";
+const Name s_AssetCaseTestsAssetPathRejectionScratch = "tests/asset_path/rejection_scratch";
+const Name s_AssetCaseTestsAssetPathRepeatedScratch = "tests/asset_path/repeated_scratch";
+const Name s_AssetCaseTestsAssetPathUnicodePrefixInputs = "tests/asset_path/unicode_prefix_inputs";
+const Name s_AssetCaseTestsAssetPathUnicodePrefixScratch = "tests/asset_path/unicode_prefix_scratch";
+const Name s_AssetCaseTestsAssetPathNativeFilenameSpans = "tests/asset_path/native_filename_spans";
+const Name s_AssetCaseTestsAssetsBuildInputs = "tests/assets/build_inputs";
+const Name s_AssetCaseTestsAssetsInferredRoots = "tests/assets/inferred_roots";
+const Name s_AssetCaseTestsAssetsExplicitRoots = "tests/assets/explicit_roots";
+const Name s_AssetCaseTestsAssetsRejectedRoots = "tests/assets/rejected_roots";
+const Name s_AssetCaseProjectProbeLeaf = "project/probe/leaf";
+const Name s_AssetCaseProjectProbeParent = "project/probe/parent";
+const Name s_AssetCaseProjectCsgExactTextExtra = "project/csg/exact_text_extra/";
+const Name s_AssetCaseProjectCsgFirstShape = "project/csg/first_shape";
+const Name s_AssetCaseProjectCsgFirstModule = "project/csg/first_module";
+const Name s_AssetCaseTestsAvboitShaderGeneratorScratch = "tests/avboit_shader_generator/scratch";
+const Name s_AssetCaseProjectCsgSecondShape = "project/csg/second_shape";
+const Name s_AssetCaseProjectCsgSecondModule = "project/csg/second_module";
+const Name s_AssetCaseProjectGather = "project/gather/";
+const Name s_AssetCaseTestsAssetsGraphicsBuiltInputs = "tests/assets_graphics/built_inputs";
+const Name s_AssetCaseTestsAssetsGraphicsGatherInputs = "tests/assets_graphics/gather_inputs";
+const Name s_AssetCaseTestsAssetsGraphicsBorrowedIndex = "tests/assets_graphics/borrowed_index";
+const Name s_AssetCaseProjectShadersBorrowedIndex = "project/shaders/borrowed_index";
+const Name s_AssetCasePs = "ps";
+const Name s_AssetCaseProjectMeshesCubeHardEdges = "project/meshes/cube_hard_edges";
+const Name s_AssetCaseProjectMeshesSphereSmooth = "project/meshes/sphere_smooth";
+const Name s_AssetCaseProjectMeshesUvSeamQuad = "project/meshes/uv_seam_quad";
+const Name s_AssetCaseProjectMeshesMirroredUvQuad = "project/meshes/mirrored_uv_quad";
+const Name s_AssetCaseProjectMeshesTwoSidedPlane = "project/meshes/two_sided_plane";
+const Name s_AssetCaseProjectMeshesLargeMeshManyMeshlets = "project/meshes/large_mesh_many_meshlets";
+const Name s_AssetCaseProjectMeshesOriginal = "project/meshes/original";
+const Name s_AssetCaseProjectSkeletonsOriginal = "project/skeletons/original";
+const Name s_AssetCaseProjectSkinsOriginal = "project/skins/original";
+const Name s_AssetCaseProjectMeshesReplacement = "project/meshes/replacement";
+const Name s_AssetCaseRig = "rig";
+const Name s_AssetCaseProp = "prop";
+const Name s_AssetCaseProjectMeshesProp = "project/meshes/prop";
+const Name s_AssetCaseBody = "body";
+const Name s_AssetCaseProjectSkinsBody = "project/skins/body";
+const Name s_AssetCaseProjectModelsOriginal = "project/models/original";
+const Name s_AssetCaseRoot = "root";
+const Name s_AssetCaseReplacement = "replacement";
+const Name s_AssetCaseProjectMeshesMinimalMesh = "project/meshes/minimal_mesh";
+const Name s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder = "tests/integration/assets_graphics/mesh_index_corner_order";
+const Name s_AssetCaseTestsMetadataExtensionRequire = "tests/metadata_extension/require";
+const Name s_AssetCaseTestsMetadataExtensionEraseClear = "tests/metadata_extension/erase_clear";
+const Name s_AssetCaseTestsMetadataExtensionMapFirst = "tests/metadata_extension/map_first";
+const Name s_AssetCaseTestsMetadataExtensionMapSecond = "tests/metadata_extension/map_second";
+const Name s_AssetCaseTestsMetadataExtensionOwnerFirst = "tests/metadata_extension/owner_first";
+const Name s_AssetCaseTestsMetadataExtensionOwnerSecond = "tests/metadata_extension/owner_second";
+const Name s_AssetCaseTestsMetadataExtensionInsertionMap = "tests/metadata_extension/insertion_map";
+const Name s_AssetCaseTestsMetadataExtensionInsertionOwner = "tests/metadata_extension/insertion_owner";
+const Name s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch = "tests/metadata_extension/registry_lifetime_scratch";
+const Name s_AssetCaseTestsMetadataExtensionGraphicsFixture = "tests/metadata_extension/graphics_fixture";
+const Name s_AssetCaseTestsMetadataExtensionGraphicsOwner = "tests/metadata_extension/graphics_owner";
+const Name s_AssetCaseTestsMetadataExtensionGraphicsScratch = "tests/metadata_extension/graphics_scratch";
+const Name s_AssetCaseTestsMetadataRegistryFixture = "tests/metadata_registry/fixture";
+const Name s_AssetCaseTestsMetadataRegistryOutput = "tests/metadata_registry/output";
+const Name s_AssetCaseTestsMetadataRegistryScratch = "tests/metadata_registry/scratch";
+const Name s_AssetCaseTestsMetadataDiscoveryDuplicateRoots = "tests/metadata_discovery/duplicate_roots";
+const Name s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch = "tests/metadata_discovery/duplicate_roots_scratch";
+const Name s_AssetCaseTestsMetadataDiscoveryCaseIdentity = "tests/metadata_discovery/case_identity";
+const Name s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch = "tests/metadata_discovery/case_identity_scratch";
+const Name s_AssetCaseTestsMetadataDiscoveryRootInspection = "tests/metadata_discovery/root_inspection";
+const Name s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch = "tests/metadata_discovery/root_inspection_scratch";
+const Name s_AssetCaseTestsMetadataRegistryNullAllocation = "tests/metadata_registry/null_allocation";
+const Name s_AssetCaseTestsMetadataRegistryDependencyPath = "tests/metadata_registry/dependency_path";
+const Name s_AssetCaseTestsMetadataRegistryDependencyPathScratch = "tests/metadata_registry/dependency_path_scratch";
+const Name s_AssetCaseTestsMetadataDiscoveryCollidingPaths = "tests/metadata_discovery/colliding_paths";
+const Name s_AssetCaseTestsMetadataRegistryOwnedTokens = "tests/metadata_registry/owned_tokens";
+const Name s_AssetCaseTestsOwnedType71a7 = "tests/owned_type_71a7";
+const Name s_AssetCaseNwbReplacedFallback71a7 = "nwb_replaced_fallback_71a7";
+const Name s_AssetCaseTestsMetadataRegistryConcurrentTokens = "tests/metadata_registry/concurrent_tokens";
+const Name s_AssetCaseTestsAssetCodecNullAllocation = "tests/asset_codec/null_allocation";
+const Name s_AssetCaseProjectTestsNullAsset = "project/tests/null_asset";
+const Name s_AssetCaseTestsModelCookMetadataMetadata = "tests/model_cook_metadata/metadata";
+const Name s_AssetCaseTestsModelCookMetadataOutput = "tests/model_cook_metadata/output";
+const Name s_AssetCaseTestsModelCookMetadataScratch = "tests/model_cook_metadata/scratch";
+const Name s_AssetCaseTestsModelCookMetadataModel = "tests/model_cook_metadata/model";
+const Name s_AssetCaseTestsModelPayloadInputs = "tests/model_payload/inputs";
+const Name s_AssetCaseTestsModelPayloadValidationScratch = "tests/model_payload/validation_scratch";
+const Name s_AssetCaseTestsModelPayloadModel = "tests/model_payload/model";
+const Name s_AssetCaseHand = "hand";
+const Name s_AssetCaseMissing = "missing";
+const Name s_AssetCaseProjectSamplersBinaryAdmission = "project/samplers/binary_admission";
+const Name s_AssetCaseProjectSamplersReloadAdmission = "project/samplers/reload_admission";
+const Name s_AssetCaseProjectSamplersWideEnumAdmission = "project/samplers/wide_enum_admission";
+const Name s_AssetCaseProjectShadersStageCs = "project/shaders/stage_cs";
+const Name s_AssetCaseProjectShadersBomCompilerProbePs = "project/shaders/bom_compiler_probe_ps";
+const Name s_AssetCaseProjectShadersCacheStageCs = "project/shaders/cache_stage_cs";
+const Name s_AssetCaseShaderTestShaderDefaultPs = "shader/test_shader/default/ps";
+const Name s_AssetCaseShaderUnalignedDefaultPs = "shader/unaligned/default/ps";
+const Name s_AssetCaseTestsAssetsGraphicsArchiveAdmission = "tests/assets_graphics/archive_admission";
+const Name s_AssetCaseTestsSkeletonPayloadInputs = "tests/skeleton_payload/inputs";
+const Name s_AssetCaseTestsSkeletonPayloadValidationScratch = "tests/skeleton_payload/validation_scratch";
+const Name s_AssetCaseTestsSkeletonPayloadSkeleton = "tests/skeleton_payload/skeleton";
+const Name s_AssetCaseProjectTexturesMipTableAdmission = "project/textures/mip_table_admission";
+const Name s_AssetCaseProjectTexturesPayloadFormatAdmission = "project/textures/payload_format_admission";
+const Name s_AssetCaseProjectTexturesConstantAlphaAdmission = "project/textures/constant_alpha_admission";
+const Name s_AssetCaseProjectTexturesMipRecordAdmission = "project/textures/mip_record_admission";
+const Name s_AssetCaseProjectTexturesPrepared = "project/textures/prepared";
+const Name s_AssetCaseProjectTexturesVersionAdmission = "project/textures/version_admission";
+const Name s_AssetCaseProjectTexturesInvalidAlphaMode = "project/textures/invalid_alpha_mode";
+const Name s_AssetCaseProjectTexturesTruncatedRaw = "project/textures/truncated_raw";
+const Name s_AssetCaseProjectTexturesOverflowingRawLayout = "project/textures/overflowing_raw_layout";
+const Name s_AssetCaseProjectTexturesLinearDecode = "project/textures/linear_decode";
+
+const Name s_IntegrationAssetsGraphicsMaterial = "tests/integration/assets_graphics/material";
+const Name s_IntegrationAssetsGraphicsShader = "tests/integration/assets_graphics/shader";
+const Name s_IntegrationAssetsGraphicsCodec = "tests/integration/assets_graphics/codec";
+const Name s_IntegrationAssetsGraphicsBuild = "tests/integration/assets_graphics/build";
+const Name s_IntegrationAssetsGraphicsGather = "tests/integration/assets_graphics/gather";
+const Name s_ProjectTestsScratchPayload = "project/tests/scratch_payload";
+const Name s_ProjectEntitiesLensRenderer = "project/entities/lens/renderer";
+const Name s_ProjectSamplersFirstSampler = "project/samplers/first_sampler";
+const Name s_ProbeParentAsset = "probe_parent_asset";
+const Name s_ProbeLeafAsset = "probe_leaf_asset";
+const Name s_ProjectCsgAlphaShape = "project/csg/alpha_shape";
+const Name s_ProjectCsgZebraShape = "project/csg/zebra_shape";
+const Name s_ProjectCsgAlphaModule = "project/csg/alpha_module";
+const Name s_ProjectCsgZebraModule = "project/csg/zebra_module";
+const Name s_ProjectCsgExactTextShape = "project/csg/exact_text_shape";
+const Name s_ProjectCsgExactTextModule = "project/csg/exact_text_module";
+const Name s_ProjectCsgControlByteShape = "project/csg/control_byte_shape";
+const Name s_ProjectCsgControlByteModule = "project/csg/control_byte_module";
+const Name s_MetadataRegistryNullAllocation = "tests/metadata_registry/null_allocation";
+const Name s_MetadataExtensionAligned = "tests/metadata_extension/aligned";
+const Name s_MetadataExtensionText = "tests/metadata_extension/text";
+const Name s_MetadataExtensionOther = "tests/metadata_extension/other";
+const Name s_MetadataRegistryNullBucket = "tests/metadata_registry/null_bucket";
+const Name s_NwbOwnedFallback71a7 = "nwb_owned_fallback_71a7";
+const StringView s_AssetsDirectory = "assets";
+const StringView s_TestsConfiguration = "tests";
+const StringView s_FirstSamplerPath = "project/samplers/first";
+const StringView s_SecondSamplerPath = "project/samplers/second";
+const u64 s_SharedCookKeyHash = 0x123456789abcdef0ull;
+const StringView s_EngineDirectory = "impl";
+const StringView s_CacheDirectory = "__asset_cache";
+const StringView s_GraphicsDirectory = "graphics";
+const StringView s_MeshesDirectory = "meshes";
+const StringView s_MaterialInterfacesDirectory = "material_interfaces";
+const StringView s_SurfaceBindFilename = "test_surface.bind";
+const StringView s_ShadersDirectory = "shaders";
+const StringView s_ProjectVirtualRoot = "project";
+const StringView s_BuildDirectory = "__build_obj";
+const usize s_MetadataRegistrySamplerCount = 65u;
+const StringView s_ShaderStagePs = "ps";
+const StringView s_ProjectShadersTestShader = "project/shaders/test_shader";
+const StringView s_ShaderEntryMain = "main";
+const StringView s_MaterialsDirectory = "materials";
+const StringView s_ProjectMaterialInterfacesTestSurface = "project/material_interfaces/test_surface";
+const StringView s_ProjectMaterialsTestMaterial = "project/materials/test_material";
+const StringView s_EngineSamplersLinearClampPath = "engine/samplers/linear_clamp";
+const StringView s_MaterialBindIncludesDirectory = "material_bind_includes";
+const StringView s_ModelRigSegment = "rig";
+const StringView s_ModelBodySegment = "body";
+const StringView s_FieldTarget = "target";
+
+
+class ShaderMetadataCase{
+    public StringView shaderAssetType = "";
+    public StringView fields = "";
+    public b8 accepted = false;
+}
+
+class SpirvModelStageCase{
+    public ShaderStageMask stage = ShaderStageMask();
+    public u32 model = 0u;
+}
+
+
+
+class MaterialBinaryTypedLayoutOffsets{
+    public usize layoutHashOffset = 0u;
+    public usize blockByteCountOffset = 0u;
+}
+
+class MetadataExtensionState{
+    public usize constructions = 0u;
+    public usize destructions = 0u;
+    public usize memberDestructions = 0u;
+}
+
+class TextureMipCorruptionCase{
+    public usize fieldOffset = 0u;
+    public u32 value = 0u;
+}
+
+
+const StringView s_LinearWrapSamplerMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 0.0;\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const i32 s_InputCodeValueInputActionReleaseBase = 0;
+const i32 s_InputCodeValueModifierShiftBits = 0x0001;
+const i32 s_InputCodeValueModifierControlBits = 0x0002;
+const i32 s_InputCodeValueModifierAltBits = 0x0004;
+const i32 s_InputCodeValueModifierSuperBits = 0x0008;
+const i32 s_InputCodeValueModifierCapsLockBits = 0x0010;
+const i32 s_InputCodeValueModifierNumLockBits = 0x0020;
+const i32 s_InputCodeValueMouseButtonLeftBase = 0;
+const i32 s_InputCodeValueKeyUnknownCode = -1;
+const i32 s_InputCodeValueKeySpaceAscii = 32;
+const i32 s_InputCodeValueKeyWorld1Code = 161;
+const i32 s_InputCodeValueKeyWorld2Code = 162;
+const i32 s_InputCodeValueKeyLeftShiftCode = 340;
+const i32 s_InputCodeValueKeyKeypad0Code = 320;
+const i32 s_InputCodeValueKeyF1Code = 290;
+const i32 s_InputCodeValueKeyCapsLockCode = 280;
+const i32 s_InputCodeValueKeyEscapeCode = 256;
+const i32 s_InputCodeValueKeyGraveAccentCode = 96;
+const i32 s_InputCodeValueKeyLeftBracketCode = 91;
+const i32 s_InputCodeValueKeyACode = 65;
+const i32 s_InputCodeValueKeyEqualCode = 61;
+const i32 s_InputCodeValueKeySemicolonCode = 59;
+const i32 s_InputCodeValueKeyCommaCode = 44;
+const i32 s_InputCodeValueKeyApostropheCode = 39;
+const usize s_InputCodeValueKeyboardScancodeCount = 512u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
-
 #include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +49,7 @@ b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline(){
             m_shaderSystem,
             &ShadowSubsystem::swShadowTransparentSoftCs,
             variants[index],
-            Name("ECSRender_SwShadowTransparentSoft"),
+            Name(s_SoftwareShadowShaderScope),
             sizeof(SoftwareTransparentSamplingPush),
             false,
             sampling.m_layout,

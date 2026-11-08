@@ -3,6 +3,7 @@
 
 
 #include "postprocess_resources.h"
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>

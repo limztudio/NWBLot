@@ -116,7 +116,7 @@ Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in Vecto
     const VectorDouble minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight), 0.0, 0.0);
     const VectorDouble scaledSlices = VectorDouble(sliceExtents.x, sliceExtents.y, 0.0, 0.0) / VectorDouble(density.x, density.y, 1.0, 1.0);
     const VectorDouble widthHeight = max(minimumSize, scaledSlices);
-    if(!isFinite(widthHeight.x) || widthHeight.x > maxFloatF64 || !isFinite(widthHeight.y) || widthHeight.y > maxFloatF64)
+    if(!isFinite(widthHeight.xy) || widthHeight.x > maxFloatF64 || widthHeight.y > maxFloatF64)
         return makeUnexpected(Failure());
     return VectorSingle(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
 }
@@ -258,3 +258,4 @@ void ResetUiSkinAtlasFields(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

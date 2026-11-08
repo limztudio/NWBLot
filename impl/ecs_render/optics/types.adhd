@@ -9,6 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_RayTracingOpticalSceneHeaderBytes = 32u;
+const usize s_RayTracingOpticalInstanceBytes = 16u;
 const u32 s_RtOpticalSceneFlagBoundsValid = 1u;
 const u32 s_RtOpticalBoundaryUnspecified = 0u;
 const usize s_OpticalBoundsUseCapacity = 8u;
@@ -172,5 +174,18 @@ b8 ValidateRayTracingOpticalRuntimeBoundsBinding(
     return true;
 }
 
+b8 OpticalUploadByteSizeFits(in usize byteSize, in u64 capacity, in usize alignment){
+    return byteSize != 0u && cast<u64>(byteSize) <= capacity && alignment != 0u && (byteSize % alignment) == 0u;
+}
+
+b8 OpticalRuntimeInputCountFits(in usize count, in usize inputByteSize){
+    return inputByteSize != 0u && count <= cast<usize>(u32.max) / inputByteSize;
+}
+
+b8 OpticalSceneInstanceCountFits(in usize instanceCount){
+    return instanceCount <= (cast<usize>(u32.max) - s_RayTracingOpticalSceneHeaderBytes) / s_RayTracingOpticalInstanceBytes;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

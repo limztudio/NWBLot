@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -71,7 +72,7 @@ using UiTestSupport::Pointer;
 class UiContextMenuInputTests : public UiTestSupport::RouterTestFixture{
 public:
     UiContextMenuInputTests()
-        : RouterTestFixture(Name("tests/ui/context_menu_input"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContextMenuInput))
     {}
 
 

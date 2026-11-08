@@ -50,8 +50,7 @@ private:
             canonical,
             ValidateIntegerBounds,
             ParseIntegerDraft,
-            [](const i64 candidate, const i64 value)noexcept{ return candidate != value; }
-        );
+            [](const i64 candidate, const i64 value)noexcept{ return candidate != value; });
     }
     [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const i64 value){
         return canonicalizeWith(value, [](const i64 candidate, const Span<char> buffer)noexcept{ return FormatI64(candidate, buffer); });

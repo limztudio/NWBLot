@@ -25,10 +25,10 @@ namespace Tests::Smoke{
 
 class TransparentMultiScene final{
 public:
-    static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
-    static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
-    static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
-    static constexpr f32 s_CausticSphereScale = 0.70f;
+    static constexpr f32 s_DefaultDirectionalLightPitch = s_TransparentMultiDefaultDirectionalLightPitch;
+    static constexpr f32 s_DefaultDirectionalLightYaw = s_TransparentMultiDefaultDirectionalLightYaw;
+    static constexpr f32 s_DefaultDirectionalLightIntensity = s_TransparentMultiDefaultDirectionalLightIntensity;
+    static constexpr f32 s_CausticSphereScale = s_TransparentMultiCausticSphereScale;
 
 
 public:

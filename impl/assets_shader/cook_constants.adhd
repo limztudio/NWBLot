@@ -124,6 +124,12 @@ enum<u8> IncludeKind{
     Unsupported
 }
 
+enum<u8> ShaderDefineNameStatus{
+    Valid,
+    Reserved,
+    Invalid
+}
+
 [reflect]
 enum<u8> VariantSignatureSegmentError{
     None,
@@ -156,3 +162,4 @@ class SlangStageMapping{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

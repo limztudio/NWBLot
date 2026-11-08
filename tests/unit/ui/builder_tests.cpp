@@ -5,9 +5,10 @@
 #include "widget_fixture.h"
 #include "widget_id_assertion.h"
 
-#include <impl/ecs_ui/toolkit/builder.h>
-
 #include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/filesystem.h>
 #include <global/sha256.h>
@@ -36,7 +37,7 @@ constexpr AStringView s_ApplyKey = "apply";
 class UiBuilderTests : public UiTestSupport::InputTestFixtureBase{
 public:
     UiBuilderTests()
-        : InputTestFixtureBase(Name("tests/ui/builder"))
+        : InputTestFixtureBase(Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilder))
         , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
         , m_text(m_arena)
         , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
@@ -58,18 +59,18 @@ protected:
     void configureSkin(const b8 includePanel = true, const b8 includeButton = true){
         UiSkin::RegionVector regions(m_arena);
         if(includePanel)
-            regions.push_back({ Name("panel.normal"), { 0u, 0u, 8u, 8u }, {}, { 4.0f, 6.0f, 8.0f, 10.0f } });
+            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCasePanelNormal), { 0u, 0u, 8u, 8u }, {}, { 4.0f, 6.0f, 8.0f, 10.0f } });
         if(includeButton)
-            regions.push_back({ Name("button.normal"), { 8u, 0u, 8u, 8u }, {}, { 1.0f, 2.0f, 3.0f, 4.0f }, 20.0f, 20.0f });
-        regions.push_back({ Name("button.hover"), { 16u, 0u, 8u, 8u }, {}, { 7.0f, 1.0f, 2.0f, 3.0f }, 40.0f, 30.0f });
-        regions.push_back({ Name("button.pressed"), { 24u, 0u, 8u, 8u }, {}, { 2.0f, 9.0f, 5.0f, 1.0f }, 30.0f, 35.0f });
-        regions.push_back({ Name("button.disabled"), { 32u, 0u, 8u, 8u }, {}, { 3.0f, 4.0f, 11.0f, 12.0f }, 70.0f, 50.0f });
-        regions.push_back({ Name("checkbox.normal"), { 40u, 0u, 8u, 8u }, {}, {}, 10.0f, 10.0f });
-        regions.push_back({ Name("checkbox.hover"), { 48u, 0u, 8u, 8u }, {}, {}, 20.0f, 24.0f });
-        regions.push_back({ Name("checkbox.checked"), { 56u, 0u, 8u, 8u }, {}, {}, 28.0f, 30.0f });
-        regions.push_back({ Name("checkbox.disabled"), { 64u, 0u, 8u, 8u }, {}, {}, 34.0f, 32.0f });
-        regions.push_back({ Name("checkbox.mark"), { 72u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        regions.push_back({ Name("focus.overlay"), { 80u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal), { 8u, 0u, 8u, 8u }, {}, { 1.0f, 2.0f, 3.0f, 4.0f }, 20.0f, 20.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonHover), { 16u, 0u, 8u, 8u }, {}, { 7.0f, 1.0f, 2.0f, 3.0f }, 40.0f, 30.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonPressed), { 24u, 0u, 8u, 8u }, {}, { 2.0f, 9.0f, 5.0f, 1.0f }, 30.0f, 35.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonDisabled), { 32u, 0u, 8u, 8u }, {}, { 3.0f, 4.0f, 11.0f, 12.0f }, 70.0f, 50.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxNormal), { 40u, 0u, 8u, 8u }, {}, {}, 10.0f, 10.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxHover), { 48u, 0u, 8u, 8u }, {}, {}, 20.0f, 24.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxChecked), { 56u, 0u, 8u, 8u }, {}, {}, 28.0f, 30.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxDisabled), { 64u, 0u, 8u, 8u }, {}, {}, 34.0f, 32.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxMark), { 72u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseFocusOverlay), { 80u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
     }
 
@@ -431,7 +432,7 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     ASSERT_FALSE(first.glyphPages().empty());
     const SharedGlyphPage page = first.glyphPages().front();
     const Sha256Digest pixelHash = ComputeSha256({ page->pixels().data(), page->pixels().size() });
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/builder/frozen"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilderFrozen)};
     Vector<Vertex, Core::Alloc::ScratchArena> saved(scratch);
     saved.assign(first.vertices().begin(), first.vertices().end());
     ASSERT_TRUE(m_context.commitFrame(1u));

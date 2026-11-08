@@ -57,7 +57,7 @@ VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
     const f32 lengthSquared = lengthSq(folded.xyz);
     if(isFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
         const VectorSingle normalized = folded * rsqrt(VectorSingle(lengthSquared));
-        if(isFinite(normalized.x) && isFinite(normalized.y) && isFinite(normalized.z))
+        if(isFinite(normalized.xyz))
             return VectorSingle(normalized, 0.0f);
     }
     return VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
@@ -80,3 +80,4 @@ u32 PackMeshletCone(in VectorSingle axis, in VectorSingle cutoff){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,6 +7,8 @@
 #include "report_dot.h"
 #include "memory_report.h"
 
+#include <logger/telemetry/report_values.adhd.h>
+
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/text_log.h>
 
@@ -30,9 +32,9 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u64 s_TimingSecondsExponentMask = 0x7FF0000000000000ull;
-static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
-static constexpr usize s_PerfCsvBytesPerEvent = 128u;
+static constexpr u64 s_TimingSecondsExponentMask = ::NWB::Log::s_LogTelemetryReportTimingSecondsExponentMask;
+static constexpr usize s_PerfCsvFixedReserveBytes = ::NWB::Log::s_LogTelemetryReportPerfCsvFixedReserveBytes;
+static constexpr usize s_PerfCsvBytesPerEvent = ::NWB::Log::s_LogTelemetryReportPerfCsvBytesPerEvent;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

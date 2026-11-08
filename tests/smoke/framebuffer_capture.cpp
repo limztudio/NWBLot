@@ -5,6 +5,8 @@
 #include "framebuffer_capture.h"
 #include "bitmap_capture_writer.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
@@ -28,7 +30,7 @@ namespace __hidden_framebuffer_capture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Name s_BitmapScratchArena("tests/smoke/framebuffer_capture/bitmap");
+static constexpr Name s_BitmapScratchArena = NWB::Tests::Smoke::s_SmokeNameSmokeFramebufferCaptureBitmap;
 static b8 IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
     return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
@@ -357,7 +359,8 @@ Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core:
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
-    const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.framebuffer_capture.staging")).setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
+    const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCaptureStaging))
+        .setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
     if(!stagingHazardResult){
         markFailed(NWB_TEXT("failed to declare the framebuffer staging hazard domain"));
         return MakeUnexpected(Failure{});
@@ -370,7 +373,7 @@ Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core:
         Core::GpuTaskResourceUse{ .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, },
         Core::GpuTaskResourceUse{ .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
     };
-    taskDesc.setIdentity(Name("tests.smoke.framebuffer_capture")).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(Span(&previousTask, 1u)).setResourceUses(resourceUses);
+    taskDesc.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCapture)).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(Span(&previousTask, 1u)).setResourceUses(resourceUses);
     const auto readbackTask = graph.addTask<ReadbackTask>(
         taskDesc,
         ReadbackTask::Payload{
@@ -381,8 +384,7 @@ Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core:
             .completionState = m_completionState,
             .graphicsFrameIndex = m_lastCountedGraphicsFrame,
             .generation = m_completionState->generation,
-        }
-    );
+        });
     if(!readbackTask){
         markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
         return MakeUnexpected(Failure{});

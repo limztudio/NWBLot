@@ -83,15 +83,15 @@ b8 ValidCsgFiniteNonNegativeScalar(in f32 value){
 }
 
 b8 ValidCsgFiniteVector3(in VectorSingle value){
-    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z);
+    return isFinite(value.xyz);
 }
 
 b8 ValidCsgFiniteVector4(in VectorSingle value){
-    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z) && isFinite(value.w);
+    return isFinite(value);
 }
 
 b8 ValidCsgPositiveVector3(in VectorSingle value){
-    return ValidCsgFinitePositiveScalar(value.x) && ValidCsgFinitePositiveScalar(value.y) && ValidCsgFinitePositiveScalar(value.z);
+    return isFinite(value.xyz) && value.x > 0.0f && value.y > 0.0f && value.z > 0.0f;
 }
 
 b8 ValidCsgLocalBounds(in VectorSingle minBounds, in VectorSingle maxBounds){
@@ -208,3 +208,4 @@ Expected<CsgShapeLocalBounds> ComputeCsgShapeLocalBoundsFromBytes(in ICsgShape s
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

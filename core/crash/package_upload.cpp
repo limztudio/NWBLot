@@ -6,7 +6,9 @@
 #include "package_archive.h"
 #include "package_android_emergency.h"
 #include "package_upload_transport.h"
-#include "arena_names.h"
+
+#include <core/crash/arena_names.adhd.h>
+#include <core/crash/package_values.adhd.h>
 
 #include <global/diagnostics.h>
 #include <global/filesystem/retention.h>
@@ -29,7 +31,7 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_SpoolRetentionCategory = "crash_spool_retention";
+inline constexpr StringView s_SpoolRetentionCategory = ::NWB::Core::Crash::PackageValues::s_UploadSpoolRetentionCategory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,7 +68,7 @@ static CrashStringT<ArenaT> CrashUploadUrl(ArenaT& arena, const AStringView logS
 }
 
 static b8 WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory, const AStringView state){
-    constexpr AStringView s_StatePrefix = "state=";
+    constexpr AStringView s_StatePrefix = ::NWB::Core::Crash::PackageValues::s_UploadStatePrefix;
     const AStringView stateText = state.data() ? state : PackageNames::s_UploadAttemptUnknownState;
     CrashStringT<Alloc::ScratchArena> text(scratchArena);
     text.reserve(AddSize(stateText.size(), s_StatePrefix.size() + 1u));

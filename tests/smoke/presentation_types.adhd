@@ -1,0 +1,121 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_SmokeScratchNameTestsSmokeReflectionFrameGraph = "tests/smoke/reflection_frame_graph";
+const Name s_SmokeNameDepthWarpProbeCoverage = "DepthWarpProbeCoverage";
+const Name s_SmokeNameDepthWarpProbeWarp = "DepthWarpProbeWarp";
+const Name s_SmokeNameDepthWarpProbeControl = "DepthWarpProbeControl";
+const Name s_SmokeNameDepthWarpProbeReadback = "DepthWarpProbeReadback";
+const Name s_SmokeNameDepthWarpProbeSlots = "DepthWarpProbeSlots";
+const Name s_SmokeNameAvboitIntegrationReadback = "AvboitIntegrationReadback";
+const Name s_SmokeNameAvboitIntegrationExtinction = "AvboitIntegrationExtinction";
+const Name s_SmokeNameAvboitIntegrationOverflow = "AvboitIntegrationOverflow";
+const Name s_SmokeNameAvboitIntegrationControl = "AvboitIntegrationControl";
+const Name s_SmokeNameAvboitIntegrationSlots = "AvboitIntegrationSlots";
+const Name s_SmokeNameRefractionTileProbeReversedQueue = "RefractionTileProbeReversedQueue";
+const Name s_SmokeNameRefractionTileProbeQueue = "RefractionTileProbeQueue";
+const Name s_SmokeNameRefractionTileProbeArguments = "RefractionTileProbeArguments";
+const Name s_SmokeNameRefractionTileProbeVisits = "RefractionTileProbeVisits";
+const Name s_SmokeNameRefractionTileProbeReadback = "RefractionTileProbeReadback";
+const Name s_SmokeNameRefractionTileProbeSlots = "RefractionTileProbeSlots";
+const Name s_SmokeNameTestsSmokeFramebufferCaptureStaging = "tests.smoke.framebuffer_capture.staging";
+const Name s_SmokeNameTestsSmokeFramebufferCapture = "tests.smoke.framebuffer_capture";
+const Name s_SmokeNameSmokeReflectionOpticalDuplicate = "smoke/reflection/optical_duplicate";
+const Name s_SmokeNameTestsSmokeSkinnedCausticFrameGraph = "tests/smoke/skinned_caustic_frame_graph";
+const Name s_SmokeNameTestsSkinningCullingModelOwners = "tests/skinning_culling/model_owners";
+const Name s_SmokeNameStressCsgTransparent = "stress/csg/transparent";
+const Name s_SmokeNameStressCsgOpaque = "stress/csg/opaque";
+const Name s_SmokeNameTestsSmokeFrameGraphSnapshot = "tests/smoke/frame_graph_snapshot";
+const Name s_SmokeNameTestsSmokeFrameGraphSnapshotScratch = "tests/smoke/frame_graph_snapshot_scratch";
+const Name s_SmokeNameTestsStressWorkload = "tests/stress/workload";
+const Name s_SmokeNameTestsSmokeTextureSrgbEdges = "tests.smoke.texture.srgb_edges";
+const Name s_SmokeNameTestsSmokeTextureSrgbEdgesInitialize = "tests.smoke.texture.srgb_edges.initialize";
+const Name s_SmokeNameTestsSmokeTextureSrgbEdgesBounded = "tests.smoke.texture.srgb_edges.bounded";
+const Name s_SmokeNameAvboitDepthWarpProbe = "AvboitDepthWarpProbe";
+const Name s_SmokeNameAvboitIntegrationProbe = "AvboitIntegrationProbe";
+const Name s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver = "project/smoke/csg_skinned_visible/female_receiver";
+const Name s_SmokeNameMesh = "mesh";
+const Name s_SmokeNameHip = "hip";
+const Name s_SmokeNameSmokeFramebufferCaptureBitmap = "tests/smoke/framebuffer_capture/bitmap";
+const Name s_SmokeNameSmokeGpuPassTimingProbe = "tests/smoke/gpu_pass_timing_probe";
+const Name s_SmokeNameSmokeReflectionCsgDense = "smoke/reflection/csg_dense";
+const Name s_SmokeNameSmokeReflectionCsgOptics = "smoke/reflection/csg_optics";
+const Name s_SmokeNameSmokeReflectionCsgGroupEntry = "smoke/reflection/csg_group_entry";
+const Name s_SmokeNameProjectSmokeRefractionGalleryDuplicateVolume = "project/smoke/refraction/gallery_duplicate_volume";
+const Name s_SmokeNameSmokeRefractionCsgOptics = "smoke/refraction/csg_optics";
+const Name s_SmokeNameSmokeRefractionIdentity = "smoke/refraction/identity";
+const Name s_SmokeNameSmokeRefractionCsgCrossingOverflow = "smoke/refraction/csg_crossing_overflow";
+const Name s_SmokeNameSmokeRefractionNearAir = "smoke/refraction/near_air";
+const Name s_SmokeNameRefractionTileProbe = "RefractionTileProbe";
+const Name s_SmokeNameRefractionTileProbeCs = "refraction_tile_probe_cs";
+const Name s_SmokeNameSkeleton = "skeleton";
+const Name s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver = "project/smoke/skinned_caustic/transition_receiver";
+const Name s_SmokeNameSmokeEnvironment = "tests/smoke/environment";
+const Name s_SmokeNameProjectSmokeTransparentMultiCenterReceiver = "project/smoke/transparent_multi/center_receiver";
+const Name s_SmokeNameAlternateSkin = "alternate_skin";
+const usize s_PresentationPacingRingCapacity = 4096u;
+const f64 s_PresentationPacingStallThresholdMs = 50.0;
+const f64 s_PresentationPacingMsPerSecond = 1000.0;
+const Name s_PresentationTimingNamePrepareResourcesFailed = "graphics.prepare_resources_failed";
+const Name s_PresentationTimingNameFramePreamble = "graphics.frame_preamble";
+
+
+// Track frame intervals and count idle stalls of 50ms or more once per gap.
+class PresentationPacingSample{
+    public f64 wallMsPerPresentation;
+
+    public PresentationPacingSample(){
+        this.wallMsPerPresentation = 0.0;
+    }
+
+    public PresentationPacingSample(in f64 wallMs){
+        this.wallMsPerPresentation = wallMs;
+    }
+}
+
+class PresentationPacingSummary{
+    public usize samples = 0u;
+    public f64 p50Ms = 0.0;
+    public f64 p95Ms = 0.0;
+    public f64 maxMs = 0.0;
+    public u64 stallsOver50Ms = 0u;
+}
+
+class PresentationFpsSample{
+    public u64 firstPresentationCount = 0u;
+    public u64 lastPresentationCount = 0u;
+    public f64 wallSeconds = 0.0;
+
+    public u64 presentations()const{
+        return this.lastPresentationCount - this.firstPresentationCount;
+    }
+
+    public f64 averageFps()const{
+        if(this.wallSeconds > 0.0)
+            return cast<f64>(this.presentations()) / this.wallSeconds;
+        return 0.0;
+    }
+}
+
+
+
+class GpuPassTimingScopeAccum{
+    public f64 sumSeconds = 0.0;
+    public f64 minSeconds = 0.0;
+    public f64 maxSeconds = 0.0;
+    public u64 samples = 0u;
+    public u32 frames = 0u;
+}
+
+
+class RendererGatherBenchmarkSceneCounts{
+    public u32 renderers = 0u;
+    public u32 runtimeRenderers = 0u;
+    public u32 runtimeOwners = 0u;
+    public u32 transparentRenderers = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

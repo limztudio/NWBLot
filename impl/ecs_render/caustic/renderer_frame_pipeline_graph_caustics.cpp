@@ -11,6 +11,7 @@
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/caustic/caustics_resolve_chain.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -182,7 +183,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
 
     Core::GpuTaskDesc photonDesc;
     photonDesc
-        .setIdentity(Name("render.software_caustics.photons"))
+        .setIdentity(Name(s_RenderNameRenderSoftwareCausticsPhotons))
         .setMarkerLabel("Software Caustic Photons")
         .setScheduling(causticsScheduling)
         .setDependencies({ &prefixTasksResult->photonDependencyTask, 1u })

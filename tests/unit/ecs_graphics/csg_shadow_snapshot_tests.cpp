@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/ecs_test_world.h>
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
@@ -11,9 +15,6 @@
 #include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/entity.h>
-
-#include <tests/common/ecs_test_world.h>
-#include <tests/common/capturing_logger.h>
 
 #include <global/simd/vector.h>
 
@@ -32,9 +33,9 @@ namespace __hidden_csg_shadow_snapshot_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 
-inline constexpr Name s_ReceiverGroup("tests/csg_shadow/group");
-inline constexpr Name s_OtherGroup("tests/csg_shadow/other");
-inline constexpr Name s_CustomShape("tests/csg_shadow/custom");
+inline constexpr Name s_ReceiverGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowGroup;
+inline constexpr Name s_OtherGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowOther;
+inline constexpr Name s_CustomShape = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowCustom;
 inline constexpr Array<u32, 1> s_OpenTriangleWords = { 0u };
 inline constexpr i32 s_FrameCacheBindingFailure = 43;
 
@@ -62,7 +63,7 @@ public:
 
 struct SnapshotContext{
     Tests::EcsTestWorld testWorld;
-    Core::Alloc::ScratchArena scratch{ Name("tests/csg_shadow/scratch") };
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowScratch) };
     CsgShapeRegistry registry{ testWorld.arena };
     CsgShadowSnapshot snapshot{ testWorld.arena };
 
@@ -116,7 +117,7 @@ void SetParameters(const Float4& parameter, CsgCutterComponent& cutter){
 [[nodiscard]] b8 RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
     CsgShapeTypeDesc description(context.testWorld.arena);
     description.name = name;
-    description.shaderModule = Name("tests/csg_shadow/evaluator");
+    description.shaderModule = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowEvaluator);
     description.shaderModuleInclude = "tests/csg_shadow/evaluator.slangi";
     description.boundsCallback = &CustomBounds;
     return context.registry.registerShapeType(description).has_value();
@@ -478,7 +479,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&]()noexcept{ ++mesh.runtimeGeometryContentRevision; });
     expectRefresh([&]()noexcept{ ++mesh.runtimeMeshVersion; });
     expectRefresh([&]()noexcept{ mesh.meshletPrimitiveIndexCount += 3u; });
-    expectRefresh([&]()noexcept{ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
+    expectRefresh([&]()noexcept{ mesh.meshName = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowReplacementMesh); });
     expectRefresh([&]()noexcept{
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
     });
@@ -577,7 +578,7 @@ TEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedSt
     auto entity = context.testWorld.world.createEntity();
     entity.addComponent<StaticCsgMeshComponent>().receiverGroup = s_ReceiverGroup;
     entity.addComponent<RendererComponent>();
-    entity.addComponent<MeshComponent>().mesh.virtualPath = Name("tests/csg_shadow/static_cache_mesh");
+    entity.addComponent<MeshComponent>().mesh.virtualPath = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowStaticCacheMesh);
     entity.addComponent<Scene::TransformComponent>();
     FrameCacheRuntimeProvider provider;
     provider.receiver = entity.id();

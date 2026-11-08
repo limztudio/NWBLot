@@ -5,6 +5,7 @@
 #include "built_asset.h"
 #include "asset_file_publisher.h"
 
+#include <core/assets/volume/built_asset_types.adhd.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -30,10 +31,10 @@ namespace __hidden_built_asset{
 using ScratchBytes = Vector<u8, ScratchArena>;
 using ScratchPath = ::Path<ScratchArena>;
 
-inline constexpr u32 s_Magic = 0x4142574eu;
-inline constexpr u32 s_Version = 1u;
+inline constexpr u32 s_Magic = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetMagic;
+inline constexpr u32 s_Version = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetVersion;
 inline constexpr usize s_HeaderSize = sizeof(u32) * 2u + sizeof(NameHash) + sizeof(u64) * 2u;
-inline constexpr usize s_FilenameHexFieldCount = 3u;
+inline constexpr usize s_FilenameHexFieldCount = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetFilenameHexFieldCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

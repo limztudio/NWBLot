@@ -5,9 +5,11 @@
 #include "hardware_transparent_shadow_state.h"
 #include "hardware_transparent_shadow_resources.h"
 
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +74,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     ))
         return false;
     if(pixels > state.m_pixelsCapacity){
-        const Array<Name, 3u> names = { Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"), };
+        const Array<Name, 3u> names = { Name(s_HardwareShadowCrossings), Name(s_HardwareShadowOverflowList), Name(s_HardwareShadowOverflowArgs), };
         Array<Core::BufferHandle, s_HwTransparentScratchBufferCount> buffers{};
         Array<Core::GpuDescriptorHandle, s_HwTransparentScratchBufferCount> descriptors{};
         Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));

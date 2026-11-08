@@ -14,6 +14,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/scope_exit.h>
@@ -32,8 +33,8 @@ namespace __hidden_metadata_registry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_ProjectVirtualRoot = "project";
-constexpr AStringView s_BuildDirectory = "__build_obj";
+constexpr AStringView s_ProjectVirtualRoot = NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
+constexpr AStringView s_BuildDirectory = NWB::Tests::AssetsGraphicsFixture::s_BuildDirectory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,15 +73,15 @@ public:
 
 
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){
-    AssetArena fixtureArena(Name("tests/metadata_registry/fixture"));
-    AssetArena parseArena(Name("tests/metadata_registry/output"));
+    AssetArena fixtureArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryFixture)};
+    AssetArena parseArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryOutput)};
     CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / s_BuildDirectory / "metadata_registry_storage";
     ASSERT_TRUE(EnsureDirectories(root));
     DiscoveredNwbFileVector files(fixtureArena);
-    constexpr usize s_SamplerCount = 65u;
+    constexpr usize s_SamplerCount = NWB::Tests::AssetsGraphicsFixture::s_MetadataRegistrySamplerCount;
     files.reserve(s_SamplerCount + 1u);
     constexpr AStringView s_SamplerFields =
         "sampler asset;\r\n"
@@ -106,7 +107,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         if(rejectDuplicate)
             files.push_back(files.front());
         {
-            Alloc::ScratchArena scratchArena(Name("tests/metadata_registry/scratch"));
+            Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryScratch)};
             ParsedAssetMetadata metadata(parseArena);
             ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
             auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
@@ -139,11 +140,11 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
 
 
 TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
-    AssetArena arena(Name("tests/metadata_registry/null_allocation"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryNullAllocation)};
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     CookEntryRegistry registry(arena);
-    const Name type("tests/metadata_registry/null_bucket");
+    const Name type = NWB::Tests::AssetsGraphicsFixture::s_MetadataRegistryNullBucket;
     EXPECT_FALSE(registry.registerCustomType<NullAllocatedBucket>(type));
     EXPECT_EQ(registry.bucketCount(), 0u);
     EXPECT_EQ(registry.find(type), nullptr);
@@ -152,15 +153,15 @@ TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
 
 
 TEST(MetadataRegistryPublication, DefaultDependencyEntryOwnsItsPathText){
-    AssetArena arena(Name("tests/metadata_registry/dependency_path"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryDependencyPath)};
     CookDependencyRegistry registry(arena);
-    ScratchArena scratchArena(Name("tests/metadata_registry/dependency_path_scratch"));
+    ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryDependencyPathScratch)};
     ScratchString text("project/example", scratchArena);
-    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name("project/example"), Name("example"), AStringView(text)));
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectExample), Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameExample), AStringView(text)));
     text.assign("project/changed");
     EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
     const AStringView stored = registry.defaultEntryAsset().virtualPathText;
-    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name("project/example"), Name("example"), stored));
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectExample), Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameExample), stored));
     EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
     CookDependencyRegistry moved(Move(registry));
     EXPECT_EQ(moved.defaultEntryAsset().virtualPathText, "project/example");
@@ -169,11 +170,11 @@ TEST(MetadataRegistryPublication, DefaultDependencyEntryOwnsItsPathText){
 
 
 TEST(MetadataRegistryPublication, MetadataRegistrationKeepsCallerTextAlive){
-    ScratchArena scratchArena(Name("tests/metadata_registry/owned_tokens"));
+    ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryOwnedTokens)};
     ScratchString token("nwb_owned_token_71a7", scratchArena);
     ScratchString suffix("_nwb_owned_suffix_71a7", scratchArena);
     ScratchString extension(".nwb_owned_sidecar_71a7", scratchArena);
-    RegisterNonStandaloneAssetType(Name("tests/owned_type_71a7"), AStringView(token));
+    RegisterNonStandaloneAssetType(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsOwnedType71a7), AStringView(token));
     RegisterNonStandaloneFirstTokenSuffix(AStringView(suffix));
     RegisterAssetPairedSidecarRule(AssetPairedSidecarRule{ AStringView(extension) });
     token.assign("overwritten");
@@ -189,9 +190,9 @@ TEST(MetadataRegistryPublication, MetadataRegistrationKeepsCallerTextAlive){
         found = found || rule.sidecarExtension == ".nwb_owned_sidecar_71a7";
     EXPECT_TRUE(found);
 #if defined(NWB_DEBUG)
-    Name fallback("nwb_owned_fallback_71a7");
+    Name fallback = NWB::Tests::AssetsGraphicsFixture::s_NwbOwnedFallback71a7;
     RegisterNonStandaloneAssetType(fallback);
-    fallback = Name("nwb_replaced_fallback_71a7");
+    fallback = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseNwbReplacedFallback71a7);
     EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
 #else
     const auto previousRecorder = NameDetail::SymbolRecorderState();
@@ -218,7 +219,7 @@ TEST(MetadataRegistryPublication, ConcurrentMetadataRegistrationsKeepDistinctTok
     Array<Thread, tokens.size()> threads;
     for(usize i = 0u; i < tokens.size(); ++i){
         threads[i] = Thread([&, i](){
-            ScratchArena scratchArena(Name("tests/metadata_registry/concurrent_tokens"));
+            ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataRegistryConcurrentTokens)};
             ScratchString text(tokens[i], scratchArena);
             RegisterNonStandaloneAssetType(s_NameNone, AStringView(text.data(), text.size()));
             text.assign("overwritten");

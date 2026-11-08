@@ -5,9 +5,11 @@
 #include "light_space_shadow.h"
 #include "light_space_resource_set.h"
 
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/shader_archive.h>
@@ -80,11 +82,9 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     static_assert(computeMembers.size() == outputs.size());
     static_assert(computeVariants.size() == outputs.size());
     for(u32 index = 0u; index < outputs.size(); ++index){
-        if(!csg && index >= s_LightSpaceFirstCsgOnlyPipelineIndex && index <= s_LightSpaceLastCsgOnlyPipelineIndex)
+        if(ShouldSkipLightSpacePipeline(index, csg, hardwareCsg))
             continue;
-        if(hardwareCsg && index >= s_LightSpaceFirstCsgFallbackPipelineIndex && index <= s_LightSpaceLastCsgFallbackPipelineIndex)
-            continue;
-        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader>(computeMembers[index], computeVariants[index], Name("ECSRender_LightSpaceShadow"), state.m_shaders[index])){
+        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader>(computeMembers[index], computeVariants[index], Name(s_LightSpaceShaderScope), state.m_shaders[index])){
             state.m_pipelineFailed = true;
             return false;
         }
@@ -92,16 +92,14 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     Core::ShaderHandle& captureVs = state.m_shaders[s_LightSpaceCaptureVertexShaderIndex];
     Core::ShaderHandle& capturePs = state.m_shaders[s_LightSpaceCapturePixelShaderIndex];
     if(
-        (!captureVs && !m_shaderSystem.loadShader<VertexShader>(&ShadowSubsystem::lightSpaceCaptureVs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow"), captureVs))
-        || (!capturePs && !m_shaderSystem.loadShader<PixelShader>(&ShadowSubsystem::lightSpaceCapturePs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow"), capturePs))
+        (!captureVs && !m_shaderSystem.loadShader<VertexShader>(&ShadowSubsystem::lightSpaceCaptureVs, Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), captureVs))
+        || (!capturePs && !m_shaderSystem.loadShader<PixelShader>(&ShadowSubsystem::lightSpaceCapturePs, Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), capturePs))
     ){
         state.m_pipelineFailed = true;
         return false;
     }
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
-        if(!csg && index >= s_LightSpaceFirstCsgOnlyPipelineIndex && index <= s_LightSpaceLastCsgOnlyPipelineIndex)
-            continue;
-        if(hardwareCsg && index >= s_LightSpaceFirstCsgFallbackPipelineIndex && index <= s_LightSpaceLastCsgFallbackPipelineIndex)
+        if(ShouldSkipLightSpacePipeline(index, csg, hardwareCsg))
             continue;
         if(*outputs[index])
             continue;
@@ -153,7 +151,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
             desc
                 .setByteSize(sizeof(u32)).setCpuAccess(Core::CpuAccessMode::Read)
                 .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-                .setDebugName(Name("light_space_csg_diagnostic_readback"))
+                .setDebugName(Name(s_LightSpaceResourceCsgDiagnosticReadback))
                 .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
             ;
             auto readbackResult = m_graphics.createBuffer(desc);
@@ -172,7 +170,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
             Array<Core::GpuDescriptorHandle, 2u> csgDescriptors{};
             Core::GpuDescriptorRetirementGuard retireCsg(heap, Span<const Core::GpuDescriptorHandle>(csgDescriptors));
             const Array<u64, 2u> csgSizes = { contextSize, plan.countByteSize };
-            const Array<Name, 2u> csgNames = { Name("light_space_csg_context"), Name("light_space_csg_opaque_depth") };
+            const Array<Name, 2u> csgNames = { Name(s_LightSpaceResourceCsgContext), Name(s_LightSpaceResourceCsgOpaqueDepth) };
             for(u32 index = 0u; index < csgBuffers.size(); ++index){
                 Core::BufferDesc desc;
                 desc
@@ -217,7 +215,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
     Array<Core::BufferHandle, s_LightSpaceBufferCount> buffers{};
     Array<Core::GpuDescriptorHandle, s_LightSpaceDescriptorCount> descriptors{};
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));
-    const Array<Name, 4u> names = { Name("light_space_counts"), Name("light_space_events"), Name("light_space_views"), Name("light_space_draw_arguments") };
+    const Array<Name, 4u> names = { Name(s_LightSpaceResourceCounts), Name(s_LightSpaceResourceEvents), Name(s_LightSpaceResourceViews), Name(s_LightSpaceResourceDrawArguments) };
     for(u32 index = 0u; index < buffers.size(); ++index){
         Core::BufferDesc desc;
         desc
@@ -243,7 +241,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
         .setWidth(plan.textureResolution).setHeight(plan.textureResolution).setArraySize(plan.viewCount)
         .setDimension(Core::TextureDimension::Texture2DArray).setFormat(Core::Format::D32).setIsRenderTarget(true)
         .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("light_space_depth"))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name(s_LightSpaceResourceDepth))
     ;
     auto depthResult = device.createTexture(depthDesc);
     if(!depthResult)

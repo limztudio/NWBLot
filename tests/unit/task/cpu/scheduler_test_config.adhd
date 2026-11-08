@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/cpu/types.h>
+namespace CpuTaskSchedulerTestSupport{
+using TestSchedulerConfig = ::NWB::Core::CpuTaskSchedulerConfig;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_CompletionTimeoutMS = 10000u;
+const u32 s_ProfilingPollIntervalMS = 1u;
+const Name s_CpuProfilingNameTestsCpuScope = "tests.cpu.scope";
+const Name s_CpuProfilingNameTestsCpuTask = "tests.cpu.task";
+const Name s_CpuProfilingNameTestsCpuLocalName = "tests.cpu.local_name";
+const Name s_CpuProfilingNameTestsCpuEmptyScope = "tests.cpu.empty_scope";
+const Name s_CpuProfilingNameTestsCpuCompletedScope = "tests.cpu.completed_scope";
+const Name s_CpuProfilingNameTestsCpuCanceledScope = "tests.cpu.canceled_scope";
+
+
+class InlineRangeFailure{
+    public i32 code = 0;
+}
+
+
+TestSchedulerConfig HomogeneousWorkers(in u32 count){
+    TestSchedulerConfig config = TestSchedulerConfig();
+    config.workerCount = count;
+    config.heterogeneous = false;
+    return config;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

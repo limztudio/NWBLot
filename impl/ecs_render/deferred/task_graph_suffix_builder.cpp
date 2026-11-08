@@ -9,6 +9,7 @@
 #include <impl/ecs_render/deferred/task_graph_frame_recovery_task.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -90,7 +91,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
         desc.setInitialState(Core::ResourceStates::Unknown);
         return m_graph.importTexture(texture, desc);
     };
-    const auto compositeColorResult = importFirstWriteTexture(inputs.targets.compositeColor, Name("render.deferred_composite.composite_color"), "Composite Color");
+    const auto compositeColorResult = importFirstWriteTexture(inputs.targets.compositeColor, Name(s_RenderNameRenderDeferredCompositeCompositeColor), "Composite Color");
     const Core::GpuGraphResourceId compositeBindlessSlots = inputs.currentBindlessSlots;
     if(!compositeColorResult || !compositeBindlessSlots.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
@@ -120,7 +121,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const Array<Core::GpuTaskId, 4u> compositeDependencies = { inputs.lightingTask, inputs.avboitFinalTask, inputs.refractionResolveTask, inputs.reflectionGraph.completion, };
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
-        .setIdentity(Name("render.deferred_composite"))
+        .setIdentity(Name(s_RenderNameRenderDeferredComposite))
         .setMarkerLabel(RendererGpuPassText::s_DeferredCompositeLabel)
         .setScheduling(compositeScheduling)
         .setDependencies(compositeDependencies)
@@ -140,7 +141,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const auto backBufferAvailabilityResult =
         m_graph.importExternalCompletion(
             Core::GpuExternalCompletionDesc{}
-                .setIdentity(Name("render.deferred_present.backbuffer_availability"))
+                .setIdentity(Name(s_RenderNameRenderDeferredPresentBackbufferAvailability))
                 .setMarkerLabel("Presentation Back Buffer Availability")
                 .setToken(presentationFrame.backBuffer.availabilityCompletion)
         )
@@ -151,7 +152,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     }
     const Core::GpuExternalCompletionId backBufferAvailability = *backBufferAvailabilityResult;
 
-    Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(Name("render.deferred_present.backbuffer"), "Presentation Back Buffer");
+    Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(Name(s_RenderNameRenderDeferredPresentBackbuffer), "Presentation Back Buffer");
     backBufferDesc.setInitialState(presentationFrame.backBuffer.nativeInitialState).setInitialAvailabilityCompletion(backBufferAvailability).setExternalFinalState(Core::ResourceStates::Present);
     const auto backbufferResult = m_graph.importTexture(presentationFrame.backBuffer.texture, backBufferDesc);
     if(!backbufferResult){
@@ -187,7 +188,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
         presentDependencies[presentDependencyCount++] = outputLayer.readyTask;
     Core::GpuTaskDesc presentDesc;
     presentDesc
-        .setIdentity(Name("render.deferred_present"))
+        .setIdentity(Name(s_RenderNameRenderDeferredPresent))
         .setMarkerLabel(RendererGpuPassText::s_DeferredPresentLabel)
         .setScheduling(presentScheduling)
         .setDependencies({ presentDependencies.data(), presentDependencyCount })
@@ -207,8 +208,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
             .asyncFinalTiming = asyncFinalTiming,
             .timingTicket = presentTimingTicket,
             .shadowVisibilityTask = shadowVisibilityTask,
-        }
-    );
+        });
     if(!presentTaskResult){
         result.presentTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
@@ -234,7 +234,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     frameTimingEndScheduling.forceSubmissionBoundary = true;
     frameTimingEndScheduling.allowPacketMerge = false;
     Core::GpuTaskDesc frameTimingEndDesc;
-    frameTimingEndDesc.setIdentity(Name("render.frame_timing_end")).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies({ &frameTimingEndDependency, 1u });
+    frameTimingEndDesc.setIdentity(Name(s_RenderNameRenderFrameTimingEnd)).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies({ &frameTimingEndDependency, 1u });
     const auto frameTimingEndTaskResult = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
     if(!frameTimingEndTaskResult){
         result.frameTimingEndTask = {};

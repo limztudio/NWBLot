@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/optics/coincident_volumes.h>
 
 #include <core/alloc/general.h>
@@ -25,8 +27,8 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 struct SelectionContext{
-    Core::Alloc::GlobalArena arena{ Name("tests/coincident_optical_volumes/selection") };
-    Core::Alloc::ScratchArena scratch{ Name("tests/coincident_optical_volumes/scratch") };
+    Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesSelection) };
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesScratch) };
     RendererOpticalVolumeSelection selection{ arena };
 };
 
@@ -98,7 +100,7 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
     Array<CoincidentOpticalVolumeCandidate, 3> source = { MakeCandidate(200u), MakeCandidate(1u), MakeCandidate(300u) };
     source[1].entity = Core::ECS::EntityID(1u, 1u);
     for(auto& candidate : source){
-        candidate.group = Name("tests/coincident_optical_volumes/tie");
+        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTie);
         candidate.priority = 3;
     }
     const Array<Array<u32, 3>, 6> permutations = {{
@@ -118,8 +120,8 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
 TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries){
     SelectionContext context;
     Array<CoincidentOpticalVolumeCandidate, 9> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u) };
-    const Name firstGroup("tests/coincident_optical_volumes/first");
-    const Name secondGroup("tests/coincident_optical_volumes/second");
+    const Name firstGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCoincidentOpticalVolumesFirst;
+    const Name secondGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCoincidentOpticalVolumesSecond;
     candidates[2].group = firstGroup;
     candidates[3].group = firstGroup;
     candidates[4].group = secondGroup;
@@ -128,7 +130,7 @@ TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries)
     candidates[6].mesh = Core::Assets::AssetRef<Mesh>("tests/coincident_optical_volumes/other_mesh");
     candidates[7].group = firstGroup;
     candidates[7].material = Core::Assets::AssetRef<Material>("tests/coincident_optical_volumes/other_glass");
-    candidates[8].group = Name("tests/coincident_optical_volumes/third");
+    candidates[8].group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesThird);
 
     context.selection.select(candidates, context.scratch);
 
@@ -142,7 +144,7 @@ TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInE
     SelectionContext context;
     Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     for(auto& candidate : candidates)
-        candidate.group = Name("tests/coincident_optical_volumes/translation");
+        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTranslation);
     candidates[1].position.x = 0.0000001f;
     candidates[2].position.y = 0.0000001f;
     candidates[3].position.z = 0.0000001f;
@@ -157,7 +159,7 @@ TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBounda
     SelectionContext context;
     Array<CoincidentOpticalVolumeCandidate, 8> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
     for(auto& candidate : candidates)
-        candidate.group = Name("tests/coincident_optical_volumes/transforms");
+        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTransforms);
     candidates[1].rotation = Float4(0.6f, 0.f, 0.f, 0.8f);
     candidates[2].rotation = Float4(0.f, 0.6f, 0.f, 0.8f);
     candidates[3].rotation = Float4(0.f, 0.f, 0.6f, 0.8f);

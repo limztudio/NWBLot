@@ -187,21 +187,21 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
 
     AvboitClearChainBuilder avboitClearChainBuilder(m_graph, m_avboitSystem);
     const auto avboitClearChainResult = avboitClearChainBuilder.declare(
-        AvboitClearChainInputs{
-            .lowRaster = inputs.resources.avboitLowRaster,
-            .accumColor = inputs.resources.avboitAccumColor,
-            .accumExtinction = inputs.resources.avboitAccumExtinction,
-            .foregroundColor = inputs.resources.avboitForegroundColor,
-            .foregroundExtinction = inputs.resources.avboitForegroundExtinction,
-            .transmittance = inputs.resources.avboitTransmittance,
-            .coverage = inputs.resources.avboitCoverage,
-            .depthWarp = inputs.resources.avboitDepthWarp,
-            .control = inputs.resources.avboitControl,
-            .extinction = inputs.resources.avboitExtinction,
-            .extinctionOverflow = inputs.resources.avboitExtinctionOverflow,
-            .uploadTask = occupancyUploadChainResult->uploadTask,
-            .clearTargets = inputs.clearTargets,
-        },
+        AvboitClearChainInputs(
+            inputs.resources.avboitLowRaster,
+            inputs.resources.avboitAccumColor,
+            inputs.resources.avboitAccumExtinction,
+            inputs.resources.avboitForegroundColor,
+            inputs.resources.avboitForegroundExtinction,
+            inputs.resources.avboitTransmittance,
+            inputs.resources.avboitCoverage,
+            inputs.resources.avboitDepthWarp,
+            inputs.resources.avboitControl,
+            inputs.resources.avboitExtinction,
+            inputs.resources.avboitExtinctionOverflow,
+            occupancyUploadChainResult->uploadTask,
+            inputs.clearTargets
+        ),
         timing.clearTimingState
     );
     if(!avboitClearChainResult){
@@ -240,8 +240,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
             .depthWarpTimingTicket = timing.depthWarpTimingTicket,
             .timingFeedback = m_timingFeedback,
             .hasTransparentRenderers = inputs.hasTransparentRenderers,
-        }
-    );
+        });
     if(!avboitDepthWarpStageResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT inputs.resources.depth-warp graph task"));
         return MakeUnexpected(Failure{});
@@ -345,8 +344,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
             .extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask,
             .integrationTimingTicket = timing.integrationTimingTicket,
             .timingFeedback = m_timingFeedback,
-        }
-    )){
+        })){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return false;
     }

@@ -129,10 +129,8 @@ static constexpr u32 s_QueryRetryCount = 4u;
             if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
                 return MakeUnexpected(Failure{});
             const auto& cpuSet = information->CpuSet;
-            const b8 permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group)noexcept{ return group == cpuSet.Group; }
-            ) != processGroups.end();
-            const b8 permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id)noexcept{ return id == cpuSet.Id; }
-            ) != defaultSets.end();
+            const b8 permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group)noexcept{ return group == cpuSet.Group; }) != processGroups.end();
+            const b8 permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id)noexcept{ return id == cpuSet.Id; }) != defaultSets.end();
             const b8 reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
             b8 permittedMask = true;
             if(processMask != 0u && systemMask != 0u){

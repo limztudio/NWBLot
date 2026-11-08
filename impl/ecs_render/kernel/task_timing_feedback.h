@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/kernel/timing_policy.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -22,11 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RendererTaskTimingFeedbackPolicyTransition{
-    Core::GpuTaskTimingFeedbackPolicy previousPolicy;
-    Core::GpuTaskTimingFeedbackPolicy requestedPolicy;
-    RendererTaskTimingFeedbackCollectionAction::Enum action = RendererTaskTimingFeedbackCollectionAction::None;
-};
+static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
 
 [[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, b8 rendererActive, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept;
 void ResolveRendererTaskTimingFeedbackPolicyTransition(const RendererTaskTimingFeedbackPolicyTransition& transition, b8 collectionUpdated, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept;

@@ -73,13 +73,12 @@ Expected<CookVector<Path>> ShaderIncludeDirectories::Build(
     IncludeDirectoryScratchSet seenIncludeDirectories(0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena);
 
     CookVector<Path> includeDirectories(arena);
-    if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root count overflow for entry '{}'"), ConvertString(entry.name));
+    const auto capacity = TryComputeShaderIncludeRootCapacity(entry.name, entry.includeRoots.size(), implicitIncludeRoots.size());
+    if(!capacity)
         return MakeUnexpected(Failure{});
-    }
 
-    includeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
-    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
+    includeDirectories.reserve(*capacity);
+    seenIncludeDirectories.reserve(*capacity);
 
     for(const NotNull<const Path*> implicitIncludeRoot : implicitIncludeRoots){
         if(!ShaderIncludeDirectories::Append(*implicitIncludeRoot, entry, scratchArena, includeDirectories, seenIncludeDirectories))

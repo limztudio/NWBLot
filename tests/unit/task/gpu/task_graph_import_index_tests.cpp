@@ -4,12 +4,13 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/common/test_context.h>
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
 
 #include <global/text_utils.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -26,12 +27,7 @@ namespace __hidden_task_graph_import_index_tests{
 using namespace NWB;
 using Tests::TaskGraphTestUtils::IndexedName;
 
-struct GraphStamp{
-    u64 generation;
-    u64 revision;
-    usize resources;
-    usize sets;
-};
+using GraphStamp = NWB::Tests::TaskGraphTestUtils::GraphStamp;
 
 [[nodiscard]] static Core::GpuGraphResourceDesc ResourceDescription(const Name& identity, Core::GpuGraphResourceType::Enum type)noexcept{
     return Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Graph Import Index Resource").setType(type).setInitialState(Core::ResourceStates::Unknown);
@@ -40,7 +36,7 @@ struct GraphStamp{
 [[nodiscard]] static GraphStamp ReadStamp(const Core::GpuTaskGraph& graph){
     const Core::GpuTaskGraph::DeclarationReadView view(graph);
     EXPECT_TRUE(view.valid());
-    return GraphStamp{ view.generation(), view.declarationRevision(), view.resourceCount(), view.resourceSetCount() };
+    return GraphStamp{ .generation = view.generation(), .revision = view.declarationRevision(), .resources = view.resourceCount(), .sets = view.resourceSetCount() };
 }
 
 static void ExpectUnchanged(const Core::GpuTaskGraph& graph, const GraphStamp& before){
@@ -52,8 +48,8 @@ static void ExpectUnchanged(const Core::GpuTaskGraph& graph, const GraphStamp& b
 }
 
 struct ImportContext{
-    Core::Alloc::GlobalArena inputArena{ Name("tests/graph_import_index/inputs") };
-    Core::Alloc::GlobalArena graphArena{ Name("tests/graph_import_index/graph") };
+    Core::Alloc::GlobalArena inputArena{ Name(NWB::Tests::TaskGraphTestUtils::s_GpuCaseGraphImportIndexInputs) };
+    Core::Alloc::GlobalArena graphArena{ Name(NWB::Tests::TaskGraphTestUtils::s_GpuCaseGraphImportIndexGraph) };
     Core::GpuTaskGraph graph{ graphArena };
     Vector<Core::GpuGraphResourceDesc, Core::Alloc::GlobalArena> genericDescriptions{ inputArena };
     Vector<Core::GpuGraphResourceSetDesc, Core::Alloc::GlobalArena> setDescriptions{ inputArena };
@@ -68,10 +64,10 @@ public:
         resources.resize(count);
         sets.resize(count);
         for(usize index = 0u; index < count; ++index){
-            const auto resourceNameResult = IndexedName(Name("tests/graph_import_index/generic"), index);
+            const auto resourceNameResult = IndexedName(Name(NWB::Tests::TaskGraphTestUtils::s_GpuCaseGraphImportIndexGeneric), index);
             ASSERT_TRUE(resourceNameResult);
             genericDescriptions[index] = ResourceDescription(*resourceNameResult, Core::GpuGraphResourceType::HazardDomain);
-            const auto secondResourceNameResult = IndexedName(Name("tests/graph_import_index/set"), index);
+            const auto secondResourceNameResult = IndexedName(Name(NWB::Tests::TaskGraphTestUtils::s_GpuCaseGraphImportIndexSet), index);
             ASSERT_TRUE(secondResourceNameResult);
             setDescriptions[index].setIdentity(*secondResourceNameResult).setMarkerLabel("Graph Import Index Set").setMembers(Span(&resources[index], 1u));
         }
@@ -87,7 +83,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
     constexpr usize s_Count = 64u;
     context.resources.resize(s_Count);
     context.sets.resize(s_Count);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/graph_import_index/identities"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::TaskGraphTestUtils::s_GpuCaseGraphImportIndexIdentities)};
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_Count);
     for(usize index = 0u; index < s_Count; ++index){
@@ -130,19 +126,19 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
 
 
 TEST(TaskGraphImportIndex, DuplicatePointerRollsBackOnlyNewIdentity){
-    Core::Alloc::GlobalArena arena{ Name("tests/graph_import_index/partial_publication") };
+    Core::Alloc::GlobalArena arena{ NWB::Tests::TaskGraphTestUtils::s_TaskGraphImportPartialPublication };
     Vector<Core::GpuTaskGraphDetail::GpuGraphResourceNode, Core::Alloc::GlobalArena> resources(arena);
     resources.resize(32u);
     for(usize index = 0u; index < resources.size(); ++index){
-        const auto name = IndexedName(Name("tests/graph_import_index/prefix"), index);
+        const auto name = IndexedName(NWB::Tests::TaskGraphTestUtils::s_TaskGraphImportPrefix, index);
         ASSERT_TRUE(name);
         resources[index].identity = *name;
     }
     Core::GpuGraphResourceImportIndex index(arena);
     const Core::GpuTaskGraphDetail::ResourcePointerKey pointer{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
     index.prepareResourceIndexes(resources, pointer);
-    const Name first("tests/graph_import_index/first_pointer");
-    const Name second("tests/graph_import_index/rejected_pointer");
+    const Name first(NWB::Tests::TaskGraphTestUtils::s_TaskGraphImportFirstPointer);
+    const Name second(NWB::Tests::TaskGraphTestUtils::s_TaskGraphImportRejectedPointer);
     Core::GpuGraphResourceImportIndex::Publication accepted;
     ASSERT_TRUE(index.publishResource(first.identityHash(), pointer, 32u, accepted));
     Core::GpuGraphResourceImportIndex::Publication rejected;

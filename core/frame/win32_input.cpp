@@ -17,6 +17,7 @@
 #include "input_helpers.h"
 
 #include <core/common/log.h>
+#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/win32/text_input.h>
 #include <core/os/win32/input_message.h>
 
@@ -38,14 +39,14 @@ namespace __hidden_frame_win32_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_Win32ExtendedKeyBit = 24u;
-static constexpr usize s_Win32ScancodeShift = 16u;
-static constexpr usize s_Win32PreviousKeyStateBit = 30u;
-static constexpr usize s_Win32ScancodeMask = 0x1ffu;
-static constexpr usize s_Win32VirtualScancodeMask = 0xffu;
-static constexpr usize s_Win32WordMask = 0xffffu;
-static constexpr int s_Win32KeyDownMask = 0x8000;
-static constexpr int s_Win32KeyToggleMask = 0x0001;
+static constexpr usize s_Win32ExtendedKeyBit = FrameDetail::s_FramePlatformWin32ExtendedKeyBit;
+static constexpr usize s_Win32ScancodeShift = FrameDetail::s_FramePlatformWin32ScancodeShift;
+static constexpr usize s_Win32PreviousKeyStateBit = FrameDetail::s_FramePlatformWin32PreviousKeyStateBit;
+static constexpr usize s_Win32ScancodeMask = FrameDetail::s_FramePlatformWin32ScancodeMask;
+static constexpr usize s_Win32VirtualScancodeMask = FrameDetail::s_FramePlatformWin32VirtualScancodeMask;
+static constexpr usize s_Win32WordMask = FrameDetail::s_FramePlatformWin32WordMask;
+static constexpr int s_Win32KeyDownMask = FrameDetail::s_FramePlatformWin32KeyDownMask;
+static constexpr int s_Win32KeyToggleMask = FrameDetail::s_FramePlatformWin32KeyToggleMask;
 static constexpr u32 s_AsciiDigitFirst = '0';
 static constexpr u32 s_AsciiDigitLast = '9';
 static constexpr u32 s_AsciiUpperFirst = 'A';

@@ -119,12 +119,10 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         const Core::GpuUploadBlobId indexBytes = *indexBytesResult;
         const auto vertexUploadResult = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(s_GpuVertexUploadTaskName).setMarkerLabel(s_GpuVertexUploadMarkerLabel).setScheduling(uploadScheduling),
-            Core::GpuUploadBufferTaskDesc{ .source = vertexBytes, .destination = vertices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_vertexUpload, }
-        );
+            Core::GpuUploadBufferTaskDesc{ .source = vertexBytes, .destination = vertices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_vertexUpload, });
         const auto indexUploadResult = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(s_GpuIndexUploadTaskName).setMarkerLabel(s_GpuIndexUploadMarkerLabel).setScheduling(uploadScheduling),
-            Core::GpuUploadBufferTaskDesc{ .source = indexBytes, .destination = indices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_indexUpload, }
-        );
+            Core::GpuUploadBufferTaskDesc{ .source = indexBytes, .destination = indices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_indexUpload, });
         if(!vertexUploadResult || !indexUploadResult)
             return MakeUnexpected(Failure{});
         const Core::GpuTaskId vertexUpload = *vertexUploadResult;
@@ -136,8 +134,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     }
     const auto clearResult = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(s_GpuClearTaskName).setMarkerLabel(s_GpuClearMarkerLabel).setScheduling(uploadScheduling),
-        Core::GpuClearTextureTaskDesc{ .acceptedToken = &frame->m_clear, .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
-    );
+        Core::GpuClearTextureTaskDesc{ .acceptedToken = &frame->m_clear, .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), });
     if(!clearResult)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId clear = *clearResult;
@@ -153,8 +150,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
             .setDependencies(dependencies).setResourceUses(uses)
             .setResourceVersionUses({ &produce, 1u })
             .setTiming({ 0u, ComputeGpuTimingResolutionHash(m_width, m_height), Core::GpuTaskTimingPolicy::Task }),
-        GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) }
-    );
+        GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) });
     if(!rasterResult)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskId raster = *rasterResult;

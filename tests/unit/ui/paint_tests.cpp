@@ -4,9 +4,11 @@
 
 #include "widget_fixture.h"
 
+#include <tests/common/floating_point_environment_guard.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/paint.h>
 
-#include <tests/common/floating_point_environment_guard.h>
 #include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
 
@@ -35,7 +37,7 @@ constexpr AStringView s_PanelRegion = "panel";
 class UiPaintTests : public testing::Test{
 public:
     UiPaintTests()
-        : m_arena(Name("tests/ui/paint"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaint))
         , m_skin(m_arena, Name(s_TestSkinPath))
         , m_builder(m_arena)
     {
@@ -189,7 +191,7 @@ TEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder){
 
 TEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges){
     ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 20.0f, 20.0f }));
-    EXPECT_FALSE(m_builder.drawRegion(Name("missing"), { 0.0f, 0.0f, 20.0f, 20.0f }));
+    EXPECT_FALSE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameMissing), { 0.0f, 0.0f, 20.0f, 20.0f }));
     const auto first = m_builder.freeze();
     UiSkin::RegionVector regions(m_arena);
     regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });

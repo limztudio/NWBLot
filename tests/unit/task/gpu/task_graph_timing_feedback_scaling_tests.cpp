@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,7 +54,7 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     const Array<usize, 4u> assignedQueues = { 2u, 3u, 4u, 0u };
     Core::GpuTaskId target;
     for(usize taskIndex = 0u; taskIndex < LengthOf(costs); ++taskIndex){
-        const auto identityNameResult = IndexedName(Name("tests/timing_scaling/tied/"), taskIndex);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTimingScalingTied), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         Core::GpuTaskSchedulingHint scheduling;

@@ -99,6 +99,12 @@ b8 ContainsInlineRuntimeMeshRequestLive(in Span<RuntimeMeshRequestEntry> entries
     return index < inlineCount && entries[index].found;
 }
 
+Expected<usize> TryComputeRuntimeMeshBufferByteCount(in usize elementCount, in usize elementBytes){
+    if(elementBytes != 0u && elementCount > usize.max / elementBytes)
+        return makeUnexpected(Failure());
+    return elementCount * elementBytes;
+}
+
 Expected<usize> TryComputePaddedRawByteCount(in usize logicalByteCount){
     if(logicalByteCount == 0u)
         return makeUnexpected(Failure());
@@ -224,3 +230,4 @@ b8 ValidateMeshRawBufferLogicalByteCount(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

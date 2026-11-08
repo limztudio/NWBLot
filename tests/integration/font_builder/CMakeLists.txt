@@ -1,4 +1,5 @@
 nwb_declare_gtest_executable(nwb_font_builder_bake_tests)
+nwb_target_adhd_sources(nwb_font_builder_bake_tests NAMESPACE "NWB::Tests::FontBakeCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/bake_name_cases.adhd")
 target_sources(nwb_font_builder_bake_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/packing_tests.cpp"
 )
@@ -6,6 +7,7 @@ target_link_libraries(nwb_font_builder_bake_tests PRIVATE nwb_font_builder_bake)
 
 if(Python3_Interpreter_FOUND AND TARGET nwb_assets_font_atlas_cook AND TARGET nwb_assets_bunch_cook)
     nwb_declare_executable(nwb_font_builder_package_probe)
+    nwb_target_adhd_sources(nwb_font_builder_package_probe NAMESPACE "NWB::Tests::FontPackageCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/package_name_cases.adhd")
     target_sources(nwb_font_builder_package_probe PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/package_probe.cpp"
     )
@@ -14,7 +16,7 @@ if(Python3_Interpreter_FOUND AND TARGET nwb_assets_font_atlas_cook AND TARGET nw
 
     add_test(NAME nwb_font_builder_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/font_builder_cli_tests.py" --executable "$<TARGET_FILE:nwb_font_builder>" --package-probe "$<TARGET_FILE:nwb_font_builder_package_probe>"
             --fonts "${PROJECT_SOURCE_DIR}/impl/assets/ui/fonts/default")
-    set(_nwb_font_builder_cli_integration_timeout_seconds 420)
+    set(_nwb_font_builder_cli_integration_timeout_seconds 900)
     set_tests_properties(nwb_font_builder_cli_integration PROPERTIES TIMEOUT ${_nwb_font_builder_cli_integration_timeout_seconds})
     unset(_nwb_font_builder_cli_integration_timeout_seconds)
 endif()

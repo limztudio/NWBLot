@@ -5,7 +5,9 @@
 #include "crash_symbolicate_internal.h"
 #include "minidump_image.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 
 #include <global/diagnostics.h>
 #include <global/limit.h>
@@ -34,8 +36,8 @@ namespace LoggerCrashSymbolicateDetail{
 
 using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
-inline constexpr u32 s_MaxWindowsStackFrames = 128u;
-inline constexpr AStringView s_InvalidModuleListReport = "module_load=invalid_module_list\n";
+inline constexpr u32 s_MaxWindowsStackFrames = ::NWB::Log::CrashValues::s_CrashSymbolicateWin32MaxWindowsStackFrames;
+inline constexpr AStringView s_InvalidModuleListReport = ::NWB::Log::CrashValues::s_CrashSymbolicateWin32InvalidModuleListReport;
 
 struct DumpMemoryRange{
     u64 begin = 0u;

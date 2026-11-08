@@ -10,6 +10,7 @@
 #include "aftermath.h"
 #include "swap_chain_presentation.h"
 
+#include <core/graphics/vulkan/context_labels.adhd.h>
 #include <core/common/log.h>
 
 #include <global/text_utils.h>
@@ -37,21 +38,21 @@ namespace VulkanDetail{
 using ScratchString = AString<Alloc::ScratchArena>;
 using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
 
-static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
+static constexpr u64 s_BytesPerMiB = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataBytesPerMiB;
 // HDR10 metadata mirrors the Rec.2020/ST.2084 transform.
 // Keep values named so a policy change cannot leave the advertised Vulkan metadata behind.
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryRed = { 0.708f, 0.292f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryGreen = { 0.170f, 0.797f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryBlue = { 0.131f, 0.046f };
 static constexpr VkXYColorEXT s_Hdr10WhitePointD65 = { 0.3127f, 0.3290f };
-static constexpr f32 s_Hdr10MasteringPeakLuminance = 1000.0f;
-static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
-static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
-static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
+static constexpr f32 s_Hdr10MasteringPeakLuminance = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataHdr10MasteringPeakLuminance;
+static constexpr f32 s_Hdr10MinimumLuminance = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataHdr10MinimumLuminance;
+static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataHdr10MaximumFrameAverageLightLevel;
+static constexpr u32 s_Hdr10MetadataSwapChainCount = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataHdr10MetadataSwapChainCount;
 
-inline constexpr StringView s_UnknownDebugLabel = "unknown";
-inline constexpr StringView s_DisabledQueueReason = "disabled";
-inline constexpr AStringView s_ValidationLayerName = "VK_LAYER_KHRONOS_validation";
+inline constexpr StringView s_UnknownDebugLabel = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataUnknownDebugLabel;
+inline constexpr StringView s_DisabledQueueReason = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataDisabledQueueReason;
+inline constexpr AStringView s_ValidationLayerName = NWB::Core::GraphicsBackend::VulkanDetail::s_ContextDataValidationLayerName;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

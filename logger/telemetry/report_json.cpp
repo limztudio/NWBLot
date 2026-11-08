@@ -6,6 +6,8 @@
 
 #include "memory_report.h"
 
+#include <logger/telemetry/report_values.adhd.h>
+
 #include <global/name_hash_text.h>
 #include <global/binary.h>
 #include <global/json_text.h>
@@ -26,31 +28,31 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_JsonQueueIndexFormat = "{{\"index\": {}, \"deviceGeneration\": {}}}";
-inline constexpr AStringView s_JsonInitialQueueKey = "{\"initialQueue\": ";
-inline constexpr AStringView s_JsonPlannedQueueKey = ", \"plannedQueue\": ";
-inline constexpr AStringView s_JsonAcceptedQueueKey = ", \"acceptedQueue\": ";
-inline constexpr AStringView s_JsonPreviousAcceptedQueueKey = ", \"previousAcceptedQueue\": ";
-inline constexpr AStringView s_JsonQueueClassKey = ", \"queueClass\": ";
-inline constexpr AStringView s_JsonReasonKey = ", \"reason\": ";
-inline constexpr AStringView s_JsonAcceptanceKey = ", \"acceptance\": ";
-static constexpr usize s_JsonReportReserveBytes = 1024u;
-static constexpr usize s_JsonReportBytesPerGraph = 128u;
-static constexpr usize s_JsonReportBytesPerNode = 896u;
-static constexpr usize s_JsonReportBytesPerEdge = 96u;
-static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
-static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
-static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
-static constexpr AStringView s_JsonDocumentOpen = "{\n";
-static constexpr AStringView s_JsonDocumentClose = "}\n";
-static constexpr AStringView s_JsonSectionClose = "  },\n";
-static constexpr AStringView s_JsonFieldEnd = ",\n";
-static constexpr AStringView s_JsonLastFieldEnd = "\n";
-static constexpr AStringView s_JsonRecordingKey = ", \"recording\": ";
-static constexpr AStringView s_JsonSubmissionKey = ", \"submission\": ";
-static constexpr AStringView s_JsonSecondsFormat = "{:.9}";
-static constexpr AStringView s_JsonInheritedTimelineWaitElisionCountFormat = ", \"inheritedTimelineWaitElisionCount\": {}";
-static constexpr AStringView s_JsonRecordingCountsFormat = "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, ";
+inline constexpr AStringView s_JsonQueueIndexFormat = ::NWB::Log::s_LogTelemetryReportJsonJsonQueueIndexFormat;
+inline constexpr AStringView s_JsonInitialQueueKey = ::NWB::Log::s_LogTelemetryReportJsonJsonInitialQueueKey;
+inline constexpr AStringView s_JsonPlannedQueueKey = ::NWB::Log::s_LogTelemetryReportJsonJsonPlannedQueueKey;
+inline constexpr AStringView s_JsonAcceptedQueueKey = ::NWB::Log::s_LogTelemetryReportJsonJsonAcceptedQueueKey;
+inline constexpr AStringView s_JsonPreviousAcceptedQueueKey = ::NWB::Log::s_LogTelemetryReportJsonJsonPreviousAcceptedQueueKey;
+inline constexpr AStringView s_JsonQueueClassKey = ::NWB::Log::s_LogTelemetryReportJsonJsonQueueClassKey;
+inline constexpr AStringView s_JsonReasonKey = ::NWB::Log::s_LogTelemetryReportJsonJsonReasonKey;
+inline constexpr AStringView s_JsonAcceptanceKey = ::NWB::Log::s_LogTelemetryReportJsonJsonAcceptanceKey;
+static constexpr usize s_JsonReportReserveBytes = ::NWB::Log::s_LogTelemetryReportJsonJsonReportReserveBytes;
+static constexpr usize s_JsonReportBytesPerGraph = ::NWB::Log::s_LogTelemetryReportJsonJsonReportBytesPerGraph;
+static constexpr usize s_JsonReportBytesPerNode = ::NWB::Log::s_LogTelemetryReportJsonJsonReportBytesPerNode;
+static constexpr usize s_JsonReportBytesPerEdge = ::NWB::Log::s_LogTelemetryReportJsonJsonReportBytesPerEdge;
+static constexpr usize s_JsonReportRuntimeStatisticsBytes = ::NWB::Log::s_LogTelemetryReportJsonJsonReportRuntimeStatisticsBytes;
+static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = ::NWB::Log::s_LogTelemetryReportJsonJsonReportPhysicalQueueRuntimeStatisticsBytes;
+static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = ::NWB::Log::s_LogTelemetryReportJsonJsonReportPacketSubmissionStatisticsBytes;
+static constexpr AStringView s_JsonDocumentOpen = ::NWB::Log::s_LogTelemetryReportJsonJsonDocumentOpen;
+static constexpr AStringView s_JsonDocumentClose = ::NWB::Log::s_LogTelemetryReportJsonJsonDocumentClose;
+static constexpr AStringView s_JsonSectionClose = ::NWB::Log::s_LogTelemetryReportJsonJsonSectionClose;
+static constexpr AStringView s_JsonFieldEnd = ::NWB::Log::s_LogTelemetryReportJsonJsonFieldEnd;
+static constexpr AStringView s_JsonLastFieldEnd = ::NWB::Log::s_LogTelemetryReportJsonJsonLastFieldEnd;
+static constexpr AStringView s_JsonRecordingKey = ::NWB::Log::s_LogTelemetryReportJsonJsonRecordingKey;
+static constexpr AStringView s_JsonSubmissionKey = ::NWB::Log::s_LogTelemetryReportJsonJsonSubmissionKey;
+static constexpr AStringView s_JsonSecondsFormat = ::NWB::Log::s_LogTelemetryReportJsonJsonSecondsFormat;
+static constexpr AStringView s_JsonInheritedTimelineWaitElisionCountFormat = ::NWB::Log::s_LogTelemetryReportJsonJsonInheritedTimelineWaitElisionCountFormat;
+static constexpr AStringView s_JsonRecordingCountsFormat = ::NWB::Log::s_LogTelemetryReportJsonJsonRecordingCountsFormat;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/graph_types.adhd.h>
 #include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/assets/graphics/bvh/scene_refit_constants.h>
 
@@ -114,11 +115,6 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct SoftwareSceneRefitGraphTasks{
-    Core::GpuTaskId inputUpload;
-    Core::GpuTaskId refit;
-};
 
 // Both tasks must share the accepting packet with all mesh builds and the scene upload.
 [[nodiscard]] Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareSceneRefitHandle& snapshot, Core::GpuGraphResourceId sceneNodes, Core::GpuTaskId dependency, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena);

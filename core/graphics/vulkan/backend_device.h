@@ -59,7 +59,7 @@ private:
 private:
     static constexpr u64 s_SubmissionDrainBit = static_cast<u64>(1u) << 63u;
     static constexpr u64 s_SubmissionOperationCountMask = s_SubmissionDrainBit - 1u;
-    static constexpr u32 s_CompleteTimestampValidBits = 64u;
+    static constexpr u32 s_CompleteTimestampValidBits = VulkanDefaults::s_VulkanDefaultCompleteTimestampValidBits;
 
 
 private:

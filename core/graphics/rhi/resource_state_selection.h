@@ -30,8 +30,8 @@ public:
 
 
 private:
-    static constexpr usize s_InlineCapacity = 32u;
-    static constexpr usize s_BucketCountFactor = 2u;
+    static constexpr usize s_InlineCapacity = NWB::Core::HardwareRayTracingPolicy::s_ResourceStateSelectionInlineCapacity;
+    static constexpr usize s_BucketCountFactor = NWB::Core::HardwareRayTracingPolicy::s_ResourceStateSelectionBucketCountFactor;
     static constexpr usize s_BytesPerEntry = sizeof(Entry) + sizeof(usize) * s_BucketCountFactor;
 
     [[nodiscard]] static usize HashIdentity(void* resource, b8 texture)noexcept;

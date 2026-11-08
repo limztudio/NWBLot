@@ -4,6 +4,8 @@
 
 #include "paint_text_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -114,7 +116,7 @@ TEST_F(UiPaintOverlayTests, OverlayEscapesParentClipAndRestoresItsExactPriorClip
 TEST_F(UiPaintOverlayTests, EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport){
     m_builder.pushClip({ 50.0f, 50.0f, 5.0f, 5.0f });
     ASSERT_TRUE(m_builder.beginOverlay(2u));
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), { -20.0f, -10.0f, 160.0f, 100.0f }));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), { -20.0f, -10.0f, 160.0f, 100.0f }));
     ASSERT_TRUE(m_builder.endOverlay());
     ASSERT_TRUE(m_builder.popClip());
     const DrawSnapshot snapshot = m_builder.freeze();
@@ -269,7 +271,7 @@ TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAn
     ASSERT_TRUE(m_builder.drawSdfGlyph(distance, 3u, rectangle, uv));
     ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
     ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), rectangle));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
     ASSERT_TRUE(m_builder.drawSdfGlyph(distance, 1u, rectangle, uv));
     ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
     const DrawSnapshot snapshot = m_builder.freeze();

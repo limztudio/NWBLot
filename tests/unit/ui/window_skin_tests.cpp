@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,26 +51,29 @@ TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChanging
     for(UiSkinRegion& region : regions){
         region.rectangle.x += 128u;
         region.rectangle.y = 8u;
-        if(region.name == Name("window.normal")){
+        if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
             region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
             region.minimumWidth = 280.0f;
             region.minimumHeight = 200.0f;
         }
-        else if(region.name == Name("window.title")){
+        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
             region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
             region.minimumHeight = 44.0f;
         }
-        else if(region.name == Name("window.collapse")){
+        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
             region.minimumWidth = 26.0f;
             region.minimumHeight = 28.0f;
         }
-        else if(region.name == Name("button.normal") || region.name == Name("button.hover") || region.name == Name("button.pressed") || region.name == Name("button.disabled")){
+        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
+            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
+            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
+            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
             region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
             region.minimumWidth = 120.0f;
             region.minimumHeight = 60.0f;
         }
     }
-    regions.push_back({ Name("window.resize"), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, UiSkinDrawMode::Sprite });
+    regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, UiSkinDrawMode::Sprite });
     const Core::Assets::AssetRef<Texture> replacementTexture("tests/ui/alternate_texture");
     m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
     ASSERT_TRUE(m_skin.validatePayload());

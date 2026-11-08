@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -65,14 +66,14 @@ TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscr
     Core::GpuTimingRecorder recorder(testArena.arena, timingSink);
     GpuTimingSubscriptionCapture firstCapture;
     GpuTimingSubscriptionCapture secondCapture;
-    const Name firstScope("tests.gpu_timing.feedback.first");
-    const Name sharedScope("tests.gpu_timing.feedback.shared");
-    const Name secondScope("tests.gpu_timing.feedback.second");
-    const Name metricFirstInput("tests.gpu_timing.feedback.metric_first_input");
-    const Name metricSecondInput("tests.gpu_timing.feedback.metric_second_input");
-    const Name metricAlternateFirstInput("tests.gpu_timing.feedback.metric_alternate_first_input");
-    const Name metricAlternateSecondInput("tests.gpu_timing.feedback.metric_alternate_second_input");
-    const Name metricOutput("tests.gpu_timing.feedback.metric_output");
+    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackFirst;
+    const Name sharedScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackShared;
+    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackSecond;
+    const Name metricFirstInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricFirstInput;
+    const Name metricSecondInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricSecondInput;
+    const Name metricAlternateFirstInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateFirstInput;
+    const Name metricAlternateSecondInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateSecondInput;
+    const Name metricOutput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricOutput;
     const Array<Name, 2u> firstScopes = { firstScope, sharedScope };
     const Array<Name, 2u> secondScopes = { sharedScope, secondScope };
     const Array<Name, 2u> invalidScopes = { firstScope, s_NameNone };
@@ -220,7 +221,7 @@ TEST(TimerQueryResult, RejectsUnknownOrOutOfRangeWidths){
 }
 
 TEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversion){
-    static constexpr u64 s_LargeTick = 9007199254740993u;
+    static constexpr u64 s_LargeTick = GraphicsTimingCases::s_GpuTimingLargeTick;
     const Core::GpuComparableTimestampRange first{ .beginTicks = s_LargeTick, .endTicks = s_LargeTick + 5u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, };
     const Core::GpuComparableTimestampRange second{ .beginTicks = s_LargeTick + 4u, .endTicks = s_LargeTick + 8u, .secondsPerTick = 0.25, .physicalQueue = { .index = 3u, .deviceGeneration = 7u }, };
 

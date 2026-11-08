@@ -19,6 +19,7 @@
 #include <windows.h>
 
 #include <core/common/log.h>
+#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/win32/text_input.h>
 
 #include <global/compile.h>
@@ -113,9 +114,9 @@ namespace FrameDetail{
 static Frame* s_Frame = nullptr;
 
 static constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
-static constexpr i32 s_PaintFailureExitCode = 1;
+static constexpr i32 s_PaintFailureExitCode = FrameDetail::s_FramePlatformPaintFailureExitCode;
 
-static constexpr StringView s_WindowLifecycleCategory = "frame_window_lifecycle";
+static constexpr StringView s_WindowLifecycleCategory = FrameDetail::s_FramePlatformWindowLifecycleCategory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

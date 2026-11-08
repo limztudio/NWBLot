@@ -3,6 +3,7 @@
 
 
 #include "compiler_internal.h"
+#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -286,7 +287,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         hasTaskProducedVersions = hasTaskProducedVersions || version.origin == GpuGraphResourceVersionOrigin::TaskProduced;
     }
 
-    constexpr usize s_LinearDuplicateCheckUseLimit = 8u;
+    constexpr usize s_LinearDuplicateCheckUseLimit = s_GpuTaskLinearDuplicateCheckUseLimit;
     Vector<GpuTaskId, Alloc::ScratchArena> producers(hasTaskProducedVersions ? graph.resourceVersionCount() : 0u, scratchArena);
     Optional<Vector<u32, Alloc::ScratchArena>> lastVersionUseTasks;
     usize resourceVersionUseCount = 0u;

@@ -4,6 +4,8 @@
 
 #include "reflection_statistics_test_helpers.h"
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/reflection/history.h>
 
 #include <core/alloc/general.h>
@@ -47,7 +49,7 @@ TEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues){
 }
 
 TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling){
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/single_sample_history")};
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionSingleSampleHistory)};
     auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
@@ -78,7 +80,7 @@ TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedS
 }
 
 TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry){
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/late_reset_history")};
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionLateResetHistory)};
     auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
@@ -261,7 +263,7 @@ TEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch){
 }
 
 TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/history_lease")};
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionHistoryLease)};
     auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
@@ -269,7 +271,7 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).has_value());
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests.history.lease")).setMarkerLabel("History Lease");
+    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsHistoryLease)).setMarkerLabel("History Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, 2u);
     {
         const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)});

@@ -4,6 +4,8 @@
 
 #include "shadow_acceleration_finalize_builder.h"
 
+#include <impl/ecs_render/shadow/types.adhd.h>
+
 #include <core/common/log.h>
 
 
@@ -62,7 +64,7 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
             accelStructFinalizeResources.push_back(use.resource);
         const auto accelStructFinalizeSetResult = m_graph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.shadow_prepare.accel_struct_finalize_resources"))
+                .setIdentity(Name(s_ShadowPrepareAccelStructFinalizeResources))
                 .setMarkerLabel("Shadow Prepare Accel-Struct Finalize Resources")
                 .setMembers(accelStructFinalizeResources)
         );
@@ -80,7 +82,7 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
     accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc accelStructFinalizeDesc;
     accelStructFinalizeDesc
-        .setIdentity(Name("render.shadow_prepare.accel_struct_finalize"))
+        .setIdentity(Name(s_ShadowPrepareAccelStructFinalize))
         .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
         .setScheduling(accelStructFinalizeScheduling)
         .setDependencies({ &prepareTask, 1u })
@@ -90,8 +92,7 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
     ;
     const auto deferredShadowPrepareAccelStructFinalizeTaskResult = m_graph.addTask< ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask >(
         accelStructFinalizeDesc,
-        ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
-    );
+        ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{});
     if(!deferredShadowPrepareAccelStructFinalizeTaskResult){
         outTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));

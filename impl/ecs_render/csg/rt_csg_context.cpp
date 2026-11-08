@@ -3,9 +3,9 @@
 
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
-
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,7 +110,7 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     if(buffer && buffer->getCreationDescription().byteSize >= byteCount)
         return RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *buffer, handle);
     Core::BufferDesc desc;
-    desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("raytrace_csg_context")).enableAutomaticStateTracking(Core::ResourceStates::Common);
+    desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_CsgContextDebug)).enableAutomaticStateTracking(Core::ResourceStates::Common);
     auto replacementResult = m_graphics.createBuffer(desc);
     if(!replacementResult)
         return false;

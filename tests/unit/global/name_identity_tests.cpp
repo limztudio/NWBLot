@@ -3,13 +3,14 @@
 
 
 #include <tests/common/test_context.h>
-
-#include <gtest/gtest.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <core/common/name_symbols.h>
 
 #include <global/name_hash_text.h>
 #include <global/diagnostics.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +61,7 @@ public:
 
 
 TEST(Global, DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdentity){
-    const Name base("tests/derived_name/identity");
+    const Name base = NWB::Tests::GlobalCases::s_DerivedNameTestBase;
     constexpr AStringView s_Suffix = "suffix";
     constexpr AStringView s_UpperSuffix = "SUFFIX";
     constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
@@ -317,10 +318,7 @@ TEST(Global, OptionalNameTextPreservesAbsenceAndOwnedContainerErrors){
 }
 
 TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
-    struct RecursiveProbe{
-        u32 recordCount = 0u;
-        b8 nestedAccepted = false;
-    };
+    using RecursiveProbe = NWB::Tests::GlobalCases::NameRecursiveProbe;
     NameSymbolCallbackProbe restoreCallbacks;
     RecursiveProbe probe;
     SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{

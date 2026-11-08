@@ -29,10 +29,8 @@ NWB_IMPL_BEGIN
 b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     using namespace MaterialCookDetail;
     for(const MaterialCookEntry& entry : materialEntries){
-        if(entry.bxdfSource.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), ConvertString(AStringView(entry.virtualPath)));
+        if(!ValidateDeferredBxdfSource(AStringView(entry.virtualPath), AStringView(entry.bxdfSource)))
             return false;
-        }
     }
 
     Vector<AStringView, ScratchArena> uniqueSources(scratchArena);
@@ -42,10 +40,8 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
     Sort(uniqueSources.begin(), uniqueSources.end());
 
     uniqueSources.erase(Unique(uniqueSources.begin(), uniqueSources.end()), uniqueSources.end());
-    if(uniqueSources.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique deferred bxdfs"));
+    if(!ValidateDeferredBxdfCount(uniqueSources.size()))
         return false;
-    }
 
     for(MaterialCookEntry& entry : materialEntries){
         const AStringView source(entry.bxdfSource);
@@ -64,10 +60,8 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
     Sort(uniqueSurfaces.begin(), uniqueSurfaces.end());
 
     uniqueSurfaces.erase(Unique(uniqueSurfaces.begin(), uniqueSurfaces.end()), uniqueSurfaces.end());
-    if(uniqueSurfaces.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique material surfaces"));
+    if(!ValidateMaterialSurfaceCount(uniqueSurfaces.size()))
         return false;
-    }
 
     for(MaterialCookEntry& entry : materialEntries){
         if(entry.surfaceSource.empty()){

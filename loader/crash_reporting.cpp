@@ -4,9 +4,11 @@
 
 #include "crash_reporting.h"
 
+#include <loader/runtime_constants.adhd.h>
+
 #include <core/common/log.h>
 #include <core/crash/module.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 #include <core/graphics/rhi/gpu_crash_diagnostics.h>
 
 #include <global/filesystem/executable_paths.h>
@@ -22,15 +24,6 @@ namespace LoaderDetail{
 
 
 using CrashArena = Core::Alloc::PersistentArena;
-
-inline constexpr AStringView s_FallbackExecutableDirectory = ".";
-inline constexpr AStringView s_FallbackExecutableName = "nwb";
-inline constexpr AStringView s_UnknownBuildLabel = "unknown";
-inline constexpr AStringView s_RuntimeCrashMetadataKey = "runtime";
-inline constexpr AStringView s_LoaderCrashMetadataValue = "loader";
-inline constexpr AStringView s_GpuDebugCrashMetadataKey = "gpu_debug";
-inline constexpr AStringView s_EnabledText = "true";
-inline constexpr AStringView s_DisabledText = "false";
 
 
 b8 CrashReporting::Install(CrashArena& crashArena){
@@ -90,3 +83,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

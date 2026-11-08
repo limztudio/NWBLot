@@ -73,7 +73,7 @@ SkeletonHeaderBinary MakeSkeletonHeaderBinary(in u64 jointCount){
 }
 
 b8 IsFiniteSkeletonJointRow(in VectorSingle row){
-    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+    return isFinite(row);
 }
 
 b8 IsFiniteSkeletonJointMatrix(in MatrixSingle matrix){

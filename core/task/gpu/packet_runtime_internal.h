@@ -8,6 +8,7 @@
 #include "packet_runtime.h"
 
 #include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/packet_runtime_statistics.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,8 +135,8 @@ private:
         Alloc::ScratchArena& stateFanInScratchArena,
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuRecordedGraph& outRecordedGraph,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        GpuPacketRecordingAbort* deferredAbort = nullptr
+        GpuCommandIrCapture* outCommandIrCapture = nullptr,
+        GpuPacketRecordingAbort* outDeferredAbort = nullptr
     )const;
     [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,
@@ -175,12 +176,7 @@ namespace GpuPacketRuntimeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PacketWaitStatistics{
-    usize plannedWaitTokenCount = 0u;
-    usize sameQueueWaitElisionCount = 0u;
-    usize timelineWaitCount = 0u;
-    usize mergedTimelineWaitCount = 0u;
-};
+using PacketWaitStatistics = ::NWB::Core::GpuPacketWaitStatisticsValue;
 
 [[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(GpuPhysicalQueueId queue, Span<const QueueSubmissionToken> waitTokens, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;

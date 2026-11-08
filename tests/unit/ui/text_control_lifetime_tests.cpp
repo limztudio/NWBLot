@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -28,7 +29,7 @@ using namespace NWB::Impl::Ui;
 class UiTextControlLifetimeTests : public UiTestSupport::RouterTestFixture{
 public:
     UiTextControlLifetimeTests()
-        : RouterTestFixture(Name("tests/ui/text_control_lifetime"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextControlLifetime))
     {
         HitTarget& host = m_targets[0u];
         host.id = { 1u };

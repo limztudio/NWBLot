@@ -10,6 +10,7 @@
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/refraction/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,11 +70,11 @@ b8 AvboitRefractionCaptureResources::appendCsg(
     if(
         !intervalResult
         || !rangesResult
-        || !appendUpload(Name("render.refraction.capture.csg_ranges_upload"), *rangesResult, csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData))
+        || !appendUpload(Name(s_RenderIdentityRenderRefractionCaptureCsgRangesUpload), *rangesResult, csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData))
         || !cuttersResult
-        || !appendUpload(Name("render.refraction.capture.csg_cutters_upload"), *cuttersResult, csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData))
+        || !appendUpload(Name(s_RenderIdentityRenderRefractionCaptureCsgCuttersUpload), *cuttersResult, csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData))
         || !clipResult
-        || !appendUpload(Name("render.refraction.capture.csg_context_upload"), *clipResult, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots))
+        || !appendUpload(Name(s_RenderIdentityRenderRefractionCaptureCsgContextUpload), *clipResult, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots))
     )
         return false;
     const Core::GpuGraphResourceId interval = *intervalResult;

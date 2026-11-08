@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const AStringView s_Extension = ".nwba";
+const AStringView s_ManifestFilename = "assets.list";
+const u32 s_BuiltAssetMagic = 0x4142574eu;
+const u32 s_BuiltAssetVersion = 1u;
+const AStringView s_BuiltAssetTemporaryNamePrefix = ".nwb_";
+const AStringView s_BuiltAssetTemporaryNameExtension = ".tmp";
+const u64 s_BuiltAssetTemporarySequenceStep = 1u;
+const u32 s_BuiltAssetMaxRenameAttempts = 16u;
+const usize s_BuiltAssetFilenameHexFieldCount = 3u;
+const StringView s_BuiltAssetWarningEventName = "warning";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

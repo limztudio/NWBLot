@@ -30,7 +30,7 @@ Core::ECS::EntityID ReflectionOpticalCsgBuilder::addPlane(const Core::ECS::Entit
     auto cutterEntity = m_world.createEntity();
     auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
     cutter.receiverGroup = group;
-    cutter.shapeType = Name("engine/csg/plane");
+    cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
     Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = normalDistance;
     AssignCsgCutterParameters(parameters, cutter);
@@ -43,7 +43,7 @@ void ReflectionOpticalCsgBuilder::addBox(const Core::ECS::EntityID receiver, con
     auto cutterEntity = m_world.createEntity();
     auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
     cutter.receiverGroup = group;
-    cutter.shapeType = Name("engine/csg/box");
+    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
     Impl::CsgBoxShapeParameters parameters;
     parameters.halfExtents = halfExtents;
     AssignCsgCutterParameters(parameters, cutter);

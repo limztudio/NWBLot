@@ -4,6 +4,7 @@
 
 #include "material_system.h"
 #include "material_pipeline_builder.h"
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
 
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
@@ -62,22 +63,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
-    switch(resources.renderPath){
-    case RenderPath::MeshShader:
-        if(resources.meshletPipeline)
-            return MakeNotNull(&resources);
-        break;
-    case RenderPath::VertexIndexed:
-        if(resources.indexedPipeline && resources.objectGeometryDecodePipeline)
-            return MakeNotNull(&resources);
-        break;
-    case RenderPath::ComputeEmulation:
-        if(resources.computePipeline && resources.emulationPipeline)
-            return MakeNotNull(&resources);
-        break;
-    default:
-        break;
-    }
+    if(resources.ready())
+        return MakeNotNull(&resources);
 
     auto removeFailedEntry = [&]()noexcept{
         if(inserted)
@@ -147,7 +134,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
     const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::objectVs);
-    const b8 sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const b8 sharedObjectGeometry = UsesSharedMaterialMeshShader(sharedMeshShaderAssetName, materialInfo.meshShader, shaderVariant, Core::ShaderArchive::s_DefaultVariant);
 
     Name passPixelShaderName = s_NameNone;
     Name passPixelShaderDebugName = s_InvalidPassPixelShaderDebugName;
@@ -249,22 +236,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::findRender
         return MakeUnexpected(Failure{});
 
     MaterialPipelineResources& resources = foundPipeline.value();
-    switch(resources.renderPath){
-    case RenderPath::MeshShader:
-        if(!resources.meshletPipeline)
-            return MakeUnexpected(Failure{});
-        break;
-    case RenderPath::VertexIndexed:
-        if(!resources.indexedPipeline || !resources.objectGeometryDecodePipeline)
-            return MakeUnexpected(Failure{});
-        break;
-    case RenderPath::ComputeEmulation:
-        if(!resources.computePipeline || !resources.emulationPipeline)
-            return MakeUnexpected(Failure{});
-        break;
-    default:
+    if(!resources.ready())
         return MakeUnexpected(Failure{});
-    }
 
     return MakeNotNull(&resources);
 }

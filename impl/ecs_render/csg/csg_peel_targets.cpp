@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
@@ -91,32 +92,32 @@ b8 RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     };
 
     return
-        createCsgTexture(targets.csgCapNormalFormat, Name("engine/deferred/csg_cap_back_normal"), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG cap back-normal peel target"), targets.csgCapBackNormal)
-        && createCsgTexture(targets.csgIntervalDepthFormat, Name("engine/deferred/csg_interval_depth"), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"), targets.csgIntervalDepth)
-        && createCsgTexture(targets.csgIntervalIdFormat, Name("engine/deferred/csg_interval_id"), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"), targets.csgIntervalId)
+        createCsgTexture(targets.csgCapNormalFormat, Name(s_RenderNameEngineDeferredCsgCapBackNormal), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG cap back-normal peel target"), targets.csgCapBackNormal)
+        && createCsgTexture(targets.csgIntervalDepthFormat, Name(s_RenderNameEngineDeferredCsgIntervalDepth), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"), targets.csgIntervalDepth)
+        && createCsgTexture(targets.csgIntervalIdFormat, Name(s_RenderNameEngineDeferredCsgIntervalId), targets.csgPeelLayerCount, true, NWB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"), targets.csgIntervalId)
         && createCsgTexture(
-            targets.csgReceiverEventDataFormat, Name("engine/deferred/csg_receiver_event_data"), targets.csgReceiverEventLayerCount, false,
+            targets.csgReceiverEventDataFormat, Name(s_RenderNameEngineDeferredCsgReceiverEventData), targets.csgReceiverEventLayerCount, false,
             NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event data target"), targets.csgReceiverEventData
         )
-        && createCsgTexture(targets.csgReceiverEventCountFormat, Name("engine/deferred/csg_receiver_event_count"), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"), targets.csgReceiverEventCount)
+        && createCsgTexture(targets.csgReceiverEventCountFormat, Name(s_RenderNameEngineDeferredCsgReceiverEventCount), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"), targets.csgReceiverEventCount)
         && createCsgTexture(
-            targets.csgReceiverSpanDataFormat, Name("engine/deferred/csg_receiver_span_data"), targets.csgReceiverSpanLayerCount, false,
+            targets.csgReceiverSpanDataFormat, Name(s_RenderNameEngineDeferredCsgReceiverSpanData), targets.csgReceiverSpanLayerCount, false,
             NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span data target"), targets.csgReceiverSpanData
         )
-        && createCsgTexture(targets.csgReceiverSpanCountFormat, Name("engine/deferred/csg_receiver_span_count"), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"), targets.csgReceiverSpanCount)
+        && createCsgTexture(targets.csgReceiverSpanCountFormat, Name(s_RenderNameEngineDeferredCsgReceiverSpanCount), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"), targets.csgReceiverSpanCount)
         && createCsgTexture(
-            targets.csgRemovedIntervalDepthFormat, Name("engine/deferred/csg_removed_interval_depth"), targets.csgRemovedIntervalLayerCount, false,
+            targets.csgRemovedIntervalDepthFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalDepth), targets.csgRemovedIntervalLayerCount, false,
             NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval depth target"), targets.csgRemovedIntervalDepth
         )
         && createCsgTexture(
-            targets.csgRemovedIntervalCapNormalFormat, Name("engine/deferred/csg_removed_interval_cap_normal"), targets.csgRemovedIntervalLayerCount, false,
+            targets.csgRemovedIntervalCapNormalFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal), targets.csgRemovedIntervalLayerCount, false,
             NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval cap-normal target"), targets.csgRemovedIntervalCapNormal
         )
         && createCsgTexture(
-            targets.csgRemovedIntervalDataFormat, Name("engine/deferred/csg_removed_interval_data"), targets.csgRemovedIntervalLayerCount, false,
+            targets.csgRemovedIntervalDataFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalData), targets.csgRemovedIntervalLayerCount, false,
             NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"), targets.csgRemovedIntervalData
         )
-        && createCsgTexture(targets.csgRemovedIntervalCountFormat, Name("engine/deferred/csg_removed_interval_count"), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"), targets.csgRemovedIntervalCount)
+        && createCsgTexture(targets.csgRemovedIntervalCountFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalCount), 1u, false, NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"), targets.csgRemovedIntervalCount)
     ;
 }
 

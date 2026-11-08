@@ -2,14 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
+#include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/text/atlas.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <core/common/log.h>
-
-#include "widget_fixture.h"
-
-#include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -86,7 +87,7 @@ private:
 class TextFontTests : public testing::Test{
 public:
     TextFontTests()
-        : m_arena(Name("tests/ui/text/font"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextFont))
         , m_latin(m_arena, Name(s_TestLatinFontPath))
         , m_korean(m_arena, Name(s_TestKoreanFontPath))
         , m_service(m_arena)
@@ -130,12 +131,12 @@ protected:
 
 
 TEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory){
-    Core::Alloc::GlobalArena sourceArena(Name("tests/ui/font_construction/source"));
+    Core::Alloc::GlobalArena sourceArena{Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionSource)};
     const Core::Assets::AssetRef<Font> emptyFontRef("tests/ui/font_construction/empty");
     Font emptyFont(sourceArena, emptyFontRef.name());
-    Core::Alloc::GlobalArena fontArena(Name("tests/ui/font_construction/native"));
-    Core::Alloc::ScratchArena scratchArena(Name("tests/ui/font_construction/scratch"));
-    Core::Common::LogArena logArena(Name("tests/ui/font_construction/logger"));
+    Core::Alloc::GlobalArena fontArena{Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionNative)};
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionScratch)};
+    Core::Common::LogArena logArena{Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionLogger)};
     ThrowingFontConstructionLogger logger(logArena);
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
     const FontSource source{ emptyFontRef, emptyFont, 1u };

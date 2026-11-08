@@ -4,6 +4,8 @@
 
 #include "model_test_context.h"
 
+#include <tests/unit/model/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +43,7 @@ Core::ECS::EntityID RuntimeContext::makeObject(const Core::ECS::EntityID owner){
     auto& object = entity.addComponent<Impl::ModelObjectComponent>();
     object.owner = owner;
     object.model = Name(s_ModelPath);
-    object.object = Name("object");
+    object.object = Name(NWB::Tests::ModelCases::s_ModelFixtureNameObject);
     entity.addComponent<Impl::Scene::TransformComponent>();
     if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))
         ++runtime->objectCount;

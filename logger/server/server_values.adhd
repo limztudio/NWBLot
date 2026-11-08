@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_LogServerValueFrameLinuxConsoleUpdateIntervalMilliseconds = 50u;
+const StringView s_LogServerValueFrameWinLifecycleDiagnosticCategory = "logger_window_lifecycle";
+const StringView s_LogServerValueFrameWinMessagesDiagnosticCategory = "logger_window_messages";
+const StringView s_LogServerValueFrameWinLayoutDiagnosticCategory = "logger_window_layout";
+const StringView s_LogServerValueFrameWinPaintDiagnosticCategory = "logger_window_paint";
+const StringView s_LogServerValueMainAppName = "logserver";
+const StringView s_LogServerValueMainReadinessTokenOption = "--readiness-token";
+const StringView s_LogServerValueMainCrashSymbolStoreOption = "--crash-symbol-store";
+const StringView s_LogServerValueMainCrashRetainPackagesOption = "--crash-retain-packages";
+const StringView s_LogServerValueMainCrashRetainRawOption = "--crash-retain-raw";
+const StringView s_LogServerValueMainCrashRetainInvalidOption = "--crash-retain-invalid";
+const usize s_LogServerValueModuleConnectionInitialBufferCapacity = 256u;
+const usize s_LogServerValueModuleMaxCrashPackageUploadMebibytes = 128u;
+const StringView s_LogServerValueModuleUnsupportedNameSymbolUploadPath = "/namesym";
+const StringView s_LogServerValueModuleUploadDiagnosticCategory = "logger_server_upload";
+const usize s_LogServerValueModuleMaxPendingCrashUploadPathText = 1024u;
+const f32 s_LogServerValueModuleServerUpdateIntervalSeconds = 0.1f;
+const usize s_LogServerValueModuleBytesPerMebibyte = 1024u * 1024u;
+const usize s_LogServerValueModuleMaxCrashPackageUploadBytes = s_LogServerValueModuleMaxCrashPackageUploadMebibytes * s_LogServerValueModuleBytesPerMebibyte;
+const i32 s_LogServerValueMainLoggerServerExitSuccess = 0;
+const i32 s_LogServerValueMainLoggerServerExitFailure = -1;
+const i32 s_LogServerValueFrameWinLogFontHeight = 10;
+const StringView s_LogServerValueClipboardDiagnosticCategory = "logger_clipboard";
+const usize s_LogServerValueClipboardLineBreakCharacterCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

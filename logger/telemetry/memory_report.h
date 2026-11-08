@@ -6,6 +6,7 @@
 
 
 #include <logger/global.h>
+#include <logger/telemetry/report_values.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/telemetry/perf.h>
@@ -22,7 +23,7 @@ NWB_LOG_BEGIN
 
 struct TelemetryReportSummary;
 
-inline constexpr AStringView s_JsonNullText = "null";
+inline constexpr AStringView s_JsonNullText = ::NWB::Log::s_LogTelemetryMemoryReportJsonNullText;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -25,8 +25,8 @@ namespace __hidden_vulkan_resource_bindings_descriptor_buffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_ResourceSegmentDebugName = "vk_resource_descriptor_buffer";
-static constexpr AStringView s_SamplerSegmentDebugName = "vk_sampler_descriptor_buffer";
+static constexpr AStringView s_ResourceSegmentDebugName = VulkanDefaults::s_VulkanDefaultResourceSegmentDebugName;
+static constexpr AStringView s_SamplerSegmentDebugName = VulkanDefaults::s_VulkanDefaultSamplerSegmentDebugName;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

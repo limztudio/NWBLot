@@ -4,6 +4,8 @@
 
 #include "task_graph_resource_version_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +31,7 @@ namespace TaskGraphResourceVersionTestUtils{
 TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOnReset){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/storage_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStorageResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
@@ -53,7 +55,7 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
 
     const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, range, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
     Core::GpuTaskResourceVersionUse versionUse = VersionUse(first, Core::GpuTaskResourceVersionRole::Consume);
-    const auto taskResult = AddTask(Name("tests/task_graph_resource_version/storage_task"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
+    const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStorageTask), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -91,7 +93,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/missing_producer_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionMissingProducerResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced);
@@ -102,7 +104,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
         const Core::GpuTaskResourceVersionUse versionUse = VersionUse(version, Core::GpuTaskResourceVersionRole::Consume);
         {
-            const auto gpuTaskAdmission = AddTask(Name("tests/task_graph_resource_version/missing_producer_consumer"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
+            const auto gpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionMissingProducerConsumer), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
             ASSERT_TRUE(gpuTaskAdmission);
             ASSERT_TRUE(gpuTaskAdmission->valid());
         }
@@ -117,7 +119,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/duplicate_producer_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionDuplicateProducerResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced);
@@ -127,10 +129,10 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         ASSERT_TRUE(version.valid());
         const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
         const Core::GpuTaskResourceVersionUse versionUse = VersionUse(version, Core::GpuTaskResourceVersionRole::Produce);
-        const auto firstResult = AddTask(Name("tests/task_graph_resource_version/duplicate_producer_first"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
+        const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionDuplicateProducerFirst), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
         ASSERT_TRUE(firstResult);
         const Core::GpuTaskId first = *firstResult;
-        const auto secondResult = AddTask(Name("tests/task_graph_resource_version/duplicate_producer_second"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
+        const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionDuplicateProducerSecond), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
         ASSERT_TRUE(secondResult);
         const Core::GpuTaskId second = *secondResult;
         ASSERT_TRUE(first.valid());
@@ -152,7 +154,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/invalid_origin_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionInvalidOriginResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
@@ -170,7 +172,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto staleResourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_version_resource"));
+        const auto staleResourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStaleVersionResource));
         ASSERT_TRUE(staleResourceResult);
         const Core::GpuGraphResourceId staleResource = *staleResourceResult;
         ASSERT_TRUE(staleResource.valid());
@@ -189,7 +191,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/invalid_range_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionInvalidRangeResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
@@ -209,7 +211,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         Core::GpuTaskGraph graph(testArena.arena);
         const auto resourceResult = graph.importResource(
             Core::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph_resource_version/invalid_metadata_texture_range"))
+                .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionInvalidMetadataTextureRange))
                 .setMarkerLabel("Invalid Metadata Texture Version Range")
                 .setType(Core::GpuGraphResourceType::Texture)
                 .setInitialState(Core::ResourceStates::Common)
@@ -237,7 +239,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto oldResourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_use_old_resource"));
+        const auto oldResourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStaleUseOldResource));
         ASSERT_TRUE(oldResourceResult);
         const Core::GpuGraphResourceId oldResource = *oldResourceResult;
         const auto staleVersionResult = AddVersion(graph, oldResource, Core::GpuGraphResourceVersionOrigin::ImportedRoot);
@@ -246,12 +248,12 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         ASSERT_TRUE(oldResource.valid());
         ASSERT_TRUE(staleVersion.valid());
         graph.reset();
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/stale_use_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStaleUseResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
         const Core::GpuTaskResourceVersionUse versionUse = VersionUse(staleVersion, Core::GpuTaskResourceVersionRole::Consume);
-        const auto taskResult = AddTask(Name("tests/task_graph_resource_version/stale_use_task"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
+        const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionStaleUseTask), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(resource.valid());
@@ -268,7 +270,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         SCOPED_TRACE(bindingCount);
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/duplicate_binding_resource"));
+        const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionDuplicateBindingResource));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
@@ -284,12 +286,12 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         versionUses[bindingCount - 1u] = versionUses[0u];
         const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
         if(bindingCount == LengthOf(versionUses)){
-            const auto precedingTaskResult = AddTask(Name("tests/task_graph_resource_version/valid_bindings_before_duplicate"), Span(&resourceUse, 1u), Span(versionUses.data(), bindingCount - 1u), {}, {}, graph);
+            const auto precedingTaskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionValidBindingsBeforeDuplicate), Span(&resourceUse, 1u), Span(versionUses.data(), bindingCount - 1u), {}, {}, graph);
             ASSERT_TRUE(precedingTaskResult);
             const Core::GpuTaskId precedingTask = *precedingTaskResult;
             ASSERT_TRUE(precedingTask.valid());
         }
-        const auto taskResult = AddTask(Name("tests/task_graph_resource_version/duplicate_binding_task"), Span(&resourceUse, 1u), Span(versionUses.data(), bindingCount), {}, {}, graph);
+        const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionDuplicateBindingTask), Span(&resourceUse, 1u), Span(versionUses.data(), bindingCount), {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -303,7 +305,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
     }
 
     ExpectInvalidBoundUse(
-        Name("tests/task_graph_resource_version/invalid_role"),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionInvalidRole),
         Core::GpuGraphResourceVersionOrigin::ImportedRoot,
         BufferRange(0u, 64u),
         BufferRange(0u, 64u),
@@ -311,7 +313,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         Core::GpuTaskResourceVersionRole::Count
     );
     ExpectInvalidBoundUse(
-        Name("tests/task_graph_resource_version/imported_root_producer"),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedRootProducer),
         Core::GpuGraphResourceVersionOrigin::ImportedRoot,
         BufferRange(0u, 64u),
         BufferRange(0u, 64u),
@@ -319,7 +321,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         Core::GpuTaskResourceVersionRole::Produce
     );
     ExpectInvalidBoundUse(
-        Name("tests/task_graph_resource_version/invalid_access"),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionInvalidAccess),
         Core::GpuGraphResourceVersionOrigin::TaskProduced,
         BufferRange(0u, 64u),
         BufferRange(0u, 64u),
@@ -327,7 +329,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         Core::GpuTaskResourceVersionRole::Produce
     );
     ExpectInvalidBoundUse(
-        Name("tests/task_graph_resource_version/uncovered_range"),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionUncoveredRange),
         Core::GpuGraphResourceVersionOrigin::ImportedRoot,
         BufferRange(16u, 32u),
         BufferRange(0u, 16u),

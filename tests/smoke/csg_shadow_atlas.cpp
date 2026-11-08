@@ -32,25 +32,25 @@ using Box = SmokeBoxBounds;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_PlaneShapePath = "engine/csg/plane";
-constexpr AStringView s_CapsuleShapePath = "engine/csg/capsule";
-static constexpr AStringView s_EngineCsgSphere = "engine/csg/sphere";
+constexpr AStringView s_PlaneShapePath = NWB::Tests::Smoke::s_ShadowSmokePlaneShapePath;
+constexpr AStringView s_CapsuleShapePath = NWB::Tests::Smoke::s_ShadowSmokeCapsuleShapePath;
+static constexpr AStringView s_EngineCsgSphere = NWB::Tests::Smoke::s_ShadowSmokeEngineCsgSphere;
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
 static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_caustic/materials/glass"};
 #else
 static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/materials/glass"};
 #endif
 static constexpr SmokeMaterialRef s_OpenMaterial{"project/smoke/reflection/materials/optical_volume"};
-static constexpr AStringView s_OpenInterface = "project/shaders/reflection_optical";
+static constexpr AStringView s_OpenInterface = NWB::Tests::Smoke::s_ShadowSmokeOpenInterface;
 static constexpr Array<Name, 7> s_Groups = {
-    Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"), Name("csg_shadow/glass_hole"),
-    Name("csg_shadow/overlap_a"), Name("csg_shadow/overlap_b"), Name("csg_shadow/glass_control"),
+    Name(s_SmokeSceneNameCsgShadowOpaqueHole), Name(s_SmokeSceneNameCsgShadowOpaqueCap), Name(s_SmokeSceneNameCsgShadowGlassDepth), Name(s_SmokeSceneNameCsgShadowGlassHole),
+    Name(s_SmokeSceneNameCsgShadowOverlapA), Name(s_SmokeSceneNameCsgShadowOverlapB), Name(s_SmokeSceneNameCsgShadowGlassControl),
 };
 static constexpr Array<Name, 6> s_AnalyticGroups = {
-    Name("csg_shadow/analytic_plane"), Name("csg_shadow/analytic_sphere"), Name("csg_shadow/analytic_capsule"),
-    Name("csg_shadow/analytic_axial_capsule"), Name("csg_shadow/analytic_union"), Name("csg_shadow/analytic_control"),
+    Name(s_SmokeSceneNameCsgShadowAnalyticPlane), Name(s_SmokeSceneNameCsgShadowAnalyticSphere), Name(s_SmokeSceneNameCsgShadowAnalyticCapsule),
+    Name(s_SmokeSceneNameCsgShadowAnalyticAxialCapsule), Name(s_SmokeSceneNameCsgShadowAnalyticUnion), Name(s_SmokeSceneNameCsgShadowAnalyticControl),
 };
-static constexpr Array<Name, 2> s_OpenGroups = { Name("csg_shadow/open_five"), Name("csg_shadow/open_six") };
+static constexpr Array<Name, 2> s_OpenGroups = { Name(s_SmokeSceneNameCsgShadowOpenFive), Name(s_SmokeSceneNameCsgShadowOpenSix) };
 static constexpr SmokeMeshRef s_OpenPairMesh{"project/meshes/csg_shadow_open_2"};
 static constexpr SmokeMeshRef s_OpenFiveMesh{"project/meshes/csg_shadow_open_5"};
 static constexpr SmokeMeshRef s_OpenSixMesh{"project/meshes/csg_shadow_open_6"};
@@ -135,7 +135,7 @@ void CsgShadowAtlas::addCaster(const Box& box, const Box& cutterBox, const u32 g
     auto cutterEntity = m_world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = s_Groups[groupIndex];
-    cutter.shapeType = Name("engine/csg/box");
+    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
     cutter.active = m_mode.arm != Arm::Uncut;
     NWB::Impl::CsgBoxShapeParameters parameters;
     const SIMDVectorSingle minimum = LoadFloat(cutterBox.minimum);

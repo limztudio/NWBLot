@@ -8,6 +8,8 @@
 #include "marker_positions.h"
 #include "smoke_geometry.h"
 
+#include <tests/smoke/ui_layer/snapshots.adhd.h>
+
 #include <core/input/module.h>
 
 
@@ -26,21 +28,6 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PassiveSmokeColumns{
-    f32 mainWidth = 0.0f;
-    f32 rightColumn = 0.0f;
-    f32 rightWidth = 0.0f;
-};
-
-struct PassiveSmokeTargetObservation{
-    u32 focusCode = 0u;
-    u32 passiveTargets = 0u;
-};
-
-struct PassiveSmokeSnapshotUpdate{
-    b8 published = false;
-    b8 displayChanged = false;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,7 +99,7 @@ template<typename SnapshotT, typename StateChangedT>
         return {};
     current.sequence = snapshot.sequence + 1u;
     snapshot = current;
-    return { true, displayChanged };
+    return { .published = true, .displayChanged = displayChanged };
 }
 
 [[nodiscard]] b8 HandlePassiveSmokeKeyboard(i32 key, i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept;

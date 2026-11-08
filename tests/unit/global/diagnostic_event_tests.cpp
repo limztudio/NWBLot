@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/name_case_types.adhd.h>
+
 #include <gtest/gtest.h>
 
 #include <global/diagnostics.h>
@@ -18,9 +20,9 @@ namespace __hidden_diagnostic_event_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_Unit = "unit";
-static constexpr AStringView s_Value42 = "value 42";
-static constexpr AStringView s_ValueFormatTrailing = "value {}.trailing";
+static constexpr AStringView s_Unit = NWB::Tests::GlobalCases::s_GlobalDiagnosticUnit;
+static constexpr AStringView s_Value42 = NWB::Tests::GlobalCases::s_GlobalDiagnosticValue42;
+static constexpr AStringView s_ValueFormatTrailing = NWB::Tests::GlobalCases::s_GlobalDiagnosticValueFormatTrailing;
 static constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
 
 

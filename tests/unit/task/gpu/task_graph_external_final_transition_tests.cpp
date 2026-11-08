@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,8 +46,7 @@ TEST(GpuTaskGraph, KeepsSameStateExternalExportConcurrentReadersIndependent){
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
         false,
         false,
-        {}
-    );
+        {});
     ASSERT_TRUE(pairResult);
     const ExternalFinalReadPair pair = *pairResult;
     ASSERT_TRUE(pair.resource.valid());
@@ -89,8 +90,7 @@ TEST(GpuTaskGraph, KeepsDisjointExternalFinalTextureFragmentsIndependent){
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
         false,
         false,
-        {}
-    );
+        {});
     ASSERT_TRUE(pairResult);
     const ExternalFinalReadPair pair = *pairResult;
     ASSERT_TRUE(pair.resource.valid());
@@ -134,8 +134,7 @@ TEST(GpuTaskGraph, ElidesSamePacketExternalFinalTransitionSelfDependency){
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
         true,
         false,
-        {}
-    );
+        {});
     ASSERT_TRUE(pairResult);
     const ExternalFinalReadPair pair = *pairResult;
     ASSERT_TRUE(pair.resource.valid());
@@ -159,20 +158,15 @@ TEST(GpuTaskGraph, ElidesSamePacketExternalFinalTransitionSelfDependency){
 }
 
 TEST(GpuTaskGraph, OrdersExternalFinalTransitionsForWholeAllocationResources){
-    struct WholeAllocationCase{
-        Core::GpuGraphResourceType::Enum type;
-        Core::ResourceStates::Mask readState;
-        Core::ResourceStates::Mask finalState;
-    };
     const Array<WholeAllocationCase, 2> testCases = {
-        WholeAllocationCase{ Core::GpuGraphResourceType::Buffer, Core::ResourceStates::ShaderResource, Core::ResourceStates::CopySource, },
-        WholeAllocationCase{ Core::GpuGraphResourceType::AccelStruct, Core::ResourceStates::AccelStructRead, Core::ResourceStates::Common, },
+        WholeAllocationCase(Core::GpuGraphResourceType::Buffer, Core::ResourceStates::ShaderResource, Core::ResourceStates::CopySource),
+        WholeAllocationCase(Core::GpuGraphResourceType::AccelStruct, Core::ResourceStates::AccelStructRead, Core::ResourceStates::Common),
     };
 
     for(const WholeAllocationCase& testCase : testCases){
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto pairResult = AddExternalFinalReadPair(graph, testCase.type, {}, {}, testCase.readState, testCase.finalState, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, false, false, {});
+        const auto pairResult = AddExternalFinalReadPair(graph, testCase.resourceType, {}, {}, testCase.readState, testCase.finalState, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, false, false, {});
         ASSERT_TRUE(pairResult);
         const ExternalFinalReadPair pair = *pairResult;
         ASSERT_TRUE(pair.resource.valid());
@@ -271,8 +265,7 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
         false,
         true,
-        {}
-    );
+        {});
     ASSERT_TRUE(pairResult);
     const ExternalFinalReadPair pair = *pairResult;
     ASSERT_TRUE(pair.resource.valid());
@@ -285,7 +278,7 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
     terminalScheduling.allowPacketMerge = false;
     Core::GpuTaskDesc terminalDesc;
     terminalDesc
-        .setIdentity(Name("tests/task_graph/external_final_transitive_terminal_reader"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalTransitiveTerminalReader))
         .setMarkerLabel("External Final Transitive Terminal Reader")
         .setScheduling(terminalScheduling)
         .setDependencies(Span(&pair.finalizingReader, 1u))

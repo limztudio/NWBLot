@@ -5,6 +5,7 @@
 #include "task_graph_builtin_internal.h"
 
 #include <core/graphics/backend_selection/backend.h>
+#include <core/task/gpu/upload_validation.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,11 +26,10 @@ namespace GpuTaskGraphBuiltinDetail{
 [[nodiscard]] b8 UploadTextureTaskCanMaterializeRetainedState(const TextureDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState, const ResourceStates::Mask uploadFinalState)noexcept{
     if(!resourceDesc.keepInitialState)
         return true;
-    if(resourceDesc.initialState == ResourceStates::Unknown || uploadFinalState != resourceDesc.initialState || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
-        return false;
     // A texture upload is a first write.
     // Its recorder writes CopyDest then publishes finalState, so explicit Unknown import is safe for a fresh image.
-    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
+    static_assert(ResourceStates::Unknown == 0u);
+    return UploadRetainedStateMatches(resourceDesc.initialState, graphInitialState, externalFinalState, uploadFinalState);
 }
 
 

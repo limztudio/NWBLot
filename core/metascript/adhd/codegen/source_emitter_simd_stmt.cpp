@@ -97,7 +97,7 @@ namespace __hidden_adhd_simd_stmt{
             if(a0IsTrans != a1IsTrans){
                 const Expr* vecArg = a0IsTrans ? a1 : a0;
                 u32 rowIdx = 0u;
-                if(SimdConstantAnalysis::TryMatchIdentityRowIndex(*vecArg, symbols, rowIdx, localVarDecls) && !ExprReferencesIdentifier(vecArg, transposedName)){
+                if(SimdConstantAnalysis::TryMatchIdentityRowIndex(rowIdx, *vecArg, symbols, localVarDecls) && !ExprReferencesIdentifier(vecArg, transposedName)){
                     ++inOutValidUseCount;
                     return self(self, vecArg);
                 }

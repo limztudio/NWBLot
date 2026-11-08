@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_FrameGraphNameEcsRenderFrame = "ecs_render/frame";
+const Name s_FrameGraphNameEcsRenderFrameSetup = "ecs_render/frame_setup";
+const Name s_FrameGraphNameEcsRenderDeferredTargets = "ecs_render/deferred_targets";
+const Name s_FrameGraphNameEcsRenderMeshViewBuffer = "ecs_render/mesh_view_buffer";
+const Name s_FrameGraphNameEcsRenderSceneShadingBuffer = "ecs_render/scene_shading_buffer";
+const Name s_FrameGraphNameEcsRenderMaterialDrawBuffers = "ecs_render/material_draw_buffers";
+const Name s_FrameGraphNameEcsRenderCsgIntervalTargets = "ecs_render/csg_interval_targets";
+const Name s_FrameGraphNameEcsRenderAvboitTargets = "ecs_render/avboit_targets";
+
 // Hashes the immutable upload payload, including edits and light order.
 u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
     const u32 lightCount = cast<u32>(lights.size());

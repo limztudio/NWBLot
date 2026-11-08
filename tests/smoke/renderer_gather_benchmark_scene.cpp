@@ -6,6 +6,8 @@
 
 #include "smoke_project_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_render/module.h>
 
 #include <global/simd/vector.h>
@@ -21,17 +23,17 @@ namespace Tests::Smoke{
 
 
 namespace __hidden_renderer_gather_scene{
-constexpr AStringView s_OpaqueWorkload = "opaque";
-constexpr AStringView s_HybridWorkload = "hybrid";
-constexpr AStringView s_UniqueWorkload = "unique";
-constexpr AStringView s_OverridesWorkload = "overrides";
+constexpr AStringView s_OpaqueWorkload = s_GatherBenchmarkOpaqueWorkload;
+constexpr AStringView s_HybridWorkload = s_GatherBenchmarkHybridWorkload;
+constexpr AStringView s_UniqueWorkload = s_GatherBenchmarkUniqueWorkload;
+constexpr AStringView s_OverridesWorkload = s_GatherBenchmarkOverridesWorkload;
 static constexpr SmokeMeshRef s_Mesh("project/meshes/octahedron");
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
 static constexpr SmokeMaterialRef s_Glass("project/smoke/gather_benchmark/materials/glass_00");
 static constexpr SmokeModelRef s_Model("project/characters/body/model");
-static constexpr AStringView s_Interface = "project/shaders/smoke_surface";
-static constexpr u32 s_ObjectCount = 64u;
+static constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+static constexpr u32 s_ObjectCount = s_GatherBenchmarkObjectCount;
 };
 
 using namespace __hidden_renderer_gather_scene;
@@ -118,7 +120,7 @@ b8 RendererGatherBenchmarkScene::createRuntime(const u32 index, const Float4& po
     if(!owner.valid() || !modelResult.tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);
-    const auto skeleton = FindSpawnedModelObject(owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    const auto skeleton = FindSpawnedModelObject(owner, Name(NWB::Tests::Smoke::s_SmokeNameSkeleton), NWB::Impl::ModelObjectKind::Skeleton, m_world);
     if(!skeleton.valid())
         return false;
     auto& pose = m_world.entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
@@ -142,3 +144,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

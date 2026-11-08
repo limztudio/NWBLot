@@ -90,7 +90,7 @@ Expected<MicromapUsageVector> BuildOpacityMicromapUsageCounts(
 }
 
 Expected<VkDeviceAddress> ResolveOpacityMicromapBuildInputAddress(Buffer& buffer, const u64 offset, const u64 byteSize, TStringView resourceName){
-    constexpr u64 s_DeviceAddressAlignment = 256u;
+    constexpr u64 s_DeviceAddressAlignment = VulkanDefaults::s_VulkanDefaultMicromapDeviceAddressAlignment;
     const u64 validatedByteSize = byteSize != 0u ? byteSize : 1u;
     if(!IsBufferRangeInBounds(buffer.getCreationDescription(), offset, validatedByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} range is outside the buffer"), resourceName);

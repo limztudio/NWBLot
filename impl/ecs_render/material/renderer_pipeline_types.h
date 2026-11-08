@@ -43,16 +43,6 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MaterialPipelineKey{
-    Name material = s_NameNone;
-    Name csgEvaluatorVariant = s_NameNone;
-    u64 csgShapeRegistryRevision = 0u;
-    Core::FramebufferInfo framebufferInfo;
-    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    b8 twoSided = false;
-    MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
-};
-
 struct MaterialPipelineKeyHasher{
     [[nodiscard]] usize operator()(const MaterialPipelineKey& key)const noexcept{
         usize seed = ComputeMaterialPipelineBaseHash(
@@ -126,21 +116,6 @@ public:
         , constantTypedBytes(arena)
         , mutableDefaultTypedBytes(arena)
     {}
-};
-
-struct MaterialPipelineResources{
-    Core::GraphicsPipelineHandle indexedPipeline;
-    Core::GraphicsPipelineHandle emulationPipeline;
-    Core::MeshletPipelineHandle meshletPipeline;
-    Core::ComputePipelineHandle computePipeline;
-    Core::ComputePipelineHandle objectGeometryDecodePipeline;
-    Core::ShaderHandle objectGeometryVertexShader;
-    Core::ShaderHandle pixelShader;
-    Core::ShaderHandle meshShader;
-    Core::ShaderHandle computeShader;
-    RenderPath::Enum renderPath = RenderPath::MeshShader;
-    b8 sharedGeometryComputeProgram = false;
-    b8 indexedGeometryOutput = false;
 };
 
 

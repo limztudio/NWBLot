@@ -5,7 +5,9 @@
 #include "crash_symbolicate_internal.h"
 #include "linux_frame_symbol_resolver.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 
 #include <global/overflow.h>
 #include <global/process_memory_map.h>

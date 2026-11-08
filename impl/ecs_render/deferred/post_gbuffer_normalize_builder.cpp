@@ -50,7 +50,7 @@ Expected<Core::GpuTaskId> PostGbufferNormalizeBuilder::declare(const PostGbuffer
     normalizeScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc normalizeDesc;
     normalizeDesc
-        .setIdentity(Name("render.graphics_prefix.normalize"))
+        .setIdentity(Name(s_FrameGraphNameRenderGraphicsPrefixNormalize))
         .setMarkerLabel("Post-G-Buffer Normalize")
         .setScheduling(normalizeScheduling)
         .setDependencies({ &inputs.gbufferCompletionTask, 1u })

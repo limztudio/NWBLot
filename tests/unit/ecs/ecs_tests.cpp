@@ -2,17 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/ecs/module.h>
-#include <core/common/module.h>
-
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs/basic_case_types.adhd.h>
 
-#include <gtest/gtest.h>
+#include <core/ecs/module.h>
+#include <core/common/module.h>
 
 #include <global/atomic.h>
 #include <global/compile.h>
 #include <global/timer.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,16 +26,6 @@ namespace __hidden_ecs_tests{
 
 
 using TestWorld = NWB::Tests::EcsTestWorld;
-
-struct PositionComponent{
-    i32 x = 0;
-    i32 y = 0;
-};
-
-struct VelocityComponent{
-    i32 x = 0;
-    i32 y = 0;
-};
 
 struct AddressTrapComponent{
 public:
@@ -49,11 +40,6 @@ public:
 
 struct alignas(32) OverAlignedComponent{
     Array<u8, 32> value{};
-};
-
-template<usize I>
-struct PoolSlotComponent{
-    usize value = I;
 };
 
 template<usize... Is>
@@ -159,12 +145,10 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     });
     EXPECT_TRUE((testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
         ++singleViewCount;
-    }
-    )));
+    })));
     EXPECT_TRUE((testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
         ++multiViewCount;
-    }
-    )));
+    })));
 
     EXPECT_EQ(singleViewCount, 0u);
     EXPECT_EQ(multiViewCount, 0u);
@@ -291,8 +275,7 @@ TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
         32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
         48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
-    >{}
-    );
+    >{});
     EXPECT_NE(typeIds.front(), typeIds.back());
 
     TestWorld firstWorld;

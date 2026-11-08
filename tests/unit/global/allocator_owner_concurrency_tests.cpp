@@ -3,6 +3,7 @@
 
 
 #include <tests/common/arena_owner_fixture.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <core/alloc/module.h>
 
@@ -36,7 +37,7 @@ void WaitForFlag(const Atomic<b8>& flag)noexcept{
 
 
 TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHistory){
-    static constexpr Name s_Owner("tests/allocation_owners/concurrent_lifetimes");
+    static constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerConcurrentLifetimes;
     constexpr usize s_ThreadCount = 4u;
     constexpr usize s_Iterations = 256u;
     constexpr u64 s_Allocations = s_ThreadCount * s_Iterations * 5u;

@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/compiler_internal.h>
 
 
@@ -136,7 +138,7 @@ TEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableInd
 TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyRequest){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/first"), "First Use Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseFirst), "First Use Buffer");
     ASSERT_TRUE(bufferResult);
     const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -160,10 +162,10 @@ TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyR
 TEST(GpuTaskUseIndex, PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnknownStateCoverage){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/partial"), "Partial Use Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUsePartial), "Partial Use Buffer");
     ASSERT_TRUE(bufferResult);
     const auto buffer = *bufferResult;
-    const auto otherResult = AddBufferMetadata(graph, Name("tests/task_use/other"), "Other Use Buffer");
+    const auto otherResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseOther), "Other Use Buffer");
     ASSERT_TRUE(otherResult);
     const auto other = *otherResult;
     ASSERT_TRUE(buffer.valid());
@@ -189,7 +191,7 @@ TEST(GpuTaskUseIndex, PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnkn
 TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/covered"), "Covered Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseCovered), "Covered Buffer");
     ASSERT_TRUE(bufferResult);
     const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -212,7 +214,7 @@ TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInv
 TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/symbolic"), "Symbolic Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseSymbolic), "Symbolic Buffer");
     ASSERT_TRUE(bufferResult);
     const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -233,7 +235,7 @@ TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
 TEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_use/rectangle"), "Texture Rectangle");
+    const auto textureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseRectangle), "Texture Rectangle");
     ASSERT_TRUE(textureResult);
     const auto texture = *textureResult;
     ASSERT_TRUE(texture.valid());
@@ -261,16 +263,16 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto aResult = AddBufferMetadata(graph, Name("tests/task_use/expanded_a"), "Expanded A", Core::ResourceStates::Common);
+    const auto aResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseExpandedA), "Expanded A", Core::ResourceStates::Common);
     ASSERT_TRUE(aResult);
     const auto a = *aResult;
-    const auto bResult = AddBufferMetadata(graph, Name("tests/task_use/expanded_b"), "Expanded B", Core::ResourceStates::Common);
+    const auto bResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseExpandedB), "Expanded B", Core::ResourceStates::Common);
     ASSERT_TRUE(bResult);
     const auto b = *bResult;
     ASSERT_TRUE(a.valid());
     ASSERT_TRUE(b.valid());
     const Array<Core::GpuGraphResourceId, 2u> members = { a, b };
-    const auto setResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_use/expanded_set")).setMarkerLabel("Expanded Set").setMembers(members));
+    const auto setResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskUseExpandedSet)).setMarkerLabel("Expanded Set").setMembers(members));
     ASSERT_TRUE(setResult);
     const auto set = *setResult;
     ASSERT_TRUE(set.valid());
@@ -282,7 +284,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_use/expanded_task")).setMarkerLabel("Expanded Task").setResourceUses(direct).setResourceSetUses(Span(&expanded, 1u));
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskUseExpandedTask)).setMarkerLabel("Expanded Task").setResourceUses(direct).setResourceSetUses(Span(&expanded, 1u));
     const auto taskResult = graph.addTask(desc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics });
     ASSERT_TRUE(taskResult);
     const auto task = *taskResult;
@@ -323,7 +325,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const auto accelerationResult = graph.importResource(Core::GpuGraphResourceDesc{}
-        .setIdentity(Name("tests/task_use/acceleration"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskUseAcceleration))
         .setMarkerLabel("Repeated Acceleration")
         .setType(Core::GpuGraphResourceType::AccelStruct)
         .setInitialState(Core::ResourceStates::Common)
@@ -331,7 +333,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
     );
     ASSERT_TRUE(accelerationResult);
     const auto acceleration = *accelerationResult;
-    const auto otherResult = AddBufferMetadata(graph, Name("tests/task_use/acceleration_other"), "Unrelated Buffer", Core::ResourceStates::Common);
+    const auto otherResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskUseAccelerationOther), "Unrelated Buffer", Core::ResourceStates::Common);
     ASSERT_TRUE(otherResult);
     const auto other = *otherResult;
     ASSERT_TRUE(acceleration.valid());
@@ -342,7 +344,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
         Core::GpuTaskResourceUse{ .resource = acceleration, .range = {}, .requiredState = Core::ResourceStates::AccelStructRead, .access = Core::GpuTaskResourceAccess::Read },
         Core::GpuTaskResourceUse{ .resource = acceleration, .range = {}, .requiredState = Core::ResourceStates::AccelStructWrite, .access = Core::GpuTaskResourceAccess::Write },
     };
-    const auto taskResult = AddTask(Name("tests/task_use/acceleration_task"), "Repeated Acceleration Task", {}, Span(uses), {}, {}, {}, graph);
+    const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskUseAccelerationTask), "Repeated Acceleration Task", {}, Span(uses), {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const auto task = *taskResult;
     ASSERT_TRUE(task.valid());

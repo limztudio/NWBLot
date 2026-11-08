@@ -28,7 +28,7 @@ public:
     inline static u32 s_ConstructorCalls = 0u;
     inline static b8 s_LoadCalled = false;
     [[nodiscard]] static const Name& AssetTypeName()noexcept{
-        static constexpr Name s_Type("tests/metadata_registry/null_allocation");
+        static constexpr Name s_Type = NWB::Tests::AssetsGraphicsFixture::s_MetadataRegistryNullAllocation;
         return s_Type;
     }
 
@@ -130,7 +130,7 @@ public:
 
 public:
     ContextualComparisonAsset()noexcept
-        : IAsset(Name("tests/asset_constructor/contextual_comparison"))
+        : IAsset(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetFixtureNameTestsAssetConstructorContextualComparison))
     {}
 };
 
@@ -139,12 +139,12 @@ public:
 
 
 TEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad){
-    AssetArena arena(Name("tests/asset_codec/null_allocation"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetCodecNullAllocation)};
     NullAllocatedAsset::s_ConstructorCalls = 0u;
     NullAllocatedAsset::s_LoadCalled = false;
     NullAllocatedCodec codec;
     AssetBytes bytes(arena);
-    const auto result = codec.deserialize(Name("project/tests/null_asset"), bytes, arena);
+    const auto result = codec.deserialize(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseProjectTestsNullAsset), bytes, arena);
     EXPECT_FALSE(result);
     EXPECT_EQ(NullAllocatedAsset::s_ConstructorCalls, 0u);
     EXPECT_FALSE(NullAllocatedAsset::s_LoadCalled);
@@ -159,11 +159,11 @@ TEST(AssetConstructorContracts, ImplicitNameBindingCanThrowDespiteNothrowExplici
     static_assert(!IsNothrowConstructible_V<ImplicitNameShader, AssetArena&, const Name&>);
     static_assert(!IsNothrowConstructible_V<Impl::ShaderAssetCodec<ImplicitNameShader>>);
     EXPECT_THROW(ImplicitNameAsset{}, u32);
-    EXPECT_THROW(ImplicitNameAsset{Name("project/tests/name_conversion")}, u32);
+    EXPECT_THROW(ImplicitNameAsset{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectTestsNameConversion)}, u32);
     EXPECT_THROW(ImplicitNameCodec{}, u32);
-    AssetArena arena(Name("tests/asset_constructor/implicit_name"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameTestsAssetConstructorImplicitName)};
     EXPECT_THROW(ImplicitNameShader{arena}, u32);
-    EXPECT_THROW((ImplicitNameShader{arena, Name("project/tests/shader_name_conversion")}), u32);
+    EXPECT_THROW((ImplicitNameShader{arena, Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectTestsShaderNameConversion)}), u32);
     EXPECT_THROW((Impl::ShaderAssetCodec<ImplicitNameShader>{}), u32);
 }
 

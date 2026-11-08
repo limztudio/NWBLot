@@ -13,6 +13,8 @@
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -63,7 +65,7 @@ using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 static constexpr GiTestMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr GiTestMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 
 static constexpr f32 s_BoxHalfExtent = 2.0f;
 static constexpr f32 s_BoxHeight = 2.0f;

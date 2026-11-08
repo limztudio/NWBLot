@@ -95,8 +95,7 @@ template<typename SourceArenaT, typename DependencyVectorT>
                 if(includeKind == ShaderBinaryPayload::IncludeKind::Macro || includeKind == ShaderBinaryPayload::IncludeKind::Unsupported){
                     const b8 plannedMacro = includeKind == ShaderBinaryPayload::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
                         return name == includeName;
-                    }
-                    ) != externallyPlannedMacroIncludes.end();
+                    }) != externallyPlannedMacroIncludes.end();
                     if(plannedMacro){
                         lineBegin = lineEnd + 1u;
                         continue;

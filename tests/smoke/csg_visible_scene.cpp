@@ -5,6 +5,8 @@
 #include "csg_visible_scene.h"
 #include "csg_smoke_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <global/simd/frame.h>
@@ -19,18 +21,18 @@ using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 using CsgVisibleMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using CsgVisibleMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 static constexpr f32 s_CameraTargetY = NWB::Tests::Smoke::CsgVisibleScene::s_CameraTargetY;
 static constexpr Float2U s_ShapeGridHalfSpacing = Float2U(1.55f, 1.05f);
-static constexpr f32 s_ReceiverBaseScale = 0.72f;
-static constexpr f32 s_ReceiverScale = 1.08f;
+static constexpr f32 s_ReceiverBaseScale = NWB::Tests::Smoke::s_CsgVisibleReceiverBaseScale;
+static constexpr f32 s_ReceiverScale = NWB::Tests::Smoke::s_CsgVisibleReceiverScale;
 static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = NWB::Tests::Smoke::CsgVisibleScene::s_ShapeCount;
 static constexpr CsgVisibleMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
-static constexpr f32 s_OverlappingReceiverDepthOffset = 0.125f;
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
+static constexpr f32 s_OverlappingReceiverDepthOffset = NWB::Tests::Smoke::s_CsgVisibleOverlappingReceiverDepthOffset;
 
 namespace CsgVisibleShapeSlot{
     enum Enum : usize{
@@ -45,10 +47,10 @@ namespace CsgVisibleShapeSlot{
 static_assert(CsgVisibleShapeSlot::kCount == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
 
 inline constexpr Array<Name, s_CsgVisibleShapeCount> s_CsgVisibleReceiverGroups = {
-    Name("project/smoke/csg_visible/plane_receiver"),
-    Name("project/smoke/csg_visible/box_receiver"),
-    Name("project/smoke/csg_visible/sphere_receiver"),
-    Name("project/smoke/csg_visible/capsule_receiver"),
+    Name(NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisiblePlaneReceiver),
+    Name(NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisibleBoxReceiver),
+    Name(NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver),
+    Name(NWB::Tests::Smoke::s_SmokeSceneNameProjectSmokeCsgVisibleCapsuleReceiver),
 };
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(const Name receiverGroup, const Float4& colorTint, const Float4& position, const Float4& scale, const b8 csgReceiver, const CsgVisibleMaterialRef& material, NWB::Core::ECS::World& world){
@@ -126,28 +128,28 @@ static void ApplyCutterTransform(const NWB::Core::ECS::EntityID cutterEntity, co
 
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane:{
-        cutter.shapeType = Name("engine/csg/plane");
+        cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
         NWB::Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(0.0f, 0.0f, 1.0f, 0.0f);
         AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Box:{
-        cutter.shapeType = Name("engine/csg/box");
+        cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
         NWB::Impl::CsgBoxShapeParameters parameters;
         parameters.halfExtents = Float4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f);
         AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
-        cutter.shapeType = Name("engine/csg/sphere");
+        cutter.shapeType = Name(NWB::Impl::s_CsgSphereShapeName);
         NWB::Impl::CsgSphereShapeParameters parameters;
         parameters.radius = Float4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f);
         AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
-        cutter.shapeType = Name("engine/csg/capsule");
+        cutter.shapeType = Name(NWB::Impl::s_CsgCapsuleShapeName);
         NWB::Impl::CsgCapsuleShapeParameters parameters;
         parameters.radiusHalfHeight = Float4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f);
         AssignCsgCutterParameters(parameters, cutter);

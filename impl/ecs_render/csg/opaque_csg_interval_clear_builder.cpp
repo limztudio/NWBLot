@@ -5,6 +5,7 @@
 #include "opaque_csg_interval_clear_builder.h"
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -37,8 +38,7 @@ b8 DeclareCsgIntervalRectClearTasks(
     const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     const auto firstTaskResult = graph.addClearTextureRectUIntTask(
         firstDesc,
-        Core::GpuClearTextureRectUIntTaskDesc{ .destination = desc.csgIntervalId, .subresources = desc.csgPeelSubresources, .rect = desc.clearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearBeginHooks, }
-    );
+        Core::GpuClearTextureRectUIntTaskDesc{ .destination = desc.csgIntervalId, .subresources = desc.csgPeelSubresources, .rect = desc.clearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearBeginHooks, });
     if(!firstTaskResult){
         outFirstTask = {};
         NWB_LOGGER_WARNING(desc.intervalClearWarningMessage);
@@ -53,8 +53,7 @@ b8 DeclareCsgIntervalRectClearTasks(
     tailDesc.setIdentity(desc.receiverEventClearIdentity).setMarkerLabel(desc.receiverEventClearMarkerLabel).setScheduling(csgIntervalClearTailScheduling).setDependencies({ &outFirstTask, 1u });
     const auto tailTaskResult = graph.addClearTextureRectUIntTask(
         tailDesc,
-        Core::GpuClearTextureRectUIntTaskDesc{ .destination = desc.csgReceiverEventCount, .subresources = desc.csgReceiverEventCountSubresources, .rect = desc.clearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearEndHooks, }
-    );
+        Core::GpuClearTextureRectUIntTaskDesc{ .destination = desc.csgReceiverEventCount, .subresources = desc.csgReceiverEventCountSubresources, .rect = desc.clearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearEndHooks, });
     if(!tailTaskResult){
         outTailTask = {};
         NWB_LOGGER_WARNING(desc.receiverEventClearWarningMessage);
@@ -74,10 +73,10 @@ Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(co
         return MakeUnexpected(Failure{});
 
     const CsgIntervalRectClearDesc clearDesc{
-        .intervalClearIdentity = Name("render.graphics_prefix.csg_interval_clear"),
+        .intervalClearIdentity = Name(s_RenderNameRenderGraphicsPrefixCsgIntervalClear),
         .intervalClearMarkerLabel = "CSG Interval Id Clear",
         .intervalClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"),
-        .receiverEventClearIdentity = Name("render.graphics_prefix.csg_receiver_event_count_clear"),
+        .receiverEventClearIdentity = Name(s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear),
         .receiverEventClearMarkerLabel = "CSG Receiver Event Count Clear",
         .receiverEventClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"),
         .csgIntervalId = inputs.csgIntervalId,

@@ -10,6 +10,7 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +89,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     avboitIntervalScheduling.mergeWithPrevious = prePayload.transparentCsgStreamsUploaded;
     Core::GpuTaskDesc avboitIntervalDesc;
     avboitIntervalDesc
-        .setIdentity(Name("render.avboit.intervals"))
+        .setIdentity(Name(s_RenderNameRenderAvboitIntervals))
         .setMarkerLabel(RendererGpuPassText::s_TransparentCsgIntervalsLabel)
         .setScheduling(avboitIntervalScheduling)
         .setDependencies({ &intervalDependency, 1u })
@@ -128,7 +129,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         avboitIntervalSpanScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc avboitIntervalSpanDesc;
         avboitIntervalSpanDesc
-            .setIdentity(Name("render.avboit.transparent_csg.receiver_span"))
+            .setIdentity(Name(s_RenderNameRenderAvboitTransparentCsgReceiverSpan))
             .setMarkerLabel("Transparent CSG Receiver Span")
             .setScheduling(avboitIntervalSpanScheduling)
             .setDependencies({ &m_avboitSystem.taskGraphStage().m_preTask, 1u })
@@ -164,7 +165,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         avboitIntervalCombineScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc avboitIntervalCombineDesc;
         avboitIntervalCombineDesc
-            .setIdentity(Name("render.avboit.transparent_csg.interval_combine"))
+            .setIdentity(Name(s_RenderNameRenderAvboitTransparentCsgIntervalCombine))
             .setMarkerLabel("Transparent CSG Interval Combine")
             .setScheduling(avboitIntervalCombineScheduling)
             .setDependencies({ &avboitIntervalCompletionTask, 1u })

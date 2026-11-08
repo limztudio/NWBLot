@@ -20,9 +20,12 @@
 #include "csg_smoke_helpers.h"
 #endif
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+#include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/ecs_csg/module.h>
 #endif
 #include <impl/ecs_scene/module.h>

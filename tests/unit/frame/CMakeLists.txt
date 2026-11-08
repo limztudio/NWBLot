@@ -1,6 +1,7 @@
 if(WIN32)
     set(_nwb_frame_lifecycle_tests_timeout_seconds 60)
     nwb_declare_gtest_executable(nwb_frame_lifecycle_tests)
+    nwb_target_adhd_sources(nwb_frame_lifecycle_tests NAMESPACE "NWB::Tests::FrameCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd")
     target_sources(nwb_frame_lifecycle_tests PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/*.c"
         "${CMAKE_CURRENT_LIST_DIR}/*.cc"

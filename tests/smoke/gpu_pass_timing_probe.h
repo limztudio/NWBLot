@@ -7,6 +7,9 @@
 
 #include "smoke_environment.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/perf/timing.h>
@@ -38,20 +41,14 @@ namespace Tests::Smoke{
 class GpuPassTimingProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
-    static constexpr f64 s_ReportIntervalSeconds = 0.5;
+    static constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
     static constexpr i32 s_TimingFilePrecision = 4;
-    static constexpr Name s_Arena{ "tests/smoke/gpu_pass_timing_probe" };
+    static constexpr Name s_Arena = NWB::Tests::Smoke::s_SmokeNameSmokeGpuPassTimingProbe;
 
 
 private:
-    struct ScopeAccum{
-        f64 sumSeconds = 0.0;
-        f64 minSeconds = 0.0;
-        f64 maxSeconds = 0.0;
-        u64 samples = 0u;
-        u32 frames = 0u;
-    };
+    using ScopeAccum = GpuPassTimingScopeAccum;
 
     struct ScopeState{
         ScopeAccum interval;

@@ -94,8 +94,7 @@ public:
             if(!options)
                 return s_PipelineExitFailure;
             return body(*options);
-        }, [&](const CLI::ParseError& error){ return exit(error); }, []()noexcept{ return s_PipelineExitFatal; }
-        );
+        }, [&](const CLI::ParseError& error){ return exit(error); }, []()noexcept{ return s_PipelineExitFatal; });
     }
 
 

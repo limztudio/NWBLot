@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_EcsGraphicsCaseTestsStatistics = "tests/statistics";
+const Name s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch = "tests/runtime_mesh_pruning/request_scratch";
+const Name s_EcsGraphicsCaseTestsRuntimeMeshPruningNotRequested = "tests/runtime_mesh_pruning/not_requested";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesSelection = "tests/coincident_optical_volumes/selection";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesScratch = "tests/coincident_optical_volumes/scratch";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesTie = "tests/coincident_optical_volumes/tie";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesThird = "tests/coincident_optical_volumes/third";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesTranslation = "tests/coincident_optical_volumes/translation";
+const Name s_EcsCaseTestsCoincidentOpticalVolumesTransforms = "tests/coincident_optical_volumes/transforms";
+const Name s_EcsCaseTestsComputeOutputSetEmpty = "tests/compute_output_set/empty";
+const Name s_EcsCaseTestsCsgShadowScratch = "tests/csg_shadow/scratch";
+const Name s_EcsCaseTestsCsgShadowEvaluator = "tests/csg_shadow/evaluator";
+const Name s_EcsCaseTestsCsgShadowReplacementMesh = "tests/csg_shadow/replacement_mesh";
+const Name s_EcsCaseTestsCsgShadowStaticCacheMesh = "tests/csg_shadow/static_cache_mesh";
+const Name s_EcsCaseTestsCsgFiniteCustomCutter = "tests/csg/finite_custom_cutter";
+const Name s_EcsCaseTestsCsgFiniteCustomCutterEval = "tests/csg/finite_custom_cutter_eval";
+const Name s_EcsCaseProjectMeshesStaticMesh = "project/meshes/static_mesh";
+const Name s_EcsCaseTestsCsgPipelineEvaluator = "tests/csg/pipeline_evaluator";
+const Name s_EcsCaseTestsCsgPipelineMaterial = "tests/csg/pipeline_material";
+const Name s_EcsCaseTestsEcsGraphicsFrameGraphBuilderScratch = "tests/ecs_graphics/frame_graph_builder_scratch";
+const Name s_EcsCasePacketOwner = "packet_owner";
+const Name s_EcsCasePacketResource = "packet_resource";
+const Name s_EcsCaseTestsEcsGraphicsResetRuntimeStatisticsScratch = "tests/ecs_graphics/reset_runtime_statistics_scratch";
+const Name s_EcsCaseTestsOpaqueCsgIntervalClearDependency = "tests/opaque_csg_interval_clear/dependency";
+const Name s_EcsCaseTestsOpticalRuntimeBoundsGather = "tests/optical_runtime_bounds/gather";
+const Name s_EcsCaseTestsOpticalRuntimeBoundsRejectedUploadControl = "tests/optical_runtime_bounds/rejected_upload_control";
+const Name s_EcsCaseTestsOpticalSceneUpload = "tests/optical_scene/upload";
+const Name s_EcsCaseTestsOpticalSceneGather = "tests/optical_scene/gather";
+const Name s_EcsCaseTestsPreparedSwBvhMissing = "tests/prepared_sw_bvh/missing";
+const Name s_EcsCaseTestsRaySceneGraphReadsScratch = "tests/ray_scene_graph_reads/scratch";
+const Name s_EcsCaseTestsReflectionFeedbackGraph = "tests/reflection/feedback_graph";
+const Name s_EcsCaseTestsFeedbackLease = "tests.feedback.lease";
+const Name s_EcsCaseTestsReflectionFeedbackMove = "tests/reflection/feedback_move";
+const Name s_EcsCaseTestsReflectionSingleSampleHistory = "tests/reflection/single_sample_history";
+const Name s_EcsCaseTestsReflectionLateResetHistory = "tests/reflection/late_reset_history";
+const Name s_EcsCaseTestsReflectionHistoryLease = "tests/reflection/history_lease";
+const Name s_EcsCaseTestsHistoryLease = "tests.history.lease";
+const Name s_EcsCaseTestsReflectionStatisticsLease = "tests.reflection.statistics.lease";
+const Name s_EcsCaseTestsShadowMaterialContext = "tests/shadow_material_context";
+const Name s_EcsCaseTestsShadowPacketOpaque = "tests/shadow_packet/opaque";
+const Name s_EcsCaseTestsShadowPacketOpaqueWavelet = "tests/shadow_packet/opaque_wavelet";
+const Name s_EcsCaseTestsShadowPacketOpaqueUpsample = "tests/shadow_packet/opaque_upsample";
+const Name s_EcsCaseTestsShadowPacketTransparentTrace = "tests/shadow_packet/transparent_trace";
+const Name s_EcsCaseTestsShadowPacketTransparentTemporal = "tests/shadow_packet/transparent_temporal";
+const Name s_EcsCaseTestsShadowPacketTransparentWavelet = "tests/shadow_packet/transparent_wavelet";
+const Name s_EcsCaseTestsShadowPacketTerminal = "tests/shadow_packet/terminal";
+const Name s_EcsCaseTestsShadowPacketDiagnostics = "tests/shadow_packet/diagnostics";
+const Name s_EcsCaseTestsShadowPacketScratch = "tests/shadow_packet/scratch";
+const Name s_EcsCaseTestsRendererTimingSampleFirstTask = "tests.renderer_timing.sample_first.task";
+const Name s_EcsCaseTestsRendererTimingCallbackAllocationTask = "tests.renderer_timing.callback_allocation.task";
+const Name s_EcsCaseTestsRendererTimingAcceptFirstTask = "tests.renderer_timing.accept_first.task";
+const Name s_EcsCaseTestsRendererTimingUnpublishedFirstTask = "tests.renderer_timing.unpublished_first.task";
+const Name s_EcsCaseTestsRendererTimingUnpublishedSecondTask = "tests.renderer_timing.unpublished_second.task";
+const Name s_EcsCaseTestsRendererTimingInvalidMetadataTask = "tests.renderer_timing.invalid_metadata.task";
+const Name s_EcsCaseTestsRendererTimingWrongScope = "tests.renderer_timing.wrong_scope";
+const Name s_EcsCaseTestsRendererTimingNonFiniteDurationTask = "tests.renderer_timing.non_finite_duration.task";
+const Name s_EcsCaseTestsRendererTimingDeviceChangeTask = "tests.renderer_timing.device_change.task";
+const Name s_EcsCaseTestsRendererTimingUnresolvedDeviceChangeTask = "tests.renderer_timing.unresolved_device_change.task";
+
+const Name s_EcsGraphicsNameTestsCoincidentOpticalVolumesFirst = "tests/coincident_optical_volumes/first";
+const Name s_EcsGraphicsNameTestsCoincidentOpticalVolumesSecond = "tests/coincident_optical_volumes/second";
+const Name s_EcsGraphicsNameTestsComputeOutputSetResources = "tests/compute_output_set/resources";
+const Name s_EcsGraphicsNameTestsCsgShadowGroup = "tests/csg_shadow/group";
+const Name s_EcsGraphicsNameTestsCsgShadowOther = "tests/csg_shadow/other";
+const Name s_EcsGraphicsNameTestsCsgShadowCustom = "tests/csg_shadow/custom";
+const Name s_EcsGraphicsNameTestsEcsGraphicsScratch = "tests/ecs_graphics/scratch";
+const Name s_EcsGraphicsNameProjectMaterialsShared = "project/materials/shared";
+const Name s_EcsGraphicsNameProjectMaterialsOther = "project/materials/other";
+const Name s_EcsGraphicsNameTestsSharedMeshShader = "tests/shared_mesh_shader";
+const Name s_EcsGraphicsNameEmpty = "";
+const Name s_EcsGraphicsNameTestsRendererTimingSampleFirst = "tests.renderer_timing.sample_first";
+const Name s_EcsGraphicsNameTestsRendererTimingCallbackAllocation = "tests.renderer_timing.callback_allocation";
+const Name s_EcsGraphicsNameTestsRendererTimingAcceptFirst = "tests.renderer_timing.accept_first";
+const Name s_EcsGraphicsNameTestsRendererTimingUnpublishedFirst = "tests.renderer_timing.unpublished_first";
+const Name s_EcsGraphicsNameTestsRendererTimingUnpublishedSecond = "tests.renderer_timing.unpublished_second";
+const Name s_EcsGraphicsNameTestsRendererTimingInvalidMetadata = "tests.renderer_timing.invalid_metadata";
+const Name s_EcsGraphicsNameTestsRendererTimingNonFiniteDuration = "tests.renderer_timing.non_finite_duration";
+const Name s_EcsGraphicsNameTestsRendererTimingDeviceChange = "tests.renderer_timing.device_change";
+const Name s_EcsGraphicsNameTestsRendererTimingUnresolvedDeviceChange = "tests.renderer_timing.unresolved_device_change";
+const Name s_EcsGraphicsOverrideInterface = "test/interface";
+const Name s_EcsGraphicsOverrideBlock = "runtime";
+const Name s_EcsGraphicsOverrideField = "roughness";
+const Name s_EcsGraphicsOverrideParameter = "runtime.roughness";
+const Name s_EcsGraphicsOverrideMaterial = "test/material";
+const Name s_EcsGraphicsMutableValue = "value";
+const Name s_EcsGraphicsMutableParameter = "runtime.value";
+const Name s_EcsCaseTestsOpaqueGbufferCsgSparse = "tests/opaque_gbuffer/csg_sparse";
+const Name s_EcsCaseTestsSoftShadowResolveDispatchBuilder = "tests/soft_shadow_resolve_dispatch_builder";
+const u64 s_EcsGraphicsCollisionHash = 41u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

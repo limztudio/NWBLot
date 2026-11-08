@@ -5,6 +5,10 @@
 #include "assets_graphics_fixture.h"
 #include "assets_graphics_shader_archive_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
+#include <global/limit.h>
+
 #include <gtest/gtest.h>
 
 
@@ -138,6 +142,69 @@ static b8 WriteExactEntryPointShaderProbe(const Path& assetRoot){
 }
 
 
+TEST(AssetsGraphics, CompilerPathTextCapacityChecksWideOverflow){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    const usize limit = Limit<usize>::s_Max;
+    const usize wideUnits = limit / Impl::ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit;
+    const auto wideCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(wideUnits, false);
+    ASSERT_TRUE(wideCapacity);
+    EXPECT_EQ(*wideCapacity, wideUnits * Impl::ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(wideUnits + 1u, false));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("compiler path text exceeds representable size")));
+    const auto narrowCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(limit, true);
+    ASSERT_TRUE(narrowCapacity);
+    EXPECT_EQ(*narrowCapacity, limit);
+}
+
+TEST(AssetsGraphics, CompilerArgumentCapacitiesRejectOverflow){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    const usize limit = Limit<usize>::s_Max;
+    const usize prefixBytes = Impl::ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size();
+    const usize rootBytes = (limit - prefixBytes) / 2u;
+    const auto rootCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootBytes);
+    ASSERT_TRUE(rootCapacity);
+    EXPECT_EQ(*rootCapacity, prefixBytes + rootBytes * 2u);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootBytes + 1u));
+    const auto defineCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 1u);
+    ASSERT_TRUE(defineCapacity);
+    EXPECT_EQ(*defineCapacity, limit);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 1u, 0u));
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 2u));
+    const auto quotedCapacity = Impl::ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(limit - 2u);
+    ASSERT_TRUE(quotedCapacity);
+    EXPECT_EQ(*quotedCapacity, limit);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(limit - 1u));
+    const auto includeCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u);
+    ASSERT_TRUE(includeCapacity);
+    EXPECT_EQ(*includeCapacity, (limit / 2u) * 2u);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u + 1u));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("too many include directories")));
+    const auto replacementBytes = Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 2u);
+    ASSERT_TRUE(replacementBytes);
+    EXPECT_EQ(*replacementBytes, limit);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 1u));
+    const auto wrappedRemoval = Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(0u, 1u, 0u);
+    ASSERT_TRUE(wrappedRemoval);
+    EXPECT_EQ(*wrappedRemoval, limit);
+}
+
+TEST(AssetsGraphics, ShaderCombinationCountsPreserveStateOnOverflow){
+    usize reserveCount = Limit<usize>::s_Max - 1u;
+    EXPECT_TRUE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
+    EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
+    EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
+    const auto expanded = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u, 2u);
+    ASSERT_TRUE(expanded);
+    EXPECT_EQ(*expanded, (Limit<usize>::s_Max / 2u) * 2u);
+    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u + 1u, 2u));
+    const auto empty = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max, 0u);
+    ASSERT_TRUE(empty);
+    EXPECT_EQ(*empty, 0u);
+}
+
 TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState){
     CapturingLogger logger;
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -153,7 +220,7 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "stage_cs.slang", "[numthreads(1, 1, 1)] void MainC(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersStageCs), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
     ASSERT_TRUE(pixelPathResult);
     ASSERT_TRUE(computePathResult);
     const Name& pixelPath = *pixelPathResult;
@@ -314,10 +381,19 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     EXPECT_EQ(logger.errorCount(), 0u);
     ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
-    const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
+    const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersBomCompilerProbePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
     ASSERT_TRUE(shaderPathResult);
     const Name& shaderPath = *shaderPathResult;
     ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, shaderPath, 2u, testArena));
+
+    const auto absoluteInclude = PathToGenericString(testArena.arena, externalIncludeRoot / s_CompilerProbeIncludeFilename);
+    const usize includeLineEnd = s_BomCompilerProbeSource.find('\n');
+    ASSERT_NE(includeLineEnd, AStringView::npos);
+    const auto absoluteSource = StringFormat(testArena.arena, "\xEF\xBB\xBF#include \"{}\"{}", absoluteInclude, s_BomCompilerProbeSource.substr(includeLineEnd));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", absoluteSource));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_EQ(logger.errorCount(), 0u);
+    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n"));
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
@@ -435,7 +511,7 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / s_ShadersDirectory / "cache_stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"main\";\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / s_ShadersDirectory / "cache_stage_cs.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, computeRoot, computeOutput, { computeAssets }));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersCacheStageCs), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
     ASSERT_TRUE(computePathResult);
     const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> computeAsset;

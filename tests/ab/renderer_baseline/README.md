@@ -1,11 +1,13 @@
-# Immutable renderer baselines
+# Fixed renderer baselines
 
-This test-owned workflow captures a current renderer image as an immutable reference, then compares a later
-renderer capture against that reference without adding a production feature switch or reviving retired renderer
-paths. `current-renderer-v1` is the formal forward reference for the graph renderer: it protects approved current
-output from later changes, but it is not a retired-legacy parity corpus.
+This test-owned flow takes a current renderer image as a fixed reference.
+Then it compares a later renderer image with that reference. It adds no
+production switch and brings back no old renderer paths.
+`current-renderer-v1` is the formal forward reference for the graph renderer.
+It guards approved current output from later change. It is not an old-output
+match set.
 
-Capture a reference from the repository root:
+Take a reference from the repo root:
 
 ```text
 python -m launcher renderer-baseline transparent-avboit
@@ -14,15 +16,18 @@ python -m launcher renderer-baseline skinned-csg
 python -m launcher renderer-baseline stress
 ```
 
-Each run builds only its selected smoke target and writes `baseline.bmp`, `runtime.log`, and `manifest.json` under
-`.cozter/out/ab-results/renderer-baseline/<profile>/<timestamp>/`. The manifest records the source revision,
-executable checksum, frozen environment, capture settings, and image checksum. Baseline creation refuses a dirty
-source worktree, and an existing artifact directory is never overwritten. The launcher requests GPU validation by
-default; use `dbg` or `opt` for validated captures. A `fin` capture requires `--no-gpu-validation` because its loader
-rejects `--gpudbg`. Validation mode is part of reference identity: a Final capture cannot compare against the formal
-corpus below, which requires validation enabled.
+Each run builds only its set smoke target. It writes `baseline.bmp`,
+`runtime.log`, and `manifest.json` under
+`.cozter/out/ab-results/renderer-baseline/<profile>/<timestamp>/`. The manifest
+holds the source version, exe check sum, fixed env, capture settings, and
+image check sum. Baseline build refuses a dirty source tree. It never writes
+over an old result folder. The launcher asks for GPU validation by default.
+Use `dbg` or `opt` for checked captures. A `fin` capture needs
+`--no-gpu-validation` because its loader rejects `--gpudbg`. Check mode is
+part of reference ID. A Final capture cannot compare with the formal set
+below, which needs checks on.
 
-Compare a later build against an existing reference:
+Compare a later build with a stored reference:
 
 ```text
 python -m launcher renderer-baseline transparent-avboit -- \
@@ -30,81 +35,59 @@ python -m launcher renderer-baseline transparent-avboit -- \
   --maximum-mean-abs 2.0 --maximum-changed-fraction 0.02
 ```
 
-The candidate directory receives `candidate.bmp`, `difference.bmp`, `comparison.json`, and its own capture manifest.
-Without thresholds the comparison is report-only; `--require-exact` is suitable only for deterministic paths. A
-reference with a different profile, frozen environment, or GPU-validation mode is rejected rather than silently
-compared.
+The new folder gets `candidate.bmp`, `difference.bmp`, `comparison.json`,
+and its own capture manifest. With no limits the compare is report-only.
+`--require-exact` fits only fixed paths. A reference with a changed profile,
+fixed env, or check mode is rejected, not quietly compared.
 
-For surfel-GI A/B work, `surfel-gi-complex` selects the closed black room with a small skylight and twenty seeded
-bodies. After at least 360 successful presentations, it waits at least 30 steady-clock seconds while allowing rendering before selecting an application framebuffer readback.
-The runtime log records the warmup start/end graphics frames, presentation progress, elapsed interval, and authoritative completed readback source frame.
-The runner rejects missing, short, fully idle, or mismatched readback evidence and stores the admitted interval in the capture manifest.
-This protocol requires presentation progress; its endpoint counters do not prove uninterrupted rendering or lighting convergence.
-Startup and frame warmup do not count toward this live interval. Complex captures use the `settled-readback` mode
-and do not use `--settle-seconds`; control the post-warmup interval through `NWB_GI_SMOKE_MIN_SETTLE_SECONDS`.
-To request 100 live seconds after frame warmup, set the profile's environment override and increase the ready-marker timeout:
+For surfel-GI A/B work, `surfel-gi-complex` takes the closed black room with
+a small sky light and twenty fixed bodies. After at least 360 good presents,
+it waits at least 30 real seconds while it may render. Then it takes an app
+frame readback. The run log notes warm-up start/end frames, present counts,
+time passed, and the true done readback source frame. The runner rejects
+missing, short, fully idle, or wrong readback proof. It stores the used time
+in the capture manifest. This rule needs present counts. Its end counts do not
+prove smooth render or light settle. Start-up and frame warm-up do not count
+in this live time. Complex captures use the `settled-readback` mode and do
+not use `--settle-seconds`. Set the post-warm time through
+`NWB_GI_SMOKE_MIN_SETTLE_SECONDS`. To ask for 100 live seconds after frame
+warm-up, set the profile env value and raise the ready-marker time-out:
 
 ```powershell
 $env:NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "100"
 python -m launcher renderer-baseline surfel-gi-complex --no-gpu-validation -- --startup-timeout 300
 ```
 
-Run this from a clean source revision to create an immutable reference, then repeat with `--reference-dir` pointing
-at that reference. Keep the settle override and GPU-validation choice identical for both runs. The formal
-`current-renderer-v1` corpus retains the original open-box `surfel-gi` profile; the complex A/B profile is separate.
-Its fixture-only GI materials are cooked only into `Testing/gi_smoke_runtime/<config>`, so `surfel-gi-complex` runs from
-that runtime while `surfel-gi` keeps the shared `skinning_culling_benchmark_runtime` cook.
-Older complex-scene artifacts labeled `surfel-gi` cannot be used as references for `surfel-gi-complex` because the
-profile identity is part of each capture manifest.
+Run this from a clean source state to make a fixed reference. Then repeat with
+`--reference-dir` set to that reference. Keep the settle value and check
+choice the same for both runs. The formal `current-renderer-v1` set keeps the
+first open-box `surfel-gi` profile. The complex A/B profile is separate. Its
+fixture-only GI mats are cooked only into
+`Testing/gi_smoke_runtime/<config>`. So `surfel-gi-complex` runs from that
+runtime root, and its cooked proof root differs from the base profile.
 
-## Formal current-renderer corpus
+Published frozen references under `tests/ab/renderer_baseline/`:
 
-The checked-in [`current_renderer_corpus.json`](current_renderer_corpus.json) pins the eight approved reference
-artifacts by source revision and SHA-256, including each baseline BMP, manifest, and runtime log. It also records one
-same-revision re-capture per profile and conservative, adapter-local comparison limits derived from that observed
-noise. Use it for a formal forward comparison:
+| Profile | Directory | Source | Covered captures / comparison |
+| --- | --- | --- | --- |
+| `transparent-avboit` | `v1/` | `0403c1831`, Adreno X2-90, Windows ARM64 `opt` | Transparent-glass depth-peel smoke artifacts as the changed-subject gate: source image, exact-duplicate check against earlier review copy, budget/zoom/clear/heat captures, per-view and whole-gallery numeric tables, `resolve.ok` / `resolve.fail` markers, `refraction.ok` markers, reuse A/B check, and burst stress logs |
+| `static-csg` | `v1/` | `0403c1831`, Adreno X2-90, Windows ARM64 `opt` | `nwb_csg_visible_smoke` window capture plus its runtime log, markers, and cooked asset manifest |
+| `skinned-csg` | `v1/` | `0403c1831`, Adreno X2-90, Windows ARM64 `opt` | `nwb_csg_skinned_visible_smoke` window capture plus its runtime log, markers, and cooked asset manifest |
+| `stress` | `v1/` | `0403c1831`, Adreno X2-90, Windows ARM64 `opt` | `nwb_stress_test_smoke` window capture plus its runtime log, markers, and cooked asset manifest |
 
-```text
-python -m launcher renderer-baseline transparent-avboit -- \
-  --reference-corpus current-renderer-v1
-```
+Each `v1/` folder holds `baseline.bmp`, `manifest.json`, and `runtime.log`.
+Check hashes before use. These files prove the subject state for the listed
+source and setup. They do not re-prove a later source.
 
-That mode validates the complete reference identity before it starts the candidate, applies the corpus limits by
-default, and refuses a caller-supplied limit that would relax the recorded policy. Stricter limits and
-`--require-exact` remain allowed. Its `comparison.json` records `reference_corpus: "current-renderer-v1"` and reports
-`pass` or `fail`, rather than a generic report-only verdict.
+`surfel-gi` and `surfel-gi-complex` runs need a GPU with ray queries. With no
+ray-query support, the GI scene reports a skip and makes no capture. The
+`surfel-gi-complex` fixture-only mats give a closed black room with soot-like
+walls. The warm room walls are mid-grey with a small sky light. Fresh runs
+use the same scene and the current cooker. So new captures may differ from the
+old v1 proof files.
 
-Raw captures deliberately remain ignored A/B artifacts under `.cozter/out/ab-results/`. Preserve the matching
-`renderer-baseline/` artifact tree in the project artifact store and restore it at that default path before use, or
-point the runner at a restored tree whose immediate children are the profile directories:
+## Self-check
 
-```text
-python tests/ab/renderer_baseline/run.py --verify-corpus current-renderer-v1
-python -m launcher renderer-baseline surfel-gi -- \
-  --reference-corpus current-renderer-v1 \
-  --corpus-root /mnt/nwb-artifacts/current-renderer-v1
-```
-
-`--verify-corpus` is an offline integrity check for all eight baseline images, manifests, and logs. Any missing or
-changed artifact fails closed. The v1 corpus was captured on AMD BC-250 with RADV GFX1013 on Linux and Vulkan
-validation enabled; use it only on that qualified adapter/driver configuration. The runner enforces validation mode,
-scene settings, and immutable hashes; adapter identity remains part of the operator's qualified-hardware selection.
-
-Do not edit or overwrite a corpus reference in place. Replacing it requires a new corpus id, clean-revision captures
-for every profile, a documented same-revision noise re-capture, a new checksummed registry, and an acceptance-audit
-update explaining why the approved current output changed.
-
-The `transparent-avboit` profile is frame-locked at 96 completed render submissions. Its smoke project sets the
-test-only `NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME` control, suspends further submission, logs the ready marker,
-then allows a fixed 0.75-second present settle while the native event loop remains alive before it captures the
-pinned temporal phase. `transparent-avboit` and `skinned-csg` also set the test-only
-`NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=1/60`, so a fixed 96-frame capture advances time-scaled animation by the
-same amount on every run. The caustic profile uses the same control with a fixed 360-frame warm-up. Surfel GI also
-uses the fixed 360-frame/`1/60` boundary. Other profiles use their documented fixed settle duration. The soft-shadow
-profile uses the same 360-frame/`1/60` test-only boundary for its temporal shadow history, as does the skinned
-stress profile at M4's established 96-frame/`1/60` capture point. The stress control is separate from its existing
-M4 async-lighting capture contract.
-
-Available profiles cover opaque sampled images, transparent AVBOIT, static/skinned CSG, soft shadows, caustics,
-surfel GI, and the skinned stress scene. Frame-lagged async lighting retains its
-separate topology-gated workflow because a Graphics fallback is not equivalent evidence.
+Run `python tests/ab/renderer_baseline/run.py --self-test` to check flow
+order, missing proof, and fail cleanup with no graphics app. CTest also runs
+these checks.

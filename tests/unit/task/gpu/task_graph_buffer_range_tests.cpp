@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,15 +65,15 @@ TEST(GpuTaskGraphBufferRange, IndependentIntervalsKeepSeparateInitialStates){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/buffer_range/independent"), "Independent Bytes");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeIndependent), "Independent Bytes");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     const Core::GpuTaskResourceUse firstUse = BufferUse(buffer, 0u, 32u, Core::ResourceStates::CopyDest);
     const Core::GpuTaskResourceUse tailUse = BufferUse(buffer, 32u, Core::BufferRange::s_AllBytes, Core::ResourceStates::UnorderedAccess);
-    const auto firstResult = AddRangeTask(graph, Name("tests/buffer_range/first"), Span(&firstUse, 1u));
+    const auto firstResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeFirst), Span(&firstUse, 1u));
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto tailResult = AddRangeTask(graph, Name("tests/buffer_range/tail"), Span(&tailUse, 1u));
+    const auto tailResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeTail), Span(&tailUse, 1u));
     ASSERT_TRUE(tailResult);
     const Core::GpuTaskId tail = *tailResult;
     ASSERT_TRUE(first.valid());
@@ -100,19 +102,19 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/buffer_range/fan_in"), "Byte Fan In");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeFanIn), "Byte Fan In");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     const Core::GpuTaskResourceUse wholeUse = BufferUse(buffer, 0u, 128u, Core::ResourceStates::CopyDest);
     const Core::GpuTaskResourceUse middleUse = BufferUse(buffer, 32u, 32u, Core::ResourceStates::UnorderedAccess);
     const Core::GpuTaskResourceUse readUse = BufferUse(buffer, 0u, 128u, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
-    const auto wholeResult = AddRangeTask(graph, Name("tests/buffer_range/whole"), Span(&wholeUse, 1u));
+    const auto wholeResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeWhole), Span(&wholeUse, 1u));
     ASSERT_TRUE(wholeResult);
     const Core::GpuTaskId whole = *wholeResult;
-    const auto middleResult = AddRangeTask(graph, Name("tests/buffer_range/middle"), Span(&middleUse, 1u));
+    const auto middleResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeMiddle), Span(&middleUse, 1u));
     ASSERT_TRUE(middleResult);
     const Core::GpuTaskId middle = *middleResult;
-    const auto readerResult = AddRangeTask(graph, Name("tests/buffer_range/reader"), Span(&readUse, 1u));
+    const auto readerResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeReader), Span(&readUse, 1u));
     ASSERT_TRUE(readerResult);
     const Core::GpuTaskId reader = *readerResult;
     ASSERT_TRUE(whole.valid());
@@ -154,15 +156,15 @@ TEST(GpuTaskGraphBufferRange, SameTaskOverlappingDeclarationsSeedOnlyNewBytes){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/buffer_range/local"), "Local Byte Ranges");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeLocal), "Local Byte Ranges");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     const Array<Core::GpuTaskResourceUse, 2> uses = { BufferUse(buffer, 32u, 32u, Core::ResourceStates::CopyDest), BufferUse(buffer, 0u, 128u, Core::ResourceStates::UnorderedAccess), };
-    const auto taskResult = AddRangeTask(graph, Name("tests/buffer_range/local_writer"), uses);
+    const auto taskResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeLocalWriter), uses);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     const Core::GpuTaskResourceUse readUse = BufferUse(buffer, 0u, 128u, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
-    const auto readerResult = AddRangeTask(graph, Name("tests/buffer_range/local_reader"), Span(&readUse, 1u));
+    const auto readerResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeLocalReader), Span(&readUse, 1u));
     ASSERT_TRUE(readerResult);
     const Core::GpuTaskId reader = *readerResult;
     ASSERT_TRUE(task.valid());
@@ -202,7 +204,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
     const auto bufferResult = graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/buffer_range/export"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseBufferRangeExport))
             .setMarkerLabel("Byte Range Exports")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::Common)
@@ -213,10 +215,10 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     const Core::GpuGraphResourceId buffer = *bufferResult;
     const Core::GpuTaskResourceUse wholeUse = BufferUse(buffer, 0u, Core::BufferRange::s_AllBytes, Core::ResourceStates::CopyDest);
     const Core::GpuTaskResourceUse middleUse = BufferUse(buffer, 32u, 32u, Core::ResourceStates::UnorderedAccess);
-    const auto wholeResult = AddRangeTask(graph, Name("tests/buffer_range/export_whole"), Span(&wholeUse, 1u));
+    const auto wholeResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeExportWhole), Span(&wholeUse, 1u));
     ASSERT_TRUE(wholeResult);
     const Core::GpuTaskId whole = *wholeResult;
-    const auto middleResult = AddRangeTask(graph, Name("tests/buffer_range/export_middle"), Span(&middleUse, 1u), true);
+    const auto middleResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeExportMiddle), Span(&middleUse, 1u), true);
     ASSERT_TRUE(middleResult);
     const Core::GpuTaskId middle = *middleResult;
     ASSERT_TRUE(whole.valid());
@@ -255,19 +257,19 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     Core::GpuTaskGraph graph(testArena.arena);
     const Array<Core::GpuPhysicalQueueInfo, 2> queues = { GraphicsQueue(), DedicatedComputeQueue() };
     const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/buffer_range/cross_queue"), "Cross Queue Bytes");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeCrossQueue), "Cross Queue Bytes");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     const Core::GpuTaskResourceUse graphicsUse = BufferUse(buffer, 0u, 64u, Core::ResourceStates::CopyDest);
     const Core::GpuTaskResourceUse computeUse = BufferUse(buffer, 64u, 64u, Core::ResourceStates::UnorderedAccess);
     const Core::GpuTaskResourceUse readUse = BufferUse(buffer, 32u, 64u, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
-    const auto graphicsResult = AddRangeTask(graph, Name("tests/buffer_range/graphics"), Span(&graphicsUse, 1u));
+    const auto graphicsResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeGraphics), Span(&graphicsUse, 1u));
     ASSERT_TRUE(graphicsResult);
     const Core::GpuTaskId graphics = *graphicsResult;
-    const auto computeResult = AddRangeTask(graph, Name("tests/buffer_range/compute"), Span(&computeUse, 1u), true);
+    const auto computeResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeCompute), Span(&computeUse, 1u), true);
     ASSERT_TRUE(computeResult);
     const Core::GpuTaskId compute = *computeResult;
-    const auto readerResult = AddRangeTask(graph, Name("tests/buffer_range/join"), Span(&readUse, 1u));
+    const auto readerResult = AddRangeTask(graph, Name(TaskGraphTestUtils::s_GpuCaseBufferRangeJoin), Span(&readUse, 1u));
     ASSERT_TRUE(readerResult);
     const Core::GpuTaskId reader = *readerResult;
     ASSERT_TRUE(graphics.valid());
@@ -303,7 +305,7 @@ TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDisc
     Core::GpuTaskGraph graph(testArena.arena);
     const Array<Core::GpuPhysicalQueueInfo, 3> queues = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue() };
     const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
-    const Array<Name, 2> identities = { Name("tests/buffer_range/grouped_a"), Name("tests/buffer_range/grouped_b") };
+    const Array<Name, 2> identities = { Name(TaskGraphTestUtils::s_GpuCaseBufferRangeGroupedA), Name(TaskGraphTestUtils::s_GpuCaseBufferRangeGroupedB) };
     const Array<Core::BufferRange, 2> ranges = { Core::BufferRange{ 16u, 32u }, Core::BufferRange{ 64u, 16u } };
     Array<Core::GpuGraphResourceId, 2u> resources{};
     Array<Core::GpuTaskId, 2u> writers{};
@@ -341,7 +343,7 @@ TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDisc
         consumers[index] = *consumerTaskAdmission;
         ASSERT_TRUE(consumers[index].valid());
     }
-    const auto emptyResult = graph.addTask(Core::GpuTaskDesc{}.setIdentity(Name("tests/buffer_range/grouped_empty")).setMarkerLabel("No Epilogue Task"));
+    const auto emptyResult = graph.addTask(Core::GpuTaskDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseBufferRangeGroupedEmpty)).setMarkerLabel("No Epilogue Task"));
     ASSERT_TRUE(emptyResult);
     const Core::GpuTaskId empty = *emptyResult;
     ASSERT_TRUE(empty.valid());

@@ -5,10 +5,11 @@
 #pragma once
 
 
+#include <tests/common/floating_point_environment_guard.h>
+#include <tests/common/name_cases.adhd.h>
+
 #include <core/alloc/core.h>
 #include <core/alloc/general.h>
-
-#include <tests/common/floating_point_environment_guard.h>
 
 #include <global/global.h>
 
@@ -30,8 +31,8 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_TestArena("tests/common/test_arena");
-inline constexpr Name s_DefaultTestArena("tests/common/default_test_arena");
+inline constexpr Name s_TestArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonTestArena;
+inline constexpr Name s_DefaultTestArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonDefaultTestArena;
 inline constexpr f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
 inline constexpr usize s_TestPropertyNumberBufferBytes = 32u;
 inline constexpr Array<u32, 3> s_TriangleIndices = { 0u, 1u, 2u };

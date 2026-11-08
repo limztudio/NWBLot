@@ -78,7 +78,7 @@ b8 RefractionScene::CreateDensity(const u32 percent, Core::Alloc::ScratchArena& 
     const u32 bottom = top + coveredHeight;
     const u64 admittedPixels = static_cast<u64>(coveredWidth) * coveredHeight;
     const u64 totalPixels = static_cast<u64>(extent.width) * extent.height;
-    constexpr u32 s_TileEdge = 8u;
+    constexpr u32 s_TileEdge = s_RefractionDensityTileEdge;
     const u32 activeTiles = percent == 0u ? 0u : (DivideUp(right, s_TileEdge) - left / s_TileEdge) * (DivideUp(bottom, s_TileEdge) - top / s_TileEdge);
     const u32 totalTiles = DivideUp(frameWidth, s_TileEdge) * DivideUp(frameHeight, s_TileEdge);
 
@@ -94,13 +94,13 @@ b8 RefractionScene::CreateDensity(const u32 percent, Core::Alloc::ScratchArena& 
     world.entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
     // Shared opaque backdrop that occludes the behind-wall slab.
-    constexpr f32 s_BackdropDepth = 2.8f;
+    constexpr f32 s_BackdropDepth = s_RefractionDensityBackdropDepth;
     const f32 backdropHalfHeight = tangent * (6.f + s_BackdropDepth);
     const f32 backdropHalfWidth = backdropHalfHeight * aspect;
     const f32 backdropPanelHalfWidth = backdropHalfWidth * 1.05f;
     const f32 backdropPanelHalfHeight = backdropHalfHeight * 1.05f;
     CreatePanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(backdropPanelHalfWidth, 1.f, backdropPanelHalfHeight, 0.f), world);
-    constexpr u32 s_StripeCount = 48u;
+    constexpr u32 s_StripeCount = s_RefractionDensityStripeCount;
     const f32 stripeHalfWidth = backdropHalfWidth / static_cast<f32>(s_StripeCount);
     const f32 stripeStart = -backdropHalfWidth;
     for(u32 stripe = 1u; stripe < s_StripeCount; stripe += 2u){

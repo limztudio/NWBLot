@@ -1,0 +1,12 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_UiBenchmarkNameTestsPerformanceUiInputPublication = "tests/performance/ui_input/publication";
+const Name s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection = "tests/performance/ui_input/empty_selection";
+const Name s_UiBenchmarkNameTestsPerformanceUiInputPaint = "tests/performance/ui_input/paint";
+const Name s_UiBenchmarkNameTestsPerformanceUiInputPointer = "tests/performance/ui_input/pointer";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

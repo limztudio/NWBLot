@@ -4,6 +4,8 @@
 
 #include "paint_text_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -59,7 +61,7 @@ TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
     ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
     ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
     m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), rectangle));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
     m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
     ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
     ASSERT_TRUE(m_builder.popClip());
@@ -252,7 +254,7 @@ TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsRele
     SharedSdfAtlasPage page;
     Sha256Digest sourceHash;
     {
-        FontAtlas atlas(m_arena, Name("tests/ui/font_atlas"));
+        FontAtlas atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontAtlas));
         FontAtlasPayload payload(m_arena);
         payload.font = Core::Assets::AssetRef<Font>("tests/ui/font");
         payload.fontSha256.bytes[0u] = 99u;
@@ -270,7 +272,7 @@ TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsRele
         sourceHash = group.sha256;
         payload.groups.push_back(Move(group));
         atlas.setPayload(Move(payload));
-        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/paint_sdf/validation_scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintSdfValidationScratch)};
         ASSERT_TRUE(atlas.validatePayload(scratchArena));
         auto pageResult = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
         ASSERT_TRUE(pageResult);

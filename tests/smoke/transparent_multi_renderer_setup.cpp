@@ -5,6 +5,8 @@
 #include "transparent_multi_renderer_setup.h"
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_render/module.h>
@@ -33,7 +35,7 @@ namespace Tests::Smoke{
 
 void TransparentMultiRendererSetup::Configure(Core::ECS::World& world, ProjectRuntimeContext& context){
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    static constexpr AStringView s_CausticTimingEnvironment = "NWB_CAUSTIC_SMOKE_TIMING";
+    static constexpr AStringView s_CausticTimingEnvironment = s_TransparentMultiCausticTimingEnvironment;
 #endif
     const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
     if(rayQueryHardwareAvailable)

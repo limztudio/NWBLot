@@ -56,6 +56,51 @@ f32 CleanFloat(in f32 value){
     return value;
 }
 
+b8 ValidateFbxSkinPositionCount(in usize positionCount, in usize influenceCount){
+    if(positionCount != influenceCount){
+        error("Failed to canonicalize skinned mesh: position and skin influence counts must match");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateFbxMeshAttributes(in b8 hasPositions, in b8 requiresImportedNormals, in b8 hasNormals){
+    if(!hasPositions){
+        error("Failed to build mesh: mesh is missing positions");
+        return false;
+    }
+    if(requiresImportedNormals && !hasNormals){
+        error("Failed to build mesh: imported normal mode requires mesh normals after ufbx import");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateFbxSkinDeformerCount(in usize count){
+    if(count != 1u){
+        error("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh");
+        return false;
+    }
+    return true;
+}
+
+b8 TryAccumulateFbxSelectedTriangleCorners(in usize triangleCount, mut usize inOutCornerCount){
+    if(triangleCount > (usize.max - inOutCornerCount) / cast<usize>(s_MeshletTriangleIndexCount)){
+        error("Failed to build mesh: selected meshes have too many triangle corners");
+        return false;
+    }
+    inOutCornerCount += triangleCount * cast<usize>(s_MeshletTriangleIndexCount);
+    return true;
+}
+
+b8 HasSourceMeshStreamValueCapacity(in usize count){
+    return count < cast<usize>(s_MeshMissingStreamIndex);
+}
+
+b8 HasUsableSourceTriangleArea(in f64 areaLengthSquared, in f64 minimumAreaLengthSquared){
+    return isFinite(areaLengthSquared) && !(areaLengthSquared <= minimumAreaLengthSquared);
+}
+
 SourceTangentMode ResolveGeneratedSourceTangentMode(in b8 usedDefaultUvs, in u32 degenerateUvTriangleCount, in u32 fallbackTangentVertexCount){
     if(usedDefaultUvs || degenerateUvTriangleCount != 0u || fallbackTangentVertexCount != 0u)
         return SourceTangentMode::GeneratedFallback;
@@ -145,3 +190,4 @@ b8 RemapSourceVertexRef(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

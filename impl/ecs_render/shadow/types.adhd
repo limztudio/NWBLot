@@ -8,6 +8,65 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using ShadowGpuTaskId = Core::GpuTaskId;
+using ShadowGpuGraphResourceId = Core::GpuGraphResourceId;
+using ShadowShaderHandle = Core::ShaderHandle;
+using ShadowComputePipelineHandle = Core::ComputePipelineHandle;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_HardwareShadowCrossings = "hardware_shadow_crossings";
+const Name s_HardwareShadowOverflowList = "hardware_shadow_overflow_list";
+const Name s_HardwareShadowOverflowArgs = "hardware_shadow_overflow_args";
+const Name s_ShadowPrepareBlasGeometryBuildInputs = "render.shadow_prepare.blas_geometry_build_inputs";
+const Name s_ShadowPrepareTraceGeometry = "render.shadow_prepare_trace_geometry";
+const Name s_ShadowPrepareSoftwareBvhBuildState = "render.shadow_prepare.software_bvh_build_state";
+const Name s_ShadowPreparePass = "render.shadow_prepare";
+const Name s_ShadowPrepareAccelStructFinalizeResources = "render.shadow_prepare.accel_struct_finalize_resources";
+const Name s_ShadowPrepareAccelStructFinalize = "render.shadow_prepare.accel_struct_finalize";
+const Name s_ShadowPassSceneGeometry = "render.shadow_visibility.scene_geometry";
+const Name s_ShadowPassCoarseTransmittance = "render.shadow_visibility.coarse_transmittance";
+const Name s_ShadowPassEdgeList = "render.shadow_visibility.edge_list";
+const Name s_ShadowPassIndirectArgs = "render.shadow_visibility.indirect_args";
+const Name s_ShadowPassAdaptiveCounterClear = "render.shadow_visibility.adaptive_counter_clear";
+const Name s_ShadowPassAllLitClear = "render.shadow_visibility.all_lit_clear";
+const Name s_ShadowVisibilityPass = "render.shadow_visibility";
+const Name s_SoftwareShadowEdgeCounter = "sw_shadow_edge_counter";
+const Name s_SoftwareShadowIndirectArgs = "sw_shadow_indirect_args";
+const Name s_ShadowResourceInstanceMaterial = "shadow_instance_material";
+const Name s_ShadowResourceInstanceContext = "shadow_instance_context";
+const Name s_ShadowResourceMaterialTyped = "shadow_material_typed";
+const Name s_SoftwareShadowEdgeList = "sw_shadow_edge_list";
+const Name s_SoftwareShadowShaderScope = "ECSRender_SwShadowTransparentSoft";
+const Name s_ShadowDeferredBindlessSlotsUpload = "render.deferred.bindless_slots_upload";
+const Name s_ShadowRaytraceMaterialContextSlotsUpload = "render.raytrace.material_context_slots_upload";
+const Name s_ShadowRaytraceCsgContext = "render.raytrace.csg_context";
+const Name s_ShadowRaytraceCsgContextUpload = "render.raytrace.csg_context_upload";
+const Name s_ShadowRaytraceCausticEmissionTargetsUpload = "render.raytrace.caustic_emission_targets_upload";
+const Name s_ShadowSurfelConstantsUpload = "render.surfel_gi.constants_upload";
+const Name s_ShadowDeferredEffectsInstanceMaterialUpload = "render.deferred_effects.instance_material_upload";
+const Name s_ShadowDeferredEffectsShadowInstancesUpload = "render.deferred_effects.shadow_instances_upload";
+const Name s_ShadowDeferredEffectsMaterialTypedUpload = "render.deferred_effects.material_typed_upload";
+const Name s_ShadowPassSceneBvhNodesUpload = "render.shadow_visibility.scene_bvh_nodes_upload";
+const Name s_ShadowPassSceneInstancesUpload = "render.shadow_visibility.scene_instances_upload";
+const Name s_ShadowPassOpaque = "render.shadow_visibility.opaque";
+const Name s_ShadowPassOpaqueTemporalMerge = "render.shadow_visibility.opaque_temporal_merge";
+const Name s_ShadowPassOpaqueFirstWavelet = "render.shadow_visibility.opaque_first_wavelet";
+const Name s_ShadowPassOpaqueSoftResolve = "render.shadow_visibility.opaque_soft_resolve";
+const Name s_ShadowPassSoftTransparentTrace = "render.shadow_visibility.soft_transparent_trace";
+const Name s_ShadowPassCombinedTemporalMerge = "render.shadow_visibility.combined_temporal_merge";
+const Name s_ShadowPassTransparentTemporalMerge = "render.shadow_visibility.transparent_temporal_merge";
+const Name s_ShadowPassCombinedFirstWavelet = "render.shadow_visibility.combined_first_wavelet";
+const Name s_ShadowPassTransparentFirstWavelet = "render.shadow_visibility.transparent_first_wavelet";
+const Name s_ShadowPassSoftTransparentFold = "render.shadow_visibility.soft_transparent_fold";
+
 const StringView s_ShadowSoftHalfAName = "render.shadow_visibility.soft_half_a";
 const StringView s_ShadowSoftHalfALabel = "Shadow Soft Half A";
 const StringView s_ShadowSoftHalfBName = "render.shadow_visibility.soft_half_b";
@@ -126,6 +185,17 @@ flag<u8> PreparedShadowTraceGeometryRole{
     SoftwareAttribute
 }
 
+class SoftShadowResolveStageState{
+    public ShadowShaderHandle m_shader = ShadowShaderHandle();
+    public ShadowComputePipelineHandle m_pipeline = ShadowComputePipelineHandle();
+}
+
+class SoftShadowResolveChannelState{
+    public SoftShadowResolveStageState m_wavelet = SoftShadowResolveStageState();
+    public SoftShadowResolveStageState m_upsample = SoftShadowResolveStageState();
+    public b8 m_failed = false;
+}
+
 class ShadowPreparePacketValidationResult{
     public b8 softwareBvhBuildsMerged = false;
     public b8 softwareSceneRefitMerged = false;
@@ -136,6 +206,90 @@ class ShadowPreparePacketValidationResult{
     public b8 surfelFrameConstantsUploadMerged = false;
     public b8 shadowMaterialContextUploadsMerged = false;
     public b8 sceneBvhUploadsMerged = false;
+}
+
+class ShadowPrepareUploadTasks{
+    public ShadowGpuTaskId bindlessSlots = ShadowGpuTaskId();
+    public ShadowGpuTaskId rayTraceMaterialContextSlots = ShadowGpuTaskId();
+    public ShadowGpuTaskId csgTraceContext = ShadowGpuTaskId();
+    public ShadowGpuTaskId causticEmissionTargets = ShadowGpuTaskId();
+    public ShadowGpuTaskId surfelFrameConstants = ShadowGpuTaskId();
+    public ShadowGpuTaskId shadowInstanceMaterial = ShadowGpuTaskId();
+    public ShadowGpuTaskId shadowInstance = ShadowGpuTaskId();
+    public ShadowGpuTaskId shadowMaterialTyped = ShadowGpuTaskId();
+    public ShadowGpuTaskId sceneBvhNodes = ShadowGpuTaskId();
+    public ShadowGpuTaskId sceneBvhInstances = ShadowGpuTaskId();
+}
+
+class ShadowPrepareUploadChain{
+    public ShadowPrepareUploadTasks tasks = ShadowPrepareUploadTasks();
+    // Last declared upload; Shadow Preparation depends on it.
+    public ShadowGpuTaskId completionTask = ShadowGpuTaskId();
+    // Upload destinations stay invalid when their preflighted buffer is absent.
+    public ShadowGpuGraphResourceId csgTraceContext = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId causticEmissionTargets = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId surfelFrameConstants = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId shadowInstanceMaterials = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId shadowInstances = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId shadowMaterialTyped = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId sceneBvhNodes = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId sceneBvhInstances = ShadowGpuGraphResourceId();
+    public b8 currentBindlessSlotsGraphOwned = false;
+    public b8 shadowMaterialContextBatchGraphOwned = false;
+    public b8 sceneBvhBatchGraphOwned = false;
+}
+
+class SoftShadowLightSpaceMaps{
+    public ShadowGpuTaskId shadowTraceDependency = ShadowGpuTaskId();
+    public ShadowGpuGraphResourceId csgShadowContext = ShadowGpuGraphResourceId();
+}
+
+class SoftShadowSplitTasks{
+    public ShadowGpuTaskId opaque = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaqueFirstWavelet = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaqueResolve = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentTrace = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentTemporalMerge = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentFirstWavelet = ShadowGpuTaskId();
+    public ShadowGpuTaskId fold = ShadowGpuTaskId();
+    public ShadowGpuTaskId diagnostics = ShadowGpuTaskId();
+}
+
+class LightSpaceShadowGraph{
+    public ShadowGpuGraphResourceId counts = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId events = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId views = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId drawArguments = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId depth = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId csgContext = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId csgOpaqueDepth = ShadowGpuGraphResourceId();
+    public ShadowGpuTaskId viewUpload = ShadowGpuTaskId();
+    public ShadowGpuTaskId countsClear = ShadowGpuTaskId();
+    public ShadowGpuTaskId viewFit = ShadowGpuTaskId();
+    public ShadowGpuTaskId drawCull = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaqueCapture = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentCapture = ShadowGpuTaskId();
+    public ShadowGpuTaskId shade = ShadowGpuTaskId();
+    public ShadowGpuTaskId ready = ShadowGpuTaskId();
+
+    public b8 valid()const{
+        return this.counts.valid() && this.events.valid() && this.views.valid() && this.depth.valid() && this.ready.valid();
+    }
+}
+
+// Prepared shadow callbacks share one acceptance endpoint; combined stages omit their independent predecessors.
+class PreparedShadowVisibilityTasks{
+    public ShadowGpuTaskId terminal = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaque = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaqueFirstWavelet = ShadowGpuTaskId();
+    public ShadowGpuTaskId opaqueResolve = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentTrace = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentTemporalMerge = ShadowGpuTaskId();
+    public ShadowGpuTaskId transparentFirstWavelet = ShadowGpuTaskId();
+    public ShadowGpuTaskId diagnostics = ShadowGpuTaskId();
+    public b8 combinedUpsample = false;
+    public b8 combinedWavelet = false;
+    public b8 combinedTemporal = false;
 }
 
 class ShadowVisibilityMergeValidationResult{
@@ -212,8 +366,6 @@ class ShadowTraceBufferRecord{
     public b8 accepted;
 }
 
-const usize s_InstanceGpuDataByteSize = 96u;
-
 
 void ResetSoftShadowTemporalHistoryState(
     mut b8 outSoftShadowTemporalSeeded,
@@ -227,6 +379,14 @@ void ResetSoftShadowTemporalHistoryState(
     outSoftShadowHistoryFrontIsA = 1u;
 }
 
+ShadowGpuTaskId SelectOpaqueShadowCompletion(in b8 combinedTemporal, in b8 combinedUpsample, in ShadowGpuTaskId opaque, in ShadowGpuTaskId firstWavelet, in ShadowGpuTaskId resolve){
+    if(combinedTemporal)
+        return opaque;
+    if(combinedUpsample)
+        return firstWavelet;
+    return resolve;
+}
+
 Expected<u32> TryResolveShadowEdgeListCapacityRecords(in u32 width, in u32 height){
     const u64 edgeListCapacity = cast<u64>(width) * cast<u64>(height);
     if(edgeListCapacity > cast<u64>(u32.max)){
@@ -234,6 +394,39 @@ Expected<u32> TryResolveShadowEdgeListCapacityRecords(in u32 width, in u32 heigh
         return makeUnexpected(Failure());
     }
     return cast<u32>(edgeListCapacity);
+}
+
+
+class OpaqueSoftShadowResolveOptions{
+    public b8 frontIsA = false;
+    public b8 temporalActive = false;
+    public b8 graphOwnsGeometryEntry = false;
+    public b8 graphOwnsTraceToFirstWavelet = false;
+    public b8 dispatchResolve = false;
+    public b8 dispatchResolveTail = false;
+    public SoftShadowOpaqueResolvePhase phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+}
+
+
+class TransparentSoftShadowResolveOptions{
+    public b8 frontIsA = false;
+    public b8 temporalActive = false;
+    public b8 dispatchResolve = false;
+    public b8 dispatchResolveTail = false;
+    public b8 splitResolve = false;
+    public b8 dispatchTemporalMerge = false;
+    public b8 graphOwnsTraceToResolve = false;
+}
+
+
+class SoftwareTransparentShadowTraceInputs{
+    public u32 frameIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 groupsX = 0u;
+    public u32 groupsY = 0u;
+    public b8 graphOwnsOpaqueToTransparentBoundary = false;
+    public b8 temporalHistoryReadable = false;
+    public b8 historyFrontIsA = false;
 }
 
 

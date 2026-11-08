@@ -5,6 +5,8 @@
 #include "refraction_query_diagnostics.h"
 #include "smoke_environment.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_render/module.h>
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -64,7 +66,7 @@ void RefractionQueryDiagnostics::update(){
         m_targetStart = currentFrame;
         return;
     }
-    constexpr u64 s_RequiredTargetFrames = 16u;
+    constexpr u64 s_RequiredTargetFrames = s_RefractionDiagnosticsRequiredTargetFrames;
     if(currentFrame - *m_targetStart < s_RequiredTargetFrames)
         return;
     const auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());

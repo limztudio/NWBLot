@@ -7,6 +7,8 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,7 +29,7 @@ class RefractionScene final{
 public:
     static constexpr SmokeMaterialRef s_ClearMaterial{"project/smoke/refraction/materials/clear"};
     static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/refraction/materials/opaque"};
-    static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surface";
+    static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
 
 
 public:

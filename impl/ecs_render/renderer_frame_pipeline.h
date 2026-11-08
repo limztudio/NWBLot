@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <impl/assets_graphics/csg_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/caustic/caustics_graph_coordinator.h>
 #include <impl/ecs_render/csg/csg_system.h>
@@ -73,7 +75,7 @@ NWB_IMPL_BEGIN
 
 
 class ObjectGeometryCacheGraph;
-struct DeferredGraphResourceImportResult;
+class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 struct RayTracingSceneGraphReads;
 

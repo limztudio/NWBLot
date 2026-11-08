@@ -2,14 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/mesh/solid_test_types.adhd.h>
+
 #include <impl/assets_mesh/cook.h>
 #include <impl/assets_mesh/binary_payload_io.h>
 #include <impl/assets_mesh/cook_meshlets.h>
 #include <impl/assets_mesh/meshlet_triangle_visit.h>
 
 #include <core/assets/binary_payload_io.h>
-
-#include <tests/common/capturing_logger.h>
 
 #include <global/bit.h>
 
@@ -74,7 +75,7 @@ static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMesh
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_MeshName("tests/mesh/solid_codec");
+inline constexpr Name s_MeshName = NWB::Tests::s_OneOffNameTestsMeshSolidCodec;
 inline constexpr AStringView s_MeshSource = R"(mesh asset;
 asset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
 asset.normals = [[0, 0, 1]];
@@ -97,7 +98,7 @@ asset.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
     if(!asset)
         return MakeUnexpected(Failure{});
     Core::CpuTaskScheduler scheduler(1u);
-    Core::Alloc::ScratchArena scratch(Name("tests/mesh/solid_codec/cook"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::s_SolidCaseMeshSolidCodecCook)};
     const Path sourcePath(arena, "tests/mesh/solid_codec.nwb");
     auto entry = Impl::ParseMeshCookMetadata(s_MeshName, sourcePath, *asset, arena, scheduler, scratch);
     if(!entry)
@@ -127,7 +128,7 @@ using namespace __hidden_mesh_solid_codec_tests;
 TEST(MeshSolidCodec, MissingTruncatedOrExtraMembershipWordsAreRejected){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/truncated"));
+    Core::Assets::AssetArena arena{Name(NWB::Tests::s_SolidCaseMeshSolidCodecTruncated)};
     const auto cooked = CookMeshBinary(arena);
     ASSERT_TRUE(cooked);
     Impl::Mesh control(arena, s_MeshName);
@@ -150,7 +151,7 @@ TEST(MeshSolidCodec, MissingTruncatedOrExtraMembershipWordsAreRejected){
 TEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/unaddressable_bounds"));
+    Core::Assets::AssetArena arena{Name(NWB::Tests::s_SolidCaseMeshSolidCodecUnaddressableBounds)};
     const auto cooked = CookMeshBinary(arena);
     ASSERT_TRUE(cooked);
     Impl::Mesh loaded(arena, s_MeshName);
@@ -177,7 +178,7 @@ TEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreser
 TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/padding"));
+    Core::Assets::AssetArena arena{Name(NWB::Tests::s_SolidCaseMeshSolidCodecPadding)};
     const auto cooked = CookMeshBinary(arena);
     ASSERT_TRUE(cooked);
     Impl::Mesh control(arena, s_MeshName);
@@ -200,7 +201,7 @@ TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
 TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/compact_bounds"));
+    Core::Assets::AssetArena arena{Name(NWB::Tests::s_SolidCaseMeshSolidCodecCompactBounds)};
     const Array<u32, 10u> words{ 0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u, 0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u };
     Core::Assets::AssetVector<Impl::MeshletBounds> bounds(arena);
     bounds.resize(2u);
@@ -241,7 +242,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
 TEST(MeshSolidCodec, PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPayload){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/previous_encoding"));
+    Core::Assets::AssetArena arena{Name(NWB::Tests::s_SolidCaseMeshSolidCodecPreviousEncoding)};
     const auto cooked = CookMeshBinary(arena);
     ASSERT_TRUE(cooked);
     Impl::Mesh control(arena, s_MeshName);

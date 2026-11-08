@@ -4,6 +4,7 @@
 
 #include <tests/common/arena_owner_fixture.h>
 #include <tests/common/test_context.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <core/alloc/module.h>
 
@@ -29,8 +30,8 @@ using namespace NWB::Core::Alloc;
 using NWB::Tests::OwnerStats;
 
 TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
-    constexpr Name s_Owner("tests/allocation_owners/identity_retirement");
-    constexpr Name s_LaterOwner("tests/allocation_owners/identity_later_publication");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerIdentityRetirement;
+    constexpr const Name& s_LaterOwner = NWB::Tests::GlobalCases::s_AllocationOwnerIdentityLater;
     const ArenaMemoryOwnerRecord* retained = nullptr;
     const ArenaMemoryOwnerRecord* successor = nullptr;
     {
@@ -77,7 +78,7 @@ TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
 }
 
 TEST(AllocationOwners, SharedNameAggregatesBytesAndRetainsIndividualHighwater){
-    constexpr Name s_Owner("tests/allocation_owners/shared_name");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerSharedName;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     u64 combinedBytes = 0u;
     u64 largestArenaBytes = 0u;
@@ -106,7 +107,7 @@ TEST(AllocationOwners, SharedNameAggregatesBytesAndRetainsIndividualHighwater){
 }
 
 TEST(AllocationOwners, TransientScratchBulkReleaseRetainsChurnWithoutAccumulatingPeak){
-    constexpr Name s_Owner("tests/allocation_owners/transient_scratch");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerTransientScratch;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     for(usize pass = 0u; pass < 3u; ++pass){
         ScratchArena arena(s_Owner);
@@ -127,7 +128,7 @@ TEST(AllocationOwners, TransientScratchBulkReleaseRetainsChurnWithoutAccumulatin
 }
 
 TEST(AllocationOwners, PersistentPoolBulkReleaseRetainsReallocationHistory){
-    constexpr Name s_Owner("tests/allocation_owners/transient_persistent");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerTransientPersistent;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     {
         PersistentArena arena(s_Owner, 65536u);
@@ -147,7 +148,7 @@ TEST(AllocationOwners, PersistentPoolBulkReleaseRetainsReallocationHistory){
 }
 
 TEST(AllocationOwners, SharedNamePreservesPoolReservationAlongsideDirectHeapUsage){
-    constexpr Name s_Owner("tests/allocation_owners/mixed_reservation");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerMixedReservation;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     {
         PersistentArena pool(s_Owner, 65536u);
@@ -170,7 +171,7 @@ TEST(AllocationOwners, SharedNamePreservesPoolReservationAlongsideDirectHeapUsag
 }
 
 TEST(AllocationOwners, ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce){
-    constexpr Name s_Owner("tests/allocation_owners/reset_history");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerResetHistory;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     {
         ArenaMemoryTracker tracker(s_Owner);
@@ -199,7 +200,7 @@ TEST(AllocationOwners, ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce
 }
 
 TEST(AllocationOwners, RetiredGlobalArenaPreservesUnreleasedOwnership){
-    constexpr Name s_Owner("tests/allocation_owners/retired_outstanding");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerRetiredOutstanding;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     void* allocation = nullptr;
     {
@@ -288,7 +289,7 @@ TEST(AllocationOwners, RawReallocationMaintainsBackingReservationAndCounts){
 }
 
 TEST(AllocationOwners, BackingDomainCannotCollideWithAnArenaName){
-    constexpr Name s_Owner("global/arena_memory/heap_backing");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerHeapBacking;
     GlobalArena arena(s_Owner);
     void* allocation = arena.allocate(1u, 13u);
     ASSERT_NE(allocation, nullptr);
@@ -301,7 +302,7 @@ TEST(AllocationOwners, BackingDomainCannotCollideWithAnArenaName){
 }
 
 TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
-    constexpr Name s_Owner("tests/allocation_owners/concurrent");
+    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerConcurrent;
     constexpr u32 s_ThreadCount = 4u;
     constexpr u32 s_AllocationCount = 8192u;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
@@ -309,7 +310,7 @@ TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
     Atomic<b8> failed{ false };
     Array<Thread, s_ThreadCount> workers;
     for(Thread& worker : workers){
-        worker = Thread([&startGate, &failed, &s_Owner](){
+        worker = Thread([&startGate, &failed](){
             GlobalArena arena(s_Owner);
             startGate.arrive_and_wait();
             for(u32 index = 0u; index < s_AllocationCount; ++index){

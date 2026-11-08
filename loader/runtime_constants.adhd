@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_CrashArenaPayloadSize = 256u * 1024u;
+const Name s_CommandLineArena = "loader/command_line";
+const Name s_CrashReportingArena = "loader/crash_reporting";
+const Name s_ProjectTaskProfileName = "cpu.task.project";
+const StringView s_ResourceDirectoryName = "res";
+const StringView s_GraphicsVolumeName = "graphics";
+const StringView s_FallbackExecutableDirectory = ".";
+const StringView s_FallbackExecutableName = "nwb";
+const StringView s_UnknownBuildLabel = "unknown";
+const StringView s_RuntimeCrashMetadataKey = "runtime";
+const StringView s_LoaderCrashMetadataValue = "loader";
+const StringView s_GpuDebugCrashMetadataKey = "gpu_debug";
+const StringView s_EnabledText = "true";
+const StringView s_DisabledText = "false";
+const i32 s_LoaderExitSuccess = 0;
+const i32 s_LoaderExitFailure = -1;
+const u16 s_EmptyFrameClientExtent = 0u;
+const u16 s_StandaloneLoggerPort = 0u;
+const StringView s_LoaderAppName = "loader";
+const StringView s_ForceSdrOutputFlag = "--sdr";
+const StringView s_DisableHardwareRayTracingFlag = "--disable-hardware-ray-tracing";
+const i32 s_UninitializedFrameExtent = 0;
+const u16 s_DefaultProjectFrameClientWidth = 1280u;
+const u16 s_DefaultProjectFrameClientHeight = 900u;
+
+
+class ProjectFrameClientSize{
+    public u16 width = s_DefaultProjectFrameClientWidth;
+    public u16 height = s_DefaultProjectFrameClientHeight;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

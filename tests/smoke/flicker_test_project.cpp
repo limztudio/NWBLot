@@ -9,6 +9,10 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -86,7 +90,7 @@ static constexpr f32 s_PointLightHeight = 2.6f;
 static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.5f;
+constexpr f32 s_SpinSpeed = NWB::Tests::Smoke::s_SmokeSpinSpeed;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
@@ -154,7 +158,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_transparentOwner, Name(NWB::Tests::Smoke::s_SmokeNameMesh), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));

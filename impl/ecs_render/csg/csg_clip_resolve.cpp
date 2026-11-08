@@ -151,8 +151,7 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
         receiverWorldBounds,
         [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter)noexcept{
             return TryAccumulateCsgReceiverClipDrawInfo(resolvedCutter.shapeType.desc.shaderModule, info);
-        }
-    );
+        });
     if(!resolved)
         return MakeUnexpected(Failure{});
     return info;
@@ -226,8 +225,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
             csgFrameData.cutters.push_back(cutterGpuData);
             ++range.cutterCount;
             return true;
-        }
-    );
+        });
 
     FinalizeCsgReceiverRangeWorkRegion(receiverWorkRegion, frameWidth, frameHeight, range, csgFrameData.workRegion);
     if(!appended || range.cutterCount == 0u)
@@ -243,3 +241,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

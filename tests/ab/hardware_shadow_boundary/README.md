@@ -1,61 +1,72 @@
-# Hardware transparent versus opaque shadow boundary
+# Hardware clear vs solid shadow edge
 
-This target-hardware A/B workflow measures the natural hardware transparent-shadow route against an opaque hardware-only
-baseline on the animated ten-character stress scene. Both arms freeze the same yaw and use the same binary:
+This hardware A/B flow measures the real hardware clear-shadow route against
+a solid hardware-only baseline on the moving ten-figure stress scene. Both
+arms freeze the same yaw and use the same binary:
 
-- `nwb_hardware_shadow_boundary_healthy_benchmark` records the healthy hardware transparent-shadow tail.
-- The second launch sets `NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1`, making every test-scene character opaque
-  so the renderer naturally selects hardware shadows without a behavior-changing production hook.
+- `nwb_hardware_shadow_boundary_healthy_benchmark` records the healthy
+  hardware clear-shadow tail.
+- The second run sets
+  `NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1`. This makes each test-scene
+  figure solid, so the renderer takes hardware shadows with no
+  behavior-change hook in production code.
 
-The baseline intentionally removes transparent materials. Its capture is therefore an inspection artifact, not a
-visual-parity input. The runner verifies RayQuery and natural route markers, checks for GPU validation/runtime failures, and
-compares GPU timestamp medians without manufacturing a renderer failure.
+The baseline drops clear mats on purpose. Its capture is a check artifact,
+not a look-match input. The runner checks RayQuery and real route markers. It
+checks for GPU validation and run faults. It compares GPU time middle values
+with no made-up renderer fault.
 
-From the repository root:
+From the repo root:
 
 ```bash
 python -m launcher hardware-shadow-boundary
 ```
 
-Use `--config dbg` for correctness investigation or `--config opt` for timing evidence. The canonical launcher
-rejects `fin` because Final builds omit the warning diagnostics needed to detect transient hardware-route degradation.
-For an optimized binary whose timing names are hashed, forward its generated `.namesym` sidecar with
-`--healthy-namesym`; because both arms reuse the same executable, the runner applies that sidecar to both arms when
-`--baseline-namesym` is omitted.
+Use `--config dbg` to study faults or `--config opt` for timing proof. The
+plain launcher rejects `fin` because Final builds drop the warn checks needed
+to spot short hardware-route faults. For an opt binary with hashed timing
+names, pass its made `.namesym` file with `--healthy-namesym`. Both arms use
+the same exe, so the runner uses that file for both arms when
+`--baseline-namesym` is left out.
 
-The command configures and builds the shared benchmark, then writes a timestamped artifact bundle
-under `.cozter/out/ab-results/hardware-shadow-boundary/`. It measures without GPU validation by
-default so `--gpudbg` layer work does not dominate the timing evidence. Run the correctness-oriented
-variant explicitly when needed:
+The command sets up and builds the shared check. Then it writes a dated
+result pack under `.cozter/out/ab-results/hardware-shadow-boundary/`. It
+measures with no GPU validation by default, so `--gpudbg` layer work does not
+swamp the timing proof. Run the fault-check form when needed:
 
 ```bash
 python -m launcher hardware-shadow-boundary --config dbg --gpu-validation
 ```
 
-Forward runner options after `--`:
+Pass runner flags after `--`:
 
 ```bash
 python -m launcher hardware-shadow-boundary -- --measure-seconds 30 --minimum-samples 12
 ```
 
-After the requested warmup, the runner waits for the next complete timing-file flush and excludes every byte through
-that boundary from the measured sample set. Collection then requires at least `--minimum-samples` (default six) positive
-`render.frame` and `render.shadow_opaque_trace` intervals from each arm, plus the same count of positive
-`render.shadow_transparent_trace` and `render.shadow_transparent_resolve` intervals from the healthy arm. Timing
-comparisons need more than ten positive intervals in each of those scopes; with fewer, a report whose functional gates
-pass is `inconclusive`. The opaque baseline must publish no positive transparent timing. Expected arm markers, clean
-runtime/validation logs, and nonblank native-window captures remain mandatory. A machine without RayQuery-capable
-hardware returns the standard skip code `77`; a missing route marker or runtime error is still a failure.
+After the set warm-up, the runner waits for the next full timing-file flush.
+It drops each byte through that edge from the measured set. Each arm must
+then give at least `--minimum-samples` (default six) good `render.frame` and
+`render.shadow_opaque_trace` times, plus the same count of good
+`render.shadow_transparent_trace` and `render.shadow_transparent_resolve`
+times from the healthy arm. Time compares need more than ten good times in
+each of those scopes. With fewer, a report with good task gates reads
+`inconclusive`. The solid baseline must show no good clear times. Set arm
+markers, clean run/check logs, and real native-window shots stay required. A
+box with no RayQuery hardware returns the plain skip code `77`. A missing
+route marker or run fault is still a fail.
 
-The report records hardware transparent-shadow overhead relative to the opaque baseline but does not classify it by default
-because the scene changes material classes. If a target has an agreed maximum transparent-shadow overhead, make it explicit:
+The report notes hardware clear-shadow cost against the solid baseline. It
+does not grade it by default because the scene changes mat kinds. If a target
+has a set max clear-shadow cost, state it:
 
 ```powershell
 python -m launcher hardware-shadow-boundary -- --maximum-transparent-frame-regression-percent 3.0
 ```
 
-The report compares the mandatory route scopes plus any additional published shadow/tail scopes. A missing optional
-scope is never silently converted into zero cost. Artifacts include
-per-arm timing files, complete logs, BMP captures, and `hardware_shadow_boundary_report.json` / `.md`.
-Run on a target GPU with a visible native X11/Xwayland or Windows window; this is a hardware evidence
-workflow, not a headless CTest.
+The report compares the required route scopes plus any extra shown
+shadow/tail scopes. A missing opt scope never quietly turns into zero cost.
+Results hold per-arm timing files, full logs, BMP shots, and
+`hardware_shadow_boundary_report.json` / `.md`. Run on a target GPU with a
+real native X11/Xwayland or Windows window. This is a hardware proof flow,
+not a headless CTest.

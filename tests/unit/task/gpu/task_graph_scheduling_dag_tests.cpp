@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,21 +37,21 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto handoffResult = AddHazardDomain(graph, Name("tests/task_graph/transitive_reduction_handoff"), "Transitive Reduction Handoff");
+    const auto handoffResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransitiveReductionHandoff), "Transitive Reduction Handoff");
     ASSERT_TRUE(handoffResult);
     const Core::GpuGraphResourceId handoff = *handoffResult;
     ASSERT_TRUE(handoff.valid());
 
     const Core::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
     const Core::GpuTaskCommandRequirements computeCommands = ComputeCommands();
-    const Name mergeDomain("tests/task_graph/transitive_reduction_merge_domain");
+    const Name mergeDomain = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTransitiveReductionMergeDomain;
 
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Core::GpuTaskCostHint::Medium;
     firstScheduling.frontierScoredMergeDomain = mergeDomain;
     const Core::GpuTaskResourceUse firstUse{ .resource = handoff, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/transitive_reduction_first")).setMarkerLabel("Transitive Reduction First").setScheduling(firstScheduling).setResourceUses(Span(&firstUse, 1u));
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransitiveReductionFirst)).setMarkerLabel("Transitive Reduction First").setScheduling(firstScheduling).setResourceUses(Span(&firstUse, 1u));
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -59,7 +61,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     secondScheduling.cost = Core::GpuTaskCostHint::Tiny;
     secondScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc secondDesc;
-    secondDesc.setIdentity(Name("tests/task_graph/transitive_reduction_second")).setMarkerLabel("Transitive Reduction Second").setScheduling(secondScheduling).setDependencies(Span(&first, 1u));
+    secondDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransitiveReductionSecond)).setMarkerLabel("Transitive Reduction Second").setScheduling(secondScheduling).setDependencies(Span(&first, 1u));
     const auto secondResult = graph.addTask(secondDesc, graphicsCommands);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
@@ -67,7 +69,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
 
     const Core::GpuTaskResourceUse thirdUse{ .resource = handoff, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc thirdDesc;
-    thirdDesc.setIdentity(Name("tests/task_graph/transitive_reduction_third")).setMarkerLabel("Transitive Reduction Third").setDependencies(Span(&second, 1u)).setResourceUses(Span(&thirdUse, 1u));
+    thirdDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransitiveReductionThird)).setMarkerLabel("Transitive Reduction Third").setDependencies(Span(&second, 1u)).setResourceUses(Span(&thirdUse, 1u));
     const auto thirdResult = graph.addTask(thirdDesc, computeCommands);
     ASSERT_TRUE(thirdResult);
     const Core::GpuTaskId third = *thirdResult;
@@ -138,10 +140,10 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(Name("tests/task_graph/scheduling_adjacency_first"), "Scheduling Adjacency First", {}, {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSchedulingAdjacencyFirst), "Scheduling Adjacency First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(Name("tests/task_graph/scheduling_adjacency_second"), "Scheduling Adjacency Second", Span(&first, 1u), {}, {}, {}, {}, graph);
+    const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSchedulingAdjacencySecond), "Scheduling Adjacency Second", Span(&first, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(first.valid());
@@ -167,7 +169,7 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
     const Core::GpuTaskId outOfRangeTask{ .generation = graphGeneration, .index = static_cast<u32>(declaredTaskCount), };
     const Core::GpuTaskId staleTask{ .generation = graphGeneration + 1u, .index = static_cast<u32>(first.index) };
     Core::GpuTaskGraph foreignGraph(testArena.arena);
-    const auto foreignTaskResult = AddTask(Name("tests/task_graph/scheduling_adjacency_foreign"), "Scheduling Adjacency Foreign", {}, {}, {}, {}, {}, foreignGraph);
+    const auto foreignTaskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSchedulingAdjacencyForeign), "Scheduling Adjacency Foreign", {}, {}, {}, {}, {}, foreignGraph);
     ASSERT_TRUE(foreignTaskResult);
     const Core::GpuTaskId foreignTask = *foreignTaskResult;
     ASSERT_TRUE(foreignTask.valid());
@@ -201,7 +203,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
         Array<Core::GpuTaskId, s_MaxTaskCount> tasks = {};
-        const Name taskBaseName("tests/task_graph/packed_reachability_task_");
+        const Name taskBaseName = NWB::Tests::TaskGraphTestUtils::s_TaskGraphPackedReachabilityTask;
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const Core::GpuTaskId* const dependency = taskIndex >= 2u ? &tasks[taskIndex - 2u] : nullptr;
             const auto derivedNameResult = IndexedName(taskBaseName, taskIndex);
@@ -215,7 +217,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
 
         Core::GpuTaskGraphAnalysis analysis(testArena.arena);
         ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-        Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/task/gpu/packed_reachability_scratch"));
+        Core::Alloc::ScratchArena reachabilityScratchArena{Name(TaskGraphTestUtils::s_GpuCaseTaskGpuPackedReachabilityScratch)};
         Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(reachabilityScratchArena);
         u64 graphGeneration = 0u;
         {

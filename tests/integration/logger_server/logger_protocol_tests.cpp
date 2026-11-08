@@ -9,7 +9,8 @@
 #include <core/common/log.h>
 
 #include <logger/common.h>
-#include <logger/server/crash_auth.h>
+#include <logger/server/crash_auth.adhd.h>
+#include <tests/integration/logger_server/name_cases.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -24,7 +25,7 @@ namespace __hidden_logger_protocol_tests{
 
 
 using TestArena = NWB::Tests::TestArena<>;
-static constexpr AStringView s_SecretToken = "secret-token";
+static constexpr AStringView s_SecretToken = NWB::Tests::LoggerCrashCases::s_LoggerProtocolSecretToken;
 
 
 class LoggerProtocolTests : public ::testing::Test{
@@ -74,7 +75,7 @@ TEST_F(LoggerProtocolTests, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token "));
 
-    constexpr AStringView s_HeaderBytes = "Bearer secret-token trailing";
+    constexpr AStringView s_HeaderBytes = NWB::Tests::LoggerCrashCases::s_LoggerProtocolHeaderBytes;
     const AStringView header(s_HeaderBytes.data(), LengthOf("Bearer secret-token") - 1u);
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header.substr(0u, header.size() - 1u)));

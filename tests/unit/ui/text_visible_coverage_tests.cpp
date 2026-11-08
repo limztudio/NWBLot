@@ -5,6 +5,8 @@
 #include "text_visible_fixture.h"
 #include "baked_font_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/text/atlas.h>
 #include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
 
@@ -110,7 +112,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     ASSERT_EQ(m_layout.lines().size(), 2u);
     ASSERT_EQ(m_layout.glyphs().size(), hiddenCount + 1u);
     ASSERT_TRUE(m_text.measure(m_layout, { 800.0f, 600.0f, 1.0f, 1.0f }));
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/text/visible_hangul"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleHangul)};
     Vector<u32, Core::Alloc::ScratchArena> ids(scratch);
     ids.reserve(hiddenCount);
     const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
@@ -164,7 +166,7 @@ TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsReveal
     ASSERT_EQ(first.glyphPages().size(), 1u);
     ASSERT_EQ(first.vertices().size(), 4u);
     const SharedGlyphPage original = first.glyphPages()[0u];
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/text/visible_retained_pixels"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleRetainedPixels)};
     Vector<u8, Core::Alloc::ScratchArena> pixels(scratch);
     pixels.assign(original->pixels().begin(), original->pixels().end());
     beginPaint(2u);
@@ -444,7 +446,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     const auto initial = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 32.0f });
     ASSERT_TRUE(initial);
     ASSERT_EQ(initial->glyphs().size(), 1u);
-    FontAtlas baked(m_arena, Name("tests/ui/fonts/measured_sdf"));
+    FontAtlas baked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsMeasuredSdf));
     FontAtlasPayload payload(m_arena);
     payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
     const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
@@ -484,7 +486,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     }
     group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
     baked.setPayload(Move(payload));
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/text/measure_sdf"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextMeasureSdf)};
     ASSERT_TRUE(baked.validatePayload(scratch));
     const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &baked };
     ASSERT_TRUE(m_text.setFonts(scratch, Span(&source, 1u)));

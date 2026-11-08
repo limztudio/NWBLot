@@ -13,6 +13,7 @@
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/rhi/device.h>
+#include <core/task/gpu/packet_runtime_statistics.adhd.h>
 
 #include <global/sync.h>
 #include <global/simd/vector.h>
@@ -294,15 +295,7 @@ private:
 
 
 private:
-    struct NativeSubmissionInfo{
-        usize commandListCount = 0u;
-        usize plannedWaitTokenCount = 0u;
-        usize sameQueueWaitElisionCount = 0u;
-        usize timelineWaitCount = 0u;
-        usize mergedTimelineWaitCount = 0u;
-        usize inheritedTimelineWaitElisionCount = 0u;
-        f64 submissionSeconds = 0.0;
-    };
+    using NativeSubmissionInfo = ::NWB::Core::GpuNativeSubmissionInfo;
 
     class AcceptedPacketPublicationGuard;
     class RejectingPacketUnwindScope;

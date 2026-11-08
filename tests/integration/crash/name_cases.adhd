@@ -1,0 +1,13 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_CrashTestNameTestsIntegrationCrashArchiveUpload = "tests/integration/crash/archive_upload";
+const Name s_CrashTestNameTestsIntegrationCrashArchiveUploadScratch = "tests/integration/crash/archive_upload_scratch";
+const Name s_CrashTestNameTestsIntegrationCrashOperationScratch = "tests/integration/crash/operation_scratch";
+const Name s_CrashTestNameTestsIntegrationCrashInstall = "tests/integration/crash/install";
+const Name s_CrashTestNameTestsIntegrationCrashSignalChildInstall = "tests/integration/crash/signal_child_install";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/graphics/rhi/device.h>
 
@@ -18,17 +19,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct SoftShadowResolveStageState{
-    Core::ShaderHandle m_shader;
-    Core::ComputePipelineHandle m_pipeline;
-};
-
-struct SoftShadowResolveChannelState{
-    SoftShadowResolveStageState m_wavelet;
-    SoftShadowResolveStageState m_upsample;
-    b8 m_failed = false;
-};
 
 struct SoftShadowResolveState{
     Core::BindingLayoutHandle m_bindingLayout;

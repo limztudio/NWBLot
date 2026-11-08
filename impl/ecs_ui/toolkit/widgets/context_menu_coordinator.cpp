@@ -199,8 +199,7 @@ b8 ContextMenuCoordinator::applyContextMenuInput(ContextMenuFrame& frame, Contex
             m_builder.m_context.input().closePopup(frame.popupToken);
             snapshotContextMenu(frame);
             return ListActionOutcome::Stop;
-        }
-    );
+        });
 }
 
 void ContextMenuCoordinator::snapshotContextMenu(ContextMenuFrame& frame)noexcept{

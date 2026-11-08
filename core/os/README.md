@@ -1,60 +1,113 @@
-# Native UI services
+# Home OS helpers
 
-`Frame` owns `IClipboardService`; UI/ECS clients borrow it after startup and keep only request tokens. Clipboard requests copy their input, preserve FIFO ordering, complete through `poll`, and can be cancelled without borrowing client buffers. All native work and completion polling belong to the Frame event thread. Up to 32 requests and 16 MiB of UTF-8 text are admitted. Text contains no embedded NUL and must be valid UTF-8; an empty string is supported. Clipboard and text-input admission share `IsValidUtf8TextWithoutNul` from `global/utf8_text.h`, which rejects NUL, overlong forms, surrogates, and out-of-range scalars before either queue copies its bytes.
+`Frame` owns `IClipboardService`. UI/ECS users borrow it after start and keep
+only ask tokens. Board asks copy their input, keep first-in-first-out order,
+end through `poll`, and can drop with no lent user stores. All home work and
+done checks sit on the Frame event thread. At most 32 asks and 16 MiB of
+UTF-8 text go in. Text holds no hid NUL and must be good UTF-8. A blank string
+works. Board and text-in take-in share `IsValidUtf8TextWithoutNul` from
+`global/utf8_text.h`. It turns down NUL, long forms, half pairs, and out-of-set
+codes before each queue copies its bytes.
 
-Win32 uses `CF_UNICODETEXT`, normalizes native CRLF to LF for reads, and makes clipboard write ownership explicit through movable global memory. The clipboard channel is supported; primary selection is reported unsupported.
+Win32 uses `CF_UNICODETEXT`, turns home CRLF into LF for reads, and makes
+board write hold clear through moved global store. The board lane works. Main
+pick reports not held.
 
-Linux X11 borrows the existing Frame `Display` and forwards selection/property events before ordinary window input. A private owner window retains clipboard and primary text. Every external read has a unique request window and actual server timestamp, so cancelled/stale notifications cannot complete another request. Owners implement `TARGETS`, `TIMESTAMP`, `MULTIPLE`, UTF-8, and Latin-1 `STRING` when representable. Large text uses bounded ICCCM `INCR` transfers. Active outgoing transfers keep immutable bytes through ownership loss and restore requestor event masks when finished. Foreign window errors are checked. Reads and transfers time out after five seconds; at most eight outgoing transfers are active.
+Linux X11 borrows the set Frame `Display` and sends pick/field events before
+plain window input. A closed owner window keeps board and main text. Each
+outside read has its own ask window and true server time mark, so dead/stale
+notes cannot end another ask. Owners do `TARGETS`, `TIMESTAMP`, `MULTIPLE`,
+UTF-8, and Latin-1 `STRING` when they can show it. Big text uses capped ICCCM
+`INCR` moves. Live out moves keep fixed bytes through hold loss and fix
+ask-side state on new owner asks. Unreadable asks still answer asks in a
+fixed order. The owner window and its X11 links free on drop. This keeps live
+X11 state off the board ask. X11 asks which toolkits may also serve run in
+the ask window thread. Only treated X11 faults show in the run faults. Real
+apps own the thread and start/stop rules. Toolkits may not keep ask state in
+shared statics. Wayland asks live on the Frame Wayland run queue. Each top
+window links its own board state. `wl_data_device_manager` v1 or newer is
+needed. With no `zwp_primary_selection_device_manager_v1`, reads and writes
+of main pick report not held. Board asks and main pick asks stay split. MIME
+texts use the marked UTF-8 form with plain-text fall back. Board reads take
+both copy and paste forms. Event-thread asks of the same kind stay in order.
+The run queue owns the seat, known MIME set, and last shown pick serial. New
+board source state replaces old state before it shows. Stale serials fail, and
+broad moves may fix old text. Byte caps are shared on each queue. Mid-offer
+faults send fail with no half state held.
 
-Linux Wayland borrows the Frame display and selected seat. It binds the core data-device manager and uses nonblocking, bounded reads and writes through native file descriptors. The receiving pipe leaves the foreign source's write endpoint blocking for toolkit interoperability. Owned source text and active transfers have separate lifetimes. Clipboard writes require keyboard focus and a serial from a real button/key event. Focus loss, keyboard capability loss, and seat removal clear eligibility; same-seat manager hotplug preserves focus while requiring a fresh input serial. Selection offers received before keyboard enter are retained. Primary selection is supported only when its protocol XML was available at build time and the compositor advertises `zwp_primary_selection_device_manager_v1`; otherwise capabilities report unsupported.
-
-Both backends finish without nested native event loops or shell commands. Protocol and pipe progress is pumped during Frame updates, with a 64 KiB budget per pipe transfer and five-second deadlines. Text-input sessions are a separate OS service; editable-text selection and document policy stay in the UI domain.
-
-The common async queue and UTF-8 tests run on Windows and Linux. Linux pipe tests cover descriptor modes, partial transfer, EOF, backpressure, closed readers, and writer reuse. X11 integration tests are skipped in normal runs and never touch a logged-in user's selection. When `xvfb-run` is installed, CTest adds `nwb_os_x11_clipboard_isolated`, which runs them against a temporary isolated Xvfb display. They cover Unicode clipboard/primary round trips, ownership loss during `INCR`, cancellation followed by a fresh request, and a queued ownership-loss event delivered after reacquisition. Wayland live qualification requires a Linux compositor; deterministic service tests do not establish native compositor behavior.
-
-On a Linux host with the repository toolchain and native X11 development packages installed, run:
-
-```sh
-python3 -m launcher build nwb_os_tests --configure-preset linux-clang-x64 --config dbg --configure always
-ctest --preset linux-clang-dbg -R '^nwb_os_tests$' --output-on-failure
-```
-
-Install `xvfb-run`/Xvfb before configuring to enable the isolated selection integration entry, then run:
+Set up `xvfb-run`/Xvfb before setup to turn on the lone pick check entry.
+Then run:
 
 ```sh
 ctest --preset linux-clang-dbg -R '^nwb_os_x11_clipboard_isolated$' --output-on-failure
 ```
 
-Wayland additionally needs the existing `wayland-client`, `xkbcommon`, `wayland-scanner`, and `wayland-protocols` dependencies. The normal Linux preset discovers them; pass `-D NWB_ENABLE_WAYLAND=OFF` to the launcher build command for the X11-only build. Primary-selection XML is discovered separately from xdg-shell; its absence keeps the core Wayland clipboard enabled and reports primary selection unsupported.
+Wayland also needs the set `wayland-client`, `xkbcommon`,
+`wayland-scanner`, and `wayland-protocols` files. The plain Linux form finds
+them. Pass `-D NWB_ENABLE_WAYLAND=OFF` to the launcher build call for the
+X11-only build. Main-pick XML is found apart from xdg-shell. With none, the
+core Wayland board stays on and reports main pick not held.
 
-## Text-input sessions
+## Text-in runs
 
-`Frame` owns `ITextInputService` beside the clipboard service. Clients borrow the service on the native event thread and retain only `TextInputSessionToken { service, generation }`. A service admits one active session. `begin` copies a UTF-8 surrounding snapshot, byte-indexed selection, and native-client-pixel caret rectangle. `updateSurrounding` copies replacement snapshots, preserves `InputMethod` versus `Other` change provenance for native feedback, and increments a service revision; `surroundingRevision(token)` lets an adapter fence a delayed native deletion against the exact model snapshot it published. `updateCaret` moves native composition/candidate placement. Capabilities report direct commits, preedit, surrounding support, and native deletion separately.
+`Frame` owns `ITextInputService` next to the board helper. Users borrow the
+helper on the home event thread and keep only
+`TextInputSessionToken { service, version }`. One helper takes one live run.
+`begin` copies a UTF-8 near shot, byte-marked pick, and home-user-pixel mark
+box. `updateSurrounding` copies new shots, keeps `InputMethod` vs `Other`
+change roots for home feed-back, and bumps a helper count.
+`surroundingRevision(token)` lets a hook fence a late home cut with the exact
+model shot it sent. `updateCaret` moves home make/candidate spot. Skill flags
+note direct puts, pre-show, near-text hold, and home cut split.
 
-`poll` delivers owned `Commit`, `Preedit`, `DeleteSurrounding`, or `Cancelled` events without invoking UI callbacks. All text excludes embedded NUL and uses strict UTF-8. Preedit anchor/caret offsets index its own text in bytes; `caretVisible` preserves a native hidden-cursor request. Delete lengths count bytes around the caret or the outer selection edges according to the event's deletion basis and carry that snapshot revision. An explicit old revision is rejected rather than deleting different model text.
+`poll` gives owned `Commit`, `Preedit`, `DeleteSurrounding`, or `Cancelled`
+notes with no UI call-backs. All text drops hid NUL and uses firm UTF-8.
+Pre-show start/mark spots mark its own text in bytes. `caretVisible` keeps a
+home hid-mark ask. Cut lengths count bytes near the mark or the outer pick
+edges by the note cut base and hold that shot count. An old stated count
+fails. It does not cut other model text.
 
-Services start unfocused. Frame forwards native keyboard focus before ordinary input focus dispatch, including Win32 `WM_SETFOCUS`/`WM_KILLFOCUS` when activation does not change. Losing focus invalidates the active token, discards its queued work, stops native composition, and leaves one terminal cancellation for that token. Polling it once, ending it, or beginning another session invalidates it permanently. Service identities and generation checks reject foreign or stale native replies. End/cancellation invalidate authority before calling native cleanup, including reentrant cancellation messages.
+Helpers start with no focus. Frame sends home key focus before plain input
+focus send. This holds Win32 `WM_SETFOCUS`/`WM_KILLFOCUS` when wake does not
+move. Lost focus voids the live token, drops its queued work, stops home
+make, and leaves one end drop note for that token. One poll of it, one end
+of it, or start of another run voids it for good. Helper IDs and version
+checks turn down strange or old home replies. End/drop voids right before it
+calls home clean-up, with re-do drop notes in it.
 
-The queue admits at most 64 events, 64 KiB per event, and 256 KiB of queued text; surrounding snapshots admit 1 MiB. Only adjacent preedit updates coalesce. Commits and deletions remain FIFO ordering barriers. Event-count or byte-budget overflow discards the partial queue and returns an explicit overflow cancellation, so a client cannot silently apply a truncated edit stream. Malformed UTF-8 or non-boundary ranges fail admission; native backends turn invalid delivery into explicit failure cancellation.
+The queue takes at most 64 notes, 64 KiB per note, and 256 KiB of queued
+text. Near shots take 1 MiB. Only side-by-side pre-show notes join. Puts and
+cuts stay first-in-first-out edge walls. Count or byte flood drops the half
+queue and gives a clear flood drop note, so a user cannot quietly use a cut
+edit stream. Bad UTF-8 or off-edge spans fail take-in. Home backs turn bad
+send into clear fail drop notes.
 
-Win32 uses IMM32 composition/result strings, converts UTF-16 composition cursors to UTF-8 byte offsets, and positions the native composition and candidate windows at the client-pixel caret. Active ordinary `WM_CHAR`/`WM_SYSCHAR` and `WM_UNICHAR` commits go exclusively into the service; control characters remain with keyboard edit/navigation policy. UTF-16 surrogate state belongs to the service for both active editing and the ordinary scene-character fallback; it resets at every session/focus boundary. The Frame fallback borrows the native decoder and refuses unfocused character delivery, so a partial scene surrogate cannot join a character typed after UI ownership changes or a late character after focus loss. `CS_INSERTCHAR` creates provisional UTF-8 preedit and `CS_NOMOVECARET` retains its insertion caret until the authoritative composition/result replaces it. Managed `WM_IME_COMPOSITION` results are consumed without calling `DefWindowProc`; `WM_IME_CHAR` is also consumed so default processing cannot synthesize a duplicate result commit. An IME message without a current-session composition start cannot deliver into a replacement session. This backend reports IMM32 preedit only when an input context is available, and does not claim TSF reconversion or native surrounding-text deletion. The native bridge checks the backend tag before downcasting; inactive text messages and foreign services leave ordinary scene input intact; native focus messages still reset session eligibility.
+Win32 uses IMM32 make/result strings, turns UTF-16 make marks into UTF-8
+byte spots, and puts the home make and pick windows at the user-pixel mark.
+Live plain `WM_CHAR`/`WM_SYSCHAR` and `WM_UNICHAR` puts go only into the
+helper. Rule chars stay with key edit/move rules. UTF-16 half-pair state sits
+with the helper for both live edit and the plain scene-char fall back. It
+clears at each run/focus edge. The Frame fall back borrows the home decoder
+and turns down no-focus char send. So a half scene pair cannot join a char
+typed after UI hold moves, or a late char after the run ends.
 
-For [`WM_IME_SETCONTEXT`](https://learn.microsoft.com/en-us/windows/win32/intl/wm-ime-setcontext), the Win32 OS bridge remembers the original activation display flags and forwards the message to `DefWindowProc`, returning its result. While a focused custom edit session owns preedit drawing, it clears only `ISC_SHOWUICOMPOSITIONWINDOW`; every other display-option bit remains unchanged. Activation can happen before an edit session begins, so session begin/end reapply the remembered active context policy without waiting for another focus change. Focus loss or native deactivation prevents reactivation; after the edit session ends, ordinary scene input keeps the original native IME visibility. The hidden-HWND tests check forwarded flags, session transitions, and a reentrant cancellation. They do not establish the appearance of any live IME's windows.
+Linux X11 IME state is a plain XIM front with no state kept past a focus or
+run edge. Frame owns the XIM links and the tied input context for each
+top-level window. The helper takes the UTF-8 form of made text and home
+spot/focus asks. Good char sets and style flags follow the open XIM. XIM open
+faults mark the helper down rather than killing setup. An idle XIM check
+entry runs under `xvfb-run`. Wayland text-in is an off stub. Start and end
+note not-held. Poll gives no notes. Home focus asks still flow, and end/drop
+rules stay firm.
 
-Win32 character messages preserve the low-word repeat count for both active text sessions and scene fallback. UTF-16 pairs decode before repeating the completed scalar. Active commits batch repeated scalars into bounded UTF-8 events, so an aggregate message does not exhaust the event count one character at a time; the total byte budget still cancels overflow atomically. Keydown preserves one initial Press followed by Repeat actions, while keyup remains one Release. Synthetic messages with a zero repeat word retain the existing single-input behavior. These counts follow the native [WM_CHAR](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-char) and [WM_UNICHAR](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-unichar) contracts.
+## Board and text-in user rules
 
-Linux X11 owns its XIM/XIC resources and borrows the Frame display/window. `XFilterEvent` handles native IM traffic; normalized physical key events still reach the ordinary input dispatcher, while `Xutf8LookupString` supplies committed text. Callback preedit is enabled only when the server supports that input style. Native character offsets are converted to UTF-8 byte positions in a copied, bounded preedit buffer. Cancellation invalidates the token immediately and defers XIC destruction until the enclosing Xlib call returns. XIM surrounding/reconversion is unsupported; candidate placement uses an optional spot hint when the selected style accepts it. Missing XIM support is reported through capabilities.
-
-Linux Wayland owns its registry, optional text-input-v3 manager and device, and borrows the Frame display/surface/selected seat. Native commit, preedit and deletion events are applied as a `done(serial)` batch against the session and surrounding snapshot actually sent. The surrounding window is limited to 4000 bytes and retains the complete selection. Deletion counts address the selection's outer edges and preserve the selected bytes through one selection-exclusion transaction. Keyboard/surface focus, manager/seat removal and generation checks fence stale delivery. Client-pixel caret rectangles convert to surface coordinates using the buffer scale. Without the protocol XML or compositor manager, direct xkb commits remain available while preedit/surrounding/deletion capabilities are disabled. Protocol generation uses the existing Wayland scanner; no generated source is vendored.
-
-The portable Linux backend-model tests exercise preedit byte mapping, nested XIC retirement, surrounding provenance, serial/session fences, selection-excluded deletion bounds, change causes and signed caret scaling. Native X11/XIM-server and Wayland-compositor execution still requires a Linux host.
-
-Deterministic session tests cover copied UTF-8, stale/foreign tokens, focus cancellation, event ordering/coalescing, revisions, byte boundaries, overflow, native start failures, reentrant cleanup, and event-thread ownership. Win32 tests use actual hidden HWNDs and exercise Unicode messages, surrogate reset/cancellation, IME duplicate suppression, aggregate character repeat counts and queue boundaries, and IMM32 composition/candidate caret placement when a context is available. These tests do not establish live Korean/Japanese/Chinese IME or TSF behavior; live language-input qualification still belongs on each native host.
-
-The IMM32 message contract and caret forms follow [Microsoft's composition-message documentation](https://learn.microsoft.com/en-us/windows/win32/intl/processing-the-wm-ime-composition-message) and [candidate-window coordinates](https://learn.microsoft.com/en-us/windows/win32/api/imm/ns-imm-candidateform).
-
-## Selection-excluded surrounding deletion
-
-`TextInputEvent::deletionBasis` defaults to `Caret` for existing producers. Wayland v3 uses `Selection`, whose before/after byte counts address the outer edges of the normalized selection and exclude the selected bytes. The queue validates scalar boundaries and copies the basis with session, sequence and surrounding revision. UI consumers perform their own model and grapheme checks.
-
-The Wayland wire state retains copied numeric bounds and endpoints of the actual at-most-4000-byte surrounding snapshot. Deletion requires matching current, published and serial-retained revisions plus exact endpoints, and cannot escape that sent slice. An unavailable replacement does not retag old metadata; reset clears it. The native Done order remains preedit clear, deletion, commit and new preedit. Linux runtime/compositor and live IME qualification require native evidence; cross-target compilation and deterministic model/service tests alone do not provide it.
+Borrow helpers only on the Frame event thread. Keep lent helper and token
+views short. Never hold a lent view past a Frame state move. Own ask bytes
+and result notes. Idle asks may stay owned for the app life. Board reads must
+take each `poll` follow-up exactly once. Text-in runs must poll run drops
+before they reuse a token. Board and text-in limit faults (`TooManyRequests`,
+`TooLarge`, `QueueFull`, `StaleWindow`, `NoDisplay`, `NoSelectionOwner`,
+`UnsupportedSelection`, `InvalidUtf8`) read as plain take-in or state faults,
+not as card faults. Only the shown `std::system_error` and
+`std::runtime_error` forms may cross the public door.

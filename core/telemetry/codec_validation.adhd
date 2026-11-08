@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/telemetry/codec.h>
+#include <core/telemetry/diagnostic.h>
+
+namespace NWB::Core::Telemetry{
+using TelemetryStreamHeader = EncodedStreamHeader;
+using DiagnosticWireHeader = EncodedDiagnosticPayloadHeader;
+constexpr auto s_DiagnosticTerminationFlag = DiagnosticPayloadFlag::TerminatesProcess;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidTelemetryStreamHeader(in TelemetryStreamHeader header){
+    return header.magic == s_StreamMagic && header.version == s_TelemetryFormatVersion && header.reserved == 0u;
+}
+
+b8 IsValidDiagnosticWireHeader(in DiagnosticWireHeader header){
+    return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~s_DiagnosticTerminationFlag) == 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

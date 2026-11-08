@@ -30,10 +30,8 @@ namespace MaterialCookDetail{
 
 
 static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const MaterialBindEntry& entry, ScratchArena& arena){
-    if(entry.virtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), ConvertString(entry.source));
+    if(!ValidateMaterialBindIncludePath(AStringView(entry.virtualPath), AStringView(entry.source)))
         return MakeUnexpected(Failure{});
-    }
 
     ScratchString includePath(AStringView(entry.virtualPath), arena);
     includePath += s_MaterialBindSourceExtensionText;

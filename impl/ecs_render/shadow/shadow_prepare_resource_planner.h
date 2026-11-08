@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 class RendererRayTracingSystem;
 class RendererMeshSystem;
 struct RayTracingShadowPreparationResourceSnapshot;
-struct ShadowPrepareUploadChain;
+class ShadowPrepareUploadChain;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

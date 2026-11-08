@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 #include "packet_runtime_internal.h"
 #include "compiler_internal.h"
 #include "task_graph.h"
@@ -256,7 +257,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     // Consecutive subsets from one immutable source agree on overlapping state.
     // Preserve source order between batches.
     // The scratch vector owns temporary snapshots; fan-in copies their contents before this local storage is released.
-    constexpr usize s_MaxSeedSubsetBatch = 8u;
+    constexpr usize s_MaxSeedSubsetBatch = s_GpuPacketMaxSeedSubsetBatch;
     Vector<CommandListResourceStateHandoff, Alloc::ScratchArena> seedSubsetBatch(stateFanInScratchArena);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);

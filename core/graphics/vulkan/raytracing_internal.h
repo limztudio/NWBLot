@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <core/graphics/vulkan/raytracing_types.adhd.h>
+
 #include <global/bit.h>
 
 
@@ -34,7 +36,7 @@ inline constexpr TStringView s_LssVertexInputName = NWB_TEXT("LSS vertex");
 inline constexpr TStringView s_LssIndexInputName = NWB_TEXT("LSS index");
 inline constexpr VkBufferUsageFlags s_AccelStructBuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 inline constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-inline constexpr u32 s_MaxPositionTruncateBitCount = 32u;
+inline constexpr u32 s_MaxPositionTruncateBitCount = VulkanDefaults::s_VulkanDefaultMaxPositionTruncateBitCount;
 
 using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena>;
 using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena>;
@@ -103,30 +105,6 @@ public:
 };
 
 
-struct RayTracingCapabilityInputs{
-    b8 accelerationStructureExtensionEnabled = false;
-    b8 accelerationStructureFeatureEnabled = false;
-    b8 createAccelerationStructureEntryPointAvailable = false;
-    b8 destroyAccelerationStructureEntryPointAvailable = false;
-    b8 getAccelerationStructureBuildSizesEntryPointAvailable = false;
-    b8 getAccelerationStructureDeviceAddressEntryPointAvailable = false;
-    b8 cmdBuildAccelerationStructuresEntryPointAvailable = false;
-
-    b8 rayTracingPipelineExtensionEnabled = false;
-    b8 rayTracingPipelineFeatureEnabled = false;
-    b8 createRayTracingPipelinesEntryPointAvailable = false;
-    b8 getRayTracingShaderGroupHandlesEntryPointAvailable = false;
-    b8 cmdTraceRaysEntryPointAvailable = false;
-
-    b8 opacityMicromapExtensionEnabled = false;
-    b8 opacityMicromapFeatureEnabled = false;
-    b8 synchronization2ExtensionEnabled = false;
-    b8 createMicromapEntryPointAvailable = false;
-    b8 destroyMicromapEntryPointAvailable = false;
-    b8 getMicromapBuildSizesEntryPointAvailable = false;
-    b8 cmdBuildMicromapsEntryPointAvailable = false;
-};
-
 [[nodiscard]] inline constexpr b8 SupportsRayTracingAccelStruct(const RayTracingCapabilityInputs& inputs)noexcept{
     return
         inputs.accelerationStructureExtensionEnabled
@@ -181,12 +159,6 @@ struct RayDispatchLimits{
 [[nodiscard]] VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipelineDesc& desc)noexcept;
 
 [[nodiscard]] b8 ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept;
-
-struct RayTracingHandleLayout{
-    u32 handleSize = 0u;
-    u32 handleSizeAligned = 0u;
-    u32 baseAlignment = 0u;
-};
 
 Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(const VulkanContext& context, TStringView operation);
 

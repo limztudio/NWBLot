@@ -72,7 +72,7 @@ combining cluster, UTF-8 sequence, or CRLF separator are rejected.
 
 These APIs expose shaped cluster edges. They do not implement UAX #29 grapheme-based
 editing, intra-ligature caret positions, or complete visual selection/navigation.
-`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation; it does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
+`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation. It does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
 
 ## Glyph image selection and painting
 

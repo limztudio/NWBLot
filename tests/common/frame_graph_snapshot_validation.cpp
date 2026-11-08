@@ -3,6 +3,7 @@
 
 
 #include <tests/common/frame_graph_snapshot_validation.h>
+#include <tests/common/name_cases.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +66,7 @@ b8 ValidateNormalFrameSnapshotCompletion(const Core::Telemetry::FrameGraphPayloa
         b8 accepted = false;
         for(const auto& packet : payload.packetSubmissionStatistics)
             accepted = accepted || packet.packetIndex == node.compiledTask.packetIndex;
-        if(node.name == Name("render.frame_recovery")){
+        if(node.name == CommonCases::s_CommonCaseNameRenderFrameRecovery){
             if(!unusedRecovery || accepted)
                 return false;
             ++unusedRecoveryTasks;

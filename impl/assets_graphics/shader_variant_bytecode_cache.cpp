@@ -90,10 +90,8 @@ b8 ShaderVariantBytecodeCache::GetBytecode(
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
 
     Vector<ShaderBinaryPayload::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
-    if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has too many merged defines for shader compilation"), ConvertString(entry.name));
+    if(!ValidateShaderMergedDefineCount(entry.name, mergedDefines.size()))
         return false;
-    }
     compileDefines.reserve(mergedDefines.size());
     for(const auto& [defineName, value] : mergedDefines)
         compileDefines.push_back(ShaderBinaryPayload::ShaderMacroDefinition{ defineName, value });
@@ -137,3 +135,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

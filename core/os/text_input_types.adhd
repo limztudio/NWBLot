@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TextInputBackend{
+    Unsupported = 0,
+    Win32Imm32,
+    X11Xim,
+    Wayland,
+    kCount
+}
+
+enum<u8> TextInputAdmission{
+    Accepted = 0,
+    WrongThread,
+    InvalidSession,
+    InvalidText,
+    InvalidRange,
+    TooLarge,
+    QueueFull,
+    Unsupported,
+    Unavailable,
+    Busy,
+    NativeFailure,
+    kCount
+}
+
+enum<u8> TextInputChangeCause{
+    InputMethod = 0,
+    Other,
+    kCount
+}
+
+enum<u8> TextInputPollResult{
+    InvalidSession = 0,
+    Pending,
+    Event,
+    WrongThread,
+    kCount
+}
+
+enum<u8> TextInputEventKind{
+    Commit = 0,
+    Preedit,
+    DeleteSurrounding,
+    Cancelled,
+    kCount
+}
+
+enum<u8> TextInputCancelReason{
+    FocusLost = 0,
+    NativeCancelled,
+    Overflow,
+    NativeFailure,
+    kCount
+}
+
+const usize s_TextInputMaxEvents = 64u;
+const usize s_TextInputMaxEventTextBytes = 64u * 1024u;
+const usize s_TextInputMaxQueuedTextBytes = 256u * 1024u;
+const usize s_TextInputMaxSurroundingBytes = 1024u * 1024u;
+
+
+class TextInputRect{
+    public i32 x = 0;
+    public i32 y = 0;
+    public i32 width = 1;
+    public i32 height = 1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

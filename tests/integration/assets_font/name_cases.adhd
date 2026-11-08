@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FontCaseEngineUiFontsDefaultLatinFace = "engine/ui/fonts/default/latin/face";
+const Name s_FontCaseEngineUiFontsDefaultKoreanFace = "engine/ui/fonts/default/korean/face";
+const Name s_FontCaseProjectFontsTest = "project/fonts/test";
+const Name s_FontCaseTestsIntegrationAssetsFontPreparedOutput = "tests/integration/assets_font/prepared_output";
+const Name s_FontCaseTestsIntegrationAssetsFontPreparedSerializeOutput = "tests/integration/assets_font/prepared_serialize_output";
+const Name s_OneOffNameTestsAssetsFontNativeValidationDiagnostic = "tests/assets_font/native_validation_diagnostic";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

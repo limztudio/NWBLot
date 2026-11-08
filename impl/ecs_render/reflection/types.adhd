@@ -8,6 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_RenderNameECSRenderReflectionClassify = "ECSRender_ReflectionClassify";
+const Name s_RenderNameECSRenderReflectionBuildArgs = "ECSRender_ReflectionBuildArgs";
+const Name s_RenderNameECSRenderReflectionDepthReduce = "ECSRender_ReflectionDepthReduce";
+const Name s_RenderNameECSRenderReflectionOpticalHardware = "ECSRender_ReflectionOpticalHardware";
+const Name s_RenderNameECSRenderReflectionHardware = "ECSRender_ReflectionHardware";
+const Name s_RenderNameECSRenderReflectionUnspecifiedOpticalHardware = "ECSRender_ReflectionUnspecifiedOpticalHardware";
+const Name s_RenderNameECSRenderReflectionCsgBuildArgs = "ECSRender_ReflectionCsgBuildArgs";
+const Name s_RenderNameECSRenderReflectionCsgOpticalHardware = "ECSRender_ReflectionCsgOpticalHardware";
+const Name s_RenderNameECSRenderReflectionCsgHardware = "ECSRender_ReflectionCsgHardware";
+const Name s_RenderNameECSRenderReflectionCsgUnspecifiedOpticalHardware = "ECSRender_ReflectionCsgUnspecifiedOpticalHardware";
+
 const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
 const u32 s_ReflectionDefaultSpatialRadius = 2u;
 const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
@@ -232,3 +243,4 @@ u32 BuildReflectionDepthPyramidMips(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/mesh/solid_test_types.adhd.h>
+
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
 
 #include <global/simd/vector.h>
@@ -70,7 +72,7 @@ TEST(MeshSolidTopology, CoincidentIndependentPositionsDoNotRepairAnOpenSeam){
 }
 
 TEST(MeshSolidTopology, MembershipCrossesWordBoundariesWithoutSettingTailPadding){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/solid_membership_word_boundary"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::s_SolidCaseAssetsMeshSolidMembershipWordBoundary)};
     Vector<Float3U, Core::Alloc::ScratchArena> positions{scratch};
     Vector<u32, Core::Alloc::ScratchArena> indices{scratch};
     constexpr Array<u32, 12u> s_Tetrahedron = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
@@ -114,17 +116,13 @@ TEST(MeshSolidTopology, OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces){
 }
 
 TEST(MeshSolidTopology, RelativeComponentVolumePreservesTinyAndTranslatedSolids){
-    struct VolumeCase{
-        Float3U origin;
-        f32 size;
-    };
-    const Array<VolumeCase, 3u> cases = {
-        VolumeCase{{0.f, 0.f, 0.f}, 0.001f},
-        VolumeCase{{0.f, 0.f, 0.f}, 1.e-30f},
-        VolumeCase{{1.e20f, -1.e20f, 1.e20f}, 1.e14f},
-    };
+    const Array<MeshSolidVolumeCase, 3u> cases = {{
+        { .origin = Float3U{0.f, 0.f, 0.f}, .size = 0.001f },
+        { .origin = Float3U{0.f, 0.f, 0.f}, .size = 1.e-30f },
+        { .origin = Float3U{1.e20f, -1.e20f, 1.e20f}, .size = 1.e14f },
+    }};
     const Array<u32, 12u> indices = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
-    for(const VolumeCase& volumeCase : cases){
+    for(const MeshSolidVolumeCase& volumeCase : cases){
         const Float3U& origin = volumeCase.origin;
         const SIMDVectorSingle shifted = VectorAdd(VectorSet(origin.x, origin.y, origin.z, 0.f), VectorReplicate(volumeCase.size));
         const Array<Float3U, 4u> positions = {

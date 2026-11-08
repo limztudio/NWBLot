@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/timing_feedback.h>
 #include <core/task/gpu/timing_decision.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -20,6 +21,7 @@ namespace __hidden_task_graph_timing_history_tests{
 
 
 using namespace NWB::Core;
+namespace TaskGraphTestUtils = NWB::Tests::TaskGraphTestUtils;
 
 struct TimingInput{
     GpuTaskTimingKey key;
@@ -27,11 +29,11 @@ struct TimingInput{
 };
 
 [[nodiscard]] TimingInput Input(const u32 index, const u16 generation = 1u)noexcept{
-    return { .key = { .task = Name("tests/timing_history/work"), .variant = index, .resolutionClass = index % 3u, .queue = static_cast<CommandQueue::Enum>(index % CommandQueue::kCount), }, .queue = { static_cast<u16>(index % 7u), generation }, };
+    return { .key = { .task = Name(TaskGraphTestUtils::s_GpuTimingWork), .variant = index, .resolutionClass = index % 3u, .queue = static_cast<CommandQueue::Enum>(index % CommandQueue::kCount), }, .queue = { static_cast<u16>(index % 7u), generation }, };
 }
 
 TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
-    GraphicsArena arena(Name("tests/timing_history/full_identity"));
+    GraphicsArena arena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryFullIdentity)};
     GpuTaskTimingHistoryStore store(arena);
     for(u32 index = 100u; index < 164u; ++index){
         const TimingInput input = Input(index);
@@ -77,7 +79,7 @@ TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
 }
 
 TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLateSamples){
-    GraphicsArena arena(Name("tests/timing_history/assignment_order"));
+    GraphicsArena arena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryAssignmentOrder)};
     GpuTaskTimingHistoryStore store(arena, 2u);
     for(u32 index = 1u; index < 80u; ++index){
         const TimingInput input = Input(index);
@@ -115,7 +117,7 @@ TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLat
 }
 
 TEST(GpuTaskTimingHistory, PreservesOrderedAverageAndExtremaAcrossRollingWindows){
-    GraphicsArena arena(Name("tests/timing_history/ordered_reduction"));
+    GraphicsArena arena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryOrderedReduction)};
     constexpr u32 s_Capacity = 4u;
     GpuTaskTimingHistoryStore store(arena, s_Capacity);
     const TimingInput input = Input(0u);
@@ -163,8 +165,8 @@ TEST(GpuTaskTimingHistory, PreservesAbsoluteAndRelativeHysteresisThresholds){
 }
 
 TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherArena){
-    GraphicsArena storeArena(Name("tests/timing_history/store_owner"));
-    GraphicsArena snapshotArena(Name("tests/timing_history/snapshot_owner"));
+    GraphicsArena storeArena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryStoreOwner)};
+    GraphicsArena snapshotArena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistorySnapshotOwner)};
     GpuTaskTimingHistorySnapshot snapshot(snapshotArena);
     const TimingInput first = Input(0u);
     {
@@ -231,7 +233,7 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
 }
 
 TEST(GpuTaskTimingHistory, RejectedInputDoesNotCreateHistoryOrAssignmentState){
-    GraphicsArena arena(Name("tests/timing_history/rejections"));
+    GraphicsArena arena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryRejections)};
     GpuTaskTimingHistoryStore store(arena);
     const TimingInput input = Input(0u);
     EXPECT_FALSE(store.recordSample({}, input.queue, 1.0, 1u));
@@ -253,7 +255,7 @@ TEST(GpuTaskTimingHistory, RejectedInputDoesNotCreateHistoryOrAssignmentState){
 }
 
 TEST(GpuTaskTimingHistory, PromotesHistoryAndAssignmentCollectionsIndependentlyAndReusesResetStorage){
-    GraphicsArena arena(Name("tests/timing_history/independent_collections"));
+    GraphicsArena arena{Name(TaskGraphTestUtils::s_GpuCaseTimingHistoryIndependentCollections)};
     GpuTaskTimingHistoryStore historyStore(arena);
     GpuTaskTimingHistoryStore assignmentStore(arena);
     GpuTaskTimingHistorySnapshot snapshot(arena);

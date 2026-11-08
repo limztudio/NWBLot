@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +60,7 @@ TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStr
     ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 0.8f, 1.0f, 0.6f, 0.5f };
     ASSERT_TRUE(m_builder.image("image", name, options));
-    name = Name("white");
+    name = Name(NWB::Tests::UiCases::s_UiFixtureNameWhite);
     options = Fixed(20.0f, 20.0f);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -116,7 +118,7 @@ TEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets)
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     ASSERT_TRUE(panel(2u));
-    EXPECT_FALSE(m_builder.image("image", Name("unknown.region")));
+    EXPECT_FALSE(m_builder.image("image", Name(NWB::Tests::UiCases::s_UiInputNameUnknownRegion)));
     EXPECT_FALSE(m_context.commitFrame(2u));
     ASSERT_NE(target(before), nullptr);
     EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);

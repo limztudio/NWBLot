@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +46,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_first")).setMarkerLabel("Frontier First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierFirst)).setMarkerLabel("Frontier First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -54,14 +56,14 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     mergedScheduling.allowPacketMerge = true;
     mergedScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc mergedDesc;
-    mergedDesc.setIdentity(Name("tests/task_graph/frontier_unrelated_graphics")).setMarkerLabel("Frontier Unrelated Graphics").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
+    mergedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierUnrelatedGraphics)).setMarkerLabel("Frontier Unrelated Graphics").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
     const auto unrelatedGraphicsResult = graph.addTask(mergedDesc, graphicsCommands);
     ASSERT_TRUE(unrelatedGraphicsResult);
     const Core::GpuTaskId unrelatedGraphics = *unrelatedGraphicsResult;
     ASSERT_TRUE(unrelatedGraphics.valid());
 
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/frontier_compute_consumer")).setMarkerLabel("Frontier Compute Consumer").setDependencies(Span(&first, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierComputeConsumer)).setMarkerLabel("Frontier Compute Consumer").setDependencies(Span(&first, 1u));
     const auto computeConsumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(computeConsumerResult);
     const Core::GpuTaskId computeConsumer = *computeConsumerResult;
@@ -119,14 +121,14 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskCommandRequirements graphicsCommands{ Core::GpuQueueCapability::Graphics };
-    const Name mergeDomain("tests/task_graph/frontier_scored_preceding_boundary");
+    const Name mergeDomain = NWB::Tests::TaskGraphTestUtils::s_TaskGraphFrontierScoredPrecedingBoundary;
 
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Core::GpuTaskCostHint::Medium;
     firstScheduling.forceSubmissionBoundary = true;
     firstScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_scored_preceding_boundary_first")).setMarkerLabel("Frontier Scored Preceding Boundary First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredPrecedingBoundaryFirst)).setMarkerLabel("Frontier Scored Preceding Boundary First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -136,7 +138,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     successorScheduling.cost = Core::GpuTaskCostHint::Tiny;
     successorScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc successorDesc;
-    successorDesc.setIdentity(Name("tests/task_graph/frontier_scored_preceding_boundary_successor")).setMarkerLabel("Frontier Scored Preceding Boundary Successor").setScheduling(successorScheduling).setDependencies(Span(&first, 1u));
+    successorDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredPrecedingBoundarySuccessor)).setMarkerLabel("Frontier Scored Preceding Boundary Successor").setScheduling(successorScheduling).setDependencies(Span(&first, 1u));
     const auto successorResult = graph.addTask(successorDesc, graphicsCommands);
     ASSERT_TRUE(successorResult);
     const Core::GpuTaskId successor = *successorResult;
@@ -161,7 +163,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresNonemptyMergeDomain){
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Core::GpuTaskCostHint::Medium;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_scored_missing_domain_first")).setMarkerLabel("Frontier Scored Missing Domain First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMissingDomainFirst)).setMarkerLabel("Frontier Scored Missing Domain First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -169,9 +171,9 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresNonemptyMergeDomain){
 
     Core::GpuTaskSchedulingHint namedDomainScheduling;
     namedDomainScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    namedDomainScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_missing_domain");
+    namedDomainScheduling.frontierScoredMergeDomain = Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMissingDomain);
     Core::GpuTaskDesc namedDomainDesc;
-    namedDomainDesc.setIdentity(Name("tests/task_graph/frontier_scored_missing_domain_named_successor")).setMarkerLabel("Frontier Scored Missing Domain Named Successor").setScheduling(namedDomainScheduling).setDependencies(Span(&first, 1u));
+    namedDomainDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMissingDomainNamedSuccessor)).setMarkerLabel("Frontier Scored Missing Domain Named Successor").setScheduling(namedDomainScheduling).setDependencies(Span(&first, 1u));
     const auto namedDomainSuccessorResult = graph.addTask(namedDomainDesc, graphicsCommands);
     ASSERT_TRUE(namedDomainSuccessorResult);
     const Core::GpuTaskId namedDomainSuccessor = *namedDomainSuccessorResult;
@@ -180,7 +182,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresNonemptyMergeDomain){
     Core::GpuTaskSchedulingHint emptyDomainScheduling;
     emptyDomainScheduling.cost = Core::GpuTaskCostHint::Tiny;
     Core::GpuTaskDesc emptyDomainDesc;
-    emptyDomainDesc.setIdentity(Name("tests/task_graph/frontier_scored_missing_domain_empty_successor")).setMarkerLabel("Frontier Scored Missing Domain Empty Successor").setScheduling(emptyDomainScheduling).setDependencies(Span(&namedDomainSuccessor, 1u));
+    emptyDomainDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuFrontierMissingEmpty)).setMarkerLabel("Frontier Scored Missing Domain Empty Successor").setScheduling(emptyDomainScheduling).setDependencies(Span(&namedDomainSuccessor, 1u));
     const auto emptyDomainSuccessorResult = graph.addTask(emptyDomainDesc, graphicsCommands);
     ASSERT_TRUE(emptyDomainSuccessorResult);
     const Core::GpuTaskId emptyDomainSuccessor = *emptyDomainSuccessorResult;
@@ -211,9 +213,9 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
 
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Core::GpuTaskCostHint::Medium;
-    firstScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_first_domain");
+    firstScheduling.frontierScoredMergeDomain = Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredFirstDomain);
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_scored_mismatched_domain_first")).setMarkerLabel("Frontier Scored Mismatched Domain First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMismatchedDomainFirst)).setMarkerLabel("Frontier Scored Mismatched Domain First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -224,7 +226,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     explicitScheduling.mergeWithPrevious = true;
     explicitScheduling.frontierScoredMergeDomain = Name(s_SecondMergeDomainPath);
     Core::GpuTaskDesc explicitDesc;
-    explicitDesc.setIdentity(Name("tests/task_graph/frontier_scored_mismatched_domain_explicit")).setMarkerLabel("Frontier Scored Mismatched Domain Explicit").setScheduling(explicitScheduling).setDependencies(Span(&first, 1u));
+    explicitDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMismatchedDomainExplicit)).setMarkerLabel("Frontier Scored Mismatched Domain Explicit").setScheduling(explicitScheduling).setDependencies(Span(&first, 1u));
     const auto explicitTaskResult = graph.addTask(explicitDesc, graphicsCommands);
     ASSERT_TRUE(explicitTaskResult);
     const Core::GpuTaskId explicitTask = *explicitTaskResult;
@@ -234,7 +236,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     successorScheduling.cost = Core::GpuTaskCostHint::Tiny;
     successorScheduling.frontierScoredMergeDomain = Name(s_SecondMergeDomainPath);
     Core::GpuTaskDesc successorDesc;
-    successorDesc.setIdentity(Name("tests/task_graph/frontier_scored_mismatched_domain_successor")).setMarkerLabel("Frontier Scored Mismatched Domain Successor").setScheduling(successorScheduling).setDependencies(Span(&explicitTask, 1u));
+    successorDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredMismatchedDomainSuccessor)).setMarkerLabel("Frontier Scored Mismatched Domain Successor").setScheduling(successorScheduling).setDependencies(Span(&explicitTask, 1u));
     const auto successorResult = graph.addTask(successorDesc, graphicsCommands);
     ASSERT_TRUE(successorResult);
     const Core::GpuTaskId successor = *successorResult;
@@ -270,7 +272,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
     producerScheduling.cost = Core::GpuTaskCostHint::Medium;
     producerScheduling.frontierScoredMergeDomain = Name(s_CrossQueueMergeDomainPath);
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/frontier_scored_frontier_producer")).setMarkerLabel("Frontier Scored Frontier Producer").setScheduling(producerScheduling);
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredFrontierProducer)).setMarkerLabel("Frontier Scored Frontier Producer").setScheduling(producerScheduling);
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
@@ -280,14 +282,14 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
     successorScheduling.cost = Core::GpuTaskCostHint::Tiny;
     successorScheduling.frontierScoredMergeDomain = Name(s_CrossQueueMergeDomainPath);
     Core::GpuTaskDesc successorDesc;
-    successorDesc.setIdentity(Name("tests/task_graph/frontier_scored_frontier_successor")).setMarkerLabel("Frontier Scored Frontier Successor").setScheduling(successorScheduling).setDependencies(Span(&producer, 1u));
+    successorDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredFrontierSuccessor)).setMarkerLabel("Frontier Scored Frontier Successor").setScheduling(successorScheduling).setDependencies(Span(&producer, 1u));
     const auto successorResult = graph.addTask(successorDesc, graphicsCommands);
     ASSERT_TRUE(successorResult);
     const Core::GpuTaskId successor = *successorResult;
     ASSERT_TRUE(successor.valid());
 
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/frontier_scored_compute_consumer")).setMarkerLabel("Frontier Scored Compute Consumer").setDependencies(Span(&producer, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredComputeConsumer)).setMarkerLabel("Frontier Scored Compute Consumer").setDependencies(Span(&producer, 1u));
     const auto consumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
@@ -322,13 +324,13 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskCommandRequirements graphicsCommands{ Core::GpuQueueCapability::Graphics };
-    const Name mergeDomain("tests/task_graph/frontier_scored_tail_frontier");
+    const Name mergeDomain = NWB::Tests::TaskGraphTestUtils::s_TaskGraphFrontierScoredTailFrontier;
 
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Core::GpuTaskCostHint::Medium;
     firstScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_scored_tail_frontier_first")).setMarkerLabel("Frontier Scored Tail Frontier First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredTailFrontierFirst)).setMarkerLabel("Frontier Scored Tail Frontier First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -338,7 +340,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     mergedScheduling.cost = Core::GpuTaskCostHint::Tiny;
     mergedScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc mergedDesc;
-    mergedDesc.setIdentity(Name("tests/task_graph/frontier_scored_tail_frontier_merged")).setMarkerLabel("Frontier Scored Tail Frontier Merged").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
+    mergedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredTailFrontierMerged)).setMarkerLabel("Frontier Scored Tail Frontier Merged").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
     const auto mergedResult = graph.addTask(mergedDesc, graphicsCommands);
     ASSERT_TRUE(mergedResult);
     const Core::GpuTaskId merged = *mergedResult;
@@ -348,13 +350,13 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     blockedScheduling.cost = Core::GpuTaskCostHint::Tiny;
     blockedScheduling.frontierScoredMergeDomain = mergeDomain;
     Core::GpuTaskDesc blockedDesc;
-    blockedDesc.setIdentity(Name("tests/task_graph/frontier_scored_tail_frontier_blocked")).setMarkerLabel("Frontier Scored Tail Frontier Blocked").setScheduling(blockedScheduling).setDependencies(Span(&merged, 1u));
+    blockedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierScoredTailFrontierBlocked)).setMarkerLabel("Frontier Scored Tail Frontier Blocked").setScheduling(blockedScheduling).setDependencies(Span(&merged, 1u));
     const auto blockedResult = graph.addTask(blockedDesc, graphicsCommands);
     ASSERT_TRUE(blockedResult);
     const Core::GpuTaskId blocked = *blockedResult;
     ASSERT_TRUE(blocked.valid());
 
-    const Name consumerIdentity("tests/task_graph/frontier_scored_tail_frontier_consumer");
+    const Name consumerIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphFrontierScoredTailFrontierConsumer;
     Core::GpuTaskSchedulingHint consumerScheduling;
     consumerScheduling.allowSameClassQueueRouting = true;
     Core::GpuTaskDesc consumerDesc;
@@ -416,7 +418,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_override_persistence_first")).setMarkerLabel("Frontier Override Persistence First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverridePersistenceFirst)).setMarkerLabel("Frontier Override Persistence First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -427,7 +429,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     overrideScheduling.mergeWithPrevious = true;
     overrideScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc overrideDesc;
-    overrideDesc.setIdentity(Name("tests/task_graph/frontier_override_persistence_merged")).setMarkerLabel("Frontier Override Persistence Merged").setScheduling(overrideScheduling).setDependencies(Span(&first, 1u));
+    overrideDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverridePersistenceMerged)).setMarkerLabel("Frontier Override Persistence Merged").setScheduling(overrideScheduling).setDependencies(Span(&first, 1u));
     const auto overrideTaskResult = graph.addTask(overrideDesc, graphicsCommands);
     ASSERT_TRUE(overrideTaskResult);
     const Core::GpuTaskId overrideTask = *overrideTaskResult;
@@ -437,14 +439,14 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     blockedScheduling.allowPacketMerge = true;
     blockedScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc blockedDesc;
-    blockedDesc.setIdentity(Name("tests/task_graph/frontier_override_persistence_blocked")).setMarkerLabel("Frontier Override Persistence Blocked").setScheduling(blockedScheduling).setDependencies(Span(&overrideTask, 1u));
+    blockedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverridePersistenceBlocked)).setMarkerLabel("Frontier Override Persistence Blocked").setScheduling(blockedScheduling).setDependencies(Span(&overrideTask, 1u));
     const auto blockedResult = graph.addTask(blockedDesc, graphicsCommands);
     ASSERT_TRUE(blockedResult);
     const Core::GpuTaskId blocked = *blockedResult;
     ASSERT_TRUE(blocked.valid());
 
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/frontier_override_persistence_consumer")).setMarkerLabel("Frontier Override Persistence Consumer").setDependencies(Span(&first, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverridePersistenceConsumer)).setMarkerLabel("Frontier Override Persistence Consumer").setDependencies(Span(&first, 1u));
     const auto consumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
@@ -481,7 +483,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
     const Core::GpuTaskCommandRequirements computeCommands = ComputeCommands();
-    const auto orderedHandoffResult = AddHazardDomain(graph, Name("tests/task_graph/frontier_override_ordered_handoff"), "Frontier Override Ordered Handoff");
+    const auto orderedHandoffResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverrideOrderedHandoff), "Frontier Override Ordered Handoff");
     ASSERT_TRUE(orderedHandoffResult);
     const Core::GpuGraphResourceId orderedHandoff = *orderedHandoffResult;
     ASSERT_TRUE(orderedHandoff.valid());
@@ -489,7 +491,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_override_first")).setMarkerLabel("Frontier Override First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverrideFirst)).setMarkerLabel("Frontier Override First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -502,7 +504,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     Array<Core::GpuTaskResourceUse, 1> immediateFinalizeUses = { Core::GpuTaskResourceUse{ .resource = orderedHandoff, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, }, };
     Core::GpuTaskDesc immediateFinalizeDesc;
     immediateFinalizeDesc
-        .setIdentity(Name("tests/task_graph/frontier_override_immediate_finalize"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverrideImmediateFinalize))
         .setMarkerLabel("Frontier Override Immediate Finalize")
         .setScheduling(immediateFinalizeScheduling)
         .setDependencies(Span(&first, 1u))
@@ -521,7 +523,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     const Array<Core::GpuTaskResourceUse, 1> unrelatedUses = { Core::GpuTaskResourceUse{ .resource = orderedHandoff, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, }, };
     Core::GpuTaskDesc unrelatedDesc;
     unrelatedDesc
-        .setIdentity(Name("tests/task_graph/frontier_override_unrelated_successor"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverrideUnrelatedSuccessor))
         .setMarkerLabel("Frontier Override Unrelated Successor")
         .setScheduling(unrelatedScheduling)
         .setDependencies(Span(&first, 1u))
@@ -535,7 +537,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     // Keep the cross-queue edge while sequencing the consumer after the merge, so packet order cannot fake a pass.
     const Array<Core::GpuTaskId, 2> consumerDependencies = { first, unrelatedSuccessor };
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/frontier_override_compute_consumer")).setMarkerLabel("Frontier Override Compute Consumer").setDependencies(consumerDependencies);
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierOverrideComputeConsumer)).setMarkerLabel("Frontier Override Compute Consumer").setDependencies(consumerDependencies);
     const auto computeConsumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(computeConsumerResult);
     const Core::GpuTaskId computeConsumer = *computeConsumerResult;
@@ -581,7 +583,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/frontier_merge_first")).setMarkerLabel("Frontier Merge First").setScheduling(firstScheduling);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierMergeFirst)).setMarkerLabel("Frontier Merge First").setScheduling(firstScheduling);
     const auto firstResult = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -591,14 +593,14 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     mergedScheduling.allowPacketMerge = true;
     mergedScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc mergedDesc;
-    mergedDesc.setIdentity(Name("tests/task_graph/frontier_merge_producer")).setMarkerLabel("Frontier Merge Producer").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
+    mergedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierMergeProducer)).setMarkerLabel("Frontier Merge Producer").setScheduling(mergedScheduling).setDependencies(Span(&first, 1u));
     const auto producerResult = graph.addTask(mergedDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
     ASSERT_TRUE(producer.valid());
 
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/frontier_merge_compute_consumer")).setMarkerLabel("Frontier Merge Compute Consumer").setDependencies(Span(&producer, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierMergeComputeConsumer)).setMarkerLabel("Frontier Merge Compute Consumer").setDependencies(Span(&producer, 1u));
     const auto computeConsumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(computeConsumerResult);
     const Core::GpuTaskId computeConsumer = *computeConsumerResult;

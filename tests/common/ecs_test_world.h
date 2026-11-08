@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/common/name_cases.adhd.h>
+
 #include <core/alloc/general.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/ecs/world.h>
@@ -27,7 +29,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_EcsTestWorldArena("tests/common/ecs_test_world");
+inline constexpr Name s_EcsTestWorldArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonEcsTestWorld;
 
 struct EcsTestWorld{
     Core::Alloc::GlobalArena arena;

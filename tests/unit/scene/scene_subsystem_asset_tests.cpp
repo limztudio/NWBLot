@@ -4,13 +4,16 @@
 
 #include "scene_asset_test_helpers.h"
 
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/scene/name_cases.adhd.h>
+
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_mesh/skin_types.adhd.h>
 #include <impl/assets_ui_skin/types.adhd.h>
 
 #include <core/alloc/general.h>
-
-#include <tests/common/capturing_logger.h>
 
 #include <gtest/gtest.h>
 
@@ -37,7 +40,7 @@ TEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorrupt
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
-    AssetArena arena(Name("tests/scene/subsystem_round_trip"));
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneSubsystemRoundTrip)};
     SkinningSubsystem skinningSubsystem(arena, s_SkinningSubsystemPath);
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
@@ -63,7 +66,7 @@ TEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
-    AssetArena arena(Name("tests/scene/project_scene_round_trip"));
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneProjectSceneRoundTrip)};
     ProjectAssetCodec projectCodec;
 
     const AssetBytes invalidProjectBinary = MakeProjectBinary(s_NameNone, arena);
@@ -74,7 +77,7 @@ TEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
     SceneAsset::SubsystemRefVector emptySubsystems(arena);
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     const AssetBytes emptySceneBinary = MakeSceneBinary(emptySubsystems, sceneAssets, {}, arena);
-    EXPECT_FALSE(sceneCodec.deserialize(Name("project/scenes/empty"), emptySceneBinary, arena).has_value());
+    EXPECT_FALSE(sceneCodec.deserialize(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameProjectScenesEmpty), emptySceneBinary, arena).has_value());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("scene must declare at least one subsystem")));
 }
 
@@ -82,8 +85,8 @@ TEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnL
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
-    AssetArena arena(Name("tests/scene/active_scene_subsystems"));
-    Core::Alloc::GlobalArena globalArena(Name("tests/scene/active_scene_subsystems_global"));
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneActiveSceneSubsystems)};
+    Core::Alloc::GlobalArena globalArena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneActiveSceneSubsystemsGlobal)};
     AssetRegistry registry(arena);
     ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
     ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
@@ -114,43 +117,43 @@ TEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnL
     sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_UiSubsystemPath));
     sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_TransparentSubsystemPath));
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    sceneAssets.emplace(Name("cesium_man_model"), SceneAsset::AssetRef("project/characters/cesium_man/model"));
+    sceneAssets.emplace(Name(NWB::Tests::SceneAssetCases::s_SceneCaseCesiumManModel), SceneAsset::AssetRef("project/characters/cesium_man/model"));
 
     source.setBinary(s_RendererSubsystemPath, MakeSubsystemBinary(rendererSubsystem, arena));
     source.setBinary(s_SkinningSubsystemPath, MakeSubsystemBinary(skinningSubsystem, arena));
     source.setBinary(s_TransparentSubsystemPath, MakeSubsystemBinary(transparentSubsystem, arena));
     source.setBinary(s_UiSubsystemPath, MakeSubsystemBinary(uiSubsystem, arena));
-    source.setBinary(s_DefaultProjectVirtualPath, MakeProjectBinary(Name("project/scenes/main"), arena));
-    source.setBinary(Name("project/scenes/main"), MakeSceneBinary(sceneSubsystems, sceneAssets, {}, arena));
+    source.setBinary(s_DefaultProjectVirtualPath, MakeProjectBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesMain), arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesMain), MakeSceneBinary(sceneSubsystems, sceneAssets, {}, arena));
 
     ActiveSceneSubsystems active(globalArena);
     ASSERT_TRUE(active.loadProjectStartScene(assets));
     EXPECT_EQ(active.subsystemCount(), 4u);
-    EXPECT_FALSE(active.findSceneAsset(Name("nonexistent_nickname")).valid());
+    EXPECT_FALSE(active.findSceneAsset(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameNonexistentNickname)).valid());
 
     const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
     ASSERT_NE(activeUi, nullptr);
     ASSERT_EQ(activeUi->subsystems.size(), 1u);
     EXPECT_EQ(activeUi->subsystems[0].name(), s_RendererSubsystemPath);
 
-    RendererSubsystem duplicateRendererSubsystem(arena, Name("project/subsystems/renderer_override"));
+    RendererSubsystem duplicateRendererSubsystem(arena, Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectSubsystemsRendererOverride));
     PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
-    source.setBinary(Name("project/subsystems/renderer_override"), MakeSubsystemBinary(duplicateRendererSubsystem, arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectSubsystemsRendererOverride), MakeSubsystemBinary(duplicateRendererSubsystem, arena));
     SceneAsset::SubsystemRefVector duplicateTypeSceneSubsystems(arena);
     duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
     duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/renderer_override"));
-    source.setBinary(Name("project/scenes/duplicate_type"), MakeSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, {}, arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesDuplicateType), MakeSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, {}, arena));
     EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_type"), assets));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate subsystem type")));
 
     SceneAsset::SubsystemRefVector brokenSceneSubsystems(arena);
     brokenSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/missing_subsystem"));
-    source.setBinary(Name("project/scenes/broken"), MakeSceneBinary(brokenSceneSubsystems, sceneAssets, {}, arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesBroken), MakeSceneBinary(brokenSceneSubsystems, sceneAssets, {}, arena));
 
     EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/broken"), assets));
     EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
     EXPECT_EQ(active.subsystemCount(), 4u);
-    EXPECT_EQ(active.findSceneAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
+    EXPECT_EQ(active.findSceneAsset(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameCesiumManModel)).name(), Name("project/characters/cesium_man/model"));
 }
 
 

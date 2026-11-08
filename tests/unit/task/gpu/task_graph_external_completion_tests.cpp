@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/packet_runtime_internal.h>
 
 
@@ -44,12 +46,12 @@ TEST(GpuTaskGraph, RejectsSubmissionRangeWithMissingLatePacketCompletionToken){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const Name completionIdentity("tests/task_graph/missing_late_packet_completion");
+    const Name completionIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphMissingLatePacketCompletion;
     const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(completionIdentity).setMarkerLabel("Late Packet Completion"));
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
-    const auto firstResult = AddTask(Name("tests/task_graph/token_preflight_first"), "Token Preflight First", {}, {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTokenPreflightFirst), "Token Preflight First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
@@ -58,7 +60,7 @@ TEST(GpuTaskGraph, RejectsSubmissionRangeWithMissingLatePacketCompletionToken){
     scheduling.allowPacketMerge = false;
     const auto secondResult = graph.addTask(
         Core::GpuTaskDesc{}
-            .setIdentity(Name("tests/task_graph/token_preflight_second"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTokenPreflightSecond))
             .setMarkerLabel("Token Preflight Second")
             .setScheduling(scheduling)
             .setDependencies(Span(&first, 1u))
@@ -152,7 +154,8 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
 
     Core::QueueSubmissionToken staleToken = token;
     ++staleToken.deviceGeneration;
-    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stale_owned_external_completion")).setMarkerLabel("Stale Owned External Completion").setToken(staleToken)).has_value());
+    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(NWB::Tests::TaskGraphTestUtils::s_TaskGraphCaseTestsTaskGraphStaleOwnedExternalCompletion))
+        .setMarkerLabel("Stale Owned External Completion").setToken(staleToken)).has_value());
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
@@ -164,7 +167,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     missingPhysicalIdentity.deviceGeneration = 0u;
     EXPECT_FALSE(graph.importExternalCompletion(
         Core::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/unidentified_owned_external_completion"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphUnidentifiedOwnedExternalCompletion))
             .setMarkerLabel("Unidentified Owned External Completion")
             .setToken(missingPhysicalIdentity)
     ).has_value()
@@ -183,7 +186,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
 
     const Array<Core::GpuExternalCompletionId, 2> taskExternalDependencies = { completion, metadataCompletion };
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/owned_external_consumer")).setMarkerLabel("Owned External Consumer").setExternalDependencies(taskExternalDependencies);
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnedExternalConsumer)).setMarkerLabel("Owned External Consumer").setExternalDependencies(taskExternalDependencies);
     const auto consumerResult = graph.addTask(consumerDesc);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;

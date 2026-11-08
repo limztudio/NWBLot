@@ -307,19 +307,19 @@ NWB_ADHD_BEGIN
 [[nodiscard]] b8 SimdOptimizationAnalysis::TryMatchSimdNegatedMulExpr(
     const Expr* expr,
     const MStringView simdType,
+    const SymbolTable& symbols,
     const Expr*& outA,
-    const Expr*& outB,
-    const SymbolTable& symbols
+    const Expr*& outB
 )noexcept{
     if(!expr)
         return false;
     if(const Expr* negInner = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*expr, simdType, symbols)){
-        if(SimdExpressionAnalysis::IsSimdMulExpr(negInner, outA, outB, &symbols))
+        if(SimdExpressionAnalysis::IsSimdMulExpr(outA, outB, negInner, &symbols))
             return true;
     }
     const Expr* mulA = nullptr;
     const Expr* mulB = nullptr;
-    if(!SimdExpressionAnalysis::IsSimdMulExpr(expr, mulA, mulB, &symbols) || !mulA || !mulB)
+    if(!SimdExpressionAnalysis::IsSimdMulExpr(mulA, mulB, expr, &symbols) || !mulA || !mulB)
         return false;
     const Expr* negA = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulA, simdType, symbols);
     const Expr* negB = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*mulB, simdType, symbols);

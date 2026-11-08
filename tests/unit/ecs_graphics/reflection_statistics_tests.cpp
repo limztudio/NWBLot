@@ -4,6 +4,8 @@
 
 #include "reflection_statistics_test_helpers.h"
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/reflection/statistics_readback.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 
@@ -47,7 +49,7 @@ inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZ
 
 [[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests.reflection.statistics.lease")).setMarkerLabel("Statistics lease");
+    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionStatisticsLease)).setMarkerLabel("Statistics lease");
     return desc;
 }
 

@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <core/graphics/vulkan/backend_context_capability_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,17 +24,6 @@ namespace VulkanDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct DescriptorBufferStartupPrerequisites{
-    b8 descriptorBufferExtensionEnabled = false;
-    b8 bufferDeviceAddressFeatureEnabled = false;
-    b8 getBufferDeviceAddressAvailable = false;
-    b8 getDescriptorAvailable = false;
-    b8 getDescriptorSetLayoutSizeAvailable = false;
-    b8 getDescriptorSetLayoutBindingOffsetAvailable = false;
-    b8 cmdBindDescriptorBuffersAvailable = false;
-    b8 cmdSetDescriptorBufferOffsetsAvailable = false;
-};
 
 [[nodiscard]] inline constexpr b8 HasDescriptorBufferStartupPrerequisites(const DescriptorBufferStartupPrerequisites& prerequisites)noexcept{
     return

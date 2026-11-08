@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_VulkanCacheVirtualPath = "vulkan/pipeline_cache.bin";
+const StringView s_VulkanCacheVolumeName = "runtime_pipeline_cache";
+const usize s_VulkanCacheHeaderVersionOneSize = 32u;
+const u64 s_VulkanCacheVolumeSegmentSize = 16777216u;
+const u64 s_VulkanCacheVolumeMetadataSize = 4096u;
+const usize s_VulkanCacheDataMaxAttempts = 4u;
+const usize s_VulkanCacheVersionOffset = 4u;
+const usize s_VulkanCacheVendorIdOffset = 8u;
+const usize s_VulkanCacheDeviceIdOffset = 12u;
+const usize s_VulkanCacheUuidOffset = 16u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -112,8 +112,7 @@ TEST(CpuTaskCancellationTests, ParallelRangesPreserveHistoryInRecycledSlots){
         ++interruptedCallbacks;
         if(index == 0u)
             interrupted.cancel();
-    }
-    )));
+    })));
     interrupted.wait();
     EXPECT_GT(interruptedCallbacks, 0u);
     EXPECT_LT(interruptedCallbacks, 64u);

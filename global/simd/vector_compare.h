@@ -322,12 +322,12 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleIsInfinite(SIMDVectorDoubl
 }
 
 [[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL VectorIsFinite(SIMDVectorSingle value, u32 activeMask)noexcept{
-    const SIMDVectorSingle invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    const SIMDVectorSingle invalid = VectorEqualInt(VectorAndInt(value, s_SIMDInfinity), s_SIMDInfinity);
     return (VectorMoveMask(invalid) & activeMask) == 0u;
 }
 
 [[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL VectorDoubleIsFinite(SIMDVectorDouble value, u32 activeMask)noexcept{
-    const SIMDVectorDouble invalid = VectorDoubleOrInt(VectorDoubleIsNaN(value), VectorDoubleIsInfinite(value));
+    const SIMDVectorDouble invalid = VectorDoubleEqualInt(VectorDoubleAndInt(value, s_DoubleSIMDInfinity), s_DoubleSIMDInfinity);
     return (VectorDoubleMoveMask(invalid) & activeMask) == 0u;
 }
 

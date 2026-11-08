@@ -98,7 +98,7 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
     if(meshBlasGeometryBuildInputStatesGraphOwned && !meshBlasGeometryBuildInputResources.empty()){
         const auto meshBlasGeometryBuildInputSetResult = m_graph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.shadow_prepare.blas_geometry_build_inputs"))
+                .setIdentity(Name(s_ShadowPrepareBlasGeometryBuildInputs))
                 .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
                 .setMembers(meshBlasGeometryBuildInputResources)
         );
@@ -122,7 +122,7 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
     if(!shadowPrepareTraceGeometryResources.empty()){
         const auto shadowPrepareTraceGeometrySetResult = m_graph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.shadow_prepare_trace_geometry"))
+                .setIdentity(Name(s_ShadowPrepareTraceGeometry))
                 .setMarkerLabel("Shadow Prepare Trace Geometry")
                 .setMembers(shadowPrepareTraceGeometryResources)
         );
@@ -145,7 +145,7 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
     if(!softwareBvhBuildStateResources.empty()){
         const auto softwareBvhBuildStateSetResult = m_graph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.shadow_prepare.software_bvh_build_state"))
+                .setIdentity(Name(s_ShadowPrepareSoftwareBvhBuildState))
                 .setMarkerLabel("Shadow Prepare Software BVH Build State")
                 .setMembers(softwareBvhBuildStateResources)
         );

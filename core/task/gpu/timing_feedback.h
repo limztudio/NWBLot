@@ -6,6 +6,7 @@
 
 
 #include "types.h"
+#include <core/task/gpu/task_graph_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,8 +204,8 @@ public:
 
 
 namespace GpuTaskTimingFeedbackPolicyDetail{
-inline constexpr u64 s_MinFramesBetweenSwitches = 30u;
-inline constexpr u32 s_MinSwitchSamples = 8u;
+inline constexpr u64 s_MinFramesBetweenSwitches = s_GpuTimingFeedbackMinFramesBetweenSwitches;
+inline constexpr u32 s_MinSwitchSamples = s_GpuTimingFeedbackMinSwitchSamples;
 };
 
 
@@ -263,7 +264,7 @@ private:
 };
 
 
-inline constexpr u32 s_DefaultGpuTaskTimingHistorySampleCount = 32u;
+inline constexpr u32 s_DefaultGpuTaskTimingHistorySampleCount = s_GpuTimingFeedbackDefaultHistorySampleCount;
 
 // Bounded rolling samples for one device generation. Mutation APIs stay out of validation, barriers, and waits.
 class GpuTaskTimingHistoryStore final : NoCopy{

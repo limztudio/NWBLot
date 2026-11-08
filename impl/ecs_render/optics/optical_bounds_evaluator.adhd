@@ -25,21 +25,21 @@ class OpticalBoundsEvaluator{
         mut VectorSingle outMinimum,
         mut VectorSingle outMaximum
     )const{
+        const VectorSingle localMin3 = VectorSingle(localMin.x, localMin.y, localMin.z, 0.0f);
+        const VectorSingle localMax3 = VectorSingle(localMax.x, localMax.y, localMax.z, 0.0f);
         if(
-            !isFinite(localMin.x) || !isFinite(localMin.y) || !isFinite(localMin.z)
-            || !isFinite(localMax.x) || !isFinite(localMax.y) || !isFinite(localMax.z)
-            || localMin.x > localMax.x || localMin.y > localMax.y || localMin.z > localMax.z
+            !isFinite(localMin.xyz)
+            || !isFinite(localMax.xyz)
+            || localMin.x > localMax.x
+            || localMin.y > localMax.y
+            || localMin.z > localMax.z
         )
             return false;
 
         const VectorSingle row0 = objectToWorld[0u];
         const VectorSingle row1 = objectToWorld[1u];
         const VectorSingle row2 = objectToWorld[2u];
-        if(
-            !isFinite(row0.x) || !isFinite(row0.y) || !isFinite(row0.z) || !isFinite(row0.w)
-            || !isFinite(row1.x) || !isFinite(row1.y) || !isFinite(row1.z) || !isFinite(row1.w)
-            || !isFinite(row2.x) || !isFinite(row2.y) || !isFinite(row2.z) || !isFinite(row2.w)
-        )
+        if(!isFinite(row0) || !isFinite(row1) || !isFinite(row2))
             return false;
 
         const MatrixSingle columns = transpose(MatrixSingle(row0, row1, row2, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)));
@@ -47,15 +47,15 @@ class OpticalBoundsEvaluator{
         VectorSingle laneMax(0.0f, 0.0f, 0.0f, 0.0f);
         VectorSingle laneMagnitude(0.0f, 0.0f, 0.0f, 0.0f);
         for(u32 corner = 0u; corner < s_OpticalBoxCornerCount; ++corner){
-            f32 px = localMin.x;
+            f32 px = localMin3.x;
             if((corner & s_CornerMaxXBit) != 0u)
-                px = localMax.x;
-            f32 py = localMin.y;
+                px = localMax3.x;
+            f32 py = localMin3.y;
             if((corner & s_CornerMaxYBit) != 0u)
-                py = localMax.y;
-            f32 pz = localMin.z;
+                py = localMax3.y;
+            f32 pz = localMin3.z;
             if((corner & s_CornerMaxZBit) != 0u)
-                pz = localMax.z;
+                pz = localMax3.z;
             const VectorSingle x(px, px, px, px);
             const VectorSingle y(py, py, py, py);
             const VectorSingle z(pz, pz, pz, pz);
@@ -63,7 +63,7 @@ class OpticalBoundsEvaluator{
             cornerVec = columns[1u] * y + cornerVec;
             cornerVec = columns[2u] * z + cornerVec;
             cornerVec = cornerVec + columns[3u];
-            if(!isFinite(cornerVec.x) || !isFinite(cornerVec.y) || !isFinite(cornerVec.z))
+            if(!isFinite(cornerVec.xyz))
                 return false;
             if(corner == 0u){
                 laneMin = cornerVec;
@@ -81,10 +81,7 @@ class OpticalBoundsEvaluator{
         const VectorSingle marginVec(margin, margin, margin, margin);
         const VectorSingle minimum = laneMin - marginVec;
         const VectorSingle maximum = laneMax + marginVec;
-        if(
-            !isFinite(minimum.x) || !isFinite(minimum.y) || !isFinite(minimum.z)
-            || !isFinite(maximum.x) || !isFinite(maximum.y) || !isFinite(maximum.z)
-        )
+        if(!isFinite(minimum.xyz) || !isFinite(maximum.xyz))
             return false;
         outMinimum = VectorSingle(minimum.x, minimum.y, minimum.z, 0.0f);
         outMaximum = VectorSingle(maximum.x, maximum.y, maximum.z, 0.0f);
@@ -94,3 +91,4 @@ class OpticalBoundsEvaluator{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

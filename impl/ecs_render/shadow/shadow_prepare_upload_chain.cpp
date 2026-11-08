@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/common/log.h>
@@ -58,8 +59,7 @@ namespace __hidden_shadow_prepare_upload_chain{
     uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(uploadScheduling).setDependencies({ &inOutDependencyTask, 1u });
     const auto uploadTaskResult = graph.addUploadBufferTask(
         uploadDesc,
-        Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, }
-    );
+        Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, });
     if(!uploadTaskResult){
         outTask = {};
         NWB_LOGGER_WARNING(warningMessage);
@@ -97,15 +97,15 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
         uploadScheduling.forceSubmissionBoundary = false;
         uploadScheduling.allowPacketMerge = true;
         Core::GpuTaskDesc uploadDesc;
-        uploadDesc.setIdentity(Name("render.deferred.bindless_slots_upload")).setMarkerLabel("Deferred Bindless Slots Upload").setScheduling(uploadScheduling);
+        uploadDesc.setIdentity(Name(s_ShadowDeferredBindlessSlotsUpload)).setMarkerLabel("Deferred Bindless Slots Upload").setScheduling(uploadScheduling);
         const auto deferredBindlessSlotsUploadTaskResult = m_graph.addUploadBufferTask(
             uploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = bindlessSlotsBlob,
                 .destination = inputs.currentBindlessSlots,
                 // Selector persists across packet closes; upload publishes ConstantBuffer.
-                .finalState = Core::ResourceStates::ConstantBuffer, }
-        );
+                .finalState = Core::ResourceStates::ConstantBuffer,
+            });
         if(!deferredBindlessSlotsUploadTaskResult){
             chain.tasks.bindlessSlots = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred bindless selector upload"));
@@ -156,7 +156,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
     materialContextUploadScheduling.mergeWithPrevious = chain.currentBindlessSlotsGraphOwned;
     Core::GpuTaskDesc materialContextUploadDesc;
     materialContextUploadDesc
-        .setIdentity(Name("render.raytrace.material_context_slots_upload"))
+        .setIdentity(Name(s_ShadowRaytraceMaterialContextSlotsUpload))
         .setMarkerLabel("Ray-Trace Material Context Slots Upload")
         .setScheduling(materialContextUploadScheduling)
         .setDependencies({ materialContextUploadDependencies, materialContextUploadDependencyCount })
@@ -169,8 +169,8 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
             .source = rayTraceMaterialContextSlotsBlob,
             .destination = inputs.materialContextSlots,
             // Selector buffers publish Common; Shadow Preparation owns the next transition.
-            .finalState = Core::ResourceStates::Common, }
-    );
+            .finalState = Core::ResourceStates::Common,
+        });
     if(!rayTraceMaterialContextSlotsUploadTaskResult){
         chain.tasks.rayTraceMaterialContextSlots = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare ray-trace material-context selector upload"));
@@ -198,7 +198,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
     chain.completionTask = chain.tasks.rayTraceMaterialContextSlots;
     Expected<Core::GpuGraphResourceId> csgTraceContextResult = MakeUnexpected(Failure{});
     if(inputs.rayTracingResources.csgTraceContextBuffer){
-        Core::GpuGraphResourceDesc contextDesc = BufferResourceDesc(Name("render.raytrace.csg_context"), "Current CSG Ray Context");
+        Core::GpuGraphResourceDesc contextDesc = BufferResourceDesc(Name(s_ShadowRaytraceCsgContext), "Current CSG Ray Context");
         csgTraceContextResult = m_graph.importBuffer(inputs.rayTracingResources.csgTraceContextBuffer, contextDesc);
         if(csgTraceContextResult)
             chain.csgTraceContext = *csgTraceContextResult;
@@ -216,7 +216,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
         csgUploadScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc csgUploadDesc;
         csgUploadDesc
-            .setIdentity(Name("render.raytrace.csg_context_upload"))
+            .setIdentity(Name(s_ShadowRaytraceCsgContextUpload))
             .setMarkerLabel("Current CSG Ray Context Upload")
             .setScheduling(csgUploadScheduling)
             .setDependencies({ &chain.completionTask, 1u })
@@ -238,7 +238,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
 
         if(!__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
             m_graph,
-            Name("render.raytrace.caustic_emission_targets_upload"),
+            Name(s_ShadowRaytraceCausticEmissionTargetsUpload),
             "Caustic Emission Targets Upload",
             Core::GpuTaskCostHint::Medium,
             **causticEmissionTargetsBlob,
@@ -272,7 +272,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const Shad
         }
         if(!__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
             m_graph,
-            Name("render.surfel_gi.constants_upload"),
+            Name(s_ShadowSurfelConstantsUpload),
             "Surfel Frame Constants Upload",
             Core::GpuTaskCostHint::Tiny,
             **surfelFrameConstantsBlob,
@@ -319,7 +319,7 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const Sh
         if(
             !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
-                Name("render.deferred_effects.instance_material_upload"),
+                Name(s_ShadowDeferredEffectsInstanceMaterialUpload),
                 "Shadow Instance Materials Upload",
                 Core::GpuTaskCostHint::Medium,
                 shadowInstanceMaterialsBlob,
@@ -330,7 +330,7 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const Sh
             )
             || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
-                Name("render.deferred_effects.shadow_instances_upload"),
+                Name(s_ShadowDeferredEffectsShadowInstancesUpload),
                 "Shadow Instances Upload",
                 Core::GpuTaskCostHint::Medium,
                 shadowInstancesBlob,
@@ -341,7 +341,7 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const Sh
             )
             || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
-                Name("render.deferred_effects.material_typed_upload"),
+                Name(s_ShadowDeferredEffectsMaterialTypedUpload),
                 "Shadow Typed Materials Upload",
                 Core::GpuTaskCostHint::Medium,
                 shadowMaterialTypedBlob,
@@ -386,7 +386,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUp
         if(
             !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
-                Name("render.shadow_visibility.scene_bvh_nodes_upload"),
+                Name(s_ShadowPassSceneBvhNodesUpload),
                 "Scene BVH Nodes Upload",
                 Core::GpuTaskCostHint::Medium,
                 sceneBvhNodesBlob,
@@ -397,7 +397,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUp
             )
             || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
-                Name("render.shadow_visibility.scene_instances_upload"),
+                Name(s_ShadowPassSceneInstancesUpload),
                 "Scene BVH Instances Upload",
                 Core::GpuTaskCostHint::Medium,
                 sceneBvhInstancesBlob,

@@ -132,8 +132,7 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
             heap.bindCompute(commandList, *pipeline.get());
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
             commandList.dispatch(DivideUp(photonBudget.photonsPerFrame, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
-        }
-    );
+        });
     return true;
 }
 
@@ -185,8 +184,7 @@ b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, co
             Core::RayTracingDispatchRaysArguments dispatchArgs;
             dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
             commandList.dispatchRays(dispatchArgs);
-        }
-    );
+        });
     return true;
 }
 

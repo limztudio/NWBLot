@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/name_case_types.adhd.h>
+
 #include <core/alloc/module.h>
 
 #include <global/basic_string.h>
@@ -23,7 +25,7 @@ namespace __hidden_allocator_propagation_tests{
 using NWB::Core::Alloc::GlobalArena;
 
 [[nodiscard]] GlobalArena& DefaultOwner(){
-    static GlobalArena s_Arena(Name("tests/allocator_propagation/default"));
+    static GlobalArena s_Arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefault)};
     return s_Arena;
 }
 
@@ -32,7 +34,7 @@ using DefaultAllocator = ContainerDetail::DefaultArenaAllocator<T, GlobalArena, 
 
 template<typename AllocatorT>
 void VerifyAllocatorSelfAssignment(){
-    GlobalArena arena(Name("tests/allocator_propagation/self_assignment"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationSelfAssignment)};
     AllocatorT allocator(arena);
     AllocatorT& sameAllocator = allocator;
     allocator = sameAllocator;
@@ -41,8 +43,8 @@ void VerifyAllocatorSelfAssignment(){
 
 template<typename VectorT>
 void VerifyVectorMove(const b8 foreignArena, const usize targetSize = 1u){
-    GlobalArena sourceArena(Name("tests/allocator_propagation/vector_source"));
-    GlobalArena targetArena(Name("tests/allocator_propagation/vector_target"));
+    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSource)};
+    GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorTarget)};
     {
         VectorT target{ typename VectorT::allocator_type(foreignArena ? targetArena : sourceArena) };
         for(usize index = 0u; index < targetSize; ++index)
@@ -75,8 +77,8 @@ void VerifyVectorMove(const b8 foreignArena, const usize targetSize = 1u){
 
 template<typename StringT>
 void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
-    GlobalArena sourceArena(Name("tests/allocator_propagation/string_source"));
-    GlobalArena targetArena(Name("tests/allocator_propagation/string_target"));
+    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSource)};
+    GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringTarget)};
     {
         StringT target{ typename StringT::allocator_type(foreignArena ? targetArena : sourceArena) };
         target.assign(96u, 'z');
@@ -106,8 +108,8 @@ void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
 
 template<typename VectorT>
 void VerifyVectorSwap(const b8 foreignArena){
-    GlobalArena firstArena(Name("tests/allocator_propagation/vector_swap_first"));
-    GlobalArena secondArena(Name("tests/allocator_propagation/vector_swap_second"));
+    GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSwapFirst)};
+    GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSwapSecond)};
     GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
     {
         VectorT first{ typename VectorT::allocator_type(firstArena) };
@@ -147,8 +149,8 @@ void VerifyVectorSwap(const b8 foreignArena){
 
 template<typename StringT>
 void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
-    GlobalArena firstArena(Name("tests/allocator_propagation/string_swap_first"));
-    GlobalArena secondArena(Name("tests/allocator_propagation/string_swap_second"));
+    GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSwapFirst)};
+    GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSwapSecond)};
     GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
     {
         StringT first{ typename StringT::allocator_type(firstArena) };
@@ -204,8 +206,8 @@ TEST(AllocatorPropagation, CacheAlignedVectorMoveTransfersStorageAndItsDeallocat
 TEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership){
     for(const b8 explicitAllocator : { false, true }){
         for(const b8 foreignArena : { false, true }){
-            GlobalArena sourceArena(Name("tests/allocator_propagation/parallel_construct_source"));
-            GlobalArena targetArena(Name("tests/allocator_propagation/parallel_construct_target"));
+            GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationParallelConstructSource)};
+            GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationParallelConstructTarget)};
             using Values = ParallelVector<u32, GlobalArena>;
             {
                 Values source{ sourceArena };
@@ -246,8 +248,8 @@ TEST(AllocatorPropagation, StringMovePropagatesArenaForHeapAndSmallStringStorage
 
 TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner){
     for(const b8 foreignArena : { false, true }){
-        GlobalArena sourceArena(Name("tests/allocator_propagation/map_source"));
-        GlobalArena targetArena(Name("tests/allocator_propagation/map_target"));
+        GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationMapSource)};
+        GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationMapTarget)};
         {
             Map<u32, u32, GlobalArena> target{ foreignArena ? targetArena : sourceArena };
             ASSERT_TRUE(target.emplace(900u, 900u).second);
@@ -293,8 +295,8 @@ TEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage)
 
 TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
     for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena(Name("tests/allocator_propagation/ordered_swap_first"));
-        GlobalArena secondArena(Name("tests/allocator_propagation/ordered_swap_second"));
+        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationOrderedSwapFirst)};
+        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationOrderedSwapSecond)};
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
         {
             Map<u32, u32, GlobalArena> first{ firstArena };
@@ -328,8 +330,8 @@ TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
 
 TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
     for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena(Name("tests/allocator_propagation/hash_map_first"));
-        GlobalArena secondArena(Name("tests/allocator_propagation/hash_map_second"));
+        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashMapFirst)};
+        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashMapSecond)};
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
         {
             HashMap<u32, u32, GlobalArena> first{ firstArena };
@@ -370,8 +372,8 @@ TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
 
 TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
     for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena(Name("tests/allocator_propagation/hash_set_first"));
-        GlobalArena secondArena(Name("tests/allocator_propagation/hash_set_second"));
+        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashSetFirst)};
+        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashSetSecond)};
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
         {
             HashSet<u32, GlobalArena> first{ firstArena };
@@ -412,7 +414,7 @@ TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
 
 
 TEST(AllocatorPropagation, DefaultProviderAllocatorMovesAwayFromItsInitialOwner){
-    GlobalArena sourceArena(Name("tests/allocator_propagation/default_source"));
+    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefaultSource)};
     const ArenaMemoryStats defaultBefore = DefaultOwner().memoryStats();
     {
         DefaultVector<u32, GlobalArena, DefaultOwner> target;

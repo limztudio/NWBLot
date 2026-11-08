@@ -198,6 +198,9 @@ void FinalizePaintBuilderRecording(
     mut b8 inOutRecording
 ){
     assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
+    native(in overlayDepth){
+        static_cast<void>(overlayDepth);
+    }
     if(!commandsOrdered){
         native(mut inOutCommands){
             ::Sort(inOutCommands.begin(), inOutCommands.end(), IsPaintDrawCommandBefore);
@@ -209,3 +212,4 @@ void FinalizePaintBuilderRecording(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

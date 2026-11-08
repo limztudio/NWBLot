@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 
 #include <global/not_null.h>
@@ -83,10 +85,10 @@ TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
         ASSERT_TRUE(cookCase);
         const AString meta = BuildMeshIndexMeta(indexList);
         ASSERT_TRUE(AssetsGraphicsFixture::CookSingleMeshMeta(AStringView(meta.data(), meta.size()), *cookCase, testArena));
-        auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<Impl::MeshAssetCodec>(cookCase->outputDirectory, Name("project/meshes/minimal_mesh"), 1u, testArena);
+        auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<Impl::MeshAssetCodec>(cookCase->outputDirectory, Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesMinimalMesh), 1u, testArena);
         ASSERT_TRUE(loadedAsset);
         const auto& mesh = static_cast<const Impl::Mesh&>(**loadedAsset);
-        Core::Alloc::ScratchArena scratchArena(Name("tests/integration/assets_graphics/mesh_index_corner_order"));
+        Core::Alloc::ScratchArena scratchArena{Name(AssetsGraphicsFixture::s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder)};
         const auto triangleIndices = Impl::BuildMeshletTriangleIndices(mesh, scratchArena);
         ASSERT_TRUE(triangleIndices);
         ASSERT_EQ(triangleIndices->size(), 3u);

@@ -1,90 +1,86 @@
-# UI GPU layer
+# UI GPU draw
 
-`nwb_ui_gpu` renders a frozen `Ui::DrawSnapshot` into a single-sample, full-output-size
-`RGBA16_FLOAT` texture. It borrows `GraphicsRuntime`, `AssetManager`, a shader path
-resolver, and the caller's `GlobalArena`; it has no ECS or ImGui dependency.
+`nwb_ui_gpu` draws a still `Ui::DrawSnapshot` into a one-shot,
+full-out-size `RGBA16_FLOAT` shot. It borrows `GraphicsRuntime`,
+`AssetManager`, a shader path fix, and the caller `GlobalArena`. It has no
+ECS and no ImGui need.
 
-Call `validateResources(width, height)` after the graphics swap-chain framebuffers
-exist, then `setSkin(identity, loadedSkin, skinGeneration)`. Resource validation
-creates the presentation pipeline from that framebuffer compatibility and retains
-four CPU frame owners for the three GPU slots plus a pending generation. `setSkin` can also rebind a later skin generation without a GPU
-idle wait. It loads and validates the referenced texture,
-creates its concrete GPU image and descriptor, and saves the loader's authoritative
-static-upload completion token. Skin identities and generation must match the
-snapshot submitted by `submit(Move(snapshot))`. Asset references identify assets;
-the captured resource version owns the resolved GPU image.
+Call `validateResources(width, height)` once the card swap-chain frame
+buffers live. Then call `setSkin(identity, loadedSkin, skinGeneration)`.
+Store check makes the show pipe from that frame-buffer fit. It keeps four
+CPU frame slots for the three GPU slots plus a held set. `setSkin` can also
+bind a next skin set with no GPU idle wait. It loads and checks the named
+face. It makes its true GPU shot and tag. It saves the load true still
+up-load done token. Skin name and set must match the shot sent by
+`submit(Move(snapshot))`. Note names name notes. The grabbed store form
+owns the fixed GPU shot.
 
-Each new target receives a graph-owned transparent clear from its actual unknown
-native state, followed by a primary Graphics completion in `ShaderResource`, before
-its bindless sampled descriptor is published. The target version saves that exact
-accepted initialization token; each raster graph imports it as availability so
-work routed to another physical queue also waits for initialization. Setup and
-partial setup failures retain native image references through accepted GPU work.
+Each new mark gets a graph-owned clear from its true raw home state. Then
+a main Graphics done in `ShaderResource` runs. Then its free read tag
+goes live. The mark form saves that exact took start token. Each draw
+graph brings it in as ready. Work sent to a next real queue thus also
+waits for start. Set and half-set fails keep home shot links through took
+GPU work.
 
-Only one CPU generation can be pending. `submit` rejects a second pending frame
-without moving its snapshot; `hasPendingFrame()` lets the caller retain that
-existing generation for retry. Submission reuses a retained frame owner only after
-all accepted work completes and graph payloads release their CPU ownership. The
-renderer has three target/buffer slots.
-Preparation allocates or grows geometry buffers before recording and admits a
-frame only when a slot is free. If all slots remain in flight, preparation succeeds
-with no declared layer and keeps the pending snapshot. No frame waits for GPU idle.
+At most one CPU set can hold. `submit` turns down a next held frame. It
+does not move its shot. `hasPendingFrame()` lets the caller keep that set
+for retry. Send reuses a kept frame slot only past took-work done and
+graph pack free of CPU hold. The draw has three mark/box slots. Ready
+makes or grows shape boxes first, then takes a frame only when a slot is
+free. When all slots stay in flight, ready wins with no stated coat. It
+keeps the held shot. No frame waits for GPU idle.
 
-`prepareTaskGraphOutputLayer(acquired)` captures the exact acquired frame.
-`declareTaskGraphOutputLayer(graph)` declares graph-owned geometry uploads,
-a transparent target clear, and `ui.raster` for a painted frame. The raster produces
-an explicit color resource version. It has no scene dependency, so the graph can
-schedule it alongside scene work. The final output consumer depends on `readyTask`,
-reads `colorVersion`, and samples `sampledImage` before output transfer encoding.
-An empty scene-UI snapshot declares no UI graph work or color resource; it returns
-only `frameGeneration` so the accepted final consumer still retires that exact
-snapshot. A rejected graph leaves the generation pending for retry. Only accepted
-final consumption calls `acceptTaskGraphOutputLayer(frameGeneration, token)`.
+`prepareTaskGraphOutputLayer(acquired)` grabs the exact got frame.
+`declareTaskGraphOutputLayer(graph)` states graph-owned shape up-loads, a
+clear mark, and `ui.raster` for a drawn frame. The draw makes a clear
+color store form. It has no scene need, so the graph can plan it next to
+scene work. The end out user needs `readyTask`. It reads `colorVersion`.
+It reads `sampledImage` first, then out move code. A blank scene-UI shot
+states no UI graph work and no color store. It gives back only
+`frameGeneration`. The took end user still frees that exact shot. A
+turned-down graph leaves the set held for retry. Only took end calls
+`acceptTaskGraphOutputLayer(frameGeneration, token)`.
 
-Each graph payload owns the frozen snapshot and concrete skin, target, geometry,
-pipeline, sampler, and descriptor versions it reads. Descriptor slots remain
-allocated through those owners; native heap binding records submitted descriptor
-use. There is no long-lived global pending-recording lease. Raster acceptance does
-not consume the CPU frame. The renderer saves the exact accepted vertex-upload,
-index-upload, clear, raster, and final-consumer tokens. Slot reuse requires final
-consumption and completion of all accepted work. A rejected graph retains its
-immutable source; rebuilding after an accepted prefix waits nonblockingly for those
-prefix tokens before reusing its resources. An incomplete prefix cannot expose an
-old acquired generation to a new final consumer.
+Each graph pack owns the still shot. It owns the true skin, mark, shape,
+pipe, sampler, and tag forms it reads. Tag slots stay held through those
+holds. Home heap bind notes sent tag use. No long-held world held-write
+lease lives. Draw take does not eat the CPU frame. The draw saves the
+exact took point-up, mark-up, clear, draw, and end-user tokens. Slot reuse
+needs end use plus took-work done. A turned-down graph keeps its raw
+source. Rebuild past a took head waits (no block) for those head tokens
+first, then reuses its stores. A half head cannot show an old got set to
+a new end user.
 
-Coordinates use the snapshot's logical units and saved pixel scales. Vertex RGB is
-premultiplied linear Rec.709. The skin shader reads the atlas at base mip with a
-linear clamp sampler. Texture RGB is already linear from offline preparation;
-sampled straight alpha is combined with premultiplied tint. The raster blends
-source-one over inverse-source-alpha and keeps the layer linear. The default skin
-and custom skins use the same path. The final compositor applies SDR attachment
-encoding or HDR10 encoding once. UI-only HDR uses the shared 203-nit paper-white helper.
+Spots use the shot true units and saved pixel scales. Point RGB is
+pre-mixed straight Rec.709. The skin shader reads the atlas at base mip
+with a straight edge sampler. Face RGB is already straight from off-line
+make. Read plain alpha joins pre-mixed tint. The draw mixes source-one
+over one-minus-source-alpha. It keeps the coat straight. The stock skin
+and made skins share this path. The end mix puts SDR face code or HDR10
+code in once. UI-only HDR uses the shared 203-nit white-page help.
 
-`renderStandalone(acquired)` supplies UI-only presentation over black using the
-same layer and an exact imported acquired backbuffer with a graph presentation
-endpoint. An empty submitted snapshot still clears a valid transparent layer and
-outputs defined black. A frame claimed by the scene graph skips standalone;
-accepted consumption leaves no pending work. Only the exact acquired identity
-already accepted can skip output without pending work. Standalone rejects a new
-acquired image with no snapshot, a busy slot, or an incomplete retry prefix.
-An optional registered presentation contributor prepares before recording and
-declares after `ui.output`; its work is followed by a primary Graphics completion
-tail used as the present endpoint. UI slot retirement continues to use the exact
-accepted output-consumer token, independently of that later presentation tail.
-`UiLayerSystem` selects `Scene` or
-`Standalone` policy. Its current render-pass API cannot abort acquired presentation
-on a rejected standalone submission, so that adapter requests device recreation
-instead of continuing presentation with indeterminate ownership.
+`renderStandalone(acquired)` gives UI-only show over black. It uses the
+same coat and an exact brought-in got back-buffer with a graph show end.
+A blank sent shot still clears a true clear coat. It puts out set black.
+A frame owned by the scene graph skips lone use. Took use leaves no held
+work. Only the exact got name took in can skip out with no held work.
+Lone use turns down a new got shot with no shot, a full slot, or a half
+retry head. An opt show helper readies first, then states past `ui.output`.
+Its work is trailed by a main Graphics done tail used as the show end. UI
+slot free still uses the exact took out-user token. It does not lean on
+that next show tail. `UiLayerSystem` picks `Scene` or `Standalone` plan.
+Its now draw-pass call cannot drop got show on a turned-down lone send.
+So that fit asks for card remake, not more show with vague hold.
 
-The caller must stop producers, join graph/native GPU work, and release old graph
-payloads before `invalidateResources()` and before destroying the graphics device
-or caller arena. Resize/device recreation uses that same joined invalidation and
-validation boundary. Main-thread setup/submission methods do not provide concurrent
-producer admission.
+The caller must stop makers first. It must join graph/home GPU work. It
+must free old graph packs. Do this first, then `invalidateResources()`.
+Do this first, then kill the card or caller field. Size/card remake uses
+that same joined drop/make edge. Main-thread set/send calls give no
+side-by-side maker take-in.
 
-Raster and output draws support direct native recording and command IR replay.
-Graph resource imports, versions, barriers, uploads, clears, and `ui.raster`/`ui.output`
-task timing are available to graph capture and telemetry. Standalone presentation
-also records the `render.frame` timing scope around its graph work.
-Widgets, retained interaction state, text shaping/fonts, focus/navigation, and OS
-IME/clipboard borrowing live in separate domains above this renderer.
+Draw and out draws take straight home write and call IR replay. Graph
+store brings, forms, walls, up-loads, clears, and `ui.raster`/`ui.output`
+task times feed graph grab and speed notes. Lone show also writes the
+`render.frame` time span round its graph work. Tools, kept touch state,
+text shape/fonts, point/key flow, and OS IME/board borrow live in split
+fields past this draw.

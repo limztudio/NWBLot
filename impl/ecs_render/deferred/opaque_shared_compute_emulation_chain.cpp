@@ -79,7 +79,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         tasks[phaseIndex] = *phaseTask;
         dependency = *phaseTask;
     }
-    return OpaqueSharedComputeEmulationChainResult{ .completionTask = dependency, .taskCount = phaseCount, };
+    return OpaqueSharedComputeEmulationChainResult(dependency, phaseCount);
 }
 
 

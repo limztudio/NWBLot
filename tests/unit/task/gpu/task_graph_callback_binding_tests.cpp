@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/scheduler_callback_bindings.h>
 
 
@@ -83,7 +85,7 @@ b8 CallbackGraph::prepare(const usize taskCount){
     for(usize index = 0u; index < taskCount; ++index){
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % s_MergeGroupSize != 0u;
-        const auto derivedNameResult = IndexedName(Name("tests/callback_bindings/task/"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseCallbackBindingsTask), index);
         if(!derivedNameResult)
             return false;
         const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Callback Binding Task", GraphicsCommands(), scheduling, {}, scheduling.mergeWithPrevious ? Span(&tasks.back(), 1u) : Span<const Core::GpuTaskId>{}, graph);

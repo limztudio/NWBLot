@@ -189,6 +189,29 @@ usize borrowLocalStringAcrossValueCall(){
     return consumed + view.size();
 }
 
+b8 anyLaneGreater3Single(in VectorSingle lhs, in VectorSingle rhs){
+    return lhs.x > rhs.x || lhs.y > rhs.y || lhs.z > rhs.z;
+}
+
+b8 anyLaneGreater3Double(in VectorDouble lhs, in VectorDouble rhs){
+    return lhs.x > rhs.x || lhs.y > rhs.y || lhs.z > rhs.z;
+}
+
+b8 finiteLane3Single(in VectorSingle value){
+    return isFinite(value.xyz);
+}
+
+b8 finiteLane3Double(in VectorDouble value){
+    return isFinite(value.xyz);
+}
+
+const StringView s_MetascriptValueItemsField = "items";
+const usize s_MetascriptValueInitialCount = 8u;
+
+b8 anyLaneGreater2Single(in VectorSingle lhs, in VectorSingle rhs){
+    return lhs.x > rhs.x || lhs.y > rhs.y;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -14,6 +14,7 @@
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/avboit/avboit_frame_targets.h>
+#include <impl/ecs_render/refraction/types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -200,17 +201,17 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         return true;
     };
     if(
-        !appendClear(Name("render.refraction.clear.depth"), depth, true)
-        || !appendClear(Name("render.refraction.clear.normal_ior"), normalIor, false)
-        || !appendClear(Name("render.refraction.clear.tint_coverage"), tintCoverage, false)
-        || !appendClear(Name("render.refraction.clear.instance"), instance, false)
-        || !appendClear(Name("render.refraction.clear.specular_roughness"), specularRoughness, false, Core::Color(0.f, 0.f, 0.f, 1.f))
+        !appendClear(Name(s_RenderIdentityRenderRefractionClearDepth), depth, true)
+        || !appendClear(Name(s_RenderIdentityRenderRefractionClearNormalIor), normalIor, false)
+        || !appendClear(Name(s_RenderIdentityRenderRefractionClearTintCoverage), tintCoverage, false)
+        || !appendClear(Name(s_RenderIdentityRenderRefractionClearInstance), instance, false)
+        || !appendClear(Name(s_RenderIdentityRenderRefractionClearSpecularRoughness), specularRoughness, false, Core::Color(0.f, 0.f, 0.f, 1.f))
     )
         return MakeUnexpected(Failure{});
 
     const auto finalize = [&](){
         const Array<Core::GpuTaskResourceUse, 5u> uses = { ReadUse(depth), ReadUse(normalIor), ReadUse(tintCoverage), ReadUse(instance), ReadUse(specularRoughness) };
-        Core::GpuTaskDesc desc = TaskDesc(Name("render.refraction.capture_finalize"), "Refraction Capture Finalize", dependency);
+        Core::GpuTaskDesc desc = TaskDesc(Name(s_RenderIdentityRenderRefractionCaptureFinalize), "Refraction Capture Finalize", dependency);
         desc.setResourceUses(uses);
         return graph.addTask<FinalizeTask>(desc, FinalizeTask::Payload{});
     };
@@ -245,10 +246,10 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         return MakeUnexpected(Failure{});
 
     const Array<MaterialPassDrawItemsView, 2u> drawSets = {drawItems.regular, drawItems.csg};
-    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name("render.refraction.capture.geometry"), "Refraction Capture Geometry", graph, scratchArena);
+    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_RenderIdentityRenderRefractionCaptureGeometry), "Refraction Capture Geometry", graph, scratchArena);
     if(!geometrySet)
         return MakeUnexpected(Failure{});
-    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, Name("render.refraction.capture.material_textures"), "Refraction Capture Material Textures", graph, scratchArena);
+    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, Name(s_RenderIdentityRenderRefractionCaptureMaterialTextures), "Refraction Capture Material Textures", graph, scratchArena);
     if(!sampledTextureSet)
         return MakeUnexpected(Failure{});
     const Array<Core::GpuTaskResourceSetUse, 2u> setUses = {{
@@ -274,8 +275,8 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
 
     AvboitRefractionCaptureResources captureResources(graph, dependency);
     if(
-        !captureResources.appendUpload(Name("render.refraction.capture.instances_upload"), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
-        || !captureResources.appendUpload(Name("render.refraction.capture.material_upload"), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32))
+        !captureResources.appendUpload(Name(s_RenderIdentityRenderRefractionCaptureInstancesUpload), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
+        || !captureResources.appendUpload(Name(s_RenderIdentityRenderRefractionCaptureMaterialUpload), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32))
     )
         return MakeUnexpected(Failure{});
 

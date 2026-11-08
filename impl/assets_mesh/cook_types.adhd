@@ -43,7 +43,13 @@ b8 IsAllowedSkinInfluenceMetadataField(in StringView fieldName){
 
 Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in f32x4u weights){
     const VectorSingle weightVec(weights);
-    if(!isFinite(weightVec.x) || !isFinite(weightVec.y) || !isFinite(weightVec.z) || !isFinite(weightVec.w) || weightVec.x < 0.0f || weightVec.y < 0.0f || weightVec.z < 0.0f || weightVec.w < 0.0f)
+    if(
+        !isFinite(weightVec)
+        || weightVec.x < 0.0f
+        || weightVec.y < 0.0f
+        || weightVec.z < 0.0f
+        || weightVec.w < 0.0f
+    )
         return makeUnexpected(SkinInfluenceWeightFailure::NegativeWeight);
 
     const f32 totalWeight = dot(weightVec, VectorSingle(1.0f));
@@ -112,3 +118,4 @@ void CopySourceMeshStreamsToCookStreams(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

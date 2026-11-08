@@ -1,0 +1,119 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using AvboitGraphResourceId = Core::GpuGraphResourceId;
+using AvboitGraphTaskId = Core::GpuTaskId;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitClearChainInputs{
+    public AvboitGraphResourceId lowRaster;
+    public AvboitGraphResourceId accumColor;
+    public AvboitGraphResourceId accumExtinction;
+    public AvboitGraphResourceId foregroundColor;
+    public AvboitGraphResourceId foregroundExtinction;
+    public AvboitGraphResourceId transmittance;
+    public AvboitGraphResourceId coverage;
+    public AvboitGraphResourceId depthWarp;
+    public AvboitGraphResourceId control;
+    public AvboitGraphResourceId extinction;
+    public AvboitGraphResourceId extinctionOverflow;
+    public AvboitGraphTaskId uploadTask;
+    public b8 clearTargets;
+
+    public AvboitClearChainInputs(){
+        this.lowRaster = AvboitGraphResourceId();
+        this.accumColor = AvboitGraphResourceId();
+        this.accumExtinction = AvboitGraphResourceId();
+        this.foregroundColor = AvboitGraphResourceId();
+        this.foregroundExtinction = AvboitGraphResourceId();
+        this.transmittance = AvboitGraphResourceId();
+        this.coverage = AvboitGraphResourceId();
+        this.depthWarp = AvboitGraphResourceId();
+        this.control = AvboitGraphResourceId();
+        this.extinction = AvboitGraphResourceId();
+        this.extinctionOverflow = AvboitGraphResourceId();
+        this.uploadTask = AvboitGraphTaskId();
+        this.clearTargets = false;
+    }
+
+    public AvboitClearChainInputs(
+        in AvboitGraphResourceId lowRaster,
+        in AvboitGraphResourceId accumColor,
+        in AvboitGraphResourceId accumExtinction,
+        in AvboitGraphResourceId foregroundColor,
+        in AvboitGraphResourceId foregroundExtinction,
+        in AvboitGraphResourceId transmittance,
+        in AvboitGraphResourceId coverage,
+        in AvboitGraphResourceId depthWarp,
+        in AvboitGraphResourceId control,
+        in AvboitGraphResourceId extinction,
+        in AvboitGraphResourceId extinctionOverflow,
+        in AvboitGraphTaskId uploadTask,
+        in b8 clearTargets
+    ){
+        this.lowRaster = lowRaster;
+        this.accumColor = accumColor;
+        this.accumExtinction = accumExtinction;
+        this.foregroundColor = foregroundColor;
+        this.foregroundExtinction = foregroundExtinction;
+        this.transmittance = transmittance;
+        this.coverage = coverage;
+        this.depthWarp = depthWarp;
+        this.control = control;
+        this.extinction = extinction;
+        this.extinctionOverflow = extinctionOverflow;
+        this.uploadTask = uploadTask;
+        this.clearTargets = clearTargets;
+    }
+}
+
+class AvboitClearChainResult{
+    public AvboitGraphTaskId clearTask = AvboitGraphTaskId();
+}
+
+
+class AvboitDepthWarpStageResult{
+    public AvboitGraphTaskId completionTask = AvboitGraphTaskId();
+}
+
+
+// Domains publish this boundary after declaring topology; downstream avoids local coupling.
+class RendererTaskGraphTransparencyStage{
+    public AvboitGraphTaskId firstTask;
+    public AvboitGraphTaskId completionTask;
+    public b8 hasTransparentTasks;
+
+    public RendererTaskGraphTransparencyStage(){
+        this.firstTask = AvboitGraphTaskId();
+        this.completionTask = AvboitGraphTaskId();
+        this.hasTransparentTasks = false;
+    }
+
+    public RendererTaskGraphTransparencyStage(in AvboitGraphTaskId firstTask, in AvboitGraphTaskId completionTask, in b8 hasTransparentTasks){
+        this.firstTask = firstTask;
+        this.completionTask = completionTask;
+        this.hasTransparentTasks = hasTransparentTasks;
+    }
+
+    public b8 valid()const{
+        return this.firstTask.valid() && this.completionTask.valid();
+    }
+}
+
+
+b8 AvboitUploadCountsFit(in usize instances, in usize receivers, in usize cutters, in usize maxInstances, in usize maxReceivers, in usize maxCutters){
+    return instances <= maxInstances && receivers <= maxReceivers && cutters <= maxCutters;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

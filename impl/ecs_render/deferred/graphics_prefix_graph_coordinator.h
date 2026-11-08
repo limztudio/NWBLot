@@ -48,7 +48,7 @@ class CsgFrameState;
 class MeshViewGpuData;
 class ObjectGeometryCacheGraph;
 struct DeferredFrameTargets;
-struct DeferredGraphResourceImportResult;
+class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 namespace ECSRenderDetail{
     struct MeshFrameBindingSnapshot;

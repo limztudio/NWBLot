@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+struct MaterialPassDrawItemsView;
+using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
+using AvboitGeometryResourceSetId = Core::GpuGraphResourceSetId;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitGeometryPreparationInputs{
+    public AvboitGeometryDrawSets drawItemSets;
+    public AvboitGeometryPhase phase;
+
+    public AvboitGeometryPreparationInputs(){
+        this.drawItemSets = AvboitGeometryDrawSets();
+        this.phase = AvboitGeometryPhase::Occupancy;
+    }
+
+    public AvboitGeometryPreparationInputs(in AvboitGeometryDrawSets drawItemSets, in AvboitGeometryPhase phase){
+        this.drawItemSets = drawItemSets;
+        this.phase = phase;
+    }
+}
+
+
+class AvboitGeometryPreparationResult{
+    public AvboitGeometryResourceSetId materialGeometrySet = AvboitGeometryResourceSetId();
+    public AvboitGeometryResourceSetId materialSampledTextureSet = AvboitGeometryResourceSetId();
+    public b8 geometryOwned = false;
+    public b8 sampledTexturesCollected = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

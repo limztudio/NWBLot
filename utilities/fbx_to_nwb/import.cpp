@@ -10,8 +10,6 @@
 
 #include <core/common/log.h>
 
-#include <global/overflow.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,11 +48,9 @@ Expected<MeshBuildResult> BuildMesh(
     usize maxFaceTriangles = 0u;
     for(const usize instanceIndex : selection)
         maxFaceTriangles = Max(maxFaceTriangles, static_cast<usize>(instances[instanceIndex].mesh->max_face_triangles));
-    const auto triangleIndexCapacity = TryMultiply<usize>(maxFaceTriangles, Impl::s_MeshletTriangleIndexCount);
-    if(!triangleIndexCapacity){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
+    const auto triangleIndexCapacity = TryComputeTriangleIndexScratchCapacity(maxFaceTriangles);
+    if(!triangleIndexCapacity)
         return MakeUnexpected(Failure{});
-    }
     UtilityScratchVector<u32> triangleIndices(*triangleIndexCapacity, scratchArena);
     FbxSkinDetail::ExportContext skinContext(scratchArena);
     usize jointCapacity = 0u;
@@ -64,8 +60,7 @@ Expected<MeshBuildResult> BuildMesh(
             const ufbx_mesh* mesh = instances[instanceIndex].mesh;
             if(mesh && mesh->skin_deformers.count == 1u && mesh->skin_deformers.data[0u]){
                 const usize clusterCount = mesh->skin_deformers.data[0u]->clusters.count;
-                const usize remaining = s_MaxSkeletonJointCount - jointCapacity;
-                jointCapacity += clusterCount < remaining ? clusterCount : remaining;
+                jointCapacity = AccumulateFbxJointCapacity(jointCapacity, clusterCount);
             }
         }
     }

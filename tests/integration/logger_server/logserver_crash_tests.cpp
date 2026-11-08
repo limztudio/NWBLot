@@ -7,15 +7,19 @@
 #include <tests/common/filesystem_helpers.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/logger_server/name_cases.adhd.h>
 
-#include <gtest/gtest.h>
+#include <logger/common.h>
 
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
 #include <core/crash/package_archive.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 #include <core/common/log.h>
 
+#include <global/atomic.h>
+#include <global/sync.h>
+#include <global/thread.h>
 #include <global/assert.h>
 #include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>
@@ -23,7 +27,7 @@
 #include <global/process.h>
 #include <global/process_execution.h>
 
-#include <logger/common.h>
+#include <gtest/gtest.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <fcntl.h>
@@ -69,9 +73,9 @@ using namespace NWB::Tests::CrashTestPaths;
 using namespace NWB::Tests::LoggerServerCrash;
 using namespace NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
-inline constexpr Name s_ArchiveScratch("tests/integration/logger_server/archive_scratch");
-inline constexpr Name s_AssertChildInstallArena("tests/integration/logger_server/assert_child_install");
-inline constexpr Name s_RecoverableErrorInstallArena("tests/integration/logger_server/recoverable_error_install");
+inline constexpr Name s_ArchiveScratch = NWB::Tests::LoggerCrashCases::s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch;
+inline constexpr Name s_AssertChildInstallArena = NWB::Tests::LoggerCrashCases::s_LoggerCrashTestNameTestsIntegrationLoggerServerAssertChildInstall;
+inline constexpr Name s_RecoverableErrorInstallArena = NWB::Tests::LoggerCrashCases::s_LoggerCrashTestNameTestsIntegrationLoggerServerRecoverableErrorInstall;
 
 
 class LoggerServerCrash : public ::testing::Test{

@@ -2,16 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/font_fixture.h>
+#include <tests/common/test_context.h>
+#include <tests/integration/assets_font_atlas/name_cases.adhd.h>
+
 #include <impl/assets_font/cook.h>
 #include <impl/assets_font_atlas/cook.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_entry_registry.h>
 #include <core/common/module.h>
-
-#include <tests/common/capturing_logger.h>
-#include <tests/common/font_fixture.h>
-#include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
 
@@ -54,7 +55,7 @@ constexpr AStringView s_UnitsPerEmField = "units_per_em";
 using namespace Impl;
 struct FontMetadataTestArenaTag{};
 using MetadataTestArena = TestArena<FontMetadataTestArenaTag>;
-static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metadata_scratch");
+static constexpr Name s_ScratchArena = NWB::Tests::FontAtlasCases::s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,7 +157,7 @@ TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValues){
         case 3u: invalid.setReference("asset"); break;
         case 4u: invalid.makeList(); break;
         }
-        EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, invalid, testArena.arena));
+        EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, invalid, testArena.arena));
     }
 }
 
@@ -188,17 +189,17 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected){
         Core::Metascript::Value wrong(face);
         const u32 value = field == s_FaceIndexField ? fontEntry.faceIndex : field == s_UnitsPerEmField ? atlasEntry.payload.unitsPerEm : atlasEntry.payload.sourceGlyphCount;
         wrong.field(field).setInteger(value);
-        EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, wrong, testArena.arena));
+        EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrong, testArena.arena));
     }
     static constexpr Array<AStringView, 4u> s_UnsupportedFields = { "schema_version", "source_sha256", "source", "atlas" };
     for(const AStringView field : s_UnsupportedFields){
         EXPECT_EQ(atlas.findField(field), nullptr);
         Core::Metascript::Value wrongFace(face);
         wrongFace.field(field).setString("obsolete");
-        EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, wrongFace, testArena.arena));
+        EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrongFace, testArena.arena));
         Core::Metascript::Value wrongAtlas(atlas);
         wrongAtlas.field(field).setString("obsolete");
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrongAtlas, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrongAtlas, testArena.arena, scratchArena));
     }
     static constexpr Array<AStringView, 4u> s_RetiredAtlasFields = { "face_index", "units_per_em", "glyph_count", "guard_texels" };
     for(const AStringView field : s_RetiredAtlasFields){
@@ -206,30 +207,30 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected){
         Core::Metascript::Value wrong(atlas);
         const u32 value = field == s_FaceIndexField ? atlasEntry.payload.faceIndex : field == s_UnitsPerEmField ? atlasEntry.payload.unitsPerEm : field == "glyph_count" ? atlasEntry.payload.sourceGlyphCount : atlasEntry.payload.guardTexels;
         wrong.field(field).setInteger(value);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrong, testArena.arena, scratchArena));
     }
     static constexpr Array<AStringView, 2u> s_AtlasSettings = { "bake_ppem", "spread_pixels" };
     for(const AStringView field : s_AtlasSettings){
         Core::Metascript::Value wrong(atlas);
         wrong.field(field).setInteger(-1);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrong, testArena.arena, scratchArena));
     }
     EXPECT_EQ(atlas.findField("groups"), nullptr);
     Core::Metascript::Value obsoleteGroups(atlas);
     obsoleteGroups.field("groups").setString("obsolete");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsoleteGroups, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, obsoleteGroups, testArena.arena, scratchArena));
     Core::Metascript::Value wrongMetric(atlas);
     wrongMetric.field("descender_units").setDouble(Limit<f64>::s_QuietNaN);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrongMetric, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrongMetric, testArena.arena, scratchArena));
     Core::Metascript::Value wrongRaster(atlas);
     wrongRaster.field("raster_mode").setString("automatic");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrongRaster, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrongRaster, testArena.arena, scratchArena));
     Core::Metascript::Value emptyReference(atlas);
     emptyReference.field(s_FontField).setString("");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, emptyReference, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, emptyReference, testArena.arena, scratchArena));
     Core::Metascript::Value unresolvedReference(atlas);
     unresolvedReference.field(s_FontField).setReference(s_FaceVariable);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, unresolvedReference, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, unresolvedReference, testArena.arena, scratchArena));
 }
 
 TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
@@ -253,32 +254,32 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     ASSERT_GT(originalGlyphCount, 1u);
     Core::Metascript::Value incomplete(metadata);
     incomplete.field(s_GlyphsField).asList().pop_back();
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, incomplete, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, incomplete, testArena.arena, scratchArena));
     Core::Metascript::Value obsoleteId(metadata);
     EXPECT_EQ(obsoleteId.field(s_GlyphsField).asList()[0u].findField("id"), nullptr);
     obsoleteId.field(s_GlyphsField).asList()[0u].field("id").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsoleteId, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, obsoleteId, testArena.arena, scratchArena));
     static constexpr Array<AStringView, 6u> s_IntegerFields = { "group", "channel", "x", "y", "width", "height" };
     for(const AStringView field : s_IntegerFields){
         Core::Metascript::Value wrong(metadata);
         wrong.field(s_GlyphsField).asList()[0u].field(field).setInteger(s_FontAtlasMaxExtent + 1u);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrong, testArena.arena, scratchArena));
     }
     static constexpr Array<AStringView, 3u> s_FloatFields = { "plane_left", "plane_top", "advance_units" };
     for(const AStringView field : s_FloatFields){
         Core::Metascript::Value wrong(metadata);
         wrong.field(s_GlyphsField).asList()[0u].field(field).setDouble(Limit<f64>::s_Infinity);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrong, testArena.arena, scratchArena));
     }
     static constexpr Array<AStringView, 3u> s_DerivedGlyphFields = { "drawable", "plane_right", "plane_bottom" };
     for(const AStringView field : s_DerivedGlyphFields){
         Core::Metascript::Value obsolete(metadata);
         obsolete.field(s_GlyphsField).asList()[0u].field(field).setInteger(0);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsolete, testArena.arena, scratchArena));
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, obsolete, testArena.arena, scratchArena));
     }
     Core::Metascript::Value unknownGlyphField(metadata);
     unknownGlyphField.field(s_GlyphsField).asList()[0u].field("sha256").setString("obsolete");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, unknownGlyphField, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, unknownGlyphField, testArena.arena, scratchArena));
     usize drawableIndex = originalGlyphCount;
     for(usize index = 0u; index < originalGlyphCount; ++index){
         if(entry.payload.glyphs[index].drawable != 0u){
@@ -290,13 +291,13 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     Core::Metascript::Value wrongChannel(metadata);
     const FontAtlasGlyph& drawable = entry.payload.glyphs[drawableIndex];
     wrongChannel.field(s_GlyphsField).asList()[drawableIndex].field("channel").setInteger(entry.payload.groups[drawable.group].channelCount);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrongChannel, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, wrongChannel, testArena.arena, scratchArena));
     Core::Metascript::Value croppedGlyph(metadata);
     croppedGlyph.field(s_GlyphsField).asList()[drawableIndex].field("width").setInteger(entry.payload.groups[drawable.group].width);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, croppedGlyph, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, croppedGlyph, testArena.arena, scratchArena));
     Core::Metascript::Value zeroDimension(metadata);
     zeroDimension.field(s_GlyphsField).asList()[drawableIndex].field("height").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, zeroDimension, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, zeroDimension, testArena.arena, scratchArena));
     usize emptyIndex = originalGlyphCount;
     for(usize index = 0u; index < originalGlyphCount; ++index){
         if(entry.payload.glyphs[index].drawable == 0u){
@@ -307,10 +308,10 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     ASSERT_LT(emptyIndex, originalGlyphCount);
     Core::Metascript::Value emptyWithGeometry(metadata);
     emptyWithGeometry.field(s_GlyphsField).asList()[emptyIndex].field("x").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, emptyWithGeometry, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, emptyWithGeometry, testArena.arena, scratchArena));
     Core::Metascript::Value missingWidth(metadata);
     ASSERT_EQ(missingWidth.field(s_GlyphsField).asList()[drawableIndex].asMap().erase(AStringView("width")), 1u);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, missingWidth, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, missingWidth, testArena.arena, scratchArena));
 }
 
 TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected){
@@ -341,28 +342,28 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejec
     Core::Assets::AssetBytes truncated(originalFont);
     truncated.pop_back();
     ASSERT_TRUE(WriteBinaryFile(fontPath, truncated));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, face, testArena.arena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, metadata, testArena.arena, scratchArena));
     Core::Assets::AssetBytes corrupted(originalFont);
     corrupted.back() ^= 1u;
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, metadata, testArena.arena, scratchArena));
     corrupted = originalFont;
     ASSERT_GT(corrupted.size(), 24u);
     corrupted[24u] ^= 1u; // The SFNT digest follows the six u32 prepared-source header fields.
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, face, testArena.arena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, metadata, testArena.arena, scratchArena));
     Core::Assets::AssetBytes otherFont(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(DefaultBundledFontRoot(testArena) / "korean.font", otherFont));
     ASSERT_TRUE(WriteBinaryFile(fontPath, otherFont));
-    auto replacementFontParseResult = ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena);
+    auto replacementFontParseResult = ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, face, testArena.arena);
     ASSERT_TRUE(replacementFontParseResult);
     EXPECT_NE(ComputeSha256({ replacementFontParseResult->fontBytes.data(), replacementFontParseResult->fontBytes.size() }), originalHash);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), path, metadata, testArena.arena, scratchArena));
     ASSERT_TRUE(WriteBinaryFile(fontPath, originalFont));
-    EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), directory / "missing.nwb", face, testArena.arena));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), directory / "missing.nwb", metadata, testArena.arena, scratchArena));
+    EXPECT_FALSE(ParseFontCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), directory / "missing.nwb", face, testArena.arena));
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name(FontAtlasCases::s_FontAtlasOtherProject), directory / "missing.nwb", metadata, testArena.arena, scratchArena));
 }
 
 

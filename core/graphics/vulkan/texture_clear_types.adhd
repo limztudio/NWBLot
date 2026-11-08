@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_TextureClearDataColorComponentCount = 3u;
+const u32 s_TextureClearDataRGComponentCount = 2u;
+const u32 s_TextureClearDataRGBAComponentCount = 4u;
+const u32 s_TextureClearDataDepthPatternBytes = 4u;
+const u32 s_TextureClearDataStencilPatternBytes = 1u;
+const u32 s_TextureClearDataMaxPatternBytes = 16u;
+const u32 s_TextureClearDataUploadAlignment = 4u;
+const u32 s_TextureClearDataBCSingleClearBlockBytes = 8u;
+const u32 s_TextureClearDataBCDoubleClearBlockBytes = 16u;
+const u32 s_TextureClearDataBC4EndpointByteCount = 2u;
+const u32 s_TextureClearDataRGB565RedBitCount = 5u;
+const u32 s_TextureClearDataRGB565GreenBitCount = 6u;
+const u32 s_TextureClearDataRGB565RedBitShift = 11u;
+const u32 s_TextureClearDataRGB565GreenBitShift = 5u;
+const u32 s_TextureClearDataBC1TransparentColorIndices = 0xffffffffu;
+const u32 s_TextureClearDataD24ClearValueMask = 0x00ffffffu;
+const u32 s_TextureClearDataClearChannelBits4444 = 4u;
+const u32 s_TextureClearDataClearChannelBits565R = 5u;
+const u32 s_TextureClearDataClearChannelBits565G = 6u;
+const u32 s_TextureClearDataClearChannelBits555 = 5u;
+const u32 s_TextureClearDataClearChannelBits101010 = 10u;
+const u32 s_TextureClearDataClearChannelBits21030 = 2u;
+const u32 s_TextureClearDataClearShift4 = 4u;
+const u32 s_TextureClearDataClearShift5 = 5u;
+const u32 s_TextureClearDataClearShift6 = 6u;
+const u32 s_TextureClearDataClearShift8 = 8u;
+const u32 s_TextureClearDataClearShift10 = 10u;
+const u32 s_TextureClearDataClearShift11 = 11u;
+const u32 s_TextureClearDataClearShift12 = 12u;
+const u32 s_TextureClearDataClearShift20 = 20u;
+const u32 s_TextureClearDataClearShift22 = 22u;
+const u32 s_TextureClearDataUFloat111110GreenMantissaBits = 6u;
+const u32 s_TextureClearDataUFloat111110BlueMantissaBits = 5u;
+const u32 s_TextureClearDataClearShift30 = 30u;
+const u32 s_TextureClearDataBC2AlphaNibbleSplat = 0x11111111u;
+const u32 s_TextureClearDataClearHighWordShift = 32u;
+
+const u64 s_TextureClearMergedLayerUploadThreshold = 64u * 1024u;
+
+
+class VulkanTextureClearUploadLayout{
+    public u64 uploadSize = 0u;
+    public u64 layerPitch = 0u;
+    public usize clearByteCount = 0u;
+    public u32 copyOffsetAlignment = 0u;
+    public u32 stagingAlignment = 0u;
+    public b8 mergeArrayLayerCopies = false;
+}
+
+
+b8 ShouldMergeTextureClearArrayLayers(in u64 arrayLayerCount, in u64 layerPitch){
+    return arrayLayerCount > 1u && layerPitch <= s_TextureClearMergedLayerUploadThreshold / arrayLayerCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

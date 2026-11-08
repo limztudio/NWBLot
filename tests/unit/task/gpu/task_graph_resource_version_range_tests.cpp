@@ -4,6 +4,8 @@
 
 #include "task_graph_resource_version_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,14 +58,14 @@ TEST(GpuTaskGraphResourceVersion, RequiresWholeResourceRangesForAccelStructAndHa
 
     Core::GpuTaskResourceRange partialRange;
     partialRange.bufferRange = Core::BufferRange(16u, 32u);
-    const auto partialAccelStruct = analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/partial_accel_struct"), partialRange);
+    const auto partialAccelStruct = analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionPartialAccelStruct), partialRange);
     ASSERT_FALSE(partialAccelStruct);
     EXPECT_EQ(partialAccelStruct.error(), Core::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
-    const auto partialHazardDomain = analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/partial_hazard_domain"), partialRange);
+    const auto partialHazardDomain = analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionPartialHazardDomain), partialRange);
     ASSERT_FALSE(partialHazardDomain);
     EXPECT_EQ(partialHazardDomain.error(), Core::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
-    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/whole_accel_struct"), Core::GpuTaskResourceRange{}));
-    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/whole_hazard_domain"), Core::GpuTaskResourceRange{}));
+    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name(NWB::Tests::TaskGraphTestUtils::s_TaskGraphCaseTestsTaskGraphResourceVersionWholeAccelStruct), Core::GpuTaskResourceRange{}));
+    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name(NWB::Tests::TaskGraphTestUtils::s_TaskGraphCaseTestsTaskGraphResourceVersionWholeHazardDomain), Core::GpuTaskResourceRange{}));
 }
 
 

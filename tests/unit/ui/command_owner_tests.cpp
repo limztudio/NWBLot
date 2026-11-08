@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -55,7 +56,7 @@ using UiTestSupport::Key;
 class UiCommandOwnerTests : public UiTestSupport::RouterTestFixture{
 public:
     UiCommandOwnerTests()
-        : RouterTestFixture(Name("tests/ui/keyboard_owner"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiKeyboardOwner))
     {
         m_targets = { Editor(), List(), List(3u, 140.0f) };
         m_targets[2u].control.instanceGeneration = 32u;

@@ -5,6 +5,9 @@
 #include "refraction_tile_probe.h"
 #include "assets/shaders/refraction_tile_probe_layout.h"
 
+#include <tests/smoke/presentation_types.adhd.h>
+
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
@@ -41,8 +44,8 @@ inline constexpr u32 s_Sentinel = 0xa573d91bu;
 inline constexpr u32 s_PhaseCount = 6u;
 inline constexpr u32 s_MissingTile = (s_TilesY / 2u) * s_TilesX + s_TilesX / 2u;
 inline constexpr Array<u32, 6u> s_SparseTiles{ 0u, s_TilesX - 1u, (s_TilesY - 1u) * s_TilesX, s_TileCount - 1u, 65534u, 65535u };
-inline constexpr Name s_ProbeName("RefractionTileProbe");
-inline constexpr Name s_VerifyShaderName("refraction_tile_probe_cs");
+inline constexpr Name s_ProbeName = NWB::Tests::Smoke::s_SmokeNameRefractionTileProbe;
+inline constexpr Name s_VerifyShaderName = NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeCs;
 
 using ProbePushConstants = Impl::RefractionPushConstants;
 
@@ -403,16 +406,16 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
     for(u32 tile = 0u; tile < s_TileCount; ++tile)
         reversedTiles[tile] = s_TileCount - 1u - tile;
     Core::GraphicsStandaloneService::BufferSetupDesc reversedSetup;
-    reversedSetup.bufferDesc.setDebugName(Name("RefractionTileProbeReversedQueue")).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
+    reversedSetup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
     reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
     reversedSetup.data = reversedTiles.data();
     reversedSetup.dataSize = static_cast<u64>(s_QueueWords) * sizeof(u32);
     reversedSetup.queue = Core::CommandQueue::Graphics;
     const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
-    const auto queue = createBuffer(Name("RefractionTileProbeQueue"), s_QueueWords, false, false);
-    const auto arguments = createBuffer(Name("RefractionTileProbeArguments"), s_ArgumentWords, true, false);
-    const auto visits = createBuffer(Name("RefractionTileProbeVisits"), s_VisitWords, false, false);
-    const auto readback = createBuffer(Name("RefractionTileProbeReadback"), s_ReadbackWords, false, true);
+    const auto queue = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeQueue), s_QueueWords, false, false);
+    const auto arguments = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeArguments), s_ArgumentWords, true, false);
+    const auto visits = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeVisits), s_VisitWords, false, false);
+    const auto readback = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeReadback), s_ReadbackWords, false, true);
     Core::TextureDesc depthDesc;
     depthDesc.setWidth(s_Width).setHeight(s_Height).setFormat(Core::Format::R32_FLOAT).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
     const auto depth = graphics.createTexture(depthDesc);
@@ -439,7 +442,7 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
     Impl::DeferredBindlessResourceSlots slots;
     slots.refractionDepth = sampled->slot();
     Core::GraphicsStandaloneService::BufferSetupDesc setup;
-    setup.bufferDesc.setDebugName(Name("RefractionTileProbeSlots")).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
+    setup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
     setup.data = &slots;
     setup.dataSize = sizeof(slots);
     setup.queue = Core::CommandQueue::Graphics;

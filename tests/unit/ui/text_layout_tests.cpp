@@ -4,6 +4,8 @@
 
 #include "fixture_text_shaping.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/text/layout.h>
 #include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
 
@@ -30,7 +32,7 @@ constexpr AStringView s_TwoGlyphText = "AB";
 class TextLayoutTests : public testing::Test{
 public:
     TextLayoutTests()
-        : m_arena(Name("tests/ui/text/layout"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextLayout))
         , m_shaper(m_arena)
         , m_builder(m_arena, m_shaper)
         , m_layout(m_arena)

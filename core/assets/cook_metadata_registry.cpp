@@ -122,8 +122,7 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(const AssetDo
         __hidden_cook_metadata_registry::AutoMetadataParser{ documentFunction, valueFunction },
         [](const __hidden_cook_metadata_registry::AutoMetadataParser& lhs, const __hidden_cook_metadata_registry::AutoMetadataParser& rhs)noexcept{
             return lhs.documentFunction == rhs.documentFunction && lhs.valueFunction == rhs.valueFunction;
-        }
-    );
+        });
 }
 
 
@@ -160,8 +159,7 @@ void RegisterCompositeRootAssetType(const Name& assetType){
 
     QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_CompositeRootTypeQueueArena>().appendUnique(
         assetType,
-        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
-    );
+        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; });
 }
 
 b8 IsCompositeRootAssetType(const Name& assetType){
@@ -170,16 +168,14 @@ b8 IsCompositeRootAssetType(const Name& assetType){
 
     return QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_CompositeRootTypeQueueArena>().contains(
         assetType,
-        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
-    );
+        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; });
 }
 
 void RegisterNonStandaloneAssetType(const Name& assetType, const AStringView tokenText){
     if(assetType){
         QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_NonStandaloneTypeQueueArena>().appendUnique(
             assetType,
-            [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
-        );
+            [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; });
     }
 
     Array<char, NameDetail::s_SymbolTextBufferLength> resolvedToken = {};
@@ -189,8 +185,7 @@ void RegisterNonStandaloneAssetType(const Name& assetType, const AStringView tok
     if(!effectiveToken.empty()){
         QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().appendUnique(
             __hidden_cook_metadata_registry::StableRegistrationText(effectiveToken),
-            [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }
-        );
+            [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; });
     }
 }
 
@@ -200,8 +195,7 @@ void RegisterNonStandaloneFirstTokenSuffix(const AStringView tokenSuffix){
 
     QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena>().appendUnique(
         __hidden_cook_metadata_registry::StableRegistrationText(tokenSuffix),
-        [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }
-    );
+        [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; });
 }
 
 b8 IsNonStandaloneAssetType(const Name& assetType){
@@ -210,24 +204,19 @@ b8 IsNonStandaloneAssetType(const Name& assetType){
 
     return QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_NonStandaloneTypeQueueArena>().contains(
         assetType,
-        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
-    );
+        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; });
 }
 
 b8 IsLikelyNonStandaloneFirstToken(const AStringView firstToken){
     if(firstToken.empty())
         return false;
 
-    if(QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().contains(
-        firstToken,
-        [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }
-    ))
+    if(QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().contains(firstToken, [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }))
         return true;
 
     return QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena>().contains(
         firstToken,
-        [](const AStringView suffix, const AStringView token)noexcept{ return token.ends_with(suffix); }
-    );
+        [](const AStringView suffix, const AStringView token)noexcept{ return token.ends_with(suffix); });
 }
 
 void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule){
@@ -238,8 +227,7 @@ void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule){
         AssetPairedSidecarRule{ __hidden_cook_metadata_registry::StableRegistrationText(rule.sidecarExtension) },
         [](const AssetPairedSidecarRule& lhs, const AssetPairedSidecarRule& rhs)noexcept{
             return lhs.sidecarExtension == rhs.sidecarExtension;
-        }
-    );
+        });
 }
 
 AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){

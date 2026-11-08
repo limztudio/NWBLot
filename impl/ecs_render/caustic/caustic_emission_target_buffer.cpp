@@ -5,6 +5,7 @@
 #include "caustic_emission_target_buffer.h"
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
 
 #include <global/algorithm.h>
 
@@ -54,7 +55,7 @@ b8 CausticEmissionTargetBuffer::ensure(Core::GraphicsRuntime& graphics, usize ta
     targetBufferDesc
         .setByteSize(static_cast<u64>(sizeof(NwbCausticEmissionTargetGpu) * capacity))
         .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
-        .setDebugName(Name("caustic_emission_targets"))
+        .setDebugName(Name(s_RenderNameCausticEmissionTargets))
         // The upload and asynchronous photon reads share this immutable per-frame input.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -99,3 +100,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

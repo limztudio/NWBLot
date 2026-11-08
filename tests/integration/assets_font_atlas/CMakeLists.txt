@@ -1,4 +1,5 @@
 nwb_declare_gtest_executable(nwb_assets_font_atlas_tests)
+nwb_target_adhd_sources(nwb_assets_font_atlas_tests NAMESPACE "NWB::Tests::FontAtlasCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd")
 target_sources(nwb_assets_font_atlas_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/*.cc"

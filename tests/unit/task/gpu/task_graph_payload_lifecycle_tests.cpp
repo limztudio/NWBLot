@@ -5,6 +5,8 @@
 #include "task_graph_test_utils.h"
 #include "task_graph_lifecycle_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <global/scope_exit.h>
 
 
@@ -126,7 +128,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
 
     u32 discardedCount = 0u;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/non_recordable")).setMarkerLabel("Non-recordable Task");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphNonRecordable)).setMarkerLabel("Non-recordable Task");
     const auto taskResult = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .discardedCount = &discardedCount });
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
@@ -180,7 +182,7 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     u32 acceptedCount = 0u;
     u32 discardedCount = 0u;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/malformed_lifecycle_signatures")).setMarkerLabel("Malformed Lifecycle Signatures");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMalformedLifecycleSignatures)).setMarkerLabel("Malformed Lifecycle Signatures");
     const auto taskResult = graph.addTask<MalformedLifecycleTask>(desc, MalformedLifecycleTask::Payload{ .recordCount = &recordCount, .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
@@ -213,7 +215,7 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/lifecycle_discarded")).setMarkerLabel("Discarded Lifecycle Task");
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphLifecycleDiscarded)).setMarkerLabel("Discarded Lifecycle Task");
         const auto taskResult = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
@@ -230,7 +232,7 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/lifecycle_unresolved")).setMarkerLabel("Unresolved Lifecycle Task");
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphLifecycleUnresolved)).setMarkerLabel("Unresolved Lifecycle Task");
         const auto taskResult = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .acceptedCount = &acceptedCount, .discardedCount = &discardedCount, });
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
@@ -247,7 +249,7 @@ TEST(GpuTaskGraph, ResetRetiresPayloadsAndPublishesReusableStateWhenDiscardObser
     u32 discardCount = 0u;
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/reset_throwing_observer")).setMarkerLabel("Throwing Reset Observer");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResetThrowingObserver)).setMarkerLabel("Throwing Reset Observer");
     const auto task = graph.addTask<ThrowingResetTask>(desc, ThrowingResetTask::Payload(destructionCount, discardCount));
     ASSERT_TRUE(task);
 
@@ -265,7 +267,7 @@ TEST(GpuTaskGraph, ResetDuringUnwindPreservesOriginalFailureWithoutCallingDiscar
     u32 discardCount = 0u;
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/reset_active_unwind")).setMarkerLabel("Reset During Active Unwind");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResetActiveUnwind)).setMarkerLabel("Reset During Active Unwind");
     const auto task = graph.addTask<ThrowingResetTask>(desc, ThrowingResetTask::Payload(destructionCount, discardCount));
     ASSERT_TRUE(task);
 
@@ -277,7 +279,7 @@ TEST(GpuTaskGraph, ResetDuringUnwindPreservesOriginalFailureWithoutCallingDiscar
     EXPECT_EQ(discardCount, 0u);
     EXPECT_EQ(destructionCount, 1u);
 
-    const auto nextTask = graph.addTask(Core::GpuTaskDesc{}.setIdentity(Name("tests/task_graph/after_reset_unwind")).setMarkerLabel("After Reset Unwind"));
+    const auto nextTask = graph.addTask(Core::GpuTaskDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAfterResetUnwind)).setMarkerLabel("After Reset Unwind"));
     ASSERT_TRUE(nextTask);
     graph.reset();
     EXPECT_EQ(discardCount, 0u);
@@ -300,7 +302,7 @@ TEST(GpuTaskGraph, RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreserve
     {
         Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope payloadLifetime(transaction, graph, compiledGraph);
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/operation_payload")).setMarkerLabel("Operation Payload");
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOperationPayload)).setMarkerLabel("Operation Payload");
         const auto added = graph.addTask<BorrowedPayloadLifetimeTask>(desc, BorrowedPayloadLifetimeTask::Payload(ownerAlive, destructionCount, discardCount, lateUseCount, false));
         ASSERT_TRUE(added);
         task = *added;
@@ -343,11 +345,11 @@ TEST(GpuTaskGraph, OperationPayloadRetirementPreservesObserverFailureAndFinishes
     EXPECT_THROW(([&](){
         Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope payloadLifetime(transaction, graph, compiledGraph);
         Core::GpuTaskDesc firstDesc;
-        firstDesc.setIdentity(Name("tests/task_graph/retire_throw_first")).setMarkerLabel("Retire Throw First");
+        firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRetireThrowFirst)).setMarkerLabel("Retire Throw First");
         const auto first = graph.addTask<BorrowedPayloadLifetimeTask>(firstDesc, BorrowedPayloadLifetimeTask::Payload(ownerAlive, destructionCount, discardCount, lateUseCount, true));
         ASSERT_TRUE(first);
         Core::GpuTaskDesc secondDesc;
-        secondDesc.setIdentity(Name("tests/task_graph/retire_throw_second")).setMarkerLabel("Retire Throw Second");
+        secondDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRetireThrowSecond)).setMarkerLabel("Retire Throw Second");
         const auto second = graph.addTask<BorrowedPayloadLifetimeTask>(secondDesc, BorrowedPayloadLifetimeTask::Payload(ownerAlive, destructionCount, discardCount, lateUseCount, false));
         ASSERT_TRUE(second);
     }()), ResetDiscardFailure
@@ -379,7 +381,7 @@ TEST(GpuTaskGraph, OperationPayloadRetirementDuringUnwindPreservesOriginalFailur
     EXPECT_THROW(([&](){
         Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope payloadLifetime(transaction, graph, compiledGraph);
         Core::GpuTaskDesc desc;
-        desc.setIdentity(Name("tests/task_graph/retirement_unwind")).setMarkerLabel("Retirement Unwind");
+        desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRetirementUnwind)).setMarkerLabel("Retirement Unwind");
         const auto task = graph.addTask<BorrowedPayloadLifetimeTask>(desc, BorrowedPayloadLifetimeTask::Payload(ownerAlive, destructionCount, discardCount, lateUseCount, true));
         ASSERT_TRUE(task);
         throw ResetOriginalFailure{};

@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/presentation_types.adhd.h>
+
 #include <core/common/global.h>
 
 #include <global/algorithm.h>
@@ -27,24 +29,11 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Track frame intervals and count idle stalls of 50ms or more once per gap.
-struct PresentationPacingSample{
-    f64 wallMsPerPresentation = 0.0;
-};
-
-struct PresentationPacingSummary{
-    usize samples = 0u;
-    f64 p50Ms = 0.0;
-    f64 p95Ms = 0.0;
-    f64 maxMs = 0.0;
-    u64 stallsOver50Ms = 0u;
-};
-
 class PresentationPacingRing final{
 public:
-    static constexpr usize s_Capacity = 4096u;
-    static constexpr f64 s_StallThresholdMs = 50.0;
-    static constexpr f64 s_MsPerSecond = 1000.0;
+    static constexpr usize s_Capacity = s_PresentationPacingRingCapacity;
+    static constexpr f64 s_StallThresholdMs = s_PresentationPacingStallThresholdMs;
+    static constexpr f64 s_MsPerSecond = s_PresentationPacingMsPerSecond;
 
 
 public:

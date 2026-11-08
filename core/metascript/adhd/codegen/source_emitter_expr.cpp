@@ -407,6 +407,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         else
             out.append("void");
         out.append("{\r\n");
+        if(statementsNeedSimdFloatingPointEnv(expr.lambdaBody))
+            out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(expr.lambdaUsesScratchArena)
             emitScratchArenaPrologue(out, 2u, "lambda");
         if(expr.lambdaUsesTaskScope)

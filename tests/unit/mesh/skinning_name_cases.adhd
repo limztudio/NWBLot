@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_SkinningCaseSkinningGraphUsesRepeated = "tests/skinning_graph_uses/repeated";
+const Name s_SkinningCaseSkinningGraphUsesGeneration = "tests/skinning_graph_uses/generation";
+const Name s_SkinningCaseSkinningGraphUsesRejections = "tests/skinning_graph_uses/rejections";
+const Name s_SkinningCaseSkinningGraphUsesPromotedFailures = "tests/skinning_graph_uses/promoted_failures";
+const Name s_SkinningCaseSkinningGraphUsesSingleStorage = "tests/skinning_graph_uses/single_storage";
+const Name s_SkinningCaseSkinningGraphUsesRepeatedStorage = "tests/skinning_graph_uses/repeated_storage";
+const Name s_SkinningCaseSkinningPayloadFirstSource = "tests/skinning_payload/first_source";
+const Name s_SkinningCaseSkinningPayloadReplacementSource = "tests/skinning_payload/replacement_source";
+const Name s_SkinningCaseSkinningDeformationRejectedCandidate = "tests/skinning_deformation/rejected_candidate";
+
+const Name s_OneOffNameTestsSkinningPayloadScratch = "tests/skinning_payload/scratch";
+const Name s_SkinningCaseSkinningHandoffRejected = "tests/skinning_handoff/rejected";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

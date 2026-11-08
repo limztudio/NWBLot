@@ -8,10 +8,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextureMipPlaneBlockLayoutData{
+    public u32 blocksX = 0u;
+    public u32 blocksY = 0u;
+    public u64 planeByteCount = 0u;
+}
+
+
 u32 NextTextureMipExtent(in u32 extent){
     if(extent > 1u)
         return extent >> 1u;
     return 1u;
+}
+
+Expected<usize> TryComputeRgba8FallbackMipBytes(in u32 width, in u32 height){
+    const u64 texelCount = cast<u64>(width) * cast<u64>(height);
+    if(texelCount > cast<u64>(usize.max) / cast<u64>(s_TextureRgbaBytesPerTexel)){
+        error("TextureAssetLoader: RGBA8 fallback mip size exceeds addressable memory");
+        return makeUnexpected(Failure());
+    }
+    return cast<usize>(texelCount * cast<u64>(s_TextureRgbaBytesPerTexel));
 }
 
 b8 IsValidTexturePayloadFormatCode(in u8 payloadFormat){
@@ -62,11 +78,6 @@ Expected<u32> TryComputeTextureMipSliceCount(in u8 dimension, in u32 mipDepth){
     return makeUnexpected(Failure());
 }
 
-class TextureMipPlaneBlockLayoutData{
-    public u32 blocksX = 0u;
-    public u32 blocksY = 0u;
-    public u64 planeByteCount = 0u;
-}
 
 Expected<TextureMipPlaneBlockLayoutData> TryComputeTextureMipPlaneBlockLayout(in u8 payloadFormat, in u32 width, in u32 height){
     if(!IsValidTexturePayloadFormatCode(payloadFormat) || width == 0u || height == 0u)
@@ -329,3 +340,4 @@ b8 BuildTextureCookMipLevels(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

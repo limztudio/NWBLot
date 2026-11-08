@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <core/graphics/vulkan/swap_chain_presentation_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,22 +25,9 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace QueuePresentWaitDisposition{
-    enum Enum : u8{
-        Consumed,
-        NotConsumed,
-        DeviceLost,
-        Unknown,
-    };
-};
 
-namespace DirectPresentTransitionPolicy{
-    enum Enum : u8{
-        Invalid,
-        TransitionFromUnknown,
-        PreservePresent,
-    };
-};
+
+
 
 struct SwapChainImagePresentationState{
     b8 hasPresented = false;

@@ -56,8 +56,7 @@ DeadlineGuard::DeadlineGuard(const b8 deathTest, const u32 timeoutMS)
             }
             SleepMS(s_PollIntervalMS);
         }
-    }
-    )
+    })
 {}
 
 
@@ -84,17 +83,6 @@ LifetimeProbe::LifetimeProbe(LifetimeProbe&& other)noexcept
 LifetimeProbe::~LifetimeProbe()noexcept{
     if(retirements)
         retirements->fetch_add(1u, MemoryOrder::release);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] CpuTaskSchedulerConfig HomogeneousWorkers(const u32 count)noexcept{
-    CpuTaskSchedulerConfig config;
-    config.workerCount = count;
-    config.heterogeneous = false;
-    return config;
 }
 
 

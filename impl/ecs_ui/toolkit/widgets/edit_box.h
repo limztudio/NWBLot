@@ -95,7 +95,7 @@ public:
     }
     // Shape at display scale before arranging; measurement keeps line, caret, hit-test, composition coords.
     [[nodiscard]] b8 measure(TextService& text, const DisplayMetrics& display){
-        return MeasureEditBoxViewVisual(m_ready, text, layout(), display, m_visualBounds);
+        return MeasureEditBoxViewVisual(m_ready, layout(), display, text, m_visualBounds);
     }
     [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
         return TryArrangeEditBox(

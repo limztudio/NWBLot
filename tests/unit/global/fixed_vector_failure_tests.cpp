@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/fixed_vector_case_types.adhd.h>
+
 #include <global/fixed_vector.h>
 
 #include <gtest/gtest.h>
@@ -11,13 +13,6 @@
 
 
 namespace __hidden_fixed_vector_failure_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_ElementAssignmentFailure = 0xE205u;
-inline constexpr u32 s_ElementSwapFailure = 0xE206u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,10 +33,6 @@ public:
     }
 
     ThrowingFixedVectorAssignment& operator=(ThrowingFixedVectorAssignment&&)noexcept = default;
-};
-
-struct ThrowingFixedVectorSwap{
-    u32 value = 0u;
 };
 
 struct FixedVectorResource{

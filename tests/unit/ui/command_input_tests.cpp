@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -77,7 +78,7 @@ struct RoutedInput{
 class UiCommandInputTests : public testing::Test{
 public:
     UiCommandInputTests()
-        : m_arena(Name("tests/ui/command_input"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiCommandInput))
         , m_router(m_arena)
     {}
 

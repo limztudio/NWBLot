@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <core/common/log.h>
 
 #include <global/simd/vector.h>
@@ -30,7 +32,7 @@ namespace Tests::Smoke{
 class FpsProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
-    static constexpr f64 s_ReportIntervalSeconds = 0.5;
+    static constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
 

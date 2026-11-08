@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,10 +50,10 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferAResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/a"), "A");
+    const auto bufferAResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingA), "A");
     ASSERT_TRUE(bufferAResult);
     const auto bufferA = *bufferAResult;
-    const auto bufferBResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/b"), "B");
+    const auto bufferBResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingB), "B");
     ASSERT_TRUE(bufferBResult);
     const auto bufferB = *bufferBResult;
     ASSERT_TRUE(bufferA.valid());
@@ -71,7 +73,7 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
     };
     Array<Core::GpuTaskId, LengthOf(uses)> tasks{};
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        const auto derivedNameResult = IndexedName(Name("tests/hazard_tracking/task"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingTask), index);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTask(*derivedNameResult, "Task", {}, Span(&uses[index], 1u), {}, {}, {}, graph);
         ASSERT_TRUE(taskAdmission);
@@ -116,7 +118,7 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/readers"), "Readers");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingReaders), "Readers");
     ASSERT_TRUE(bufferResult);
     const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -132,7 +134,7 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
     };
     Array<Core::GpuTaskId, LengthOf(uses)> tasks{};
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        const auto derivedNameResult = IndexedName(Name("tests/hazard_tracking/read_task"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingReadTask), index);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTask(*derivedNameResult, "Read Task", {}, Span(&uses[index], 1u), {}, {}, {}, graph);
         ASSERT_TRUE(taskAdmission);
@@ -156,7 +158,7 @@ TEST(GpuTaskGraph, HazardTrackingPreservesSameTaskAccessAndResetSemantics){
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskGraphAnalysis analysis(testArena.arena);
     for(usize iteration = 0u; iteration < 2u; ++iteration){
-        const auto bufferResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/same_task"), "Same Task");
+        const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingSameTask), "Same Task");
         ASSERT_TRUE(bufferResult);
         const auto buffer = *bufferResult;
         ASSERT_TRUE(buffer.valid());
@@ -165,15 +167,15 @@ TEST(GpuTaskGraph, HazardTrackingPreservesSameTaskAccessAndResetSemantics){
             BufferUse(buffer, 0u, 16u, Core::GpuTaskResourceAccess::Read),
             BufferUse(buffer, 32u, 16u, Core::GpuTaskResourceAccess::Read),
         };
-        const auto firstResult = AddTask(Name("tests/hazard_tracking/first"), "First", {}, Span(firstUses), {}, {}, {}, graph);
+        const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingFirst), "First", {}, Span(firstUses), {}, {}, {}, graph);
         ASSERT_TRUE(firstResult);
         const auto first = *firstResult;
         const auto secondUse = BufferUse(buffer, 0u, 48u, Core::GpuTaskResourceAccess::Write);
-        const auto secondResult = AddTask(Name("tests/hazard_tracking/second"), "Second", {}, Span(&secondUse, 1u), {}, {}, {}, graph);
+        const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingSecond), "Second", {}, Span(&secondUse, 1u), {}, {}, {}, graph);
         ASSERT_TRUE(secondResult);
         const auto second = *secondResult;
         const auto thirdUse = BufferUse(buffer, 0u, 48u, Core::GpuTaskResourceAccess::ReadWrite);
-        const auto thirdResult = AddTask(Name("tests/hazard_tracking/third"), "Third", {}, Span(&thirdUse, 1u), {}, {}, {}, graph);
+        const auto thirdResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseHazardTrackingThird), "Third", {}, Span(&thirdUse, 1u), {}, {}, {}, graph);
         ASSERT_TRUE(thirdResult);
         const auto third = *thirdResult;
         ASSERT_TRUE(first.valid());

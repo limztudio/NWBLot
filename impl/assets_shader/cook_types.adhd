@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
 StringView ShaderOptimizationLevelText(in ShaderOptimizationLevel optimizationLevel){
     if(optimizationLevel == ShaderOptimizationLevel::None)
         return s_ShaderNoneOptText;
@@ -43,6 +44,14 @@ b8 IsAllowedShaderMetadataField(in StringView field, in b8 isMesh){
 
 b8 IsReservedShaderEngineDefineName(in StringView defineName){
     return defineName == "NWB_BINDLESS_TLAS" || defineName == "NWB_CAUSTIC_PHOTON_TRANSPORT";
+}
+
+ShaderDefineNameStatus ClassifyShaderDefineName(in StringView defineName){
+    if(IsReservedShaderEngineDefineName(defineName))
+        return ShaderDefineNameStatus::Reserved;
+    if(!IsAsciiIdentifier(defineName))
+        return ShaderDefineNameStatus::Invalid;
+    return ShaderDefineNameStatus::Valid;
 }
 
 Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
@@ -259,11 +268,12 @@ b8 ValidateShaderDefineEntrySpec(
     in StringView authoredName,
     in Span<String> defineValues
 ){
-    if(IsReservedShaderEngineDefineName(authoredName)){
+    const ShaderDefineNameStatus nameStatus = ClassifyShaderDefineName(authoredName);
+    if(nameStatus == ShaderDefineNameStatus::Reserved){
         error("Meta '{}': define '{}' is an engine transport feature selected in shader source", nwbFilePathText, authoredName);
         return false;
     }
-    if(!IsAsciiIdentifier(authoredName)){
+    if(nameStatus == ShaderDefineNameStatus::Invalid){
         error("Meta '{}': define '{}' must be an ASCII shader identifier", nwbFilePathText, authoredName);
         return false;
     }
@@ -290,4 +300,63 @@ b8 ValidateShaderIncludeRoots(in StringView nwbFilePathText, in Span<String> inc
     return true;
 }
 
+Expected<usize> TryComputeCompilerPathTextCapacity(in usize pathUnitCount, in b8 narrowPath){
+    usize bytesPerUnit = s_MaxEncodedPathBytesPerWideUnit;
+    if(narrowPath)
+        bytesPerUnit = s_MaxEncodedPathBytesPerCharUnit;
+    if(pathUnitCount > usize.max / bytesPerUnit){
+        error("ShaderCook: compiler path text exceeds representable size");
+        return makeUnexpected(Failure());
+    }
+    return pathUnitCount * bytesPerUnit;
+}
+
+Expected<usize> TryComputeCompilerOverlayRootKeyCapacity(in usize rootTextBytes){
+    if(rootTextBytes > (usize.max - s_SlangWorkspaceRootKeyPrefix.size()) / 2u)
+        return makeUnexpected(Failure());
+    return s_SlangWorkspaceRootKeyPrefix.size() + rootTextBytes * 2u;
+}
+
+Expected<usize> TryComputeQuotedCompilerPathCapacity(in usize pathTextBytes){
+    if(pathTextBytes > usize.max - s_SlangQuotePairByteCount)
+        return makeUnexpected(Failure());
+    return pathTextBytes + s_SlangQuotePairByteCount;
+}
+
+Expected<usize> TryComputeCompilerIncludeDirectoryCapacity(in StringView shaderName, in usize includeDirectoryCount){
+    if(includeDirectoryCount > usize.max / 2u){
+        error("ShaderCook: compiler request for '{}' has too many include directories", shaderName);
+        return makeUnexpected(Failure());
+    }
+    return includeDirectoryCount * 2u;
+}
+
+b8 TryAccumulateInheritedShaderDefineReserve(in usize additionalCount, mut usize inOutCount){
+    if(additionalCount > usize.max - inOutCount)
+        return false;
+    inOutCount += additionalCount;
+    return true;
+}
+
+Expected<usize> TryComputeShaderExpandedCombinationCount(in usize combinationCount, in usize valueCount){
+    if(valueCount != 0u && combinationCount > usize.max / valueCount)
+        return makeUnexpected(Failure());
+    return combinationCount * valueCount;
+}
+
+Expected<usize> TryComputeCompilerReplacementOutputBytes(in usize outputBytes, in usize removedBytes, in usize addedBytes){
+    const usize remainingBytes = outputBytes - removedBytes;
+    if(addedBytes > usize.max - remainingBytes)
+        return makeUnexpected(Failure());
+    return remainingBytes + addedBytes;
+}
+
+Expected<usize> TryComputeCompilerDefineArgumentCapacity(in usize fixedBytes, in usize nameBytes, in usize valueBytes){
+    if(nameBytes > usize.max - fixedBytes || valueBytes > usize.max - fixedBytes - nameBytes)
+        return makeUnexpected(Failure());
+    return fixedBytes + nameBytes + valueBytes;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_CsgInputNameEngineCsgSphere = "engine/csg/sphere";
+const Name s_CsgInputNameProjectCsgSlab = "project/csg/slab";
+const Name s_CsgInputNameProjectCsgOversized = "project/csg/oversized";
+const Name s_CsgLookupNameProjectCsgOversized = "project/csg/oversized";
+const Name s_CsgInputNameProjectCsgCustom = "project/csg/custom";
+const Name s_OneOffNameTestsCsgScratch = "tests/csg/scratch";
+const StringView s_CsgEngineBoxPath = "engine/csg/box";
+const StringView s_CsgEnginePlanePath = "engine/csg/plane";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

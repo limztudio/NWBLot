@@ -103,7 +103,7 @@ void MaterialPassGatherer::gather(
 #if defined(NWB_DEBUG)
     materialTypedRanges.reserve(rendererCapacity);
 #endif
-    const usize materialTypedByteReserve = rendererCapacity <= Limit<usize>::s_Max / sizeof(u32) ? rendererCapacity * sizeof(u32) : rendererCapacity;
+    const usize materialTypedByteReserve = ResolveMaterialTypedReserve(rendererCapacity);
     materialTypedBytes.reserve(materialTypedByteReserve);
 
     MaterialTypedStager typedStager(m_system, m_world, lookupMode, materialTypedBytes, rendererCapacity);

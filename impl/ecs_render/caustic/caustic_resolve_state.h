@@ -7,6 +7,7 @@
 
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/caustic/settings.adhd.h>
+#include <impl/ecs_render/caustic/pipeline_types.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/rhi/device.h>
@@ -49,11 +50,6 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct CausticResolveStageState{
-    Core::ShaderHandle m_shader;
-    Core::ComputePipelineHandle m_pipeline;
-};
 
 struct CausticResolveState{
     Core::BindingLayoutHandle m_bindingLayout;

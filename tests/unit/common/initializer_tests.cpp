@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/common/initializer_case_types.adhd.h>
+
 #include <core/common/module.h>
 
 #include <global/terminal_entry.h>
@@ -17,19 +19,6 @@ namespace __hidden_common_initializer_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr u32 s_InitializerCount = 2u;
-inline constexpr u32 s_EventCapacity = 16u;
-inline constexpr int s_InitializationFailureCode = 37;
-inline constexpr int s_OwnerFailureCode = 53;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct InitializerFailure{
-    int code;
-};
 
 struct InitializerState{
     Array<u32, s_InitializerCount> initializeCounts{};
@@ -69,7 +58,7 @@ public:
             }
             if(s_State.throwNext){
                 s_State.throwNext = false;
-                throw InitializerFailure{ s_InitializationFailureCode };
+                throw InitializerFailure{ .code = s_InitializationFailureCode };
             }
         }
         return true;
@@ -128,8 +117,7 @@ TEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessful
     const int result = InvokeTerminalEntry<InitializerFailure>([]()->int{
         NWB::Core::Common::InitializerGuard initializer;
         return initializer.initialize() ? 0 : -1;
-    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; }
-    );
+    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
     EXPECT_EQ(result, s_InitializationFailureCode);
     EXPECT_EQ(s_State.eventCount, 3u);
     EXPECT_EQ(s_State.events[0], 0u);
@@ -187,9 +175,8 @@ TEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEnt
         NWB::Core::Common::InitializerGuard initializer;
         if(!initializer.initialize())
             return -1;
-        throw InitializerFailure{ s_OwnerFailureCode };
-    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; }
-    );
+        throw InitializerFailure{ .code = s_OwnerFailureCode };
+    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
     EXPECT_EQ(result, s_OwnerFailureCode);
     EXPECT_EQ(s_State.initializeCounts[0], 1u);
     EXPECT_EQ(s_State.initializeCounts[1], 1u);
@@ -212,8 +199,7 @@ int main(int argc, char** argv){
         static InitializerProbe s_SecondInitializer(1u);
         ::testing::InitGoogleTest(&argc, argv);
         return RUN_ALL_TESTS();
-    }, [](const InitializerFailure&)noexcept{ return -1; }, []()noexcept{ return -1; }
-    );
+    }, [](const InitializerFailure&)noexcept{ return -1; }, []()noexcept{ return -1; });
 }
 
 

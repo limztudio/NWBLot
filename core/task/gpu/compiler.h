@@ -9,6 +9,8 @@
 #include "task_graph.h"
 #include "timing_feedback.h"
 
+#include <core/task/gpu/compiler_status_types.adhd.h>
+
 #include <core/alloc/scratch.h>
 
 
@@ -21,26 +23,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuTaskGraphAnalysisStatus{
-    enum Enum : u8{
-        NotAnalyzed,
-        Success,
-        OutputPlanInUse,
-        InputGraphInUse,
-        InvalidTask,
-        MissingTaskRecordPayload,
-        InvalidTaskDependency,
-        InvalidExternalCompletionDependency,
-        InvalidResourceUse,
-        InvalidResourceVersion,
-        InvalidResourceVersionUse,
-        MissingResourceVersionProducer,
-        DuplicateResourceVersionProducer,
-        InvalidAcceptedQueueFrontierTask,
-        Cycle,
-        InvalidPresentationEndpoint,
-    };
-};
+
 
 struct GpuTaskGraphAnalysisDiagnostic{
     GpuTaskId task;
@@ -62,7 +45,7 @@ namespace GpuTaskQueueAssignmentReason{
 };
 
 namespace GpuTaskQueueAssignmentModifier{
-    static constexpr u8 s_GpuTaskQueueAssignmentModifierNoneBase = 0u;
+    static constexpr u8 s_GpuTaskQueueAssignmentModifierNoneBase = s_GpuTaskQueueAssignmentModifierNoneBaseValue;
     enum Mask : u8{
         None = s_GpuTaskQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
@@ -75,17 +58,7 @@ namespace GpuTaskQueueAssignmentModifier{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
-namespace GpuTaskGraphQueueAssignmentStatus{
-    enum Enum : u8{
-        NotAssigned,
-        Success,
-        InvalidGraphAnalysis,
-        InvalidQueueTopology,
-        InvalidQueueLoad,
-        InvalidTimingFeedback,
-        NoCompatibleQueue,
-    };
-};
+
 
 struct GpuTaskQueueAssignmentDiagnostic{
     GpuTaskId task;

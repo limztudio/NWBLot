@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -50,7 +51,7 @@ using UiTestSupport::Pointer;
 class UiPointerHitTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerHitTests()
-        : RouterTestFixture(Name("tests/ui/pointer_hit"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerHit))
     {}
 };
 
@@ -100,7 +101,7 @@ TEST_F(UiPointerHitTests, VisibleOwnedPartCannotBypassItsClippedHostOrDisabledOv
 
 TEST_F(UiPointerHitTests, OutsideTouchDismissalRefreshesAnIndependentCursorsPopupHover){
     for(const auto intent : { PointerIntent::Activate, PointerIntent::ContextMenu }){
-        Core::Alloc::GlobalArena arena(Name("tests/ui/pointer_hit_popup"));
+        Core::Alloc::GlobalArena arena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerHitPopup)};
         InputRouter router(arena);
         PopupScope scope;
         scope.token = { { 100u }, 7u, 8u, 9u };

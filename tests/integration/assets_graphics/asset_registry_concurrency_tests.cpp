@@ -94,7 +94,7 @@ TEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnr
     public:
         virtual Expected<UniquePtr<NWB::Core::Assets::IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, NWB::Core::Assets::AssetArena&)const override{
             m_inFlight.store(true);
-            auto nested = m_registry.deserializeAsset(m_leafType, Name("project/probe/leaf"), binary);
+            auto nested = m_registry.deserializeAsset(m_leafType, Name(AssetsGraphicsFixture::s_AssetCaseProjectProbeLeaf), binary);
             if(!nested){
                 m_inFlight.store(false);
                 return MakeUnexpected(Failure{});
@@ -124,8 +124,8 @@ TEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnr
 
     TestArena testArena;
     NWB::Core::Assets::AssetRegistry registry(testArena.arena);
-    const Name parentType("probe_parent_asset");
-    const Name leafType("probe_leaf_asset");
+    const Name parentType = NWB::Tests::AssetsGraphicsFixture::s_ProbeParentAsset;
+    const Name leafType = NWB::Tests::AssetsGraphicsFixture::s_ProbeLeafAsset;
     Atomic<b8> entered{false};
     Atomic<b8> release{false};
     Atomic<b8> destroyedWhileActive{false};
@@ -136,7 +136,7 @@ TEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnr
 
     Expected<UniquePtr<NWB::Core::Assets::IAsset>> parentResult = MakeUnexpected(Failure{});
     Thread deserializeThread([&](){
-        parentResult = registry.deserializeAsset(parentType, Name("project/probe/parent"), Span<const u8>{});
+        parentResult = registry.deserializeAsset(parentType, Name(AssetsGraphicsFixture::s_AssetCaseProjectProbeParent), Span<const u8>{});
     });
 
     while(!entered.load())

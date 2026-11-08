@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/name_case_types.adhd.h>
+
 #include <global/binary.h>
 #include <global/compact_string.h>
 #include <global/diagnostics.h>
@@ -24,8 +26,8 @@ namespace __hidden_pointer_failure_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_PointerFailure = 0xE204u;
-inline constexpr u32 s_ComparisonFailure = 0xE209u;
+inline constexpr u32 s_PointerFailure = NWB::Tests::GlobalCases::s_GlobalPointerFailure;
+inline constexpr u32 s_ComparisonFailure = NWB::Tests::GlobalCases::s_GlobalComparisonFailure;
 
 
 struct RefCountTarget{};
@@ -262,5 +264,4 @@ TEST(NoexceptFailureTests, OwnerObservationUsesImplicitCopyAndPreservesBorrowedT
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

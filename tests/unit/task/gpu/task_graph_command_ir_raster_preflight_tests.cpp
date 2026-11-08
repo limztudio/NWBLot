@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/capture/command_ir_raster.h>
 
 
@@ -34,17 +36,17 @@ using namespace TaskGraphTestUtils;
 TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     TaskGraphTestUtils::TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto colorResult = AddTextureMetadata(graph, Name("tests/command_ir_raster/color"), "Raster Color", Core::ResourceStates::RenderTarget);
+    const auto colorResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseCommandIrRasterColor), "Raster Color", Core::ResourceStates::RenderTarget);
     ASSERT_TRUE(colorResult);
     const Core::GpuGraphResourceId color = *colorResult;
-    const auto pipelineResult = AddPipelineMetadata(graph, Name("tests/command_ir_raster/pipeline"), "Raster Pipeline", Core::GpuGraphPipelineType::Graphics);
+    const auto pipelineResult = AddPipelineMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseCommandIrRasterPipeline), "Raster Pipeline", Core::GpuGraphPipelineType::Graphics);
     ASSERT_TRUE(pipelineResult);
     const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(color.valid());
     ASSERT_TRUE(pipeline.valid());
     const Core::GpuTaskResourceUse use{ .resource = color, .range = {}, .requiredState = Core::ResourceStates::RenderTarget, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc description;
-    description.setIdentity(Name("tests/command_ir_raster/draw")).setMarkerLabel("Raster Draw").setResourceUses(Span(&use, 1u));
+    description.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseCommandIrRasterDraw)).setMarkerLabel("Raster Draw").setResourceUses(Span(&use, 1u));
     const auto taskResult = graph.addTask(description, GraphicsCommands());
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;

@@ -9,6 +9,7 @@
 #include "task_graph.h"
 
 #include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/packet_runtime_names.adhd.h>
 #include <core/graphics/gpu_timing.h>
 
 
@@ -27,8 +28,8 @@ namespace GpuPacketRecordingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_PacketMarkerLabel = "GPU Task Packet";
-inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
+inline constexpr AStringView s_PacketMarkerLabel = NWB::Core::s_PacketMarkerLabel;
+inline constexpr AStringView s_DefaultTaskMarkerLabel = NWB::Core::s_DefaultTaskMarkerLabel;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,13 +42,6 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 [[nodiscard]] b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder);
 
 [[nodiscard]] b8 HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept;
-
-#if defined(NWB_DEBUG)
-[[nodiscard]] inline b8 HasQueueCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
-    return (static_cast<u8>(available) & static_cast<u8>(required)) == static_cast<u8>(required);
-}
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

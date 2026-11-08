@@ -21,6 +21,18 @@ b8 ValidateAssetBuildType(in StringView assetType, in StringView expectedAssetVo
     return true;
 }
 
+b8 ValidateAssetBuilderPathInputs(in b8 hasAssetRoots, in b8 hasOutputDirectory){
+    if(!hasAssetRoots){
+        error("AssetBuilder: no asset roots specified");
+        return false;
+    }
+    if(!hasOutputDirectory){
+        error("AssetBuilder: output directory is empty");
+        return false;
+    }
+    return true;
+}
+
 b8 IsValidAssetBuildVirtualRoot(in StringView virtualRoot, in StringView engineVirtualRoot, in StringView projectVirtualRoot){
     return virtualRoot == engineVirtualRoot || virtualRoot == projectVirtualRoot;
 }

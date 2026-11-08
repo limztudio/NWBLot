@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/graph_types.adhd.h>
 #include <impl/ecs_render/shadow/types.adhd.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
 #include <impl/ecs_render/refraction/statistics_readback.h>
@@ -24,17 +25,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Freeze adaptive software-shadow compaction before graph compilation so its append-counter clear is a graph primitive.
-struct PreparedShadowMaterialContextUploads{
-    Core::GpuUploadBlobId instanceMaterial;
-    Core::GpuUploadBlobId instance;
-    Core::GpuUploadBlobId materialTyped;
-};
+static_assert(Core::GpuUploadBlobId{}.generation == 0u && Core::GpuUploadBlobId{}.index == s_PreparedGraphInvalidIndex);
 
-struct PreparedSceneBvhUploads{
-    Core::GpuUploadBlobId node;
-    Core::GpuUploadBlobId instance;
-};
 
 // Shadow Visibility freezes its route policy before the coordinator declares topology. Handles stay in snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{

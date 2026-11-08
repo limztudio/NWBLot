@@ -72,7 +72,7 @@ struct StagingTextureMapping{
 
 // Sharing intent for multi-transport resources. Hides family indices; a set becomes concurrent sharing only for created families.
 namespace ResourceQueueSharing{
-    static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
+    static constexpr u8 s_ResourceQueueSharingExclusiveBase = NWB::Core::HardwareRayTracingPolicy::s_ResourceQueueSharingExclusiveBase;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +114,7 @@ public:
 };
 
 namespace ResourceStates{
-    static constexpr auto s_ResourceStatesUnknownBase = 0;
+    static constexpr auto s_ResourceStatesUnknownBase = NWB::Core::HardwareRayTracingPolicy::s_ResourceStatesUnknownBase;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -254,7 +254,7 @@ public:
 };
 
 namespace TextureSubresourceMipResolve{
-    static constexpr u8 s_TextureSubresourceMipResolveRangeBase = 0u;
+    static constexpr u8 s_TextureSubresourceMipResolveRangeBase = NWB::Core::HardwareRayTracingPolicy::s_TextureSubresourceMipResolveRangeBase;
     enum Enum : u8{
         Range = s_TextureSubresourceMipResolveRangeBase,
         Single,
@@ -264,7 +264,7 @@ namespace TextureSubresourceMipResolve{
 struct TextureSubresourceSet{
     static constexpr auto s_AllMipLevels = static_cast<MipLevel>(-1);
     static constexpr auto s_AllArraySlices = static_cast<ArraySlice>(-1);
-    static constexpr usize s_ByteSize = 16u;
+    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_TextureSubresourceSetByteSize;
 
 
 public:
@@ -435,7 +435,7 @@ public:
 struct BufferRange{
     // s_AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
     static constexpr u64 s_AllBytes = Limit<u64>::s_Max;
-    static constexpr usize s_ByteSize = 16u;
+    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_BufferRangeByteSize;
 
     u64 byteOffset = 0;
     u64 byteSize = 0;

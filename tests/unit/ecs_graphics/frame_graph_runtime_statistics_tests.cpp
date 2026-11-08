@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
 
 #include <core/telemetry/frame_graph_contributor.h>
 #include <core/task/gpu/compiler_internal.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -180,14 +181,13 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/frame_graph_builder_scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsEcsGraphicsFrameGraphBuilderScratch)};
     NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingNameEdges, physicalQueueStatistics, packetStatistics, 41u);
 
     const NWB::Core::Telemetry::FrameGraphNodeHandle owner = builder.addPass(
-        Name("packet_owner"),
+        Name(NWB::Tests::EcsGraphicsCases::s_EcsCasePacketOwner),
         "Packet owner",
-        NWB::Core::Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(MakeValidRuntimeStatistics(), 41u, 41u), }
-    );
+        NWB::Core::Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(MakeValidRuntimeStatistics(), 41u, 41u), });
     ASSERT_TRUE(owner.valid());
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(MakeValidPacketSubmissionStatistics(), owner.index);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord excessiveDuration = statistics;
@@ -200,7 +200,7 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     EXPECT_EQ(packetStatistics[0u].commandListCount, 1u);
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, packetStatistics[0u]));
 
-    const NWB::Core::Telemetry::FrameGraphNodeHandle resource = builder.addResource(Name("packet_resource"), "Packet resource");
+    const NWB::Core::Telemetry::FrameGraphNodeHandle resource = builder.addResource(Name(NWB::Tests::EcsGraphicsCases::s_EcsCasePacketResource), "Packet resource");
     ASSERT_TRUE(resource.valid());
     statistics = packetStatistics[0u];
     statistics.ownerNodeIndex = resource.index;
@@ -277,7 +277,7 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
     const NWB::Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     NWB::Core::GpuTaskGraphAnalysis analysis(testArena.arena);
     NWB::Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/reset_runtime_statistics_scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsEcsGraphicsResetRuntimeStatisticsScratch)};
     const NWB::Core::GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(declarationAccess, topology, NWB::Core::GpuTaskGraphCompileOptions{}, scratchArena, analysis, assignments, compiledGraph));
 

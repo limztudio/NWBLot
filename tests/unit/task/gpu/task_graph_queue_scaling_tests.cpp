@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,7 +40,7 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     Core::GpuTaskGraph graph(testArena.arena);
     Array<Core::GpuTaskId, s_TaskCount> tasks = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        const auto derivedNameResult = IndexedName(Name("tests/queue_scaling/serial/"), taskIndex);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseQueueScalingSerial), taskIndex);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTaskWithCommands(*derivedNameResult, "Serial Reachability Task", ComputeCommands(), {}, {}, taskIndex != 0u ? Span(&tasks[taskIndex - 1u], 1u) : Span<const Core::GpuTaskId>{}, graph);
         ASSERT_TRUE(taskAdmission);
@@ -69,13 +71,13 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     }
 
     Core::GpuTaskGraph partialGraph(testArena.arena);
-    const auto producerResult = AddTask(Name("tests/queue_scaling/partial/producer"), "Partial Producer", {}, {}, {}, {}, {}, partialGraph);
+    const auto producerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseQueueScalingPartialProducer), "Partial Producer", {}, {}, {}, {}, {}, partialGraph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
-    const auto consumerResult = AddTask(Name("tests/queue_scaling/partial/consumer"), "Partial Consumer", Span(&producer, 1u), {}, {}, {}, {}, partialGraph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseQueueScalingPartialConsumer), "Partial Consumer", Span(&producer, 1u), {}, {}, {}, {}, partialGraph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
-    const auto independentResult = AddTask(Name("tests/queue_scaling/partial/independent"), "Independent", {}, {}, {}, {}, {}, partialGraph);
+    const auto independentResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseQueueScalingPartialIndependent), "Independent", {}, {}, {}, {}, {}, partialGraph);
     ASSERT_TRUE(independentResult);
     const Core::GpuTaskId independent = *independentResult;
     ASSERT_TRUE(producer.valid());
@@ -115,7 +117,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     };
     Array<Core::GpuTaskId, LengthOf(costs)> tasks = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        const auto identityNameResult = IndexedName(Name("tests/queue_scaling/prefix/"), taskIndex);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseQueueScalingPrefix), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         Core::GpuTaskSchedulingHint scheduling;

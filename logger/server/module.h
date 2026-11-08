@@ -10,6 +10,7 @@
 
 #include <logger/common.h>
 #include <logger/processed_message_file.h>
+#include <logger/server/server_values.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
+inline constexpr f32 s_ServerUpdateIntervalSeconds = ::NWB::Log::s_LogServerValueModuleServerUpdateIntervalSeconds;
 
 class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>, private ICrashIngestSink{
     friend class ServerHttpHandler;

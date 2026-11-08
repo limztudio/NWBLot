@@ -117,9 +117,7 @@ struct QueueSubmissionReceipt{
     usize timelineWaitCount = 0u;
 };
 
-struct WaveLaneCountRange{
-    u32 maxWaveLaneCount;
-};
+using WaveLaneCountRange = NWB::Core::HardwareRayTracingPolicy::WaveLaneCountRange;
 
 struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
@@ -172,8 +170,8 @@ typedef GraphicsBackend::Handle<Device> DeviceHandle;
 
 
 struct AdapterInfo{
-    static constexpr usize s_UuidByteCount = 16u;
-    static constexpr usize s_LuidByteCount = 8u;
+    static constexpr usize s_UuidByteCount = NWB::Core::HardwareRayTracingPolicy::s_AdapterUuidByteCount;
+    static constexpr usize s_LuidByteCount = NWB::Core::HardwareRayTracingPolicy::s_AdapterLuidByteCount;
 
 
 public:
@@ -204,7 +202,7 @@ public:
 
 // Windowed swap-chain encoding. HDR10 is 10-bit Rec.2020/PQ; scene color stays linear RGBA16F until present.
 namespace SwapChainOutputMode{
-    static constexpr u8 s_SwapChainOutputModeSDRBase = 0;
+    static constexpr u8 s_SwapChainOutputModeSDRBase = NWB::Core::HardwareRayTracingPolicy::s_SwapChainOutputModeSDRBase;
     enum Enum : u8{
         SDR = s_SwapChainOutputModeSDRBase,
         HDR10,

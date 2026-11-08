@@ -33,7 +33,13 @@ Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(in Span<f32x3u> positio
         minBounds = min(minBounds, p);
         maxBounds = max(maxBounds, p);
     }
-    if(minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z)
+    if(
+        !isFinite(minBounds.xyz)
+        || !isFinite(maxBounds.xyz)
+        || minBounds.x > maxBounds.x
+        || minBounds.y > maxBounds.y
+        || minBounds.z > maxBounds.z
+    )
         return makeUnexpected(Failure());
 
     CsgReceiverCpuBounds outBounds;
@@ -115,7 +121,7 @@ CsgCutterGpuData BuildCsgCutterGpuData(
 }
 
 b8 IsFiniteCsgMatrixRow(in VectorSingle row){
-    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+    return isFinite(row);
 }
 
 b8 IsFiniteCsgMatrix(in MatrixSingle matrix){

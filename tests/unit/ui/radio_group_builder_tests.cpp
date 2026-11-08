@@ -5,6 +5,8 @@
 #include "radio_group_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <global/simdmath.h>
 #include <global/simplemath.h>
 
@@ -57,7 +59,7 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
         ASSERT_TRUE(reference.popClip());
     }
     const DrawSnapshot expected = reference.freeze();
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/radio/temporary_labels"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiRadioTemporaryLabels)};
     Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
     Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
     CopyGlyphVertices(actual, actualGlyphs);
@@ -190,8 +192,8 @@ TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMa
     ASSERT_NE(target(part), nullptr);
     EXPECT_FALSE(target(part)->enabled);
     const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(regionQuads(snapshot, Name("radio.checked")), 1u);
-    EXPECT_EQ(regionQuads(snapshot, Name("radio.mark")), 1u);
+    EXPECT_EQ(regionQuads(snapshot, Name(NWB::Tests::UiCases::s_UiInputNameRadioChecked)), 1u);
+    EXPECT_EQ(regionQuads(snapshot, Name(NWB::Tests::UiCases::s_UiInputNameRadioMark)), 1u);
 }
 
 TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation){

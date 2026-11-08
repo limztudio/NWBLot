@@ -4,6 +4,7 @@
 
 #include "deferred_system.h"
 
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
@@ -166,8 +167,7 @@ Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
 ){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
-        __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, }
-    );
+        __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, });
 }
 
 

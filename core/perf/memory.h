@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/perf/memory_source_types.adhd.h>
+
 #include <core/alloc/module.h>
 
 #include <global/expected.h>
@@ -23,9 +25,9 @@ NWB_PERF_BEGIN
 
 namespace MemorySource{
     enum Enum : u8{
-        ExplicitScope,
-        Arena,
-        HeapBacking,
+        ExplicitScope = NWB::Core::Perf::MemorySourceTypes::MemorySource::ExplicitScope,
+        Arena = NWB::Core::Perf::MemorySourceTypes::MemorySource::Arena,
+        HeapBacking = NWB::Core::Perf::MemorySourceTypes::MemorySource::HeapBacking,
     };
 };
 

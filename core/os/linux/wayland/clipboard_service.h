@@ -8,6 +8,7 @@
 #include "clipboard.h"
 
 #include <core/os/clipboard_service.h>
+#include <core/os/platform_values.adhd.h>
 #include <core/os/linux/pipe_io.h>
 
 #pragma push_macro("interface")
@@ -61,11 +62,11 @@ private:
 
 
 public:
-    static constexpr usize s_MaxOffers = 32u;
-    static constexpr usize s_MaxWriters = 8u;
-    static constexpr u32 s_TimeoutMs = 5000u;
-    static constexpr u32 s_MaxDataDeviceManagerVersion = 3u;
-    static constexpr u32 s_DataDeviceReleaseVersion = 2u;
+    static constexpr usize s_MaxOffers = ::NWB::Core::s_OsLinuxWaylandClipboardServiceMaxOffers;
+    static constexpr usize s_MaxWriters = ::NWB::Core::s_OsLinuxWaylandClipboardServiceMaxWriters;
+    static constexpr u32 s_TimeoutMs = ::NWB::Core::s_OsLinuxWaylandClipboardServiceTimeoutMs;
+    static constexpr u32 s_MaxDataDeviceManagerVersion = ::NWB::Core::s_OsLinuxWaylandClipboardServiceMaxDataDeviceManagerVersion;
+    static constexpr u32 s_DataDeviceReleaseVersion = ::NWB::Core::s_OsLinuxWaylandClipboardServiceDataDeviceReleaseVersion;
 
 
 private:

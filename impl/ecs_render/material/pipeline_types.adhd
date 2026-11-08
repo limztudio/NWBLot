@@ -8,6 +8,95 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/graphics/rhi/framebuffer.h>
+#include <core/graphics/rhi/pipeline.h>
+namespace NWB::Impl{
+using MaterialFramebufferInfo = Core::FramebufferInfo;
+using MaterialGraphicsPipelineHandle = Core::GraphicsPipelineHandle;
+using MaterialMeshletPipelineHandle = Core::MeshletPipelineHandle;
+using MaterialComputePipelineHandle = Core::ComputePipelineHandle;
+using MaterialShaderHandle = Core::ShaderHandle;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialPipelineKey{
+    public Name material = Name();
+    public Name csgEvaluatorVariant = Name();
+    public u64 csgShapeRegistryRevision = 0u;
+    public MaterialFramebufferInfo framebufferInfo = MaterialFramebufferInfo();
+    public MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+    public b8 twoSided = false;
+    public MaterialPipelineCsgMode csgMode = MaterialPipelineCsgMode::None;
+}
+
+class MaterialPipelineResources{
+    public MaterialGraphicsPipelineHandle indexedPipeline = MaterialGraphicsPipelineHandle();
+    public MaterialGraphicsPipelineHandle emulationPipeline = MaterialGraphicsPipelineHandle();
+    public MaterialMeshletPipelineHandle meshletPipeline = MaterialMeshletPipelineHandle();
+    public MaterialComputePipelineHandle computePipeline = MaterialComputePipelineHandle();
+    public MaterialComputePipelineHandle objectGeometryDecodePipeline = MaterialComputePipelineHandle();
+    public MaterialShaderHandle objectGeometryVertexShader = MaterialShaderHandle();
+    public MaterialShaderHandle pixelShader = MaterialShaderHandle();
+    public MaterialShaderHandle meshShader = MaterialShaderHandle();
+    public MaterialShaderHandle computeShader = MaterialShaderHandle();
+    public RenderPath renderPath = RenderPath::MeshShader;
+    public b8 sharedGeometryComputeProgram = false;
+    public b8 indexedGeometryOutput = false;
+
+    public b8 ready()const{
+        if(this.renderPath == RenderPath::MeshShader){
+            if(this.meshletPipeline)
+                return true;
+            return false;
+        }
+        if(this.renderPath == RenderPath::VertexIndexed){
+            if(this.indexedPipeline && this.objectGeometryDecodePipeline)
+                return true;
+            return false;
+        }
+        if(this.renderPath == RenderPath::ComputeEmulation){
+            if(this.computePipeline && this.emulationPipeline)
+                return true;
+            return false;
+        }
+        return false;
+    }
+}
+
+class MaterialPipelineAvboitPixelShaderSelection{
+    public AssetRef<PixelShader> materialShader;
+    public Name debugName = s_InvalidAvboitPixelShaderDebugName;
+
+    public b8 materialDriven()const{
+        return this.materialShader.valid();
+    }
+
+    public Name shaderName()const{
+        if(this.materialDriven())
+            return this.materialShader.name();
+        return s_NameNone;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<usize> TryAccumulateMaterialDrawCount(in usize current, in usize count, in usize maximum){
+    if(count > maximum - current)
+        return makeUnexpected(Failure());
+    return current + count;
+}
+
+b8 UsesSharedMaterialMeshShader(in Name sharedShader, in AssetRef<MeshShader> materialShader, in StringView variant, in StringView defaultVariant){
+    return sharedShader != s_NameNone && materialShader.name() == sharedShader && variant == defaultVariant;
+}
+
 b8 MaterialPipelinePassUsesRendererAvboit(in MaterialPipelinePass pass){
     return pass == MaterialPipelinePass::AvboitOccupancy || pass == MaterialPipelinePass::AvboitExtinction || pass == MaterialPipelinePass::AvboitAccumulate || pass == MaterialPipelinePass::AvboitRefractionCapture;
 }
@@ -122,20 +211,6 @@ Name ResolveAvboitPixelShaderDebugName(in MaterialPipelinePass pass){
     }
 }
 
-class MaterialPipelineAvboitPixelShaderSelection{
-    public AssetRef<PixelShader> materialShader;
-    public Name debugName = s_InvalidAvboitPixelShaderDebugName;
-
-    public b8 materialDriven()const{
-        return this.materialShader.valid();
-    }
-
-    public Name shaderName()const{
-        if(this.materialDriven())
-            return this.materialShader.name();
-        return s_NameNone;
-    }
-}
 
 MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
     in MaterialPipelinePass pass,
@@ -214,3 +289,4 @@ void LogCsgCapSurfaceDispatchUnavailableIfNeeded(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

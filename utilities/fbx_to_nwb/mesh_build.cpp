@@ -124,7 +124,7 @@ template<typename VisitTriangle>
 
         const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
         const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal64));
-        if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, options.triangleAreaLengthSquaredEpsilon))
             return true;
 
         const SIMDVectorSingle areaNormal = ConvertVectorDoubleToSingle(areaNormal64);
@@ -169,14 +169,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
         return false;
     }
-    if(!mesh->vertex_position.exists){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
+    if(!ValidateFbxMeshAttributes(mesh->vertex_position.exists, normalMode == NormalMode::Imported, mesh->vertex_normal.exists))
         return false;
-    }
-    if(normalMode == NormalMode::Imported && !mesh->vertex_normal.exists){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal mode requires mesh normals after ufbx import"));
-        return false;
-    }
 
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
     const b8 importUvs = mesh->vertex_uv.exists;
@@ -185,10 +179,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
     const ufbx_skin_deformer* skin = nullptr;
     ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);
     if(wantsSkinning){
-        if(mesh->skin_deformers.count != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh"));
+        if(!ValidateFbxSkinDeformerCount(mesh->skin_deformers.count))
             return false;
-        }
         skin = mesh->skin_deformers.data[0u];
         if(!skin){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
@@ -323,12 +315,8 @@ Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const Span<const M
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
             return MakeUnexpected(Failure{});
         }
-        if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / Impl::s_MeshletTriangleIndexCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
+        if(!TryAccumulateFbxSelectedTriangleCorners(static_cast<usize>(mesh->num_triangles), outTriangleCorners))
             return MakeUnexpected(Failure{});
-        }
-
-        outTriangleCorners += static_cast<usize>(mesh->num_triangles) * Impl::s_MeshletTriangleIndexCount;
     }
     return outTriangleCorners;
 }
@@ -341,3 +329,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

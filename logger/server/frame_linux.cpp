@@ -4,6 +4,8 @@
 
 #include "frame.h"
 
+#include <logger/server/server_values.adhd.h>
+
 #include <global/process.h>
 #include <global/thread.h>
 
@@ -31,7 +33,7 @@ namespace FrameDetail{
 
 static Futex s_PrintMutex;
 static volatile SignalAtomic s_ShouldExit = 0;
-static constexpr u32 s_ConsoleUpdateIntervalMilliseconds = 50u;
+static constexpr u32 s_ConsoleUpdateIntervalMilliseconds = ::NWB::Log::s_LogServerValueFrameLinuxConsoleUpdateIntervalMilliseconds;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

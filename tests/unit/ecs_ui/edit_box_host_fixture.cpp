@@ -4,6 +4,8 @@
 
 #include "edit_box_host_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,7 +17,7 @@ namespace UiEditBoxTestSupport{
 
 
 UiEditBoxHostTests::UiEditBoxHostTests()
-    : m_arena(Name("tests/ecs_ui/edit_box_host"))
+    : m_arena(Name(NWB::Tests::UiCases::s_EcsUiEditBoxHost))
     , m_context(m_arena)
     , m_textInput(m_arena)
     , m_clipboard(m_arena)

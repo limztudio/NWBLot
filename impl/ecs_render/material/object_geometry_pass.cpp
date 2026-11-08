@@ -4,6 +4,7 @@
 
 #include "material_system.h"
 
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>

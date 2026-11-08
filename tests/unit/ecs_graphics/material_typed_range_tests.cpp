@@ -5,6 +5,7 @@
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <global/span.h>
 
@@ -20,7 +21,7 @@ namespace __hidden_material_typed_range_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
+inline constexpr Name s_ScratchArena = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsEcsGraphicsScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,8 +34,8 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     constexpr Array<u8, 4> s_Constants = { 0xA1u, 0xB2u, 0xC3u, 0xD4u };
     RangeMap ranges(0, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(3u);
-    const Name material("project/materials/shared");
-    const Name otherMaterial("project/materials/other");
+    const Name material = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameProjectMaterialsShared;
+    const Name otherMaterial = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameProjectMaterialsOther;
 
     const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, s_Constants, uploadBytes, ranges);
     ASSERT_TRUE(first);
@@ -123,7 +124,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(2u);
-    constexpr u64 s_CollisionHash = 41u;
+    constexpr u64 s_CollisionHash = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCollisionHash;
     const Array<u8, 4> originalFirstBytes = { 1u, 2u, 3u, 4u };
     const Array<u8, 4> secondBytes = { 1u, 2u, 3u, 5u };
     {

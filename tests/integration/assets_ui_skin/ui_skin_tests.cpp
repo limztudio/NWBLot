@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/cook.h>
-#include <impl/assets_texture/asset.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_ui_skin/name_cases.adhd.h>
+
+#include <impl/assets_ui_skin/cook.h>
+#include <impl/assets_texture/asset.h>
 
 #include <global/binary.h>
 
@@ -45,7 +46,7 @@ using namespace Impl;
 struct UiSkinTestArenaTag{};
 using SkinTestArena = TestArena<UiSkinTestArenaTag>;
 
-static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/cook");
+static constexpr Name s_ScratchArena = NWB::Tests::UiSkinCases::s_OneOffNameTestsIntegrationAssetsUiSkinCook;
 static constexpr AStringView s_Metadata =
     "ui_skin asset;\r\n"
     "asset.texture = \"project/ui/texture\";\r\n"
@@ -102,7 +103,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
 
 [[nodiscard]] static UiSkinRegionBinary ValidRegion(){
     UiSkinRegionBinary region;
-    region.nameHash = Name("panel.normal").hash();
+    region.nameHash = Name(UiSkinCases::s_UiTestPanelNormal).hash();
     region.x = 2u;
     region.y = 4u;
     region.width = 24u;
@@ -221,7 +222,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
             binary.push_back(0u);
         EXPECT_FALSE(skin.loadBinary(binary)) << variant;
         ASSERT_EQ(skin.regions().size(), 1u);
-        EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
+        EXPECT_EQ(skin.regions().front().name, Name(UiSkinCases::s_UiTestPanelNormal));
         EXPECT_FLOAT_EQ(skin.palette().colors[UiSkinColorRole::TextNormal].r, 0.25f);
     }
 }
@@ -339,7 +340,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     EXPECT_FALSE(skin.loadBinary(binary));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
     ASSERT_EQ(skin.regions().size(), 1u);
-    EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
+    EXPECT_EQ(skin.regions().front().name, Name(UiSkinCases::s_UiTestPanelNormal));
 
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(PaletteMetadata()));
@@ -457,7 +458,7 @@ TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){
     UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(ValidHeader(), ValidRegion(), testArena)));
     for(u32 variant = 0u; variant < 4u; ++variant){
-        Texture texture(testArena.arena, variant == 0u ? Name("project/other") : Name(s_TexturePath));
+        Texture texture(testArena.arena, variant == 0u ? Name(UiSkinCases::s_UiTestProjectOther) : Name(s_TexturePath));
         Texture::MipLevelVector mips(testArena.arena);
         Core::Assets::AssetBytes payload(testArena.arena);
         texture.setPayload(

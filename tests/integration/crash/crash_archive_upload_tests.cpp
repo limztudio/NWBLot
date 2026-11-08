@@ -4,11 +4,12 @@
 
 #include <tests/common/filesystem_helpers.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/crash/name_cases.adhd.h>
 
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
 #include <core/crash/package_archive.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 
 #include <global/filesystem/executable_paths.h>
 #include <global/diagnostics.h>
@@ -33,8 +34,8 @@ using ScratchArena = NWB::Core::Alloc::ScratchArena;
 using TestPath = Path<Arena>;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
-inline constexpr Name s_FixtureArena("tests/integration/crash/archive_upload");
-inline constexpr Name s_OperationScratch("tests/integration/crash/archive_upload_scratch");
+inline constexpr Name s_FixtureArena = NWB::Tests::CrashCases::s_CrashTestNameTestsIntegrationCrashArchiveUpload;
+inline constexpr Name s_OperationScratch = NWB::Tests::CrashCases::s_CrashTestNameTestsIntegrationCrashArchiveUploadScratch;
 
 static u32 s_UploadDiagnostics = 0u;
 static Array<char, 64u> s_LastUploadOperation = {};

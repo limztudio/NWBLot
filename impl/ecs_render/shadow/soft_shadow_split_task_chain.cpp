@@ -9,6 +9,7 @@
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/common/log.h>
 
@@ -177,7 +178,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     EnableCrossFamilyComputeEffectRouting(opaqueScheduling);
     Core::GpuTaskDesc opaqueDesc;
     opaqueDesc
-        .setIdentity(Name("render.shadow_visibility.opaque"))
+        .setIdentity(Name(s_ShadowPassOpaque))
         .setMarkerLabel("Shadow Visibility Opaque")
         .setScheduling(opaqueScheduling)
         .setDependencies({ &shadowTraceDependency, 1u })
@@ -216,7 +217,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         const Array<Core::GpuTaskId, 1u> opaqueFirstWaveletDependencies = { tasks.opaque };
         Core::GpuTaskDesc opaqueFirstWaveletDesc;
         opaqueFirstWaveletDesc
-            .setIdentity(route.combinedSoftWavelet ? Name("render.shadow_visibility.opaque_temporal_merge") : Name("render.shadow_visibility.opaque_first_wavelet"))
+            .setIdentity(route.combinedSoftWavelet ? Name(s_ShadowPassOpaqueTemporalMerge) : Name(s_ShadowPassOpaqueFirstWavelet))
             .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Opaque Temporal Merge" : "Shadow Opaque First Wavelet")
             .setScheduling(tailScheduling)
             .setDependencies(opaqueFirstWaveletDependencies)
@@ -251,7 +252,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         const Array<Core::GpuTaskId, 1u> opaqueResolveDependencies = { tasks.opaqueFirstWavelet };
         Core::GpuTaskDesc opaqueResolveDesc;
         opaqueResolveDesc
-            .setIdentity(Name("render.shadow_visibility.opaque_soft_resolve"))
+            .setIdentity(Name(s_ShadowPassOpaqueSoftResolve))
             .setMarkerLabel("Shadow Opaque Soft Resolve")
             .setScheduling(tailScheduling)
             .setDependencies(opaqueResolveDependencies)
@@ -290,11 +291,11 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
 ){
     const SoftShadowSplitRoute& route = inputs.route;
 
-    const Core::GpuTaskId opaqueCompletionTask = route.combinedSoftTemporal ? tasks.opaque : route.combinedSoftUpsample ? tasks.opaqueFirstWavelet : tasks.opaqueResolve;
+    const Core::GpuTaskId opaqueCompletionTask = SelectOpaqueShadowCompletion(route.combinedSoftTemporal, route.combinedSoftUpsample, tasks.opaque, tasks.opaqueFirstWavelet, tasks.opaqueResolve);
     const Array<Core::GpuTaskId, 1u> traceDependencies = { opaqueCompletionTask };
     Core::GpuTaskDesc traceDesc;
     traceDesc
-        .setIdentity(Name("render.shadow_visibility.soft_transparent_trace"))
+        .setIdentity(Name(s_ShadowPassSoftTransparentTrace))
         .setMarkerLabel("Shadow Transparent Soft Trace")
         .setScheduling(tailScheduling)
         .setDependencies(traceDependencies)
@@ -325,7 +326,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         const Array<Core::GpuTaskId, 1u> transparentTemporalMergeDependencies = { transparentFirstWaveletDependency, };
         Core::GpuTaskDesc transparentTemporalMergeDesc;
         transparentTemporalMergeDesc
-            .setIdentity(route.combinedSoftTemporal ? Name("render.shadow_visibility.combined_temporal_merge") : Name("render.shadow_visibility.transparent_temporal_merge"))
+            .setIdentity(route.combinedSoftTemporal ? Name(s_ShadowPassCombinedTemporalMerge) : Name(s_ShadowPassTransparentTemporalMerge))
             .setMarkerLabel(route.combinedSoftTemporal ? "Shadow Combined Temporal Merge" : "Shadow Transparent Temporal Merge")
             .setScheduling(tailScheduling)
             .setDependencies(transparentTemporalMergeDependencies)
@@ -358,7 +359,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const Array<Core::GpuTaskId, 1u> transparentFirstWaveletDependencies = { transparentFirstWaveletDependency };
     Core::GpuTaskDesc transparentFirstWaveletDesc;
     transparentFirstWaveletDesc
-        .setIdentity(route.combinedSoftWavelet ? Name("render.shadow_visibility.combined_first_wavelet") : Name("render.shadow_visibility.transparent_first_wavelet"))
+        .setIdentity(route.combinedSoftWavelet ? Name(s_ShadowPassCombinedFirstWavelet) : Name(s_ShadowPassTransparentFirstWavelet))
         .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Combined First Wavelet" : "Shadow Transparent First Wavelet")
         .setScheduling(tailScheduling)
         .setDependencies(transparentFirstWaveletDependencies)
@@ -388,7 +389,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const Array<Core::GpuTaskId, 1u> foldDependencies = { tasks.transparentFirstWavelet };
     Core::GpuTaskDesc foldDesc;
     foldDesc
-        .setIdentity(Name("render.shadow_visibility.soft_transparent_fold"))
+        .setIdentity(Name(s_ShadowPassSoftTransparentFold))
         .setMarkerLabel("Shadow Transparent Soft Fold")
         .setScheduling(tailScheduling)
         .setDependencies(foldDependencies)

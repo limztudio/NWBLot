@@ -18,6 +18,7 @@ const StringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
 const usize s_MaxPreparedEntriesPerShaderEntry = 2u;
 const StringView s_ShaderVariantBytecodeExtension = ".spv";
 const u32 s_ShaderVariantCookKeyVersion = 2u;
+const Name s_ShaderNonStandaloneAssetTypeName = "shader";
 const Name s_GraphicsVolumeMetadataExtensionName = "assets_graphics/volume_metadata";
 const Name s_IncludeAssetTypeName = "include";
 const StringView s_MaterialBxdfSourceLabel = "bxdf";
@@ -79,6 +80,50 @@ class ShaderStageKey{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsUnpaddedRendererOpticalVolumeGroup(in StringView text){
+    return !trimView(text).empty() && text == trimView(text);
+}
+
+Expected<usize> TryComputeCsgClipDefineCapacity(in StringView entryName, in usize sourceCount){
+    if(sourceCount > usize.max - s_CsgClipAddedDefineCount){
+        error("GraphicsCook: CSG shader define combo size overflow for entry '{}'", entryName);
+        return makeUnexpected(Failure());
+    }
+    return sourceCount + s_CsgClipAddedDefineCount;
+}
+
+b8 ValidateShaderMergedDefineCount(in StringView entryName, in usize count){
+    if(count > cast<usize>(u32.max)){
+        error("GraphicsCook: entry '{}' has too many merged defines for shader compilation", entryName);
+        return false;
+    }
+    return true;
+}
+
+Expected<usize> TryComputeShaderIncludeRootCapacity(in StringView entryName, in usize authoredCount, in usize implicitCount){
+    if(authoredCount > usize.max - implicitCount){
+        error("GraphicsCook: include root count overflow for entry '{}'", entryName);
+        return makeUnexpected(Failure());
+    }
+    return authoredCount + implicitCount;
+}
+
+Expected<usize> TryComputePreparedShaderEntryCapacity(in usize entryCount){
+    if(entryCount > usize.max / s_MaxPreparedEntriesPerShaderEntry){
+        error("GraphicsCook: prepared shader entry reserve count overflows");
+        return makeUnexpected(Failure());
+    }
+    return entryCount * s_MaxPreparedEntriesPerShaderEntry;
+}
+
+Expected<usize> TryComputeImplicitShaderIncludeRootCapacity(in usize rootCount, in usize assetRootCount){
+    if(rootCount > usize.max - assetRootCount){
+        error("GraphicsCook: implicit shader include root count overflows");
+        return makeUnexpected(Failure());
+    }
+    return rootCount + assetRootCount;
+}
 
 b8 TryAddCsgClipVariantCount(in StringView entryName, in u64 sourceVariantCount, mut u64 inOutVariantCount){
     if(sourceVariantCount <= u64.max - inOutVariantCount){
@@ -264,3 +309,4 @@ b8 ValidatePreparedShaderRecordCountFitsCapacity(in u64 shaderRecordCount, mut u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,16 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include "baked_font_fixture.h"
+#include "widget_fixture.h"
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
-
-#include "baked_font_fixture.h"
-#include "widget_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -37,10 +38,10 @@ class TextBakedTests : public testing::Test{
 public:
     TextBakedTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
-        , m_arena(Name("tests/ui/text/baked"))
-        , m_scratchArena(Name("tests/ui/text/baked_scratch"))
+        , m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextBaked))
+        , m_scratchArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextBakedScratch))
         , m_font(m_arena, Name(s_TestLatinFontPath))
-        , m_atlas(m_arena, Name("tests/ui/fonts/latin_atlas"))
+        , m_atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsLatinAtlas))
         , m_text(m_arena)
         , m_layout(m_arena)
         , m_skin(m_arena, Name(s_TestSkinPath))

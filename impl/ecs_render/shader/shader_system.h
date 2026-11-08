@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_shader/loader.h>

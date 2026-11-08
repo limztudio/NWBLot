@@ -4,6 +4,8 @@
 
 #include "gpu_timing_metrics.h"
 
+#include <core/graphics/gpu_timing_metrics.adhd.h>
+
 #include <global/algorithm.h>
 #include <global/assert.h>
 #include <global/overflow.h>
@@ -24,13 +26,10 @@ namespace __hidden_gpu_timing_metrics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_TimestampEventsPerEnvelope = 2u;
-static constexpr usize s_MinOverlappingQueueCount = 2u;
+static constexpr usize s_TimestampEventsPerEnvelope = NWB::Core::s_GpuTimingTimestampEventsPerEnvelope;
+static constexpr usize s_MinOverlappingQueueCount = NWB::Core::s_GpuTimingMinOverlappingQueueCount;
 
-struct TimestampEvent{
-    u64 ticks = 0u;
-    b8 begins = false;
-};
+using TimestampEvent = GpuTimestampEvent;
 
 using TimestampRangeVector = Vector<GpuComparableTimestampRange, Alloc::ScratchArena>;
 using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;

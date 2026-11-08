@@ -22,12 +22,12 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan_descriptor_heap{
-    inline constexpr u32 s_DefaultResourceCapacity = 16384u;
-    inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
+    inline constexpr u32 s_DefaultResourceCapacity = VulkanDefaults::s_VulkanDefaultHeapResourceCapacity;
+    inline constexpr u32 s_DefaultSamplerCapacity = VulkanDefaults::s_VulkanDefaultHeapSamplerCapacity;
 
     // Resource descriptors share one register set and omit the sampler and acceleration-structure class tags, which use their own descriptor sets.
-    inline constexpr u32 s_ResourceClassCount = 9u;
-    inline constexpr u32 s_SampledImageOrTexelClassCount = 6u;
+    inline constexpr u32 s_ResourceClassCount = VulkanDefaults::s_VulkanDefaultHeapResourceClassCount;
+    inline constexpr u32 s_SampledImageOrTexelClassCount = VulkanDefaults::s_VulkanDefaultHeapSampledImageOrTexelClassCount;
 
     // Reserve TLAS blocks across in-flight generation replacement.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;

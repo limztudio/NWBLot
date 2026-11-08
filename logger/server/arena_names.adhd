@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_LogServerArenaNameLoggerServerCrashUploadScratch = "logger/server/crash_upload/scratch";
+const Name s_LogServerArenaNameLoggerServerCrashEnqueueScratch = "logger/server/crash_enqueue/scratch";
+const Name s_LogServerArenaNameLoggerServerCrashIngestScratch = "logger/server/crash_ingest/scratch";
+const Name s_LogServerArenaNameLoggerServerFrameMessages = "logger/server/frame/messages";
+const Name s_LogServerArenaNameLoggerServerCommandLine = "logger/server/command_line";
+const Name s_LogServerArenaNameLoggerServerCrashIngest = "logger/server/crash_ingest";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

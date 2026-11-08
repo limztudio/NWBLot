@@ -5,6 +5,9 @@
 #include "module.h"
 #include "frame.h"
 
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/server_values.adhd.h>
+
 #include <core/alloc/module.h>
 #include <core/common/name_symbols.h>
 

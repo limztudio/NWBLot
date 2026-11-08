@@ -7,6 +7,8 @@
 
 #include "crash_symbolicate.h"
 
+#include <logger/server/crash_values.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,15 +25,15 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_DecimalTextBufferCapacity = 32u;
-inline constexpr usize s_CrashReportReserveBytes = 4096u;
+inline constexpr usize s_DecimalTextBufferCapacity = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalDecimalTextBufferCapacity;
+inline constexpr usize s_CrashReportReserveBytes = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalCrashReportReserveBytes;
 
-inline constexpr AStringView s_HexAddressPrefix = "0x";
-inline constexpr AStringView s_SymbolStorePresentText = "present";
-inline constexpr AStringView s_SymbolStoreMissingText = "missing";
-inline constexpr AStringView s_SymbolStoreErrorText = "error";
-inline constexpr AStringView s_CallstackSectionHeader = "\n[callstack]\n";
-inline constexpr AStringView s_AnonymousModulePath = "<anonymous>";
+inline constexpr AStringView s_HexAddressPrefix = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalHexAddressPrefix;
+inline constexpr AStringView s_SymbolStorePresentText = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalSymbolStorePresentText;
+inline constexpr AStringView s_SymbolStoreMissingText = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalSymbolStoreMissingText;
+inline constexpr AStringView s_SymbolStoreErrorText = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalSymbolStoreErrorText;
+inline constexpr AStringView s_CallstackSectionHeader = ::NWB::Log::CrashValues::s_CrashSymbolicateInternalCallstackSectionHeader;
+inline constexpr AStringView s_AnonymousModulePath = ::NWB::Log::CrashValues::s_CrashSymbolicateLinuxAnonymousModulePath;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

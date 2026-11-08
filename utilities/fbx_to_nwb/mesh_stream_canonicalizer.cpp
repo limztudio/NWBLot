@@ -71,7 +71,7 @@ template<typename Value>
         return outRemap;
     }
 
-    if(uniqueCount >= static_cast<usize>(Impl::s_MeshMissingStreamIndex)){
+    if(!HasSourceMeshStreamValueCapacity(uniqueCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
@@ -102,10 +102,8 @@ template<typename Value>
 
 
 Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::canonicalizeSkinned(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
-    if(inOutMesh.positions.size() != skinInfluences.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
+    if(!ValidateFbxSkinPositionCount(inOutMesh.positions.size(), skinInfluences.size()))
         return MakeUnexpected(Failure{});
-    }
 
     SourceMeshCanonicalizeReport report;
     report.before = CountSourceMeshStreams(inOutMesh);
@@ -178,3 +176,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -6,7 +6,9 @@
 #include "crash_report_composer.h"
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 #include <core/crash/reason_names.h>
 
 #include <global/text_utils.h>
@@ -27,8 +29,8 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_ReportSectionOpen = "\n[";
-inline constexpr AStringView s_ExceptionKey = "exception=";
+inline constexpr AStringView s_ReportSectionOpen = ::NWB::Log::CrashValues::s_CrashSymbolicateReportSectionOpen;
+inline constexpr AStringView s_ExceptionKey = ::NWB::Log::CrashValues::s_CrashSymbolicateExceptionKey;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

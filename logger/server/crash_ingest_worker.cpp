@@ -4,6 +4,8 @@
 
 #include "crash_ingest_worker.h"
 
+#include <logger/server/arena_names.adhd.h>
+
 #include <global/fixed_buffer.h>
 
 
@@ -17,7 +19,7 @@ NWB_LOG_BEGIN
 
 
 namespace __hidden_crash_ingest_worker{
-inline constexpr Name s_CrashIngestArena("logger/server/crash_ingest");
+inline constexpr Name s_CrashIngestArena = NWB::Log::s_LogServerArenaNameLoggerServerCrashIngest;
 };
 
 

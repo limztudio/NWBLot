@@ -30,14 +30,8 @@ namespace Assets = Core::Assets;
 
 
 Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena){
-    if(options.assetRoots.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
+    if(!ValidateAssetBuilderPathInputs(!options.assetRoots.empty(), !options.outputDirectory.empty()))
         return MakeUnexpected(Failure{});
-    }
-    if(options.outputDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: output directory is empty"));
-        return MakeUnexpected(Failure{});
-    }
 
     Assets::ResolvedCookPaths paths(arena);
     auto repoRoot = ResolvePipelineRepoRoot(options.repoRoot, NWB_TEXT("AssetBuilder"), arena);

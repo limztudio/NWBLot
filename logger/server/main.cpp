@@ -5,6 +5,9 @@
 #include "module.h"
 #include "frame.h"
 
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/server_values.adhd.h>
+
 #include <core/alloc/module.h>
 #include <core/common/application_entry.h>
 
@@ -23,16 +26,16 @@ namespace __hidden_logger_server_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_AppName = "logserver";
-inline constexpr StringView s_ReadinessTokenOption = "--readiness-token";
-inline constexpr StringView s_CrashSymbolStoreOption = "--crash-symbol-store";
-inline constexpr StringView s_CrashRetainPackagesOption = "--crash-retain-packages";
-inline constexpr StringView s_CrashRetainRawOption = "--crash-retain-raw";
-inline constexpr StringView s_CrashRetainInvalidOption = "--crash-retain-invalid";
+inline constexpr StringView s_AppName = ::NWB::Log::s_LogServerValueMainAppName;
+inline constexpr StringView s_ReadinessTokenOption = ::NWB::Log::s_LogServerValueMainReadinessTokenOption;
+inline constexpr StringView s_CrashSymbolStoreOption = ::NWB::Log::s_LogServerValueMainCrashSymbolStoreOption;
+inline constexpr StringView s_CrashRetainPackagesOption = ::NWB::Log::s_LogServerValueMainCrashRetainPackagesOption;
+inline constexpr StringView s_CrashRetainRawOption = ::NWB::Log::s_LogServerValueMainCrashRetainRawOption;
+inline constexpr StringView s_CrashRetainInvalidOption = ::NWB::Log::s_LogServerValueMainCrashRetainInvalidOption;
 inline constexpr TStringView s_LogFileNameBase = NWB_TEXT("logserver");
-inline constexpr Name s_CommandLineArena("logger/server/command_line");
-inline constexpr int s_LoggerServerExitSuccess = 0;
-inline constexpr int s_LoggerServerExitFailure = -1;
+inline constexpr Name s_CommandLineArena = NWB::Log::s_LogServerArenaNameLoggerServerCommandLine;
+inline constexpr int s_LoggerServerExitSuccess = ::NWB::Log::s_LogServerValueMainLoggerServerExitSuccess;
+inline constexpr int s_LoggerServerExitFailure = ::NWB::Log::s_LogServerValueMainLoggerServerExitFailure;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,8 +70,7 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
     }, [&](const GeneralException& error){
         logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), ConvertString(error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
-    }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
-    );
+    }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 
@@ -96,8 +98,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         CommandLineParseApp(app, argc, argv);
 
         return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), AStringView(readinessToken.data(), readinessToken.size()), inst);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
-    );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 

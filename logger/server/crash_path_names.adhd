@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CrashRawDirectoryName = "raw";
+const StringView s_CrashInvalidDirectoryName = "invalid";
+const StringView s_CrashExtractedDirectoryName = "packages";
+const StringView s_CrashInboxDirectoryName = "inbox";
+const StringView s_CrashSymbolStoreDirectoryName = "symbols";
+const StringView s_CrashUploadArchiveFilePrefix = "crash_";
+const StringView s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
+const StringView s_ServerSymbolicationFileName = "server_symbolication.txt";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

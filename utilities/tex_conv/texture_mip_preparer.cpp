@@ -32,8 +32,7 @@ Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> TextureMipPreparer::bu
         ::Vector<EncodedMip, Core::Alloc::ScratchArena>(scratchArena),
         [](const TextureFormat::MipLevelLayout& level)noexcept -> EncodedMip{
             return level;
-        }
-    );
+        });
     if(!mipLevels){
         switch(mipLevels.error().failure){
         case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
@@ -104,10 +103,7 @@ Expected<FloatPlanes> TextureMipPreparer::generateNext(const FloatPlanes& source
 }
 
 Expected<TexConvAlphaTransport> TextureMipPreparer::deriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
-    b8 found = false;
-    b8 constant = true;
-    b8 opaque = true;
-    u8 firstAlpha = TextureFormat::s_OpaqueAlphaUnorm8;
+    TexConvAlphaAccumulator alphaState(TextureFormat::s_OpaqueAlphaUnorm8);
     for(const FloatPlanes& planes : mips){
         for(const basisu::imagef& plane : planes){
             for(u32 y = 0u; y < plane.get_height(); ++y){
@@ -117,23 +113,17 @@ Expected<TexConvAlphaTransport> TextureMipPreparer::deriveAlpha(const FloatMipCh
                     if(!alphaResult)
                         return MakeUnexpected(Failure{});
                     const u8 alpha = *alphaResult;
-                    if(!found){
-                        firstAlpha = alpha;
-                        found = true;
-                    }
-                    else if(alpha != firstAlpha)
-                        constant = false;
-                    opaque = opaque && alpha == TextureFormat::s_OpaqueAlphaUnorm8;
+                    alphaState.observe(alpha, TextureFormat::s_OpaqueAlphaUnorm8);
                 }
             }
         }
     }
     return TryResolveTexConvAlphaTransport(
-        found,
-        opaque,
+        alphaState.found,
+        alphaState.opaque,
         format == TexturePayloadFormat::UastcLdr4x4,
-        constant,
-        firstAlpha,
+        alphaState.constant,
+        alphaState.firstAlpha,
         TextureFormat::s_OpaqueAlphaUnorm8,
         TextureAlphaMode::Opaque,
         TextureAlphaMode::EmbeddedLdr,
@@ -150,3 +140,4 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

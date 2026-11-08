@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <loader/runtime_constants.adhd.h>
+
 #include <core/global.h>
 #include <core/filesystem/factory.h>
 #include <core/perf/session.h>
@@ -57,13 +59,10 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u16 s_DefaultProjectFrameClientWidth = 1280u;
-inline constexpr u16 s_DefaultProjectFrameClientHeight = 900u;
+inline constexpr u16 s_DefaultProjectFrameClientWidth = LoaderDetail::s_DefaultProjectFrameClientWidth;
+inline constexpr u16 s_DefaultProjectFrameClientHeight = LoaderDetail::s_DefaultProjectFrameClientHeight;
 
-struct ProjectFrameClientSize{
-    u16 width = s_DefaultProjectFrameClientWidth;
-    u16 height = s_DefaultProjectFrameClientHeight;
-};
+using ProjectFrameClientSize = LoaderDetail::ProjectFrameClientSize;
 
 struct ProjectStartupContext{
     Core::GraphicsRuntime& graphics;

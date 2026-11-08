@@ -75,15 +75,20 @@ b8 DropSourceMeshTangentsStreams(
     return true;
 }
 
-b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut ScratchU32Vector inOutTriangleIndices){
+Expected<usize> TryComputeTriangleIndexScratchCapacity(in usize maxFaceTriangles){
     if(maxFaceTriangles > usize.max / cast<usize>(s_MeshletTriangleIndexCount)){
         error("Failed to build mesh: mesh face triangulation scratch size overflows");
-        return false;
+        return makeUnexpected(Failure());
     }
+    return maxFaceTriangles * cast<usize>(s_MeshletTriangleIndexCount);
+}
 
-    const usize triangleIndexCapacity = maxFaceTriangles * cast<usize>(s_MeshletTriangleIndexCount);
-    if(inOutTriangleIndices.size() < triangleIndexCapacity)
-        inOutTriangleIndices.resize(triangleIndexCapacity);
+b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut ScratchU32Vector inOutTriangleIndices){
+    const Expected<usize> triangleIndexCapacity = TryComputeTriangleIndexScratchCapacity(maxFaceTriangles);
+    if(!triangleIndexCapacity.has_value())
+        return false;
+    if(inOutTriangleIndices.size() < triangleIndexCapacity.value())
+        inOutTriangleIndices.resize(triangleIndexCapacity.value());
     return true;
 }
 

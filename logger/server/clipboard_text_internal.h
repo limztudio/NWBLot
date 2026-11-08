@@ -32,8 +32,8 @@ namespace FrameDetail{
 using MessageItem = Pair<LogString, Core::Common::LogType::Enum>;
 using MessageDeque = Deque<MessageItem, LogArena>;
 
-inline constexpr AStringView s_ClipboardDiagnosticCategory = "logger_clipboard";
-inline constexpr usize s_ClipboardLineBreakCharacterCount = 2u;
+inline constexpr AStringView s_ClipboardDiagnosticCategory = ::NWB::Log::s_LogServerValueClipboardDiagnosticCategory;
+inline constexpr usize s_ClipboardLineBreakCharacterCount = ::NWB::Log::s_LogServerValueClipboardLineBreakCharacterCount;
 
 class ClipboardText final : NoCopy{
 public:

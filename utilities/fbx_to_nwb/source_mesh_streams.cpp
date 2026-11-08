@@ -28,7 +28,7 @@ template<typename Value, typename Lookup>
     if(found != inOutLookup.end())
         return found.value();
 
-    if(inOutStream.size() >= static_cast<usize>(Impl::s_MeshMissingStreamIndex)){
+    if(!HasSourceMeshStreamValueCapacity(inOutStream.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
@@ -139,7 +139,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
         const SIMDVectorSingle p2 = LoadFloat(rebuildVertices[i2].position);
         const SIMDVectorDouble areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal));
-        if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(::s_FrameDirectionEpsilon))
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, static_cast<f64>(::s_FrameDirectionEpsilon)))
             continue;
 
         rebuildIndices.push_back(i0);
@@ -226,3 +226,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

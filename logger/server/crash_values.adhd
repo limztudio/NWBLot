@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_CrashIngestGeneratedJsonNeedleReserveSlack = 4u;
+const StringView s_CrashIngestMalformedFileFooterDetail = "malformed crash archive file footer";
+const StringView s_CrashSymbolicateReportSectionOpen = "\n[";
+const StringView s_CrashSymbolicateExceptionKey = "exception=";
+const StringView s_CrashSymbolicateReportLineEnd = "\n";
+const StringView s_CrashSymbolicateAftermathAftermathSectionHeader = "\n[aftermath]\n";
+const StringView s_CrashSymbolicateAftermathAftermathSkippedReport = "status=skipped\ndetail=logserver built without the Aftermath SDK\n";
+const StringView s_CrashSymbolicateAftermathAftermathCreateDecoderFailedReport = "status=decode_failed\ndetail=create_decoder\n";
+const StringView s_CrashSymbolicateAftermathAftermathGenerateJsonFailedReport = "status=decode_failed\ndetail=generate_json\n";
+const StringView s_CrashSymbolicateAftermathAftermathGetJsonFailedReport = "status=decode_failed\ndetail=get_json\n";
+const StringView s_CrashSymbolicateAftermathAftermathLoadRuntimeOperation = "load_runtime";
+const usize s_CrashSymbolicateAndroidAndroidTombstoneFrameMinimumTextLength = 4u;
+const StringView s_CrashSymbolicateAndroidTombstoneProgramCounterToken = " pc ";
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneParsedStatus = "status=tombstone_parsed\n";
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneUndecodedStatus = "status=not_decoded\n";
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneResolverLine = "resolver=android_tombstone_native_symbols\n";
+const StringView s_CrashSymbolicateAndroidAndroidTombstonePresentLine = "android_tombstone=present\n";
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneNoFramesDetail = "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n";
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneFramesDetail = "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n";
+const StringView s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader = "\n[tombstone_callstack]\n";
+const usize s_CrashSymbolicateInternalDecimalTextBufferCapacity = 32u;
+const usize s_CrashSymbolicateInternalCrashReportReserveBytes = 4096u;
+const StringView s_CrashSymbolicateInternalHexAddressPrefix = "0x";
+const StringView s_CrashSymbolicateInternalSymbolStorePresentText = "present";
+const StringView s_CrashSymbolicateInternalSymbolStoreMissingText = "missing";
+const StringView s_CrashSymbolicateInternalSymbolStoreErrorText = "error";
+const StringView s_CrashSymbolicateInternalCallstackSectionHeader = "\n[callstack]\n";
+const StringView s_CrashSymbolicateLinuxLinuxUnknownSymbolText = "??";
+const StringView s_CrashSymbolicateLinuxLinuxUnknownLocationPrefix = "??:";
+const StringView s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator = " <- ";
+const StringView s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator = " at ";
+const StringView s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix = "at ";
+const StringView s_CrashSymbolicateLinuxLlvmSymbolizerTool = "llvm-symbolizer";
+const StringView s_CrashSymbolicateLinuxAddr2LineTool = "addr2line";
+const StringView s_CrashSymbolicateLinuxLlvmSymbolizerObjectPrefix = "--obj=";
+const StringView s_CrashSymbolicateLinuxLlvmSymbolizerDemangleFlag = "--demangle";
+const StringView s_CrashSymbolicateLinuxLlvmSymbolizerFunctionsFlag = "--functions";
+const StringView s_CrashSymbolicateLinuxLlvmSymbolizerInliningFlag = "--inlining=true";
+const StringView s_CrashSymbolicateLinuxAddr2LineFunctionsFlag = "-f";
+const StringView s_CrashSymbolicateLinuxAddr2LineDemangleFlag = "-C";
+const StringView s_CrashSymbolicateLinuxAddr2LineInlineFlag = "-i";
+const StringView s_CrashSymbolicateLinuxAddr2LineExeFlag = "-e";
+const StringView s_CrashSymbolicateLinuxAnonymousModulePath = "<anonymous>";
+const usize s_CrashSymbolicateLinuxSymbolizerResultReserveMultiplier = 3u;
+const StringView s_CrashSymbolicateRgdGpuDetectiveSectionHeader = "\n[gpu_detective]\n";
+const StringView s_CrashSymbolicateRgdGpuDetectiveDecodeFailedStatus = "status=decode_failed\n";
+const StringView s_CrashSymbolicateRgdReportDetailPrefix = "detail=";
+const u32 s_CrashSymbolicateWin32MaxWindowsStackFrames = 128u;
+const StringView s_CrashSymbolicateWin32InvalidModuleListReport = "module_load=invalid_module_list\n";
+const usize s_CrashSymbolicateAftermathAftermathMaxJsonBytes = 8u * 1024u * 1024u;
+const StringView s_CrashSymbolicateAndroidAndroidTombstoneMissingReport = "status=not_decoded\nresolver=android_tombstone_native_symbols\nandroid_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

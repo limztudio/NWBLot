@@ -4,7 +4,9 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <logger/server/crash_values.adhd.h>
+
+#include <core/crash/package_names.adhd.h>
 
 #include <global/text_utils.h>
 
@@ -25,20 +27,17 @@ namespace LoggerCrashSymbolicateDetail{
 
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
-inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = 4u;
+inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneFrameMinimumTextLength;
 inline constexpr char s_TombstoneFrameMarker = '#';
-inline constexpr AStringView s_TombstoneProgramCounterToken = " pc ";
-inline constexpr AStringView s_AndroidTombstoneMissingReport =
-    "status=not_decoded\nresolver=android_tombstone_native_symbols\n"
-    "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n"
-;
-inline constexpr AStringView s_AndroidTombstoneParsedStatus = "status=tombstone_parsed\n";
-inline constexpr AStringView s_AndroidTombstoneUndecodedStatus = "status=not_decoded\n";
-inline constexpr AStringView s_AndroidTombstoneResolverLine = "resolver=android_tombstone_native_symbols\n";
-inline constexpr AStringView s_AndroidTombstonePresentLine = "android_tombstone=present\n";
-inline constexpr AStringView s_AndroidTombstoneNoFramesDetail = "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n";
-inline constexpr AStringView s_AndroidTombstoneFramesDetail = "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n";
-inline constexpr AStringView s_TombstoneCallstackSectionHeader = "\n[tombstone_callstack]\n";
+inline constexpr AStringView s_TombstoneProgramCounterToken = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidTombstoneProgramCounterToken;
+inline constexpr AStringView s_AndroidTombstoneMissingReport = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneMissingReport;
+inline constexpr AStringView s_AndroidTombstoneParsedStatus = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneParsedStatus;
+inline constexpr AStringView s_AndroidTombstoneUndecodedStatus = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneUndecodedStatus;
+inline constexpr AStringView s_AndroidTombstoneResolverLine = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneResolverLine;
+inline constexpr AStringView s_AndroidTombstonePresentLine = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstonePresentLine;
+inline constexpr AStringView s_AndroidTombstoneNoFramesDetail = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneNoFramesDetail;
+inline constexpr AStringView s_AndroidTombstoneFramesDetail = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidAndroidTombstoneFramesDetail;
+inline constexpr AStringView s_TombstoneCallstackSectionHeader = ::NWB::Log::CrashValues::s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

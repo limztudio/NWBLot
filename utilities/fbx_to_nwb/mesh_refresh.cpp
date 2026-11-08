@@ -11,7 +11,6 @@
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
 
-#include <global/overflow.h>
 #include <global/span.h>
 #include <global/text_replacements.h>
 
@@ -80,11 +79,9 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
     const Core::Metascript::Document& doc = *docResult;
 
     MeshRefreshTextDetail::TextReplacements replacements(scratchArena);
-    const auto replacementCapacity = TryMultiply<usize>(doc.declarations().size(), s_MaxMeshReplacementCount);
-    if(!replacementCapacity){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: replacement capacity overflows"));
+    const auto replacementCapacity = TryComputeMeshRefreshReplacementCapacity(doc.declarations().size());
+    if(!replacementCapacity)
         return MakeUnexpected(Failure{});
-    }
     replacements.reserve(*replacementCapacity);
     b8 sawMesh = false;
 
@@ -159,3 +156,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

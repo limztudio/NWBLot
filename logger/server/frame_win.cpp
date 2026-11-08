@@ -6,6 +6,9 @@
 #include "clipboard_text_internal.h"
 #include "log_row_painter.h"
 
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/server_values.adhd.h>
+
 #include <global/diagnostics.h>
 #include <global/expected.h>
 #include <global/scope_exit.h>
@@ -46,10 +49,10 @@ inline constexpr UINT s_SynchronizeMessageRows = WM_APP + 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
-inline constexpr AStringView s_LifecycleDiagnosticCategory = "logger_window_lifecycle";
-inline constexpr AStringView s_MessagesDiagnosticCategory = "logger_window_messages";
-inline constexpr AStringView s_LayoutDiagnosticCategory = "logger_window_layout";
+inline constexpr Name s_MessageArenaName = NWB::Log::s_LogServerArenaNameLoggerServerFrameMessages;
+inline constexpr AStringView s_LifecycleDiagnosticCategory = ::NWB::Log::s_LogServerValueFrameWinLifecycleDiagnosticCategory;
+inline constexpr AStringView s_MessagesDiagnosticCategory = ::NWB::Log::s_LogServerValueFrameWinMessagesDiagnosticCategory;
+inline constexpr AStringView s_LayoutDiagnosticCategory = ::NWB::Log::s_LogServerValueFrameWinLayoutDiagnosticCategory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

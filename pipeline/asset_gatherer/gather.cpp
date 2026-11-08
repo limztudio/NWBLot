@@ -29,10 +29,8 @@ namespace Assets = Core::Assets;
 
 b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
-    if(options.outputDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: output directory is empty"));
+    if(!ValidateAssetGathererOutputDirectory(!options.outputDirectory.empty()))
         return false;
-    }
 
     const auto filesResult = AssetGatherInputDiscovery::Collect(options, scratchArena);
     if(!filesResult)

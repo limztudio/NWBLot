@@ -70,7 +70,7 @@ f64 ImportPrompts::promptDouble(const AStringView label, const f64 defaultValue,
             return defaultValue;
 
         const auto parsed = ParseF64FromChars(AStringView(line.data(), line.size()));
-        if(parsed && IsFinite(*parsed) && *parsed > 0.0)
+        if(parsed && IsValidFbxImportScale(*parsed))
             return *parsed;
 
         NWB_COUT << "Please enter a positive finite number.\n";
@@ -190,3 +190,4 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

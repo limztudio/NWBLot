@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_LogTelemetryArenaNameLoggerTelemetryReport = "logger/telemetry/report";
+
+class TelemetryMemorySummary{
+    public u64 eventCount = 0u;
+    public u64 maxUsedBytes = 0u;
+    public u64 maxPeakUsedBytes = 0u;
+    public i64 totalUsedDeltaBytes = 0;
+    // An unrepresentable sum stays invalid for this report; individual records retain their original deltas.
+    public b8 totalUsedDeltaValid = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

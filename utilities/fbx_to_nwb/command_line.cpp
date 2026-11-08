@@ -32,8 +32,7 @@ namespace __hidden_command_line{
 
 
 Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
-    b8 sawStatic = false;
-    b8 sawSkinned = false;
+    FbxMeshSkinningSummary summary;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
@@ -42,16 +41,10 @@ Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances,
 
         const MeshInstance& instance = instances[instanceIndex];
         const b8 hasSkin = instance.mesh && instance.mesh->skin_deformers.count != 0u;
-        sawSkinned = sawSkinned || hasSkin;
-        sawStatic = sawStatic || !hasSkin;
+        summary.observe(hasSkin);
     }
 
-    if(sawStatic && sawSkinned){
-        NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
-        return MakeUnexpected(Failure{});
-    }
-
-    return sawSkinned;
+    return summary.resolve();
 }
 
 
@@ -136,9 +129,9 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
         if(!ImportPrompts::configurePromptsBeforeLoad(presence, scratchArena, options, prompted))
             return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
 
-        if(!IsFinite(options.scale) || options.scale <= 0.0)
+        if(!IsValidFbxImportScale(options.scale))
             return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
-        if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0)
+        if(!IsValidFbxTriangleAreaEpsilon(options.triangleAreaLengthSquaredEpsilon))
             return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
 
         const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));

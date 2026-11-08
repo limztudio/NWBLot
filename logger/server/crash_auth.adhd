@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CrashBearerPrefix = "Bearer ";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CrashUploadAuthorizationMatches(in StringView expectedToken, in StringView authorizationHeader){
+    if(expectedToken.empty())
+        return true;
+    if(authorizationHeader.empty())
+        return false;
+    if(authorizationHeader.size() != s_CrashBearerPrefix.size() + expectedToken.size())
+        return false;
+    if(authorizationHeader.substr(0u, s_CrashBearerPrefix.size()) != s_CrashBearerPrefix)
+        return false;
+    return authorizationHeader.substr(s_CrashBearerPrefix.size()) == expectedToken;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

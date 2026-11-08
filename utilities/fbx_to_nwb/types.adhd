@@ -129,9 +129,43 @@ class OptionPresence{
     public b8 flipWinding = false;
 }
 
+class FbxMeshSkinningSummary{
+    private b8 sawStatic = false;
+    private b8 sawSkinned = false;
+
+    public void observe(in b8 hasSkin){
+        this.sawSkinned = this.sawSkinned || hasSkin;
+        this.sawStatic = this.sawStatic || !hasSkin;
+    }
+
+    public Expected<b8> resolve()const{
+        if(this.sawStatic && this.sawSkinned){
+            warning("Model export does not support mixed static and skinned source meshes yet");
+            return makeUnexpected(Failure());
+        }
+        return this.sawSkinned;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsValidFbxImportScale(in f64 value){
+    return isFinite(value) && value > 0.0;
+}
+
+b8 IsValidFbxTriangleAreaEpsilon(in f64 value){
+    return isFinite(value) && !(value < 0.0);
+}
+
+Expected<usize> TryComputeMeshRefreshReplacementCapacity(in usize declarationCount){
+    if(declarationCount > usize.max / s_MaxMeshReplacementCount){
+        error("Failed to refresh NWB mesh: replacement capacity overflows");
+        return makeUnexpected(Failure());
+    }
+    return declarationCount * s_MaxMeshReplacementCount;
+}
 
 u32 ComputeWorkerCount(in u32 coreCount){
     if(coreCount > s_MinParallelCoreCount)
@@ -156,6 +190,29 @@ b8 AssetTypeRequiresSkinning(in OutputAssetType assetType){
 
 b8 AssetTypeCanUseSkinning(in OutputAssetType assetType){
     return assetType == OutputAssetType::Bunch || assetType == OutputAssetType::Model || AssetTypeRequiresSkinning(assetType);
+}
+
+b8 ValidateFbxOutputMode(
+    in OutputAssetType assetType,
+    in b8 separateAssets,
+    in b8 hasMeshSkin,
+    in b8 hasSkeletonJoints,
+    in b8 hasBindPoses,
+    in b8 hasInverseBindMatrices
+){
+    if(separateAssets && assetType != OutputAssetType::Bunch){
+        error("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'");
+        return false;
+    }
+    if(assetType == OutputAssetType::Mesh && (hasSkeletonJoints || hasBindPoses || hasInverseBindMatrices)){
+        error("Failed to write NWB mesh: mesh output cannot write split skeleton/skin payload");
+        return false;
+    }
+    if(AssetTypeRequiresSkinning(assetType) && !hasMeshSkin && !hasSkeletonJoints && !hasInverseBindMatrices){
+        error("Failed to write NWB asset: requested asset type requires a skinned source mesh");
+        return false;
+    }
+    return true;
 }
 
 Expected<usize> TryParseMeshIndexSelector(in StringView text){

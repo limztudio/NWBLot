@@ -55,6 +55,10 @@ const StringView s_OverwriteOptionFlag = "--overwrite";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u64 ComputeBakePixelCapacity(in u32 extent, in u32 maxGroups){
+    return cast<u64>(extent) * cast<u64>(extent) * cast<u64>(s_FontAtlasMaxChannelCount) * cast<u64>(maxGroups);
+}
+
 b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 maxGroups){
     return
         ppem >= s_FontAtlasMinBakePpem
@@ -65,8 +69,16 @@ b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 m
         && extent <= s_FontAtlasMaxExtent
         && maxGroups != 0u
         && maxGroups <= s_FontAtlasMaxGroupCount
-        && cast<u64>(extent) * cast<u64>(extent) * cast<u64>(s_FontAtlasMaxChannelCount) * cast<u64>(maxGroups) <= s_FontAtlasMaxPixelBytes
+        && ComputeBakePixelCapacity(extent, maxGroups) <= s_FontAtlasMaxPixelBytes
     ;
+}
+
+b8 ValidateBakeInitialOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 maxGroups, in b8 hasSource, in b8 hasOutput){
+    if(!IsValidBakeNumericOptions(ppem, spread, extent, maxGroups) || !hasSource || !hasOutput){
+        error("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB");
+        return false;
+    }
+    return true;
 }
 
 Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){

@@ -5,6 +5,8 @@
 #include "ingest.h"
 
 #include <logger/common.h>
+#include <logger/telemetry/report_types.adhd.h>
+#include <logger/telemetry/report_values.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -35,13 +37,13 @@ using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_StorageDirectoryName = "telemetry";
-inline constexpr StringView s_RawDirectoryName = "raw";
-inline constexpr StringView s_ReportDirectoryName = "reports";
-inline constexpr StringView s_RawStreamFileExtension = ".nwbs";
-inline constexpr StringView s_JsonFileExtension = ".json";
-inline constexpr StringView s_PerfCsvFileExtension = ".perf.csv";
-inline constexpr StringView s_GraphFileExtension = ".graph.dot";
+inline constexpr StringView s_StorageDirectoryName = ::NWB::Log::s_LogTelemetryIngestStorageDirectoryName;
+inline constexpr StringView s_RawDirectoryName = ::NWB::Log::s_LogTelemetryIngestRawDirectoryName;
+inline constexpr StringView s_ReportDirectoryName = ::NWB::Log::s_LogTelemetryIngestReportDirectoryName;
+inline constexpr StringView s_RawStreamFileExtension = ::NWB::Log::s_LogTelemetryIngestRawStreamFileExtension;
+inline constexpr StringView s_JsonFileExtension = ::NWB::Log::s_LogTelemetryIngestJsonFileExtension;
+inline constexpr StringView s_PerfCsvFileExtension = ::NWB::Log::s_LogTelemetryIngestPerfCsvFileExtension;
+inline constexpr StringView s_GraphFileExtension = ::NWB::Log::s_LogTelemetryIngestGraphFileExtension;
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
 
@@ -93,7 +95,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
         return result;
     }
 
-    Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Log::s_LogTelemetryArenaNameLoggerTelemetryReport)};
     const auto storageDirectory = ExecutablePaths(scratchArena).storageDirectory(config.storageDirectory, __hidden_telemetry_ingest::s_StorageDirectoryName);
     const auto rawDirectory = storageDirectory / __hidden_telemetry_ingest::s_RawDirectoryName;
     const auto reportDirectory = storageDirectory / __hidden_telemetry_ingest::s_ReportDirectoryName;

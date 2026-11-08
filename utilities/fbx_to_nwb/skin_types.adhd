@@ -143,6 +143,21 @@ b8 LessEmittedStreamValue(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
     return false;
 }
 
+b8 ValidateFbxNewSkeletonJointCapacity(in usize jointCount){
+    if(jointCount >= s_MaxSkeletonJointCount){
+        error("Failed to build mesh: skeleton has more than {} joints", s_MaxSkeletonJointCount);
+        return false;
+    }
+    return true;
+}
+
+usize AccumulateFbxJointCapacity(in usize currentCount, in usize clusterCount){
+    const usize remaining = s_MaxSkeletonJointCount - currentCount;
+    if(clusterCount < remaining)
+        return currentCount + clusterCount;
+    return currentCount + remaining;
+}
+
 Expected<usize> ValidateFbxSkinClusterCount(in usize clusterCount, in usize currentJointCount){
     if(clusterCount == 0u){
         error("Failed to build mesh: skin deformer contains no clusters");
@@ -157,6 +172,14 @@ Expected<usize> ValidateFbxSkinClusterCount(in usize clusterCount, in usize curr
         return makeUnexpected(Failure());
     }
     return currentJointCount + clusterCount;
+}
+
+b8 ValidateFbxSkinLogicalVertex(in u32 logicalVertex, in usize vertexCount){
+    if(cast<usize>(logicalVertex) >= vertexCount){
+        error("Failed to build mesh: skin deformer does not contain weights for every logical vertex");
+        return false;
+    }
+    return true;
 }
 
 b8 ValidateFbxSkinVertexWeightRange(in u32 weightBegin, in u32 numWeights, in usize totalWeights){
@@ -184,3 +207,4 @@ b8 IsBeforeFbxSkeletonJointSortKey(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -27,6 +27,24 @@ namespace __hidden_compile{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static b8 IsRepresentableDepfilePath(const AStringView path)noexcept{
+    if(path.empty() || path.front() == '~' || path.back() == ':' || path.back() == '\\')
+        return false;
+    constexpr AStringView s_Punctuation = "+\"'&,/_:.~()}@!- #$\\{";
+    for(usize index = 0u; index < path.size(); ++index){
+        const char c = path[index];
+        if(static_cast<u8>(c) < 0x80u && !IsAsciiAlphaNumeric(c) && s_Punctuation.find(c) == AStringView::npos)
+            return false;
+        if(index > 0u && path[index - 1u] == '\\' && (c == '#' || c == ':' || c == '$'))
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Core::Metascript::MString DeriveVirtualCompilePath(
     const Path<Core::Metascript::MetaArena>& inputPath,
     const Path<Core::Metascript::MetaArena>& resolvedInputPath,
@@ -309,16 +327,16 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
             const MString sourceGeneric = PathToGenericString<MChar>(arena, sourceOutPath);
             const MString inputGeneric = PathToGenericString<MChar>(arena, inputPath);
             if(
-                HasLineBreak(AStringView(headerGeneric))
-                || HasLineBreak(AStringView(sourceGeneric))
-                || HasLineBreak(AStringView(inputGeneric))
+                !__hidden_compile::IsRepresentableDepfilePath(headerGeneric)
+                || !__hidden_compile::IsRepresentableDepfilePath(sourceGeneric)
+                || !__hidden_compile::IsRepresentableDepfilePath(inputGeneric)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: depfile path for '{}' contains a newline"), ConvertString(inputView));
+                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: depfile path for '{}' cannot be represented safely"), ConvertString(inputView));
                 return false;
             }
             for(const MString& depPath : result.unit.resolvedIncludedFiles){
-                if(HasLineBreak(AStringView(depPath))){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: included dependency path for '{}' contains a newline"), ConvertString(inputView));
+                if(!__hidden_compile::IsRepresentableDepfilePath(depPath)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: included dependency path for '{}' cannot be represented safely"), ConvertString(inputView));
                     return false;
                 }
             }

@@ -18,8 +18,8 @@ NWB_LOG_BEGIN
 
 namespace FrameDetail{
 namespace __hidden_log_row_painter{
-inline constexpr AStringView s_RowLayoutDiagnosticCategory = "logger_window_layout";
-inline constexpr AStringView s_PaintDiagnosticCategory = "logger_window_paint";
+inline constexpr AStringView s_RowLayoutDiagnosticCategory = ::NWB::Log::s_LogServerValueFrameWinLayoutDiagnosticCategory;
+inline constexpr AStringView s_PaintDiagnosticCategory = ::NWB::Log::s_LogServerValueFrameWinPaintDiagnosticCategory;
 inline constexpr COLORREF s_DefaultLogRowTextColor = RGB(0, 0, 0);
 inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
 
@@ -166,3 +166,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -106,18 +106,11 @@ b8 WriteNwbAsset(
     }
 
     const OutputAssetType::Enum assetType = *assetTypeResult;
-    if(separateAssets && assetType != OutputAssetType::Bunch){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'"));
+    if(!ValidateFbxOutputMode(assetType, separateAssets, !mesh.skin.empty(), !skeletonJoints.empty(), !skeletonBindPoseMatrices.empty(), !inverseBindMatrices.empty()))
         return false;
-    }
 
-    if(assetType == OutputAssetType::Mesh){
-        if(!skeletonJoints.empty() || !skeletonBindPoseMatrices.empty() || !inverseBindMatrices.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh output cannot write split skeleton/skin payload"));
-            return false;
-        }
+    if(assetType == OutputAssetType::Mesh)
         return AssetWriterFormatDetail::WriteMeshAsset(outputPath, mesh);
-    }
 
     const b8 skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
     const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
@@ -135,10 +128,6 @@ b8 WriteNwbAsset(
     }
 
     if(!skinnedModel){
-        if(assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: requested asset type requires a skinned source mesh"));
-            return false;
-        }
         if(assetType == OutputAssetType::Bunch && !separateAssets)
             return AssetWriterFormatDetail::WriteAssetBunch(outputPath, mesh, {}, {}, skeletonJoints, skeletonBindPoseMatrices, {}, inverseBindMatrices, scratchArena);
 

@@ -6,6 +6,7 @@
 
 
 #include <logger/global.h>
+#include <logger/telemetry/report_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/telemetry/perf.h>
@@ -24,15 +25,6 @@ NWB_LOG_BEGIN
 
 inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u;
 inline constexpr usize s_TelemetryMemorySourceCount = static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u;
-
-struct TelemetryMemorySummary{
-    u64 eventCount = 0u;
-    u64 maxUsedBytes = 0u;
-    u64 maxPeakUsedBytes = 0u;
-    i64 totalUsedDeltaBytes = 0;
-    // An unrepresentable sum stays invalid for this report; individual records retain their original deltas.
-    b8 totalUsedDeltaValid = true;
-};
 
 struct TelemetryReportSummary{
     u64 eventCount = 0u;

@@ -20,7 +20,7 @@ Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFo
     RasterGlyphs glyphs(inOutFont.arena());
     FT_Face face = inOutFont.freeType().face();
     const f32 designPerPixel = Impl::ComputeFontAtlasUnitsPerPixel(face->units_per_EM, options.ppem);
-    const u64 capacity = static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups;
+    const u64 capacity = ComputeBakePixelCapacity(options.extent, options.maxGroups);
     u64 rasterBytes = 0u;
     glyphs.reserve(static_cast<usize>(face->num_glyphs));
     for(u32 glyphId = 0u; glyphId < static_cast<u32>(face->num_glyphs); ++glyphId){

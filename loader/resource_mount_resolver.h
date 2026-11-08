@@ -21,9 +21,6 @@ namespace LoaderDetail{
 
 class ResourceMountResolver{
 public:
-    inline static constexpr AStringView s_ResourceDirectoryName = "res";
-    inline static constexpr AStringView s_GraphicsVolumeName = "graphics";
-
     struct Error{
         ErrorCode code;
         AStringView stage;
@@ -41,3 +38,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -30,8 +30,7 @@ The smoke-test fix comes after those moves:
 - The GPU time fixture acts as a cold record try that notes query need with
   no query pools made. After it drops that try, the next start makes room
   before the measured try. The measured start, full, and drop counts stay 2,
-  10, and 10. The test also checks that the cold try has zero noted scopes
-  and two room skips, and the measured try adds no room skips.
+  10, and 10. The test also checks the cold try. It must hold zero noted scopes and two room skips. The read try must add no room skips.
 - The clear CSG fixture uses a project-owned plain green mat for its mid
   plate and turns off show/glass for the clip and cover check. This stops
   face light and glass back move from hiding the shape under test. Plain

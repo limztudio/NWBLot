@@ -99,7 +99,7 @@ Declare this branch without a dependency on scene presentation or swapchain acqu
 
 The frame timer begins in `Core::FrameTimingBeginGraphTask::Record()`, declared in `core/task/gpu/frame_timing_begin_task.h`. The normal-execution prelude precedes both scene and independent UI branches. The frame ends after their final join. Standalone UI uses the same shared task contract. Timing recovery retains accepted work without making UI depend on shadow preparation to inherit its timing start.
 
-The final compositor can sample the UI layer in the existing fullscreen output pass. There is no need for an additional full-screen pass merely to merge UI. A standalone UI-only path must also work when no scene renderer contributes: use a defined background and the same layer/output contract, acquire/present once, and avoid submitting the UI twice when a scene renderer already claims it.
+The final compositor can sample the UI layer in the existing fullscreen output pass. There is no need for an additional full-screen pass merely to merge UI. A lone UI-only path must also work with no scene draw. Use a set back fill and the same coat/out deal. Take/show once. Do not send the UI twice when a scene draw already holds it.
 
 ### Render and color contract
 

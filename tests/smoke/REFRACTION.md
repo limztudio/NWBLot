@@ -61,8 +61,8 @@ sphere and lifecycle fixtures retain their existing defaults when density is not
 selected; `native` and `npot` remain extent options for those fixtures.
 
 Each density uses one closed, hard-edge clear glass slab with IOR 1.5, zero AVBOIT
-coverage, and thickness 0.2. The eye is at `(0, 1.4, -6)`, the vertical FOV is
-60 degrees, and the aspect ratio is set explicitly from the requested extent.
+cover, and thick 0.2. The eye sits at `(0, 1.4, -6)`. The straight FOV is
+60 deg. The shown ratio comes straight from the asked span.
 The visible slab starts at Z=0. Its centered front-face dimensions derive from
 the perspective projection and even integer pixel counts nearest
 `width * sqrt(percent / 100)` and `height * sqrt(percent / 100)`. This puts the

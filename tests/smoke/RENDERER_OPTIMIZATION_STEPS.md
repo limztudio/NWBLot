@@ -245,7 +245,7 @@ Timing report SHA256: `023a8eb8d24d447cbe1e9a6a1e50652b7cc291193a3a8acfabc4df327
 
 ## Step 8: preserve rejection order for derivative-dependent surface work
 
-The proposed optimization would discard the selected primary refraction instance before AVBOIT accumulation evaluates surface inputs, CSG and the authored material hook. That can avoid work for the discarded fragment, but it introduces earlier termination of neighboring fragment invocations whose values can still be needed for derivatives. The primary-instance ID comes from a texture and can vary within a primitive or a 2Ã—2 derivative group. The existing device and material contracts do not guarantee that this new rejection is safe.
+The proposed optimization would discard the selected primary refraction instance before AVBOIT accumulation evaluates surface inputs, CSG and the authored material hook. That can skip work for the cut bit. But it ends near bit runs early. Their values can still feed slope math. The primary-instance ID comes from a texture and can vary within a primitive or a 2Ã—2 derivative group. The existing device and material contracts do not guarantee that this new rejection is safe.
 
 The current CSG path makes the dependency concrete: `nwbAvboitCsgPixelDiscard` calls `nwbCsgPixelWorldDistanceTolerance`, which evaluates `ddx` and `ddy` of world position. Authored `nwbMaterialSurface` hooks also have no derivative-free restriction and may use implicit-LOD texture sampling. Evaluating only the CSG footprint before the early rejection so would not prove safety for the later material hook.
 

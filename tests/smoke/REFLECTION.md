@@ -60,9 +60,7 @@ the temporal suite runs from that directory.
 The cases are:
 
 - `offscreen`: the camera is at `(0, 1.4, -6)`, facing `+Z` with a 60-degree
-  vertical FOV. A smooth opaque mirror lies at `z=0`. Red and green sphere markers
-  sit behind the camera at `z=-8`, so their mirror images have virtual depth
-  `z=+8`, 14 units from the camera. The two reflected colors must appear in their
+  vertical FOV. A smooth opaque mirror lies at `z=0`. Red and green ball marks sit past the cam at `z=-8`. Their glass shots hold true depth `z=+8`, 14 lengths from the cam. The two reflected colors must appear in their
   geometrically predicted regions. Disabled and screen/environment captures must
   contain neither colored marker.
 - `moved`: both offscreen markers shift right by 0.9 world units. Their images
@@ -76,9 +74,7 @@ The cases are:
   deliberately a high-index optical stress fixture, not ordinary window glass;
   coverage is zero and absorption is disabled.
 - `onscreen`: the wall mirror remains at `z=0`, and two-sided upright red/green
-  panels lie at `z=-3`, centered at `x=-1.7/+1.7`, `y=1.0/2.0`. Their direct
-  camera images are three units away, near screen `x=127/833`; the mirror images
-  have virtual depth `z=+3`, nine units away, near `x=362/598`. Separate projected
+  panels lie at `z=-3`, centered at `x=-1.7/+1.7`, `y=1.0/2.0`. Their straight cam shots sit three lengths off, near screen `x=127/833`. Their glass shots hold true depth `z=+3`, nine lengths off, near `x=362/598`. Separate projected
   rectangles ensure direct visibility cannot pass as reflection. Reflected rays
   approach the panel backs, so SSR has provisional confidence capped at 0.5.
   Hybrid resolves that ambiguity through hardware; this case cannot prove ray
@@ -92,9 +88,7 @@ The cases are:
   lose that green reflection; hybrid must retain it. The red panel remains an
   on-screen control.
 - `floor`: the mirror is a horizontal `y=0` plane, with half extents of four
-  units in X/Z. Both upright panels are at `y=2, z=3`, facing the camera. Their
-  direct images are near `y=318`; reflection through the floor puts their virtual
-  centers at `y=-2`, near screen `y=596`, with the same `x=362/598` centers.
+  units in X/Z. Both upright panels are at `y=2, z=3`, facing the camera. Their straight shots sit near `y=318`. Floor bounce puts their true hubs at `y=-2`, near screen `y=596`, with the same `x=362/598` hubs.
   Camera and reflected rays approach the marker fronts, providing a separate
   fixture for confident SSR. Image agreement establishes visible behavior;
   the completed GPU counters below separately prove hardware ray savings.
@@ -108,9 +102,7 @@ and 64 hardware rays per frame. The default `--suite all` runs all 22.
 It requires the matching accepted-route diagnostic, normal
 shutdown, nonempty actual framebuffer data, and strict runtime/validation logs.
 Unsupported required hardware is a skip unless `--require-hardware` was selected.
-The application must self-exit within each capture timeout. The outer runner
-allows an additional 90 seconds for bounded child startup and process/logserver
-cleanup, rather than interrupting that cleanup at the capture deadline.
+The application must self-exit within each capture timeout. The far runner gives 90 more secs for capped child start and run/log-server clean. It does not cut that clean at the shot end.
 
 The fixture enables `ReflectionSettings::diagnosticsEnabled` and polls
 `RendererSystem::tryGetLatestReflectionStatistics` without waiting. It logs each
@@ -122,9 +114,7 @@ the capture harness's `--log-output` option. Logs are written before validation
 so timeout and validation failures retain their collected evidence. Each completed
 sample must match its capture's mode, 960x720 dimensions, budget and queue
 capacity, and have an accepted token/device identity. Static captures reject
-mixed generations, stale or out-of-order sequence/frame/token values. Hardware
-rays may never exceed either effective budget or candidate count, including on
-warm-up frames, and the outcomes must satisfy:
+mixed generations, stale or out-of-order sequence/frame/token values. Card rays must never pass the true cap or try count. This holds on warm frames too. The ends must meet:
 
 ```text
 opaquePixels + glassPixels = screenHits + hardwareHits + fallbackPixels
@@ -168,20 +158,13 @@ The completed stage-three run measured the following reflected marker areas:
 | Wall mirror (`onscreen`) | 1,410 / 1,942 | 1,470 / 2,058 | 1,470 / 2,058 |
 | Floor mirror (`floor`) | 1,470 / 2,058 | 1,470 / 2,058 | 1,470 / 2,058 |
 
-All these marker pixels were within their predicted regions. In the boundary
-case, screen mode retained 1,410 red pixels and lost the offscreen green marker
-entirely; hybrid retained 1,470 red and 2,058 green pixels. The on-screen sources
-moved inward by exactly 52 pixels in the captures, versus a 51.96-pixel prediction;
-their screen reflections moved by approximately 17.54/17.55 pixels, versus
-17.32 predicted. Hybrid also retained both fully offscreen sphere reflections.
-The opaque/glass comparison again measured 3,880/3,881 added reflection pixels,
-retained all 12,811 foreground pixels, and found no added foreground or changed
+All these marker pixels were within their predicted regions. In the edge case, screen mode kept 1,410 red pixels. It lost the far green mark fully. Mixed mode kept 1,470 red and 2,058 green pixels. The on-screen sources
+moved in by 52 true pixels in the grabs, past a 51.96-pixel guess. Their screen bounces moved near 17.54/17.55 pixels, past 17.32 guessed. Hybrid also retained both fully offscreen sphere reflections.
+The solid/glass weigh again read 3,880/3,881 added bounce pixels. It kept all 12,811 front pixels. It found no added front or changed
 exterior pixels.
 
 Visual inspection shows the wall-mirror SSR rectangles have small missing edge
-portions; hardware/hybrid restore their complete shapes. The floor screen capture
-contains black missing-background patches just above the colored reflections,
-where the camera source image cannot supply the occluded backdrop. Hybrid fills
+portions; hardware/hybrid restore their complete shapes. The floor screen shot holds black blank-back fills just past the tinted bounces. The cam true shot cannot give the hid back there. Hybrid fills
 those regions through hardware continuation. Matching marker areas does not
 prove complete image equivalence or remove this screen-only visibility limit.
 
@@ -195,9 +178,7 @@ frame-time improvement.
 Each limited-budget capture supplied 13 completed samples from frame three or
 later. Both counted 63,652 hardware candidates and 179,684 accepted screen hits.
 The zero-budget case issued zero hardware rays with a one-entry queue allocation.
-The 64-ray case allocated 64 queue entries and issued exactly 64 rays. Those
-64 rays missed in this capture, so both controls retained 63,652 fallback pixels;
-zero hardware hits is valid when the budget selects rays that miss. Their visible
+The 64-ray case allocated 64 queue entries and issued exactly 64 rays. Those 64 rays missed in this grab. So both checks kept 63,652 fall-back pixels. Zero card hits stays good when the cap picks rays that miss. Their visible
 floor markers and outcome partitions passed the same checks.
 
 Build and run on the Windows ARM64 debug preset:
@@ -235,9 +216,7 @@ Remaining work and limits are set:
   inputs. Additional reflection, shadow, GI, and transparent-volume transport at
   a secondary hit are not traced. A second transparent glass surface can so
   hide content that full optical transport would reveal.
-- Primary glass reflection is composited behind foreground AVBOIT. The paired
-  fixture checks this order and visible reflection on glass; it is not a numerical
-  proof of full reflection/refraction energy conservation or multilayer optics.
+- Primary glass reflection is composited behind foreground AVBOIT. The paired set checks this rank and seen bounce on glass. It is not a num proof of full bounce/bend power keep or multilayer optics.
 - The stage-three cases distinguish on-screen reflection, uncertain back-facing
   hits, front-facing floor hits, and offscreen continuation. They do not prove
   screen visibility for hidden geometry or reflected secondary transparent
@@ -280,9 +259,7 @@ by mip count or multiply by mip count. A valid benchmark must normalize against
 completed source-frame coverage and use frame critical-path timing for the
 end-to-end comparison.
 
-Collect repeated, interleaved route runs after shader/history warm-up. Compare the
-`render.frame` critical path and affected reflection scopes alongside unaffected
-controls such as `render.opaque_regular`, `render.shadow_visibility`, and applicable
+Collect repeated, interleaved route runs after shader/history warm-up. Weigh the `render.frame` hot path and hit bounce scopes with flat checks such as `render.opaque_regular`, `render.shadow_visibility`, and applicable
 caustic scopes; do not sum overlapping packet envelopes. CPU-visible counters
 must retain their originating frame/route and come only from completed accepted
 submissions. Ray savings require actual ray-count evidence, and timing changes

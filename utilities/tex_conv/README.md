@@ -131,5 +131,4 @@ start paired publish. Deal owner flags stay live clean-up state. This holds a
 staged path made before a later write fails. See [made values and set
 faults](../../docs/expected_results.md).
 
-The tool checks cover LDR/HDR pack, linear color change, full cube and volume
-mip chains, alpha swaps, ready binary take-in, and failed-publish rescue.
+The tool checks span LDR/HDR pack, straight tint move, full cube and bulk mip runs, clear swaps, ripe take-in, and lost-send save.

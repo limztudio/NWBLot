@@ -40,12 +40,12 @@ python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke n
 ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-failure
 ```
 
-The seven scene tests cover overlapping transparent meshes, two clipped CSG poses,
-converged sphere caustics with refraction, animated skinned glass, the full
-20-body scene before/after an odd-sized resize, and the dedicated GI scene.
-They require the Loader disabled policy and software shadow dispatch, reject
-hardware traversal/producer markers, and request selected GPU validation
-outside the Final configuration. Caustic
+The seven scene tests span lap clear webs, two cut CSG poses,
+joined ball burns with bend, moved skinned glass, the full
+20-thing scene past an odd-size grow, and the set GI scene.
+They need the Loader off rule and soft dark send. They turn down
+card walk/make marks. They ask set card proof
+out of the End set. Caustic
 cases also require the software photon producer. Warnings, errors,
 assertions and validation diagnostics fail the capture harness.
 
@@ -83,7 +83,7 @@ The GI set owns its test mats, BXDF sets, and scene list under
 `<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These shots and the cover probe run from that folder. The formal surfel-GI base scene keeps the shared `skinning_culling_benchmark_runtime` cook.
 
 The free and off card ray-trace rules use the same still scene and shot true-model after plain back pick. Each weighs plain cut mesh shape, same CSG with two lap box cutters, and a no-cut kept shot. One zone weighs blue bounced light through a gap. One more weighs green light bounced from a made wall to the cut hole. A free pane must take GI in each arm. The plain base must move from the no-cut kept shot first. Then CSG same can pass.
-Shown grids also need 95% or more cover of the through gap and back wall in both the plain base and CSG shots. They need 5% or less in the no-cut shot. These gates spot half gaps and in lap walls that a small zone GI mean can miss.
+Shown grids also need 95% or more lap of the through gap and back wall in both the plain base and CSG shots. They need 5% or less in the no-cut shot. These gates spot half gaps and in lap walls that a small zone GI mean can miss.
 
 A third build puts a shut box and an open quad in one mesh. The same cutter cuts a bar from both. Its base uses match cut shape and kept open side quads. A no-cut green bar gives the false-good kept shot. The true-model checks pass cover and GI. It checks red floor light from kept open tris. It checks seen kept-face glow. It checks RGB match that turns down light from cut green tris.
 

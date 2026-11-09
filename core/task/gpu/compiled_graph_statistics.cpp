@@ -5,8 +5,6 @@
 #include "compiled_graph.h"
 #include "task_graph.h"
 
-#include <core/task/gpu/compiler_analysis_types.adhd.h>
-
 #include <global/hash_utils.h>
 
 
@@ -25,7 +23,7 @@ namespace __hidden_gpu_compiled_graph_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_ConcurrentSharingAdviceSignatureThreshold = s_GpuTaskConcurrentSharingAdviceSignatureThreshold;
+inline constexpr u32 s_ConcurrentSharingAdviceSignatureThreshold = 2u;
 
 using OwnershipTransferKey = NotNull<const GpuCompiledOwnershipTransfer*>;
 
@@ -52,7 +50,10 @@ struct OwnershipTransferSignatureEqual{
     }
 };
 
-using OwnershipResourceStatistics = GpuOwnershipResourceStatistics;
+struct OwnershipResourceStatistics{
+    usize lastAdviceQueueIndex = Limit<usize>::s_Max;
+    u8 avoidableSignatureCount = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

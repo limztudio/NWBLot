@@ -40,7 +40,7 @@ namespace ResourceType{
 };
 
 struct BindingLayoutItem{
-    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_BindingLayoutItemByteSize;
+    static constexpr usize s_ByteSize = 8u;
 
     u32 slot;
 
@@ -109,7 +109,7 @@ public:
 // BindlessLayoutType describes descriptor classes in the global heap.
 // Slang bindings and host layouts must agree on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
-    static constexpr u8 s_BindlessLayoutTypeImmutableBase = NWB::Core::HardwareRayTracingPolicy::s_BindlessLayoutTypeImmutableBase;
+    static constexpr u8 s_BindlessLayoutTypeImmutableBase = 0;
     enum Enum : u8{
         Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
@@ -152,7 +152,7 @@ using BindingLayoutHandle = GraphicsBackend::Handle<BindingLayout>;
 
 
 struct DescriptorWriteItem{
-    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_DescriptorWriteItemByteSize;
+    static constexpr usize s_ByteSize = 40u;
 
     union{
         TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV

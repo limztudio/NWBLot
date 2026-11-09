@@ -234,7 +234,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
 
         const usize transformBufferSize = transformCount * sizeof(VkTransformMatrixKHR);
-        constexpr u32 s_TransformDeviceAddressAlignment = VulkanDefaults::s_VulkanDefaultTransformDeviceAddressAlignment;
+        constexpr u32 s_TransformDeviceAddressAlignment = 16u;
         const auto transformInput = suballocateBuildInput(static_cast<u64>(transformBufferSize), s_TransformDeviceAddressAlignment, NWB_TEXT("allocate BLAS transform input"));
         if(!transformInput)
             return;

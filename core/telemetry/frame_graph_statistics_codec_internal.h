@@ -8,8 +8,6 @@
 #include "frame_graph.h"
 
 #include <core/alloc/scratch.h>
-#include <core/telemetry/frame_graph_types.adhd.h>
-#include <core/telemetry/local_values.adhd.h>
 
 #include <global/binary.h>
 #include <global/overflow.h>

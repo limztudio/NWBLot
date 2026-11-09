@@ -3,9 +3,8 @@
 
 
 #include "linux_platform.h"
+#include "arena_names.h"
 
-#include <core/frame/arena_names.adhd.h>
-#include <core/frame/frame_platform_values.adhd.h>
 #include <core/common/log.h>
 #include <core/alloc/scratch.h>
 
@@ -33,14 +32,14 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_X11BackendName = FrameDetail::s_FramePlatformX11BackendName;
-inline constexpr StringView s_WaylandBackendName = FrameDetail::s_FramePlatformWaylandBackendName;
-inline constexpr StringView s_NoneBackendName = FrameDetail::s_FramePlatformNoneBackendName;
-inline constexpr StringView s_LinuxBackendEnvName = FrameDetail::s_FramePlatformLinuxBackendEnvName;
-inline constexpr StringView s_X11BackendRequest = FrameDetail::s_FramePlatformX11BackendRequest;
-inline constexpr StringView s_WaylandBackendRequest = FrameDetail::s_FramePlatformWaylandBackendRequest;
-inline constexpr StringView s_XdgSessionTypeEnvName = FrameDetail::s_FramePlatformXdgSessionTypeEnvName;
-inline constexpr StringView s_WaylandDisplayEnvName = FrameDetail::s_FramePlatformWaylandDisplayEnvName;
+inline constexpr StringView s_X11BackendName = "X11";
+inline constexpr StringView s_WaylandBackendName = "Wayland";
+inline constexpr StringView s_NoneBackendName = "None";
+inline constexpr StringView s_LinuxBackendEnvName = "NWB_LINUX_BACKEND";
+inline constexpr StringView s_X11BackendRequest = "x11";
+inline constexpr StringView s_WaylandBackendRequest = "wayland";
+inline constexpr StringView s_XdgSessionTypeEnvName = "XDG_SESSION_TYPE";
+inline constexpr StringView s_WaylandDisplayEnvName = "WAYLAND_DISPLAY";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +56,7 @@ static StringView BackendName(Common::LinuxFrameBackend::Enum backend)noexcept{
 }
 
 
-inline constexpr usize s_LinuxBackendOrderCapacity = FrameDetail::s_FramePlatformLinuxBackendOrderCapacity;
+inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
 struct LinuxBackendOrder final{
     Array<Common::LinuxFrameBackend::Enum, s_LinuxBackendOrderCapacity> backends = {};

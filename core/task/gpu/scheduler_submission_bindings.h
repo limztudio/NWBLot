@@ -33,7 +33,10 @@ struct ResolvedSubmissionHook{
     QueueSubmissionPreSubmitHook hook;
 };
 
-using TimingPacketChain = ::NWB::Core::GpuTaskTimingPacketChain;
+struct TimingPacketChain{
+    usize first = Limit<usize>::s_Max;
+    usize last = Limit<usize>::s_Max;
+};
 
 struct TaskSubmissionBindings : NoCopy{
     Alloc::ScratchArena& scratchArena;

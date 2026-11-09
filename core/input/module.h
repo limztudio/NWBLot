@@ -5,10 +5,10 @@
 #pragma once
 
 
+#include "arena_names.h"
 #include "input_event.h"
 
 #include <core/global.h>
-#include <core/input/arena_names.adhd.h>
 #include <core/alloc/module.h>
 
 #include <global/scope_exit.h>
@@ -34,7 +34,7 @@ namespace HandlerMutationType{
 
 class InputDispatcher{
 private:
-    static constexpr usize s_KeyboardScancodeCount = NWB::Core::InputCodeValues::s_InputCodeValueKeyboardScancodeCount;
+    static constexpr usize s_KeyboardScancodeCount = 512u;
 
 
 private:

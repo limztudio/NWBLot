@@ -4,10 +4,7 @@
 
 #include "diagnostic.h"
 
-#include "codec_validation.adhd.h"
-
 #include <core/common/log.h>
-#include <core/telemetry/local_values.adhd.h>
 
 #include <global/assert.h>
 #include <global/binary.h>
@@ -29,8 +26,8 @@ namespace __hidden_telemetry_diagnostic{
 
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
-inline constexpr usize s_PayloadTextFieldCount = ::NWB::Core::Telemetry::s_TelemetryDiagnosticPayloadTextFieldCount;
-inline constexpr StringView s_LifecycleCategory = ::NWB::Core::Telemetry::s_TelemetryDiagnosticLifecycleCategory;
+inline constexpr usize s_PayloadTextFieldCount = 5u;
+inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +35,10 @@ inline constexpr StringView s_LifecycleCategory = ::NWB::Core::Telemetry::s_Tele
 
 [[nodiscard]] static b8 AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
     return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
+}
+
+[[nodiscard]] static b8 ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
+    return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~DiagnosticPayloadFlag::TerminatesProcess) == 0u;
 }
 
 [[nodiscard]] static EncodedDiagnosticPayloadHeader MakePayloadHeader(const DiagnosticEventRecord& record)noexcept{
@@ -154,7 +155,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* const payload, co
     if(!decodedHeader)
         return MakeUnexpected(Failure{});
     const EncodedDiagnosticPayloadHeader& header = *decodedHeader;
-    if(!IsValidDiagnosticWireHeader(header))
+    if(!__hidden_telemetry_diagnostic::ValidateHeader(header))
         return MakeUnexpected(Failure{});
 
     parsedPayload.instructionPointer = header.instructionPointer;

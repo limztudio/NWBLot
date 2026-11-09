@@ -20,7 +20,7 @@ NWB_VULKAN_BEGIN
 
 
 namespace DeviceExtensionFeature{
-    static constexpr u8 s_DeviceExtensionFeatureNoneBase = VulkanDefaults::s_VulkanDefaultDeviceExtensionFeatureNoneBase;
+    static constexpr u8 s_DeviceExtensionFeatureNoneBase = 0;
     enum Enum : u8{
         None = s_DeviceExtensionFeatureNoneBase,
         AccelerationStructure,
@@ -67,7 +67,7 @@ inline constexpr Array<DeviceExtensionEntry, 10> s_RayTracingDeviceExtensions = 
 
 
 namespace DeviceExtensionRequestAction{
-    static constexpr u8 s_DeviceExtensionRequestActionEnableBase = VulkanDefaults::s_VulkanDefaultDeviceExtensionRequestActionEnableBase;
+    static constexpr u8 s_DeviceExtensionRequestActionEnableBase = 0;
     enum Enum : u8{
         Enable = s_DeviceExtensionRequestActionEnableBase,
         Omit,

@@ -5,8 +5,6 @@
 #include "text_input_state.h"
 
 #include <core/os/text_input_text.h>
-#include <core/os/platform_values.adhd.h>
-
 #include <global/bit.h>
 #include <global/simplemath.h>
 
@@ -26,7 +24,7 @@ namespace __hidden_wayland_text_input_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_MaxSurroundingBytes = ::NWB::Core::s_OsLinuxWaylandTextInputStateMaxSurroundingBytes;
+static constexpr usize s_MaxSurroundingBytes = 4000u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

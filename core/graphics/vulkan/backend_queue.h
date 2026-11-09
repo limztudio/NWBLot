@@ -71,7 +71,11 @@ public:
         u32 recordingWorkerIndex = 0u;
         b8 graphSubmissionAuthorized = false;
     };
-    using SubmissionReceipt = VulkanDefaults::VulkanQueueSubmissionReceipt;
+    struct SubmissionReceipt{
+        u64 submittedID = 0u;
+        usize timelineWaitCount = 0u;
+        b8 accepted = false;
+    };
     struct SubmissionFailure{
         u64 lastSubmittedID = 0u;
         VkResult nativeResult = VK_SUCCESS;

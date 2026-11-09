@@ -25,7 +25,7 @@ namespace CrashDetail{
 
 #if defined(NWB_PLATFORM_ANDROID)
 static b8 WriteAndroidCollectionNote(Alloc::ScratchArena& scratchArena, const CrashRequest& request){
-    constexpr AStringView s_CollectionNote = ::NWB::Core::Crash::PackageValues::s_UploadCollectionNote;
+    constexpr AStringView s_CollectionNote = "application_exit_info=not_collected_by_native_layer\n" "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
     return WriteTextFile(RequestPendingDirectory(scratchArena, request) / PackageNames::s_AndroidCollectionFileName, s_CollectionNote);
 }
 

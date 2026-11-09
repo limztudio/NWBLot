@@ -3,9 +3,7 @@
 
 
 #include "package_upload_transport.h"
-
-#include <core/crash/arena_names.adhd.h>
-#include <core/crash/package_values.adhd.h>
+#include "arena_names.h"
 
 #include <global/diagnostics.h>
 #include <global/optional.h>
@@ -29,14 +27,14 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_AuthorizationBearerPrefix = ::NWB::Core::Crash::PackageValues::s_UploadAuthorizationBearerPrefix;
+inline constexpr StringView s_AuthorizationBearerPrefix = "Authorization: Bearer ";
 inline constexpr usize s_AuthorizationBearerPrefixLength = s_AuthorizationBearerPrefix.size();
-inline constexpr long s_CurlOptionEnabled = ::NWB::Core::Crash::PackageValues::s_UploadCurlOptionEnabled;
-inline constexpr long s_CrashUploadConnectTimeoutMilliseconds = ::NWB::Core::Crash::PackageValues::s_UploadCrashUploadConnectTimeoutMilliseconds;
-inline constexpr long s_CrashUploadTimeoutMilliseconds = ::NWB::Core::Crash::PackageValues::s_UploadCrashUploadTimeoutMilliseconds;
-inline constexpr long s_HttpSuccessStatusBegin = ::NWB::Core::Crash::PackageValues::s_UploadHttpSuccessStatusBegin;
-inline constexpr long s_HttpSuccessStatusEnd = ::NWB::Core::Crash::PackageValues::s_UploadHttpSuccessStatusEnd;
-inline constexpr StringView s_UploadCategory = ::NWB::Core::Crash::PackageValues::s_UploadUploadCategory;
+inline constexpr long s_CurlOptionEnabled = 1L;
+inline constexpr long s_CrashUploadConnectTimeoutMilliseconds = 1000L;
+inline constexpr long s_CrashUploadTimeoutMilliseconds = 5000L;
+inline constexpr long s_HttpSuccessStatusBegin = 200L;
+inline constexpr long s_HttpSuccessStatusEnd = 300L;
+inline constexpr StringView s_UploadCategory = "crash_package_upload";
 
 
 
@@ -229,4 +227,5 @@ NWB_CRASH_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

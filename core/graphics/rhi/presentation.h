@@ -40,7 +40,9 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return backBuffer.valid() && framebuffer; }
 };
 
-using PresentationFailure = NWB::Core::HardwareRayTracingPolicy::PresentationFailure;
+struct PresentationFailure{
+    b8 presentationAccepted = false;
+};
 
 namespace PresentationReceiptStatus{
     enum Enum : u8{ Pending, Accepted, Rejected };

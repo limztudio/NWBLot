@@ -24,7 +24,7 @@ class CommandListResourceSelection;
 
 // Queue identity for command lists and state handoffs (avoids pulling in device.h).
 namespace CommandQueue{
-    static constexpr u8 s_CommandQueueGraphicsBase = NWB::Core::HardwareRayTracingPolicy::s_CommandQueueGraphicsBase;
+    static constexpr u8 s_CommandQueueGraphicsBase = 0;
     enum Enum : u8{
         Graphics = s_CommandQueueGraphicsBase,
         Compute,
@@ -103,7 +103,7 @@ public:
 };
 
 namespace GpuQueueCapability{
-    static constexpr u8 s_GpuQueueCapabilityNoneBase = NWB::Core::HardwareRayTracingPolicy::s_GpuQueueCapabilityNoneBase;
+    static constexpr u8 s_GpuQueueCapabilityNoneBase = 0u;
     enum Mask : u8{
         None = s_GpuQueueCapabilityNoneBase,
         Transfer = 1u << 0u,
@@ -180,7 +180,10 @@ typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 // One begin/end cycle. Query, queue, generation, and reset authorization stop a reused buffer from closing another cycle.
-using TimerQueryRecordingEndpoints = NWB::Core::HardwareRayTracingPolicy::TimerQueryRecordingEndpoints;
+struct TimerQueryRecordingEndpoints{
+    b8 recordsBegin = false;
+    b8 recordsEnd = false;
+};
 
 struct TimerQueryRecordingToken{
     TimerQuery* query = nullptr;
@@ -211,7 +214,7 @@ public:
 
 // Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic.
 struct TimerQueryResult{
-    static constexpr u32 s_FullWidthBits = NWB::Core::HardwareRayTracingPolicy::s_TimerQueryResultFullWidthBits;
+    static constexpr u32 s_FullWidthBits = 64u;
 
     u64 beginTicks = 0u;
     u64 endTicks = 0u;
@@ -522,7 +525,11 @@ public:
     constexpr ComputeState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 };
 
-using DispatchIndirectArguments = NWB::Core::HardwareRayTracingPolicy::DispatchIndirectArguments;
+struct DispatchIndirectArguments{
+    u32 groupsX = 1;
+    u32 groupsY = 1;
+    u32 groupsZ = 1;
+};
 
 struct MeshletState{
     MeshletPipeline* pipeline = nullptr;

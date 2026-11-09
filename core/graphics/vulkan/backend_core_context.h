@@ -153,8 +153,8 @@ public:
     {}
 };
 
-inline constexpr u32 s_MaxSharedQueueFamilyCount = VulkanDefaults::s_VulkanDefaultMaxSharedQueueFamilyCount;
-inline constexpr u32 s_MinConcurrentSharingQueueFamilyCount = VulkanDefaults::s_VulkanDefaultMinConcurrentSharingQueueFamilyCount;
+inline constexpr u32 s_MaxSharedQueueFamilyCount = 6u;
+inline constexpr u32 s_MinConcurrentSharingQueueFamilyCount = 2u;
 
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;

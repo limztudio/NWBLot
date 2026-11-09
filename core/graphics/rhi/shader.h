@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 
 namespace ShaderType{
-    static constexpr u8 s_ShaderTypeVertexStageBase = NWB::Core::HardwareRayTracingPolicy::s_ShaderTypeVertexStageBase;
+    static constexpr u8 s_ShaderTypeVertexStageBase = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +120,7 @@ namespace ShaderType{
 };
 
 struct ShaderDesc{
-    static constexpr AStringView s_DefaultEntryName = NWB::Core::HardwareRayTracingPolicy::s_ShaderDefaultEntryName;
+    static constexpr AStringView s_DefaultEntryName = "main";
 
     Name debugName;
     // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.

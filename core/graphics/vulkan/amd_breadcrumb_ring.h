@@ -7,8 +7,6 @@
 
 #include "module.h"
 
-#include <core/graphics/vulkan/host_readback_types.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,9 +25,24 @@ namespace VulkanDetail{
 
 class AmdBreadcrumbRing final{
 public:
-    using Layout = AmdBreadcrumbRingLayout;
-    using Slot = AmdBreadcrumbRingSlot;
-    using Reservation = AmdBreadcrumbReservation;
+    struct Layout{
+        usize physicalQueueCount = 0u;
+        usize slotsPerQueue = 0u;
+        usize totalSlotCount = 0u;
+        VkDeviceSize totalByteSize = 0u;
+        u16 deviceGeneration = 0u;
+    };
+
+    struct Slot{
+        usize flatSlot = 0u;
+        VkDeviceSize byteOffset = 0u;
+    };
+
+    struct Reservation{
+        u64 serial = 0u;
+        usize localSlot = 0u;
+        u32 marker = 0u;
+    };
 
 
 public:

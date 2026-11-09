@@ -3,7 +3,6 @@
 
 
 #include "compiler_internal.h"
-#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 #include <core/graphics/rhi/queue_sharing.h>
 
@@ -27,10 +26,10 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 s_TinyQueueCostWeight = s_GpuTaskTinyQueueCostWeight;
-inline constexpr u64 s_SmallQueueCostWeight = s_GpuTaskSmallQueueCostWeight;
-inline constexpr u64 s_MediumQueueCostWeight = s_GpuTaskMediumQueueCostWeight;
-inline constexpr u64 s_LargeQueueCostWeight = s_GpuTaskLargeQueueCostWeight;
+inline constexpr u64 s_TinyQueueCostWeight = 1u;
+inline constexpr u64 s_SmallQueueCostWeight = 2u;
+inline constexpr u64 s_MediumQueueCostWeight = 4u;
+inline constexpr u64 s_LargeQueueCostWeight = 8u;
 
 
 inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);

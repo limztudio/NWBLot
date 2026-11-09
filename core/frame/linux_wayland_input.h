@@ -18,8 +18,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/frame/frame_platform_values.adhd.h>
-
 #include <global/timer.h>
 
 #pragma push_macro("interface")
@@ -47,8 +45,8 @@ namespace FrameDetail{
 // Owns the Wayland seat and keyboard state of one frame.
 class WaylandFrameInput{
 private:
-    static constexpr i32 s_DefaultKeyRepeatRate = FrameDetail::s_FramePlatformDefaultKeyRepeatRate;
-    static constexpr i32 s_DefaultKeyRepeatDelayMs = FrameDetail::s_FramePlatformDefaultKeyRepeatDelayMs;
+    static constexpr i32 s_DefaultKeyRepeatRate = 25;
+    static constexpr i32 s_DefaultKeyRepeatDelayMs = 600;
 
 
 private:

@@ -1,11 +1,4 @@
 nwb_declare_static_library(nwb_crash)
-nwb_target_adhd_sources(nwb_crash NAMESPACE "NWB::Core::Crash::CrashArenaScope" SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_names.adhd")
-nwb_declare_static_library(nwb_crash_package_names)
-nwb_target_adhd_sources(nwb_crash_package_names NAMESPACE "NWB::Core::Crash::PackageNames" SOURCES "${CMAKE_CURRENT_LIST_DIR}/package_names.adhd")
-nwb_declare_static_library(nwb_crash_reason_names)
-nwb_target_adhd_sources(nwb_crash_reason_names NAMESPACE "NWB::Core::Crash::CrashReasonNames" SOURCES "${CMAKE_CURRENT_LIST_DIR}/reason_names.adhd")
-nwb_declare_static_library(nwb_crash_types)
-nwb_target_adhd_sources(nwb_crash_types NAMESPACE "NWB::Core::Crash::CrashTypes" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/internal_values.adhd")
 set(NWB_CRASH_HANDLER_OUTPUT_NAME "crash_handler")
 target_compile_definitions(nwb_crash PRIVATE NWB_CRASH_HANDLER_EXECUTABLE_NAME="${NWB_CRASH_HANDLER_OUTPUT_NAME}")
 target_sources(nwb_crash PRIVATE
@@ -33,11 +26,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android
     )
 endif()
 target_link_libraries(nwb_crash PUBLIC nwb_alloc)
-target_link_libraries(nwb_crash PUBLIC nwb_crash_package_names nwb_crash_reason_names)
-target_link_libraries(nwb_crash PUBLIC nwb_crash_types)
-
-nwb_declare_static_library(nwb_crash_package_values)
-nwb_target_adhd_sources(nwb_crash_package_values NAMESPACE "NWB::Core::Crash::PackageValues" SOURCES "${CMAKE_CURRENT_LIST_DIR}/package_values.adhd")
 
 nwb_declare_static_library(nwb_crash_package)
 target_sources(nwb_crash_package PRIVATE
@@ -51,7 +39,6 @@ target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_crash_package PRIVATE nwb_crash)
-target_link_libraries(nwb_crash_package PUBLIC nwb_crash_package_names nwb_crash_reason_names nwb_crash_types nwb_crash_package_values)
 target_link_libraries(nwb_crash_package PRIVATE nwb::curl)
 if(WIN32)
     target_link_libraries(nwb_crash_package PRIVATE dbghelp)

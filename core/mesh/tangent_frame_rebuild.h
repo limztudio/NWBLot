@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <core/mesh/tangent_frame_types.adhd.h>
-
 #include <global/expected.h>
 #include <global/containers.h>
 #include <global/simd/frame.h>
@@ -56,9 +54,9 @@ namespace TangentFrameRebuildDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_TangentOrthogonalityTolerance = NWB::Core::s_TangentOrthogonalityTolerance;
-inline constexpr usize s_IndicesPerTriangle = NWB::Core::s_IndicesPerTriangle;
-inline constexpr u32 s_UvComponentMask = NWB::Core::s_UvComponentMask;
+inline constexpr f32 s_TangentOrthogonalityTolerance = 0.001f;
+inline constexpr usize s_IndicesPerTriangle = 3u;
+inline constexpr u32 s_UvComponentMask = 0x3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

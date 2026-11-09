@@ -6,7 +6,6 @@
 
 
 #include <core/global.h>
-#include <core/frame/frame_dimensions.adhd.h>
 
 #include <global/algorithm.h>
 #include <global/limit.h>
@@ -29,11 +28,17 @@ namespace FrameDetail{
 
 // Native positive scale factors have no smaller protocol bound than i32; avoid an overflowing ceil-division numerator.
 [[nodiscard]] inline i32 LogicalDimensionForPixels(const u16 pixelDimension, const i32 bufferScale)noexcept{
-    return ComputeFrameLogicalDimensionForPixels(pixelDimension, bufferScale);
+    const i32 scale = Max(bufferScale, 1);
+    const i32 pixels = pixelDimension > 0u ? static_cast<i32>(pixelDimension) : 1;
+    return DivideUp(pixels, scale);
 }
 
 [[nodiscard]] inline u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 availableDimension)noexcept{
-    return ComputeFrameClampedInitialWindowDimension(requestedDimension, availableDimension);
+    if(availableDimension <= 0)
+        return requestedDimension;
+
+    const u32 clampedDimension = Min<u32>(static_cast<u32>(requestedDimension), static_cast<u32>(availableDimension));
+    return static_cast<u16>(Min<u32>(clampedDimension, s_MaxU16));
 }
 
 

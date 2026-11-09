@@ -202,7 +202,7 @@ void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept{
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
 #include <core/crash/package_archive.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #include <global/filesystem/executable_paths.h>
 #include <global/diagnostics.h>

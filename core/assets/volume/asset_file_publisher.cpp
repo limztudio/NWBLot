@@ -4,7 +4,6 @@
 
 #include "asset_file_publisher.h"
 
-#include <core/assets/volume/built_asset_types.adhd.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -34,12 +33,12 @@ namespace __hidden_asset_file_publisher{
 using ScratchBytes = Vector<u8, ScratchArena>;
 using ScratchPath = ::Path<ScratchArena>;
 
-inline constexpr AStringView s_TemporaryNamePrefix = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetTemporaryNamePrefix;
+inline constexpr AStringView s_TemporaryNamePrefix = ".nwb_";
 inline constexpr char s_TemporaryNameSeparator = '_';
-inline constexpr AStringView s_TemporaryNameExtension = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetTemporaryNameExtension;
-inline constexpr u64 s_TemporarySequenceStep = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetTemporarySequenceStep;
-inline constexpr u32 s_MaxRenameAttempts = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetMaxRenameAttempts;
-inline constexpr StringView s_WarningEventName = ::NWB::Core::Assets::BuiltAssetDetail::s_BuiltAssetWarningEventName;
+inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
+inline constexpr u64 s_TemporarySequenceStep = 1u;
+inline constexpr u32 s_MaxRenameAttempts = 16u;
+inline constexpr StringView s_WarningEventName = "warning";
 Atomic<u64> g_TemporarySequence{0u};
 
 

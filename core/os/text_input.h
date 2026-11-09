@@ -7,8 +7,6 @@
 
 #include <core/alloc/general.h>
 
-#include <core/os/text_input_types.adhd.h>
-
 #include <global/expected.h>
 
 
@@ -22,76 +20,40 @@ NWB_CORE_BEGIN
 
 
 namespace TextInputBackend{
-    enum Enum : u8{
-        Unsupported = NWB::Core::OsTextInputTypes::TextInputBackend::Unsupported,
-        Win32Imm32 = NWB::Core::OsTextInputTypes::TextInputBackend::Win32Imm32,
-        X11Xim = NWB::Core::OsTextInputTypes::TextInputBackend::X11Xim,
-        Wayland = NWB::Core::OsTextInputTypes::TextInputBackend::Wayland,
-    };
+    enum Enum : u8{ Unsupported, Win32Imm32, X11Xim, Wayland };
 };
 
 namespace TextInputAdmission{
     enum Enum : u8{
-        Accepted = NWB::Core::OsTextInputTypes::TextInputAdmission::Accepted,
-        WrongThread = NWB::Core::OsTextInputTypes::TextInputAdmission::WrongThread,
-        InvalidSession = NWB::Core::OsTextInputTypes::TextInputAdmission::InvalidSession,
-        InvalidText = NWB::Core::OsTextInputTypes::TextInputAdmission::InvalidText,
-        InvalidRange = NWB::Core::OsTextInputTypes::TextInputAdmission::InvalidRange,
-        TooLarge = NWB::Core::OsTextInputTypes::TextInputAdmission::TooLarge,
-        QueueFull = NWB::Core::OsTextInputTypes::TextInputAdmission::QueueFull,
-        Unsupported = NWB::Core::OsTextInputTypes::TextInputAdmission::Unsupported,
-        Unavailable = NWB::Core::OsTextInputTypes::TextInputAdmission::Unavailable,
-        Busy = NWB::Core::OsTextInputTypes::TextInputAdmission::Busy,
-        NativeFailure = NWB::Core::OsTextInputTypes::TextInputAdmission::NativeFailure,
+        Accepted, WrongThread, InvalidSession, InvalidText, InvalidRange, TooLarge, QueueFull,
+        Unsupported, Unavailable, Busy, NativeFailure
     };
 };
 
 namespace TextInputChangeCause{
-    enum Enum : u8{
-        InputMethod = NWB::Core::OsTextInputTypes::TextInputChangeCause::InputMethod,
-        Other = NWB::Core::OsTextInputTypes::TextInputChangeCause::Other,
-    };
+    enum Enum : u8{ InputMethod, Other };
 };
 
 namespace TextInputDeletionBasis{
-    enum Enum : u8{
-        Caret,
-        Selection,
-        Count,
-    };
+    enum Enum : u8{ Caret, Selection, Count };
 };
 
 namespace TextInputPollResult{
-    enum Enum : u8{
-        InvalidSession = NWB::Core::OsTextInputTypes::TextInputPollResult::InvalidSession,
-        Pending = NWB::Core::OsTextInputTypes::TextInputPollResult::Pending,
-        Event = NWB::Core::OsTextInputTypes::TextInputPollResult::Event,
-        WrongThread = NWB::Core::OsTextInputTypes::TextInputPollResult::WrongThread,
-    };
+    enum Enum : u8{ InvalidSession, Pending, Event, WrongThread };
 };
 
 namespace TextInputEventKind{
-    enum Enum : u8{
-        Commit = NWB::Core::OsTextInputTypes::TextInputEventKind::Commit,
-        Preedit = NWB::Core::OsTextInputTypes::TextInputEventKind::Preedit,
-        DeleteSurrounding = NWB::Core::OsTextInputTypes::TextInputEventKind::DeleteSurrounding,
-        Cancelled = NWB::Core::OsTextInputTypes::TextInputEventKind::Cancelled,
-    };
+    enum Enum : u8{ Commit, Preedit, DeleteSurrounding, Cancelled };
 };
 
 namespace TextInputCancelReason{
-    enum Enum : u8{
-        FocusLost = NWB::Core::OsTextInputTypes::TextInputCancelReason::FocusLost,
-        NativeCancelled = NWB::Core::OsTextInputTypes::TextInputCancelReason::NativeCancelled,
-        Overflow = NWB::Core::OsTextInputTypes::TextInputCancelReason::Overflow,
-        NativeFailure = NWB::Core::OsTextInputTypes::TextInputCancelReason::NativeFailure,
-    };
+    enum Enum : u8{ FocusLost, NativeCancelled, Overflow, NativeFailure };
 };
 
-inline constexpr usize s_TextInputMaxEvents = NWB::Core::OsTextInputTypes::s_TextInputMaxEvents;
-inline constexpr usize s_TextInputMaxEventTextBytes = NWB::Core::OsTextInputTypes::s_TextInputMaxEventTextBytes;
-inline constexpr usize s_TextInputMaxQueuedTextBytes = NWB::Core::OsTextInputTypes::s_TextInputMaxQueuedTextBytes;
-inline constexpr usize s_TextInputMaxSurroundingBytes = NWB::Core::OsTextInputTypes::s_TextInputMaxSurroundingBytes;
+inline constexpr usize s_TextInputMaxEvents = 64u;
+inline constexpr usize s_TextInputMaxEventTextBytes = 64u * 1024u;
+inline constexpr usize s_TextInputMaxQueuedTextBytes = 256u * 1024u;
+inline constexpr usize s_TextInputMaxSurroundingBytes = 1024u * 1024u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +81,12 @@ public:
 }
 
 // Coordinates are native window-client pixels. Linux surface coordinates are converted by the backend.
-using TextInputRect = NWB::Core::OsTextInputTypes::TextInputRect;
+struct TextInputRect{
+    i32 x = 0;
+    i32 y = 0;
+    i32 width = 1;
+    i32 height = 1;
+};
 
 struct TextInputSessionDesc{
     TextInputRect caret;

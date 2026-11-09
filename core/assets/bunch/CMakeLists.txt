@@ -1,6 +1,5 @@
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_bunch_cook)
-    nwb_target_adhd_sources(nwb_assets_bunch_cook NAMESPACE "NWB::Core::Assets::AssetsBunchCook" SOURCES "${CMAKE_CURRENT_LIST_DIR}/bunch_names.adhd" "${CMAKE_CURRENT_LIST_DIR}/bunch_constants.adhd")
     target_sources(nwb_assets_bunch_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/*.c"
         "${CMAKE_CURRENT_LIST_DIR}/*.cc"

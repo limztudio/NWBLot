@@ -6,7 +6,6 @@
 
 
 #include <core/os/clipboard_text.h>
-#include <core/os/clipboard_pipe.adhd.h>
 
 #include <global/timer.h>
 
@@ -19,6 +18,16 @@ NWB_CORE_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct ClipboardPipe{
+    int readFd = -1;
+    int writeFd = -1;
+};
+
+struct ClipboardPipeReadFailure{
+    ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
+    b8 finished = false;
+};
 
 [[nodiscard]] Expected<ClipboardPipe> OpenClipboardPipe()noexcept;
 void CloseClipboardPipe(int& fd)noexcept;

@@ -24,8 +24,6 @@
 #endif
 
 #include <core/common/log.h>
-#include <core/frame/x11_scroll_types.adhd.h>
-#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/linux/x11/clipboard.h>
 #include <core/os/linux/x11/text_input.h>
 
@@ -54,19 +52,19 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_X11ScrollUpButton = FrameDetail::s_FramePlatformX11ScrollUpButton;
-static constexpr u32 s_X11ScrollDownButton = FrameDetail::s_FramePlatformX11ScrollDownButton;
-static constexpr u32 s_X11ScrollLeftButton = FrameDetail::s_FramePlatformX11ScrollLeftButton;
-static constexpr u32 s_X11ScrollRightButton = FrameDetail::s_FramePlatformX11ScrollRightButton;
-static constexpr u32 s_X11MouseButton4 = FrameDetail::s_FramePlatformX11MouseButton4;
-static constexpr u32 s_X11MouseButton5 = FrameDetail::s_FramePlatformX11MouseButton5;
-static constexpr u32 s_X11MouseButton6 = FrameDetail::s_FramePlatformX11MouseButton6;
-static constexpr u32 s_X11MouseButton7 = FrameDetail::s_FramePlatformX11MouseButton7;
-static constexpr u32 s_X11MouseButton8 = FrameDetail::s_FramePlatformX11MouseButton8;
-static constexpr f64 s_ScrollUnit = FrameDetail::s_FramePlatformScrollUnit;
+static constexpr u32 s_X11ScrollUpButton = 4u;
+static constexpr u32 s_X11ScrollDownButton = 5u;
+static constexpr u32 s_X11ScrollLeftButton = 6u;
+static constexpr u32 s_X11ScrollRightButton = 7u;
+static constexpr u32 s_X11MouseButton4 = 8u;
+static constexpr u32 s_X11MouseButton5 = 9u;
+static constexpr u32 s_X11MouseButton6 = 10u;
+static constexpr u32 s_X11MouseButton7 = 11u;
+static constexpr u32 s_X11MouseButton8 = 12u;
+static constexpr f64 s_ScrollUnit = 1.0;
 // Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
-static constexpr i32 s_InactivePollSleepMs = FrameDetail::s_FramePlatformInactivePollSleepMs;
-static constexpr int s_X11CardinalPropertyFormatBits = FrameDetail::s_FramePlatformX11CardinalPropertyFormatBits;
+static constexpr i32 s_InactivePollSleepMs = 10;
+static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
 static X11KeyboardInput s_Keyboard;
 
@@ -109,6 +107,11 @@ static i32 TranslateMouseButton(u32 button)noexcept{
         return -1;
     }
 }
+
+struct ScrollOffset{
+    f64 x = 0.0;
+    f64 y = 0.0;
+};
 
 [[nodiscard]] static Optional<ScrollOffset> TranslateScroll(const u32 button)noexcept{
     switch(button){
@@ -226,6 +229,13 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
 
     return true;
 }
+
+struct X11WindowState final{
+    u32 width;
+    u32 height;
+    b8 windowVisible;
+    b8 windowIsInFocus;
+};
 
 static Expected<X11WindowState> QueryWindowState(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();

@@ -6,8 +6,6 @@
 #include "gpu_timing_submission_ticket.h"
 #include "backend_selection.h"
 
-#include <core/graphics/internal_names.adhd.h>
-
 #include <global/scope_exit.h>
 #include <global/exception.h>
 
@@ -27,7 +25,7 @@ namespace __hidden_gpu_timing_submission{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GraphicsInternalNames::s_SubmissionScratchArena;
+inline constexpr Name s_SubmissionScratchArena("graphics.gpu_timing.submission_scratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

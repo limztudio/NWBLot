@@ -92,7 +92,7 @@ Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, cons
     const long longLength = static_cast<long>(DivideUpWrapping(maxBytes, s_X11WireUnitBytes));
     const int status = XGetWindowProperty(&display, window, property, 0, longLength, remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
     if(!operation.succeeded() || status != 0)
-        return MakeUnexpected(X11PropertyFailure(status, operation.m_error));
+        return MakeUnexpected(X11PropertyFailure{ .nativeStatus = status, .errorCode = operation.m_error, });
     return result;
 }
 

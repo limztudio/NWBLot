@@ -4,8 +4,6 @@
 
 #include "codec.h"
 
-#include "codec_validation.adhd.h"
-
 #include <global/binary.h>
 
 
@@ -30,6 +28,10 @@ namespace __hidden_telemetry_codec{
 
 [[nodiscard]] static b8 ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
     return ValidatePayloadPointer(payload, payloadBytes) && header.payloadBytes == payloadBytes && header.valid();
+}
+
+[[nodiscard]] static b8 ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
+    return header.magic == s_StreamMagic && header.version == s_TelemetryFormatVersion && header.reserved == 0u;
 }
 
 [[nodiscard]] static EncodedEventHeader EncodeHeader(const EventHeader& header)noexcept{
@@ -204,7 +206,7 @@ Expected<usize, DecodeResult> DecodeEventStream(const void* const bytes, const u
     if(!decodedHeader)
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedHeader });
     const EncodedStreamHeader& streamHeader = *decodedHeader;
-    if(!IsValidTelemetryStreamHeader(streamHeader))
+    if(!__hidden_telemetry_codec::ValidateStreamHeader(streamHeader))
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
     if(streamHeader.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });

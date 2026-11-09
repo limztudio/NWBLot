@@ -33,7 +33,10 @@ private:
     using PointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, GpuTaskGraphDetail::ResourcePointerEqual>;
 
 public:
-    using Publication = GpuGraphResourceImportPublication;
+    struct Publication{
+        b8 identity = false;
+        b8 pointer = false;
+    };
 
     explicit GpuGraphResourceImportIndex(GraphicsArena& arena)noexcept : m_arena(arena){}
     [[nodiscard]] u32 findResourceIdentity(Span<const ResourceNode> resources, const Name& identity)const noexcept;
@@ -50,8 +53,8 @@ public:
 
 private:
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const ResourceNode& resource)noexcept;
-    static constexpr usize s_InlineImportIndexCount = s_GpuGraphInlineImportIndexCount;
-    static constexpr usize s_InitialPointerIndexBucketCount = s_GpuGraphInitialPointerIndexBucketCount;
+    static constexpr usize s_InlineImportIndexCount = 32u;
+    static constexpr usize s_InitialPointerIndexBucketCount = 2u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
     GraphicsArena& m_arena;
     Optional<IdentityIndex> m_resourceIdentityIndex;
@@ -64,4 +67,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

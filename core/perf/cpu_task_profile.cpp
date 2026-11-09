@@ -5,8 +5,6 @@
 #include "cpu_task_profile.h"
 #include "timing.h"
 
-#include <core/perf/cpu_task_profile_names.adhd.h>
-#include <core/perf/cpu_task_profile_values.adhd.h>
 #include <core/common/log.h>
 #include <core/task/cpu/scheduler.h>
 
@@ -28,16 +26,16 @@ namespace __hidden_cpu_task_profile{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CpuTaskProfileNames::s_QueueDelay;
-using CpuTaskProfileNames::s_Execution;
-using CpuTaskProfileNames::s_HandleJoin;
-using CpuTaskProfileNames::s_ScopeJoin;
-using CpuTaskProfileNames::s_SchedulerJoin;
-using CpuTaskProfileNames::s_WorkerIdle;
-inline constexpr usize s_ReadBatchSize = CpuTaskProfileValues::s_ReadBatchSize;
+inline constexpr Name s_QueueDelay("cpu.task.queue_delay");
+inline constexpr Name s_Execution("cpu.task.execution");
+inline constexpr Name s_HandleJoin("cpu.task.handle_join");
+inline constexpr Name s_ScopeJoin("cpu.task.scope_join");
+inline constexpr Name s_SchedulerJoin("cpu.task.scheduler_join");
+inline constexpr Name s_WorkerIdle("cpu.worker.idle");
+inline constexpr usize s_ReadBatchSize = 32u;
 // One SIMDVectorDouble holds four lanes.
-inline constexpr usize s_SecondsBatchLanes = CpuTaskProfileValues::s_SecondsBatchLanes;
-inline constexpr f64 s_NanosecondsToSeconds = CpuTaskProfileValues::s_NanosecondsToSeconds;
+inline constexpr usize s_SecondsBatchLanes = 4u;
+inline constexpr f64 s_NanosecondsToSeconds = 1.0e-9;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

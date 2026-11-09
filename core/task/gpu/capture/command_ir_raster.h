@@ -23,6 +23,8 @@ NWB_CORE_BEGIN
 // Variable vertex bindings and push bytes live in the stream blob.
 // The first retained raster scope supports one color attachment, one viewport, optional scissor, and direct draws.
 #pragma pack(push, 1)
+inline constexpr usize s_GpuCommandIrGraphicsStateRecordBytes = 112u;
+inline constexpr usize s_GpuCommandIrDrawRecordBytes = 36u;
 struct GpuCommandIrRasterVertexWire{
     u32 resourceIndex = Limit<u32>::s_Max;
     u32 slot = 0u;

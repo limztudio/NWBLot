@@ -169,7 +169,7 @@ b8 BackendContext::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
         return false;
     }
-    constexpr u32 s_ComputeAndTransferQueueCount = VulkanDefaults::s_VulkanDefaultComputeAndTransferQueueCount;
+    constexpr u32 s_ComputeAndTransferQueueCount = 2u;
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
     physicalQueues.reserve(1u + m_sameClassQueues.size() + s_ComputeAndTransferQueueCount);
     const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass)noexcept{

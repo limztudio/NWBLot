@@ -3,7 +3,6 @@
 
 
 #include "packet_runtime_internal.h"
-#include <core/task/gpu/task_graph_types.adhd.h>
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection/backend.h>
@@ -85,7 +84,7 @@ namespace __hidden_gpu_packet_runtime_recording_frontier{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MinParallelRecordingPacketCount = s_GpuPacketMinParallelRecordingPacketCount;
+inline constexpr usize s_MinParallelRecordingPacketCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

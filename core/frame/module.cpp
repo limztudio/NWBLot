@@ -3,9 +3,8 @@
 
 
 #include "module.h"
+#include "arena_names.h"
 
-#include <core/frame/frame_timing_names.adhd.h>
-#include <core/frame/arena_names.adhd.h>
 #include <core/common/log.h>
 #include <core/perf/cpu_task_profile.h>
 
@@ -27,7 +26,7 @@ namespace __hidden_frame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using FrameDetail::s_ProjectUpdateCpuTimingScope;
+inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@
 
 #include <logger/server/crash_values.adhd.h>
 
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #if defined(NWB_WITH_AFTERMATH)
 #include <core/crash/aftermath_runtime.h>

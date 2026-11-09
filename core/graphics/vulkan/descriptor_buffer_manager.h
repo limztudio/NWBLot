@@ -31,10 +31,10 @@ class DescriptorBufferManager final : NoCopy{
 public:
     // Resource and sampler descriptor buffers are always bound in this order.
     // A TLAS set reuses the resource descriptor buffer, so the optional third offset extends this fixed topology.
-    static constexpr u32 s_ResourceDescriptorBufferIndex = VulkanDefaults::s_VulkanDefaultResourceDescriptorBufferIndex;
-    static constexpr u32 s_SamplerDescriptorBufferIndex = VulkanDefaults::s_VulkanDefaultSamplerDescriptorBufferIndex;
-    static constexpr u32 s_PersistentDescriptorBufferCount = VulkanDefaults::s_VulkanDefaultPersistentDescriptorBufferCount;
-    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = VulkanDefaults::s_VulkanDefaultDescriptorBufferCountWithAccelStruct;
+    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
+    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
+    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
+    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
 
 
 private:
@@ -145,4 +145,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

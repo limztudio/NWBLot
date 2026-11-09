@@ -24,7 +24,7 @@ namespace __hidden_vulkan_heap{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_HeapLifecycleDiagnosticCategory = VulkanDefaults::s_VulkanDefaultHeapLifecycleDiagnosticCategory;
+static constexpr StringView s_HeapLifecycleDiagnosticCategory = "vulkan_heap_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,12 +107,7 @@ Expected<HeapBindingRange> TryBuildHeapBindingRange(const u64 heapCapacity, cons
     const u64 requiredAlignment = Max<u64>(alignment, 1u);
     if((absoluteBegin % requiredAlignment) != 0u || size > Limit<u64>::s_Max - absoluteBegin)
         return MakeUnexpected(Failure{});
-    HeapBindingRange range;
-    range.localOffset = localOffset;
-    range.size = size;
-    range.absoluteBegin = absoluteBegin;
-    range.absoluteEnd = absoluteBegin + size;
-    return range;
+    return HeapBindingRange{ localOffset, size, absoluteBegin, absoluteBegin + size };
 }
 
 b8 HeapBindingRangesConflict(const HeapBindingRange& first, const HeapBindingResourceClass::Enum firstClass, const HeapBindingRange& second, const HeapBindingResourceClass::Enum secondClass, const u64 bufferImageGranularity)noexcept{

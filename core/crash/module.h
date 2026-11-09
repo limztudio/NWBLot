@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <core/crash/crash_types.adhd.h>
-
 #include <core/alloc/module.h>
 
 #include <global/filesystem.h>
@@ -25,40 +23,53 @@ NWB_CRASH_BEGIN
 
 namespace DumpDetailMode{
     enum Enum : u8{
-        Small = NWB::Core::Crash::CrashTypes::DumpDetailMode::Small,
-        Full = NWB::Core::Crash::CrashTypes::DumpDetailMode::Full,
+        Small,
+        Full,
     };
 };
 
 namespace CrashDumpStatus{
     enum Enum : u8{
-        NotInstalled = NWB::Core::Crash::CrashTypes::CrashDumpStatus::NotInstalled,
-        RequestFailed = NWB::Core::Crash::CrashTypes::CrashDumpStatus::RequestFailed,
-        RequestQueued = NWB::Core::Crash::CrashTypes::CrashDumpStatus::RequestQueued,
-        RequestTimedOut = NWB::Core::Crash::CrashTypes::CrashDumpStatus::RequestTimedOut,
-        PackageWriteFailed = NWB::Core::Crash::CrashTypes::CrashDumpStatus::PackageWriteFailed,
-        PackageWritten = NWB::Core::Crash::CrashTypes::CrashDumpStatus::PackageWritten,
-        AttachmentWriteFailed = NWB::Core::Crash::CrashTypes::CrashDumpStatus::AttachmentWriteFailed,
+        NotInstalled,
+        RequestFailed,
+        RequestQueued,
+        RequestTimedOut,
+        PackageWriteFailed,
+        PackageWritten,
+        AttachmentWriteFailed,
     };
 };
 
 namespace GpuCrashDumpKind{
     enum Enum : u8{
-        None = NWB::Core::Crash::CrashTypes::GpuCrashDumpKind::None,
-        Aftermath = NWB::Core::Crash::CrashTypes::GpuCrashDumpKind::Aftermath,
-        RadeonGpuDetective = NWB::Core::Crash::CrashTypes::GpuCrashDumpKind::RadeonGpuDetective,
+        None,
+        Aftermath,
+        RadeonGpuDetective,
     };
 };
 
-inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerProcess = NWB::Core::Crash::CrashTypes::s_DefaultMaxDiagnosticDumpsPerProcess;
-inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerSite = NWB::Core::Crash::CrashTypes::s_DefaultMaxDiagnosticDumpsPerSite;
-inline constexpr usize s_DefaultMaxPendingCrashPackages = NWB::Core::Crash::CrashTypes::s_DefaultMaxPendingCrashPackages;
-inline constexpr usize s_DefaultMaxUploadedCrashPackages = NWB::Core::Crash::CrashTypes::s_DefaultMaxUploadedCrashPackages;
-inline constexpr usize s_DefaultMaxFailedCrashPackages = NWB::Core::Crash::CrashTypes::s_DefaultMaxFailedCrashPackages;
-inline constexpr usize s_DefaultMaxUploadingCrashPackages = NWB::Core::Crash::CrashTypes::s_DefaultMaxUploadingCrashPackages;
+inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerProcess = 8u;
+inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerSite = 1u;
+inline constexpr usize s_DefaultMaxPendingCrashPackages = 128u;
+inline constexpr usize s_DefaultMaxUploadedCrashPackages = 256u;
+inline constexpr usize s_DefaultMaxFailedCrashPackages = 64u;
+inline constexpr usize s_DefaultMaxUploadingCrashPackages = 64u;
 
-using CrashCapturePolicy = NWB::Core::Crash::CrashTypes::CrashCapturePolicy;
-using CrashSpoolRetentionConfig = NWB::Core::Crash::CrashTypes::CrashSpoolRetentionConfig;
+struct CrashCapturePolicy{
+    b8 captureAssertions = true;
+    b8 captureFatalAssertions = true;
+    b8 captureLoggerErrors = true;
+    b8 captureLoggerFatals = true;
+    u32 maxDiagnosticDumpsPerProcess = s_DefaultMaxDiagnosticDumpsPerProcess;
+    u32 maxDiagnosticDumpsPerSite = s_DefaultMaxDiagnosticDumpsPerSite;
+};
+
+struct CrashSpoolRetentionConfig{
+    usize maxPendingPackages = s_DefaultMaxPendingCrashPackages;
+    usize maxUploadedPackages = s_DefaultMaxUploadedCrashPackages;
+    usize maxFailedPackages = s_DefaultMaxFailedCrashPackages;
+    usize maxUploadingPackages = s_DefaultMaxUploadingCrashPackages;
+};
 
 struct CrashDumpResult{
     CrashDumpStatus::Enum status = CrashDumpStatus::NotInstalled;

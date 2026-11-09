@@ -8,7 +8,7 @@
 
 #include <core/common/log.h>
 #include <core/crash/module.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 #include <core/graphics/rhi/gpu_crash_diagnostics.h>
 
 #include <global/filesystem/executable_paths.h>

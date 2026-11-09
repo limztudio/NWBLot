@@ -29,8 +29,8 @@ namespace ShaderArchive{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_IndexVirtualPath = NWB::Core::HardwareRayTracingPolicy::s_ShaderArchiveIndexVirtualPath;
-inline constexpr StringView s_DefaultVariant = NWB::Core::HardwareRayTracingPolicy::s_ShaderArchiveDefaultVariant;
+inline constexpr StringView s_IndexVirtualPath = "shader/index.bin";
+inline constexpr StringView s_DefaultVariant = "default";
 inline constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath);
 
 

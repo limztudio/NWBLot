@@ -8,6 +8,9 @@
 #include "module.h"
 #include "backend_forward.h"
 #include "backend_core_context.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "timer_query_claim_journal.h"
 #include "accel_struct_build_journal.h"
@@ -16,8 +19,6 @@
 #include "native_resource_provenance.h"
 #include "native_queue_state.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +41,7 @@ struct PendingOpacityMicromapBuildCommit{
 };
 
 namespace TrackedCommandBufferArenaState{
-    static constexpr u8 s_TrackedCommandBufferArenaStateUntrackedBase = VulkanDefaults::s_VulkanDefaultTrackedCommandBufferArenaStateUntrackedBase;
+    static constexpr u8 s_TrackedCommandBufferArenaStateUntrackedBase = 0u;
     enum Enum : u8{
         Untracked = s_TrackedCommandBufferArenaStateUntrackedBase,
         Leased,

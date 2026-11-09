@@ -7,7 +7,7 @@
 
 #include <logger/server/crash_values.adhd.h>
 
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #include <global/overflow.h>
 #include <global/process_memory_map.h>

@@ -7,9 +7,6 @@
 
 #include "module.h"
 
-#include <core/graphics/vulkan/arena_names.adhd.h>
-#include <core/graphics/vulkan/context_labels.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +23,7 @@ namespace VulkanArenaScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_InstanceCreateArena("core/graphics/backend_instance_create");
 inline constexpr TStringView s_TaskStageLabel = NWB_TEXT("task");
 inline constexpr TStringView s_MeshStageLabel = NWB_TEXT("mesh");
 inline constexpr TStringView s_FragmentStageLabel = NWB_TEXT("fragment");
@@ -36,16 +34,47 @@ inline constexpr TStringView s_SetComputeStateCommandLabel = NWB_TEXT("set compu
 inline constexpr TStringView s_SetPermanentTextureStateCommandLabel = NWB_TEXT("set permanent texture state");
 inline constexpr TStringView s_DispatchMeshCommandLabel = NWB_TEXT("dispatch mesh");
 inline constexpr TStringView s_DispatchIndirectCommandLabel = NWB_TEXT("dispatch indirect");
-using VulkanDetail::s_PresentationSignalCancellationContext;
-using VulkanDetail::s_AcquireSlotReuseContext;
-using VulkanDetail::s_AcquireNextImageContext;
-using VulkanDetail::s_QueueSubmitContext;
-using VulkanDetail::s_NativePresentAdmissionContext;
-using VulkanDetail::s_AcquiredImageSemaphoreBridgeContext;
-using VulkanDetail::s_AbandonedPresentationSignalIdleContext;
-using VulkanDetail::s_UnconsumedPresentationSignalIdleContext;
-using VulkanDetail::s_PresentContext;
-using VulkanDetail::s_QueueTimelineQueryContext;
+inline constexpr AStringView s_PresentationSignalCancellationContext = "presentation signal cancellation";
+inline constexpr AStringView s_AcquireSlotReuseContext = "acquire slot reuse";
+inline constexpr AStringView s_AcquireNextImageContext = "acquire next image";
+inline constexpr AStringView s_QueueSubmitContext = "queue submit";
+inline constexpr AStringView s_NativePresentAdmissionContext = "native present admission";
+inline constexpr AStringView s_AcquiredImageSemaphoreBridgeContext = "acquired image semaphore bridge";
+inline constexpr AStringView s_AbandonedPresentationSignalIdleContext = "abandoned presentation signal idle";
+inline constexpr AStringView s_UnconsumedPresentationSignalIdleContext = "unconsumed presentation signal idle";
+inline constexpr AStringView s_PresentContext = "present";
+inline constexpr AStringView s_QueueTimelineQueryContext = "queue timeline query";
+inline constexpr Name s_QueueFamilyQueryArena("core/graphics/backend_queue_family_query");
+inline constexpr Name s_SwapChainPresentModeArena("core/graphics/backend_swap_chain_present_mode");
+inline constexpr Name s_DeviceExtensionSetupArena("core/graphics/backend_device_extension_setup");
+inline constexpr Name s_AdapterEnumerateArena("core/graphics/backend_adapter_enumerate");
+
+inline constexpr Name s_ComputePipelineArena("core/graphics/compute_pipeline");
+
+inline constexpr Name s_PipelineCacheSaveArena("core/graphics/device_pipeline_cache_save");
+inline constexpr Name s_StateHandoffArena("core/graphics/command_list_state_handoff");
+inline constexpr Name s_CooperativeVectorQueryArena("core/graphics/device_cooperative_vector_query");
+
+inline constexpr Name s_CooperativeVectorConvertArena("core/graphics/extensions_cooperative_vector_convert");
+
+inline constexpr Name s_GraphicsPipelineArena("core/graphics/graphics_pipeline");
+
+inline constexpr Name s_MeshletPipelineArena("core/graphics/meshlet_pipeline");
+
+inline constexpr Name s_RayTracingArena("core/graphics/ray_tracing");
+
+inline constexpr Name s_DescriptorBindingArena("core/graphics/descriptor_binding");
+inline constexpr Name s_DescriptorHeapStorageArena("core/graphics/descriptor_heap_storage");
+
+inline constexpr Name s_InputLayoutArena("core/graphics/shader_input_layout");
+
+inline constexpr Name s_TextureClearArena("core/graphics/texture_clear");
+inline constexpr Name s_TextureResolveArena("core/graphics/texture_resolve");
+
+inline constexpr Name s_GpuCrashReportArena("core/graphics/gpu_crash_report");
+inline constexpr Name s_GpuCrashVendorBinaryArena("core/graphics/gpu_crash_vendor_binary");
+inline constexpr Name s_AmdBreadcrumbMetadataArena("core/graphics/amd_breadcrumb_metadata");
+inline constexpr Name s_AftermathDumpArena("core/graphics/aftermath_dump");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

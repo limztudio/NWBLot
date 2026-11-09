@@ -6,8 +6,6 @@
 
 
 #include <core/os/text_input.h>
-#include <core/os/platform_values.adhd.h>
-#include <core/os/linux/x11/text_input_key_history_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,14 +20,19 @@ NWB_CORE_BEGIN
 // XIM can forward a filtered physical event after its key release or native editing session has ended.
 class X11FilteredKeyHistory final{
 private:
-    using Stamp = X11FilteredKeyHistoryStamp;
+    struct Stamp{
+        u64 receivedAtMs = 0u;
+        u32 timestamp = 0u;
+        u32 serial = 0u;
+        b8 valid = false;
+    };
 
 
 private:
-    static constexpr usize s_KeyCount = ::NWB::Core::s_OsLinuxX11TextInputKeyHistoryKeyCount;
+    static constexpr usize s_KeyCount = 256u;
     // Press and release, each for native timestamps and for zero-time XSendEvent input.
-    static constexpr usize s_KindCount = ::NWB::Core::s_OsLinuxX11TextInputKeyHistoryKindCount;
-    static constexpr u32 s_ZeroTimeKindOffset = ::NWB::Core::s_OsLinuxX11TextInputKeyHistoryZeroTimeKindOffset;
+    static constexpr usize s_KindCount = 4u;
+    static constexpr u32 s_ZeroTimeKindOffset = 2u;
     static constexpr u32 s_HalfRange = 1u << 31u;
 
 

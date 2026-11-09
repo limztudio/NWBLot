@@ -25,7 +25,7 @@
 #include <impl/ecs_render/kernel/renderer_device_diagnostics_label.h>
 #include <impl/ecs_render/kernel/renderer_graph_runtime_label.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/frame_graph_nodes.adhd.h>
+#include <core/graphics/frame_graph_nodes.h>
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/reflection/history_planning.adhd.h>

@@ -1,8 +1,4 @@
-nwb_declare_static_library(nwb_frame_arena_names)
-nwb_target_adhd_sources(nwb_frame_arena_names NAMESPACE "NWB::Core::FrameArenaScope" SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_names.adhd")
-
 nwb_declare_static_library(nwb_frame)
-nwb_target_adhd_sources(nwb_frame NAMESPACE "NWB::Core::FrameDetail" SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_dimensions.adhd" "${CMAKE_CURRENT_LIST_DIR}/frame_timing_names.adhd" "${CMAKE_CURRENT_LIST_DIR}/x11_scroll_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/frame_platform_values.adhd")
 target_sources(nwb_frame PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
@@ -35,6 +31,5 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-target_link_libraries(nwb_frame PRIVATE nwb_frame_arena_names)
 target_link_libraries(nwb_frame PUBLIC nwb_common nwb_alloc nwb_cpu_task nwb_graphics nwb_input nwb_os nwb_perf nwb_telemetry)
 

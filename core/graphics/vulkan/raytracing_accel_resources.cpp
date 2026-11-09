@@ -254,7 +254,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
         as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
     }
 
-    constexpr usize s_InitialBuildSignatureRoleCount = VulkanDefaults::s_VulkanDefaultInitialBuildSignatureRoleCount;
+    constexpr usize s_InitialBuildSignatureRoleCount = 2u;
     for(usize roleIndex = 0u; roleIndex < s_InitialBuildSignatureRoleCount; ++roleIndex){
         GlobalUniquePtr<AccelStructBuildSignatureRole> role = MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
         if(!role)

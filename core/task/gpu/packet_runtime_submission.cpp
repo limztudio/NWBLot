@@ -3,7 +3,6 @@
 
 
 #include "packet_runtime_internal.h"
-#include <core/task/gpu/task_graph_types.adhd.h>
 #include "compiler_internal.h"
 #include "task_graph.h"
 
@@ -24,7 +23,7 @@ namespace GpuPacketRuntimeDetail{
 
 
 [[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(const GpuPhysicalQueueId queue, const Span<const QueueSubmissionToken> waitTokens, Alloc::ScratchArena& scratchArena){
-    constexpr usize s_InlineQueueCount = s_GpuPacketInlineQueueCount;
+    constexpr usize s_InlineQueueCount = 8u;
     Array<GpuPhysicalQueueId, s_InlineQueueCount> inlineQueues;
     usize inlineQueueCount = 0u;
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> overflowQueues(scratchArena);

@@ -6,7 +6,7 @@
 
 
 #include <core/alloc/general.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 #include <core/global.h>
 
 #include <global/filesystem/executable_paths.h>

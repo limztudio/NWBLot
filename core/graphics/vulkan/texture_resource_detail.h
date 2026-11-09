@@ -28,7 +28,7 @@ namespace VulkanTextureDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_TextureCubeLayerCount = VulkanDefaults::s_VulkanDefaultTextureCubeLayerCount;
+inline constexpr u32 s_TextureCubeLayerCount = 6u;
 inline constexpr ResourceStates::Mask s_ValidTextureResourceStates =
     ResourceStates::Common
     | ResourceStates::ShaderResource

@@ -1,5 +1,4 @@
 nwb_declare_static_library(nwb_gpu_task)
-nwb_target_adhd_sources(nwb_gpu_task NAMESPACE "NWB::Core" SOURCES "${CMAKE_CURRENT_LIST_DIR}/queue_assignment.adhd" "${CMAKE_CURRENT_LIST_DIR}/upload_validation.adhd" "${CMAKE_CURRENT_LIST_DIR}/capture/opcode_mapping.adhd" "${CMAKE_CURRENT_LIST_DIR}/telemetry_queue_class.adhd" "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_names.adhd" "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_statistics.adhd" "${CMAKE_CURRENT_LIST_DIR}/task_graph_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_value_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/compiler_status_types.adhd")
 target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/*.cc"

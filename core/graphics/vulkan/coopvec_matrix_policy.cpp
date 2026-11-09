@@ -73,7 +73,7 @@ Expected<CooperativeVectorMatrixPolicy::StandardMatrixLayout> CooperativeVectorM
     if(!precedingMajorBytes || AddOverflows<usize>(*precedingMajorBytes, *minorByteSize))
         return MakeUnexpected(Failure{});
     const usize byteSize = *precedingMajorBytes + *minorByteSize;
-    return StandardMatrixLayout{ .stride = stride, .byteSize = byteSize };
+    return StandardMatrixLayout{ stride, byteSize };
 }
 
 Expected<usize> CooperativeVectorMatrixPolicy::QueryOptimalLayoutSize(const VulkanContext& context, const VkComponentTypeKHR componentType, const VkCooperativeVectorMatrixLayoutNV layout, const u32 numRows, const u32 numColumns)noexcept{
@@ -153,4 +153,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

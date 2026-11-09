@@ -10,8 +10,9 @@
 
 #include "volume_prepare_registry.h"
 
+#include "arena_names.h"
+
 #include <core/assets/arena_names.h>
-#include <core/assets/volume/arena_names.adhd.h>
 #include <core/common/log.h>
 
 #include <global/assert.h>

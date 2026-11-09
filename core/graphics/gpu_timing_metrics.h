@@ -8,7 +8,6 @@
 #include "rhi/command.h"
 
 #include <core/alloc/scratch.h>
-#include <core/graphics/gpu_timing_metrics.adhd.h>
 
 #include <global/expected.h>
 
@@ -50,6 +49,12 @@ struct GpuQueuePacketEnvelopeMetrics{
     GpuPhysicalQueueId physicalQueue;
     // Positive holes between accepted packet envelopes on this queue. Leading and trailing idle are unknowable.
     u64 internalIdleTicks = 0u;
+};
+
+struct GpuPacketEnvelopeMetrics{
+    f64 secondsPerTick = 0.0;
+    // Union length for which at least two distinct physical queues have accepted packet work in flight.
+    u64 queueOverlapTicks = 0u;
 };
 
 using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics, Alloc::ScratchArena>;

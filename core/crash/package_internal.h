@@ -7,8 +7,6 @@
 
 #include "internal.h"
 
-#include <core/crash/package_values.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +23,7 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_PackageErrorCategory = ::NWB::Core::Crash::PackageValues::s_InternalPackageErrorCategory;
+inline constexpr StringView s_PackageErrorCategory = "crash_package_error";
 
 struct CrashUploadSnapshot{
     CrashSpoolRetentionConfig spoolRetention;

@@ -3,11 +3,11 @@
 
 
 #include "backend_input_layout.h"
+
 #include "backend.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
-#include <core/graphics/vulkan/input_layout_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,7 +79,12 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
         return MakeUnexpected(Failure{});
     }
 
-    using VertexBindingBuildInfo = ::NWB::Core::VulkanVertexBindingBuildInfo;
+    struct VertexBindingBuildInfo{
+        u64 requiredStride = 0;
+        u32 explicitStride = 0;
+        b8 hasExplicitStride = false;
+        b8 isInstanced = false;
+    };
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InputLayoutArena);
     HashMap<u32, VertexBindingBuildInfo, Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> bindingInfos(0, Hasher<u32>(), EqualTo<u32>(), scratchArena);

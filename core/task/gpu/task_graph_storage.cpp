@@ -3,7 +3,6 @@
 
 
 #include "task_graph.h"
-#include <core/task/gpu/task_graph_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
@@ -476,7 +475,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
         return MakeUnexpected(Failure{});
 
     {
-        constexpr usize s_InlineMemberCount = s_GpuGraphStorageInlineMemberCount;
+        constexpr usize s_InlineMemberCount = 32u;
         Array<u32, s_InlineMemberCount> inlineMembers;
         Optional<HashSet<u32, Alloc::ScratchArena>> indexedMembers;
         for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){

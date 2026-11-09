@@ -18,7 +18,6 @@
 #include "input_helpers.h"
 
 #include <core/common/log.h>
-#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/linux/wayland/clipboard.h>
 #include <core/os/linux/wayland/text_input.h>
 
@@ -50,11 +49,11 @@ namespace __hidden_frame_linux_wayland_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_EvdevToXkbKeycodeOffset = FrameDetail::s_FramePlatformEvdevToXkbKeycodeOffset;
-static constexpr i32 s_MinKeyRepeatStepMs = FrameDetail::s_FramePlatformMinKeyRepeatStepMs;
-static constexpr u32 s_WaylandSeatBindVersion = FrameDetail::s_FramePlatformWaylandSeatBindVersion;
-static constexpr u32 s_WaylandSeatReleaseVersion = FrameDetail::s_FramePlatformWaylandSeatReleaseVersion;
-static constexpr StringView s_KeymapLifecycleCategory = FrameDetail::s_FramePlatformKeymapLifecycleCategory;
+static constexpr u32 s_EvdevToXkbKeycodeOffset = 8u;
+static constexpr i32 s_MinKeyRepeatStepMs = 1;
+static constexpr u32 s_WaylandSeatBindVersion = 5u;
+static constexpr u32 s_WaylandSeatReleaseVersion = 5u;
+static constexpr StringView s_KeymapLifecycleCategory = "frame_keymap_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

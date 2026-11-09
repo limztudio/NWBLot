@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <core/graphics/vulkan/backend_context_capability_types.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,6 +22,21 @@ namespace VulkanDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct RequiredQueueFamilySelection{
+    i32 graphicsFamily = s_InvalidQueueFamilyIndex;
+    i32 computeFamily = s_InvalidQueueFamilyIndex;
+    i32 asyncComputeFamily = s_InvalidQueueFamilyIndex;
+    i32 dedicatedTransferFamily = s_InvalidQueueFamilyIndex;
+};
+
+struct PhysicalDeviceFeatureQueryOptions{
+    b8 apiSupportsVulkan13 = false;
+    b8 descriptorBufferExtensionAvailable = false;
+    b8 dynamicRenderingExtensionAvailable = false;
+    b8 synchronization2ExtensionAvailable = false;
+    b8 maintenance4ExtensionAvailable = false;
+};
 
 struct PhysicalDeviceFeatureSupport{
     VkPhysicalDeviceFeatures2 features = {};

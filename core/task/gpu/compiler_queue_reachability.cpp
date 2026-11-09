@@ -3,7 +3,6 @@
 
 
 #include "compiler_internal.h"
-#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 #include <global/bit_matrix.h>
 
@@ -131,7 +130,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     outReachability.m_graphGeneration = graph.generation();
     outReachability.m_taskCount = taskCount;
     outReachability.m_wordsPerRow = wordsPerRow;
-    constexpr usize s_SmallDenseWordCount = s_GpuTaskSmallDenseWordCount;
+    constexpr usize s_SmallDenseWordCount = 4u;
     if(wordsPerRow > s_SmallDenseWordCount){
         outReachability.m_relatedWordRanges.resize(taskCount);
         Vector<GpuTaskSchedulingReachability::WordRange, Alloc::ScratchArena> descendantRanges(taskCount, outReachability.m_relatedWordRanges.get_allocator());
@@ -174,13 +173,13 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             compactWordCount += span;
         }
         // Include temporary bounds and retained offsets so compact rows reduce peak scratch use.
-        constexpr usize s_CompactBudgetReserveDivisor = s_GpuTaskCompactBudgetReserveDivisor;
+        constexpr usize s_CompactBudgetReserveDivisor = 4u;
         const usize compactBudget = (totalWordCount - totalWordCount / s_CompactBudgetReserveDivisor) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
         const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
         const b8 compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;
         // Retaining the bounds costs at most 1/32 of a dense matrix at this width; smaller dense rows release them.
-        constexpr usize s_MinDenseBoundsReuseWordsPerRow = s_GpuTaskMinDenseBoundsReuseWordsPerRow;
+        constexpr usize s_MinDenseBoundsReuseWordsPerRow = 64u;
         if(compactRows || wordsPerRow >= s_MinDenseBoundsReuseWordsPerRow){
             if(compactRows)
                 outReachability.m_rowOffsets.resize(taskCount);

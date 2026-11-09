@@ -8,8 +8,6 @@
 #include "frame_graph.h"
 
 #include <core/alloc/scratch.h>
-#include <core/telemetry/frame_graph_types.adhd.h>
-#include <core/telemetry/local_values.adhd.h>
 
 #include <global/overflow.h>
 #include <global/simd/vector.h>
@@ -32,13 +30,25 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     u64 barrierCount = 0u;
 };
 
-using FrameGraphPacketSubmissionStatisticsAccumulator = ::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsAccumulatorValue;
+struct FrameGraphPacketSubmissionStatisticsAccumulator{
+    u64 nativeSubmissionCount = 0u;
+    u64 taskCount = 0u;
+    u64 commandListCount = 0u;
+    u64 plannedWaitTokenCount = 0u;
+    u64 sameQueueWaitElisionCount = 0u;
+    u64 timelineWaitCount = 0u;
+    u64 mergedTimelineWaitCount = 0u;
+    u64 inheritedTimelineWaitElisionCount = 0u;
+    u64 acceptedFrontierSubmissionCount = 0u;
+    u64 recoverySubmissionCount = 0u;
+    f64 submissionSeconds = 0.0;
+};
 
 class FrameGraphStatisticsValidator final{
 private:
-    static constexpr f64 s_DoublePrecisionEpsilon = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsCodecDoublePrecisionEpsilon;
-    static constexpr f64 s_SubmissionRoundingLimit = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsCodecSubmissionRoundingLimit;
-    static constexpr f64 s_SubmissionRoundingScale = ::NWB::Core::Telemetry::s_TelemetryFrameGraphStatisticsCodecSubmissionRoundingScale;
+    static constexpr f64 s_DoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
+    static constexpr f64 s_SubmissionRoundingLimit = 0.5;
+    static constexpr f64 s_SubmissionRoundingScale = 2.0;
 
 public:
     [[nodiscard]] static b8 PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept;
@@ -174,4 +184,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

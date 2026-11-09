@@ -7,8 +7,7 @@
 
 #include "module.h"
 #include "protocol.h"
-#include <core/crash/internal_values.adhd.h>
-#include <core/crash/package_names.adhd.h>
+#include "package_names.h"
 
 #include <core/alloc/scratch.h>
 
@@ -35,11 +34,11 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxDiagnosticSites = ::NWB::Core::Crash::CrashTypes::s_MaxDiagnosticSites;
-inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = ::NWB::Core::Crash::CrashTypes::s_PlatformCrashHandlerWaitMilliseconds;
-inline constexpr u32 s_HandlerExitWaitMilliseconds = ::NWB::Core::Crash::CrashTypes::s_HandlerExitWaitMilliseconds;
-inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = ::NWB::Core::Crash::CrashTypes::s_ManualCrashDumpWaitMilliseconds;
-inline constexpr usize s_HandlerArgumentTextCapacity = ::NWB::Core::Crash::CrashTypes::s_HandlerArgumentTextCapacity;
+inline constexpr usize s_MaxDiagnosticSites = 64u;
+inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
+inline constexpr u32 s_HandlerExitWaitMilliseconds = 3000u;
+inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
+inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 
 #ifndef NWB_CRASH_HANDLER_EXECUTABLE_NAME
 #define NWB_CRASH_HANDLER_EXECUTABLE_NAME "crash_handler"
@@ -54,13 +53,13 @@ inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HA
 inline constexpr TStringView s_RequestHandleArgument = NWB_TEXT("--request-handle");
 inline constexpr TStringView s_AckHandleArgument = NWB_TEXT("--ack-handle");
 inline constexpr TStringView s_AckEventArgument = NWB_TEXT("--ack-event");
-inline constexpr StringView s_RequestFdArgument = ::NWB::Core::Crash::CrashTypes::s_RequestFdArgument;
-inline constexpr StringView s_AckFdArgument = ::NWB::Core::Crash::CrashTypes::s_AckFdArgument;
-inline constexpr StringView s_DefaultBreadcrumbCategory = ::NWB::Core::Crash::CrashTypes::s_DefaultBreadcrumbCategory;
-inline constexpr StringView s_ManualDumpCategory = ::NWB::Core::Crash::CrashTypes::s_ManualDumpCategory;
-inline constexpr StringView s_GpuCrashCategory = ::NWB::Core::Crash::CrashTypes::s_GpuCrashCategory;
-inline constexpr usize s_SnapshotImageCount = ::NWB::Core::Crash::CrashTypes::s_SnapshotImageCount;
-inline constexpr usize s_MaxCrashSignals = ::NWB::Core::Crash::CrashTypes::s_MaxCrashSignals;
+inline constexpr StringView s_RequestFdArgument = "--request-fd";
+inline constexpr StringView s_AckFdArgument = "--ack-fd";
+inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
+inline constexpr StringView s_ManualDumpCategory = "manual_dump";
+inline constexpr StringView s_GpuCrashCategory = "gpu_crash";
+inline constexpr usize s_SnapshotImageCount = 2u;
+inline constexpr usize s_MaxCrashSignals = 6u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +149,11 @@ private:
 };
 
 
-using FixedDiagnosticSite = ::NWB::Core::Crash::CrashTypes::FixedDiagnosticSite;
+struct FixedDiagnosticSite{
+    u64 hash = 0u;
+    u32 captureCount = 0u;
+    u8 used = 0u;
+};
 
 struct ManualDumpContextStorage;
 

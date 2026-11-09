@@ -3,7 +3,6 @@
 
 
 #include "compiler_internal.h"
-#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 #include <global/hash_utils.h>
 
@@ -68,7 +67,7 @@ namespace GpuTaskGraphCompilerDetail{
     using TerminalDependencyIndex = HashSet<GpuPacketDependency, Alloc::ScratchArena, TerminalPacketDependencyHasher, TerminalPacketDependencyEqual>;
     Optional<TerminalDependencyIndex> indexedTerminalDependencies;
     const auto appendTerminalFinalizationDependency = [&](const GpuPacketDependency& dependency){
-        constexpr usize s_InlineTerminalDependencyCount = s_GpuTaskInlineTerminalDependencyCount;
+        constexpr usize s_InlineTerminalDependencyCount = 8u;
         if(!indexedTerminalDependencies && resourceStateDependencies.size() <= s_InlineTerminalDependencyCount){
             for(const GpuPacketDependency& previous : resourceStateDependencies){
                 if(TerminalPacketDependencyEqual{}(previous, dependency))

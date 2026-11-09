@@ -4,8 +4,6 @@
 
 #include "pipe_io.h"
 
-#include <core/os/platform_values.adhd.h>
-
 #include <global/termination.h>
 #include <global/posix/descriptor.h>
 #include <global/posix/pipe_io.h>
@@ -30,10 +28,10 @@ namespace __hidden_pipe_io{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_PumpByteBudget = ::NWB::Core::s_OsLinuxPipeIoPumpByteBudget;
-static constexpr usize s_PumpCallBudget = ::NWB::Core::s_OsLinuxPipeIoPumpCallBudget;
-static constexpr u32 s_TimeoutMs = ::NWB::Core::s_OsLinuxPipeIoTimeoutMs;
-static constexpr usize s_ReadChunkBytes = ::NWB::Core::s_OsLinuxPipeIoReadChunkBytes;
+static constexpr usize s_PumpByteBudget = 65536u;
+static constexpr usize s_PumpCallBudget = 64u;
+static constexpr u32 s_TimeoutMs = 5000u;
+static constexpr usize s_ReadChunkBytes = 4096u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,13 +76,13 @@ Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, Clipboard
         if(count > 0){
             const ClipboardStatus::Enum status = text.appendBytes(AStringView(bytes.data(), static_cast<usize>(count)));
             if(status != ClipboardStatus::Success)
-                return MakeUnexpected(ClipboardPipeReadFailure(status));
+                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status });
             consumed += static_cast<usize>(count);
         }
         else if(count == 0){
             const auto status = ValidateClipboardUtf8Text(text.text());
             if(status != ClipboardStatus::Success)
-                return MakeUnexpected(ClipboardPipeReadFailure(status, true));
+                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status, .finished = true });
             return true;
         }
         else if(errno == EAGAIN || errno == EWOULDBLOCK)

@@ -13,7 +13,7 @@
 #include <core/alloc/module.h>
 #include <core/common/application_entry.h>
 #include <core/crash/module.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
 #include <core/assets/manager.h>

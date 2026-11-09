@@ -5,8 +5,6 @@
 #include "internal.h"
 #include "platform_win32_transport.h"
 
-#include <core/crash/internal_values.adhd.h>
-
 #include <global/blocking_io.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
@@ -193,8 +191,8 @@ template<typename ArenaT>
 Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations){
     if(g_State.handlerStarted)
         return {};
-    constexpr usize s_MaxCommandCharacters = ::NWB::Core::Crash::CrashTypes::s_MaxCommandCharacters;
-    constexpr usize s_HandleTextCharacters = ::NWB::Core::Crash::CrashTypes::s_HandleTextCharacters;
+    constexpr usize s_MaxCommandCharacters = 32766u;
+    constexpr usize s_HandleTextCharacters = 20u;
     constexpr usize s_ArgumentCharacters = s_RequestHandleArgument.size() + s_AckHandleArgument.size() + s_AckEventArgument.size() + 3u * s_HandleTextCharacters + 8u;
     if(handlerExecutablePath.empty())
         return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareCommand, ERROR_INVALID_PARAMETER));

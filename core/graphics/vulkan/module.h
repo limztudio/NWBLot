@@ -22,9 +22,9 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_DefaultUploadSuballocationAlignment = VulkanDefaults::s_VulkanDefaultUploadSuballocationAlignment;
-inline constexpr u64 s_AccelerationStructureAlignment = VulkanDefaults::s_VulkanDefaultAccelerationStructureAlignment;
-inline constexpr u64 s_TlasInstanceDataAlignment = VulkanDefaults::s_VulkanDefaultTlasInstanceDataAlignment;
+inline constexpr u32 s_DefaultUploadSuballocationAlignment = 256;
+inline constexpr u64 s_AccelerationStructureAlignment = 256;
+inline constexpr u64 s_TlasInstanceDataAlignment = 16u;
 
 namespace ObjectTypes{
     inline constexpr ObjectType s_Queue                               = 0x00030004;

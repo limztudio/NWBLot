@@ -3,9 +3,10 @@
 
 
 #include "frame_graph_registry.h"
-#include "session.h"
 
-#include <core/telemetry/arena_names.adhd.h>
+#include "session.h"
+#include "arena_names.h"
+
 #include <core/alloc/scratch.h>
 
 #include <global/scope_exit.h>

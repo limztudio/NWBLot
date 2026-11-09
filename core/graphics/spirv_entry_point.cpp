@@ -4,8 +4,6 @@
 
 #include "spirv_entry_point.h"
 
-#include "spirv_model.adhd.h"
-
 #include <global/bit.h>
 
 
@@ -24,18 +22,39 @@ namespace __hidden_spirv_entry_point{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u16 s_OpEntryPoint = NWB::Core::s_SpirvDataOpEntryPoint;
-inline constexpr u32 s_SpirvMagic = NWB::Core::s_SpirvDataSpirvMagic;
-inline constexpr usize s_SpirvHeaderWords = NWB::Core::s_SpirvDataSpirvHeaderWords;
-inline constexpr usize s_SpirvMagicWordIndex = NWB::Core::s_SpirvDataSpirvMagicWordIndex;
-inline constexpr usize s_SpirvEntryPointExecutionModelWordIndex = NWB::Core::s_SpirvDataSpirvEntryPointExecutionModelWordIndex;
-inline constexpr usize s_SpirvEntryPointFixedWordCount = NWB::Core::s_SpirvDataSpirvEntryPointFixedWordCount;
-inline constexpr u32 s_SpirvInstructionOpcodeBitMask = NWB::Core::s_SpirvDataSpirvInstructionOpcodeBitMask;
-inline constexpr u32 s_SpirvInstructionWordCountBitShift = NWB::Core::s_SpirvDataSpirvInstructionWordCountBitShift;
+inline constexpr u16 s_OpEntryPoint = 15u;
+inline constexpr u32 s_SpirvMagic = 0x07230203u;
+inline constexpr usize s_SpirvHeaderWords = 5u;
+inline constexpr usize s_SpirvMagicWordIndex = 0u;
+inline constexpr usize s_SpirvEntryPointExecutionModelWordIndex = 1u;
+inline constexpr usize s_SpirvEntryPointFixedWordCount = 3u;
+inline constexpr u32 s_SpirvInstructionOpcodeBitMask = 0xffffu;
+inline constexpr u32 s_SpirvInstructionWordCountBitShift = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace SpirvExecutionModel{
+    enum Enum : u32{
+        Vertex = 0u,
+        TessellationControl = 1u,
+        TessellationEvaluation = 2u,
+        Geometry = 3u,
+        Fragment = 4u,
+        GLCompute = 5u,
+        TaskNV = 5267u,
+        MeshNV = 5268u,
+        RayGenerationKHR = 5313u,
+        IntersectionKHR = 5314u,
+        AnyHitKHR = 5315u,
+        ClosestHitKHR = 5316u,
+        MissKHR = 5317u,
+        CallableKHR = 5318u,
+        TaskEXT = 5364u,
+        MeshEXT = 5365u,
+    };
+};
 
 struct SpirvEntryPointInstruction{
     AStringView name;
@@ -82,6 +101,28 @@ public:
     return AStringView(reinterpret_cast<const char*>(bytes), wordCount * sizeof(u32));
 }
 
+inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel)noexcept{
+    switch(executionModel){
+    case SpirvExecutionModel::Vertex: return ShaderType::Vertex;
+    case SpirvExecutionModel::TessellationControl: return ShaderType::Hull;
+    case SpirvExecutionModel::TessellationEvaluation: return ShaderType::Domain;
+    case SpirvExecutionModel::Geometry: return ShaderType::Geometry;
+    case SpirvExecutionModel::Fragment: return ShaderType::Pixel;
+    case SpirvExecutionModel::GLCompute: return ShaderType::Compute;
+    case SpirvExecutionModel::TaskNV: return ShaderType::Amplification;
+    case SpirvExecutionModel::MeshNV: return ShaderType::Mesh;
+    case SpirvExecutionModel::RayGenerationKHR: return ShaderType::RayGeneration;
+    case SpirvExecutionModel::IntersectionKHR: return ShaderType::Intersection;
+    case SpirvExecutionModel::AnyHitKHR: return ShaderType::AnyHit;
+    case SpirvExecutionModel::ClosestHitKHR: return ShaderType::ClosestHit;
+    case SpirvExecutionModel::MissKHR: return ShaderType::Miss;
+    case SpirvExecutionModel::CallableKHR: return ShaderType::Callable;
+    case SpirvExecutionModel::TaskEXT: return ShaderType::Amplification;
+    case SpirvExecutionModel::MeshEXT: return ShaderType::Mesh;
+    default: return ShaderType::None;
+    }
+}
+
 template<typename Source>
 [[nodiscard]] NWB_INLINE Expected<SpirvEntryPointInstruction> DecodeEntryPointInstruction(const Source& source, const usize instructionIndex, const u16 instructionWordCount)noexcept{
     SpirvEntryPointInstruction entryPoint;
@@ -89,7 +130,7 @@ template<typename Source>
     if(instructionWordCount <= s_SpirvEntryPointFixedWordCount)
         return MakeUnexpected(Failure{});
 
-    entryPoint.shaderType = ResolveSpirvExecutionModel(source.word(instructionIndex + s_SpirvEntryPointExecutionModelWordIndex));
+    entryPoint.shaderType = ConvertExecutionModel(source.word(instructionIndex + s_SpirvEntryPointExecutionModelWordIndex));
 
     const AStringView entryPointBytes = SpirvNameBytes(source.wordBytes(instructionIndex + s_SpirvEntryPointFixedWordCount), static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount);
     const usize entryPointLength = entryPointBytes.find('\0');

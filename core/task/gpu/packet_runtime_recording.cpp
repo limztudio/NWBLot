@@ -8,7 +8,6 @@
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/task/gpu/capture/command_ir.h>
-#include <core/task/gpu/queue_assignment.adhd.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/exception.h>
@@ -144,10 +143,10 @@ b8 GpuNativePacketRecorder::recordPacket(
     Alloc::ScratchArena& stateFanInScratchArena,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuRecordedGraph& outRecordedGraph,
-    GpuCommandIrCapture* const outCommandIrCapture,
-    GpuPacketRecordingAbort* const outDeferredAbort
+    GpuCommandIrCapture* const commandIrCapture,
+    GpuPacketRecordingAbort* const deferredAbort
 )const{
-    if(outDeferredAbort && outDeferredAbort->valid()){
+    if(deferredAbort && deferredAbort->valid()){
         NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));
         return false;
     }
@@ -165,9 +164,9 @@ b8 GpuNativePacketRecorder::recordPacket(
     )
         return false;
     // One capture per compiled plan. Reject a stale non-empty capture before opening a packet with no primitive command.
-    if(outCommandIrCapture && outCommandIrCapture->recordCount() != 0u && (outCommandIrCapture->graphGeneration() != planAccess.generation() || outCommandIrCapture->planGeneration() != planAccess.planGeneration()))
+    if(commandIrCapture && commandIrCapture->recordCount() != 0u && (commandIrCapture->graphGeneration() != planAccess.generation() || commandIrCapture->planGeneration() != planAccess.planGeneration()))
         return false;
-    if(outCommandIrCapture && outCommandIrCapture->recordCount() != 0u && outCommandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)
+    if(commandIrCapture && commandIrCapture->recordCount() != 0u && commandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)
         return false;
     if(outRecordedGraph.findWithinArtifactOperation(packetID, artifactAccess))
         return false;
@@ -194,8 +193,8 @@ b8 GpuNativePacketRecorder::recordPacket(
     const GpuCommandIrCaptureCheckpoint* capturedPrefix = nullptr;
     GpuPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
-        if(outDeferredAbort){
-            const b8 abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *outDeferredAbort);
+        if(deferredAbort){
+            const b8 abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
             NWB_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
             return;
         }
@@ -209,7 +208,7 @@ b8 GpuNativePacketRecorder::recordPacket(
         abortPacketRecording();
         return false;
     }
-    PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, artifactAccess, packetID, recordingAttemptGeneration, outRecordedGraph, recordingLease, outDeferredAbort, outCommandIrCapture, capturedPrefix, packetStateSeed);
+    PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, artifactAccess, packetID, recordingAttemptGeneration, outRecordedGraph, recordingLease, deferredAbort, commandIrCapture, capturedPrefix, packetStateSeed);
     const Timer recordingBegin = TimerNow();
 
     const auto initialStateResult = outRecordedGraph.buildPacketInitialStateSeed(scratch, stateFanInScratchArena, graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packetID);
@@ -232,13 +231,13 @@ b8 GpuNativePacketRecorder::recordPacket(
         return false;
     }
 
-    if(outCommandIrCapture && !outCommandIrCapture->beginRecordingAttempt(recordingAttemptGeneration)){
+    if(commandIrCapture && !commandIrCapture->beginRecordingAttempt(recordingAttemptGeneration)){
         packetStateSeed->reset();
         abortPacketRecording();
         return false;
     }
-    if(outCommandIrCapture){
-        captureCheckpoint = outCommandIrCapture->checkpoint();
+    if(commandIrCapture){
+        captureCheckpoint = commandIrCapture->checkpoint();
         capturedPrefix = &captureCheckpoint;
     }
 
@@ -250,7 +249,7 @@ b8 GpuNativePacketRecorder::recordPacket(
     if(!commandListResult){
         packetStateSeed->reset();
         abortPacketRecording();
-        if(outCommandIrCapture && !outCommandIrCapture->rollback(captureCheckpoint))
+        if(commandIrCapture && !commandIrCapture->rollback(captureCheckpoint))
             TerminateInvariant();
         return false;
     }
@@ -299,7 +298,7 @@ b8 GpuNativePacketRecorder::recordPacket(
             .task = task,
             .packet = packetID,
             .queue = packet.queue,
-            .commandIrCapture = outCommandIrCapture,
+            .commandIrCapture = commandIrCapture,
         };
         const GpuCompiledBarrier* const prologueBarriers = compiledTaskView.prologueBarriers;
         barrierCount += compiledTask->prologueBarrierCount;
@@ -396,7 +395,7 @@ b8 GpuNativePacketRecorder::recordPacket(
             else
                 commandList->cancelTaskCapabilityTracking();
         }
-        if(recorded && (!QueueHasCapabilities(taskView.commands.allowedCapabilities(), usedCapabilities) || !QueueHasCapabilities(queue->capabilities, usedCapabilities))){
+        if(recorded && (!GpuPacketRecordingDetail::HasQueueCapabilities(taskView.commands.allowedCapabilities(), usedCapabilities) || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities))){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})")
                 , ConvertString(taskView.markerLabel)
                 , static_cast<u32>(usedCapabilities)
@@ -475,7 +474,7 @@ b8 GpuNativePacketRecorder::recordPacket(
     if(!recorded){
         packetStateSeed->reset();
         abortPacketRecording();
-        if(outCommandIrCapture && !outCommandIrCapture->rollback(captureCheckpoint))
+        if(commandIrCapture && !commandIrCapture->rollback(captureCheckpoint))
             TerminateInvariant();
         return false;
     }

@@ -6,7 +6,6 @@
 
 
 #include <core/global.h>
-#include <core/graphics/rhi/hardware_ray_tracing_policy.adhd.h>
 
 #include <global/span.h>
 #include <global/type_properties.h>
@@ -29,7 +28,7 @@ NWB_CORE_BEGIN
 // Resource classes a shader selects between.
 // Each class maps to exactly one heap register space, so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
-    static constexpr u8 s_GpuDescriptorClassSampledImageBase = NWB::Core::HardwareRayTracingPolicy::s_GpuDescriptorClassSampledImageBase;
+    static constexpr u8 s_GpuDescriptorClassSampledImageBase = 0;
     enum Enum : u8{
         SampledImage = s_GpuDescriptorClassSampledImageBase, // Texture_SRV           -> SAMPLED_IMAGE
         StorageImage,       // Texture_UAV           -> STORAGE_IMAGE
@@ -59,8 +58,8 @@ namespace GpuDescriptorClass{
 
 // Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only side table validates handles instead.
 struct GpuDescriptorHandle{
-    static constexpr u32 s_Invalid = NWB::Core::HardwareRayTracingPolicy::s_GpuDescriptorHandleInvalid;
-    static constexpr u32 s_ClassShift = NWB::Core::HardwareRayTracingPolicy::s_GpuDescriptorHandleClassShift;
+    static constexpr u32 s_Invalid = 0xFFFFFFFFu;
+    static constexpr u32 s_ClassShift = 28u;
     static constexpr u32 s_SlotMask = (1u << s_ClassShift) - 1u;
 
 
@@ -92,7 +91,7 @@ public:
 inline constexpr b8 operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
 
 inline constexpr b8 operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value != rhs.value; }
-static constexpr usize s_GpuDescriptorHandleByteSize = NWB::Core::HardwareRayTracingPolicy::s_GpuDescriptorHandleByteSize;
+static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 // Values connecting the generic descriptor heap to the shared shader ABI.

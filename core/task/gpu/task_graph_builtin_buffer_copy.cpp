@@ -52,7 +52,8 @@ public:
                 emitCommandList.endRenderPass();
                 emitCommandList.copyBuffer(*copy.destination, copy.destinationOffsetBytes, *copy.source, copy.sourceOffsetBytes, copy.dataSizeBytes);
                 return true;
-            });
+            }
+        );
     }
 };
 

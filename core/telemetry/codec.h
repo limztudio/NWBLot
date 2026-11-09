@@ -7,8 +7,6 @@
 
 #include "recorder.h"
 
-#include <core/telemetry/stream_header.adhd.h>
-
 #include <global/expected.h>
 
 
@@ -21,6 +19,28 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_StreamMagic = 0x4E574253u; // NWBS
+
+#pragma pack(push, 1)
+struct EncodedStreamHeader{
+    u32 magic = s_StreamMagic;
+    u16 version = s_TelemetryFormatVersion;
+    u16 reserved = 0u;
+    u64 eventCount = 0u;
+    u64 payloadBytes = 0u;
+};
+
+struct EncodedEventHeader{
+    u32 magic = s_EventMagic;
+    u16 version = s_TelemetryFormatVersion;
+    u16 kind = EventKind::Unknown;
+    u8 reserved = 0u;
+    u32 streamId = 0u;
+    u64 frameIndex = 0u;
+    u64 timestampNanoseconds = 0u;
+    u64 payloadBytes = 0u;
+};
+#pragma pack(pop)
 static constexpr usize s_EncodedStreamHeaderByteSize = 24u;
 static_assert(sizeof(EncodedStreamHeader) == s_EncodedStreamHeaderByteSize, "EncodedStreamHeader wire layout drifted");
 static constexpr usize s_CodecPackedAlignBytes = 1u;

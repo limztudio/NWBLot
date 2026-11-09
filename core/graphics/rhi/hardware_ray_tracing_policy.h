@@ -7,8 +7,6 @@
 
 #include <core/global.h>
 
-#include <core/graphics/rhi/hardware_ray_tracing_policy.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +19,7 @@ NWB_CORE_BEGIN
 
 // Selects logical-device capabilities before instance creation; Disabled does not emulate hardware features.
 namespace HardwareRayTracingPolicy{
-    static constexpr u8 s_HardwareRayTracingPolicyDisabledBase = NWB::Core::HardwareRayTracingPolicy::HardwareRayTracingPolicy::Disabled;
+    static constexpr u8 s_HardwareRayTracingPolicyDisabledBase = 0;
     enum Enum : u8{
         Disabled = s_HardwareRayTracingPolicyDisabledBase,
         Automatic,
@@ -29,7 +27,7 @@ namespace HardwareRayTracingPolicy{
 };
 
 [[nodiscard]] constexpr b8 IsValidHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
-    return NWB::Core::HardwareRayTracingPolicy::IsValidHardwareRayTracingPolicy(static_cast<NWB::Core::HardwareRayTracingPolicy::HardwareRayTracingPolicy::Enum>(policy));
+    return policy == HardwareRayTracingPolicy::Disabled || policy == HardwareRayTracingPolicy::Automatic;
 }
 
 

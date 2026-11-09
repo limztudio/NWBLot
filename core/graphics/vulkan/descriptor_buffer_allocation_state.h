@@ -7,8 +7,6 @@
 
 #include "module.h"
 
-#include <core/graphics/vulkan/heap_binding_types.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,7 +15,7 @@ NWB_VULKAN_BEGIN
 
 
 namespace DescriptorBufferSegmentKind{
-    static constexpr u8 s_DescriptorBufferSegmentKindNoneBase = VulkanDefaults::s_VulkanDefaultDescriptorBufferSegmentKindNoneBase;
+    static constexpr u8 s_DescriptorBufferSegmentKindNoneBase = 0;
     enum Enum : u8{
         None = s_DescriptorBufferSegmentKindNoneBase,
         Resource,
@@ -43,7 +41,7 @@ public:
 
 class DescriptorBufferAllocationState final : NoCopy{
 private:
-    using FreeRange = VulkanDetail::DescriptorFreeRange;
+    struct FreeRange{ u32 offsetBytes = 0u; u32 sizeBytes = 0u; };
 
 public:
     explicit DescriptorBufferAllocationState(Alloc::GlobalArena& arena)noexcept : m_freeRanges(arena), m_liveAllocations(arena){}
@@ -67,4 +65,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

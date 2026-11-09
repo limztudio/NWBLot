@@ -5,12 +5,7 @@
 #pragma once
 
 
-#ifdef Success
-#undef Success
-#endif
-
 #include <core/os/clipboard.h>
-#include <core/os/platform_values.adhd.h>
 
 #include <X11/Xlib.h>
 
@@ -29,10 +24,10 @@ NWB_CORE_BEGIN
 
 
 // Property format is the item width in bits. Format 32 items are passed as long values on the client side.
-inline constexpr int s_X11PropertyByteFormat = ::NWB::Core::s_OsLinuxX11CheckedX11PropertyByteFormat;
-inline constexpr int s_X11PropertyLongFormat = ::NWB::Core::s_OsLinuxX11CheckedX11PropertyLongFormat;
+inline constexpr int s_X11PropertyByteFormat = 8;
+inline constexpr int s_X11PropertyLongFormat = 32;
 // Property lengths and request sizes count 4-byte units.
-inline constexpr usize s_X11WireUnitBytes = ::NWB::Core::s_OsLinuxX11CheckedX11WireUnitBytes;
+inline constexpr usize s_X11WireUnitBytes = 4u;
 
 
 struct X11Property final : NoCopy{
@@ -47,6 +42,12 @@ public:
     X11Property()noexcept = default;
     X11Property(X11Property&& other)noexcept;
     ~X11Property()noexcept;
+};
+
+
+struct X11PropertyFailure{
+    i32 nativeStatus = 0;
+    u8 errorCode = 0u;
 };
 
 

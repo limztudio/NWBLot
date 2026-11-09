@@ -7,9 +7,6 @@
 
 #include "backend.h"
 
-#include <core/graphics/vulkan/device_feature_types.adhd.h>
-#include <core/graphics/vulkan/pipeline_cache_types.adhd.h>
-
 #include <global/atomic_identity.h>
 
 
@@ -28,10 +25,10 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_PipelineCacheVirtualPath = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVirtualPath;
+inline constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
 // Pipeline-cache validation rejects data from different GPUs or drivers.
-inline constexpr AStringView s_PipelineCacheVolumeName = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheVolumeName;
-inline constexpr usize s_PipelineCacheHeaderVersionOneSize = NWB::Core::GraphicsBackend::VulkanDetail::s_VulkanCacheHeaderVersionOneSize;
+inline constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
+inline constexpr usize s_PipelineCacheHeaderVersionOneSize = 32u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,9 +44,22 @@ namespace PipelineCacheDataValidation{
 
 [[nodiscard]] PipelineCacheDataValidation::Enum ValidatePipelineCacheData(BinaryByteView cacheData, const VkPhysicalDeviceProperties& properties)noexcept;
 
+struct AstcHdrFeatureNegotiation{
+    b8 apiSupportsVulkan13 = false;
+    b8 vulkan13FeatureSupported = false;
+    b8 extensionEnabled = false;
+    b8 extensionFeatureSupported = false;
+};
+
 [[nodiscard]] inline constexpr b8 ShouldEnableAstcHdrFeature(const AstcHdrFeatureNegotiation& negotiation)noexcept{
     return negotiation.apiSupportsVulkan13 ? negotiation.vulkan13FeatureSupported : negotiation.extensionEnabled && negotiation.extensionFeatureSupported;
 }
+
+struct CompressedTextureFeatureState{
+    b8 bcEnabled = false;
+    b8 astcLdrEnabled = false;
+    b8 astcHdrEnabled = false;
+};
 
 [[nodiscard]] inline constexpr b8 IsCompressedTextureFormatFeatureEnabled(const Format::Enum format, const CompressedTextureFeatureState& featureState)noexcept{
     if(Format::IsBCCompressedFormat(format))

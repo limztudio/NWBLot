@@ -10,8 +10,6 @@
 #include "task_desc.h"
 #include "task_graph_declaration_view.h"
 
-#include <core/task/gpu/task_graph_types.adhd.h>
-
 #include <global/arena_object.h>
 
 
@@ -162,7 +160,10 @@ struct ResourcePointerEqual{
     }
 };
 
-using ResourceImportMatch = ::NWB::Core::GpuGraphResourceImportMatch;
+struct ResourceImportMatch{
+    u32 index = Limit<u32>::s_Max;
+    b8 samePointer = false;
+};
 
 // The binding borrows an import argument only until its pending resource node takes ownership.
 struct ResourceBinding{
@@ -207,7 +208,10 @@ struct PipelinePointerEqual{
     }
 };
 
-using PipelineImportMatch = ::NWB::Core::GpuGraphPipelineImportMatch;
+struct PipelineImportMatch{
+    u32 index = Limit<u32>::s_Max;
+    b8 samePointer = false;
+};
 
 // The pending pipeline node retains the imported handle before any registry entry is published.
 struct PipelineBinding{
@@ -236,7 +240,10 @@ public:
     {}
 };
 
-using MarkerLabelRange = ::NWB::Core::GpuMarkerLabelRange;
+struct MarkerLabelRange{
+    u32 offset = 0u;
+    u32 size = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

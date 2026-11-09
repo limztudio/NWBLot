@@ -10,11 +10,11 @@
 
 #include "cooked_object_cache.h"
 
+#include "arena_names.h"
 #include "built_asset.h"
 #include "nwb_file_asset_cache_writer.h"
 
 #include <core/assets/module.h>
-#include <core/assets/volume/arena_names.adhd.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>

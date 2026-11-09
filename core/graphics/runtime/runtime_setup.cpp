@@ -4,7 +4,6 @@
 
 #include "runtime_setup_upload_graph.h"
 
-#include <core/graphics/internal_names.adhd.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/task_graph.h>
 #include <core/common/log.h>
@@ -25,8 +24,8 @@ namespace __hidden_graphics_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GraphicsInternalNames::s_SetupBufferResourceIdentity;
-using GraphicsInternalNames::s_SetupBufferUploadIdentity;
+inline constexpr Name s_SetupBufferResourceIdentity("graphics.setup_buffer.resource");
+inline constexpr Name s_SetupBufferUploadIdentity("graphics.setup_buffer.upload");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +72,8 @@ struct BufferSetupSubmissionData{
             .destinationOffsetBytes = submissionData.setupDesc.destOffsetBytes,
             .finalState = GraphicsModuleDetail::SetupUploadGraph::FinalState(submissionData.uploadDesc.initialState),
             .acceptedToken = &submissionData.uploadToken,
-        });
+        }
+    );
     if(!taskResult)
         return MakeUnexpected(Failure{});
     const GpuTaskId task = *taskResult;

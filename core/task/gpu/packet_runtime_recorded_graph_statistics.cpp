@@ -3,12 +3,10 @@
 
 
 #include "packet_runtime_recorded_graph.h"
-#include <core/task/gpu/task_graph_types.adhd.h>
+
 #include "packet_runtime.h"
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
-
-#include <core/task/gpu/packet_runtime_statistics.adhd.h>
 
 #include <global/interval.h>
 #include <global/simd/vector.h>
@@ -29,7 +27,7 @@ namespace __hidden_gpu_packet_runtime_recorded_graph_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MinOverlapPacketCount = s_GpuPacketMinOverlapPacketCount;
+inline constexpr usize s_MinOverlapPacketCount = 2u;
 
 template<typename StatisticsT>
 static void AccumulatePacketRecordingCounts(const GpuRecordedPacket& recordedPacket, const b8 overlaps, StatisticsT& inOutStatistics, SIMDVectorDouble& inOutRecordingSeconds)noexcept{
@@ -53,7 +51,11 @@ static void StorePacketRecordingSeconds(StatisticsT& statistics, const SIMDVecto
     statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
 }
 
-using PacketRecordingIntervalEntry = GpuPacketRecordingIntervalEntry;
+struct PacketRecordingIntervalEntry{
+    u64 beginNanoseconds = 0u;
+    u64 endNanoseconds = 0u;
+    u32 packetIndex = 0u;
+};
 
 [[nodiscard]] b8 LessPacketRecordingIntervalEntry(const PacketRecordingIntervalEntry& left, const PacketRecordingIntervalEntry& right)noexcept{
     return left.beginNanoseconds < right.beginNanoseconds || (left.beginNanoseconds == right.beginNanoseconds && (left.endNanoseconds < right.endNanoseconds || (left.endNanoseconds == right.endNanoseconds && left.packetIndex < right.packetIndex)));
@@ -187,7 +189,8 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
         Span<const IntervalEntry>(intervalEntries),
         [](const IntervalEntry& interval)noexcept{ return interval.beginNanoseconds; },
         [](const IntervalEntry& interval)noexcept{ return interval.endNanoseconds; },
-        [&storage](const IntervalEntry& interval)noexcept{ storage.packetRecordingOverlaps[interval.packetIndex] = 1u; });
+        [&storage](const IntervalEntry& interval)noexcept{ storage.packetRecordingOverlaps[interval.packetIndex] = 1u; }
+    );
 }
 
 

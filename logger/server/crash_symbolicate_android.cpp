@@ -6,7 +6,7 @@
 
 #include <logger/server/crash_values.adhd.h>
 
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #include <global/text_utils.h>
 

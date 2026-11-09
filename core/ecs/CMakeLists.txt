@@ -1,5 +1,4 @@
 nwb_declare_static_library(nwb_ecs)
-nwb_target_adhd_sources(nwb_ecs NAMESPACE "NWB::Core::ECS::WorldProfileNames" SOURCES "${CMAKE_CURRENT_LIST_DIR}/profile_names.adhd")
 target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/*.cc"

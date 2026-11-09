@@ -8,7 +8,7 @@
 #include <logger/common.h>
 
 #include <core/alloc/scratch.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 #include <logger/server/crash_path_names.adhd.h>
 
 #include <global/filesystem/executable_paths.h>

@@ -24,7 +24,7 @@ namespace __hidden_command_buffer_resource_references{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_LinearCapacity = VulkanDefaults::s_VulkanDefaultCommandBufferResourceLinearCapacity;
+inline constexpr usize s_LinearCapacity = 32u;
 inline constexpr u8 s_Owned = 1u << 0u;
 inline constexpr u8 s_Buffer = 1u << 1u;
 inline constexpr u8 s_Texture = 1u << 2u;

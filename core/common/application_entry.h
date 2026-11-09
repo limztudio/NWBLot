@@ -89,7 +89,8 @@ template<typename EntryPoint, typename CharT>
                 Decay_T<decltype(DeclVal<const RemoveReference_T<EntryPoint>&>()(DeclVal<const isize&>(), DeclVal<CharT** const&>(), DeclVal<void* const&>()))>
             >
         )
-    ){ return entryPoint(argc, argv, instance); });
+    ){ return entryPoint(argc, argv, instance); }
+    );
 }
 
 #if defined(NWB_UNICODE)

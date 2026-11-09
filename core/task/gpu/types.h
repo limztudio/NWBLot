@@ -6,7 +6,6 @@
 
 
 #include <core/graphics/rhi/command.h>
-#include <core/task/gpu/task_graph_types.adhd.h>
 #include <core/graphics/rhi/raytracing.h>
 
 #include <global/hash_utils.h>
@@ -87,7 +86,7 @@ namespace GpuTaskHazardType{
 
 // Edge flags ride in the existing telemetry payload; wire format and scheduling unchanged.
 namespace GpuTaskGraphTelemetryEdgeFlag{
-    static constexpr u8 s_GpuTaskGraphTelemetryEdgeFlagNoneBase = s_GpuTaskGraphTelemetryEdgeFlagNoneBaseValue;
+    static constexpr u8 s_GpuTaskGraphTelemetryEdgeFlagNoneBase = 0u;
     enum Mask : u8{
         None = s_GpuTaskGraphTelemetryEdgeFlagNoneBase,
         ExplicitDependency = 1u << 0u,
@@ -99,7 +98,7 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
 
 // Queue-assignment summary flags supplement the detailed frame-graph assignment payload.
 namespace GpuTaskGraphTelemetryNodeFlag{
-    static constexpr u8 s_GpuTaskGraphTelemetryNodeFlagNoneBase = s_GpuTaskGraphTelemetryNodeFlagNoneBaseValue;
+    static constexpr u8 s_GpuTaskGraphTelemetryNodeFlagNoneBase = 0u;
     enum Mask : u8{
         None = s_GpuTaskGraphTelemetryNodeFlagNoneBase,
         AssignedGraphicsQueue = 1u << 0u,
@@ -371,7 +370,7 @@ struct GpuCompiledBarrier{
     // Initial-state, ownership, and export records never set this flag.
     b8 forceMemoryDependency = false;
 };
-static constexpr usize s_GpuCompiledBarrierByteSize = s_GpuCompiledBarrierExpectedByteSize;
+static constexpr usize s_GpuCompiledBarrierByteSize = 72u;
 static_assert(sizeof(GpuCompiledBarrier) == s_GpuCompiledBarrierByteSize, "GpuCompiledBarrier should keep its compact runtime layout");
 
 // A packet-state seed names the prior packet owning the native snapshot for one range. The recorder filters it to the declared range.

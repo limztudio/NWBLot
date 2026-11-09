@@ -5,7 +5,6 @@
 #include "text_input_service.h"
 
 #include <core/common/log.h>
-#include <core/os/platform_values.adhd.h>
 
 #include <global/scope_exit.h>
 
@@ -28,7 +27,7 @@ namespace __hidden_x11_text_input_service{
 
 
 static constexpr Array<XIMStyle, 3u> s_PreferredStyles{ XIMPreeditCallbacks | XIMStatusNothing, XIMPreeditNothing | XIMStatusNothing, XIMPreeditNone | XIMStatusNone, };
-static constexpr usize s_InitialLookupBytes = ::NWB::Core::s_OsLinuxX11TextInputServiceInitialLookupBytes;
+static constexpr usize s_InitialLookupBytes = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

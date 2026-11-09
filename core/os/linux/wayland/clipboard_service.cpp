@@ -155,7 +155,7 @@ void WaylandClipboardService::cancelNativeRequest(const ClipboardRequestToken to
 void WaylandClipboardService::pumpNativeRequests(){
     const Timer now = TimerNow();
     if(m_readToken.valid()){
-        const auto read = now >= m_readDeadline ? Expected<b8, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure(ClipboardStatus::Unavailable))) : ReadClipboardPipe(m_readFd, m_received);
+        const auto read = now >= m_readDeadline ? Expected<b8, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable })) : ReadClipboardPipe(m_readFd, m_received);
         if(!read || *read)
             finishRead(read ? ClipboardStatus::Success : read.error().status);
     }

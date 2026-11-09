@@ -129,7 +129,7 @@ NWB_END
 #include <gtest/gtest.h>
 
 #include <core/crash/package_internal.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #include <global/environment.h>
 #include <global/error_code.h>
@@ -838,7 +838,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
 #include <core/crash/module.h>
 #include <core/crash/package_internal.h>
 #include <core/crash/package_archive.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 #include <core/common/log.h>
 
 #include <global/atomic.h>
@@ -2061,7 +2061,7 @@ TEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth){
 #include <tests/integration/logger_server/name_cases.adhd.h>
 
 #include <core/alloc/scratch.h>
-#include <core/crash/package_names.adhd.h>
+#include <core/crash/package_names.h>
 
 #include <global/filesystem/operations.h>
 #include <global/filesystem/utility.h>

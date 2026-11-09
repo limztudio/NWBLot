@@ -18,8 +18,8 @@ NWB_CORE_BEGIN
 
 
 namespace BlendFactor{
-    static constexpr u8 s_BlendFactorZeroBase = NWB::Core::HardwareRayTracingPolicy::s_BlendFactorZeroBase;
-    static constexpr u8 s_BlendFactorConstantColorBase = NWB::Core::HardwareRayTracingPolicy::s_BlendFactorConstantColorBase;
+    static constexpr u8 s_BlendFactorZeroBase = 1;
+    static constexpr u8 s_BlendFactorConstantColorBase = 14;
     enum Enum : u8{
         Zero = s_BlendFactorZeroBase,
         One,
@@ -42,7 +42,7 @@ namespace BlendFactor{
 };
 
 namespace BlendOp{
-    static constexpr u8 s_BlendOpAddBase = NWB::Core::HardwareRayTracingPolicy::s_BlendOpAddBase;
+    static constexpr u8 s_BlendOpAddBase = 1;
     enum Enum : u8{
         Add = s_BlendOpAddBase,
        Subtract,
@@ -53,7 +53,7 @@ namespace BlendOp{
 };
 
 namespace ColorMask{
-    static constexpr u8 s_ColorMaskNoneBase = NWB::Core::HardwareRayTracingPolicy::s_ColorMaskNoneBase;
+    static constexpr u8 s_ColorMaskNoneBase = 0;
     enum Mask : u8{
         None = s_ColorMaskNoneBase,
 
@@ -185,7 +185,7 @@ public:
 
 
 namespace StencilOp{
-    static constexpr u8 s_StencilOpKeepBase = NWB::Core::HardwareRayTracingPolicy::s_StencilOpKeepBase;
+    static constexpr u8 s_StencilOpKeepBase = 1;
     enum Enum : u8{
         Keep = s_StencilOpKeepBase,
         Zero,
@@ -199,7 +199,7 @@ namespace StencilOp{
 };
 
 namespace ComparisonFunc{
-    static constexpr u8 s_ComparisonFuncNeverBase = NWB::Core::HardwareRayTracingPolicy::s_ComparisonFuncNeverBase;
+    static constexpr u8 s_ComparisonFuncNeverBase = 1;
     enum Enum : u8{
         Never = s_ComparisonFuncNeverBase,
         Less,

@@ -81,7 +81,8 @@ Expected<TimingScopeId> TimingRecorder::registerScope(const Name& scopeName){
         [&](ScopeRecord& scope, const TimingScopeId& scopeId)noexcept{
             scope.generation = scopeId.generation;
             scope.accumulator.setEnabled(m_enabled);
-        });
+        }
+    );
 }
 
 void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept{

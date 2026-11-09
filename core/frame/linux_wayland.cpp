@@ -7,7 +7,6 @@
 #include "frame_detail.h"
 
 #include <core/common/log.h>
-#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/linux/wayland/clipboard.h>
 #include <core/os/linux/wayland/text_input.h>
 
@@ -47,11 +46,11 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr i32 s_InactivePollTimeoutMs = FrameDetail::s_FramePlatformInactivePollTimeoutMs;
-static constexpr u32 s_WaylandCompositorBindVersion = FrameDetail::s_FramePlatformWaylandCompositorBindVersion;
-static constexpr u32 s_WaylandOutputBindVersion = FrameDetail::s_FramePlatformWaylandOutputBindVersion;
-static constexpr u32 s_WaylandWmBaseBindVersion = FrameDetail::s_FramePlatformWaylandWmBaseBindVersion;
-static constexpr u32 s_InitialConfigureRoundtripLimit = FrameDetail::s_FramePlatformInitialConfigureRoundtripLimit;
+static constexpr i32 s_InactivePollTimeoutMs = 10;
+static constexpr u32 s_WaylandCompositorBindVersion = 4u;
+static constexpr u32 s_WaylandOutputBindVersion = 2u;
+static constexpr u32 s_WaylandWmBaseBindVersion = 1u;
+static constexpr u32 s_InitialConfigureRoundtripLimit = 2u;
 static constexpr TStringView s_PosixNativeDomain = NWB_TEXT("POSIX");
 
 

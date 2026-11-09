@@ -5,8 +5,6 @@
 #include "calibrated_timestamp_probe.h"
 #include "backend.h"
 
-#include <core/graphics/vulkan/timer_query_types.adhd.h>
-
 #include <core/common/log.h>
 
 
@@ -26,7 +24,7 @@ namespace VulkanDetail{
 
 
 namespace __hidden_calibrated_timestamp_probe{
-    static constexpr u32 s_CalibratedTimestampProbeAttemptCount = ::NWB::Core::GraphicsBackend::VulkanDetail::s_CalibratedTimestampProbeAttemptCount;
+    static constexpr u32 s_CalibratedTimestampProbeAttemptCount = 4u;
 };
 
 
@@ -103,4 +101,5 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

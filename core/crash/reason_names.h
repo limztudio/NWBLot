@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <core/crash/reason_names.adhd.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,17 +17,17 @@ NWB_CRASH_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_SignalReasonKind = NWB::Core::Crash::CrashReasonNames::s_SignalReasonKind;
-inline constexpr StringView s_WindowsExceptionReasonKind = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionReasonKind;
-inline constexpr StringView s_TerminateReasonKind = NWB::Core::Crash::CrashReasonNames::s_TerminateReasonKind;
-inline constexpr StringView s_ManualDumpReasonKind = NWB::Core::Crash::CrashReasonNames::s_ManualDumpReasonKind;
-inline constexpr StringView s_GpuCrashReasonKind = NWB::Core::Crash::CrashReasonNames::s_GpuCrashReasonKind;
-inline constexpr StringView s_UnknownReasonKind = NWB::Core::Crash::CrashReasonNames::s_UnknownReasonKind;
+inline constexpr StringView s_SignalReasonKind = "signal";
+inline constexpr StringView s_WindowsExceptionReasonKind = "windows_exception";
+inline constexpr StringView s_TerminateReasonKind = "terminate";
+inline constexpr StringView s_ManualDumpReasonKind = "manual_dump";
+inline constexpr StringView s_GpuCrashReasonKind = "gpu_crash";
+inline constexpr StringView s_UnknownReasonKind = "unknown";
 
-inline constexpr StringView s_WindowsPlatformName = NWB::Core::Crash::CrashReasonNames::s_WindowsPlatformName;
-inline constexpr StringView s_LinuxPlatformName = NWB::Core::Crash::CrashReasonNames::s_LinuxPlatformName;
-inline constexpr StringView s_AndroidPlatformName = NWB::Core::Crash::CrashReasonNames::s_AndroidPlatformName;
-inline constexpr StringView s_UnknownPlatformName = NWB::Core::Crash::CrashReasonNames::s_UnknownPlatformName;
+inline constexpr StringView s_WindowsPlatformName = "windows";
+inline constexpr StringView s_LinuxPlatformName = "linux";
+inline constexpr StringView s_AndroidPlatformName = "android";
+inline constexpr StringView s_UnknownPlatformName = "unknown";
 
 [[nodiscard]] inline StringView PosixSignalName(const u64 signalNumber)noexcept{
 #if defined(SIGILL)
@@ -59,27 +57,58 @@ inline constexpr StringView s_UnknownPlatformName = NWB::Core::Crash::CrashReaso
     return s_SignalReasonKind;
 }
 
-inline constexpr u32 s_WindowsExceptionBreakpointCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionBreakpointCode;
-inline constexpr u32 s_WindowsExceptionAccessViolationCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionAccessViolationCode;
-inline constexpr u32 s_WindowsExceptionIllegalInstructionCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionIllegalInstructionCode;
-inline constexpr u32 s_WindowsExceptionArrayBoundsExceededCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionArrayBoundsExceededCode;
-inline constexpr u32 s_WindowsExceptionFloatDenormalOperandCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatDenormalOperandCode;
-inline constexpr u32 s_WindowsExceptionFloatDivideByZeroCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatDivideByZeroCode;
-inline constexpr u32 s_WindowsExceptionFloatInexactResultCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatInexactResultCode;
-inline constexpr u32 s_WindowsExceptionFloatInvalidOperationCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatInvalidOperationCode;
-inline constexpr u32 s_WindowsExceptionFloatOverflowCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatOverflowCode;
-inline constexpr u32 s_WindowsExceptionFloatStackCheckCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatStackCheckCode;
-inline constexpr u32 s_WindowsExceptionFloatUnderflowCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionFloatUnderflowCode;
-inline constexpr u32 s_WindowsExceptionIntegerDivideByZeroCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionIntegerDivideByZeroCode;
-inline constexpr u32 s_WindowsExceptionIntegerOverflowCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionIntegerOverflowCode;
-inline constexpr u32 s_WindowsExceptionStackOverflowCode = NWB::Core::Crash::CrashReasonNames::s_WindowsExceptionStackOverflowCode;
+inline constexpr u32 s_WindowsExceptionBreakpointCode = 0x80000003u;
+inline constexpr u32 s_WindowsExceptionAccessViolationCode = 0xC0000005u;
+inline constexpr u32 s_WindowsExceptionIllegalInstructionCode = 0xC000001Du;
+inline constexpr u32 s_WindowsExceptionArrayBoundsExceededCode = 0xC000008Cu;
+inline constexpr u32 s_WindowsExceptionFloatDenormalOperandCode = 0xC000008Du;
+inline constexpr u32 s_WindowsExceptionFloatDivideByZeroCode = 0xC000008Eu;
+inline constexpr u32 s_WindowsExceptionFloatInexactResultCode = 0xC000008Fu;
+inline constexpr u32 s_WindowsExceptionFloatInvalidOperationCode = 0xC0000090u;
+inline constexpr u32 s_WindowsExceptionFloatOverflowCode = 0xC0000091u;
+inline constexpr u32 s_WindowsExceptionFloatStackCheckCode = 0xC0000092u;
+inline constexpr u32 s_WindowsExceptionFloatUnderflowCode = 0xC0000093u;
+inline constexpr u32 s_WindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
+inline constexpr u32 s_WindowsExceptionIntegerOverflowCode = 0xC0000095u;
+inline constexpr u32 s_WindowsExceptionStackOverflowCode = 0xC00000FDu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline StringView WindowsExceptionName(const u64 exceptionCode)noexcept{
-    return NWB::Core::Crash::CrashReasonNames::WindowsExceptionName(exceptionCode);
+    switch(exceptionCode){
+    case s_WindowsExceptionBreakpointCode:
+        return "breakpoint";
+    case s_WindowsExceptionAccessViolationCode:
+        return "access_violation";
+    case s_WindowsExceptionIllegalInstructionCode:
+        return "illegal_instruction";
+    case s_WindowsExceptionArrayBoundsExceededCode:
+        return "array_bounds_exceeded";
+    case s_WindowsExceptionFloatDenormalOperandCode:
+        return "float_denormal_operand";
+    case s_WindowsExceptionFloatDivideByZeroCode:
+        return "float_divide_by_zero";
+    case s_WindowsExceptionFloatInexactResultCode:
+        return "float_inexact_result";
+    case s_WindowsExceptionFloatInvalidOperationCode:
+        return "float_invalid_operation";
+    case s_WindowsExceptionFloatOverflowCode:
+        return "float_overflow";
+    case s_WindowsExceptionFloatStackCheckCode:
+        return "float_stack_check";
+    case s_WindowsExceptionFloatUnderflowCode:
+        return "float_underflow";
+    case s_WindowsExceptionIntegerDivideByZeroCode:
+        return "integer_divide_by_zero";
+    case s_WindowsExceptionIntegerOverflowCode:
+        return "integer_overflow";
+    case s_WindowsExceptionStackOverflowCode:
+        return "stack_overflow";
+    default:
+        return s_WindowsExceptionReasonKind;
+    }
 }
 
 

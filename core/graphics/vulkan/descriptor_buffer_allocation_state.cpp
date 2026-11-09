@@ -116,7 +116,7 @@ void DescriptorBufferAllocationState::free(const DescriptorBufferSegment& segmen
         return range.offsetBytes + range.sizeBytes;
     };
 
-    FreeRange freedRange{ .offsetBytes = segment.offsetBytes, .sizeBytes = segment.sizeBytes };
+    FreeRange freedRange{ segment.offsetBytes, segment.sizeBytes };
     for(const FreeRange& range : m_freeRanges){
         if(freedRange.offsetBytes < rangeEnd(range) && range.offsetBytes < freedRange.offsetBytes + freedRange.sizeBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} overlaps a free range."), segment.offsetBytes, segment.sizeBytes);
@@ -205,4 +205,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

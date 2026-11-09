@@ -123,7 +123,7 @@ Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const
         return MakeUnexpected(Failure{});
 
     NameHash derivedHash;
-    static constexpr AStringView s_VirtualPathPrefix = NWB::Core::HardwareRayTracingPolicy::s_ShaderArchiveVirtualPathPrefix;
+    static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
     const u64 prefixHash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, s_VirtualPathPrefix);
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         u64 laneHash = prefixHash;

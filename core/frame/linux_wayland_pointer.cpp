@@ -28,8 +28,8 @@ NWB_CORE_BEGIN
 namespace __hidden_frame_linux_wayland_input{
 
 
-static constexpr f64 s_WaylandScrollAxisUnit = FrameDetail::s_FramePlatformWaylandScrollAxisUnit;
-static constexpr u32 s_WaylandPointerFrameSeatVersion = FrameDetail::s_FramePlatformWaylandPointerFrameSeatVersion;
+static constexpr f64 s_WaylandScrollAxisUnit = 120.0;
+static constexpr u32 s_WaylandPointerFrameSeatVersion = 5u;
 
 
 static i32 TranslatePointerButton(u32 button)noexcept{

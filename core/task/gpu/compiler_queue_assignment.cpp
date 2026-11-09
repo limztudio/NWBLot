@@ -3,7 +3,6 @@
 
 
 #include "compiler_internal.h"
-#include <core/task/gpu/compiler_analysis_types.adhd.h>
 
 #include <global/overflow.h>
 
@@ -109,7 +108,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
         }
     }
     if(needsSchedulingReachability && !analysis.schedulingEdges().empty()){
-        constexpr usize s_OverlapQueueMinimum = s_GpuTaskOverlapQueueMinimum;
+        constexpr usize s_OverlapQueueMinimum = 2u;
         usize capableQueueCount = 0u;
         for(usize queueIndex = 0u; queueIndex < topology.queueCount && capableQueueCount < s_OverlapQueueMinimum; ++queueIndex){
             for(const GpuTaskQueuePlacementGroup& group : groups){

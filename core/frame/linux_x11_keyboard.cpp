@@ -11,7 +11,6 @@
 #include <X11/Xutil.h>
 
 #include <core/common/log.h>
-#include <core/frame/frame_platform_values.adhd.h>
 #include <core/os/linux/x11/text_input.h>
 #include <global/thread.h>
 
@@ -37,7 +36,7 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_TextInputBufferSize = FrameDetail::s_FramePlatformTextInputBufferSize;
+static constexpr usize s_TextInputBufferSize = 64u;
 
 
 void X11KeyboardInput::reset()noexcept{

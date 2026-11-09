@@ -51,7 +51,8 @@ public:
                 NWB_ASSERT(copy.source && copy.destination);
                 emitCommandList.copyTexture(*copy.destination, copy.destinationSlice, *copy.source, copy.sourceSlice);
                 return !emitCommandList.commandRecordingFailed();
-            });
+            }
+        );
     }
 };
 

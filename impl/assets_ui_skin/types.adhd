@@ -137,7 +137,7 @@ Expected<usize> TryFindUiSkinRegionIndex(
             if(regions[i].name == name)
                 return i;
         }
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     usize first = 0u;
     usize count = regionIndex.size();
@@ -153,20 +153,20 @@ Expected<usize> TryFindUiSkinRegionIndex(
             count = step;
     }
     if(first == regionIndex.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const usize matchedPosition = cast<usize>(regionIndex[first]);
     if(regions[matchedPosition].name != name)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return matchedPosition;
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){
-    return max(minimumExtent, max(region.minimumWidth, region.minimumHeight));
+    return Max(minimumExtent, Max(region.minimumWidth, region.minimumHeight));
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f32 density){
-    const f32 sourceExtent = cast<f32>(max(region.rectangle.width, region.rectangle.height)) / density;
-    return max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
+    const f32 sourceExtent = cast<f32>(Max(region.rectangle.width, region.rectangle.height)) / density;
+    return Max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
 }
 
 void RebuildUiSkinRegionIndex(in Span<UiSkinRegion> regions, mut Vector<u32> outIndex){

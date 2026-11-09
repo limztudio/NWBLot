@@ -22,9 +22,9 @@ u64 ResolveListNavigationStartIndex(in u64 count, in ListKeyResolution current, 
         if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
             distance = action.pageRows;
         if(reverse)
-            start = current.index - min(distance, current.index);
+            start = current.index - Min(distance, current.index);
         else
-            start = current.index + min(distance, count - 1u - current.index);
+            start = current.index + Min(distance, count - 1u - current.index);
     }
     return start;
 }
@@ -67,10 +67,10 @@ void ApplyListCandidateSelection(
 }
 
 u64 ComputeListHostPageRows(in f32 viewportHeight, in f32 rowHeight, in u64 rowCount){
-    const f64 page = floor(cast<f64>(viewportHeight) / cast<f64>(rowHeight));
+    const f64 page = Floor(cast<f64>(viewportHeight) / cast<f64>(rowHeight));
     if(page >= cast<f64>(rowCount))
-        return max(cast<u64>(1u), rowCount);
-    return max(cast<u64>(1u), cast<u64>(page));
+        return Max(cast<u64>(1u), rowCount);
+    return Max(cast<u64>(1u), cast<u64>(page));
 }
 
 f64 ComputeListExpandedScrollOffset(
@@ -85,7 +85,7 @@ f64 ComputeListExpandedScrollOffset(
     const f64 firstRow = cast<f64>(candidateFirstRow);
     const f64 within = (candidateOffset + clippedTop) - (firstRow * cast<f64>(oldRowHeight));
     const f64 offset = ((firstRow * cast<f64>(newRowHeight)) + within) - clippedTop;
-    return max(0.0, offset);
+    return Max(0.0, offset);
 }
 
 f64 ComputeListRescaledScrollOffset(
@@ -96,20 +96,20 @@ f64 ComputeListRescaledScrollOffset(
     in f32 newRowHeight
 ){
     const f64 clippedTop = cast<f64>(contentClipY) - cast<f64>(viewportY);
-    const f64 anchor = max(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
-    return max(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
+    const f64 anchor = Max(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
+    return Max(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
 }
 
 Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
     const f64 travel = cast<f64>(gesture.referenceRectangle.height) - cast<f64>(gesture.targetRectangle.height);
-    if(!isFinite(travel) || travel <= 0.0 || !isFinite(gesture.maximum) || gesture.maximum < 0.0)
-        return makeUnexpected(Failure());
+    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
+        return MakeUnexpected(Failure());
     const f64 start = cast<f64>(gesture.targetRectangle.y) - cast<f64>(gesture.referenceRectangle.y);
     const f64 delta = cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y);
     const f64 fractionValue = (start + delta) / travel;
     f64 fraction = 0.0;
     if(fractionValue > 0.0)
-        fraction = min(1.0, fractionValue);
+        fraction = Min(1.0, fractionValue);
     return fraction * gesture.maximum;
 }
 
@@ -127,7 +127,7 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
 ){
     ListMeasureKey key;
     if(textLanguage.size() >= key.language.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     key.sourceGeneration = sourceGeneration;
     key.sourceRevision = sourceRevision;
     key.rowCount = rowCount;
@@ -149,20 +149,20 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
 }
 
 Rect ResolveListProbeRect(in UiSkinRegion background, in Insets padding, in f32 scrollbarWidth, in f32 rowHeight){
-    const f32 probeWidth = max(max(s_StyleMinimumFieldWidth, background.minimumWidth), padding.left + padding.right + scrollbarWidth + rowHeight);
-    const f32 probeHeight = max(background.minimumHeight, rowHeight + padding.top + padding.bottom);
+    const f32 probeWidth = Max(Max(s_StyleMinimumFieldWidth, background.minimumWidth), padding.left + padding.right + scrollbarWidth + rowHeight);
+    const f32 probeHeight = Max(background.minimumHeight, rowHeight + padding.top + padding.bottom);
     return Rect(0.0f, 0.0f, probeWidth, probeHeight);
 }
 
 Point ResolveListIntrinsicSize(in UiSkinRegion background, in Insets padding, in f32 rowHeight){
     return Point(
-        max(background.minimumWidth, s_StyleMinimumFieldWidth),
-        max(background.minimumHeight, rowHeight + padding.top + padding.bottom)
+        Max(background.minimumWidth, s_StyleMinimumFieldWidth),
+        Max(background.minimumHeight, rowHeight + padding.top + padding.bottom)
     );
 }
 
 f32 ResolveListRowBaseHeight(in SelectableMetrics metrics, in f32 textHeight){
-    return max(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
+    return Max(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
 }
 
 void CommitListReconcileState(

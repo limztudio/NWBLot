@@ -53,19 +53,19 @@ b8 IsValidUiSkinDefaultFontSize(in f32 defaultFontSize){
 
 Expected<VectorDouble> TryLoadUiSkinSliceExtents(in UiSkinRegion region){
     if(region.rectangle.width == 0u || region.rectangle.height == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
     const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
     if(region.drawMode == UiSkinDrawMode::Sprite){
         if(horizontal != 0u || vertical != 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
     }
     else if(region.drawMode == UiSkinDrawMode::NineSlice){
         if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
     }
     else
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return VectorDouble(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
 }
 
@@ -78,10 +78,10 @@ b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, i
 }
 
 b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
-    return isFinite(color.r) && IsValidUiSkinPaletteChannelValue(color.r, 0u)
-        && isFinite(color.g) && IsValidUiSkinPaletteChannelValue(color.g, 1u)
-        && isFinite(color.b) && IsValidUiSkinPaletteChannelValue(color.b, 2u)
-        && isFinite(color.a) && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
+    return IsFinite(color.r) && IsValidUiSkinPaletteChannelValue(color.r, 0u)
+        && IsFinite(color.g) && IsValidUiSkinPaletteChannelValue(color.g, 1u)
+        && IsFinite(color.b) && IsValidUiSkinPaletteChannelValue(color.b, 2u)
+        && IsFinite(color.a) && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
     ;
 }
 
@@ -93,38 +93,38 @@ b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHe
 
     const UiSkinInsets padding = region.padding;
     if(
-        !isFinite(padding.left) || padding.left < 0.0f
-        || !isFinite(padding.top) || padding.top < 0.0f
-        || !isFinite(padding.right) || padding.right < 0.0f
-        || !isFinite(padding.bottom) || padding.bottom < 0.0f
+        !IsFinite(padding.left) || padding.left < 0.0f
+        || !IsFinite(padding.top) || padding.top < 0.0f
+        || !IsFinite(padding.right) || padding.right < 0.0f
+        || !IsFinite(padding.bottom) || padding.bottom < 0.0f
     )
         return false;
 
     const f32 paddingHorizontal = padding.left + padding.right;
     const f32 paddingVertical = padding.top + padding.bottom;
-    return isFinite(paddingHorizontal)
-        && isFinite(paddingVertical)
-        && isFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
-        && isFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
+    return IsFinite(paddingHorizontal)
+        && IsFinite(paddingVertical)
+        && IsFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
+        && IsFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
     ;
 }
 
 Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in VectorDouble sliceExtents, in VectorDouble density){
-    if(!isFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !isFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
-        return makeUnexpected(Failure());
+    if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+        return MakeUnexpected(Failure());
     const f64 maxFloatF64 = cast<f64>(f32.max);
     const VectorDouble minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight), 0.0, 0.0);
     const VectorDouble scaledSlices = VectorDouble(sliceExtents.x, sliceExtents.y, 0.0, 0.0) / VectorDouble(density.x, density.y, 1.0, 1.0);
-    const VectorDouble widthHeight = max(minimumSize, scaledSlices);
-    if(!isFinite(widthHeight.xy) || widthHeight.x > maxFloatF64 || widthHeight.y > maxFloatF64)
-        return makeUnexpected(Failure());
+    const VectorDouble widthHeight = Max(minimumSize, scaledSlices);
+    if(!IsFinite(widthHeight.xy) || widthHeight.x > maxFloatF64 || widthHeight.y > maxFloatF64)
+        return MakeUnexpected(Failure());
     return VectorSingle(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
 }
 
 Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density){
     const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
     if(!sliceExtents.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return TryLoadUiSkinMinimumSize(region, sliceExtents.value(), VectorDouble(density, density, 0.0, 0.0));
 }
 
@@ -145,8 +145,8 @@ b8 ValidateUiSkinPayloadData(
     if(
         !texture.valid() || texture.name() == Name("")
         || atlasWidth == 0u || atlasHeight == 0u
-        || !isFinite(referenceDensity) || referenceDensity <= 0.0f
-        || !(isFinite(cast<f32>(atlasWidth) / referenceDensity) && isFinite(cast<f32>(atlasHeight) / referenceDensity))
+        || !IsFinite(referenceDensity) || referenceDensity <= 0.0f
+        || !(IsFinite(cast<f32>(atlasWidth) / referenceDensity) && IsFinite(cast<f32>(atlasHeight) / referenceDensity))
         || regions.empty()
     ){
         error("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid");
@@ -177,7 +177,7 @@ b8 ValidateUiSkinPayloadData(
             return false;
         }
     }
-    if(!isFinite(typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
+    if(!IsFinite(typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
         error("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]");
         return false;
     }

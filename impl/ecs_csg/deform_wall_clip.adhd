@@ -41,13 +41,13 @@ Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
     if(registryDistanceCallback.has_value()){
         const Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> packedParameterBytes = PackCsgShapeDefaultParameterBytes(registryParameterByteSize, inlineParameters);
         if(!packedParameterBytes.has_value())
-            return makeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
         inlineParameters = ReadCsgShapeInlineParameters(packedParameterBytes.value());
     }
     else{
         const Expected<CsgBuiltInShapeKind> resolvedBuiltInKind = TryResolveBuiltInCsgShapeKind(shape.shapeType);
         if(!resolvedBuiltInKind.has_value())
-            return makeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
         builtInKind = resolvedBuiltInKind.value();
     }
 
@@ -65,7 +65,7 @@ Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
             const Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)> callback = registryDistanceCallback.value();
             const Expected<f32> evaluated = callback(shapePosition, inlineParameters);
             if(!evaluated.has_value())
-                return makeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
             distance = evaluated.value();
         }
         else
@@ -73,7 +73,7 @@ Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
 
         const Expected<f32, CsgDeformViabilityReason> snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
         if(!snapped.has_value())
-            return makeUnexpected(snapped.error());
+            return MakeUnexpected(snapped.error());
         const f32 snappedDistance = snapped.value();
         native(in vertexIndex, in snappedDistance, mut outDistances){
             outDistances[vertexIndex] = snappedDistance;
@@ -91,8 +91,8 @@ Expected<u32> SplitCsgDeformEdgeVertex(
     mut CsgDeformEdgeSplitMap edgeSplits
 ){
     if(vertices.size() + 1u > s_MaxDeformVertices)
-        return makeUnexpected(Failure());
-    const u64 edge = packUnorderedU32Pair(first, second);
+        return MakeUnexpected(Failure());
+    const u64 edge = PackUnorderedU32Pair(first, second);
     u32 existingIndex = 0u;
     b8 foundExisting = false;
     native(in edge, in edgeSplits, mut existingIndex, mut foundExisting){
@@ -113,7 +113,7 @@ Expected<u32> SplitCsgDeformEdgeVertex(
     // A zero secondDistance selects the second endpoint.
     const Expected<CsgDeformVertex> mixed = TryBuildInterpolatedCsgDeformVertex(firstVertex, secondVertex, firstDistance, secondDistance);
     if(!mixed.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u32 created = cast<u32>(vertices.size());
     vertices.push_back(mixed.value());
     b8 inserted = false;
@@ -126,7 +126,7 @@ Expected<u32> SplitCsgDeformEdgeVertex(
     }
     if(!inserted){
         assert(false);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return created;
 }
@@ -161,15 +161,15 @@ Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
             continue;
         const Expected<u32> splitA = SplitCsgDeformEdgeVertex(plan.firstEdgeStart, plan.firstEdgeEnd, plan.firstEdgeStartDistance, plan.firstEdgeEndDistance, inOutVertices, edgeSplits);
         if(!splitA.has_value())
-            return makeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
         const Expected<u32> splitB = SplitCsgDeformEdgeVertex(plan.secondEdgeStart, plan.secondEdgeEnd, plan.secondEdgeStartDistance, plan.secondEdgeEndDistance, inOutVertices, edgeSplits);
         if(!splitB.has_value())
-            return makeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
         scratchKept.push_back(MakeCsgDeformTriangle(plan.primaryCorner, splitA.value(), splitB.value()));
         if(plan.keepCount == 2u)
             scratchKept.push_back(MakeCsgDeformTriangle(plan.primaryCorner, splitB.value(), plan.secondKeepVertex));
         if(scratchKept.size() > s_MaxDeformTriangles)
-            return makeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
     }
     inOutTriangles = scratchKept;
     return true;

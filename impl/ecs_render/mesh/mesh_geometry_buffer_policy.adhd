@@ -11,37 +11,37 @@
 class MeshGeometryBufferPolicy{
     public Expected<ComputeEmulationLayout> resolveComputeEmulationLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount)const{
         if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshEmulationFirstVertexIndex;
         if(vertexCount >= s_MeshAddressableBytes / s_MeshEmulationVertexByteSize)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
         const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
         // Every raw index store must fit its uint byte address, including the final four-byte element.
         if(indexedByteSize > s_MeshAddressableBytes)
-            return makeUnexpected(Failure());
-        const u64 alignedIndexedByteSize = alignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
+            return MakeUnexpected(Failure());
+        const u64 alignedIndexedByteSize = AlignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
         const u64 expandedByteSize = cast<u64>(primitiveIndexCount) * s_MeshEmulationVertexByteSize;
         ComputeEmulationLayout outLayout;
-        outLayout.bufferByteSize = max(expandedByteSize, alignedIndexedByteSize);
+        outLayout.bufferByteSize = Max(expandedByteSize, alignedIndexedByteSize);
         outLayout.indexByteOffset = cast<u32>(indexByteOffset);
         return outLayout;
     }
 
     public Expected<ObjectGeometryCacheLayout> resolveObjectCacheLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount)const{
         if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshObjectFirstVertexIndex;
         if(vertexCount > s_MeshMaxU32Value / s_MeshObjectVertexByteSize)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u64 indexByteOffset = vertexCount * s_MeshObjectVertexByteSize;
         const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
         if(indexedByteSize > s_MeshAddressableBytes)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
-        const u64 bufferByteSize = alignUp(indexedByteSize, s_MeshObjectVertexByteSize);
+        const u64 bufferByteSize = AlignUp(indexedByteSize, s_MeshObjectVertexByteSize);
         if(bufferByteSize > s_MeshAddressableBytes)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         ObjectGeometryCacheLayout outLayout;
         outLayout.bufferByteSize = bufferByteSize;
         outLayout.indexByteOffset = cast<u32>(indexByteOffset);

@@ -77,7 +77,7 @@ class FontAtlasPacker{
             placement.y = placedY;
             return placement;
         }
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     public void copyGlyphToGroup(

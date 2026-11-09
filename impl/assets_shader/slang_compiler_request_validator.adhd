@@ -14,7 +14,7 @@ class SlangCompilerRequestValidator{
             if(stage == mapping.stage)
                 return mapping.slangStage;
         }
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     public b8 validateInputs(

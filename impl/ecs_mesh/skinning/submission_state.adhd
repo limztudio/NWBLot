@@ -58,7 +58,7 @@ b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<Skelet
         const MatrixSingle a(lhs[i]);
         const MatrixSingle b(rhs[i]);
         for(u32 row = 0u; row < s_SkeletonJointMatrixRowCount; ++row){
-            if(!equalF32x4Bits(a[row], b[row]))
+            if(!EqualF32x4Bits(a[row], b[row]))
                 return false;
         }
     }
@@ -110,7 +110,7 @@ Expected<u64> TryStageMeshSkinningDeformationCandidate(
 ){
     if(!CanStageMeshSkinningDeformationCandidate(hasResourceSlotsBuffer, joints.size(), hasJointData, inoutCandidateSerial, acceptedRevision)){
         error("MeshSkinningDeformationState: invalid or exhausted deformation candidate");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     outPendingJoints.clear();
     if(!joints.empty()){

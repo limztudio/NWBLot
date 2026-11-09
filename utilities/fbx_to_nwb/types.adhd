@@ -141,7 +141,7 @@ class FbxMeshSkinningSummary{
     public Expected<b8> resolve()const{
         if(this.sawStatic && this.sawSkinned){
             warning("Model export does not support mixed static and skinned source meshes yet");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         return this.sawSkinned;
     }
@@ -152,17 +152,17 @@ class FbxMeshSkinningSummary{
 
 
 b8 IsValidFbxImportScale(in f64 value){
-    return isFinite(value) && value > 0.0;
+    return IsFinite(value) && value > 0.0;
 }
 
 b8 IsValidFbxTriangleAreaEpsilon(in f64 value){
-    return isFinite(value) && !(value < 0.0);
+    return IsFinite(value) && !(value < 0.0);
 }
 
 Expected<usize> TryComputeMeshRefreshReplacementCapacity(in usize declarationCount){
     if(declarationCount > usize.max / s_MaxMeshReplacementCount){
         error("Failed to refresh NWB mesh: replacement capacity overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return declarationCount * s_MaxMeshReplacementCount;
 }
@@ -216,14 +216,14 @@ b8 ValidateFbxOutputMode(
 }
 
 Expected<usize> TryParseMeshIndexSelector(in StringView text){
-    const StringView trimmed = trimView(text);
+    const StringView trimmed = TrimView(text);
     if(trimmed.empty())
-        return makeUnexpected(Failure());
-    const Expected<u64> parsed = parseU64(trimmed);
+        return MakeUnexpected(Failure());
+    const Expected<u64> parsed = ParseU64(trimmed);
     if(!parsed.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(parsed.value() > cast<u64>(usize.max))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<usize>(parsed.value());
 }
 
@@ -242,8 +242,8 @@ StringView ResolveFbxMeshDisplayName(in StringView meshName){
 }
 
 Expected<Vec4> TryMakeFiniteColorVec4(in f32 red, in f32 green, in f32 blue, in f32 alpha){
-    if(!isFinite(red) || !isFinite(green) || !isFinite(blue) || !isFinite(alpha))
-        return makeUnexpected(Failure());
+    if(!IsFinite(red) || !IsFinite(green) || !IsFinite(blue) || !IsFinite(alpha))
+        return MakeUnexpected(Failure());
     return Vec4(red, green, blue, alpha);
 }
 

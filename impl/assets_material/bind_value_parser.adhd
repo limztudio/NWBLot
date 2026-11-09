@@ -10,7 +10,7 @@
 
 Expected<MaterialTypedValueData> StoreMaterialTypedValueComponent(in MaterialParameterValueType valueType, in u32 componentIndex, in u32 value, in MaterialTypedValueData parameter){
     if(componentIndex >= s_MaterialTypedValueComponentCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     MaterialTypedValueData outParameter = parameter;
     switch(valueType){
@@ -57,20 +57,20 @@ Expected<MaterialTypedValueData> StoreMaterialTypedValueComponent(in MaterialPar
 Expected<MaterialTypedValueData> ParseMaterialTypedValue(in StringView key, in StringView value){
     MaterialTypedValueData parameter;
     if(key.empty() || key.size() > s_MaterialCompactStringMaxLength || value.empty() || value.size() > s_MaterialCompactStringMaxLength)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
-    const Expected<MaterialParameterCall> call = SplitMaterialParameterCall(trimView(value));
+    const Expected<MaterialParameterCall> call = SplitMaterialParameterCall(TrimView(value));
     if(!call.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<MaterialParameterType> type = TryParseMaterialParameterTypeText(call.value().typeText);
     if(!type.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<MaterialParameterTokens> tokens = SplitMaterialParameterTokens(call.value().arguments);
     if(!tokens.has_value() || tokens.value().count != type.value().componentCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     for(u32 i = 0u; i < tokens.value().count; ++i){
-        Expected<u32> parsedValue = makeUnexpected(Failure());
+        Expected<u32> parsedValue = MakeUnexpected(Failure());
         if(type.value().valueType == MaterialParameterValueType::f16){
             const StringView numericToken = NormalizeMaterialParameterNumericToken(tokens.value().values[cast<usize>(i)], type.value().valueType);
             const Expected<f32> converted = ParseMaterialParameterF32Token(numericToken);
@@ -87,10 +87,10 @@ Expected<MaterialTypedValueData> ParseMaterialTypedValue(in StringView key, in S
             parsedValue = ParseMaterialParameterNonHalfToken(tokens.value().values[cast<usize>(i)], type.value().valueType);
         }
         if(!parsedValue.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const Expected<MaterialTypedValueData> storedParameter = StoreMaterialTypedValueComponent(type.value().valueType, i, parsedValue.value(), parameter);
         if(!storedParameter.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         parameter = storedParameter.value();
     }
 

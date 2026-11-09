@@ -181,7 +181,7 @@ u8 SelectNextSliderInputStream(
 
 f32 ComputeListRowPaddedHeight(in f32 textHeight, in Insets padding, in f32 currentHeight){
     const f32 paddedHeight = (textHeight + padding.top) + padding.bottom;
-    return max(currentHeight, paddedHeight);
+    return Max(currentHeight, paddedHeight);
 }
 
 

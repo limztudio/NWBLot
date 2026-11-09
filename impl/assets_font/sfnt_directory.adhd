@@ -162,11 +162,11 @@ class FontSfntDirectory{
     public Expected<FontSfntTable> table(in usize index)const{
         const Expected<Span<u8>> rec = this.record(index);
         if(!rec.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u32 offset = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordOffsetFieldOffset);
         const u32 length = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordLengthFieldOffset);
         if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         FontSfntTable outTable;
         outTable.tag = ReadFontSfntU32BigEndian(rec.value(), 0u);
         outTable.offset = offset;
@@ -177,7 +177,7 @@ class FontSfntDirectory{
     public Expected<u32> tableTag(in usize index)const{
         const Expected<Span<u8>> rec = this.record(index);
         if(!rec.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return ReadFontSfntU32BigEndian(rec.value(), 0u);
     }
 
@@ -186,7 +186,7 @@ class FontSfntDirectory{
 
     private Expected<Span<u8>> record(in usize index)const{
         if(index >= cast<usize>(this.m_tableCount))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
     }
 }

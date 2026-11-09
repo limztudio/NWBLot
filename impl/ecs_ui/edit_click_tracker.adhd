@@ -125,12 +125,12 @@ class UiEditClickTracker{
     }
 
     public UiEditClickKind press(in UiTextEditOwner owner, in PopupToken popup, in u64 revision, in u64 externalRevision, in Point position, in u64 timestampMs, in b8 shift){
-        if(!owner.valid() || timestampMs == 0u || shift || !isFinite(position.x) || !isFinite(position.y)){
+        if(!owner.valid() || timestampMs == 0u || shift || !IsFinite(position.x) || !IsFinite(position.y)){
             this.cancel();
             return UiEditClickKind::Caret;
         }
         const VectorDouble delta = VectorDouble(cast<f64>(position.x), cast<f64>(position.y), 0.0, 0.0) - VectorDouble(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y), 0.0, 0.0);
-        const f64 distanceSquared = lengthSq(delta.xy);
+        const f64 distanceSquared = LengthSq(delta.xy);
         const b8 second = this.m_released && this.m_clickCount == 1u && owner == this.m_owner && popup == this.m_popup
             && revision == this.m_revision && externalRevision == this.m_externalRevision
             && timestampMs >= this.m_pressTimestampMs && timestampMs - this.m_pressTimestampMs <= s_UiDoubleClickMaxIntervalMs
@@ -155,12 +155,12 @@ class UiEditClickTracker{
     public void move(in Point position){
         if(!this.m_down)
             return;
-        if(!isFinite(position.x) || !isFinite(position.y)){
+        if(!IsFinite(position.x) || !IsFinite(position.y)){
             this.cancel();
             return;
         }
         const VectorDouble delta = VectorDouble(cast<f64>(position.x), cast<f64>(position.y), 0.0, 0.0) - VectorDouble(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y), 0.0, 0.0);
-        const f64 distanceSquared = lengthSq(delta.xy);
+        const f64 distanceSquared = LengthSq(delta.xy);
         if(distanceSquared > s_UiDoubleClickMaxDistanceSquared)
             this.cancel();
     }

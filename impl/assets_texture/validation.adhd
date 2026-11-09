@@ -25,7 +25,7 @@ Expected<usize> TryComputeRgba8FallbackMipBytes(in u32 width, in u32 height){
     const u64 texelCount = cast<u64>(width) * cast<u64>(height);
     if(texelCount > cast<u64>(usize.max) / cast<u64>(s_TextureRgbaBytesPerTexel)){
         error("TextureAssetLoader: RGBA8 fallback mip size exceeds addressable memory");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return cast<usize>(texelCount * cast<u64>(s_TextureRgbaBytesPerTexel));
 }
@@ -50,7 +50,7 @@ b8 IsValidTextureResolutionCode(in u8 dimension, in u32 width, in u32 height, in
 
 Expected<u32> TryComputeCompleteTextureMipCount(in u8 dimension, in u32 width, in u32 height, in u32 depth){
     if(!IsValidTextureDimensionCode(dimension) || width == 0u || height == 0u || depth == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     u32 mipCount = 0u;
     u32 mipWidth = width;
@@ -75,19 +75,19 @@ Expected<u32> TryComputeTextureMipSliceCount(in u8 dimension, in u32 mipDepth){
         return 6u;
     if(dimension == 2u && mipDepth > 0u)
         return mipDepth;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 
 Expected<TextureMipPlaneBlockLayoutData> TryComputeTextureMipPlaneBlockLayout(in u8 payloadFormat, in u32 width, in u32 height){
     if(!IsValidTexturePayloadFormatCode(payloadFormat) || width == 0u || height == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
-    const u64 blocksX64 = divideUp(cast<u64>(width), cast<u64>(4u));
-    const u64 blocksY64 = divideUp(cast<u64>(height), cast<u64>(4u));
+    const u64 blocksX64 = DivideUp(cast<u64>(width), cast<u64>(4u));
+    const u64 blocksY64 = DivideUp(cast<u64>(height), cast<u64>(4u));
     const u64 blockCount = blocksX64 * blocksY64;
     if(blockCount > u64.max / s_TextureUastcBytesPerBlock)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     TextureMipPlaneBlockLayoutData layout;
     layout.blocksX = cast<u32>(blocksX64);
@@ -108,11 +108,11 @@ Expected<u64> ValidateTextureAssetMipLevels(
     const Expected<u32> mipCountResult = TryComputeCompleteTextureMipCount(dimension, width, height, depth);
     if(!mipCountResult.has_value()){
         error("{} failed: base resolution is invalid", failureContext);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(mipLevels.size() != cast<usize>(mipCountResult.value())){
         error("{} failed: mip count does not describe a complete chain", failureContext);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     u32 expectedWidth = width;
@@ -125,38 +125,38 @@ Expected<u64> ValidateTextureAssetMipLevels(
         const Expected<TextureMipPlaneBlockLayoutData> planeLayoutResult = TryComputeTextureMipPlaneBlockLayout(payloadFormat, expectedWidth, expectedHeight);
         if(!planeLayoutResult.has_value()){
             error("{} failed: mip {} block layout exceeds runtime limits", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         const Expected<u32> sliceCountResult = TryComputeTextureMipSliceCount(dimension, expectedDepth);
         if(!sliceCountResult.has_value()){
             error("{} failed: mip {} slice count is invalid", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(planeLayoutResult.value().planeByteCount > u64.max / cast<u64>(sliceCountResult.value())){
             error("{} failed: mip {} byte size overflows", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         const u64 expectedSizeBytes = planeLayoutResult.value().planeByteCount * cast<u64>(sliceCountResult.value());
 
         if(mip.width != expectedWidth || mip.height != expectedHeight){
             error("{} failed: mip {} resolution is not a complete chain", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(mip.blockCountX != planeLayoutResult.value().blocksX || mip.blockCountY != planeLayoutResult.value().blocksY){
             error("{} failed: mip {} block grid is invalid", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(mip.sliceCount != sliceCountResult.value()){
             error("{} failed: mip {} slice count is invalid", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(mip.offsetBytes != expectedOffsetBytes || mip.sizeBytes != expectedSizeBytes){
             error("{} failed: mip {} is not a contiguous texture payload", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(expectedSizeBytes > u64.max - expectedOffsetBytes){
             error("{} failed: mip {} byte range overflows", failureContext, mipIndexU32);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
 
         expectedOffsetBytes += expectedSizeBytes;

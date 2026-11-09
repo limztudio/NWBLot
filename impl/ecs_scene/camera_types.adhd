@@ -53,31 +53,31 @@ CameraProjection MakeFallbackCameraProjection(){
 }
 
 Expected<f32> TryComputeCameraTanHalfVerticalFov(in f32 verticalFovRadians){
-    if(!isFinite(verticalFovRadians) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
-        return makeUnexpected(Failure());
+    if(!IsFinite(verticalFovRadians) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
+        return MakeUnexpected(Failure());
 
     const f32 halfFov = verticalFovRadians * s_HalfFovWeight;
-    const f32 sinHalfFov = sin(halfFov);
-    const f32 cosHalfFov = cos(halfFov);
-    if(!isFinite(sinHalfFov) || !isFinite(cosHalfFov) || !(abs(cosHalfFov) >= s_CameraFovCosEpsilon))
-        return makeUnexpected(Failure());
+    const f32 sinHalfFov = Sin(halfFov);
+    const f32 cosHalfFov = Cos(halfFov);
+    if(!IsFinite(sinHalfFov) || !IsFinite(cosHalfFov) || !(Abs(cosHalfFov) >= s_CameraFovCosEpsilon))
+        return MakeUnexpected(Failure());
 
     const f32 tanHalfFov = sinHalfFov / cosHalfFov;
-    if(!isFinite(tanHalfFov) || !(tanHalfFov > 0.0f))
-        return makeUnexpected(Failure());
+    if(!IsFinite(tanHalfFov) || !(tanHalfFov > 0.0f))
+        return MakeUnexpected(Failure());
 
     return tanHalfFov;
 }
 
 b8 CameraClipRangeValid(in f32 nearPlane, in f32 farPlane){
-    return isFinite(nearPlane) && isFinite(farPlane) && nearPlane > 0.0f && nearPlane < farPlane;
+    return IsFinite(nearPlane) && IsFinite(farPlane) && nearPlane > 0.0f && nearPlane < farPlane;
 }
 
 f32 ResolveCameraAspectRatio(in f32 cameraAspectRatio, in f32 fallbackAspectRatio){
     f32 resolvedFallback = 1.0f;
-    if(isFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
+    if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
         resolvedFallback = fallbackAspectRatio;
-    if(isFinite(cameraAspectRatio) && cameraAspectRatio > 0.0f)
+    if(IsFinite(cameraAspectRatio) && cameraAspectRatio > 0.0f)
         return cameraAspectRatio;
     return resolvedFallback;
 }
@@ -90,9 +90,9 @@ b8 CameraProjectionValuesValid(
     in f32 farPlane
 ){
     return
-        isFinite(projectionParams.x) && isFinite(projectionParams.y) && isFinite(projectionParams.z) && isFinite(projectionParams.w)
-        && isFinite(aspectRatio)
-        && isFinite(tanHalfVerticalFov)
+        IsFinite(projectionParams.x) && IsFinite(projectionParams.y) && IsFinite(projectionParams.z) && IsFinite(projectionParams.w)
+        && IsFinite(aspectRatio)
+        && IsFinite(tanHalfVerticalFov)
         && aspectRatio > 0.0f
         && tanHalfVerticalFov > 0.0f
         && CameraClipRangeValid(nearPlane, farPlane)
@@ -112,7 +112,7 @@ Expected<CameraProjection> TryBuildCameraProjection(
 ){
     const Expected<f32> tanHalfFov = TryComputeCameraTanHalfVerticalFov(verticalFovRadians);
     if(!tanHalfFov.has_value() || !CameraClipRangeValid(nearPlane, farPlane))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const f32 aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
     const f32 depthRange = farPlane - nearPlane;
@@ -123,7 +123,7 @@ Expected<CameraProjection> TryBuildCameraProjection(
         (-farPlane * nearPlane) / depthRange
     );
     if(!CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfFov.value(), nearPlane, farPlane))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return MakeCameraProjection(projectionParams, VectorSingle(aspectRatio, tanHalfFov.value(), nearPlane, farPlane));
 }
@@ -148,14 +148,14 @@ CameraProjection StoreDefaultCameraProjection(){
 
 b8 IsValidCameraTransformVectors(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
     if(
-        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
-        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
-        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
+        !IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z)
+        || !IsFinite(rotation.x) || !IsFinite(rotation.y) || !IsFinite(rotation.z) || !IsFinite(rotation.w)
+        || !IsFinite(scale.x) || !IsFinite(scale.y) || !IsFinite(scale.z)
     )
         return false;
 
-    const f32 rotationLengthSquared = lengthSq(rotation);
-    return isFinite(rotationLengthSquared) && abs(rotationLengthSquared - 1.0f) <= s_CameraRotationUnitLengthSquaredTolerance;
+    const f32 rotationLengthSquared = LengthSq(rotation);
+    return IsFinite(rotationLengthSquared) && Abs(rotationLengthSquared - 1.0f) <= s_CameraRotationUnitLengthSquaredTolerance;
 }
 
 b8 IsValidSceneCameraViewProjection(

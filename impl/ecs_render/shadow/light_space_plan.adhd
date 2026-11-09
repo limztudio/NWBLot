@@ -14,17 +14,17 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
     LightSpacePlan outPlan;
     const usize requestCount = requests.size();
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > s_SceneShadowSlotCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     u32 seenSlots = 0u;
     u64 seenLights = 0u;
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
         if(request.lightIndex >= s_SceneMaxLights || request.shadowSlot >= s_SceneShadowSlotCount || request.type >= s_LightSpaceLightTypeCount)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u32 slotBit = 1u << request.shadowSlot;
         const u64 lightBit = 1ull << request.lightIndex;
         if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         seenSlots |= slotBit;
         seenLights |= lightBit;
     }
@@ -35,7 +35,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
         if(!request.eligible || request.type == s_LightSpaceLightTypeSpot)
             continue;
         if(drawCount == 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const b8 point = request.type == s_LightSpaceLightTypePoint;
         u32 resolution = settings.directionalResolution;
         u32 viewCount = 1u;
@@ -46,7 +46,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
         const u64 pixelsPerView = cast<u64>(resolution) * cast<u64>(resolution);
         const u64 pixels = cast<u64>(outPlan.totalPixels) + pixelsPerView * cast<u64>(viewCount);
         const u32 newViewCount = outPlan.viewCount + viewCount;
-        const u32 textureResolution = max(outPlan.textureResolution, resolution);
+        const u32 textureResolution = Max(outPlan.textureResolution, resolution);
         const u64 eventBytes = pixels * s_LightSpaceEventsPerTexel * s_LightSpaceEventBytes;
         const u64 countBytes = pixels * s_LightSpacePixelWordBytes;
         // Every D32 array layer uses the largest selected extent, even when its viewport is smaller.
@@ -103,7 +103,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
 u32 LightSpaceCasterDrawCount(in u32 meshletCount){
     if(meshletCount == 0u)
         return 1u;
-    return divideUp(meshletCount, s_LightSpaceMeshletsPerDraw);
+    return DivideUp(meshletCount, s_LightSpaceMeshletsPerDraw);
 }
 
 b8 LightSpaceCasterEligibleForCapturePass(in b8 casterTransparent, in b8 casterCsg, in b8 passTransparent, in u32 indexCount, in u32 csgFlags){
@@ -176,7 +176,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlanForSceneLights(
 ){
     const usize lightCount = lights.size();
     if(lightCount > cast<usize>(s_SceneMaxLights))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     Array<LightSpaceLightRequest, s_SceneShadowSlotCount> requests;
     usize requestCount = 0u;
@@ -185,7 +185,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlanForSceneLights(
         if(light.params.z < 0.0f || light.params.z >= cast<f32>(s_SceneShadowSlotCount))
             continue;
         if(requestCount == requests.size())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         LightSpaceLightRequest request;
         request.lightIndex = index;
         request.shadowSlot = cast<u32>(light.params.z);
@@ -200,7 +200,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlanForSceneLights(
         settings.backend = SoftwareShadowBackend::Automatic;
         const u64 requiredCsgBytes = cast<u64>(csgContextBytes) + 4ull;
         if(settings.memoryBudgetBytes <= requiredCsgBytes)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         settings.memoryBudgetBytes -= requiredCsgBytes;
     }
 
@@ -213,7 +213,7 @@ Expected<LightSpacePlan> TryBuildLightSpacePlanForSceneLights(
         hasCsg
     );
     if(!plan.has_value() || plan.value().viewCount == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return plan.value();
 }
 

@@ -41,7 +41,7 @@ class SubsystemBinaryCodec{
         for(usize i = 0u; i < fieldCounts.size(); ++i){
             u64 count = fieldCounts[i];
             if(count == 0u || count > 0xFFFFFFFFFFFFFFFFu - totalCount)
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             totalCount += count;
         }
         return totalCount;

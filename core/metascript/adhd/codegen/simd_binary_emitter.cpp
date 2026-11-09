@@ -382,7 +382,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
                     && rhs.isBuiltinCall
                     && rhs.lhs
                     && rhs.lhs->kind == ExprKind::Identifier
-                    && rhs.lhs->text == "sqrt"
+                    && rhs.lhs->text == "Sqrt"
                     && rhs.arguments.size() == 1u
                     && rhs.arguments[0]
                     && rhs.arguments[0]->resolvedSimdType == simdType

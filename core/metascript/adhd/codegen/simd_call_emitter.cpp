@@ -70,7 +70,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             return true;
         }
 
-        if(!isInt && callee == "rsqrt" && expr.arguments.size() == 1u){
+        if(!isInt && callee == "Rsqrt" && expr.arguments.size() == 1u){
             if(const Expr* lenSqVec = SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_emitter.m_symbols)){
                 const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*lenSqVec, &m_emitter.m_symbols);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
@@ -115,7 +115,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             emitSimdCallRegArgsAndClose(expr.arguments);
             return true;
         }
-        if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
+        if(callee == "Lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
             if(!isInt && !isMatrix){
                 if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[2], isDouble, &m_emitter.m_symbols) && SimdExpressionAnalysis::IsPureSimdAddressExpr(*expr.arguments[1])){
                     m_emitter.emitSimdRegExpr(out, *expr.arguments[0], simdType);
@@ -162,7 +162,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             emitSimdCallRegArgsAndClose(expr.arguments);
             return true;
         }
-        if(callee == "mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+        if(callee == "Mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
             const MStringView lhsSimd = expr.arguments[0]->resolvedSimdType;
             const MStringView rhsSimd = expr.arguments[1]->resolvedSimdType;
             const b8 lhsIsMat = SymbolTable::IsSimdMatrixType(lhsSimd);
@@ -225,13 +225,13 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             out.push_back(')');
             return true;
         }
-        if(callee == "transpose" && !expr.arguments.empty() && expr.arguments[0]){
+        if(callee == "Transpose" && !expr.arguments.empty() && expr.arguments[0]){
             const Expr& arg0 = *expr.arguments[0];
             const Expr* matA = nullptr;
             const Expr* matB = nullptr;
             if(
                 arg0.kind == ExprKind::Call && arg0.lhs && arg0.lhs->kind == ExprKind::Identifier
-                && arg0.isBuiltinCall && arg0.lhs->text == "mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
+                && arg0.isBuiltinCall && arg0.lhs->text == "Mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
                 && SymbolTable::IsSimdMatrixType(arg0.arguments[0]->resolvedSimdType)
                 && SymbolTable::IsSimdMatrixType(arg0.arguments[1]->resolvedSimdType)
             ){

@@ -253,9 +253,9 @@ b8 ShouldSuppressEditCommandRepeat(in EditCommand command){
 
 EditLimits ClampEditLimits(in EditLimits limits){
     EditLimits bounded;
-    bounded.maxBytes = min(limits.maxBytes, s_EditMaxBytes);
-    bounded.maxHistoryRecords = min(limits.maxHistoryRecords, s_EditMaxHistoryRecords);
-    bounded.maxHistoryBytes = min(limits.maxHistoryBytes, s_EditMaxHistoryBytes);
+    bounded.maxBytes = Min(limits.maxBytes, s_EditMaxBytes);
+    bounded.maxHistoryRecords = Min(limits.maxHistoryRecords, s_EditMaxHistoryRecords);
+    bounded.maxHistoryBytes = Min(limits.maxHistoryBytes, s_EditMaxHistoryBytes);
     return bounded;
 }
 

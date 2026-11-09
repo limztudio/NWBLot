@@ -75,12 +75,12 @@ class SourceVertexRef{
     }
 
     public usize hash()const{
-        usize seed = hashValue(this.position);
-        seed = hashCombineValue(seed, this.normal);
-        seed = hashCombineValue(seed, this.tangent);
-        seed = hashCombineValue(seed, this.uv0);
-        seed = hashCombineValue(seed, this.color);
-        return hashCombineValue(seed, this.skin);
+        usize seed = HashValue(this.position);
+        seed = HashCombineValue(seed, this.normal);
+        seed = HashCombineValue(seed, this.tangent);
+        seed = HashCombineValue(seed, this.uv0);
+        seed = HashCombineValue(seed, this.color);
+        return HashCombineValue(seed, this.skin);
     }
 
     public u32 position = u32.max;
@@ -129,9 +129,9 @@ class PositionKey{
     }
 
     public usize hash()const{
-        usize seed = hashValue(this.x);
-        seed = hashCombineValue(seed, this.y);
-        return hashCombineValue(seed, this.z);
+        usize seed = HashValue(this.x);
+        seed = HashCombineValue(seed, this.y);
+        return HashCombineValue(seed, this.z);
     }
 
     public u32 x = 0u;

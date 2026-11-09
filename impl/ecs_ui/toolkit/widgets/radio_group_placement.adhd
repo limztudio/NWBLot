@@ -10,29 +10,29 @@
 
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;
     candidate.count = choices.count;
     const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
     if(!clipped.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.clip = clipped.value();
     const VectorDouble insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
     const Expected<Rect> content = TryMakeUiRect(insetRect.x, insetRect.y, insetRect.z, insetRect.w, UiRectPrecision::PreciseExtents);
     if(!content.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.content = content.value();
     const f64 contentX = insetRect.x;
     const f64 contentY = insetRect.y;
     const f64 contentW = insetRect.z;
-    const f64 indicatorExtentScalar = min(cast<f64>(metrics.indicatorExtent), contentW);
-    const f64 labelOffset = min(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
+    const f64 indicatorExtentScalar = Min(cast<f64>(metrics.indicatorExtent), contentW);
+    const f64 labelOffset = Min(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
     const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
     for(u32 index = 0u; index < candidate.count; ++index){
         if(!IsUniqueRadioGroupChoiceKey(choices, index, choices.rows[index].key))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         RadioGroupChoicePlacement row;
         row.key = choices.rows[index].key;
         row.enabled = choices.rows[index].enabled;
@@ -42,29 +42,29 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
         const f64 indicatorYScalar = rowOriginScalar + (indicatorSpace * 0.5);
         const Expected<Rect> rowRect = TryMakeUiRect(contentX, rowOriginScalar, contentW, rowHeightScalar, UiRectPrecision::PreciseExtents);
         if(!rowRect.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         row.rectangle = rowRect.value();
         const Expected<Rect> rowClip = TryIntersectUiRects(row.rectangle, candidate.clip, UiRectPrecision::PreciseExtents);
         if(!rowClip.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         row.clip = rowClip.value();
         const Expected<Rect> indicator = TryMakeUiRect(contentX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents);
         if(!indicator.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         row.indicator = indicator.value();
         const f64 markX = contentX + markInsetScalar;
         const f64 markY = indicatorYScalar + markInsetScalar;
         const f64 markExtent = indicatorExtentScalar - cast<f64>(s_CheckmarkInsetSides) * markInsetScalar;
         const Expected<Rect> mark = TryMakeUiRect(markX, markY, markExtent, markExtent, UiRectPrecision::PreciseExtents);
         if(!mark.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         row.mark = mark.value();
         const Expected<Rect> labelRect = TryMakeUiRect(contentX + labelOffset, rowOriginScalar, contentW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents);
         if(!labelRect.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const Expected<Rect> textClip = TryIntersectUiRects(labelRect.value(), row.clip, UiRectPrecision::PreciseExtents);
         if(!textClip.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         row.textClip = textClip.value();
         candidate.rows[index] = row;
     }

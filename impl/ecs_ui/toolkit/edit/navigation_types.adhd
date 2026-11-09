@@ -94,38 +94,38 @@ class EditNavigationResult{
 
 Expected<EditNavigationDirection> TryTranslateEditNavigation(in InputCommandIntent intent){
     if(!intent.edit)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     switch(intent.command){
     case InputCommand::Up: return EditNavigationDirection::Up;
     case InputCommand::Down: return EditNavigationDirection::Down;
     case InputCommand::PageUp: return EditNavigationDirection::PageUp;
     case InputCommand::PageDown: return EditNavigationDirection::PageDown;
-    default: return makeUnexpected(Failure());
+    default: return MakeUnexpected(Failure());
     }
 }
 
 EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
-    if(isUnicodeWhitespace(scalar))
+    if(IsUnicodeWhitespace(scalar))
         return EditNavigationRunClass::Whitespace;
-    if(isAsciiPunctuation(scalar))
+    if(IsAsciiPunctuation(scalar))
         return EditNavigationRunClass::Punctuation;
     return EditNavigationRunClass::Text;
 }
 
 b8 IsEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = lowerBoundIndex(boundaries, position);
+    const usize index = LowerBoundIndex(boundaries, position);
     return index < boundaries.size() && boundaries[index] == position;
 }
 
 usize PreviousEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = lowerBoundIndex(boundaries, position);
+    const usize index = LowerBoundIndex(boundaries, position);
     if(index == 0u)
         return 0u;
     return boundaries[index - 1u];
 }
 
 usize NextEditBoundary(in Span<usize> boundaries, in usize textSize, in usize position){
-    usize index = lowerBoundIndex(boundaries, position);
+    usize index = LowerBoundIndex(boundaries, position);
     if(index < boundaries.size() && boundaries[index] == position)
         ++index;
     if(index >= boundaries.size())
@@ -136,8 +136,8 @@ usize NextEditBoundary(in Span<usize> boundaries, in usize textSize, in usize po
 EditWordRange ResolveEditBackspaceRange(in Span<usize> boundaries, in usize anchor, in usize caret){
     EditWordRange range;
     if(anchor != caret){
-        range.begin = min(anchor, caret);
-        range.end = max(anchor, caret);
+        range.begin = Min(anchor, caret);
+        range.end = Max(anchor, caret);
     }
     else{
         range.begin = PreviousEditBoundary(boundaries, caret);
@@ -149,8 +149,8 @@ EditWordRange ResolveEditBackspaceRange(in Span<usize> boundaries, in usize anch
 EditWordRange ResolveEditEraseForwardRange(in Span<usize> boundaries, in usize textSize, in usize anchor, in usize caret){
     EditWordRange range;
     if(anchor != caret){
-        range.begin = min(anchor, caret);
-        range.end = max(anchor, caret);
+        range.begin = Min(anchor, caret);
+        range.end = Max(anchor, caret);
     }
     else{
         range.begin = caret;

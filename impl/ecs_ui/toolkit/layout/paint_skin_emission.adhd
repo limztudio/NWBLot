@@ -171,10 +171,10 @@ void BeginPaintBuilderRecording(
     mut b8 outCommandsOrdered,
     mut b8 outRecording
 ){
-    assert(isFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
-    assert(isFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
-    assert(isFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
-    assert(isFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
+    assert(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
+    assert(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
+    assert(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
+    assert(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
     outVertices.clear();
     outIndices.clear();
     outCommands.clear();

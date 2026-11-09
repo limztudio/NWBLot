@@ -150,9 +150,9 @@ usize NextLoopVertexIndex(in usize vertexIndex, in usize loopSize){
 
 Expected<f32> TryComputeCsgDeformEdgeSplitBlend(in f32 firstDistance, in f32 secondDistance){
     const f32 denominator = firstDistance - secondDistance;
-    if(!isFinite(denominator) || abs(denominator) < s_SplitDenominatorEpsilon)
-        return makeUnexpected(Failure());
-    return saturate(abs(secondDistance / denominator));
+    if(!IsFinite(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
+        return MakeUnexpected(Failure());
+    return Saturate(Abs(secondDistance / denominator));
 }
 
 b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
@@ -161,23 +161,23 @@ b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
 
 b8 IsFiniteCsgDeformVertex(in CsgDeformVertex vertex){
     return
-        isFinite(vertex.position.x)
-        && isFinite(vertex.position.y)
-        && isFinite(vertex.position.z)
-        && isFinite(vertex.normal.x)
-        && isFinite(vertex.normal.y)
-        && isFinite(vertex.normal.z)
-        && isFinite(vertex.normal.w)
-        && isFinite(vertex.tangent.x)
-        && isFinite(vertex.tangent.y)
-        && isFinite(vertex.tangent.z)
-        && isFinite(vertex.tangent.w)
-        && isFinite(vertex.uv0.x)
-        && isFinite(vertex.uv0.y)
-        && isFinite(vertex.color.x)
-        && isFinite(vertex.color.y)
-        && isFinite(vertex.color.z)
-        && isFinite(vertex.color.w)
+        IsFinite(vertex.position.x)
+        && IsFinite(vertex.position.y)
+        && IsFinite(vertex.position.z)
+        && IsFinite(vertex.normal.x)
+        && IsFinite(vertex.normal.y)
+        && IsFinite(vertex.normal.z)
+        && IsFinite(vertex.normal.w)
+        && IsFinite(vertex.tangent.x)
+        && IsFinite(vertex.tangent.y)
+        && IsFinite(vertex.tangent.z)
+        && IsFinite(vertex.tangent.w)
+        && IsFinite(vertex.uv0.x)
+        && IsFinite(vertex.uv0.y)
+        && IsFinite(vertex.color.x)
+        && IsFinite(vertex.color.y)
+        && IsFinite(vertex.color.z)
+        && IsFinite(vertex.color.w)
     ;
 }
 
@@ -207,16 +207,16 @@ b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexC
 }
 
 VectorSingle NormalizeCsgDeformNormal(in VectorSingle normal){
-    if(lengthSq(normal.xyz) > s_NormalizeEpsilonSq){
-        const VectorSingle normalized = normalize(normal.xyz);
+    if(LengthSq(normal.xyz) > s_NormalizeEpsilonSq){
+        const VectorSingle normalized = Normalize(normal.xyz);
         return VectorSingle(normalized, normal.w);
     }
     return VectorSingle(0.0f, 1.0f, 0.0f, normal.w);
 }
 
 VectorSingle NormalizeCsgDeformTangent(in VectorSingle tangent){
-    if(lengthSq(tangent.xyz) > s_NormalizeEpsilonSq){
-        const VectorSingle normalized = normalize(tangent.xyz);
+    if(LengthSq(tangent.xyz) > s_NormalizeEpsilonSq){
+        const VectorSingle normalized = Normalize(tangent.xyz);
         f32 sign = s_OneWeight;
         if(tangent.w < 0.0f)
             sign = s_NegativeOne;
@@ -233,7 +233,7 @@ Expected<CsgDeformVertex> TryBuildInterpolatedCsgDeformVertex(
 ){
     const Expected<f32> blendResult = TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance);
     if(!blendResult.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f32 blend = blendResult.value();
     const f32 other = s_OneWeight - blend;
     const VectorSingle firstPos(firstVertex.position);
@@ -252,7 +252,7 @@ Expected<CsgDeformVertex> TryBuildInterpolatedCsgDeformVertex(
     mixed.uv0 = f32x2u(uv);
     mixed.color = f32x4(color);
     if(!IsFiniteCsgDeformVertex(mixed))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return mixed;
 }
 

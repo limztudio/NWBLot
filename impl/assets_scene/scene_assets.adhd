@@ -146,7 +146,7 @@ b8 ValidateSceneAssetSubsystemCount(in usize subsystemCount){
 }
 
 b8 IsValidSceneAssetNicknameText(in StringView nicknameView){
-    const StringView trimmed = trimView(nicknameView);
+    const StringView trimmed = TrimView(nicknameView);
     return !trimmed.empty() && nicknameView == trimmed;
 }
 

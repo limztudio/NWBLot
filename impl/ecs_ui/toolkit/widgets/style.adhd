@@ -105,12 +105,12 @@ void ApplySkinPaletteToWidgetStyle(in UiSkinPalette palette, mut WidgetStyle sty
 Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density){
     const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, cast<f64>(density));
     if(!minimum.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return Point(minimum.value().x, minimum.value().y);
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){
-    return Point(bounds.x + xInset, bounds.y + max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction);
+    return Point(bounds.x + xInset, bounds.y + Max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction);
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in Rect textBounds){
@@ -130,7 +130,7 @@ Name ResolveButtonPreferredName(in WidgetStyle style, in b8 enabled, in b8 press
 
 void ResolveButtonTextPlacement(in Rect bounds, in Insets padding, in Point measured, mut Rect outTextClip, mut Point outOrigin){
     outTextClip = InsetUiRectBounds(bounds, padding);
-    outOrigin = ResolveCenteredTextOrigin(outTextClip, max(0.0f, (outTextClip.width - measured.x) * s_RectCenterFraction), measured.y);
+    outOrigin = ResolveCenteredTextOrigin(outTextClip, Max(0.0f, (outTextClip.width - measured.x) * s_RectCenterFraction), measured.y);
 }
 
 Name ResolveCheckboxPreferredName(in WidgetStyle style, in b8 enabled, in b8 checked, in b8 hover){
@@ -153,41 +153,41 @@ void ResolveCheckboxPlacement(
     mut Rect outTextClip,
     mut Point outOrigin
 ){
-    const f32 squareOffsetY = max(0.0f, (bounds.height - checkboxExtent) * s_RectCenterFraction);
+    const f32 squareOffsetY = Max(0.0f, (bounds.height - checkboxExtent) * s_RectCenterFraction);
     outSquare = Rect(bounds.x, bounds.y + squareOffsetY, checkboxExtent, checkboxExtent);
     const f32 inset = checkboxExtent * s_CheckmarkInsetFraction;
     const f32 markExtent = checkboxExtent - (s_CheckmarkInsetSides * inset);
     outMark = Rect(outSquare.x + inset, outSquare.y + inset, markExtent, markExtent);
     const f32 textOffsetX = checkboxExtent + gap;
     outOrigin = ResolveCenteredTextOrigin(bounds, textOffsetX, measured.y);
-    const f32 clipWidth = max(0.0f, bounds.width - textOffsetX);
+    const f32 clipWidth = Max(0.0f, bounds.width - textOffsetX);
     outTextClip = Rect(outOrigin.x, bounds.y, clipWidth, bounds.height);
 }
 
 void AccumulateButtonRegionMetrics(in UiSkinRegion skinRegion, mut Point inOutMinimum, mut Insets inOutPadding){
-    inOutMinimum.x = max(inOutMinimum.x, skinRegion.minimumWidth);
-    inOutMinimum.y = max(inOutMinimum.y, skinRegion.minimumHeight);
+    inOutMinimum.x = Max(inOutMinimum.x, skinRegion.minimumWidth);
+    inOutMinimum.y = Max(inOutMinimum.y, skinRegion.minimumHeight);
     inOutPadding = MaxUiPadding(inOutPadding, skinRegion.padding);
 }
 
 void AccumulateEditRegionMinimumSize(in UiSkinRegion skinRegion, mut Point inOutMinimum){
-    inOutMinimum.x = max(inOutMinimum.x, skinRegion.minimumWidth);
-    inOutMinimum.y = max(inOutMinimum.y, skinRegion.minimumHeight);
+    inOutMinimum.x = Max(inOutMinimum.x, skinRegion.minimumWidth);
+    inOutMinimum.y = Max(inOutMinimum.y, skinRegion.minimumHeight);
 }
 
 Point ResolveEditIntrinsicSize(in Point minimum, in f32 visualHeight, in Insets padding){
     const f32 paddedHeight = (visualHeight + padding.top) + padding.bottom;
-    return Point(minimum.x, max(minimum.y, paddedHeight));
+    return Point(minimum.x, Max(minimum.y, paddedHeight));
 }
 
 Point ResolvePaddedIntrinsicSize(in Point textBounds, in Insets padding, in Point minimum){
     const f32 measuredX = textBounds.x + padding.left + padding.right;
     const f32 measuredY = textBounds.y + padding.top + padding.bottom;
-    return Point(max(minimum.x, measuredX), max(minimum.y, measuredY));
+    return Point(Max(minimum.x, measuredX), Max(minimum.y, measuredY));
 }
 
 Point ResolveCheckboxIntrinsicSize(in Point textBounds, in f32 checkboxExtent, in f32 gap){
-    return Point(textBounds.x + checkboxExtent + gap, max(textBounds.y, checkboxExtent));
+    return Point(textBounds.x + checkboxExtent + gap, Max(textBounds.y, checkboxExtent));
 }
 
 LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in SeparatorOptions options){
@@ -195,7 +195,7 @@ LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in Separator
     f32 minimum = skinRegion.minimumWidth;
     if(horizontal)
         minimum = skinRegion.minimumHeight;
-    f32 thickness = max(1.0f, minimum);
+    f32 thickness = Max(1.0f, minimum);
     if(options.thickness > 0.0f)
         thickness = options.thickness;
     LayoutNodeDesc description;

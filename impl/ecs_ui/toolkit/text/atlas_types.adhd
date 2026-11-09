@@ -201,7 +201,7 @@ SdfAtlasPageBindingRecord<TFont> MakeSdfAtlasPageGroupBinding<TFont>(
 }
 
 b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
-    if(!isFinite(physicalSize) || physicalSize <= 0.0f)
+    if(!IsFinite(physicalSize) || physicalSize <= 0.0f)
         return false;
     const f32 ppem = cast<f32>(bakePpem);
     return physicalSize >= ppem * s_BakedFontAtlasMinScale && physicalSize <= ppem * s_BakedFontAtlasMaxScale;
@@ -254,8 +254,8 @@ Expected<GlyphAtlasPlacement> TryPlaceGlyphAtlasBitmap(
         placement.rowHeight = 0u;
     }
     if(placement.y + height > s_GlyphAtlasPageExtent)
-        return makeUnexpected(Failure());
-    placement.rowHeight = max(placement.rowHeight, height);
+        return MakeUnexpected(Failure());
+    placement.rowHeight = Max(placement.rowHeight, height);
     return placement;
 }
 

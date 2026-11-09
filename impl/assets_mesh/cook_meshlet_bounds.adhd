@@ -9,12 +9,12 @@
 
 
 b8 IsValidMeshletDirection3(in VectorSingle value){
-    return isFinite(value.xyz) && lengthSq(value.xyz) > s_MeshletDirectionEpsilon;
+    return IsFinite(value.xyz) && LengthSq(value.xyz) > s_MeshletDirectionEpsilon;
 }
 
 VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
     if(IsValidMeshletDirection3(value)){
-        const VectorSingle normalized = normalize(value.xyz);
+        const VectorSingle normalized = Normalize(value.xyz);
         return VectorSingle(normalized, 0.0f);
     }
     return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
@@ -41,17 +41,17 @@ MeshletBounds BuildMeshletBounds(
     VectorSingle maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const VectorSingle pos(positions[cast<usize>(localPositionIndex)]);
-        minBounds = min(minBounds, pos);
-        maxBounds = max(maxBounds, pos);
+        minBounds = Min(minBounds, pos);
+        maxBounds = Max(maxBounds, pos);
     }
 
     const VectorSingle center = (minBounds + maxBounds) * 0.5f;
     VectorSingle radiusSquaredLanes(0.0f, 0.0f, 0.0f, 0.0f);
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const VectorSingle delta = VectorSingle(positions[cast<usize>(localPositionIndex)]) - center;
-        radiusSquaredLanes = max(radiusSquaredLanes, VectorSingle(lengthSq(delta.xyz)));
+        radiusSquaredLanes = Max(radiusSquaredLanes, VectorSingle(LengthSq(delta.xyz)));
     }
-    const f32 radius = sqrt(radiusSquaredLanes.x);
+    const f32 radius = Sqrt(radiusSquaredLanes.x);
 
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
     u32 validFaceNormalCount = 0u;
@@ -66,7 +66,7 @@ MeshletBounds BuildMeshletBounds(
         const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
         const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
         const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
-        const VectorSingle faceNormal = cross((p1 - p0).xyz, (p2 - p0).xyz);
+        const VectorSingle faceNormal = Cross((p1 - p0).xyz, (p2 - p0).xyz);
         if(IsValidMeshletDirection3(faceNormal)){
             areaWeightedNormal = areaWeightedNormal + faceNormal;
             ++validFaceNormalCount;
@@ -88,9 +88,9 @@ MeshletBounds BuildMeshletBounds(
             const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
             const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
             const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
-            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(cross((p1 - p0).xyz, (p2 - p0).xyz));
+            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(Cross((p1 - p0).xyz, (p2 - p0).xyz));
             if(IsValidMeshletDirection3(faceNormal))
-                coneCutoff = min(coneCutoff, dot(coneAxis.xyz, faceNormal.xyz));
+                coneCutoff = Min(coneCutoff, Dot(coneAxis.xyz, faceNormal.xyz));
         }
         if(coneCutoff <= 0.0f)
             coneCutoff = -1.0f;

@@ -10,7 +10,7 @@ class GpuFramebufferAttachmentExtent{
 
 
 u32 FramebufferMipDimension(in u32 dimension, in u32 mip){
-    return max(dimension >> mip, 1u);
+    return Max(dimension >> mip, 1u);
 }
 
 

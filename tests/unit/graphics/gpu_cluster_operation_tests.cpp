@@ -39,7 +39,7 @@ TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){
         const auto built = VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
         ASSERT_TRUE(built);
         auto copied = *built;
-        const auto native = copied.NativeInfo();
+        const auto native = copied.nativeInfo();
         EXPECT_EQ(native.maxAccelerationStructureCount, 7u);
         if(type == RayTracingClusterOperationType::Move)
             EXPECT_EQ(native.opInput.pMoveObjects, &copied.move);

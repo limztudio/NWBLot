@@ -30,18 +30,18 @@ b8 IsCanonicalMultilineScalar(in u32 scalar){
 
 // The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
 f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){
-    const b8 validPhase = isFinite(phase) && phase > 0.0;
-    const b8 validDelta = isFinite(deltaSeconds) && deltaSeconds > 0.0;
+    const b8 validPhase = IsFinite(phase) && phase > 0.0;
+    const b8 validDelta = IsFinite(deltaSeconds) && deltaSeconds > 0.0;
     f64 phaseIn = 0.0;
     if(validPhase)
         phaseIn = phase;
     f64 deltaIn = 0.0;
     if(validDelta)
         deltaIn = deltaSeconds;
-    const f64 wrappedPhase = phaseIn - floor(phaseIn);
+    const f64 wrappedPhase = phaseIn - Floor(phaseIn);
     if(!validDelta)
         return wrappedPhase;
-    const f64 wrappedDelta = deltaIn - floor(deltaIn);
+    const f64 wrappedDelta = deltaIn - Floor(deltaIn);
     const f64 next = wrappedPhase + wrappedDelta;
     if(next >= 1.0)
         return next - 1.0;

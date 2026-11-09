@@ -27,46 +27,46 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
     placement.clip = IntersectUiRectsBounds(viewport, clip);
     const f32 left = viewport.x;
     const f32 top = viewport.y;
-    const f32 overhangX = max(0.0f, (visualBounds.x + visualBounds.width) - logicalSize.x);
-    const f32 maximumScroll = max(0.0f, (visualBounds.width + caretWidth) - placement.content.width);
+    const f32 overhangX = Max(0.0f, (visualBounds.x + visualBounds.width) - logicalSize.x);
+    const f32 maximumScroll = Max(0.0f, (visualBounds.width + caretWidth) - placement.content.width);
     // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
     const f32 caretEndX = ((caretRect.x - visualBounds.x) + caretWidth) + overhangX;
-    if(!isFinite(maximumScroll) || !isFinite(caretEndX))
-        return makeUnexpected(Failure());
+    if(!IsFinite(maximumScroll) || !IsFinite(caretEndX))
+        return MakeUnexpected(Failure());
     f32 scrollX = 0.0f;
     if(previousScroll.x > 0.0f)
-        scrollX = min(maximumScroll, previousScroll.x);
+        scrollX = Min(maximumScroll, previousScroll.x);
     if(revealCaret && caretRect.x < scrollX)
         scrollX = caretRect.x;
     if(revealCaret && caretEndX > scrollX + placement.content.width)
         scrollX = caretEndX - placement.content.width;
     if(scrollX > 0.0f)
-        scrollX = min(maximumScroll, scrollX);
+        scrollX = Min(maximumScroll, scrollX);
     else
         scrollX = 0.0f;
     placement.scroll = scrollX;
     if(textMode == EditTextMode::Multiline){
-        const f32 overhangY = max(0.0f, (visualBounds.y + visualBounds.height) - logicalSize.y);
-        const f32 maximumScrollY = max(0.0f, visualBounds.height - placement.content.height);
+        const f32 overhangY = Max(0.0f, (visualBounds.y + visualBounds.height) - logicalSize.y);
+        const f32 maximumScrollY = Max(0.0f, visualBounds.height - placement.content.height);
         const f32 caretEndY = ((caretRect.y - visualBounds.y) + caretRect.height) + overhangY;
-        if(!isFinite(maximumScrollY) || !isFinite(caretEndY))
-            return makeUnexpected(Failure());
+        if(!IsFinite(maximumScrollY) || !IsFinite(caretEndY))
+            return MakeUnexpected(Failure());
         f32 scrollY = 0.0f;
         if(previousScroll.y > 0.0f)
-            scrollY = min(maximumScrollY, previousScroll.y);
+            scrollY = Min(maximumScrollY, previousScroll.y);
         if(revealCaret && caretRect.y < scrollY)
             scrollY = caretRect.y;
         if(revealCaret && caretEndY > scrollY + placement.content.height)
             scrollY = caretEndY - placement.content.height;
         if(scrollY > 0.0f)
-            scrollY = min(maximumScrollY, scrollY);
+            scrollY = Min(maximumScrollY, scrollY);
         else
             scrollY = 0.0f;
         placement.scrollY = scrollY;
         placement.textOrigin = Point((left - visualBounds.x) - scrollX, (top - visualBounds.y) - scrollY);
     }
     else{
-        const f32 verticalOffset = max(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
+        const f32 verticalOffset = Max(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
         placement.textOrigin = Point((left - visualBounds.x) - placement.scroll, (top - visualBounds.y) + verticalOffset);
     }
     placement.caret = Rect(placement.textOrigin.x + caretRect.x, placement.textOrigin.y + caretRect.y, caretWidth, caretRect.height);
@@ -82,7 +82,7 @@ b8 ValidateEditBoxArrangedSegments(in EditBoxPlacement placement, in f32 caretWi
     }
     if(composing)
         PlaceEditPreeditUnderline(placement.textOrigin, caretWidth, preeditUnderline);
-    return IsValidUiRect(placement.caret) && IsValidUiRect(selection) && IsValidUiRect(preeditUnderline) && isFinite(placement.textOrigin.x) && isFinite(placement.textOrigin.y);
+    return IsValidUiRect(placement.caret) && IsValidUiRect(selection) && IsValidUiRect(preeditUnderline) && IsFinite(placement.textOrigin.x) && IsFinite(placement.textOrigin.y);
 }
 
 b8 IsValidEditBoxPaintStyle(in EditBoxStyle style){
@@ -118,14 +118,14 @@ Expected<b8> ValidateTextAreaNavigationInputs(
         textMode != EditTextMode::Multiline
         || compositionActive
         || cast<u8>(direction) > cast<u8>(EditNavigationDirection::PageDown)
-        || !isFinite(fontSize)
+        || !IsFinite(fontSize)
         || fontSize <= 0.0f
-        || !isFinite(viewportHeight)
+        || !IsFinite(viewportHeight)
         || viewportHeight < 0.0f
         || (page && viewportHeight == 0.0f)
-        || !isFinite(preferred.preferredX)
+        || !IsFinite(preferred.preferredX)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return page;
 }
 
@@ -133,8 +133,8 @@ Expected<f32> TryResolveTextAreaPreferredX(in EditNavigationSnapshot preferred, 
     f32 outPreferredX = caret.x;
     if(preferred.valid)
         outPreferredX = preferred.preferredX;
-    if(!isFinite(outPreferredX))
-        return makeUnexpected(Failure());
+    if(!IsFinite(outPreferredX))
+        return MakeUnexpected(Failure());
     return outPreferredX;
 }
 

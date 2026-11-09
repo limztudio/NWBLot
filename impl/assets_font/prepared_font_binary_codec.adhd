@@ -44,7 +44,7 @@ class PreparedFontBinaryCodec{
             || groupCount > cast<usize>(s_PreparedFontMaxGroupCount)
             || pixelByteCount > s_PreparedFontMaxPixelBytes
         )
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return
             cast<u64>(s_PreparedFontHeaderBytes)
             + cast<u64>(groupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes)
@@ -55,7 +55,7 @@ class PreparedFontBinaryCodec{
 
     private Expected<u32> imageByteCount(in u32 width, in u32 height, in u32 channels)const{
         if(width == 0u || width > s_PreparedFontMaxSide || height == 0u || height > s_PreparedFontMaxSide || channels == 0u || channels > s_PreparedFontMaxChannelCount)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return width * height * channels;
     }
 
@@ -67,7 +67,7 @@ class PreparedFontBinaryCodec{
     )const{
         if(!hasSfntData || !this.validHeaderInputs(sfntByteCount, faceIndex, groups.size())){
             error("Prepared font serialization: invalid font bytes, face index, or image group count");
-            return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
+            return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
         }
 
         u64 pixelByteCount = 0u;
@@ -81,14 +81,14 @@ class PreparedFontBinaryCodec{
                 || cast<u64>(expectedBytes.value()) > s_PreparedFontMaxPixelBytes - pixelByteCount
             ){
                 error("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes", index);
-                return makeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
+                return MakeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
             }
             pixelByteCount += cast<u64>(expectedBytes.value());
         }
         const Expected<u64> expectedPayloadBytes = this.expectedPayloadBytes(sfntByteCount, groups.size(), pixelByteCount);
         if(!expectedPayloadBytes.has_value()){
             error("Prepared font serialization: invalid font bytes, face index, or image group count");
-            return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
+            return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
         }
         return expectedPayloadBytes.value();
     }
@@ -148,11 +148,11 @@ class PreparedFontBinaryCodec{
         const Expected<u32> groupCount = ReadU32LittleEndian(headerBytes, cursor);
         const Expected<u32> flags = ReadU32LittleEndian(headerBytes, cursor);
         if(!magic.has_value() || !version.has_value() || !faceIndex.has_value() || !fontByteCount.has_value() || !groupCount.has_value() || !flags.has_value())
-            return makeUnexpected(s_PreparedFontHeaderTruncatedReason);
+            return MakeUnexpected(s_PreparedFontHeaderTruncatedReason);
         if(!this.validHeader(magic.value(), version.value(), faceIndex.value(), flags.value()))
-            return makeUnexpected(s_PreparedFontUnsupportedHeaderReason);
+            return MakeUnexpected(s_PreparedFontUnsupportedHeaderReason);
         if(!this.validHeaderInputs(cast<usize>(fontByteCount.value()), faceIndex.value(), cast<usize>(groupCount.value())))
-            return makeUnexpected(s_PreparedFontCountsOutOfBoundsReason);
+            return MakeUnexpected(s_PreparedFontCountsOutOfBoundsReason);
 
         outFaceIndex = faceIndex.value();
         outFontByteCount = fontByteCount.value();
@@ -174,7 +174,7 @@ class PreparedFontBinaryCodec{
         const Expected<u32> channelCount = ReadU32LittleEndian(groupHeaderBytes, cursor);
         const Expected<u32> byteCount = ReadU32LittleEndian(groupHeaderBytes, cursor);
         if(!width.has_value() || !height.has_value() || !channelCount.has_value() || !byteCount.has_value())
-            return makeUnexpected(s_PreparedFontImageDirectoryTruncatedReason);
+            return MakeUnexpected(s_PreparedFontImageDirectoryTruncatedReason);
 
         const Expected<u32> expectedBytes = this.imageByteCount(width.value(), height.value(), channelCount.value());
         if(
@@ -182,7 +182,7 @@ class PreparedFontBinaryCodec{
             || byteCount.value() != expectedBytes.value()
             || cast<u64>(expectedBytes.value()) > s_PreparedFontMaxPixelBytes - inOutPixelByteCount
         )
-            return makeUnexpected(s_PreparedFontInvalidImageGroupReason);
+            return MakeUnexpected(s_PreparedFontInvalidImageGroupReason);
 
         inOutPixelByteCount += cast<u64>(expectedBytes.value());
         outWidth = width.value();

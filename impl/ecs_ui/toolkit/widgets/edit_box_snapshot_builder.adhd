@@ -94,8 +94,8 @@ class EditBoxSnapshotBuilder{
             outPreedit.end = composition.replacementStart + preeditBytes;
             outReplacement.begin = composition.replacementStart;
             outReplacement.end = composition.replacementEnd;
-            outSelection.begin = outPreedit.begin + min(composition.anchor, composition.caret);
-            outSelection.end = outPreedit.begin + max(composition.anchor, composition.caret);
+            outSelection.begin = outPreedit.begin + Min(composition.anchor, composition.caret);
+            outSelection.end = outPreedit.begin + Max(composition.anchor, composition.caret);
             outCaret = outPreedit.begin + composition.caret;
         }
         else{

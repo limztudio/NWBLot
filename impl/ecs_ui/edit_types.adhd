@@ -47,7 +47,7 @@ EditWordRange ResolveUiEditWordDragSelection(
 }
 
 b8 IsValidUiEditNavigationViewportHeight(in EditNavigationDirection direction, in f32 viewportHeight){
-    if(!isFinite(viewportHeight) || viewportHeight < 0.0f)
+    if(!IsFinite(viewportHeight) || viewportHeight < 0.0f)
         return false;
     if((direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown) && viewportHeight == 0.0f)
         return false;
@@ -139,7 +139,7 @@ b8 MatchesUiEditNativeSurroundingState(
 
 u64 AdvanceUiEditFocusGeneration(mut u64 inOutFocusGeneration){
     if(inOutFocusGeneration == u64.max)
-        terminateInvariant();
+        TerminateInvariant();
     ++inOutFocusGeneration;
     return inOutFocusGeneration;
 }

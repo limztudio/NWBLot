@@ -45,7 +45,7 @@ Point ResolveLabelPaintOrigin(in Rect bounds, in Rect measured){
 }
 
 b8 IsValidTextGlyphLocation(in Point glyphPosition, in Point topLeft){
-    return isFinite(glyphPosition.x) && isFinite(glyphPosition.y) && isFinite(topLeft.x) && isFinite(topLeft.y);
+    return IsFinite(glyphPosition.x) && IsFinite(glyphPosition.y) && IsFinite(topLeft.x) && IsFinite(topLeft.y);
 }
 
 Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
@@ -56,15 +56,15 @@ Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
     in FontAtlasGlyph record
 ){
     if(!IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || unitsPerEm == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(record.drawable == 0u)
         return VectorDouble(0.0, 0.0, 0.0, 0.0);
     if(
-        !isFinite(record.planeLeft) || !isFinite(record.planeTop)
-        || !isFinite(record.planeRight) || !isFinite(record.planeBottom)
+        !IsFinite(record.planeLeft) || !IsFinite(record.planeTop)
+        || !IsFinite(record.planeRight) || !IsFinite(record.planeBottom)
         || record.planeRight <= record.planeLeft || record.planeBottom <= record.planeTop
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
     const f64 x = (cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x)) + (cast<f64>(record.planeLeft) * scale);
     const f64 y = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) + (cast<f64>(record.planeTop) * scale);
@@ -76,10 +76,10 @@ Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
         || width < 0.0 || height < 0.0
         || !FitsTextCoordinate(x + width) || !FitsTextCoordinate(y + height)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const VectorSingle rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
-    if(!isFinite(rounded) || !isFinite(rounded.xy + rounded.zw))
-        return makeUnexpected(Failure());
+    if(!IsFinite(rounded) || !IsFinite(rounded.xy + rounded.zw))
+        return MakeUnexpected(Failure());
     return VectorDouble(rounded);
 }
 
@@ -95,7 +95,7 @@ TextGlyphIntersection IntersectTextCoverageInk(
     in Point pixelScale
 ){
     const f64 fontSizeF64 = cast<f64>(fontSize);
-    const f64 shapedSize = floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
+    const f64 shapedSize = Floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
     f64 correctionScalar = 1.0;
     if(!coverageKnown)
         correctionScalar = fontSizeF64 / shapedSize;
@@ -104,7 +104,7 @@ TextGlyphIntersection IntersectTextCoverageInk(
     if(!coverageKnown)
         outlineAllowance = fontSizeF64 / cast<f64>(unitsPerEm);
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
-    const f64 rasterMarginScalar = ((max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
+    const f64 rasterMarginScalar = ((Max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
     const f64 marginX = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.x));
     const f64 marginY = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.y));
     const f64 inkOriginX = cast<f64>(ink.x);
@@ -113,10 +113,10 @@ TextGlyphIntersection IntersectTextCoverageInk(
     const f64 inkEndY = inkOriginY + cast<f64>(ink.height);
     const f64 posX = cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x);
     const f64 posY = cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y);
-    const f64 minX = (posX + min(inkOriginX, inkOriginX * correctionScalar)) - marginX;
-    const f64 minY = (posY + min(inkOriginY, inkOriginY * correctionScalar)) - marginY;
-    const f64 maxX = (posX + max(inkEndX, inkEndX * correctionScalar)) + marginX;
-    const f64 maxY = (posY + max(inkEndY, inkEndY * correctionScalar)) + marginY;
+    const f64 minX = (posX + Min(inkOriginX, inkOriginX * correctionScalar)) - marginX;
+    const f64 minY = (posY + Min(inkOriginY, inkOriginY * correctionScalar)) - marginY;
+    const f64 maxX = (posX + Max(inkEndX, inkEndX * correctionScalar)) + marginX;
+    const f64 maxY = (posY + Max(inkEndY, inkEndY * correctionScalar)) + marginY;
     return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
 }
 
@@ -132,11 +132,11 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
 ){
     if(
         !IsValidTextGlyphLocation(glyphPosition, topLeft)
-        || !isFinite(rasterScale) || rasterScale <= 0.0f
+        || !IsFinite(rasterScale) || rasterScale <= 0.0f
         || !IsValidUiRect(recordPixels)
-        || !isFinite(pixelScale.x) || !isFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+        || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(pageIndex == s_GlyphAtlasNoPage)
         return Rect();
     const f64 scaleF64 = cast<f64>(rasterScale);
@@ -144,8 +144,8 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
     const f64 posY = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) - (cast<f64>(bearingY) / scaleF64);
     const f64 scaleX = cast<f64>(pixelScale.x);
     const f64 scaleY = cast<f64>(pixelScale.y);
-    const f64 alignedX = floor((posX * scaleX) + s_TextHalfPixel) / scaleX;
-    const f64 alignedY = floor((posY * scaleY) + s_TextHalfPixel) / scaleY;
+    const f64 alignedX = Floor((posX * scaleX) + s_TextHalfPixel) / scaleX;
+    const f64 alignedY = Floor((posY * scaleY) + s_TextHalfPixel) / scaleY;
     const f64 width = cast<f64>(recordPixels.width) / scaleF64;
     const f64 height = cast<f64>(recordPixels.height) / scaleF64;
     return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
@@ -177,9 +177,9 @@ TextGlyphIntersection ValidateTextGlyphCandidateInputs(
     in Point pixelScale
 ){
     if(
-        !IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || !isFinite(physicalSize)
+        !IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || !IsFinite(physicalSize)
         || physicalSize < 1.0f || physicalSize > s_TextMaxRasterPpemF32 || !IsValidUiRect(clip)
-        || !isFinite(pixelScale.x) || !isFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+        || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
         return TextGlyphIntersection::Invalid;
     if(clip.width <= 0.0f || clip.height <= 0.0f)

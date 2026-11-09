@@ -22,7 +22,7 @@ class CsgShaderVariantBuilder{
         in StringView defaultVariant
     )const{
         if(variant.empty() || defineName.empty() || variant == defaultVariant)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         usize begin = 0u;
         while(begin < variant.size()){
@@ -33,17 +33,17 @@ class CsgShaderVariantBuilder{
             const StringView segment = variant.substr(begin, segmentEnd - begin);
             const StringView segmentDefineName = this.segmentDefineName(segment);
             if(segmentDefineName.empty())
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             if(segmentDefineName == defineName){
                 const usize valueBegin = segmentDefineName.size() + 1u;
                 if(valueBegin >= segment.size())
-                    return makeUnexpected(Failure());
+                    return MakeUnexpected(Failure());
                 return segment;
             }
 
             begin = segmentEnd + 1u;
         }
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     public Expected<String> buildClipVariant(
@@ -54,7 +54,7 @@ class CsgShaderVariantBuilder{
         String outVariant = "";
         const usize defineAssignmentCount = defineAssignments.size();
         if(baseVariant.empty() || defineAssignmentCount == 0u || defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(baseVariant == defaultVariant){
             Array<b8, s_MaxCsgClipShaderVariantDefineAssignments> insertedDefines;
             for(usize outputIndex = 0u; outputIndex < defineAssignmentCount; ++outputIndex){
@@ -66,7 +66,7 @@ class CsgShaderVariantBuilder{
                         selectedIndex = i;
                 }
                 if(selectedIndex == defineAssignmentCount)
-                    return makeUnexpected(Failure());
+                    return MakeUnexpected(Failure());
                 if(!outVariant.empty())
                     outVariant += ";";
                 outVariant += defineAssignments[selectedIndex].assignment;
@@ -90,7 +90,7 @@ class CsgShaderVariantBuilder{
             const StringView segment = baseVariant.substr(begin, segmentEnd - begin);
             const StringView defineName = this.segmentDefineName(segment);
             if(defineName.empty())
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
 
             for(usize step = 0u; step < defineAssignmentCount; ++step){
                 usize selectedIndex = defineAssignmentCount;

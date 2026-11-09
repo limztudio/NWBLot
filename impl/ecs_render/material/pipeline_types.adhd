@@ -89,7 +89,7 @@ class MaterialPipelineAvboitPixelShaderSelection{
 
 Expected<usize> TryAccumulateMaterialDrawCount(in usize current, in usize count, in usize maximum){
     if(count > maximum - current)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return current + count;
 }
 
@@ -133,29 +133,29 @@ usize ComputeMaterialPipelineBaseHash(
     in u32 sampleCount,
     in u32 sampleQuality
 ){
-    usize seed = hashValue(material);
-    seed = hashCombineValue(seed, cast<u32>(pass));
+    usize seed = HashValue(material);
+    seed = HashCombineValue(seed, cast<u32>(pass));
     if(twoSided)
-        seed = hashCombineValue(seed, 1u);
+        seed = HashCombineValue(seed, 1u);
     else
-        seed = hashCombineValue(seed, 0u);
-    seed = hashCombineValue(seed, cast<u32>(csgMode));
-    seed = hashCombineValue(seed, hashValue(csgEvaluatorVariant));
-    seed = hashCombineValue(seed, csgShapeRegistryRevision);
-    seed = hashCombineValue(seed, depthFormat);
-    seed = hashCombineValue(seed, sampleCount);
-    return hashCombineValue(seed, sampleQuality);
+        seed = HashCombineValue(seed, 0u);
+    seed = HashCombineValue(seed, cast<u32>(csgMode));
+    seed = HashCombineValue(seed, HashValue(csgEvaluatorVariant));
+    seed = HashCombineValue(seed, csgShapeRegistryRevision);
+    seed = HashCombineValue(seed, depthFormat);
+    seed = HashCombineValue(seed, sampleCount);
+    return HashCombineValue(seed, sampleQuality);
 }
 
 b8 MeshletConeCullScaleSafe(in VectorSingle scale){
-    if(!isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z))
+    if(!IsFinite(scale.x) || !IsFinite(scale.y) || !IsFinite(scale.z))
         return false;
     if(scale.x <= 0.0f || scale.y <= 0.0f || scale.z <= 0.0f)
         return false;
 
-    f32 minScale = min(scale.x, min(scale.y, scale.z));
-    f32 maxScale = max(scale.x, max(scale.y, scale.z));
-    f32 tolerance = max(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
+    f32 minScale = Min(scale.x, Min(scale.y, scale.z));
+    f32 maxScale = Max(scale.x, Max(scale.y, scale.z));
+    f32 tolerance = Max(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
     return (maxScale - minScale) <= tolerance;
 }
 

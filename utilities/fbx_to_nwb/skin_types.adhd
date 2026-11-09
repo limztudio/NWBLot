@@ -51,7 +51,7 @@ Expected<u32> TryComputeSkeletonJointHierarchyDepth(in Span<u32> parentIndices, 
     for(usize guard = 0u; parentIndex != s_MeshMissingStreamIndex; ++guard){
         if(guard >= parentIndices.size() || cast<usize>(parentIndex) >= parentIndices.size()){
             error("Failed to write NWB skeleton: skeleton hierarchy contains a cycle");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         ++depth;
         parentIndex = parentIndices[cast<usize>(parentIndex)];
@@ -79,7 +79,7 @@ b8 TryAccumulateFbxSkinWeight(
     mut f64 inOutWeightSum,
     mut MeshSkinInfluence inOutResult
 ){
-    if(!isFinite(value)){
+    if(!IsFinite(value)){
         error("Failed to build mesh: skin contains a non-finite weight");
         return false;
     }
@@ -98,7 +98,7 @@ b8 TryAccumulateFbxSkinWeight(
 }
 
 b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){
-    if(!isFinite(weightSum) || weightSum <= 0.0){
+    if(!IsFinite(weightSum) || weightSum <= 0.0){
         error("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights");
         return false;
     }
@@ -117,11 +117,11 @@ b8 EqualMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
 }
 
 usize HashMeshSkinInfluence(in MeshSkinInfluence value){
-    usize seed = hashValue(value.joint[0u]);
+    usize seed = HashValue(value.joint[0u]);
     for(usize i = 1u; i < s_SkinInfluenceJointCount; ++i)
-        seed = hashCombineValue(seed, value.joint[i]);
+        seed = HashCombineValue(seed, value.joint[i]);
     for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i)
-        seed = hashCombineValue(seed, FbxFloatingHashBits(value.weight[i]));
+        seed = HashCombineValue(seed, FbxFloatingHashBits(value.weight[i]));
     return seed;
 }
 
@@ -161,15 +161,15 @@ usize AccumulateFbxJointCapacity(in usize currentCount, in usize clusterCount){
 Expected<usize> ValidateFbxSkinClusterCount(in usize clusterCount, in usize currentJointCount){
     if(clusterCount == 0u){
         error("Failed to build mesh: skin deformer contains no clusters");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(clusterCount > cast<usize>(u32.max)){
         error("Failed to build mesh: skin deformer has too many clusters");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(clusterCount > usize.max - currentJointCount){
         error("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return currentJointCount + clusterCount;
 }

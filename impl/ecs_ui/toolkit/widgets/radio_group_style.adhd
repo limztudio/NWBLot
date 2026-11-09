@@ -146,14 +146,14 @@ b8 IsValidRadioGroupChoices(in RadioGroupChoices choices){
 
 Expected<u32> TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key){
     if(key == 0u){
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     for(u32 candidate = 0u; candidate < choices.count; ++candidate){
         if(choices.rows[candidate].key == key){
             return candidate;
         }
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b8 reverse){

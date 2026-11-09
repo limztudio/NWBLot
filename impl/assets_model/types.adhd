@@ -115,13 +115,13 @@ b8 ResolveModelSkinnedMeshTargetState(in b8 foundParent, in u8 parentFlags){
 Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
     usize objectCount = 0u;
     if(skeletonCount > 0xffffffffffffffffu - objectCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     objectCount += skeletonCount;
     if(staticMeshCount > 0xffffffffffffffffu - objectCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     objectCount += staticMeshCount;
     if(skinnedMeshCount > 0xffffffffffffffffu - objectCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     objectCount += skinnedMeshCount;
     return objectCount;
 }
@@ -129,17 +129,17 @@ Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize
 Expected<usize> ResolveModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
     if(skeletonCount == 0u && staticMeshCount == 0u && skinnedMeshCount == 0u){
         error("Model::validatePayload failed: model has no objects");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const Expected<usize> objectCountResult = TryComputeTotalModelObjectCount(skeletonCount, staticMeshCount, skinnedMeshCount);
     if(!objectCountResult.has_value()){
         error("Model::validatePayload failed: total object count overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const usize objectCount = objectCountResult.value();
     if(objectCount > 1u && objectCount > usize.max / 2u){
         error("Model::validatePayload failed: name index capacity overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return objectCount;
 }

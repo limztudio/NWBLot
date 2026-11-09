@@ -24,20 +24,20 @@ Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterG
     outPush.translate.x = -1.0f;
     outPush.translate.y = 1.0f;
     outPush.samplerSlot = samplerSlot;
-    if(!isFinite(outPush.scale.x) || !isFinite(outPush.scale.y))
-        return makeUnexpected(Failure());
+    if(!IsFinite(outPush.scale.x) || !IsFinite(outPush.scale.y))
+        return MakeUnexpected(Failure());
     return outPush;
 }
 
 Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
     const VectorSingle coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
     const VectorSingle physicalClip = coordinates * VectorSingle(geometry.pixelScale);
-    const VectorSingle first = floor(VectorSingle(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
-    const VectorSingle last = ceil(VectorSingle(physicalClip.z, physicalClip.w, 0.0f, 0.0f));
-    const VectorSingle minimum = max(first, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
-    const VectorSingle maximum = min(last, VectorSingle(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
+    const VectorSingle first = Floor(VectorSingle(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
+    const VectorSingle last = Ceil(VectorSingle(physicalClip.z, physicalClip.w, 0.0f, 0.0f));
+    const VectorSingle minimum = Max(first, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle maximum = Min(last, VectorSingle(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
     if(maximum.x <= minimum.x || maximum.y <= minimum.y)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
 }
 

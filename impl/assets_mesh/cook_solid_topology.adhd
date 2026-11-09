@@ -26,7 +26,7 @@ class TriangleEdge{
 
 TriangleEdge MakeTriangleEdge(in u32 first, in u32 second, in u32 triangle){
     TriangleEdge edge;
-    edge.positions = packUnorderedU32Pair(first, second);
+    edge.positions = PackUnorderedU32Pair(first, second);
     edge.triangle = triangle;
     edge.forward = first < second;
     return edge;
@@ -48,12 +48,12 @@ b8 DegenerateTriangle(in VectorDouble a, in VectorDouble b, in VectorDouble c){
 }
 
 f64 RelativeTriangleVolume(in VectorDouble a, in VectorDouble b, in VectorDouble c, in VectorDouble origin){
-    return dot((a - origin).xyz, cross((b - origin).xyz, (c - origin).xyz));
+    return Dot((a - origin).xyz, Cross((b - origin).xyz, (c - origin).xyz));
 }
 
 b8 AreAllMeshPositionsFinite(in Span<f32x3u> positions){
     for(in f32x3u position : positions){
-        if(!isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z))
+        if(!IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z))
             return false;
     }
     return true;
@@ -209,7 +209,7 @@ void FinalizeMeshSolidTriangleWords(
     }
 
     outWords.clear();
-    outWords.resize(divideUp(triangleCount, cast<usize>(s_MeshletSolidTriangleWordBits)), 0u);
+    outWords.resize(DivideUp(triangleCount, cast<usize>(s_MeshletSolidTriangleWordBits)), 0u);
     for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
         const u32 component = FindMeshTopologyComponent(triangle, inOutParents);
         if(invalidComponents[cast<usize>(component)] == 0u && componentVolumes[cast<usize>(component)] != 0.0)
@@ -243,7 +243,7 @@ Expected<Vector<u32>> BuildSolidTriangleWords(
 ){
     Vector<u32> words;
     if(!BuildSolidTriangleWordsInto(positions, triangleIndices, words))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return words;
 }
 

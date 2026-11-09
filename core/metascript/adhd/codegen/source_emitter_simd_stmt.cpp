@@ -41,7 +41,7 @@ namespace __hidden_adhd_simd_stmt{
         || !initExpr->isBuiltinCall
         || !initExpr->lhs
         || initExpr->lhs->kind != ExprKind::Identifier
-        || initExpr->lhs->text != "transpose"
+        || initExpr->lhs->text != "Transpose"
         || initExpr->arguments.size() != 1u
         || !initExpr->arguments[0]
     ){
@@ -85,7 +85,7 @@ namespace __hidden_adhd_simd_stmt{
             && expr->isBuiltinCall
             && expr->lhs
             && expr->lhs->kind == ExprKind::Identifier
-            && expr->lhs->text == "mul"
+            && expr->lhs->text == "Mul"
             && expr->arguments.size() == 2u
             && expr->arguments[0]
             && expr->arguments[1]

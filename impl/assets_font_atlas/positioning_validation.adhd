@@ -219,22 +219,22 @@ Expected<Span<u8>> FindFontAtlasSourcePositioningTableBytes(
     for(u16 index = 0u; index < directory.tableCount(); ++index){
         const Expected<u32> tableTag = directory.tableTag(cast<usize>(index));
         if(!tableTag.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(tableTag.value() != tag)
             continue;
         const Expected<FontSfntTable> sourceTable = directory.table(cast<usize>(index));
         if(!sourceTable.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const Span<u8> sourceBytes = sourceTable.value().bytes;
         const usize length = sourceBytes.size();
         if(length == 0u)
             return Span<u8>();
         if(inOutTotalBytes + cast<u64>(length) > cast<u64>(s_FontAtlasMaxPositioningBytes)){
             error("FontAtlas positioning export failed: source table byte budget exceeded");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(!ValidateFontAtlasPositioningTableBytes(tag, sourceBytes, sourceGlyphCount))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         inOutTotalBytes += cast<u64>(length);
         return sourceBytes;
     }

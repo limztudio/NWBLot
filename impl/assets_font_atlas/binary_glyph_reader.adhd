@@ -78,55 +78,55 @@ Expected<FontAtlasGlyph> TryReadFontAtlasGlyph(in Span<u8> bytes, mut usize curs
     FontAtlasGlyph glyph;
     const Expected<u32> glyphId = ReadU32LittleEndian(bytes, cursor);
     if(!glyphId.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.glyphId = glyphId.value();
     const Expected<u32> group = ReadU32LittleEndian(bytes, cursor);
     if(!group.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.group = group.value();
     const Expected<u32> channel = ReadU32LittleEndian(bytes, cursor);
     if(!channel.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.channel = channel.value();
     const Expected<u32> x = ReadU32LittleEndian(bytes, cursor);
     if(!x.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.x = x.value();
     const Expected<u32> y = ReadU32LittleEndian(bytes, cursor);
     if(!y.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.y = y.value();
     const Expected<u32> width = ReadU32LittleEndian(bytes, cursor);
     if(!width.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.width = width.value();
     const Expected<u32> height = ReadU32LittleEndian(bytes, cursor);
     if(!height.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.height = height.value();
     const Expected<f32> planeLeft = ReadF32LittleEndian(bytes, cursor);
     if(!planeLeft.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.planeLeft = planeLeft.value();
     const Expected<f32> planeTop = ReadF32LittleEndian(bytes, cursor);
     if(!planeTop.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.planeTop = planeTop.value();
     const Expected<f32> planeRight = ReadF32LittleEndian(bytes, cursor);
     if(!planeRight.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.planeRight = planeRight.value();
     const Expected<f32> planeBottom = ReadF32LittleEndian(bytes, cursor);
     if(!planeBottom.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.planeBottom = planeBottom.value();
     const Expected<f32> advanceUnits = ReadF32LittleEndian(bytes, cursor);
     if(!advanceUnits.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.advanceUnits = advanceUnits.value();
     const Expected<u32> drawable = ReadU32LittleEndian(bytes, cursor);
     if(!drawable.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     glyph.drawable = drawable.value();
     return glyph;
 }
@@ -222,57 +222,57 @@ Expected<FontAtlasBinaryDecodedHeader> TryReadFontAtlasBinaryHeaderTail(
     FontAtlasBinaryDecodedHeader header;
     const Expected<u32> faceIndex = ReadU32LittleEndian(bytes, cursor);
     if(!faceIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.faceIndex = faceIndex.value();
     const Expected<u32> unitsPerEm = ReadU32LittleEndian(bytes, cursor);
     if(!unitsPerEm.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.unitsPerEm = unitsPerEm.value();
     const Expected<u32> sourceGlyphCount = ReadU32LittleEndian(bytes, cursor);
     if(!sourceGlyphCount.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.sourceGlyphCount = sourceGlyphCount.value();
     const Expected<u32> bakePpem = ReadU32LittleEndian(bytes, cursor);
     if(!bakePpem.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.bakePpem = bakePpem.value();
     const Expected<u32> spreadPixels = ReadU32LittleEndian(bytes, cursor);
     if(!spreadPixels.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.spreadPixels = spreadPixels.value();
     const Expected<u32> guardTexels = ReadU32LittleEndian(bytes, cursor);
     if(!guardTexels.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.guardTexels = guardTexels.value();
     const Expected<u32> raster = ReadU32LittleEndian(bytes, cursor);
     if(!raster.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<f32> ascenderUnits = ReadF32LittleEndian(bytes, cursor);
     if(!ascenderUnits.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.ascenderUnits = ascenderUnits.value();
     const Expected<f32> descenderUnits = ReadF32LittleEndian(bytes, cursor);
     if(!descenderUnits.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.descenderUnits = descenderUnits.value();
     const Expected<f32> lineGapUnits = ReadF32LittleEndian(bytes, cursor);
     if(!lineGapUnits.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.lineGapUnits = lineGapUnits.value();
     const Expected<u32> glyphCount = ReadU32LittleEndian(bytes, cursor);
     if(!glyphCount.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.glyphCount = glyphCount.value();
     const Expected<u32> groupCount = ReadU32LittleEndian(bytes, cursor);
     if(!groupCount.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.groupCount = groupCount.value();
     const Expected<u32> tableCount = ReadU32LittleEndian(bytes, cursor);
     if(!tableCount.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.tableCount = tableCount.value();
     if(!IsValidFontAtlasBinaryCounts(header.glyphCount, header.sourceGlyphCount, header.groupCount, header.tableCount, raster.value(), cursor, bytes.size()))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     header.rasterMode = cast<FontAtlasRasterMode>(raster.value());
     return header;
 }

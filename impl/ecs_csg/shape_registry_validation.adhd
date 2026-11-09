@@ -56,7 +56,7 @@ Expected<CsgShapeTypeId> TryResolveCsgShapeRegistryId(in Name name){
     const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeTypeIdFromName(name);
     if(!canonicalIdResult.has_value()){
         error("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id", name.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return canonicalIdResult.value();
 }
@@ -93,7 +93,7 @@ Expected<CsgBuiltInShapeKind> TryResolveBuiltInCsgShapeKind(in Name shapeType){
         return CsgBuiltInShapeKind::Sphere;
     if(shapeType == s_CsgCapsuleShapeName)
         return CsgBuiltInShapeKind::Capsule;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 f32 EvaluateBuiltInCsgShapeSignedDistance(in CsgBuiltInShapeKind kind, in VectorSingle shapePosition, in CsgShapeInlineParameters parameters){
@@ -123,7 +123,7 @@ Expected<Span<u8>> TryResolveCsgShapeParameterBytes(
     if(parameterBytes.empty() && !hasExplicitParameterData && !defaultParameterBytes.empty())
         resolved = defaultParameterBytes;
     if(cast<usize>(expectedByteSize) != resolved.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return resolved;
 }
 
@@ -146,7 +146,7 @@ Expected<CsgShapeLocalBounds> TryTransformCsgShapeLocalBounds(
         }
     }
     if(!validTransform)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return MakeCsgLocalBounds(worldMin, worldMax);
 }
 

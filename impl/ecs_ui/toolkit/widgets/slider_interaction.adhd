@@ -12,7 +12,7 @@ f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
     if(configuredStep > 0.0)
         return configuredStep;
     const f64 span = maximum - minimum;
-    if(isFinite(span)){
+    if(IsFinite(span)){
         const f64 step = span / s_SliderDefaultKeyStepDivisor;
         if(step == 0.0)
             return span;
@@ -28,18 +28,18 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     case ControlActionKind::Left:
     case ControlActionKind::Down:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
-        value = stepF64Bounded(value, options.minimum, options.maximum, step, false);
+        value = StepF64Bounded(value, options.minimum, options.maximum, step, false);
         break;
     case ControlActionKind::Right:
     case ControlActionKind::Up:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
-        value = stepF64Bounded(value, options.minimum, options.maximum, step, true);
+        value = StepF64Bounded(value, options.minimum, options.maximum, step, true);
         break;
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
         for(u32 index = 0u; index < s_SliderPageStepCount; ++index)
-            value = stepF64Bounded(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
+            value = StepF64Bounded(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
         break;
     case ControlActionKind::Home:
         value = options.minimum;
@@ -50,8 +50,8 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     default:
         return currentValue;
     }
-    if(!isFinite(value))
-        return makeUnexpected(Failure());
+    if(!IsFinite(value))
+        return MakeUnexpected(Failure());
     return value;
 }
 
@@ -59,8 +59,8 @@ Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGest
     const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
-        normalized = min(1.0, normalizedValue);
-    return interpolateFiniteRange(options.minimum, options.maximum, normalized);
+        normalized = Min(1.0, normalizedValue);
+    return InterpolateFiniteRange(options.minimum, options.maximum, normalized);
 }
 
 b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved, mut f64 outValue, mut b8 outMoved){
@@ -73,14 +73,14 @@ b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOpti
             outValue = baseline;
         return true;
     }
-    const Expected<f64> normalized = normalizeFiniteRange(options.minimum, options.maximum, baseline);
+    const Expected<f64> normalized = NormalizeFiniteRange(options.minimum, options.maximum, baseline);
     if(!normalized.has_value())
         return false;
     const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
-        dragged = min(1.0, normalizedValue);
-    const Expected<f64> interpolated = interpolateFiniteRange(options.minimum, options.maximum, dragged);
+        dragged = Min(1.0, normalizedValue);
+    const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
         return false;
     outValue = interpolated.value();
@@ -106,7 +106,7 @@ Expected<b8> TryEvaluateSliderAdmission(
     in SliderPlacement placement
 ){
     if(!IsValidSliderOptions(options) || !IsValidSliderPlacement(placement))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return !admitted
         || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
         || !SameSliderPlacementGeometry(stateAdmission, placement);

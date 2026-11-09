@@ -104,7 +104,7 @@ class ReflectionCsgDispatchPushConstants{
 
 // Precompute two Sobol dimensions per frame; scrambling stays in the shader.
 ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
-    const u64 sample = computeSobol2U32(sampleIndex);
+    const u64 sample = ComputeSobol2U32(sampleIndex);
     ReflectionSampleBase base;
     base.x = cast<u32>(sample);
     base.y = cast<u32>(sample >> 32u);
@@ -145,29 +145,29 @@ void CopyReflectionDiagnosticCounters(in Span<u32> completedCounters, in Reflect
 
 Expected<ReflectionFeedbackExtent> TryComputeReflectionFeedbackExtent(in u32 width, in u32 height){
     if(width == 0u || height == 0u)
-        return makeUnexpected(Failure());
-    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
-    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
+        return MakeUnexpected(Failure());
+    const u32 tilesX = DivideUp(width, s_ReflectionFeedbackGroupSize);
+    const u32 tilesY = DivideUp(height, s_ReflectionFeedbackGroupSize);
     const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
     const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
     if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
 }
 
 Expected<u32> TryResolveReflectionQueueCapacity(in u32 width, in u32 height, in u32 maxHardwareRaysPerFrame){
     u64 pixelCount = cast<u64>(width) * cast<u64>(height);
     if(width == 0u || height == 0u || pixelCount > cast<u64>(0xFFFFFFFFu) / 2u)
-        return makeUnexpected(Failure());
-    u64 boundedCapacity = max(cast<u64>(1u), min(pixelCount * 2u, cast<u64>(maxHardwareRaysPerFrame)));
+        return MakeUnexpected(Failure());
+    u64 boundedCapacity = Max(cast<u64>(1u), Min(pixelCount * 2u, cast<u64>(maxHardwareRaysPerFrame)));
     if(boundedCapacity > cast<u64>(0xFFFFFFFFu) / 4u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<u32>(boundedCapacity);
 }
 
 u32 ResolveReflectionIndirectArgumentCount(in u32 capacity, in b8 sliced){
     if(sliced)
-        return divideUp(capacity, s_ReflectionTraceSliceRays);
+        return DivideUp(capacity, s_ReflectionTraceSliceRays);
     return 1u;
 }
 

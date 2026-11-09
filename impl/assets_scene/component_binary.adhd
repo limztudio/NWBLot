@@ -208,7 +208,7 @@ LightComponentPayloadBinary PackLightComponentPayloadBinary(in LightComponent co
 
 Expected<LightComponent> UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayload){
     if(binaryPayload.enableCaustics > 1u || binaryPayload.reserved != 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     LightComponent unpacked;
     if(binaryPayload.type == 0u)
@@ -218,7 +218,7 @@ Expected<LightComponent> UnpackLightComponentPayloadBinary(in LightComponentPayl
     else if(binaryPayload.type == 2u)
         unpacked.type = LightType::Spot;
     else
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     unpacked.colorIntensity = binaryPayload.colorIntensity;
     unpacked.range = binaryPayload.range;

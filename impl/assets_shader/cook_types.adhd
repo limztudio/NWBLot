@@ -58,25 +58,25 @@ Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
     IncludeDirective include;
 
     usize cursor = 0u;
-    while(cursor < line.size() && isAsciiSpace(line[cursor]))
+    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size() || line[cursor] != '#')
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     ++cursor;
-    while(cursor < line.size() && isAsciiSpace(line[cursor]))
+    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
     usize directiveBegin = cursor;
-    while(cursor < line.size() && isAsciiIdentifierChar(line[cursor]))
+    while(cursor < line.size() && IsAsciiIdentifierChar(line[cursor]))
         ++cursor;
     StringView directive = line.substr(directiveBegin, cursor - directiveBegin);
     if(directive == "include_next" || directive == "import"){
         include.kind = IncludeKind::Unsupported;
-        include.name = trimView(line.substr(cursor));
+        include.name = TrimView(line.substr(cursor));
         return include;
     }
     if(directive != "include")
-        return makeUnexpected(Failure());
-    while(cursor < line.size() && isAsciiSpace(line[cursor]))
+        return MakeUnexpected(Failure());
+    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size()){
         include.kind = IncludeKind::Unsupported;
@@ -92,7 +92,7 @@ Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
     }
     else{
         include.kind = IncludeKind::Macro;
-        include.name = trimView(line.substr(cursor));
+        include.name = TrimView(line.substr(cursor));
         return include;
     }
     ++cursor;
@@ -116,7 +116,7 @@ b8 IsAllowedIncludeMetadataField(in StringView field){
 }
 
 b8 IsValidShaderDefineValueText(in StringView valueView){
-    if(valueView.empty() || trimView(valueView) != valueView)
+    if(valueView.empty() || TrimView(valueView) != valueView)
         return false;
     for(usize i = 0u; i < valueView.size(); ++i){
         const i8 ch = valueView[i];
@@ -144,7 +144,7 @@ b8 TryParseVariantSignatureSegment(
     }
     inOutCursor = segmentEnd + 1u;
 
-    const StringView segment = trimView(variantSignature.substr(begin, segmentEnd - begin));
+    const StringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
     outSegment = segment;
     if(segment.empty()){
         outError = VariantSignatureSegmentError::EmptySegment;
@@ -163,8 +163,8 @@ b8 TryParseVariantSignatureSegment(
         return false;
     }
 
-    const StringView defineName = trimView(segment.substr(0u, equalPos));
-    const StringView defineValue = trimView(segment.substr(equalPos + 1u));
+    const StringView defineName = TrimView(segment.substr(0u, equalPos));
+    const StringView defineValue = TrimView(segment.substr(equalPos + 1u));
     if(defineName.empty() || defineValue.empty()){
         outError = VariantSignatureSegmentError::InvalidAssignment;
         return false;
@@ -260,7 +260,7 @@ Expected<ShaderOptimizationLevel> TryParseShaderOptimizationLevelText(in StringV
         return ShaderOptimizationLevel::High;
     if(text == s_ShaderMaximalOptText)
         return ShaderOptimizationLevel::Maximal;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 ValidateShaderDefineEntrySpec(
@@ -306,27 +306,27 @@ Expected<usize> TryComputeCompilerPathTextCapacity(in usize pathUnitCount, in b8
         bytesPerUnit = s_MaxEncodedPathBytesPerCharUnit;
     if(pathUnitCount > usize.max / bytesPerUnit){
         error("ShaderCook: compiler path text exceeds representable size");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return pathUnitCount * bytesPerUnit;
 }
 
 Expected<usize> TryComputeCompilerOverlayRootKeyCapacity(in usize rootTextBytes){
     if(rootTextBytes > (usize.max - s_SlangWorkspaceRootKeyPrefix.size()) / 2u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return s_SlangWorkspaceRootKeyPrefix.size() + rootTextBytes * 2u;
 }
 
 Expected<usize> TryComputeQuotedCompilerPathCapacity(in usize pathTextBytes){
     if(pathTextBytes > usize.max - s_SlangQuotePairByteCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return pathTextBytes + s_SlangQuotePairByteCount;
 }
 
 Expected<usize> TryComputeCompilerIncludeDirectoryCapacity(in StringView shaderName, in usize includeDirectoryCount){
     if(includeDirectoryCount > usize.max / 2u){
         error("ShaderCook: compiler request for '{}' has too many include directories", shaderName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return includeDirectoryCount * 2u;
 }
@@ -340,20 +340,20 @@ b8 TryAccumulateInheritedShaderDefineReserve(in usize additionalCount, mut usize
 
 Expected<usize> TryComputeShaderExpandedCombinationCount(in usize combinationCount, in usize valueCount){
     if(valueCount != 0u && combinationCount > usize.max / valueCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return combinationCount * valueCount;
 }
 
 Expected<usize> TryComputeCompilerReplacementOutputBytes(in usize outputBytes, in usize removedBytes, in usize addedBytes){
     const usize remainingBytes = outputBytes - removedBytes;
     if(addedBytes > usize.max - remainingBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return remainingBytes + addedBytes;
 }
 
 Expected<usize> TryComputeCompilerDefineArgumentCapacity(in usize fixedBytes, in usize nameBytes, in usize valueBytes){
     if(nameBytes > usize.max - fixedBytes || valueBytes > usize.max - fixedBytes - nameBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return fixedBytes + nameBytes + valueBytes;
 }
 

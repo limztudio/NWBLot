@@ -26,10 +26,10 @@ CsgIntervalSampleStateGpuData ResolveCsgIntervalSampleState(
 ){
     const CsgWorkRect workRect = workRegion.resolveRect(frameWidth, frameHeight);
     CsgIntervalSampleStateGpuData state;
-    state.workMinX = cast<u32>(max(workRect.minX, 0));
-    state.workMinY = cast<u32>(max(workRect.minY, 0));
-    state.workMaxX = cast<u32>(max(workRect.maxX, 0));
-    state.workMaxY = cast<u32>(max(workRect.maxY, 0));
+    state.workMinX = cast<u32>(Max(workRect.minX, 0));
+    state.workMinY = cast<u32>(Max(workRect.minY, 0));
+    state.workMaxX = cast<u32>(Max(workRect.maxX, 0));
+    state.workMaxY = cast<u32>(Max(workRect.maxY, 0));
     state.meshViewHeapSlot = meshViewHeapSlot;
     return state;
 }
@@ -48,11 +48,11 @@ CsgIntervalDispatchPushConstants ResolveCsgIntervalDispatchPushConstants(
     pushConstants.frameWidth = frameWidth;
     pushConstants.frameHeight = frameHeight;
     pushConstants.receiverCount = receiverCount;
-    pushConstants.layerCount = min(csgPeelLayerCount, s_CsgPeelLayerCount);
-    pushConstants.workOffsetX = cast<u32>(max(workRect.minX, 0));
-    pushConstants.workOffsetY = cast<u32>(max(workRect.minY, 0));
-    pushConstants.workExtentX = cast<u32>(max(workRect.width(), 0));
-    pushConstants.workExtentY = cast<u32>(max(workRect.height(), 0));
+    pushConstants.layerCount = Min(csgPeelLayerCount, s_CsgPeelLayerCount);
+    pushConstants.workOffsetX = cast<u32>(Max(workRect.minX, 0));
+    pushConstants.workOffsetY = cast<u32>(Max(workRect.minY, 0));
+    pushConstants.workExtentX = cast<u32>(Max(workRect.width(), 0));
+    pushConstants.workExtentY = cast<u32>(Max(workRect.height(), 0));
     pushConstants.meshViewHeapSlot = meshViewHeapSlot;
     pushConstants.csgContextHeapSlot = csgContextHeapSlot;
     return pushConstants;
@@ -92,7 +92,7 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     CsgClipWorkBounds outWorkBounds;
     if(!cutterBoundsResolved){
         if(receiverBounds.valid)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return outWorkBounds;
     }
     if(!cutterFiniteBounds)
@@ -104,10 +104,10 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
         return outWorkBounds;
     }
     if(
-        !isFinite(receiverBounds.minBounds.x) || !isFinite(receiverBounds.minBounds.y) || !isFinite(receiverBounds.minBounds.z)
-        || !isFinite(receiverBounds.maxBounds.x) || !isFinite(receiverBounds.maxBounds.y) || !isFinite(receiverBounds.maxBounds.z)
-        || !isFinite(cutterMinBounds.x) || !isFinite(cutterMinBounds.y) || !isFinite(cutterMinBounds.z)
-        || !isFinite(cutterMaxBounds.x) || !isFinite(cutterMaxBounds.y) || !isFinite(cutterMaxBounds.z)
+        !IsFinite(receiverBounds.minBounds.x) || !IsFinite(receiverBounds.minBounds.y) || !IsFinite(receiverBounds.minBounds.z)
+        || !IsFinite(receiverBounds.maxBounds.x) || !IsFinite(receiverBounds.maxBounds.y) || !IsFinite(receiverBounds.maxBounds.z)
+        || !IsFinite(cutterMinBounds.x) || !IsFinite(cutterMinBounds.y) || !IsFinite(cutterMinBounds.z)
+        || !IsFinite(cutterMaxBounds.x) || !IsFinite(cutterMaxBounds.y) || !IsFinite(cutterMaxBounds.z)
         || receiverBounds.minBounds.x > receiverBounds.maxBounds.x
         || receiverBounds.minBounds.y > receiverBounds.maxBounds.y
         || receiverBounds.minBounds.z > receiverBounds.maxBounds.z
@@ -115,16 +115,16 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
         || cutterMinBounds.y > cutterMaxBounds.y
         || cutterMinBounds.z > cutterMaxBounds.z
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(
         receiverBounds.maxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverBounds.minBounds.x
         || receiverBounds.maxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverBounds.minBounds.y
         || receiverBounds.maxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverBounds.minBounds.z
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
-    const VectorSingle mergedMin = max(VectorSingle(receiverBounds.minBounds), cutterMinBounds);
-    const VectorSingle mergedMax = min(VectorSingle(receiverBounds.maxBounds), cutterMaxBounds);
+    const VectorSingle mergedMin = Max(VectorSingle(receiverBounds.minBounds), cutterMinBounds);
+    const VectorSingle mergedMax = Min(VectorSingle(receiverBounds.maxBounds), cutterMaxBounds);
     outWorkBounds.minBounds = f32x4(mergedMin);
     outWorkBounds.maxBounds = f32x4(mergedMax);
     outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
@@ -140,7 +140,7 @@ Expected<Span<u8>> TryResolveCsgCutterParameterBytes(
     if(cutterParameterBytes.empty())
         resolved = defaultParameterBytes;
     if(resolved.size() != cast<usize>(parameterByteSize))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return resolved;
 }
 
@@ -166,7 +166,7 @@ Expected<MatrixSingle> TryBuildCsgReceiverWorldToLocal(
         valid = ::VectorIsFinite(determinant, ::VectorComponentMask::s_XYZW) && ::Vector4Greater(::VectorAbs(determinant), ::VectorZero());
     }
     if(!valid)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return worldToLocal;
 }
 

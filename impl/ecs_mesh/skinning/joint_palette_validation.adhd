@@ -104,7 +104,7 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
     );
     if(!jointMatrix.has_value()){
         error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(!useDualQuaternionPayload)
         return SkeletonJointMatrix(jointMatrix.value());
@@ -122,7 +122,7 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
     }
     if(!builtDualQuaternion){
         error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build", handleValue, jointIndex);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return storedJointMatrix;
 }

@@ -134,9 +134,9 @@ b8 IsValidSamplerScalarParameters(
         && borderColorG == 0.0f
         && borderColorB == 0.0f
         && borderColorA == 0.0f
-        && isFinite(maxAnisotropy)
+        && IsFinite(maxAnisotropy)
         && maxAnisotropy >= 1.0f
-        && isFinite(mipBias)
+        && IsFinite(mipBias)
     ;
 }
 
@@ -282,18 +282,18 @@ Expected<SamplerBinaryHeader> DeserializeSamplerBinaryHeader(in Span<u8> binary)
     const Expected<SamplerBinaryHeader> headerResult = ReadPOD<SamplerBinaryHeader>(binary, cursor);
     if(!headerResult.has_value()){
         error("Sampler::loadBinary failed: malformed header");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const SamplerBinaryHeader header = headerResult.value();
     if(header.magic != s_SamplerBinaryMagic){
         error("Sampler::loadBinary failed: invalid sampler asset format; recook required");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(!ValidateSamplerBinaryHeaderAndDescription(header))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(cursor != binary.size()){
         error("Sampler::loadBinary failed: trailing bytes detected");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return header;
 }

@@ -25,11 +25,11 @@ FontAtlasGroupCompactBounds ComputeFontAtlasGroupCompactBounds(
         const FontAtlasGlyph glyph = glyphs[i];
         if(glyph.drawable == 0u || glyph.group != groupIndex)
             continue;
-        firstX = min(firstX, glyph.x - guardTexels);
-        firstY = min(firstY, glyph.y - guardTexels);
-        endX = max(endX, glyph.x + glyph.width + guardTexels);
-        endY = max(endY, glyph.y + glyph.height + guardTexels);
-        channelCount = max(channelCount, glyph.channel + 1u);
+        firstX = Min(firstX, glyph.x - guardTexels);
+        firstY = Min(firstY, glyph.y - guardTexels);
+        endX = Max(endX, glyph.x + glyph.width + guardTexels);
+        endY = Max(endY, glyph.y + glyph.height + guardTexels);
+        channelCount = Max(channelCount, glyph.channel + 1u);
     }
     assert(channelCount > 0u);
     FontAtlasGroupCompactBounds out;
@@ -58,11 +58,11 @@ b8 ValidateFontAtlasGlyphRecord(
     if(
         cast<usize>(glyph.glyphId) != expectedIndex
         || glyph.drawable > 1u
-        || !isFinite(glyph.advanceUnits)
-        || !isFinite(glyph.planeLeft)
-        || !isFinite(glyph.planeTop)
-        || !isFinite(glyph.planeRight)
-        || !isFinite(glyph.planeBottom)
+        || !IsFinite(glyph.advanceUnits)
+        || !IsFinite(glyph.planeLeft)
+        || !IsFinite(glyph.planeTop)
+        || !IsFinite(glyph.planeRight)
+        || !IsFinite(glyph.planeBottom)
     ){
         error("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}", expectedIndex);
         return false;

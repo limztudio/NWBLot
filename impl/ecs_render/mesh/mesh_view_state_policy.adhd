@@ -10,9 +10,9 @@
 
 class MeshViewStatePolicy{
     private MatrixSingle worldToClip(in VectorSingle positionDepthBias, in VectorSingle right, in VectorSingle up, in VectorSingle forward, in VectorSingle projection)const{
-        const f32 tx = -dot(positionDepthBias.xyz, right.xyz);
-        const f32 ty = -dot(positionDepthBias.xyz, up.xyz);
-        const f32 tz = -dot(positionDepthBias.xyz, forward.xyz) + positionDepthBias.w;
+        const f32 tx = -Dot(positionDepthBias.xyz, right.xyz);
+        const f32 ty = -Dot(positionDepthBias.xyz, up.xyz);
+        const f32 tz = -Dot(positionDepthBias.xyz, forward.xyz) + positionDepthBias.w;
         const MatrixSingle worldToView(
             right.x, right.y, right.z, tx,
             up.x, up.y, up.z, ty,
@@ -25,17 +25,17 @@ class MeshViewStatePolicy{
             0.0f, 0.0f, projection.z, projection.w,
             0.0f, 0.0f, 1.0f, 0.0f
         );
-        return mul(viewToClip, worldToView);
+        return Mul(viewToClip, worldToView);
     }
 
     private VectorSingle frustumPlane(in VectorSingle normal, in VectorSingle point)const{
-        const f32 lengthSquared = lengthSq(normal.xyz);
+        const f32 lengthSquared = LengthSq(normal.xyz);
         VectorSingle unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
-        if(isFinite(lengthSquared) && lengthSquared > 0.0f){
-            const VectorSingle scaled = normal * rsqrt(VectorSingle(lengthSquared));
+        if(IsFinite(lengthSquared) && lengthSquared > 0.0f){
+            const VectorSingle scaled = normal * Rsqrt(VectorSingle(lengthSquared));
             unitNormal = VectorSingle(scaled, 0.0f);
         }
-        return VectorSingle(unitNormal, -dot(unitNormal.xyz, point.xyz));
+        return VectorSingle(unitNormal, -Dot(unitNormal.xyz, point.xyz));
     }
 
     private VectorSingle frustumSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition)const{
@@ -65,7 +65,7 @@ class MeshViewStatePolicy{
 
         const MatrixSingle worldToClip = this.worldToClip(positionDepthBias, right, up, forward, projectionParams);
         state.worldToClip = f32x4x4(worldToClip);
-        state.clipToWorld = f32x4x4(inverse(worldToClip));
+        state.clipToWorld = f32x4x4(Inverse(worldToClip));
 
         const VectorSingle negForward = -forward;
         const VectorSingle offsetPos = negForward * VectorSingle(positionDepthBias.w) + positionDepthBias;
@@ -85,7 +85,7 @@ class MeshViewStatePolicy{
 
     public Expected<MeshViewGpuData> readAccepted(in b8 valid, in Span<u8> storedBytes)const{
         if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         usize cursor = 0u;
         return ReadPOD<MeshViewGpuData>(storedBytes, cursor);
     }

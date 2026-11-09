@@ -41,8 +41,8 @@ Expected<usize> FindRouterHitTargetIndex(
     in Span<PopupRecord> popups,
     in Point position
 ){
-    if(!isFinite(position.x) || !isFinite(position.y))
-        return makeUnexpected(Failure());
+    if(!IsFinite(position.x) || !IsFinite(position.y))
+        return MakeUnexpected(Failure());
     b8 hasFound = false;
     usize foundIndex = 0u;
     HitTarget foundTarget;
@@ -57,7 +57,7 @@ Expected<usize> FindRouterHitTargetIndex(
         }
     }
     if(!hasFound)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return foundIndex;
 }
 
@@ -97,10 +97,10 @@ Expected<ContextMenuAction> TryConsumeRouterContextMenu(
 ){
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !windowFocused || !targetIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const HitTarget target = targets[targetIndex.value()];
     if(!target.contextMenu || !IsRouterTargetInteractive(targets, lookup, popups, target))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     for(usize index = 0u; index < contextMenuActions.size(); ++index){
         const ContextMenuAction candidate = contextMenuActions[index];
         if(candidate.id.target != id || candidate.id.declarationGeneration != declarationGeneration || candidate.popup != target.popup || candidate.control != target.control)
@@ -110,7 +110,7 @@ Expected<ContextMenuAction> TryConsumeRouterContextMenu(
         contextMenuActions.pop_back();
         return candidate;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<PointerGesture> TryConsumeRouterPointerGesture(
@@ -123,10 +123,10 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
 ){
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !targetIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const HitTarget target = targets[targetIndex.value()];
     if(!IsRouterTargetInteractive(targets, lookup, popups, target) || !target.pointerGesture)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     for(usize index = 0u; index < pointerGestures.size(); ++index){
         PointerGestureRecord record = pointerGestures[index];
         if(record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration || !record.pendingUpdate || record.gesture.popup != target.popup || record.gesture.control != target.control)
@@ -143,7 +143,7 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
         }
         return gesture;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 void ReconcileRouterPointerGestures(

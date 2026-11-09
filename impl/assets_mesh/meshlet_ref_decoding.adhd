@@ -23,11 +23,11 @@ using ScratchMeshletAttribGpuVector = Vector<AttribGpu, Core::Alloc::ScratchAren
 
 Expected<usize> TryComputeMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width){
     if(!MeshletRefDeltaWidthValid(width))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const usize byteWidth = cast<usize>(MeshletRefDeltaByteWidth(width));
     if(cast<usize>(refCount) > 0xffffffffffffffffu / byteWidth)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return cast<usize>(refCount) * byteWidth;
 }
@@ -45,11 +45,11 @@ b8 AddMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width, m
 
 Expected<usize> TryAddMeshletRefLayoutChannel(in usize baseOffset, in u32 refCount, in MeshletRefDeltaWidth width, mut usize inOutRelativeOffset){
     if(baseOffset > 0xffffffffffffffffu - inOutRelativeOffset)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const usize channelByteOffset = baseOffset + inOutRelativeOffset;
     if(!AddMeshletRefDeltaByteCount(refCount, width, inOutRelativeOffset))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return channelByteOffset;
 }
 
@@ -60,13 +60,13 @@ Expected<MeshletPositionRefEncodingLayout> TryBuildMeshletPositionRefEncodingLay
     layout.skinWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingSkinShift);
     const Expected<usize> positionOffset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.positionRefOffset), positionCount, layout.positionWidth, layout.byteCount);
     if(!positionOffset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.positionByteOffset = positionOffset.value();
     if(!skinRequired)
         return layout;
     const Expected<usize> skinOffset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.positionRefOffset), positionCount, layout.skinWidth, layout.byteCount);
     if(!skinOffset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.skinByteOffset = skinOffset.value();
     return layout;
 }
@@ -80,19 +80,19 @@ Expected<MeshletAttributeRefEncodingLayout> TryBuildMeshletAttributeRefEncodingL
     layout.colorWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingColorShift);
     const Expected<usize> normalOffset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.normalWidth, layout.byteCount);
     if(!normalOffset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.normalByteOffset = normalOffset.value();
     const Expected<usize> tangentOffset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.tangentWidth, layout.byteCount);
     if(!tangentOffset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.tangentByteOffset = tangentOffset.value();
     const Expected<usize> uv0Offset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.uv0Width, layout.byteCount);
     if(!uv0Offset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.uv0ByteOffset = uv0Offset.value();
     const Expected<usize> colorOffset = TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.colorWidth, layout.byteCount);
     if(!colorOffset.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     layout.colorByteOffset = colorOffset.value();
     return layout;
 }
@@ -100,7 +100,7 @@ Expected<MeshletAttributeRefEncodingLayout> TryBuildMeshletAttributeRefEncodingL
 Expected<usize> TryComputeMeshletEncodedPositionRefByteCount(in MeshletDesc meshlet, in b8 skinRequired){
     const Expected<MeshletPositionRefEncodingLayout> layout = TryBuildMeshletPositionRefEncodingLayout(meshlet, skinRequired);
     if(!layout.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return layout.value().byteCount;
 }
@@ -108,19 +108,19 @@ Expected<usize> TryComputeMeshletEncodedPositionRefByteCount(in MeshletDesc mesh
 Expected<usize> TryComputeMeshletEncodedAttributeRefByteCount(in MeshletDesc meshlet){
     const Expected<MeshletAttributeRefEncodingLayout> layout = TryBuildMeshletAttributeRefEncodingLayout(meshlet);
     if(!layout.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return layout.value().byteCount;
 }
 
 Expected<u32> TryDecodeMeshletRefDelta(in Span<u8> bytes, in usize byteOffset, in MeshletRefDeltaWidth width){
     if(!MeshletRefDeltaWidthValid(width))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const usize byteCount = bytes.size();
     const usize byteWidth = cast<usize>(MeshletRefDeltaByteWidth(width));
     if(byteOffset > byteCount || byteWidth > byteCount - byteOffset)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     u32 delta = cast<u32>(bytes[byteOffset]);
     if(width == MeshletRefDeltaWidth::U8)
@@ -142,7 +142,7 @@ Expected<u32> TryDecodeMeshletRefDeltaAtIndex(in Span<u8> bytes, in usize channe
 Expected<u32> TryDecodeMeshletRefChannelValue(in Span<u8> bytes, in usize channelByteOffset, in MeshletRefDeltaWidth width, in u32 base, in u32 localIndex){
     const Expected<u32> delta = TryDecodeMeshletRefDeltaAtIndex(bytes, channelByteOffset, localIndex, width);
     if(!delta.has_value() || delta.value() > 0xffffffffu - base)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return base + delta.value();
 }
@@ -151,26 +151,26 @@ Expected<MeshletPositionStreamRef> TryDecodeMeshletPositionRef(in Span<u8> bytes
     MeshletPositionStreamRef refValue;
     const u32 positionCount = MeshletPositionCount(meshlet);
     if(localPositionIndex >= positionCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const Expected<MeshletPositionRefEncodingLayout> layout = TryBuildMeshletPositionRefEncodingLayout(meshlet, skinRequired);
     if(!layout.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const Expected<u32> position = TryDecodeMeshletRefChannelValue(bytes, layout.value().positionByteOffset, layout.value().positionWidth, meshlet.positionBase, localPositionIndex);
     if(!position.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.position = position.value();
 
     if(!skinRequired){
         if(meshlet.skinBase != s_MeshMissingStreamIndex)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return refValue;
     }
 
     const Expected<u32> skin = TryDecodeMeshletRefChannelValue(bytes, layout.value().skinByteOffset, layout.value().skinWidth, meshlet.skinBase, localPositionIndex);
     if(!skin.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.skin = skin.value();
     return refValue;
 }
@@ -179,27 +179,27 @@ Expected<MeshletAttributeStreamRef> TryDecodeMeshletAttributeRef(in Span<u8> byt
     MeshletAttributeStreamRef refValue;
     const u32 attributeCount = MeshletAttributeCount(meshlet);
     if(localAttributeIndex >= attributeCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const Expected<MeshletAttributeRefEncodingLayout> layout = TryBuildMeshletAttributeRefEncodingLayout(meshlet);
     if(!layout.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const Expected<u32> normal = TryDecodeMeshletRefChannelValue(bytes, layout.value().normalByteOffset, layout.value().normalWidth, meshlet.normalBase, localAttributeIndex);
     if(!normal.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.normal = normal.value();
     const Expected<u32> tangent = TryDecodeMeshletRefChannelValue(bytes, layout.value().tangentByteOffset, layout.value().tangentWidth, meshlet.tangentBase, localAttributeIndex);
     if(!tangent.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.tangent = tangent.value();
     const Expected<u32> uv0 = TryDecodeMeshletRefChannelValue(bytes, layout.value().uv0ByteOffset, layout.value().uv0Width, meshlet.uv0Base, localAttributeIndex);
     if(!uv0.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.uv0 = uv0.value();
     const Expected<u32> color = TryDecodeMeshletRefChannelValue(bytes, layout.value().colorByteOffset, layout.value().colorWidth, meshlet.colorBase, localAttributeIndex);
     if(!color.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     refValue.color = color.value();
 
     return refValue;

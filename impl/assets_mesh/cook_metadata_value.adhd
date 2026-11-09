@@ -70,21 +70,21 @@ enum<u8> SourceIndexStreamFailure{
 
 Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Number(in b8 isNumeric, in f64 numericValue){
     if(!isNumeric)
-        return makeUnexpected(MetadataF32ValueFailure::NotNumeric);
-    if(!isFinite(numericValue))
-        return makeUnexpected(MetadataF32ValueFailure::NonFinite);
+        return MakeUnexpected(MetadataF32ValueFailure::NotNumeric);
+    if(!IsFinite(numericValue))
+        return MakeUnexpected(MetadataF32ValueFailure::NonFinite);
     if(numericValue < cast<f64>(f32.min) || numericValue > cast<f64>(f32.max))
-        return makeUnexpected(MetadataF32ValueFailure::OutOfRange);
+        return MakeUnexpected(MetadataF32ValueFailure::OutOfRange);
     return cast<f32>(numericValue);
 }
 
 Expected<u32, MetadataU32ValueFailure> ValidateMetadataU32Number(in b8 isNumeric, in f64 numericValue){
     if(!isNumeric)
-        return makeUnexpected(MetadataU32ValueFailure::NotNumeric);
-    if(!isFinite(numericValue) || numericValue < 0.0 || numericValue != floor(numericValue))
-        return makeUnexpected(MetadataU32ValueFailure::NonIntegerOrNegative);
+        return MakeUnexpected(MetadataU32ValueFailure::NotNumeric);
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue))
+        return MakeUnexpected(MetadataU32ValueFailure::NonIntegerOrNegative);
     if(numericValue > cast<f64>(u32.max))
-        return makeUnexpected(MetadataU32ValueFailure::OutOfRange);
+        return MakeUnexpected(MetadataU32ValueFailure::OutOfRange);
     return cast<u32>(numericValue);
 }
 

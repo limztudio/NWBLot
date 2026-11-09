@@ -37,9 +37,9 @@ void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut Scr
     edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     for(in CsgDeformTriangle triangle : triangles){
         Array<u64, s_TriangleCornerCount> edges;
-        edges[0u] = packUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
-        edges[1u] = packUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
-        edges[2u] = packUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
+        edges[0u] = PackUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
+        edges[1u] = PackUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
+        edges[2u] = PackUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const u64 edgeKey = edges[cast<usize>(corner)];
             u32 useCount = 1u;
@@ -50,13 +50,13 @@ void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut Scr
     }
     outEdges.reserve(triangles.size());
     for(in CsgDeformTriangle triangle : triangles){
-        const u64 edge0 = packUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
+        const u64 edge0 = PackUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
         if(edgeUses.contains(edge0) && edgeUses[edge0] == 1u)
             outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[0u], triangle.indices[1u]));
-        const u64 edge1 = packUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
+        const u64 edge1 = PackUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
         if(edgeUses.contains(edge1) && edgeUses[edge1] == 1u)
             outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[1u], triangle.indices[2u]));
-        const u64 edge2 = packUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
+        const u64 edge2 = PackUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
         if(edgeUses.contains(edge2) && edgeUses[edge2] == 1u)
             outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[2u], triangle.indices[0u]));
     }
@@ -181,7 +181,7 @@ Expected<u32> FillCsgDeformCutCaps(
         }
         const Expected<CsgDeformVertex> center = TryResolveCsgDeformCapLoopCenter(currentVertices, loop, inOutTriangles.size());
         if(!center.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u32 centerIndex = cast<u32>(inOutVertices.size());
         inOutVertices.push_back(center.value());
         for(usize vertexIndex = 0u; vertexIndex < loop.size(); ++vertexIndex){

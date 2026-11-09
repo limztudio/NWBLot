@@ -17,7 +17,7 @@ Expected<RendererComponent> TryResolveModelObjectRendererComponent(in AssetRef<M
             resolvedMaterial = ownerRenderer.material;
     }
     if(!resolvedMaterial.valid())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     RendererComponent renderer;
     renderer.material = resolvedMaterial;

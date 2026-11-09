@@ -193,7 +193,7 @@ class ControlVisualPainter{
             painted = paint.drawRegion(markRegionName, row.mark, tint);
         if(painted && focused && skin.hasRegion(style.focus))
             painted = paint.drawRegion(style.focus, row.rectangle);
-        const f32 horizontalOffset = min(row.rectangle.width, row.indicator.width + metrics.gap);
+        const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + metrics.gap);
         const Point origin = ResolveCenteredTextOrigin(row.rectangle, horizontalOffset, textBounds);
         paint.pushClip(row.textClip);
         if(painted){

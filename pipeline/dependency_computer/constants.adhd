@@ -13,7 +13,7 @@ Expected<StringView> ExtractParentVirtualPathText(in StringView virtualPathText)
             lastSlash = index;
     }
     if(lastSlash == usize.max || lastSlash == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return virtualPathText.substr(0u, lastSlash);
 }
 
@@ -33,9 +33,9 @@ b8 RecordDependencyProviderMatch(in Name virtualPath, in usize index, mut usize 
 }
 
 Expected<StringView> TryTrimVirtualPathText(in StringView rawText){
-    const StringView trimmed = trimView(rawText);
+    const StringView trimmed = TrimView(rawText);
     if(trimmed.empty() || trimmed.find('/') >= trimmed.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return trimmed;
 }
 

@@ -73,10 +73,10 @@ Expected<usize> TryComputeShaderAssetPayloadByteCount(
 ){
     usize entryPointBytes = 4u + entryPointByteLength;
     if(entryPointBytes < entryPointByteLength || entryPointBytes > 0xFFFFFFFFFFFFFFFFu - s_AssetPayloadHeaderBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
     if(bytecodeByteLength > 0xFFFFFFFFFFFFFFFFu - headerAndEntryPointBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return headerAndEntryPointBytes + bytecodeByteLength;
 }
 
@@ -148,16 +148,16 @@ Expected<AssetPayloadView, AssetPayloadDecodeFailure> DecodeAssetPayload(in Span
     const Expected<u32> magic = ReadU32LittleEndian(payload, cursor);
     const Expected<u32> version = ReadU32LittleEndian(payload, cursor);
     if(!magic.has_value() || !version.has_value() || magic.value() != s_AssetPayloadMagic)
-        return makeUnexpected(AssetPayloadDecodeFailure::InvalidHeader);
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidHeader);
     if(version.value() != s_AssetPayloadVersion)
-        return makeUnexpected(AssetPayloadDecodeFailure::UnsupportedVersion);
+        return MakeUnexpected(AssetPayloadDecodeFailure::UnsupportedVersion);
     const Expected<StringView> entryPoint = ReadString(payload, cursor);
     if(!entryPoint.has_value() || entryPoint.value().empty())
-        return makeUnexpected(AssetPayloadDecodeFailure::InvalidEntryPoint);
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidEntryPoint);
 
     const Span<u8> bytecode = payload.subspan(cursor, payload.size() - cursor);
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return makeUnexpected(AssetPayloadDecodeFailure::InvalidBytecode);
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidBytecode);
     AssetPayloadView outView;
     outView.entryPoint = entryPoint.value();
     outView.bytecode = bytecode;

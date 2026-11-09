@@ -101,7 +101,7 @@ class UiSkinBinaryCodec{
     private Expected<UiSkinRegion> tryUnpackRegion(in UiSkinRegionBinary packed, in u32 index)const{
         if(!this.isValidRegionFlags(packed)){
             error("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags", index);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         return this.unpackRegion(packed);
     }

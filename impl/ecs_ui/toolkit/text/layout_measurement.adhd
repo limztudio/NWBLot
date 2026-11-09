@@ -41,7 +41,7 @@ Expected<TextLine> TryBuildInitialTextLine(
     const f64 baseline = cast<f64>(top) + cast<f64>(metrics.ascender);
     const f64 height = (cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap);
     if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(cast<f64>(top) + height))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     TextLine line;
     line.byteBegin = cast<u32>(byteBegin);
     line.byteEnd = cast<u32>(byteEnd);
@@ -69,13 +69,13 @@ Expected<Point> TryAdvanceTextGlyphPosition(
     const f64 y = cast<f64>(baseline) + cast<f64>(offset.y);
     const f64 nextPen = cast<f64>(inOutPen) + cast<f64>(advance.x);
     if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Point position(cast<f32>(x), cast<f32>(y));
     const Expected<VectorDouble> translatedInk = TryTranslateTextInk(position, ink);
     if(!translatedInk.has_value() || !TryIncludeTextInk(translatedInk.value(), inOutInkBounds, inOutHasInk))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(coverage.known && !TryTranslateTextInk(position, coverage.ink).has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     inOutPen = cast<f32>(nextPen);
     return position;
 }
@@ -111,10 +111,10 @@ TextCluster MakeTextCluster(
 VectorDouble ComputeInitialMeasuredTextBounds(in Point logical, in Rect ink){
     const f64 inkEndX = cast<f64>(ink.x) + cast<f64>(ink.width);
     const f64 inkEndY = cast<f64>(ink.y) + cast<f64>(ink.height);
-    const f64 minX = min(0.0, cast<f64>(ink.x));
-    const f64 minY = min(0.0, cast<f64>(ink.y));
-    const f64 maxX = max(cast<f64>(logical.x), inkEndX);
-    const f64 maxY = max(cast<f64>(logical.y), inkEndY);
+    const f64 minX = Min(0.0, cast<f64>(ink.x));
+    const f64 minY = Min(0.0, cast<f64>(ink.y));
+    const f64 maxX = Max(cast<f64>(logical.x), inkEndX);
+    const f64 maxY = Max(cast<f64>(logical.y), inkEndY);
     return VectorDouble(minX, minY, maxX, maxY);
 }
 
@@ -126,10 +126,10 @@ void ExpandMeasuredTextBoundsWithSdfSupport(in VectorDouble support, mut VectorD
     const f64 lastX = firstX + support.z;
     const f64 lastY = firstY + support.w;
     inOutBounds = VectorDouble(
-        min(inOutBounds.x, firstX),
-        min(inOutBounds.y, firstY),
-        max(inOutBounds.z, lastX),
-        max(inOutBounds.w, lastY)
+        Min(inOutBounds.x, firstX),
+        Min(inOutBounds.y, firstY),
+        Max(inOutBounds.z, lastX),
+        Max(inOutBounds.w, lastY)
     );
 }
 
@@ -157,10 +157,10 @@ void ExpandMeasuredTextBoundsWithRaster(
     const f64 lastX = (originX + (pixelEndX / scale)) + snapX;
     const f64 lastY = (originY + (pixelEndY / scale)) + snapY;
     inOutBounds = VectorDouble(
-        min(inOutBounds.x, firstX),
-        min(inOutBounds.y, firstY),
-        max(inOutBounds.z, lastX),
-        max(inOutBounds.w, lastY)
+        Min(inOutBounds.x, firstX),
+        Min(inOutBounds.y, firstY),
+        Max(inOutBounds.z, lastX),
+        Max(inOutBounds.w, lastY)
     );
 }
 
@@ -239,12 +239,12 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
         ));
         first = end;
     }
-    if(!isFinite(pen) || !isFinite(line.top + line.height))
+    if(!IsFinite(pen) || !IsFinite(line.top + line.height))
         return TextLayoutStatus::InvalidParameters;
     line.advance = pen;
     line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
     inOutLines.push_back(line);
-    inOutMeasure = Point(max(inOutMeasure.x, pen), inOutMeasure.y + line.height);
+    inOutMeasure = Point(Max(inOutMeasure.x, pen), inOutMeasure.y + line.height);
     return TextLayoutStatus::Success;
 }
 

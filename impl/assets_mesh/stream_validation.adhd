@@ -31,22 +31,22 @@ const StringView s_ColorsStreamLabelText = "colors";
 
 
 b8 IsValidMeshDirectionVector(in VectorSingle direction){
-    if(!isFinite(direction.xyz))
+    if(!IsFinite(direction.xyz))
         return false;
-    return abs(lengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
+    return Abs(LengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
 }
 
 b8 IsValidMeshTangentVector(in VectorSingle tangent){
-    if(!isFinite(tangent))
+    if(!IsFinite(tangent))
         return false;
     return
-        abs(lengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
-        && abs(abs(tangent.w) - 1.0f) <= s_TangentHandednessTolerance
+        Abs(LengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
+        && Abs(Abs(tangent.w) - 1.0f) <= s_TangentHandednessTolerance
     ;
 }
 
 b8 IsValidMeshletBoundsSphere(in MeshletBounds bounds){
-    return isFinite(bounds.sphere.x) && isFinite(bounds.sphere.y) && isFinite(bounds.sphere.z) && isFinite(bounds.sphere.w) && bounds.sphere.w >= 0.0f;
+    return IsFinite(bounds.sphere.x) && IsFinite(bounds.sphere.y) && IsFinite(bounds.sphere.z) && IsFinite(bounds.sphere.w) && bounds.sphere.w >= 0.0f;
 }
 
 b8 HasValidMeshletConeFlags(in MeshletBounds bounds){
@@ -116,7 +116,7 @@ Expected<usize> TryFindInvalidMeshletPrimitiveIndex(
                 return cast<usize>(primitiveIndex);
         }
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 ValidateMeshBaseHeader(in MeshBinaryHeader header){
@@ -217,7 +217,7 @@ b8 ValidateMeshStreams(
 
     for(usize i = 0u; i < positions.size(); ++i){
         const f32x3u pos = positions[i];
-        if(isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z))
+        if(IsFinite(pos.x) && IsFinite(pos.y) && IsFinite(pos.z))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_PositionsStreamLabelText, i, s_NonFiniteDataReasonText);
@@ -240,7 +240,7 @@ b8 ValidateMeshStreams(
     }
     for(usize i = 0u; i < uv0.size(); ++i){
         const f32x2u uv = uv0[i];
-        if(isFinite(uv.x) && isFinite(uv.y))
+        if(IsFinite(uv.x) && IsFinite(uv.y))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_Uv0StreamLabelText, i, s_NonFiniteDataReasonText);
@@ -248,7 +248,7 @@ b8 ValidateMeshStreams(
     }
     for(usize i = 0u; i < colors.size(); ++i){
         const VectorSingle color(colors[i]);
-        if(isFinite(color))
+        if(IsFinite(color))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_ColorsStreamLabelText, i, s_NonFiniteDataReasonText);

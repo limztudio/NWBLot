@@ -18,7 +18,7 @@ Expected<FontAtlasRasterMode> TryParseFontAtlasRasterMode(in StringView text){
         return FontAtlasRasterMode::Bitmap;
     if(text == s_FontAtlasRasterModeOutline)
         return FontAtlasRasterMode::Outline;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 IsAllowedFontAtlasGlyphField(in StringView field, in b8 hasBitmap){
@@ -41,7 +41,7 @@ b8 IsAllowedFontAtlasGlyphField(in StringView field, in b8 hasBitmap){
 }
 
 b8 IsValidFontAtlasMetrics(in f32 ascenderUnits, in f32 descenderUnits, in f32 lineGapUnits){
-    return isFinite(ascenderUnits) && isFinite(descenderUnits) && isFinite(lineGapUnits) && ascenderUnits > descenderUnits && lineGapUnits >= 0.0f;
+    return IsFinite(ascenderUnits) && IsFinite(descenderUnits) && IsFinite(lineGapUnits) && ascenderUnits > descenderUnits && lineGapUnits >= 0.0f;
 }
 
 b8 IsValidFontAtlasGlyphGroupRect(in FontAtlasGlyph glyph, in u32 groupWidth, in u32 groupHeight, in u32 groupChannelCount, in u32 guardTexels){
@@ -99,8 +99,8 @@ b8 IsValidFontAtlasGlyphPlaneBounds(in FontAtlasGlyph glyph, in f32 unitsPerPixe
     const f32 planeWidth = glyph.planeRight - glyph.planeLeft;
     const f32 planeHeight = glyph.planeBottom - glyph.planeTop;
     return
-        abs(planeWidth - expectedWidth) <= expectedWidth * s_FontAtlasGlyphPlaneSizeRelativeTolerance
-        && abs(planeHeight - expectedHeight) <= expectedHeight * s_FontAtlasGlyphPlaneSizeRelativeTolerance
+        Abs(planeWidth - expectedWidth) <= expectedWidth * s_FontAtlasGlyphPlaneSizeRelativeTolerance
+        && Abs(planeHeight - expectedHeight) <= expectedHeight * s_FontAtlasGlyphPlaneSizeRelativeTolerance
     ;
 }
 
@@ -117,7 +117,7 @@ b8 IsValidFontAtlasGroupDimensions(in u32 width, in u32 height, in u32 channelCo
 
 Expected<usize> TryComputeFontAtlasOccupancyWordCount(in u32 width, in u32 height, in u32 channelCount){
     if(!IsValidFontAtlasGroupDimensions(width, height, channelCount))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const usize totalBits = cast<usize>(width) * cast<usize>(height) * cast<usize>(channelCount);
     return (totalBits + s_FontAtlasOccupiedWordLastBit) / s_FontAtlasBitsPerOccupiedWord;
 }
@@ -153,7 +153,7 @@ b8 IsFontAtlasPositioningTableTag(in u32 tag){
 Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes){
     const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
     if(!directory.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     u32 unitsPerEm = 0u;
     u32 sourceGlyphCount = 0u;
     b8 hasHead = false;
@@ -161,16 +161,16 @@ Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontByt
     for(u16 index = 0u; index < directory.value().tableCount(); ++index){
         const Expected<FontSfntTable> table = directory.value().table(cast<usize>(index));
         if(!table.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(table.value().tag == s_FontSfntHeadTag){
             if(table.value().bytes.size() < s_FontSfntHeadUnitsPerEmOffset + s_FontSfntU16Bytes)
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             unitsPerEm = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntHeadUnitsPerEmOffset));
             hasHead = true;
         }
         else if(table.value().tag == s_FontSfntMaxpTag){
             if(table.value().bytes.size() < s_FontSfntMaxpGlyphCountOffset + s_FontSfntU16Bytes)
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             sourceGlyphCount = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntMaxpGlyphCountOffset));
             hasMaxp = true;
         }
@@ -182,7 +182,7 @@ Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontByt
         || unitsPerEm > s_FontAtlasMaxUnitsPerEm
         || sourceGlyphCount == 0u
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     FontFaceSfntMetrics out;
     out.unitsPerEm = unitsPerEm;
     out.sourceGlyphCount = sourceGlyphCount;

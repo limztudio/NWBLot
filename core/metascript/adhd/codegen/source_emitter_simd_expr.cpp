@@ -113,7 +113,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                             if(effLanes1 < effLanes)
                                 effLanes = effLanes1;
                         }
-                        if(callee == "dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                        if(callee == "Dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                             const Expr* sumArg = SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_symbols)
                                 ? expr.arguments[0]
                                 : (SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_symbols) ? expr.arguments[1] : nullptr);
@@ -135,7 +135,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                         return;
                     }
                 }
-                if(callee == "rsqrt" && expr.arguments.size() == 1u){
+                if(callee == "Rsqrt" && expr.arguments.size() == 1u){
                     if(const Expr* lenSqVec = SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_symbols)){
                         const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*lenSqVec, &m_symbols);
                         AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
@@ -148,7 +148,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 b8 maxIsDouble = false;
                 u32 maxLanes = 0u;
                 b8 maxIsAbs = false;
-                if(callee == "max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble && maxBaseVec){
+                if(callee == "Max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble && maxBaseVec){
                     AppendSimdLaneCountIntrinsicPrefix(out, isDouble, maxLanes, "MaxComponent");
                     if(maxIsAbs)
                         out.append(isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");

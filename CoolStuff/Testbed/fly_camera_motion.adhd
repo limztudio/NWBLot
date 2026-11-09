@@ -25,8 +25,8 @@ class FlyCameraPointerDelta{
 
 class FlyCameraMotion{
     public f32 sanitizeDelta(in f32 deltaSeconds)const{
-        if(isFinite(deltaSeconds))
-            return max(deltaSeconds, 0.0f);
+        if(IsFinite(deltaSeconds))
+            return Max(deltaSeconds, 0.0f);
         return 0.0f;
     }
 
@@ -42,7 +42,7 @@ class FlyCameraMotion{
         const f32 deltaY = cast<f32>(ypos - lastMouseY);
         const f32 pendingDeltaX = inOutPendingMouseDeltaX + deltaX;
         const f32 pendingDeltaY = inOutPendingMouseDeltaY + deltaY;
-        if(isFinite(deltaX) && isFinite(deltaY) && isFinite(pendingDeltaX) && isFinite(pendingDeltaY)){
+        if(IsFinite(deltaX) && IsFinite(deltaY) && IsFinite(pendingDeltaX) && IsFinite(pendingDeltaY)){
             inOutPendingMouseDeltaX = pendingDeltaX;
             inOutPendingMouseDeltaY = pendingDeltaY;
         }
@@ -75,7 +75,7 @@ class FlyCameraMotion{
         mut f32 inOutPendingMouseDeltaX,
         mut f32 inOutPendingMouseDeltaY
     )const{
-        if(!isFinite(xpos) || !isFinite(ypos) || wantsPointer || !mouseLookActive){
+        if(!IsFinite(xpos) || !IsFinite(ypos) || wantsPointer || !mouseLookActive){
             inOutMousePositionValid = false;
             return;
         }
@@ -118,43 +118,43 @@ class FlyCameraMotion{
     }
 
     private VectorSingle rotateVector3(in VectorSingle value, in VectorSingle rotationQuaternion)const{
-        const VectorSingle t = cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
-        const VectorSingle rotated = value + t * VectorSingle(rotationQuaternion.w) + cross(rotationQuaternion.xyz, t.xyz);
+        const VectorSingle t = Cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
+        const VectorSingle rotated = value + t * VectorSingle(rotationQuaternion.w) + Cross(rotationQuaternion.xyz, t.xyz);
         return VectorSingle(rotated, 0.0f);
     }
 
     private VectorSingle resolveForwardVector(in VectorSingle rotation)const{
         const VectorSingle localForward(0.0f, 0.0f, 1.0f, 0.0f);
         const VectorSingle rotated = this.rotateVector3(localForward, rotation);
-        const f32 lenSq = lengthSq(rotated.xyz);
-        if(!isFinite(lenSq) || !(lenSq > s_CameraMoveEpsilon))
+        const f32 lenSq = LengthSq(rotated.xyz);
+        if(!IsFinite(lenSq) || !(lenSq > s_CameraMoveEpsilon))
             return localForward;
-        const VectorSingle normalized = rotated * rsqrt(VectorSingle(lenSq));
-        return clamp(VectorSingle(normalized, 0.0f), VectorSingle(-1.0f, -1.0f, -1.0f, -1.0f), VectorSingle(1.0f, 1.0f, 1.0f, 1.0f));
+        const VectorSingle normalized = rotated * Rsqrt(VectorSingle(lenSq));
+        return Clamp(VectorSingle(normalized, 0.0f), VectorSingle(-1.0f, -1.0f, -1.0f, -1.0f), VectorSingle(1.0f, 1.0f, 1.0f, 1.0f));
     }
 
     private VectorSingle sanitizeAngles(in f32 yawRadians, in f32 pitchRadians)const{
         f32 yaw = 0.0f;
-        if(isFinite(yawRadians))
+        if(IsFinite(yawRadians))
             yaw = yawRadians;
         f32 pitch = 0.0f;
-        if(isFinite(pitchRadians))
-            pitch = clamp(pitchRadians, -s_FlyCameraPitchLimitRadians, s_FlyCameraPitchLimitRadians);
+        if(IsFinite(pitchRadians))
+            pitch = Clamp(pitchRadians, -s_FlyCameraPitchLimitRadians, s_FlyCameraPitchLimitRadians);
         return VectorSingle(yaw, pitch, 0.0f, 0.0f);
     }
 
     private VectorSingle resolveRotationAngles(in VectorSingle currentAngles, in VectorSingle mouseDelta)const{
         f32 curYaw = 0.0f;
-        if(isFinite(currentAngles.x))
+        if(IsFinite(currentAngles.x))
             curYaw = currentAngles.x;
         f32 curPitch = 0.0f;
-        if(isFinite(currentAngles.y))
+        if(IsFinite(currentAngles.y))
             curPitch = currentAngles.y;
         f32 deltaX = 0.0f;
-        if(isFinite(mouseDelta.x))
+        if(IsFinite(mouseDelta.x))
             deltaX = mouseDelta.x;
         f32 deltaY = 0.0f;
-        if(isFinite(mouseDelta.y))
+        if(IsFinite(mouseDelta.y))
             deltaY = mouseDelta.y;
         const VectorSingle sanitized = this.sanitizeAngles(
             curYaw + deltaX * s_FlyCameraMouseSensitivityRadiansPerPixel,
@@ -171,15 +171,15 @@ class FlyCameraMotion{
         in b8 boosted
     )const{
         VectorSingle outPosition(0.0f, 0.0f, 0.0f, 0.0f);
-        if(isFinite(currentPosition.xyz))
+        if(IsFinite(currentPosition.xyz))
             outPosition = currentPosition;
 
         f32 axisX = 0.0f;
-        if(isFinite(moveAxes.x))
-            axisX = clamp(moveAxes.x, -1.0f, 1.0f);
+        if(IsFinite(moveAxes.x))
+            axisX = Clamp(moveAxes.x, -1.0f, 1.0f);
         f32 axisY = 0.0f;
-        if(isFinite(moveAxes.y))
-            axisY = clamp(moveAxes.y, -1.0f, 1.0f);
+        if(IsFinite(moveAxes.y))
+            axisY = Clamp(moveAxes.y, -1.0f, 1.0f);
         const f32 moveLengthSq = axisX * axisX + axisY * axisY;
         if(!(moveLengthSq > s_CameraMoveEpsilon))
             return outPosition;
@@ -189,17 +189,17 @@ class FlyCameraMotion{
         if(boosted)
             boost = s_FlyCameraBoostMultiplier;
         const f32 speedDelta = (s_FlyCameraMoveSpeed * boost) * safeDelta;
-        const VectorSingle moveScale = VectorSingle(speedDelta) * rsqrt(VectorSingle(moveLengthSq));
-        if(!isFinite(moveScale.x))
+        const VectorSingle moveScale = VectorSingle(speedDelta) * Rsqrt(VectorSingle(moveLengthSq));
+        if(!IsFinite(moveScale.x))
             return outPosition;
 
         const VectorSingle localMove = VectorSingle(axisX, 0.0f, axisY, 0.0f) * moveScale;
         const VectorSingle worldMove = this.rotateVector3(localMove, rotation);
-        if(!isFinite(worldMove.xyz))
+        if(!IsFinite(worldMove.xyz))
             return outPosition;
 
         const VectorSingle newPosition = outPosition + worldMove;
-        if(isFinite(newPosition.xyz))
+        if(IsFinite(newPosition.xyz))
             return newPosition;
         return outPosition;
     }

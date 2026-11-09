@@ -74,7 +74,7 @@ class MaterialInstanceOverrideApplier{
             break;
         }
 
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     private Expected<MaterialInstanceOverrideField> resolveField(
@@ -89,7 +89,7 @@ class MaterialInstanceOverrideApplier{
             return resolvedField.value();
 
         error("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     private b8 validateInterface(
@@ -125,17 +125,17 @@ class MaterialInstanceOverrideApplier{
     )const{
         if(parameter.blockName == s_NameNone || parameter.fieldName == s_NameNone){
             error("RendererSystem: material instance override for entity {} has an invalid parameter name", entityId);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
 
         const Expected<MaterialInstanceOverrideField> resolvedField = this.resolveField(entityId, materialName, typedLayoutBlocks, typedLayoutFields, parameter);
         if(!resolvedField.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         const MaterialTypedLayoutField field = resolvedField.value().field;
         if(!resolvedField.value().mutableBlock){
             error("RendererSystem: material instance override '{}' for entity {} targets material-constant storage", parameter.parameterName.resolvedText(), entityId);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(field.fieldType != parameter.fieldType){
             error(
@@ -144,7 +144,7 @@ class MaterialInstanceOverrideApplier{
                 , entityId
                 , materialName.resolvedText()
             );
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
 
         assert(field.offset <= 0xFFFFFFFFu - resolvedField.value().blockByteBegin);
@@ -153,7 +153,7 @@ class MaterialInstanceOverrideApplier{
         assert(fieldByteSize != 0u);
         if(cast<usize>(fieldByteOffset) > mutableByteCapacity || cast<usize>(fieldByteSize) > mutableByteCapacity - cast<usize>(fieldByteOffset)){
             error("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         return fieldByteOffset;
     }

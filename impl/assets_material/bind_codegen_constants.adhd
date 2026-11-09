@@ -285,7 +285,7 @@ i8 ToMaterialBindAsciiUpperByte(in i8 ch){
 }
 
 b8 IsMaterialBindAsciiAlphaNumericByte(in i8 ch){
-    return isAsciiAlpha(ch) || (ch >= '0' && ch <= '9');
+    return IsAsciiAlpha(ch) || (ch >= '0' && ch <= '9');
 }
 
 void AppendMaterialBindAsciiUpperIdentifier(in StringView text, mut String inOutText){

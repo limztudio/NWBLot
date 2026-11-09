@@ -25,7 +25,7 @@ Expected<MeshletFrontierCandidate> SelectBestMeshletCandidateFromResults(in Span
     for(in MeshletCandidateSearchResult result : results)
         UpdateBestMeshletCandidateFromResult(result, found, bestCandidate);
     if(!found)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return bestCandidate;
 }
 
@@ -40,7 +40,7 @@ b8 IsBetterMeshletCandidate(in f32 score, in u32 triangleIndex, in b8 hasExistin
 usize ResolveMeshletDisconnectedCandidateChunkCount(in usize searchCount, in u32 workerThreadCount){
     const usize workerCount = cast<usize>(workerThreadCount) + 1u;
     const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
-    return min(searchCount, maxChunkCount);
+    return Min(searchCount, maxChunkCount);
 }
 
 void ResolveMeshletDisconnectedCandidateChunkRange(
@@ -128,7 +128,7 @@ Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidateFromPrecomput
     }
 
     if(!found)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return candidate;
 }
 
@@ -165,7 +165,7 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRangeFrom
     }
 
     if(!found)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return candidate;
 }
 

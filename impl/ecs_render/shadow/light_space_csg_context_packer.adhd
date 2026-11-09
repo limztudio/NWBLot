@@ -99,7 +99,7 @@ class LightSpaceCsgContextPacker{
             if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
                 continue;
             const Span<u32> words = solidTriangleMasks[index];
-            const u32 requiredWords = divideUpWrappingU32(instances[index].primitiveCount, 32u);
+            const u32 requiredWords = DivideUpWrappingU32(instances[index].primitiveCount, 32u);
             const usize wordBytes = words.size() * 4u;
             if(words.size() != cast<usize>(requiredWords) || words.empty() || wordBytes > cast<usize>(u32.max) - totalBytes){
                 error("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity");

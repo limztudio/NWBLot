@@ -11,13 +11,13 @@
 Expected<VectorDouble> TryLoadWindowPointerDisplacement(in PointerGesture gesture){
     if(
         !gesture.id.valid()
-        || !isFinite(gesture.origin.x) || !isFinite(gesture.origin.y)
-        || !isFinite(gesture.position.x) || !isFinite(gesture.position.y)
+        || !IsFinite(gesture.origin.x) || !IsFinite(gesture.origin.y)
+        || !IsFinite(gesture.position.x) || !IsFinite(gesture.position.y)
         || !IsValidUiRect(gesture.referenceRectangle)
         || gesture.referenceRectangle.width <= 0.0f || gesture.referenceRectangle.height <= 0.0f
         || gesture.state > PointerGestureState::Completed
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return VectorDouble(
         cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x),
         cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y),
@@ -31,8 +31,8 @@ b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut W
         !IsValidUiRect(options.initialBounds)
         || options.direction > LayoutDirection::Column || options.direction == LayoutDirection::Leaf
         || !IsValidUiExtent(options.minimumSize)
-        || !isFinite(metrics.minimumSize.x) || metrics.minimumSize.x <= 0.0f
-        || !isFinite(metrics.minimumSize.y) || metrics.minimumSize.y <= 0.0f
+        || !IsFinite(metrics.minimumSize.x) || metrics.minimumSize.x <= 0.0f
+        || !IsFinite(metrics.minimumSize.y) || metrics.minimumSize.y <= 0.0f
     )
         return false;
     WindowState candidate = state;
@@ -43,8 +43,8 @@ b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut W
     }
     if(!IsValidUiRect(candidate.bounds))
         return false;
-    candidate.bounds.width = max(candidate.bounds.width, metrics.minimumSize.x);
-    candidate.bounds.height = max(candidate.bounds.height, metrics.minimumSize.y);
+    candidate.bounds.width = Max(candidate.bounds.width, metrics.minimumSize.x);
+    candidate.bounds.height = Max(candidate.bounds.height, metrics.minimumSize.y);
     candidate.initialized = true;
     if(!IsValidUiRect(candidate.bounds))
         return false;
@@ -63,7 +63,7 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
     }
     const f64 left = cast<f64>(movement.initialBounds.x) + displacement.value().x;
     const f64 top = cast<f64>(movement.initialBounds.y) + displacement.value().y;
-    if(abs(left) > s_UiMaxFloatF64 || abs(top) > s_UiMaxFloatF64)
+    if(Abs(left) > s_UiMaxFloatF64 || Abs(top) > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
     candidate.x = cast<f32>(left);
@@ -77,15 +77,15 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
 
 b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut WindowState state){
     const Expected<VectorDouble> displacement = TryLoadWindowPointerDisplacement(gesture);
-    if(!displacement.has_value() || !isFinite(minimumSize.x) || minimumSize.x <= 0.0f || !isFinite(minimumSize.y) || minimumSize.y <= 0.0f)
+    if(!displacement.has_value() || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
     if(resizing.id != gesture.id){
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const f64 width = max(cast<f64>(minimumSize.x), cast<f64>(resizing.initialBounds.width) + displacement.value().x);
-    const f64 height = max(cast<f64>(minimumSize.y), cast<f64>(resizing.initialBounds.height) + displacement.value().y);
+    const f64 width = Max(cast<f64>(minimumSize.x), cast<f64>(resizing.initialBounds.width) + displacement.value().x);
+    const f64 height = Max(cast<f64>(minimumSize.y), cast<f64>(resizing.initialBounds.height) + displacement.value().y);
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
@@ -99,15 +99,15 @@ b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut Win
 }
 
 b8 TryConstrainWindow(in DisplayMetrics display, in f32 titleHeight, mut WindowState state){
-    if(!isFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !isFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !isFinite(titleHeight) || titleHeight <= 0.0f || !IsValidUiRect(state.bounds))
+    if(!IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !IsFinite(titleHeight) || titleHeight <= 0.0f || !IsValidUiRect(state.bounds))
         return false;
     f32 height = state.bounds.height;
     if(state.collapsed)
         height = titleHeight;
-    const f32 maxX = max(0.0f, display.logicalWidth - state.bounds.width);
-    const f32 maxY = max(0.0f, display.logicalHeight - height);
-    state.bounds.x = clamp(state.bounds.x, 0.0f, maxX);
-    state.bounds.y = clamp(state.bounds.y, 0.0f, maxY);
+    const f32 maxX = Max(0.0f, display.logicalWidth - state.bounds.width);
+    const f32 maxY = Max(0.0f, display.logicalHeight - height);
+    state.bounds.x = Clamp(state.bounds.x, 0.0f, maxX);
+    state.bounds.y = Clamp(state.bounds.y, 0.0f, maxY);
     return true;
 }
 
@@ -140,7 +140,7 @@ LayoutNodeDesc BuildWindowRootLayoutNodeDesc(
     description.gap = gap;
     const f32 intrinsicWidth = (metrics.minimumSize.x - description.padding.left) - description.padding.right;
     const f32 intrinsicHeight = ((metrics.minimumSize.y - metrics.titleHeight) - description.padding.top) - description.padding.bottom;
-    description.intrinsicSize = Point(max(0.0f, intrinsicWidth), max(0.0f, intrinsicHeight));
+    description.intrinsicSize = Point(Max(0.0f, intrinsicWidth), Max(0.0f, intrinsicHeight));
     return description;
 }
 
@@ -152,9 +152,9 @@ void ApplyWindowFirstUseContentBounds(
     mut WindowState inOutState
 ){
     if(firstUse && options.contentWidthFirstUse)
-        inOutState.bounds.width = max(rootRectangle.width, metrics.minimumSize.x);
+        inOutState.bounds.width = Max(rootRectangle.width, metrics.minimumSize.x);
     if(firstUse && options.contentHeightFirstUse)
-        inOutState.bounds.height = max(rootRectangle.height + metrics.titleHeight, metrics.minimumSize.y);
+        inOutState.bounds.height = Max(rootRectangle.height + metrics.titleHeight, metrics.minimumSize.y);
 }
 
 

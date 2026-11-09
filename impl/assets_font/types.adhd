@@ -26,10 +26,10 @@ NativeFontFailure MakeNativeFontPolicyFailure(in StringView operation){
 
 Expected<FontSfntDirectory> ReadFontSfntDirectory(in Span<u8> bytes){
     if(bytes.size() < s_FontSfntHeaderBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u16 tableCount = ReadFontSfntU16BigEndian(bytes, s_FontSfntHeaderTableCountFieldOffset);
     if(tableCount == 0u || cast<u32>(tableCount) > s_FontMaxTableCount || cast<usize>(tableCount) * s_FontSfntTableRecordBytes > bytes.size() - s_FontSfntHeaderBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     FontSfntDirectory directory;
     directory.assign(bytes, tableCount);
     return directory;

@@ -45,17 +45,17 @@ class ImageFrameRecord<TImage>{
 // Natural atlas extent uses reference density and logical minima; region padding does not inset images.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
-    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !isFinite(density) || density <= 0.0f)
-        return makeUnexpected(Failure());
+    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(density) || density <= 0.0f)
+        return MakeUnexpected(Failure());
     const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
     if(!sliceExtents.has_value())
-        return makeUnexpected(Failure());
-    const f64 pixelW = max(cast<f64>(region.rectangle.width), sliceExtents.value().x);
-    const f64 pixelH = max(cast<f64>(region.rectangle.height), sliceExtents.value().y);
+        return MakeUnexpected(Failure());
+    const f64 pixelW = Max(cast<f64>(region.rectangle.width), sliceExtents.value().x);
+    const f64 pixelH = Max(cast<f64>(region.rectangle.height), sliceExtents.value().y);
     const f64 densityF64 = cast<f64>(density);
     const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64));
     if(!minimum.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     outMetrics.contentSize = Point(minimum.value().x, minimum.value().y);
     return outMetrics;
 }
@@ -63,7 +63,7 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion reg
 // Engine images use one logical unit per texel without atlas density, slices or control padding.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource source){
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.
     ImageMetrics metrics;
     metrics.contentSize = Point(cast<f32>(source.texture().width()), cast<f32>(source.texture().height()));
@@ -74,10 +74,10 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource sour
 Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
     ImagePlacement outPlacement;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> intersection = TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint);
     if(!intersection.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     outPlacement.bounds = bounds;
     outPlacement.clip = intersection.value();
     return outPlacement;

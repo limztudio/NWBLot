@@ -10,7 +10,7 @@
 
 Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop){
     if(loop.size() < cast<usize>(s_MinLoopVertices))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const CsgDeformVertex originVertex = vertices[cast<usize>(loop[0u])];
     const VectorSingle origin(originVertex.position);
     VectorSingle area(0.0f, 0.0f, 0.0f, 0.0f);
@@ -19,17 +19,17 @@ Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> ve
         const CsgDeformVertex secondVertex = vertices[cast<usize>(loop[vertexIndex + 1u])];
         const VectorSingle first(firstVertex.position);
         const VectorSingle second(secondVertex.position);
-        area = area + cross(first - origin, second - origin);
+        area = area + Cross(first - origin, second - origin);
     }
-    if(lengthSq(area.xyz) <= s_LoopAreaEpsilonSq)
-        return makeUnexpected(Failure());
-    const VectorSingle normalized = normalize(area.xyz);
+    if(LengthSq(area.xyz) <= s_LoopAreaEpsilonSq)
+        return MakeUnexpected(Failure());
+    const VectorSingle normalized = Normalize(area.xyz);
     return VectorSingle(normalized, 0.0f);
 }
 
 Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVertex> vertices, in Span<u32> loop, in VectorSingle loopNormal){
     if(loop.size() < cast<usize>(s_MinLoopVertices))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     VectorSingle centerPosition(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle centerUv(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle centerColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -51,7 +51,7 @@ Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVert
     center.uv0 = f32x2u(uv);
     center.color = f32x4(color);
     if(!IsFiniteCsgDeformVertex(center))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return center;
 }
 
@@ -61,10 +61,10 @@ Expected<CsgDeformVertex> TryResolveCsgDeformCapLoopCenter(
     in usize currentTriangleCount
 ){
     if(vertices.size() + 1u > s_MaxDeformVertices || loop.size() > s_MaxDeformTriangles || currentTriangleCount > s_MaxDeformTriangles - loop.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<VectorSingle> loopNormal = TryComputeCsgDeformLoopNormal(vertices, loop);
     if(!loopNormal.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return TryBuildCsgDeformCapCenterVertex(vertices, loop, loopNormal.value());
 }
 
@@ -75,13 +75,13 @@ CsgDeformTriangle MakeCsgDeformCapLoopTriangle(in u32 centerIndex, in Span<u32> 
 }
 
 VectorSingle TransformCsgDeformVertexPosition(in CsgDeformVertex vertex, in MatrixSingle worldToShape){
-    return mul(VectorSingle(vertex.position, s_AffineW), worldToShape);
+    return Mul(VectorSingle(vertex.position, s_AffineW), worldToShape);
 }
 
 Expected<f32, CsgDeformViabilityReason> TrySnapCsgDeformSignedDistance(in f32 distance, in f32 boundaryEpsilon){
-    if(!isFinite(distance))
-        return makeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
-    if(abs(distance) <= boundaryEpsilon)
+    if(!IsFinite(distance))
+        return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
+    if(Abs(distance) <= boundaryEpsilon)
         return s_KeepDistanceZero;
     return distance;
 }
@@ -150,16 +150,16 @@ Expected<f32, CsgDeformViabilityReason> TryValidateCsgDeformPreviewInputs(
     const usize inputVertexCount = inputVertices.size();
     const usize inputTriangleCount = inputTriangles.size();
     if(inputVertexCount == 0u || inputTriangleCount == 0u)
-        return makeUnexpected(CsgDeformViabilityReason::EmptyInput);
+        return MakeUnexpected(CsgDeformViabilityReason::EmptyInput);
     if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
-        return makeUnexpected(CsgDeformViabilityReason::TooLarge);
+        return MakeUnexpected(CsgDeformViabilityReason::TooLarge);
     if(!CsgDeformValidOptions(options))
-        return makeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+        return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
     if(!IsFiniteCsgDeformVertices(inputVertices))
-        return makeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
+        return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
     if(!CsgDeformValidTopology(inputTriangles, inputVertexCount))
-        return makeUnexpected(CsgDeformViabilityReason::InvalidTopology);
-    return max(options.distanceEpsilon, s_MinEpsilon);
+        return MakeUnexpected(CsgDeformViabilityReason::InvalidTopology);
+    return Max(options.distanceEpsilon, s_MinEpsilon);
 }
 
 u32 FindInitialCsgDeformBoundaryLoopVertex(in Span<CsgDeformCutLoopEdge> edges){
@@ -179,7 +179,7 @@ Expected<usize> TryFindIncidentCsgDeformLoopEdge(in Span<CsgDeformCutLoopEdge> e
         if(edge.first == cursor || edge.second == cursor)
             return i;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 u32 OtherCsgDeformLoopEdgeVertex(in CsgDeformCutLoopEdge edge, in u32 cursor){
@@ -204,9 +204,9 @@ Expected<CsgDeformStats, CsgDeformFailure> FinalizeCsgDeformStats(
     in CsgDeformStats baseStats
 ){
     if(outVertices.empty() || outTriangles.empty())
-        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, baseStats));
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, baseStats));
     if(!IsFiniteCsgDeformVertices(outVertices))
-        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, baseStats));
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, baseStats));
     CsgDeformStats stats = baseStats;
     stats.outputVertexCount = cast<u32>(outVertices.size());
     stats.outputTriangleCount = cast<u32>(outTriangles.size());

@@ -332,6 +332,10 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
+        if(!fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
+            reportError(errors, fn->span, "global function name must start with an uppercase letter");
+            ok = false;
+        }
         if(!checkCallableSignature(nullptr, *fn, errors))
             ok = false;
         if(!fn->hasBody){

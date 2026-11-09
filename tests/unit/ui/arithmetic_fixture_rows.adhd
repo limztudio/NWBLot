@@ -17,7 +17,7 @@ Expected<u64> FindArithmeticFixtureRowIndex(in u64 count, in u64 removed, in b8 
     if(removed != 0u)
         maxCount = count + 1u;
     if(value == 0u || value == removed || value > maxCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     u64 forward = value - 1u;
     if(removed != 0u && value > removed)
         forward -= 1u;
@@ -26,27 +26,27 @@ Expected<u64> FindArithmeticFixtureRowIndex(in u64 count, in u64 removed, in b8 
         index = count - 1u - forward;
     if(index < count)
         return index;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<u64> FindSingleDisabledFixtureRowByKey(in u64 count, in u64 start, in b8 backwards, in u64 startKey, in u64 disabled){
     if(start >= count)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(startKey != disabled)
         return start;
     if(backwards){
         if(start == 0u)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return start - 1u;
     }
     if(start + 1u == count)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return start + 1u;
 }
 
 Expected<u64> FindSingleDisabledFixtureRow(in u64 count, in u64 removed, in b8 reverse, in u64 start, in b8 backwards, in u64 disabled){
     if(start >= count)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return FindSingleDisabledFixtureRowByKey(count, start, backwards, ArithmeticFixtureRowKey(count, removed, reverse, start), disabled);
 }
 

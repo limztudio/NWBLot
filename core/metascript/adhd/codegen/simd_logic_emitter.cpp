@@ -45,7 +45,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
         || !callExpr->isBuiltinCall
         || !callExpr->lhs
         || callExpr->lhs->kind != ExprKind::Identifier
-        || callExpr->lhs->text != "isFinite"
+        || callExpr->lhs->text != "IsFinite"
         || callExpr->arguments.size() != 1u
         || !callExpr->arguments[0]
     ){

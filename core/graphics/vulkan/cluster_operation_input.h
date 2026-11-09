@@ -32,7 +32,7 @@ public:
 
 
 public:
-    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV NativeInfo()noexcept;
+    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept;
     [[nodiscard]] static Expected<ClusterOperationInput> Build(const RayTracingClusterOperationParams& params, TStringView operationName);
 };
 

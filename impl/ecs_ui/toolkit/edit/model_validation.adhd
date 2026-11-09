@@ -315,8 +315,8 @@ b8 ApplyEditModelEraseAroundSelection(
     mut u64 inOutCompositionGeneration,
     mut u64 inOutRevision
 ){
-    const usize start = min(inOutAnchor, inOutCaret);
-    const usize end = max(inOutAnchor, inOutCaret);
+    const usize start = Min(inOutAnchor, inOutCaret);
+    const usize end = Max(inOutAnchor, inOutCaret);
     if(beforeBytes == 0u && afterBytes == 0u)
         return beforeBytes <= start && afterBytes <= inOutText.size() - end;
     if(!CanEraseAroundEditSelection(beforeBytes, afterBytes, start, end, inOutText.size(), inOutBoundaries))

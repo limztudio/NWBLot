@@ -34,13 +34,13 @@ f32 ShadowSlotImportance(in VectorSingle colorIntensity, in VectorSingle params,
         return radiantImportance * s_DirectionalShadowImportanceBoost + 1.0f;
 
     const VectorSingle delta = lightPosition - cameraPosition;
-    const f32 distanceSquared = lengthSq(delta.xyz);
-    const f32 range = max(params.x, 0.0f);
+    const f32 distanceSquared = LengthSq(delta.xyz);
+    const f32 range = Max(params.x, 0.0f);
     const f32 rangeSquared = range * range;
     f32 coverageSquared = 1.0f;
     if(distanceSquared > s_ShadowImportanceDistanceSquaredEpsilon)
         coverageSquared = rangeSquared / distanceSquared;
-    return radiantImportance * min(coverageSquared, 1.0f);
+    return radiantImportance * Min(coverageSquared, 1.0f);
 }
 
 SceneLightGpuData BuildUnassignedSceneLightGpuData(
@@ -133,7 +133,7 @@ b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in 
 }
 
 u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
-    return bitWidthLowU32(softShadowSlotMask, s_SceneShadowSlotCount);
+    return BitWidthLowU32(softShadowSlotMask, s_SceneShadowSlotCount);
 }
 
 b8 SoftShadowTemporalHistoryUsable(in b8 softShadowTemporalReady, in b8 prevWorldToClipValid, in b8 softShadowTemporalSeeded){
@@ -148,38 +148,38 @@ u64 ComputeShadowMaterialContextHash(
     assert(instanceMaterials.size() == instanceData.size());
 
     u64 hash = s_Fnv64OffsetBasis;
-    hash = updateFnv64U32(hash, s_SceneStaticCacheHashVersion);
+    hash = UpdateFnv64U32(hash, s_SceneStaticCacheHashVersion);
     for(in NwbRtInstanceMaterialGpu material : instanceMaterials){
-        hash = updateFnv64U32(hash, material.surfaceDispatchId);
-        hash = updateFnv64U32(hash, material.flags);
-        hash = updateFnv64U32(hash, material.shadingModelId);
-        hash = updateFnv64U32(hash, material.materialConstantByteOffset);
-        hash = updateFnv64U32(hash, material.meshInstanceIndex);
-        hash = updateFnv64U32(hash, material.indexSlot);
-        hash = updateFnv64U32(hash, material.attributeSlot);
-        hash = updateFnv64U32(hash, material.positionSlot);
-        hash = updateFnv64U32(hash, material.nodeSlot);
+        hash = UpdateFnv64U32(hash, material.surfaceDispatchId);
+        hash = UpdateFnv64U32(hash, material.flags);
+        hash = UpdateFnv64U32(hash, material.shadingModelId);
+        hash = UpdateFnv64U32(hash, material.materialConstantByteOffset);
+        hash = UpdateFnv64U32(hash, material.meshInstanceIndex);
+        hash = UpdateFnv64U32(hash, material.indexSlot);
+        hash = UpdateFnv64U32(hash, material.attributeSlot);
+        hash = UpdateFnv64U32(hash, material.positionSlot);
+        hash = UpdateFnv64U32(hash, material.nodeSlot);
     }
     for(in InstanceGpuData instance : instanceData){
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.rotation.x));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.rotation.y));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.rotation.z));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.rotation.w));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.translation.x));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.translation.y));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.translation.z));
-        hash = updateFnv64U32(hash, instance.translation.w);
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.scale.x));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.scale.y));
-        hash = updateFnv64U32(hash, bit_cast<u32>(instance.scale.z));
-        hash = updateFnv64U32(hash, instance.scale.w);
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.rotation.x));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.rotation.y));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.rotation.z));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.rotation.w));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.translation.x));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.translation.y));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.translation.z));
+        hash = UpdateFnv64U32(hash, instance.translation.w);
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.scale.x));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.scale.y));
+        hash = UpdateFnv64U32(hash, bit_cast<u32>(instance.scale.z));
+        hash = UpdateFnv64U32(hash, instance.scale.w);
         for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
-            hash = updateFnv64U32(hash, instance.geometryHeapSlots[cast<usize>(slotIndex)]);
+            hash = UpdateFnv64U32(hash, instance.geometryHeapSlots[cast<usize>(slotIndex)]);
     }
     if(!materialTypedBytes.empty()){
-        hash = updateFnv64U64(hash, cast<u64>(materialTypedBytes.size()));
+        hash = UpdateFnv64U64(hash, cast<u64>(materialTypedBytes.size()));
         for(in u8 byte : materialTypedBytes)
-            hash = updateFnv64Byte(hash, byte);
+            hash = UpdateFnv64Byte(hash, byte);
     }
     return hash;
 }

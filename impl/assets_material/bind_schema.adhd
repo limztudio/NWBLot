@@ -72,7 +72,7 @@ Expected<usize> FindMaterialBindStructIndex(in Span<MaterialBindStruct> structs,
         if(structs[i].name == structName)
             return i;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 HasMaterialBindInstance(in Span<MaterialBindInstance> instances, in StringView instanceName){
@@ -98,7 +98,7 @@ Expected<Name> TryParseMaterialBindName(in StringView text){
         }
     }
     if(!valid)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return resolved;
 }
 

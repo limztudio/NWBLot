@@ -192,7 +192,7 @@ class LightSpaceCaptureHistory{
             && identity.lighting == this.m_acceptedIdentity.lighting
             && identity.layout == this.m_acceptedIdentity.layout
         ;
-        advanceWrappingNonzeroU64(this.m_sequence);
+        AdvanceWrappingNonzeroU64(this.m_sequence);
         this.m_pendingIdentity = identity;
         this.m_pendingTicket.sequence = this.m_sequence;
         this.m_pendingTicket.reuse = reuse;

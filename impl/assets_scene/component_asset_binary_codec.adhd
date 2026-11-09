@@ -46,22 +46,22 @@ class ComponentAssetBinaryCodec{
         const Expected<ComponentHeaderBinary> headerResult = ReadPOD<ComponentHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
             error("IComponent::loadBinary failed: malformed header");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         const ComponentHeaderBinary header = headerResult.value();
         if(header.magic != s_ComponentMagic){
             error("IComponent::loadBinary failed: invalid component asset format; recook required");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         if(!this.validateHeader(header, assetType, binary.size() - cursor))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         const usize payloadByteCount = cast<usize>(header.payloadByteCount);
         const Span<u8> payload = binary.subspan(cursor, payloadByteCount);
         cursor += payloadByteCount;
         if(cursor != binary.size()){
             error("IComponent::loadBinary failed: trailing bytes detected");
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         return payload;
     }

@@ -23,7 +23,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::NativeInfo()noexcept{
+VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::nativeInfo()noexcept{
     auto native = info;
     switch(info.opType){
     case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV:
@@ -161,7 +161,7 @@ Expected<RayTracingClusterOperationSizeInfo> ClusterOperationQuery::Query(const 
     auto input = ClusterOperationInput::Build(params, NWB_TEXT("query cluster operation sizes"));
     if(!input)
         return MakeUnexpected(Failure{});
-    const auto inputInfo = input->NativeInfo();
+    const auto inputInfo = input->nativeInfo();
 
     if(params.type == RayTracingClusterOperationType::ClasBuild || params.type == RayTracingClusterOperationType::ClasBuildTemplates || params.type == RayTracingClusterOperationType::ClasInstantiateTemplates){
         const auto& properties = context.nvClusterAccelerationStructureProperties;

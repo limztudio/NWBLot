@@ -42,7 +42,7 @@ Expected<PopupDismissReason> TryConsumeRouterPopupDismissal(in PopupToken token,
             return reason;
         }
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<PopupDismissRequest> TryPrepareRouterPopupDismissal(
@@ -51,10 +51,10 @@ Expected<PopupDismissRequest> TryPrepareRouterPopupDismissal(
     in PopupDismissReason reason
 ){
     if(popups.empty() || !canAppendDismissal)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const PopupRecord top = popups.back();
     if(!CanDismissPopupScope(top.scope, top.closing, reason))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     PopupDismissRequest request;
     request.expectedTop = top.scope.token;
     request.reason = reason;
@@ -92,7 +92,7 @@ Expected<usize> FindRouterPopupScopeIndex(in Span<PopupRecord> popups, in PopupT
         if(popups[index].scope.token == token)
             return index;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 IsTargetAllowedByRouterPopup(in Span<PopupRecord> popups, in HitTarget target){

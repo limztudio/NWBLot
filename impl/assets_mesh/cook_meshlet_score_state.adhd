@@ -56,21 +56,21 @@ void ResetMeshletScoreState(mut MeshletScoreState state){
 }
 
 f32 PredictMeshletScoreRadiusFromCalculation(in MeshletScoreState state, in MeshletTriangleCalculation triangleCalculation){
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), VectorSingle(triangleCalculation.positions[0u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[1u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[2u]));
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), VectorSingle(triangleCalculation.positions[0u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[1u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[2u]));
+    VectorSingle minBounds = Min(VectorSingle(state.minBounds), VectorSingle(triangleCalculation.positions[0u]));
+    minBounds = Min(minBounds, VectorSingle(triangleCalculation.positions[1u]));
+    minBounds = Min(minBounds, VectorSingle(triangleCalculation.positions[2u]));
+    VectorSingle maxBounds = Max(VectorSingle(state.maxBounds), VectorSingle(triangleCalculation.positions[0u]));
+    maxBounds = Max(maxBounds, VectorSingle(triangleCalculation.positions[1u]));
+    maxBounds = Max(maxBounds, VectorSingle(triangleCalculation.positions[2u]));
     const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    return length(extents.xyz);
+    return Length(extents.xyz);
 }
 
 f32 MeshletScoreCentroidDistance(in MeshletScoreState state, in VectorSingle triangleCentroid){
     if(state.primitiveCount == 0u)
         return 0.0f;
     const VectorSingle meshletCentroid = VectorSingle(state.centroidSum) / VectorSingle(cast<f32>(state.primitiveCount));
-    return length((triangleCentroid - meshletCentroid).xyz);
+    return Length((triangleCentroid - meshletCentroid).xyz);
 }
 
 f32 MeshletScoreNormalCoherence(in MeshletScoreState state, in VectorSingle triangleAreaNormal){
@@ -78,7 +78,7 @@ f32 MeshletScoreNormalCoherence(in MeshletScoreState state, in VectorSingle tria
     const VectorSingle candidateNormal = NormalizeMeshletDirection3OrZero(triangleAreaNormal);
     if(!IsValidMeshletDirection3(stateAxis) || !IsValidMeshletDirection3(candidateNormal))
         return 0.0f;
-    return dot(stateAxis.xyz, candidateNormal.xyz);
+    return Dot(stateAxis.xyz, candidateNormal.xyz);
 }
 
 void UpdateMeshletScoreConeCutoff(in VectorSingle axis, in VectorSingle triangleAreaNormal, mut b8 hasNormal, mut f32 coneCutoff){
@@ -86,7 +86,7 @@ void UpdateMeshletScoreConeCutoff(in VectorSingle axis, in VectorSingle triangle
     if(!IsValidMeshletDirection3(faceNormal))
         return;
     hasNormal = true;
-    coneCutoff = min(coneCutoff, dot(axis.xyz, faceNormal.xyz));
+    coneCutoff = Min(coneCutoff, Dot(axis.xyz, faceNormal.xyz));
 }
 
 Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
@@ -97,7 +97,7 @@ Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
     in b8 hasExtraTriangle
 ){
     if(!IsValidMeshletDirection3(axis))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     b8 hasNormal = false;
     f32 coneCutoff = 1.0f;
@@ -107,7 +107,7 @@ Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
         UpdateMeshletScoreConeCutoff(axis, VectorSingle(triangleCalculations[cast<usize>(extraTriangleIndex)].areaNormal), hasNormal, coneCutoff);
 
     if(!hasNormal || !(coneCutoff > 0.0f))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return coneCutoff;
 }
@@ -127,7 +127,7 @@ f32 PredictMeshletScoreConeWideningFromCalculations(
     if(!predictedCutoff.has_value())
         return 1.0f;
 
-    return max(state.coneCutoff - predictedCutoff.value(), 0.0f);
+    return Max(state.coneCutoff - predictedCutoff.value(), 0.0f);
 }
 
 f32 ScoreMeshletCandidateFromCalculations(
@@ -142,7 +142,7 @@ f32 ScoreMeshletCandidateFromCalculations(
     const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
     const VectorSingle areaNormal(triangleCalculation.areaNormal);
     const f32 predictedRadius = PredictMeshletScoreRadiusFromCalculation(state, triangleCalculation);
-    const f32 predictedRadiusGrowth = max(predictedRadius - state.radius, 0.0f);
+    const f32 predictedRadiusGrowth = Max(predictedRadius - state.radius, 0.0f);
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, VectorSingle(triangleCalculation.centroid));
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWideningFromCalculations(triangleCalculations, triangleIndices, state, triangleIndex, areaNormal);
@@ -159,16 +159,16 @@ void AddMeshletTriangleToScoreStateFromCalculations(
     const VectorSingle p0(triangleCalculation.positions[0u]);
     const VectorSingle p1(triangleCalculation.positions[1u]);
     const VectorSingle p2(triangleCalculation.positions[2u]);
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), p0);
-    minBounds = min(minBounds, p1);
-    minBounds = min(minBounds, p2);
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), p0);
-    maxBounds = max(maxBounds, p1);
-    maxBounds = max(maxBounds, p2);
+    VectorSingle minBounds = Min(VectorSingle(state.minBounds), p0);
+    minBounds = Min(minBounds, p1);
+    minBounds = Min(minBounds, p2);
+    VectorSingle maxBounds = Max(VectorSingle(state.maxBounds), p0);
+    maxBounds = Max(maxBounds, p1);
+    maxBounds = Max(maxBounds, p2);
     state.minBounds = f32x4(minBounds);
     state.maxBounds = f32x4(maxBounds);
     const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    state.radius = length(extents.xyz);
+    state.radius = Length(extents.xyz);
     state.centroidSum = f32x4(VectorSingle(state.centroidSum) + VectorSingle(triangleCalculation.centroid));
     const VectorSingle normalSum = VectorSingle(state.normalSum) + VectorSingle(triangleCalculation.areaNormal);
     state.normalSum = f32x4(normalSum);

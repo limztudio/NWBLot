@@ -43,7 +43,7 @@ class MaterialBinaryReader{
         const MaterialResourceKind resourceKind = cast<MaterialResourceKind>(resourceReferenceBinary.resourceKind);
         const Name resourceName = Name(resourceReferenceBinary.resourceNameHash);
         if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceName))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         MaterialResourceReference outReference;
         outReference.blockName = Name(resourceReferenceBinary.blockNameHash);
@@ -51,7 +51,7 @@ class MaterialBinaryReader{
         outReference.resourceKind = resourceKind;
         outReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
         if(!TryAssignMaterialResourceReferenceAsset(resourceKind, resourceName, outReference))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return outReference;
     }
 

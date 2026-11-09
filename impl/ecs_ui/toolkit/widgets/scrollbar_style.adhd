@@ -13,11 +13,11 @@
 Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inheritedClip, in Insets padding, in f32 scrollbarWidth, in f32 minimumThumb, in u64 rowCount, in f32 rowHeight, in f64 offset){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)
-        || !isFinite(scrollbarWidth) || scrollbarWidth < 0.0f
-        || !isFinite(minimumThumb) || minimumThumb < 0.0f
-        || !isFinite(rowHeight) || rowHeight <= 0.0f || !isFinite(offset) || offset < 0.0
+        || !IsFinite(scrollbarWidth) || scrollbarWidth < 0.0f
+        || !IsFinite(minimumThumb) || minimumThumb < 0.0f
+        || !IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(offset) || offset < 0.0
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const VectorDouble inset = ComputeInsetUiRectBounds(bounds, padding);
     const f64 x = inset.x;
     const f64 y = inset.y;
@@ -27,32 +27,32 @@ Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inher
     candidate.bounds = bounds;
     candidate.rowCount = rowCount;
     candidate.contentHeight = cast<f64>(rowCount) * cast<f64>(rowHeight);
-    if(!isFinite(candidate.contentHeight))
-        return makeUnexpected(Failure());
-    candidate.maxOffset = max(0.0, candidate.contentHeight - availableHeight);
+    if(!IsFinite(candidate.contentHeight))
+        return MakeUnexpected(Failure());
+    candidate.maxOffset = Max(0.0, candidate.contentHeight - availableHeight);
     if(availableHeight > 0.0 && candidate.maxOffset > 0.0 && candidate.maxOffset >= candidate.contentHeight)
-        return makeUnexpected(Failure());
-    candidate.offset = min(offset, candidate.maxOffset);
+        return MakeUnexpected(Failure());
+    candidate.offset = Min(offset, candidate.maxOffset);
     f64 barWidth = 0.0;
     if(candidate.maxOffset > 0.0)
-        barWidth = min(cast<f64>(scrollbarWidth), availableWidth);
+        barWidth = Min(cast<f64>(scrollbarWidth), availableWidth);
     candidate.viewport = Rect(cast<f32>(x), cast<f32>(y), cast<f32>(availableWidth - barWidth), cast<f32>(availableHeight));
     if(!IsValidUiRect(candidate.viewport))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.contentClip = IntersectUiRectsBounds(candidate.viewport, inheritedClip);
     candidate.scrollbarVisible = barWidth > 0.0 && availableHeight > 0.0;
     if(candidate.scrollbarVisible){
         candidate.track = Rect(cast<f32>((x + availableWidth) - barWidth), cast<f32>(y), cast<f32>(barWidth), cast<f32>(availableHeight));
         const f64 proportionalHeight = availableHeight * (availableHeight / candidate.contentHeight);
-        const f64 minimumSize = min(cast<f64>(minimumThumb), availableHeight);
+        const f64 minimumSize = Min(cast<f64>(minimumThumb), availableHeight);
         f64 thumbHeight = minimumSize;
         if(proportionalHeight > minimumSize)
-            thumbHeight = min(availableHeight, proportionalHeight);
+            thumbHeight = Min(availableHeight, proportionalHeight);
         const f64 thumbTravel = availableHeight - thumbHeight;
         const f64 thumbY = y + thumbTravel * (candidate.offset / candidate.maxOffset);
         candidate.thumb = Rect(candidate.track.x, cast<f32>(thumbY), candidate.track.width, cast<f32>(thumbHeight));
         if(!IsValidUiRect(candidate.track) || !IsValidUiRect(candidate.thumb))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
     }
     if(candidate.contentClip.width > 0.0f && candidate.contentClip.height > 0.0f && rowCount > 0u){
         const f64 clippedTop = cast<f64>(candidate.contentClip.y) - cast<f64>(candidate.viewport.y);
@@ -65,8 +65,8 @@ Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inher
         if(endPos > 0.0)
             clampedEnd = endPos;
         const f64 rowHeightF64 = cast<f64>(rowHeight);
-        const f64 firstRow = floor(clampedStart / rowHeightF64);
-        const f64 endRow = ceil(clampedEnd / rowHeightF64);
+        const f64 firstRow = Floor(clampedStart / rowHeightF64);
+        const f64 endRow = Ceil(clampedEnd / rowHeightF64);
         const f64 rowCountF64 = cast<f64>(rowCount);
         if(firstRow >= rowCountF64)
             candidate.firstRow = rowCount;
@@ -81,7 +81,7 @@ Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inher
             boundedEnd = 0u;
         else
             boundedEnd = cast<u64>(endRow);
-        candidate.endRow = max(candidate.firstRow, boundedEnd);
+        candidate.endRow = Max(candidate.firstRow, boundedEnd);
     }
     return candidate;
 }
@@ -90,33 +90,33 @@ Expected<Rect> CalculateScrollRowBounds(in u64 index, in ScrollPlacement placeme
     if(
         index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount
         || !IsValidUiRect(placement.viewport)
-        || !isFinite(placement.offset) || placement.offset < 0.0
-        || !isFinite(rowHeight) || rowHeight <= 0.0f
+        || !IsFinite(placement.offset) || placement.offset < 0.0
+        || !IsFinite(rowHeight) || rowHeight <= 0.0f
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f64 y = (cast<f64>(index) * cast<f64>(rowHeight) - placement.offset) + cast<f64>(placement.viewport.y);
-    if(!isFinite(y) || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
+    if(!IsFinite(y) || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64)
+        return MakeUnexpected(Failure());
     const Rect candidate(placement.viewport.x, cast<f32>(y), placement.viewport.width, rowHeight);
     if(!IsValidUiRect(candidate))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return candidate;
 }
 
 b8 IsValidScrollbarPlacement(in ScrollbarPlacement bar, in ScrollAxis axis){
     if(
-        !isFinite(bar.track.x)
-        || !isFinite(bar.track.y)
-        || !isFinite(bar.track.width)
-        || !isFinite(bar.track.height)
-        || !isFinite(bar.thumb.x)
-        || !isFinite(bar.thumb.y)
-        || !isFinite(bar.thumb.width)
-        || !isFinite(bar.thumb.height)
-        || !isFinite(bar.contentExtent)
-        || !isFinite(bar.viewportExtent)
-        || !isFinite(bar.maximum)
-        || !isFinite(bar.offset)
+        !IsFinite(bar.track.x)
+        || !IsFinite(bar.track.y)
+        || !IsFinite(bar.track.width)
+        || !IsFinite(bar.track.height)
+        || !IsFinite(bar.thumb.x)
+        || !IsFinite(bar.thumb.y)
+        || !IsFinite(bar.thumb.width)
+        || !IsFinite(bar.thumb.height)
+        || !IsFinite(bar.contentExtent)
+        || !IsFinite(bar.viewportExtent)
+        || !IsFinite(bar.maximum)
+        || !IsFinite(bar.offset)
     )
         return false;
     const f32 trackX = bar.track.x;
@@ -129,14 +129,14 @@ b8 IsValidScrollbarPlacement(in ScrollbarPlacement bar, in ScrollAxis axis){
     const f32 thumbHeight = bar.thumb.height;
     if(bar.contentExtent < 0.0 || bar.viewportExtent < 0.0)
         return false;
-    const f64 expectedMaximum = max(0.0, bar.contentExtent - bar.viewportExtent);
+    const f64 expectedMaximum = Max(0.0, bar.contentExtent - bar.viewportExtent);
     const f32 trackRight = trackX + trackWidth;
     const f32 trackBottom = trackY + trackHeight;
     const f32 thumbRight = thumbX + thumbWidth;
     const f32 thumbBottom = thumbY + thumbHeight;
     if(
         trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
-        || !isFinite(trackRight) || !isFinite(trackBottom) || !isFinite(thumbRight) || !isFinite(thumbBottom)
+        || !IsFinite(trackRight) || !IsFinite(trackBottom) || !IsFinite(thumbRight) || !IsFinite(thumbBottom)
         || bar.maximum != expectedMaximum
         || bar.offset < 0.0 || bar.offset > bar.maximum
         || (bar.viewportExtent > 0.0 && bar.maximum > 0.0 && bar.maximum >= bar.contentExtent)
@@ -153,22 +153,22 @@ b8 IsValidScrollbarPlacement(in ScrollbarPlacement bar, in ScrollAxis axis){
 
 Expected<MovedScrollbarThumb> TryMoveScrollbarThumb(in f64 offset, in f64 maximum, in f32 trackOrigin, in f32 trackLength, in f32 thumbLength, in b8 visible){
     MovedScrollbarThumb outMoved;
-    const f64 acceptedOffset = min(offset, maximum);
+    const f64 acceptedOffset = Min(offset, maximum);
     if(!visible){
         outMoved.offset = acceptedOffset;
         outMoved.origin = 0.0f;
         return outMoved;
     }
-    const f64 travel = max(0.0, cast<f64>(trackLength) - cast<f64>(thumbLength));
+    const f64 travel = Max(0.0, cast<f64>(trackLength) - cast<f64>(thumbLength));
     const f64 position = cast<f64>(trackOrigin) + travel * (acceptedOffset / maximum);
-    if(!isFinite(position) || position < -s_UiMaxFloatF64 || position > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
+    if(!IsFinite(position) || position < -s_UiMaxFloatF64 || position > s_UiMaxFloatF64)
+        return MakeUnexpected(Failure());
     const f32 first = trackOrigin;
-    const f32 last = max(first, (first + trackLength) - thumbLength);
+    const f32 last = Max(first, (first + trackLength) - thumbLength);
     const f32 positionSingle = cast<f32>(position);
     f32 origin = first;
     if(positionSingle > first)
-        origin = min(last, positionSingle);
+        origin = Min(last, positionSingle);
     outMoved.offset = acceptedOffset;
     outMoved.origin = origin;
     return outMoved;
@@ -200,31 +200,31 @@ Expected<ScrollbarPlacement> TryBuildScrollbarPlacement(in f64 contentExtent, in
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
-    candidate.maximum = max(0.0, contentExtent - viewportExtent);
-    if(!isFinite(candidate.maximum) || (viewportExtent > 0.0 && candidate.maximum > 0.0 && candidate.maximum >= contentExtent))
-        return makeUnexpected(Failure());
+    candidate.maximum = Max(0.0, contentExtent - viewportExtent);
+    if(!IsFinite(candidate.maximum) || (viewportExtent > 0.0 && candidate.maximum > 0.0 && candidate.maximum >= contentExtent))
+        return MakeUnexpected(Failure());
     candidate.visible = track.width > 0.0f && track.height > 0.0f;
     if(candidate.visible){
         if(candidate.maximum <= 0.0)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         candidate.track = track;
         f64 length = cast<f64>(track.height);
         if(axis == ScrollAxis::Horizontal)
             length = cast<f64>(track.width);
         const f64 proportional = length * (viewportExtent / contentExtent);
-        const f64 minimum = min(cast<f64>(minThumb), length);
+        const f64 minimum = Min(cast<f64>(minThumb), length);
         f64 clampedThumb = minimum;
         if(proportional > minimum)
-            clampedThumb = min(length, proportional);
+            clampedThumb = Min(length, proportional);
         const f32 thumbExtent = cast<f32>(clampedThumb);
         candidate.thumb = track;
         if(axis == ScrollAxis::Horizontal)
-            candidate.thumb.width = min(thumbExtent, track.width);
+            candidate.thumb.width = Min(thumbExtent, track.width);
         else
-            candidate.thumb.height = min(thumbExtent, track.height);
+            candidate.thumb.height = Min(thumbExtent, track.height);
     }
     if(!TryStoreScrollbarOffset(offset, axis, candidate) || !IsValidScrollbarPlacement(candidate, axis))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return candidate;
 }
 

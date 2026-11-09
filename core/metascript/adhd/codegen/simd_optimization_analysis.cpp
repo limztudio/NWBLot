@@ -20,7 +20,7 @@ NWB_ADHD_BEGIN
         && candidate->isBuiltinCall
         && candidate->lhs
         && candidate->lhs->kind == ExprKind::Identifier
-        && candidate->lhs->text == "lengthSq"
+        && candidate->lhs->text == "LengthSq"
         && candidate->arguments.size() == 1u
         && candidate->arguments[0]
         && IsRegisterPromotableSimdType(candidate->arguments[0]->resolvedSimdType)
@@ -46,13 +46,13 @@ NWB_ADHD_BEGIN
         && candidate->arguments[0]
     ){
         if(
-            candidate->lhs->text == "length"
+            candidate->lhs->text == "Length"
             && IsRegisterPromotableSimdType(candidate->arguments[0]->resolvedSimdType)
             && IsDoubleSimdType(candidate->arguments[0]->resolvedSimdType) == isDouble
         ){
             return candidate->arguments[0];
         }
-        if(candidate->lhs->text == "sqrt")
+        if(candidate->lhs->text == "Sqrt")
             return SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(candidate->arguments[0], isDouble, symbols);
     }
     return nullptr;
@@ -75,13 +75,13 @@ NWB_ADHD_BEGIN
             if(IsRegisterPromotableSimdType(argSimd) && IsDoubleSimdType(argSimd) == isDouble)
                 return true;
         }
-        if(callee == "rsqrt" && scalarExpr.arguments.size() == 1u && SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(scalarExpr.arguments[0], isDouble, symbols))
+        if(callee == "Rsqrt" && scalarExpr.arguments.size() == 1u && SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(scalarExpr.arguments[0], isDouble, symbols))
             return true;
         const Expr* maxBaseVec = nullptr;
         b8 maxIsDouble = false;
         u32 maxLanes = 0u;
         b8 maxIsAbs = false;
-        if(callee == "max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(scalarExpr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble)
+        if(callee == "Max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(scalarExpr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble)
             return true;
     }
     if(scalarExpr.kind == ExprKind::Binary && scalarExpr.op == TokenType::Slash && scalarExpr.lhs && scalarExpr.rhs){
@@ -351,7 +351,7 @@ NWB_ADHD_BEGIN
     if(callExpr.kind != ExprKind::Call || !callExpr.isBuiltinCall || !callExpr.lhs || callExpr.lhs->kind != ExprKind::Identifier)
         return nullptr;
     const MStringView callee = callExpr.lhs->text;
-    if(callee == "clamp" && callExpr.arguments.size() == 3u && callExpr.arguments[0] && callExpr.arguments[1] && callExpr.arguments[2]){
+    if(callee == "Clamp" && callExpr.arguments.size() == 3u && callExpr.arguments[0] && callExpr.arguments[1] && callExpr.arguments[2]){
         if(
             SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*callExpr.arguments[1], isDouble, &symbols)
             && SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*callExpr.arguments[2], isDouble, &symbols)
@@ -385,16 +385,16 @@ NWB_ADHD_BEGIN
             return e.arguments[1];
         return nullptr;
     };
-    if(callee == "min"){
-        if(const Expr* innerMax = matchMinMaxConstArg(callExpr, "min", true)){
+    if(callee == "Min"){
+        if(const Expr* innerMax = matchMinMaxConstArg(callExpr, "Min", true)){
             if(innerMax->resolvedSimdType == simdType)
-                return matchMinMaxConstArg(*innerMax, "max", false);
+                return matchMinMaxConstArg(*innerMax, "Max", false);
         }
     }
-    else if(callee == "max"){
-        if(const Expr* innerMin = matchMinMaxConstArg(callExpr, "max", false)){
+    else if(callee == "Max"){
+        if(const Expr* innerMin = matchMinMaxConstArg(callExpr, "Max", false)){
             if(innerMin->resolvedSimdType == simdType)
-                return matchMinMaxConstArg(*innerMin, "min", true);
+                return matchMinMaxConstArg(*innerMin, "Min", true);
         }
     }
     return nullptr;
@@ -421,7 +421,7 @@ NWB_ADHD_BEGIN
         && callExpr->isBuiltinCall
         && callExpr->lhs
         && callExpr->lhs->kind == ExprKind::Identifier
-        && callExpr->lhs->text == "transpose"
+        && callExpr->lhs->text == "Transpose"
         && callExpr->arguments.size() == 1u
         && callExpr->arguments[0]
     ){

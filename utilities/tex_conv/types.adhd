@@ -92,12 +92,12 @@ f32 ResolveMaxTexConvRgb(in b8 hdr){
 }
 
 VectorSingle QuantizeUnorm(in VectorSingle value){
-    return saturate(value) * s_UnormScale + s_UnormRoundingBias;
+    return Saturate(value) * s_UnormScale + s_UnormRoundingBias;
 }
 
 b8 ValidateTexConvRgbPixel(in VectorSingle rgb, in f32 maxRgb){
     if(
-        !isFinite(rgb.xyz)
+        !IsFinite(rgb.xyz)
         || rgb.x < 0.0f
         || rgb.y < 0.0f
         || rgb.z < 0.0f
@@ -122,15 +122,15 @@ Expected<f32> TryResolveTexConvPixelAlpha(
         alpha = constantAlpha;
     else if(mode == AlphaSourceMode::Image)
         alpha = maskAlpha;
-    if(!isFinite(alpha)){
+    if(!IsFinite(alpha)){
         error("tex_conv: alpha input contains a non-finite value.");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(mode != AlphaSourceMode::Original)
-        return clamp(alpha, 0.0f, 1.0f);
+        return Clamp(alpha, 0.0f, 1.0f);
     if(alpha < 0.0f || alpha > 1.0f){
         error("tex_conv: original alpha input must be in [0, 1].");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return alpha;
 }
@@ -186,10 +186,10 @@ Expected<VectorSingle> TryPrepareTexConvLinearPixel(
     in b8 srgb
 ){
     if(!ValidateTexConvRgbPixel(rgb, maxRgb))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<f32> alpha = TryResolveTexConvPixelAlpha(alphaMode, sourceAlpha, constantAlpha, maskAlpha);
     if(!alpha.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     VectorSingle linearRgb = rgb;
     if(srgb)
         linearRgb = SrgbToLinearRgb(rgb);

@@ -82,15 +82,15 @@ Expected<UastcSliceLayout> TryComputeUastcSliceLayout(in TextureMipLevel mip, in
         || mip.blockCountX == 0u
         || mip.blockCountY == 0u
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const u64 blockCount = cast<u64>(mip.blockCountX) * cast<u64>(mip.blockCountY);
     if(blockCount > u64.max / s_TextureUastcBytesPerBlock)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const u64 sliceByteCount = mip.sizeBytes / cast<u64>(mip.sliceCount);
     if(sliceByteCount != blockCount * s_TextureUastcBytesPerBlock)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     UastcSliceLayout layout;
     layout.offsetBytes = sliceByteCount * cast<u64>(sliceIndex);
@@ -101,7 +101,7 @@ Expected<UastcSliceLayout> TryComputeUastcSliceLayout(in TextureMipLevel mip, in
 
 Expected<u64> TryComputeUastcSliceAbsoluteOffset(in TextureMipLevel mip, in UastcSliceLayout layout){
     if(mip.offsetBytes > u64.max - layout.offsetBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return mip.offsetBytes + layout.offsetBytes;
 }
@@ -145,7 +145,7 @@ Expected<usize> TryComputeTextureMipUploadTotalBytes(
     in u32 sliceCount
 ){
     if(sliceCount == 0u || sliceByteCount > usize.max / cast<usize>(sliceCount))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return sliceByteCount * cast<usize>(sliceCount);
 }
@@ -166,16 +166,16 @@ Expected<PrimaryUastcSlice> TryGetPrimaryUastcSlice(
     const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
     if(!layout.has_value()){
         error("TextureAssetLoader: invalid UASTC slice layout");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const Expected<u64> sourceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, layout.value());
     if(!sourceOffsetBytes.has_value()){
         error("TextureAssetLoader: UASTC primary slice offset exceeds addressable memory");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(!IsUastcSliceRangeWithinPrimaryPayload(sourceOffsetBytes.value(), layout.value().byteCount, primaryPayloadByteCount, payloadBytes.size())){
         error("TextureAssetLoader: UASTC primary slice is outside the texture payload");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     PrimaryUastcSlice slice;
@@ -193,24 +193,24 @@ Expected<Span<u8>> TryGetSeparateAlphaUastcSlice(
 ){
     if(!hasSeparateAlpha){
         error("TextureAssetLoader: texture does not have a separate UASTC alpha stream");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
     if(!layout.has_value()){
         error("TextureAssetLoader: invalid UASTC slice layout");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const Expected<u64> alphaSliceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, layout.value());
     if(!alphaSliceOffsetBytes.has_value()){
         error("TextureAssetLoader: UASTC alpha slice offset exceeds addressable memory");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(
         !IsUastcSliceRangeWithinPrimaryPayload(alphaSliceOffsetBytes.value(), layout.value().byteCount, primaryPayloadByteCount, payloadBytes.size())
         || primaryPayloadByteCount > cast<u64>(payloadBytes.size()) - primaryPayloadByteCount
     ){
         error("TextureAssetLoader: UASTC alpha slice is outside the texture payload");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return payloadBytes.subspan(cast<usize>(primaryPayloadByteCount + alphaSliceOffsetBytes.value()), cast<usize>(layout.value().byteCount));
 }

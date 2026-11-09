@@ -80,8 +80,8 @@ class PopupRecord{
 
 b8 HasValidPopupScopeGeometry(in PopupScope scope){
     if(
-        !isFinite(scope.bounds.x) || !isFinite(scope.bounds.y) || !isFinite(scope.bounds.width) || !isFinite(scope.bounds.height)
-        || !isFinite(scope.viewport.x) || !isFinite(scope.viewport.y) || !isFinite(scope.viewport.width) || !isFinite(scope.viewport.height)
+        !IsFinite(scope.bounds.x) || !IsFinite(scope.bounds.y) || !IsFinite(scope.bounds.width) || !IsFinite(scope.bounds.height)
+        || !IsFinite(scope.viewport.x) || !IsFinite(scope.viewport.y) || !IsFinite(scope.viewport.width) || !IsFinite(scope.viewport.height)
         || scope.bounds.width <= 0.0f || scope.bounds.height <= 0.0f || scope.viewport.width <= 0.0f || scope.viewport.height <= 0.0f
     )
         return false;
@@ -89,7 +89,7 @@ b8 HasValidPopupScopeGeometry(in PopupScope scope){
     const f32 boundsBottom = scope.bounds.y + scope.bounds.height;
     const f32 viewportRight = scope.viewport.x + scope.viewport.width;
     const f32 viewportBottom = scope.viewport.y + scope.viewport.height;
-    return isFinite(boundsRight) && isFinite(boundsBottom) && isFinite(viewportRight) && isFinite(viewportBottom) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && boundsRight <= viewportRight && boundsBottom <= viewportBottom;
+    return IsFinite(boundsRight) && IsFinite(boundsBottom) && IsFinite(viewportRight) && IsFinite(viewportBottom) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && boundsRight <= viewportRight && boundsBottom <= viewportBottom;
 }
 
 b8 CanDismissPopupScope(in PopupScope scope, in b8 closing, in PopupDismissReason reason){

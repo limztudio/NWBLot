@@ -18,12 +18,12 @@ b8 IsValidLightComponentParameters(in LightComponent component){
     ;
     if(
         !validType
-        || !isFinite(color.x) || !isFinite(color.y) || !isFinite(color.z)
+        || !IsFinite(color.x) || !IsFinite(color.y) || !IsFinite(color.z)
         || color.x < 0.0f || color.y < 0.0f || color.z < 0.0f
-        || !isFinite(intensity) || intensity <= 0.0f
-        || !isFinite(component.range) || component.range <= 0.0f
-        || !isFinite(component.angularRadius) || component.angularRadius < 0.0f
-        || !isFinite(component.sourceRadius) || component.sourceRadius < 0.0f
+        || !IsFinite(intensity) || intensity <= 0.0f
+        || !IsFinite(component.range) || component.range <= 0.0f
+        || !IsFinite(component.angularRadius) || component.angularRadius < 0.0f
+        || !IsFinite(component.sourceRadius) || component.sourceRadius < 0.0f
     )
         return false;
     return true;
@@ -65,23 +65,23 @@ b8 IsAllowedLightComponentField(in StringView fieldName){
 
 Expected<VectorSingle> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
     const VectorSingle rawQuaternion(x, y, z, w);
-    const f32 lenSq = lengthSq(rawQuaternion);
-    if(!isFinite(lenSq) || lenSq <= s_SceneMinQuaternionLengthSq)
-        return makeUnexpected(Failure());
+    const f32 lenSq = LengthSq(rawQuaternion);
+    if(!IsFinite(lenSq) || lenSq <= s_SceneMinQuaternionLengthSq)
+        return MakeUnexpected(Failure());
 
-    return normalize(rawQuaternion);
+    return Normalize(rawQuaternion);
 }
 
 b8 IsValidTransformComponentParameters(in TransformComponent component){
     if(
-        !isFinite(component.position.x) || !isFinite(component.position.y) || !isFinite(component.position.z)
-        || !isFinite(component.rotation.x) || !isFinite(component.rotation.y) || !isFinite(component.rotation.z) || !isFinite(component.rotation.w)
-        || !isFinite(component.scale.x) || !isFinite(component.scale.y) || !isFinite(component.scale.z)
+        !IsFinite(component.position.x) || !IsFinite(component.position.y) || !IsFinite(component.position.z)
+        || !IsFinite(component.rotation.x) || !IsFinite(component.rotation.y) || !IsFinite(component.rotation.z) || !IsFinite(component.rotation.w)
+        || !IsFinite(component.scale.x) || !IsFinite(component.scale.y) || !IsFinite(component.scale.z)
     )
         return false;
 
-    const f32 rotationLengthSq = lengthSq(VectorSingle(component.rotation));
-    return isFinite(rotationLengthSq) && abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
+    const f32 rotationLengthSq = LengthSq(VectorSingle(component.rotation));
+    return IsFinite(rotationLengthSq) && Abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
 }
 
 b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Name virtualPath){
@@ -106,7 +106,7 @@ b8 ValidateCameraComponentAssetPayload(in CameraComponent component, in Name vir
         s_CameraFallbackAspectRatio
     );
     if(
-        !isFinite(projection.x) || !isFinite(projection.y) || !isFinite(projection.z) || !isFinite(projection.w)
+        !IsFinite(projection.x) || !IsFinite(projection.y) || !IsFinite(projection.z) || !IsFinite(projection.w)
         || aspectRatio < 0.0f
         || !builtProjection.has_value()
     ){

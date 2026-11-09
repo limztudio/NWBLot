@@ -51,7 +51,7 @@ class MaterialParameterTokens{
 
 
 Expected<MaterialParameterCall> SplitMaterialParameterCall(in StringView text){
-    const StringView trimmed = trimView(text);
+    const StringView trimmed = TrimView(text);
     usize openParen = trimmed.size();
     for(usize i = 0u; i < trimmed.size(); ++i){
         if(trimmed[i] == '('){
@@ -60,12 +60,12 @@ Expected<MaterialParameterCall> SplitMaterialParameterCall(in StringView text){
         }
     }
     if(openParen >= trimmed.size() || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
-    const StringView typeText = trimView(trimmed.substr(0u, openParen));
-    const StringView arguments = trimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
+    const StringView typeText = TrimView(trimmed.substr(0u, openParen));
+    const StringView arguments = TrimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
     if(typeText.empty() || arguments.empty())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     MaterialParameterCall outCall;
     outCall.typeText = typeText;
     outCall.arguments = arguments;
@@ -76,16 +76,16 @@ Expected<MaterialParameterTokens> SplitMaterialParameterTokens(in StringView tex
     MaterialParameterTokens outTokens;
     usize cursor = 0u;
     while(true){
-        const Expected<StringView> token = readCommaOrSpaceDelimitedToken(text, cursor);
+        const Expected<StringView> token = ReadCommaOrSpaceDelimitedToken(text, cursor);
         if(!token.has_value())
             break;
         if(outTokens.count >= s_MaterialTypedValueComponentCount)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         outTokens.values[cast<usize>(outTokens.count)] = token.value();
         ++outTokens.count;
     }
     if(outTokens.count == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return outTokens;
 }
 
@@ -98,10 +98,10 @@ Expected<CompactString> BuildMaterialBindParameterKey(in StringView instanceName
         instanceName.size() > s_MaterialCompactStringMaxLength
         || fieldName.size() > s_MaterialCompactStringMaxLength - instanceName.size()
         || instanceName.size() + fieldName.size() + s_MaterialParameterKeySeparator.size() > s_MaterialCompactStringMaxLength
-        || hasEmbeddedNull(instanceName)
-        || hasEmbeddedNull(fieldName)
+        || HasEmbeddedNull(instanceName)
+        || HasEmbeddedNull(fieldName)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     CompactString outKey;
     if(
@@ -109,12 +109,12 @@ Expected<CompactString> BuildMaterialBindParameterKey(in StringView instanceName
         || !outKey.append(s_MaterialParameterKeySeparator)
         || !outKey.append(fieldName)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return outKey;
 }
 
 u32x4 PackMaterialTypedValueMeta(in StringView key, in MaterialParameterType type){
-    const u64 keyHash = computeFnv64AsciiLowerText(key);
+    const u64 keyHash = ComputeFnv64AsciiLowerText(key);
     return u32x4(
         cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask),
         cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift),
@@ -128,45 +128,45 @@ Expected<u32> TryParseMaterialBoolToken(in StringView token){
         return 1u;
     if(token == s_MaterialBoolFalseTextToken || token == s_MaterialBoolFalseNumberToken)
         return 0u;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<f32> ParseMaterialParameterF32Token(in StringView token){
-    const Expected<f64> parsed = parseF64(token);
-    if(!parsed.has_value() || !isFinite(parsed.value()))
-        return makeUnexpected(Failure());
+    const Expected<f64> parsed = ParseF64(token);
+    if(!parsed.has_value() || !IsFinite(parsed.value()))
+        return MakeUnexpected(Failure());
     if(parsed.value() < cast<f64>(f32.min) || parsed.value() > cast<f64>(f32.max))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<f32>(parsed.value());
 }
 
 Expected<u32> ParseMaterialParameterSignedToken(in StringView token, in i64 minValue, in i64 maxValue, in u32 storageMask){
-    const Expected<i64> parsed = parseI64(token);
+    const Expected<i64> parsed = ParseI64(token);
     if(!parsed.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(parsed.value() < minValue || parsed.value() > maxValue)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<u32>(cast<u64>(parsed.value()) & cast<u64>(storageMask));
 }
 
 Expected<u32> ParseMaterialParameterUnsignedToken(in StringView token, in u64 maxValue){
-    const Expected<u64> parsed = parseU64(token);
+    const Expected<u64> parsed = ParseU64(token);
     if(!parsed.has_value() || parsed.value() > maxValue)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<u32>(parsed.value());
 }
 
 StringView NormalizeMaterialParameterNumericToken(in StringView token, in MaterialParameterValueType type){
     if(type == MaterialParameterValueType::f32)
-        return stripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
+        return StripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
     if(type == MaterialParameterValueType::f16){
-        const StringView stripped = stripMatchingTrailingByte(token, cast<u8>('h'), cast<u8>('H'));
+        const StringView stripped = StripMatchingTrailingByte(token, cast<u8>('h'), cast<u8>('H'));
         if(stripped == token)
-            return stripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
+            return StripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
         return stripped;
     }
     if(type == MaterialParameterValueType::u8 || type == MaterialParameterValueType::u16 || type == MaterialParameterValueType::u32)
-        return stripMatchingTrailingByte(token, cast<u8>('u'), cast<u8>('U'));
+        return StripMatchingTrailingByte(token, cast<u8>('u'), cast<u8>('U'));
     return token;
 }
 
@@ -190,11 +190,11 @@ Expected<u32> ParseMaterialParameterNonHalfToken(in StringView token, in Materia
     case MaterialParameterValueType::f32:{
         const Expected<f32> converted = ParseMaterialParameterF32Token(numericToken);
         if(!converted.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return bit_cast<u32>(converted.value());
     }
     default:
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 }
 

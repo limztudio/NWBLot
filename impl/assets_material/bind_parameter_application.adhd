@@ -26,13 +26,13 @@ class MaterialBindParameterApplication{
         const Expected<MaterialTypedValueData> parameter = ParseMaterialTypedValue(parameterName, parameterValue);
         if(!parameter.has_value()){
             error("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'", parameterName, materialName.resolvedText(), parameterValue);
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
 
         const MaterialLayoutFieldType parameterFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(parameter.value().meta.z), parameter.value().meta.w);
         if(parameterFieldType != field.fieldType){
             error("Material bind typed layout: parameter '{}' for '{}' does not match interface field type", parameterName, materialName.resolvedText());
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
 
         return MaterialTypedValueToLayoutValue(parameter.value());
@@ -63,7 +63,7 @@ class MaterialBindParameterApplication{
         const MaterialTypedLayoutField field = typedLayoutFields[cast<usize>(parameterEntry.fieldIndex)];
         if(IsMaterialLayoutResourceFieldType(field.fieldType)){
             const MaterialResourceKind resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
-            const StringView resourcePath = trimView(parameterValue);
+            const StringView resourcePath = TrimView(parameterValue);
             const Expected<Name> resourceName = TryParseMaterialBindName(resourcePath);
             assert(parameterEntry.blockName != s_NameNone && field.fieldName != s_NameNone);
             if(!resourceName.has_value() || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){

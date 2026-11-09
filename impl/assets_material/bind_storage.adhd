@@ -40,16 +40,16 @@ class MaterialBindStorage{
             const MaterialTypedLayoutBlock block = blocks[i];
             if(block.blockClass == MaterialBlockClass::MaterialConstant){
                 if(block.byteSize > 0xFFFFFFFFu - outSizes.constantBytes)
-                    return makeUnexpected(Failure());
+                    return MakeUnexpected(Failure());
                 outSizes.constantBytes += block.byteSize;
             }
             else if(block.blockClass == MaterialBlockClass::MaterialMutable){
                 if(block.byteSize > 0xFFFFFFFFu - outSizes.mutableBytes)
-                    return makeUnexpected(Failure());
+                    return MakeUnexpected(Failure());
                 outSizes.mutableBytes += block.byteSize;
             }
             else
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
         }
         return outSizes;
     }

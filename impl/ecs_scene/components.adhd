@@ -9,10 +9,10 @@
 
 
 b8 IsValidSceneLightRotation(in VectorSingle rotation){
-    if(!isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w))
+    if(!IsFinite(rotation.x) || !IsFinite(rotation.y) || !IsFinite(rotation.z) || !IsFinite(rotation.w))
         return false;
-    const f32 rotationLengthSquared = lengthSq(rotation);
-    return isFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
+    const f32 rotationLengthSquared = LengthSq(rotation);
+    return IsFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
 }
 
 b8 TryBuildSceneLightVectors(
@@ -23,10 +23,10 @@ b8 TryBuildSceneLightVectors(
 ){
     const VectorSingle colorIntensity(light.colorIntensity);
     if(
-        !isFinite(colorIntensity.x)
-        || !isFinite(colorIntensity.y)
-        || !isFinite(colorIntensity.z)
-        || !isFinite(colorIntensity.w)
+        !IsFinite(colorIntensity.x)
+        || !IsFinite(colorIntensity.y)
+        || !IsFinite(colorIntensity.z)
+        || !IsFinite(colorIntensity.w)
         || !(colorIntensity.w > 0.0f)
     )
         return false;
@@ -43,9 +43,9 @@ b8 TryBuildSceneLightVectors(
         return true;
     }
     case LightType::Point:{
-        if(!isFinite(transform.position.x) || !isFinite(transform.position.y) || !isFinite(transform.position.z))
+        if(!IsFinite(transform.position.x) || !IsFinite(transform.position.y) || !IsFinite(transform.position.z))
             return false;
-        if(!isFinite(light.range) || light.range <= 0.0f)
+        if(!IsFinite(light.range) || light.range <= 0.0f)
             return false;
 
         outPosition = VectorSingle(transform.position, 1.0f);
@@ -55,9 +55,9 @@ b8 TryBuildSceneLightVectors(
     case LightType::Spot:{
         if(!IsValidSceneLightRotation(rotation))
             return false;
-        if(!isFinite(transform.position.x) || !isFinite(transform.position.y) || !isFinite(transform.position.z))
+        if(!IsFinite(transform.position.x) || !IsFinite(transform.position.y) || !IsFinite(transform.position.z))
             return false;
-        if(!isFinite(light.range) || light.range <= 0.0f)
+        if(!IsFinite(light.range) || light.range <= 0.0f)
             return false;
         if(!IsValidLightCone(light.innerConeCos, light.outerConeCos))
             return false;
@@ -77,7 +77,7 @@ Expected<SceneLight> TryBuildSceneLight(in TransformComponent transform, in Ligh
     VectorSingle position(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle direction(0.0f, 0.0f, 0.0f, 0.0f);
     if(!TryBuildSceneLightVectors(transform, light, position, direction))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return MakeSceneLight(light, position, direction);
 }
 
@@ -97,7 +97,7 @@ Expected<CameraProjection> TryResolveCameraComponentProjection(
     in f32 fallbackAspectRatio
 ){
     if(!IsValidCameraTransformVectors(VectorSingle(transform.position), VectorSingle(transform.rotation), VectorSingle(transform.scale)))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return TryBuildCameraProjection(
         camera.projection.x,
         camera.projection.y,

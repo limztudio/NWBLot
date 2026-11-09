@@ -172,7 +172,7 @@ namespace __hidden_simd_lane_zero_analysis{
         if(baseCallee == expectedSimd)
             return InferCtorArgsZeroedAboveLane(expr.arguments, isDouble, symbols, localVarDecls, depth);
         if(expr.isBuiltinCall){
-            if(callee == "normalize" && expr.arguments.size() == 1u && expr.arguments[0]){
+            if(callee == "Normalize" && expr.arguments.size() == 1u && expr.arguments[0]){
                 const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
                 if(effLanes >= 2u && effLanes <= 3u)
                     return effLanes;
@@ -180,7 +180,7 @@ namespace __hidden_simd_lane_zero_analysis{
             }
             if(callee == "unfoldOctahedralAxis" && expr.arguments.size() == 1u && expr.arguments[0])
                 return 3u;
-            if(callee == "cross" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            if(callee == "Cross" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const u32 eff0 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
                 const u32 eff1 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[1], symbols);
                 const u32 effLanes = eff0 > eff1 ? eff0 : eff1;
@@ -190,31 +190,31 @@ namespace __hidden_simd_lane_zero_analysis{
             }
             if(
                 (
-                    callee == "abs"
-                    || callee == "sqrt"
-                    || callee == "floor"
-                    || callee == "ceil"
-                    || callee == "round"
+                    callee == "Abs"
+                    || callee == "Sqrt"
+                    || callee == "Floor"
+                    || callee == "Ceil"
+                    || callee == "Round"
                     || callee == "trunc"
                     || callee == "frac"
-                    || callee == "saturate"
-                    || callee == "sin"
-                    || callee == "tan"
+                    || callee == "Saturate"
+                    || callee == "Sin"
+                    || callee == "Tan"
                     || callee == "asin"
                     || callee == "atan"
-                    || callee == "foldOctahedralAxis"
+                    || callee == "FoldOctahedralAxis"
                 )
                 && expr.arguments.size() == 1u
                 && expr.arguments[0]
             ){
                 return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
             }
-            if((callee == "min" || callee == "max") && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            if((callee == "Min" || callee == "Max") && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
                 const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[1], isDouble, symbols, localVarDecls, depth + 1u);
                 return z0 > z1 ? z0 : z1;
             }
-            if(callee == "clamp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
+            if(callee == "Clamp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
                 if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[1], isDouble, symbols) && SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[2], isDouble, symbols))
                     return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
             }

@@ -64,14 +64,14 @@ Expected<usize> TryResolveRouterControlHostIndex(
     if(target.owner.valid()){
         const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
         if(!hostIndex.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const HitTarget host = targets[hostIndex.value()];
         if(!IsValidRouterControlHostTarget(popups, target, host))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return hostIndex.value();
     }
     if(!IsValidRouterControlHostTarget(popups, target, target))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return FindTargetIndexInTable(targets, lookup, target.id, target.declarationGeneration);
 }
 
@@ -85,11 +85,11 @@ Expected<HitTarget> TryResolveRouterControlHost(
     if(target.owner.valid()){
         const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
         if(!hostIndex.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         host = targets[hostIndex.value()];
     }
     if(!IsValidRouterControlHostTarget(popups, target, host))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return host;
 }
 
@@ -114,17 +114,17 @@ Expected<usize> TryResolveRouterCommandHostIndex(
     in HitTarget source
 ){
     if(!source.textEditable || !source.commandOwner.valid() || !source.commandControl.valid() || !IsRouterTargetInteractive(targets, lookup, popups, source))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
     if(!hostIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const HitTarget host = targets[hostIndex.value()];
     if(
         !IsRouterTargetInteractive(targets, lookup, popups, host)
         || !host.focusable || !host.navigable || host.owner.valid()
         || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return hostIndex.value();
 }
 

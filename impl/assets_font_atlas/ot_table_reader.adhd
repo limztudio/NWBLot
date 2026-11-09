@@ -46,17 +46,17 @@ class FontAtlasOtTableReader{
 
     public Expected<u32> coverage(in u64 offset){
         if(!this.range(offset, s_FontAtlasCoverageHeaderBytes))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const u16 format = this.u16At(offset);
         const u32 count = cast<u32>(this.u16At(offset + s_FontAtlasCoverageCountOffset));
         u32 glyphCount = 0u;
         if(format != 1u && format != s_FontAtlasCoverageRangeFormat)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         u32 recordStride = s_FontAtlasOtRangeRecordBytes;
         if(format == 1u)
             recordStride = s_FontAtlasOtU16Bytes;
         if(!this.range(offset + s_FontAtlasCoverageHeaderBytes, cast<u64>(count) * recordStride) || !this.spend(count))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         u32 previous = 0u;
         for(u32 index = 0u; index < count; ++index){
             const u64 record = offset + s_FontAtlasCoverageHeaderBytes + cast<u64>(index) * recordStride;
@@ -65,7 +65,7 @@ class FontAtlasOtTableReader{
             if(format != 1u)
                 end = cast<u32>(this.u16At(record + s_FontAtlasOtRangeRecordEndOffset));
             if(start > end || end >= this.m_glyphCount || (index > 0u && start <= previous) || (format == s_FontAtlasCoverageRangeFormat && cast<u32>(this.u16At(record + s_FontAtlasOtRangeRecordValueOffset)) != glyphCount))
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             glyphCount += end - start + 1u;
             previous = end;
         }

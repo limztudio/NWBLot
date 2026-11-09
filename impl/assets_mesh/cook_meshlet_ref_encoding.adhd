@@ -85,8 +85,8 @@ u32 PackMeshletRefEncoding(in MeshletRefDeltaWidth positionWidth, in MeshletRefD
 }
 
 void AddMeshletRefEncodeIndex(in u32 index, mut MeshletRefEncodeRange range){
-    range.minimum = min(range.minimum, index);
-    range.maximum = max(range.maximum, index);
+    range.minimum = Min(range.minimum, index);
+    range.maximum = Max(range.maximum, index);
 }
 
 void AddMeshletAttributeRefEncodeRanges(in MeshletAttributeStreamRef streamRef, mut MeshletAttributeRefEncodeRanges ranges){

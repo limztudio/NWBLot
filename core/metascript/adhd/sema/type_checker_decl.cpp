@@ -185,6 +185,10 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
         MethodDecl* m = iface.methods[i];
         if(!m)
             continue;
+        if(!m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
+            reportError(errors, m->span, "member function name must start with a lowercase letter");
+            ok = false;
+        }
         for(usize j = 0u; j < i; ++j){
             const MethodDecl* prev = iface.methods[j];
             if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)){
@@ -498,6 +502,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         MethodDecl* m = classDecl.methods[i];
         if(!m)
             continue;
+        if(!m->isConstructor && !m->isDestructor && !m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
+            reportError(errors, m->span, "member function name must start with a lowercase letter");
+            ok = false;
+        }
         for(usize j = 0u; j < i; ++j){
             const MethodDecl* prev = classDecl.methods[j];
             if(

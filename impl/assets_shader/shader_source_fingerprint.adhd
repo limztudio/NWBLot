@@ -11,8 +11,8 @@
 class ShaderSourceFingerprint{
     public void appendChecksumLine(in StringView text, mut u64 inOutChecksum)const{
         for(usize i = 0u; i < text.size(); ++i)
-            inOutChecksum = updateFnv64Byte(inOutChecksum, cast<u8>(text[i]));
-        inOutChecksum = updateFnv64Byte(inOutChecksum, s_ShaderChecksumNewlineByte);
+            inOutChecksum = UpdateFnv64Byte(inOutChecksum, cast<u8>(text[i]));
+        inOutChecksum = UpdateFnv64Byte(inOutChecksum, s_ShaderChecksumNewlineByte);
     }
 
     public u64 beginSourceChecksum(
@@ -44,8 +44,8 @@ class ShaderSourceFingerprint{
         in u64 compilerFingerprint,
         mut u64 inOutChecksum
     )const{
-        inOutChecksum = updateFnv64U64(inOutChecksum, dependencyChecksum);
-        inOutChecksum = updateFnv64U64(inOutChecksum, compilerFingerprint);
+        inOutChecksum = UpdateFnv64U64(inOutChecksum, dependencyChecksum);
+        inOutChecksum = UpdateFnv64U64(inOutChecksum, compilerFingerprint);
         return inOutChecksum;
     }
 
@@ -63,13 +63,13 @@ class ShaderSourceFingerprint{
         if(this.hasDependencyUtf8Bom(dependencyBytes))
             inOutCompilerInputsHaveBom = true;
         for(in u8 b : dependencyBytes)
-            inOutChecksum = updateFnv64Byte(inOutChecksum, b);
-        inOutChecksum = updateFnv64Byte(inOutChecksum, s_ShaderChecksumZeroByte);
+            inOutChecksum = UpdateFnv64Byte(inOutChecksum, b);
+        inOutChecksum = UpdateFnv64Byte(inOutChecksum, s_ShaderChecksumZeroByte);
     }
 
     private void appendFingerprintText(in StringView text, mut u64 inOutFingerprint)const{
         for(usize i = 0u; i < text.size(); ++i)
-            inOutFingerprint = updateFnv64Byte(inOutFingerprint, cast<u8>(text[i]));
+            inOutFingerprint = UpdateFnv64Byte(inOutFingerprint, cast<u8>(text[i]));
     }
 
     public u64 finalizeCompilerFingerprint(
@@ -79,7 +79,7 @@ class ShaderSourceFingerprint{
         in Span<SlangStageMapping> stageMappings,
         mut u64 inOutFingerprint
     )const{
-        this.appendFingerprintText(trimView(versionText), inOutFingerprint);
+        this.appendFingerprintText(TrimView(versionText), inOutFingerprint);
         for(in StringView argument : commonArguments)
             this.appendFingerprintText(argument, inOutFingerprint);
         for(in StringView capability : baselineCapabilities){

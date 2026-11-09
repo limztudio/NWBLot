@@ -97,11 +97,11 @@ u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
 
 Expected<u32> TryAlignMaterialLayoutFieldOffset(in u32 byteOffset, in MaterialLayoutFieldType fieldType){
     const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
-    return alignU32PowerOfTwoChecked(byteOffset, alignment);
+    return AlignU32PowerOfTwoChecked(byteOffset, alignment);
 }
 
 Expected<u32> TryAlignMaterialLayoutBlockByteSize(in u32 byteSize){
-    return alignU32PowerOfTwoChecked(byteSize, s_MaterialTypedWordBytes);
+    return AlignU32PowerOfTwoChecked(byteSize, s_MaterialTypedWordBytes);
 }
 
 

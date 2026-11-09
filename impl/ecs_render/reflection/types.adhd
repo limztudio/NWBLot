@@ -235,8 +235,8 @@ u32 BuildReflectionDepthPyramidMips(
         ++mipCount;
         if(mipWidth == 1u && mipHeight == 1u)
             break;
-        mipWidth = max(mipWidth / 2u, 1u);
-        mipHeight = max(mipHeight / 2u, 1u);
+        mipWidth = Max(mipWidth / 2u, 1u);
+        mipHeight = Max(mipHeight / 2u, 1u);
     }
     return mipCount;
 }

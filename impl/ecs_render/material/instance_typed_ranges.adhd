@@ -59,8 +59,8 @@ class MaterialTypedByteRangeKey{
     }
 
     public usize hash()const{
-        usize seed = hashValue(this.materialName);
-        seed = hashCombineValue(seed, this.typedLayoutHash);
+        usize seed = HashValue(this.materialName);
+        seed = HashCombineValue(seed, this.typedLayoutHash);
         return seed;
     }
 
@@ -119,22 +119,22 @@ Expected<MaterialTypedByteAppendRange, MaterialTypedByteAppendStatus> ResolveMat
         return outRange;
 
     if(appendByteCount > cast<usize>(u32.max))
-        return makeUnexpected(MaterialTypedByteAppendStatus::AppendCountExceedsU32);
+        return MakeUnexpected(MaterialTypedByteAppendStatus::AppendCountExceedsU32);
 
     const usize wordBytes = cast<usize>(s_MaterialTypedWordBytes);
     const usize wordMask = wordBytes - 1u;
     if(currentByteCount > usize.max - wordMask)
-        return makeUnexpected(MaterialTypedByteAppendStatus::BeginAlignmentOverflow);
+        return MakeUnexpected(MaterialTypedByteAppendStatus::BeginAlignmentOverflow);
     const usize alignedByteBegin = (currentByteCount + wordMask) & ~wordMask;
     if(appendByteCount > usize.max - alignedByteBegin)
-        return makeUnexpected(MaterialTypedByteAppendStatus::TotalCountOverflow);
+        return MakeUnexpected(MaterialTypedByteAppendStatus::TotalCountOverflow);
 
     const usize byteEnd = alignedByteBegin + appendByteCount;
     if(byteEnd > usize.max - wordMask)
-        return makeUnexpected(MaterialTypedByteAppendStatus::EndAlignmentOverflow);
+        return MakeUnexpected(MaterialTypedByteAppendStatus::EndAlignmentOverflow);
     const usize alignedByteEnd = (byteEnd + wordMask) & ~wordMask;
     if(alignedByteBegin > cast<usize>(u32.max) || alignedByteEnd > cast<usize>(u32.max))
-        return makeUnexpected(MaterialTypedByteAppendStatus::TotalCountExceedsU32);
+        return MakeUnexpected(MaterialTypedByteAppendStatus::TotalCountExceedsU32);
 
     outRange.byteRange.byteOffset = cast<u32>(alignedByteBegin);
     outRange.byteRange.byteCount = cast<u32>(appendByteCount);
@@ -156,27 +156,27 @@ Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(
     switch(appendRange.error()){
     case MaterialTypedByteAppendStatus::AppendCountExceedsU32:
         error("RendererSystem: material typed byte count exceeds u32 limits");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     case MaterialTypedByteAppendStatus::BeginAlignmentOverflow:
         error("RendererSystem: material typed byte offset overflows alignment");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     case MaterialTypedByteAppendStatus::TotalCountOverflow:
         error("RendererSystem: gathered material typed byte count overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     case MaterialTypedByteAppendStatus::EndAlignmentOverflow:
         error("RendererSystem: material typed byte end overflows alignment");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     case MaterialTypedByteAppendStatus::TotalCountExceedsU32:
     case MaterialTypedByteAppendStatus::Success:
     default:
         error("RendererSystem: gathered material typed byte count exceeds u32 limits");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 }
 
 usize HashMaterialTypedByteContent(in u64 byteHash, in usize byteCount){
-    usize seed = hashValue(byteHash);
-    return hashCombineValue(seed, byteCount);
+    usize seed = HashValue(byteHash);
+    return HashCombineValue(seed, byteCount);
 }
 
 b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u64 rhsByteHash, in Span<u8> rhsBytes){
@@ -190,7 +190,7 @@ b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u6
 }
 
 usize ResolveMaterialTypedBufferByteCount(in usize byteCount, in usize wordSize){
-    return alignUp(max(byteCount, wordSize), wordSize);
+    return AlignUp(Max(byteCount, wordSize), wordSize);
 }
 
 usize ResolveMaterialTypedReserve(in usize rendererCount){

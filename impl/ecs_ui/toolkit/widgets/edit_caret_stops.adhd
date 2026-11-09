@@ -16,17 +16,17 @@ Expected<Rect> ResolveEditCaretRect(
     in usize byte
 ){
     if(lines.empty() || !IsUtf8ScalarBoundary(text, byte))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const TextLine line = lines[cast<usize>(LineForEditCaretByte(lines, byte))];
     if(byte < cast<usize>(line.byteBegin) || byte > cast<usize>(line.byteEnd))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     f32 x = 0.0f;
     if(line.clusterCount != 0u){
         const usize firstCluster = cast<usize>(line.firstCluster);
         const usize lastCluster = firstCluster + cast<usize>(line.clusterCount);
         const usize clusterIndex = LowerBoundEditClusterByEnd(clusters, firstCluster, lastCluster, byte);
         if(clusterIndex == lastCluster || byte < cast<usize>(clusters[clusterIndex].byteBegin))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const TextCluster cluster = clusters[clusterIndex];
         const usize clusterBegin = cast<usize>(cluster.byteBegin);
         const usize clusterEnd = cast<usize>(cluster.byteEnd);
@@ -37,11 +37,11 @@ Expected<Rect> ResolveEditCaretRect(
                 x = cluster.trailingX;
         }
         else{
-            usize first = lowerBoundIndex(boundaries, clusterBegin);
+            usize first = LowerBoundIndex(boundaries, clusterBegin);
             if(first != boundaries.size() && boundaries[first] == clusterBegin)
                 ++first;
-            const usize last = first + lowerBoundIndex(boundaries.subspan(first, boundaries.size() - first), clusterEnd);
-            const usize next = first + lowerBoundIndex(boundaries.subspan(first, last - first), byte);
+            const usize last = first + LowerBoundIndex(boundaries.subspan(first, boundaries.size() - first), clusterEnd);
+            const usize next = first + LowerBoundIndex(boundaries.subspan(first, last - first), byte);
             const usize intervals = (last - first) + 1u;
             f32 ordinal = cast<f32>(next - first);
             if(next != last && boundaries[next] == byte)
@@ -59,8 +59,8 @@ Expected<Rect> ResolveEditCaretRect(
             x = cluster.leadingX + ((span * ordinal) / cast<f32>(intervals));
         }
     }
-    if(!isFinite(x))
-        return makeUnexpected(Failure());
+    if(!IsFinite(x))
+        return MakeUnexpected(Failure());
     return Rect(x, line.top, 0.0f, line.height);
 }
 
@@ -88,10 +88,10 @@ Expected<EditBoxCaretStop> TryMakeEditCaretStop(
     mut usize inOutPreviousDisplay
 ){
     if(item.committedByte < inOutPreviousCommitted || item.committedByte > committedBytes || item.displayByte < inOutPreviousDisplay || item.displayByte > expectedText.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> caret = ResolveEditCaretRect(expectedText, textLines, clusters, boundaries, item.displayByte);
     if(!caret.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u32 lineIndex = LineForEditCaretByte(textLines, item.displayByte);
     EditBoxCaretStop stop;
     stop.committedByte = item.committedByte;
@@ -114,15 +114,15 @@ Expected<usize> ResolveEditCaretVerticalTarget(
     in b8 down,
     in f32 preferredX
 ){
-    if(!isFinite(preferredX))
-        return makeUnexpected(Failure());
+    if(!IsFinite(preferredX))
+        return MakeUnexpected(Failure());
     const Expected<Rect> caret = ResolveEditCaretRect(text, textLines, clusters, boundaries, displayCaret);
     if(!caret.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u32 current = LineForEditCaretByte(textLines, displayCaret);
     u32 target = 0u;
     if(down)
-        target = min(current + 1u, cast<u32>(caretLines.size() - 1u));
+        target = Min(current + 1u, cast<u32>(caretLines.size() - 1u));
     else if(current != 0u)
         target = current - 1u;
     if(target == current){
@@ -150,32 +150,32 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
 ){
     if(
         cast<usize>(lineIndex) >= caretLines.size() || range.begin > range.end || range.end > text.size()
-        || !isFinite(breakWidth) || breakWidth < 0.0f
+        || !IsFinite(breakWidth) || breakWidth < 0.0f
         || !IsUtf8ScalarBoundary(text, range.begin)
         || !IsUtf8ScalarBoundary(text, range.end)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(range.begin == range.end)
         return Rect();
     const EditCaretLine line = caretLines[cast<usize>(lineIndex)];
-    const usize begin = max(range.begin, line.byteBegin);
-    const usize end = min(range.end, line.byteEnd);
+    const usize begin = Max(range.begin, line.byteBegin);
+    const usize end = Min(range.end, line.byteEnd);
     const b8 selectedBreak = line.breakEnd != line.byteEnd && range.begin <= line.byteEnd && range.end > line.byteEnd;
     if(begin >= end && !selectedBreak)
         return Rect();
     const Expected<Rect> first = ResolveEditCaretRect(text, textLines, clusters, boundaries, begin);
     if(!first.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> last = ResolveEditCaretRect(text, textLines, clusters, boundaries, end);
     if(!last.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f32 firstX = first.value().x;
     f32 breakCap = 0.0f;
     if(selectedBreak)
         breakCap = breakWidth;
-    const f32 width = max(0.0f, last.value().x - firstX) + breakCap;
-    if(!isFinite(width) || !isFinite(firstX + width))
-        return makeUnexpected(Failure());
+    const f32 width = Max(0.0f, last.value().x - firstX) + breakCap;
+    if(!IsFinite(width) || !IsFinite(firstX + width))
+        return MakeUnexpected(Failure());
     return Rect(firstX, line.top, width, line.height);
 }
 
@@ -274,25 +274,25 @@ Expected<EditBoxPlacement> TryArrangeEditBoxViewport(
     in b8 composing
 ){
     if(!ready || !ValidateEditBoxViewportArrangeInputs(bounds, viewport, clip, previousScroll, caretWidth))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> caret = ResolveEditCaretRect(utf8Text, textLines, clusters, boundaries, displayCaret);
     if(!caret.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<EditBoxPlacement> placement = TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, textMode, visualBounds, logicalSize, caret.value());
     if(!placement.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> selection = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, caretWidth);
     if(!selection.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     Rect preeditUnderline;
     if(composing){
         const Expected<Rect> underline = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, 0u, caretWidth);
         if(!underline.has_value())
-            return makeUnexpected(underline.error());
+            return MakeUnexpected(underline.error());
         preeditUnderline = underline.value();
     }
     if(!ValidateEditBoxArrangedSegments(placement.value(), caretWidth, selection.value(), preeditUnderline, composing))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return placement.value();
 }
 
@@ -318,10 +318,10 @@ Expected<EditBoxPlacement> TryArrangeEditBox(
     in b8 composing
 ){
     if(!ready)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<Rect> viewport = TryComputeEditBoxViewport(bounds, padding, clip, previousScroll, caretWidth);
     if(!viewport.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return TryArrangeEditBoxViewport(
         ready,
         bounds,
@@ -353,8 +353,8 @@ Expected<usize> TryHitTestEditBoxView(
     in Span<EditCaretLine> lines,
     in Span<EditBoxCaretStop> stops
 ){
-    if(!viewReady || !geometryReady || !isFinite(point.x) || !isFinite(point.y) || !isFinite(placement.textOrigin.x) || !isFinite(placement.textOrigin.y))
-        return makeUnexpected(Failure());
+    if(!viewReady || !geometryReady || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
+        return MakeUnexpected(Failure());
     return HitEditCaretGeometry(lines, stops, Point(point.x - placement.textOrigin.x, point.y - placement.textOrigin.y));
 }
 
@@ -367,7 +367,7 @@ Expected<Rect> TryResolveEditCaretRectWhenReady(
     in usize byte
 ){
     if(!ready)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return ResolveEditCaretRect(text, lines, clusters, boundaries, byte);
 }
 
@@ -378,7 +378,7 @@ Expected<usize> TryHitTestEditCaretGeometryWhenReady(
     in Point localPoint
 ){
     if(!ready)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return HitEditCaretGeometry(lines, stops, localPoint);
 }
 
@@ -395,7 +395,7 @@ Expected<usize> TryResolveEditCaretVerticalTargetWhenReady(
     in f32 preferredX
 ){
     if(!ready)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return ResolveEditCaretVerticalTarget(text, lines, clusters, boundaries, caretLines, stops, displayCaret, down, preferredX);
 }
 
@@ -411,7 +411,7 @@ Expected<Rect> TryResolveEditCaretRangeOnLineWhenReady(
     in f32 breakWidth
 ){
     if(!ready)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return ResolveEditCaretRangeOnLine(text, lines, clusters, boundaries, caretLines, range, lineIndex, breakWidth);
 }
 
@@ -432,18 +432,18 @@ Expected<EditNavigationResult> TryResolveTextAreaNavigationTarget(
 ){
     const Expected<Rect> caret = TryResolveEditCaretRectWhenReady(geometryReady, utf8Text, textLines, clusters, boundaries, displayCaret);
     if(!caret.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<f32> preferredX = TryResolveTextAreaPreferredX(preferred, caret.value());
     if(!preferredX.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const b8 down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
-    Expected<usize> resolved = makeUnexpected(Failure());
+    Expected<usize> resolved = MakeUnexpected(Failure());
     if(page)
         resolved = ResolveEditCaretPageTarget(caretLines, stops, modelCaret, caret.value(), down, preferredX.value(), viewportHeight);
     else
         resolved = TryResolveEditCaretVerticalTargetWhenReady(geometryReady, utf8Text, textLines, clusters, boundaries, caretLines, stops, displayCaret, down, preferredX.value());
     if(!resolved.has_value())
-        return makeUnexpected(resolved.error());
+        return MakeUnexpected(resolved.error());
     return EditNavigationResult(resolved.value(), preferredX.value());
 }
 

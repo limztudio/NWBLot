@@ -13,27 +13,27 @@ class CsgSnapshotIdentityBuilder{
         u8 byteValue = 0u;
         if(value)
             byteValue = 1u;
-        return updateFnv64Byte(hash, byteValue);
+        return UpdateFnv64Byte(hash, byteValue);
     }
 
     public u64 updateFnv64ByteSpan(in u64 hash, in Span<u8> bytes)const{
-        u64 result = updateFnv64U64(hash, cast<u64>(bytes.size()));
+        u64 result = UpdateFnv64U64(hash, cast<u64>(bytes.size()));
         for(in u8 byte : bytes)
-            result = updateFnv64Byte(result, byte);
+            result = UpdateFnv64Byte(result, byte);
         return result;
     }
 
     public u64 updateFnv64Vector4Bits(in u64 hash, in VectorSingle value)const{
-        u64 result = updateFnv64U32(hash, bit_cast<u32>(value.x));
-        result = updateFnv64U32(result, bit_cast<u32>(value.y));
-        result = updateFnv64U32(result, bit_cast<u32>(value.z));
-        return updateFnv64U32(result, bit_cast<u32>(value.w));
+        u64 result = UpdateFnv64U32(hash, bit_cast<u32>(value.x));
+        result = UpdateFnv64U32(result, bit_cast<u32>(value.y));
+        result = UpdateFnv64U32(result, bit_cast<u32>(value.z));
+        return UpdateFnv64U32(result, bit_cast<u32>(value.w));
     }
 
     public u64 updateFnv64Float3UBits(in u64 hash, in f32x3u value)const{
-        u64 result = updateFnv64U32(hash, bit_cast<u32>(value.x));
-        result = updateFnv64U32(result, bit_cast<u32>(value.y));
-        return updateFnv64U32(result, bit_cast<u32>(value.z));
+        u64 result = UpdateFnv64U32(hash, bit_cast<u32>(value.x));
+        result = UpdateFnv64U32(result, bit_cast<u32>(value.y));
+        return UpdateFnv64U32(result, bit_cast<u32>(value.z));
     }
 
     public u64 updateFnv64Matrix34Bits(in u64 hash, in MatrixSingle value)const{
@@ -43,10 +43,10 @@ class CsgSnapshotIdentityBuilder{
     }
 
     public u64 updateFnv64ShadowReceiverRangeGpu(in u64 hash, in CsgShadowReceiverRangeGpu range)const{
-        u64 result = updateFnv64U32(hash, range.firstCutter);
-        result = updateFnv64U32(result, range.cutterCount);
-        result = updateFnv64U32(result, range.flags);
-        return updateFnv64U32(result, range.solidTriangleWordOffset);
+        u64 result = UpdateFnv64U32(hash, range.firstCutter);
+        result = UpdateFnv64U32(result, range.cutterCount);
+        result = UpdateFnv64U32(result, range.flags);
+        return UpdateFnv64U32(result, range.solidTriangleWordOffset);
     }
 
     public void updateCsgFrameStateCutterSignature(
@@ -54,10 +54,10 @@ class CsgSnapshotIdentityBuilder{
         in CsgCutterComponent cutter,
         mut u64 inOutContentHash
     )const{
-        inOutContentHash = updateFnv64U32(inOutContentHash, entity.id);
+        inOutContentHash = UpdateFnv64U32(inOutContentHash, entity.id);
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.active);
-        inOutContentHash = updateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
-        inOutContentHash = updateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
+        inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
+        inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
         inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.worldToShape));
         inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.shapeToWorld));
         inOutContentHash = this.updateFnv64ByteSpan(inOutContentHash, cutter.parameterBytes);
@@ -79,21 +79,21 @@ class CsgSnapshotIdentityBuilder{
         mut u64 inOutContentHash,
         mut b8 inOutCacheable
     )const{
-        inOutContentHash = updateFnv64U32(inOutContentHash, entity.id);
+        inOutContentHash = UpdateFnv64U32(inOutContentHash, entity.id);
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.enabled);
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.affectOpaquePass);
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, receiver.affectTransparentPass);
-        inOutContentHash = updateFnv64NameHash(inOutContentHash, receiver.receiverGroup.hash());
+        inOutContentHash = UpdateFnv64NameHash(inOutContentHash, receiver.receiverGroup.hash());
 
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, hasRenderer);
         if(hasRenderer){
             inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, rendererVisible);
-            inOutContentHash = updateFnv64NameHash(inOutContentHash, materialName.hash());
+            inOutContentHash = UpdateFnv64NameHash(inOutContentHash, materialName.hash());
         }
 
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, hasMesh);
         if(hasMesh)
-            inOutContentHash = updateFnv64NameHash(inOutContentHash, meshName.hash());
+            inOutContentHash = UpdateFnv64NameHash(inOutContentHash, meshName.hash());
         else if(receiver.enabled && hasRenderer)
             inOutCacheable = false;
 
@@ -114,8 +114,8 @@ class CsgSnapshotIdentityBuilder{
         mut u64 outContentIdentity,
         mut u64 outIdentity
     )const{
-        u64 seed = updateFnv64U64(14695981039346656037ul, shapeRegistryRevision);
-        seed = updateFnv64U64(seed, cast<u64>(receiverCount));
+        u64 seed = UpdateFnv64U64(14695981039346656037ul, shapeRegistryRevision);
+        seed = UpdateFnv64U64(seed, cast<u64>(receiverCount));
         outContentIdentity = seed;
         outIdentity = seed;
     }
@@ -126,10 +126,10 @@ class CsgSnapshotIdentityBuilder{
         mut u64 inOutContentIdentity,
         mut u64 inOutIdentity
     )const{
-        inOutContentIdentity = updateFnv64U32(inOutContentIdentity, receiver.entity.id);
-        inOutContentIdentity = updateFnv64Byte(inOutContentIdentity, cast<u8>(receiver.receiverPass));
-        inOutIdentity = updateFnv64U32(inOutIdentity, receiver.entity.id);
-        inOutIdentity = updateFnv64Byte(inOutIdentity, cast<u8>(receiver.receiverPass));
+        inOutContentIdentity = UpdateFnv64U32(inOutContentIdentity, receiver.entity.id);
+        inOutContentIdentity = UpdateFnv64Byte(inOutContentIdentity, cast<u8>(receiver.receiverPass));
+        inOutIdentity = UpdateFnv64U32(inOutIdentity, receiver.entity.id);
+        inOutIdentity = UpdateFnv64Byte(inOutIdentity, cast<u8>(receiver.receiverPass));
         if(drawStateActive){
             inOutIdentity = this.updateFnv64BoolValue(inOutIdentity, receiver.boundsValid);
             if(receiver.boundsValid){
@@ -148,11 +148,11 @@ class CsgSnapshotIdentityBuilder{
         mut u64 inOutContentIdentity,
         mut u64 inOutIdentity
     )const{
-        inOutContentIdentity = updateFnv64U32(inOutContentIdentity, entity.id);
-        inOutContentIdentity = updateFnv64NameHash(inOutContentIdentity, shapeType.hash());
+        inOutContentIdentity = UpdateFnv64U32(inOutContentIdentity, entity.id);
+        inOutContentIdentity = UpdateFnv64NameHash(inOutContentIdentity, shapeType.hash());
         inOutContentIdentity = this.updateFnv64ByteSpan(inOutContentIdentity, parameters);
-        inOutIdentity = updateFnv64U32(inOutIdentity, entity.id);
-        inOutIdentity = updateFnv64NameHash(inOutIdentity, shapeType.hash());
+        inOutIdentity = UpdateFnv64U32(inOutIdentity, entity.id);
+        inOutIdentity = UpdateFnv64NameHash(inOutIdentity, shapeType.hash());
         inOutIdentity = this.updateFnv64Matrix34Bits(inOutIdentity, worldToShape);
         inOutIdentity = this.updateFnv64Matrix34Bits(inOutIdentity, shapeToWorld);
         inOutIdentity = this.updateFnv64ByteSpan(inOutIdentity, parameters);

@@ -37,7 +37,7 @@ Expected<SliderResult> TryFinalizeSliderFrameResult(
         const Expected<WidgetId> track = TryMakeWidgetId(widgetId, s_WidgetPartTrack);
         const Expected<WidgetId> thumb = TryMakeWidgetId(widgetId, s_WidgetPartThumb);
         if(!track.has_value() || !thumb.has_value())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         result.dragging = captureId == track.value() || captureId == thumb.value();
     }
     return result;

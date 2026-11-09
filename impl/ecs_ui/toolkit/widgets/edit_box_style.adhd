@@ -236,8 +236,8 @@ void ApplySkinPaletteToEditBoxStyle(in UiSkinPalette palette, mut EditBoxStyle s
 
 void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect segment){
     if(segment.width > 0.0f){
-        const f32 thickness = min(caretWidth, segment.height);
-        const f32 verticalOffset = textOrigin.y + max(0.0f, segment.height - thickness);
+        const f32 thickness = Min(caretWidth, segment.height);
+        const f32 verticalOffset = textOrigin.y + Max(0.0f, segment.height - thickness);
         segment.x += textOrigin.x;
         segment.y += verticalOffset;
         segment.height = thickness;
@@ -245,20 +245,20 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
 }
 
 Expected<Rect> TryComputeEditBoxViewport(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth){
-    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !isFinite(caretWidth) || caretWidth <= 0.0f)
-        return makeUnexpected(Failure());
-    const f32 firstX = bounds.x + min(padding.left, bounds.width);
-    const f32 firstY = bounds.y + min(padding.top, bounds.height);
-    const f32 lastX = (bounds.x + bounds.width) - min(padding.right, bounds.width);
-    const f32 lastY = (bounds.y + bounds.height) - min(padding.bottom, bounds.height);
-    return Rect(firstX, firstY, max(lastX, firstX) - firstX, max(lastY, firstY) - firstY);
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !IsFinite(caretWidth) || caretWidth <= 0.0f)
+        return MakeUnexpected(Failure());
+    const f32 firstX = bounds.x + Min(padding.left, bounds.width);
+    const f32 firstY = bounds.y + Min(padding.top, bounds.height);
+    const f32 lastX = (bounds.x + bounds.width) - Min(padding.right, bounds.width);
+    const f32 lastY = (bounds.y + bounds.height) - Min(padding.bottom, bounds.height);
+    return Rect(firstX, firstY, Max(lastX, firstX) - firstX, Max(lastY, firstY) - firstY);
 }
 
 b8 ValidateEditBoxViewportArrangeInputs(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(viewport) || !IsValidUiRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y)
         return false;
     const VectorSingle end = VectorSingle(viewport.x, viewport.y, bounds.x, bounds.y) + VectorSingle(viewport.width, viewport.height, bounds.width, bounds.height);
-    return end.x <= end.z && end.y <= end.w && IsValidUiExtent(previousScroll) && isFinite(caretWidth) && caretWidth > 0.0f;
+    return end.x <= end.z && end.y <= end.w && IsValidUiExtent(previousScroll) && IsFinite(caretWidth) && caretWidth > 0.0f;
 }
 
 

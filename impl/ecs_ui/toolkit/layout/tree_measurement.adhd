@@ -66,7 +66,7 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
     const f64 width = (maxX + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
     const f64 height = (maxY + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     f32 resolvedWidth = cast<f32>(width);
     if(description.width.policy == LayoutSizePolicy::Fixed)
         resolvedWidth = description.width.value;
@@ -84,7 +84,7 @@ Expected<u32> TryAppendLayoutTreeNode(
     in LayoutNodeDesc description
 ){
     if(!CanAddLayoutTreeNode(nodes, maxNodes, buildFailed, parent, description))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const u32 index = cast<u32>(nodes.size());
     nodes.push_back(LayoutTreeNode(description));
     if(parent != s_LayoutNoParent){

@@ -2,160 +2,160 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize findCompact(in CompactString value){
+usize FindCompact(in CompactString value){
     return value.find("needle");
 }
 
-u8 firstCompact(in CompactString value){
+u8 FirstCompact(in CompactString value){
     return value.front();
 }
 
-u8 lastCompact(in CompactString value){
+u8 LastCompact(in CompactString value){
     return value.back();
 }
 
 
-f32 lerpWithCounter(mut i32 counter){
-    return lerp(counter++, 11.0f, 0.5f);
+f32 LerpWithCounter(mut i32 counter){
+    return Lerp(counter++, 11.0f, 0.5f);
 }
 
 
-T lerpMoveOnly<T>(mut T value){
-    return lerp(value, T(), T());
+T LerpMoveOnly<T>(mut T value){
+    return Lerp(value, T(), T());
 }
 
 
-i32 max(in i32 a, in i32 b){
+i32 Max(in i32 a, in i32 b){
     return a - b;
 }
 
-i32 callShadowedMax(in i32 a, in i32 b){
-    return max(a, b);
+i32 CallShadowedMax(in i32 a, in i32 b){
+    return Max(a, b);
 }
 
 
-VectorSingle max(in VectorSingle a, in VectorSingle b){
+VectorSingle Max(in VectorSingle a, in VectorSingle b){
     return a - b;
 }
 
-f32 callShadowedVectorMax(){
+f32 CallShadowedVectorMax(){
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
     VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
-    VectorSingle result = max(a, b);
+    VectorSingle result = Max(a, b);
     return result.x;
 }
 
 
-f32 callBuiltinVectorMin(){
+f32 CallBuiltinVectorMin(){
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
     VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
-    VectorSingle result = min(a, b);
+    VectorSingle result = Min(a, b);
     return result.x;
 }
 
 
-i32 callShadowedLocalMin(){
-    auto min = lambda() -> i32 { return 17; };
-    return min();
+i32 CallShadowedLocalMin(){
+    auto Min = lambda() -> i32 { return 17; };
+    return Min();
 }
 
 
-f32 callNestedShadowedVector(){
+f32 CallNestedShadowedVector(){
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
     VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
     VectorSingle c = VectorSingle(2.0f, 2.0f, 2.0f, 2.0f);
-    VectorSingle result = min(max(a, b), c);
+    VectorSingle result = Min(Max(a, b), c);
     return result.x;
 }
 
 
-MatrixSingle mul(in MatrixSingle a, in MatrixSingle b){
+MatrixSingle Mul(in MatrixSingle a, in MatrixSingle b){
     return a + b;
 }
 
-f32 callShadowedMatrixMul(){
+f32 CallShadowedMatrixMul(){
     MatrixSingle a = MatrixSingle(1.0f);
     MatrixSingle b = MatrixSingle(2.0f);
-    MatrixSingle result = transpose(mul(a, b));
+    MatrixSingle result = Transpose(Mul(a, b));
     return result[0].x;
 }
 
 
-f32 callShadowedLocalDot(){
-    auto dot = lambda(in VectorSingle a, in VectorSingle b) -> f32 { return a.x - b.x; };
+f32 CallShadowedLocalDot(){
+    auto Dot = lambda(in VectorSingle a, in VectorSingle b) -> f32 { return a.x - b.x; };
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
     VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
-    return dot(a, b);
+    return Dot(a, b);
 }
 
 
-i32 callShadowedEntityConstant(in i32 s_InvalidEntityId){
+i32 CallShadowedEntityConstant(in i32 s_InvalidEntityId){
     return s_InvalidEntityId;
 }
 
 
-EntityID readBuiltinEntityConstant(){
+EntityID ReadBuiltinEntityConstant(){
     return s_InvalidEntityId;
 }
 
 
-T lerpTemporary<T>(){
-    return lerp(T(), T(), T());
+T LerpTemporary<T>(){
+    return Lerp(T(), T(), T());
 }
 
 
-usize trimLocalCompact(){
+usize TrimLocalCompact(){
     CompactString text = CompactString("  payload  ");
-    StringView view = trimView(text);
+    StringView view = TrimView(text);
     return view.size();
 }
 
 
-String stepAndMakeLongString(mut i32 recvCounter){
+String StepAndMakeLongString(mut i32 recvCounter){
     ++recvCounter;
     return String("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_tail_segment_beyond_sso");
 }
 
-usize stepSubstrArg(mut i32 argCounter, in usize value){
+usize StepSubstrArg(mut i32 argCounter, in usize value){
     ++argCounter;
     return value;
 }
 
-String extractLongStringSubstrOnce(mut i32 recvCounter, mut i32 posCounter, mut i32 countCounter){
-    auto sub = stepAndMakeLongString(recvCounter).substr(
-        stepSubstrArg(posCounter, 10u),
-        stepSubstrArg(countCounter, 72u)
+String ExtractLongStringSubstrOnce(mut i32 recvCounter, mut i32 posCounter, mut i32 countCounter){
+    auto sub = StepAndMakeLongString(recvCounter).substr(
+        StepSubstrArg(posCounter, 10u),
+        StepSubstrArg(countCounter, 72u)
     );
     return sub;
 }
 
-CompactString extractCompactSubstr(in CompactString value, in usize pos, in usize count){
+CompactString ExtractCompactSubstr(in CompactString value, in usize pos, in usize count){
     auto fullCopy = value.substr();
     auto sliced = fullCopy.substr(pos, count);
     return sliced;
 }
 
-i32 selectByteOverload(in u8 value){
+i32 SelectByteOverload(in u8 value){
     return 1000 + cast<i32>(value);
 }
 
-i32 selectByteOverload(in i32 value){
+i32 SelectByteOverload(in i32 value){
     return -1000 + value;
 }
 
-i32 selectByteSignedness(in u8 value){
+i32 SelectByteSignedness(in u8 value){
     return 2000 + cast<i32>(value);
 }
 
-i32 selectByteSignedness(in i8 value){
+i32 SelectByteSignedness(in i8 value){
     return -2000 + cast<i32>(value);
 }
 
-void incrementMutableByte(mut u8 target){
+void IncrementMutableByte(mut u8 target){
     target += 1u;
 }
 
-u32 exerciseHighByteStringOps(in StringView viewValue, in CompactString compactValue){
+u32 ExerciseHighByteStringOps(in StringView viewValue, in CompactString compactValue){
     auto vf = viewValue.front();
     auto vb = viewValue.back();
     auto cf = compactValue.front();
@@ -164,51 +164,51 @@ u32 exerciseHighByteStringOps(in StringView viewValue, in CompactString compactV
     if(vf > 0x7fu && vf == 0x80u && vb == 0xffu && cf == 0x80u && cb == 0xfeu){
         sum += cast<u32>(vf) + cast<u32>(vb) + cast<u32>(cf) + cast<u32>(cb);
     }
-    sum += cast<u32>(selectByteOverload(viewValue.front()));
-    sum += cast<u32>(selectByteSignedness(compactValue.back()));
+    sum += cast<u32>(SelectByteOverload(viewValue.front()));
+    sum += cast<u32>(SelectByteSignedness(compactValue.back()));
 
     String owned = String(viewValue);
     owned.front() >>= 1u;
     owned.back() = 0x80u;
     u8 postInc = owned.back()++;
-    incrementMutableByte(owned[1u]);
+    IncrementMutableByte(owned[1u]);
     if(postInc == 0x80u && owned.front() == 0x40u && owned.back() == 0x81u && owned[1u] == 0x80u){
         sum += cast<u32>(owned.front()) + cast<u32>(owned.back()) + cast<u32>(owned[1u]);
     }
     return sum;
 }
 
-usize consumeStringValue(in String s){
+usize ConsumeStringValue(in String s){
     return s.size();
 }
 
-usize borrowLocalStringAcrossValueCall(){
+usize BorrowLocalStringAcrossValueCall(){
     String text = String("  0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789  ");
-    StringView view = trimView(text);
-    const usize consumed = consumeStringValue(text);
+    StringView view = TrimView(text);
+    const usize consumed = ConsumeStringValue(text);
     return consumed + view.size();
 }
 
-b8 anyLaneGreater3Single(in VectorSingle lhs, in VectorSingle rhs){
+b8 AnyLaneGreater3Single(in VectorSingle lhs, in VectorSingle rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y || lhs.z > rhs.z;
 }
 
-b8 anyLaneGreater3Double(in VectorDouble lhs, in VectorDouble rhs){
+b8 AnyLaneGreater3Double(in VectorDouble lhs, in VectorDouble rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y || lhs.z > rhs.z;
 }
 
-b8 finiteLane3Single(in VectorSingle value){
-    return isFinite(value.xyz);
+b8 FiniteLane3Single(in VectorSingle value){
+    return IsFinite(value.xyz);
 }
 
-b8 finiteLane3Double(in VectorDouble value){
-    return isFinite(value.xyz);
+b8 FiniteLane3Double(in VectorDouble value){
+    return IsFinite(value.xyz);
 }
 
 const StringView s_MetascriptValueItemsField = "items";
 const usize s_MetascriptValueInitialCount = 8u;
 
-b8 anyLaneGreater2Single(in VectorSingle lhs, in VectorSingle rhs){
+b8 AnyLaneGreater2Single(in VectorSingle lhs, in VectorSingle rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y;
 }
 

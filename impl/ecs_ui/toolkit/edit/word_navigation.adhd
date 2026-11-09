@@ -11,7 +11,7 @@
 EditNavigationRunClass ClassifyEditNavigationOffset(in StringView text, in usize offset){
     u32 codePoint = 0u;
     usize byteCount = 0u;
-    if(!tryDecodeUtf8CodePoint(text.substr(offset, s_EditUtf8MaxSequenceBytes), codePoint, byteCount))
+    if(!TryDecodeUtf8CodePoint(text.substr(offset, s_EditUtf8MaxSequenceBytes), codePoint, byteCount))
         return EditNavigationRunClass::Text;
     return ClassifyEditNavigationScalar(codePoint);
 }
@@ -25,7 +25,7 @@ EditNavigationRunClass ClassifyEditWordRangeOffset(in StringView text, in usize 
 usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in usize position, in b8 forward){
     if((forward && position == text.size()) || (!forward && position == 0u) || boundaries.empty())
         return position;
-    usize cursor = lowerBoundIndex(boundaries, position);
+    usize cursor = LowerBoundIndex(boundaries, position);
     const usize lastBoundaryIndex = boundaries.size() - 1u;
     if(forward){
         const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, position);
@@ -46,9 +46,9 @@ usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in 
 }
 
 Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize> boundaries, in usize position){
-    const usize requested = lowerBoundIndex(boundaries, position);
+    const usize requested = LowerBoundIndex(boundaries, position);
     if(requested >= boundaries.size() || boundaries[requested] != position)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(text.empty())
         return EditWordRange();
     usize origin = requested;
@@ -78,13 +78,13 @@ Expected<usize> TryResolveEditMoveTarget(
     in b8 extend
 ){
     if(cast<u8>(movement) > cast<u8>(EditMove::DocumentEnd))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     usize target = caret;
     if(!extend && anchor != caret && (movement == EditMove::Left || movement == EditMove::Right)){
         if(movement == EditMove::Left)
-            target = min(anchor, caret);
+            target = Min(anchor, caret);
         else
-            target = max(anchor, caret);
+            target = Max(anchor, caret);
     }
     else{
         switch(movement){
@@ -130,8 +130,8 @@ Expected<usize> TryResolveEditMoveTarget(
 }
 
 Expected<f32> TryResolveEditNavigationPreferredX(in f32 preferredX){
-    if(!isFinite(preferredX))
-        return makeUnexpected(Failure());
+    if(!IsFinite(preferredX))
+        return MakeUnexpected(Failure());
     return preferredX;
 }
 

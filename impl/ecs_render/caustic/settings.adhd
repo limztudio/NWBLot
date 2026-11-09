@@ -72,12 +72,12 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
 
 Expected<CausticResolveActivityLayout> TryResolveCausticActivityLayout(in u32 halfWidth, in u32 halfHeight){
     if(halfWidth == 0u || halfHeight == 0u || halfWidth > s_RtMaxI32AsU32 || halfHeight > s_RtMaxI32AsU32)
-        return makeUnexpected(Failure());
-    const u32 tilesX = divideUp(halfWidth, s_CausticResolveGroupSize);
-    const u32 tilesY = divideUp(halfHeight, s_CausticResolveGroupSize);
+        return MakeUnexpected(Failure());
+    const u32 tilesX = DivideUp(halfWidth, s_CausticResolveGroupSize);
+    const u32 tilesY = DivideUp(halfHeight, s_CausticResolveGroupSize);
     const u64 byteSize = cast<u64>(tilesX) * cast<u64>(tilesY) * 4ull;
     if(byteSize > s_MeshAddressableBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     CausticResolveActivityLayout outLayout;
     outLayout.bufferByteSize = byteSize;
     outLayout.tilesX = tilesX;
@@ -109,8 +109,8 @@ CausticResolvePushConstants ResolveCausticResolvePushConstants(
     CausticResolvePushConstants resolvePush;
     resolvePush.width = width;
     resolvePush.height = height;
-    resolvePush.halfWidth = divideUpWrappingU32(width, 2u);
-    resolvePush.halfHeight = divideUpWrappingU32(height, 2u);
+    resolvePush.halfWidth = DivideUpWrappingU32(width, 2u);
+    resolvePush.halfHeight = DivideUpWrappingU32(height, 2u);
     resolvePush.causticIntensity = causticIntensity;
     resolvePush.stepWidth = stepWidth;
     resolvePush.stage = cast<u32>(stage);

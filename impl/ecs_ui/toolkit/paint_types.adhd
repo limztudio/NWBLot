@@ -48,8 +48,8 @@ b8 SameSkinBinding<TUiSkin, TTexture>(in SkinBindingRecord<TUiSkin, TTexture> lh
 
 b8 IsValidDisplayMetricsForGpuSubmit(in DisplayMetrics display){
     return
-        isFinite(display.logicalWidth) && isFinite(display.logicalHeight)
-        && isFinite(display.pixelScaleX) && isFinite(display.pixelScaleY)
+        IsFinite(display.logicalWidth) && IsFinite(display.logicalHeight)
+        && IsFinite(display.pixelScaleX) && IsFinite(display.pixelScaleY)
         && display.logicalWidth > 0.0f && display.logicalHeight > 0.0f
         && display.pixelScaleX > 0.0f && display.pixelScaleY > 0.0f
     ;
@@ -104,7 +104,7 @@ b8 ValidSnapshotImageCounts(in usize glyphPageCount, in usize sdfPageCount, in u
 
 b8 IsValidPaintUvRect(in Rect uv){
     return
-        isFinite(uv.x) && isFinite(uv.y) && isFinite(uv.width) && isFinite(uv.height)
+        IsFinite(uv.x) && IsFinite(uv.y) && IsFinite(uv.width) && IsFinite(uv.height)
         && uv.x >= 0.0f && uv.y >= 0.0f && uv.width > 0.0f && uv.height > 0.0f
         && uv.x + uv.width <= 1.0f && uv.y + uv.height <= 1.0f
     ;
@@ -113,7 +113,7 @@ b8 IsValidPaintUvRect(in Rect uv){
 Insets MaxUiPadding(in Insets lhs, in Insets rhs){
     const VectorSingle first(lhs.left, lhs.top, lhs.right, lhs.bottom);
     const VectorSingle second(rhs.left, rhs.top, rhs.right, rhs.bottom);
-    const VectorSingle maximum = max(first, second);
+    const VectorSingle maximum = Max(first, second);
     Insets out;
     out.left = maximum.x;
     out.top = maximum.y;

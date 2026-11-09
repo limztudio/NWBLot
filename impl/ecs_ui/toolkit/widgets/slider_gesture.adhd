@@ -82,7 +82,7 @@ b8 TryDragSliderPointerGesture(
         || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
         || !EqualUiRect(gesture.referenceRectangle, stateAdmission.travelBounds)
         || gesture.targetRectangle.width != stateAdmission.thumbExtent.x
-        || gesture.targetRectangle.height != stateAdmission.thumbExtent.y || !isFinite(baseline)
+        || gesture.targetRectangle.height != stateAdmission.thumbExtent.y || !IsFinite(baseline)
     )
         return false;
     SliderResult accepted = inOutResult;
@@ -111,9 +111,9 @@ b8 TryDragSliderPointerGesture(
 
 Expected<f32> TryResolveSliderTrackContentWidth(in SliderMetrics metrics, in f32 trackMinimumWidth){
     const f64 width = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right) + cast<f64>(metrics.thumbExtent.x) + cast<f64>(trackMinimumWidth);
-    if(!isFinite(width) || width > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
-    return max(metrics.contentSize.x, cast<f32>(width));
+    if(!IsFinite(width) || width > s_UiMaxFloatF64)
+        return MakeUnexpected(Failure());
+    return Max(metrics.contentSize.x, cast<f32>(width));
 }
 
 b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement placement){

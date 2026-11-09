@@ -49,8 +49,8 @@ class RuntimeMeshRequestEntry{
 
 
 usize HashRuntimeMeshRequestKey(in NameHash name, in u64 version){
-    usize seed = hashValue(name);
-    return hashCombineValue(seed, version);
+    usize seed = HashValue(name);
+    return HashCombineValue(seed, version);
 }
 
 usize FindInlineRuntimeMeshRequest(in Span<RuntimeMeshRequestEntry> entries, in usize inlineCount, in NameHash name, in u64 version){
@@ -101,14 +101,14 @@ b8 ContainsInlineRuntimeMeshRequestLive(in Span<RuntimeMeshRequestEntry> entries
 
 Expected<usize> TryComputeRuntimeMeshBufferByteCount(in usize elementCount, in usize elementBytes){
     if(elementBytes != 0u && elementCount > usize.max / elementBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return elementCount * elementBytes;
 }
 
 Expected<usize> TryComputePaddedRawByteCount(in usize logicalByteCount){
     if(logicalByteCount == 0u)
-        return makeUnexpected(Failure());
-    return alignUpChecked(logicalByteCount, s_RawByteLoadAlignmentBytes);
+        return MakeUnexpected(Failure());
+    return AlignUpChecked(logicalByteCount, s_RawByteLoadAlignmentBytes);
 }
 
 usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){
@@ -198,13 +198,13 @@ void ReportMeshBufferSetupFailure(in BufferSetupFailure failure, in Name meshNam
 }
 
 Expected<Name> DeriveMeshBufferName(in Name meshName, in StringView suffix, in StringView label){
-    Expected<Name> derived = makeUnexpected(Failure());
+    Expected<Name> derived = MakeUnexpected(Failure());
     native(in meshName, in suffix, mut derived){
         derived = DeriveName(meshName, suffix);
     }
     if(!derived.has_value()){
         error("RendererSystem: failed to derive {} buffer name for mesh '{}'", label, meshName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return derived.value();
 }

@@ -62,10 +62,10 @@ Expected<ControlAction> TryConsumeRouterControlAction(
 ){
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, host, declarationGeneration);
     if(declarationGeneration == 0u || !token.valid() || !targetIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const HitTarget target = targets[targetIndex.value()];
     if(!IsRouterTargetInteractive(targets, lookup, popups, target) || target.control != token || target.owner.valid() || !target.focusable)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     for(usize index = 0u; index < controlActions.size(); ++index){
         const ControlAction candidate = controlActions[index];
         if(candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration || candidate.control != token || !IsCurrentRouterControlAction(targets, lookup, popups, candidate))
@@ -75,7 +75,7 @@ Expected<ControlAction> TryConsumeRouterControlAction(
         controlActions.pop_back();
         return candidate;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 FenceRouterControlTargets(

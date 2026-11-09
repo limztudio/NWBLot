@@ -43,13 +43,13 @@ class CsgPlaneShape : ICsgShape{
 
     public Expected<CsgShapeLocalBounds> computeLocalBounds(in CsgShapeInlineParameters parameters)const override{
         if(!ValidCsgFiniteVector4(VectorSingle(parameters.parameter0)))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return MakeCsgUnboundedLocalBounds();
     }
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
         const VectorSingle param0(parameters.parameter0);
-        return dot(shapePosition.xyz, param0.xyz) + param0.w;
+        return Dot(shapePosition.xyz, param0.xyz) + param0.w;
     }
 }
 
@@ -72,9 +72,9 @@ class CsgBoxShape : ICsgShape{
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
         const VectorSingle halfExtents(parameters.parameter0, s_CsgShapeBoundsW);
-        const VectorSingle q = abs(shapePosition) - halfExtents;
-        const f32 outside = length(max(q, VectorSingle(s_CsgZeroShapeParameter)).xyz);
-        const f32 inside = min(min(q.x, min(q.y, q.z)), 0.0f);
+        const VectorSingle q = Abs(shapePosition) - halfExtents;
+        const f32 outside = Length(Max(q, VectorSingle(s_CsgZeroShapeParameter)).xyz);
+        const f32 inside = Min(Min(q.x, Min(q.y, q.z)), 0.0f);
         return outside + inside;
     }
 }
@@ -98,7 +98,7 @@ class CsgSphereShape : ICsgShape{
     }
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
-        return length(shapePosition.xyz) - parameters.parameter0.x;
+        return Length(shapePosition.xyz) - parameters.parameter0.x;
     }
 }
 
@@ -119,7 +119,7 @@ class CsgCapsuleShape : ICsgShape{
         const f32 radius = parameters.parameter0.x;
         const f32 halfHeight = parameters.parameter0.y;
         if(!ValidCsgFinitePositiveScalar(radius) || !ValidCsgFiniteNonNegativeScalar(halfHeight))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         const f32 yExtent = halfHeight + radius;
         return MakeCsgSymmetricLocalBounds(VectorSingle(radius, yExtent, radius, s_CsgShapeBoundsW));
@@ -127,9 +127,9 @@ class CsgCapsuleShape : ICsgShape{
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
         const f32 halfHeight = parameters.parameter0.y;
-        const f32 clampedY = clamp(shapePosition.y, -halfHeight, halfHeight);
+        const f32 clampedY = Clamp(shapePosition.y, -halfHeight, halfHeight);
         const VectorSingle delta = shapePosition - VectorSingle(0.0f, clampedY, 0.0f, 0.0f);
-        return length(delta.xyz) - parameters.parameter0.x;
+        return Length(delta.xyz) - parameters.parameter0.x;
     }
 }
 

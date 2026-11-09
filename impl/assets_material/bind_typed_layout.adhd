@@ -28,19 +28,19 @@ Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
     const Expected<CompactString> key = BuildMaterialBindParameterKey(instanceName, fieldName);
     if(!key.has_value()){
         error("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity", instanceName, fieldName, materialName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     CompactString defaultText;
     if(!defaultText.assign(defaultArgument)){
         error("Material bind typed layout: default for '{}.{}' in '{}' exceeds ACompactString capacity", instanceName, fieldName, materialName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     const Expected<MaterialTypedValueData> defaultParameter = ParseMaterialTypedValue(key.value().view(), defaultText.view());
     if(!defaultParameter.has_value()){
         error("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid", defaultArgument, instanceName, fieldName, materialName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     const MaterialLayoutFieldType defaultFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(defaultParameter.value().meta.z), defaultParameter.value().meta.w);
@@ -53,7 +53,7 @@ Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
             , materialName.resolvedText()
             , fieldTypeText
         );
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 
     return MaterialTypedValueToLayoutValue(defaultParameter.value());
@@ -181,7 +181,7 @@ b8 TryFinalizeMaterialBindTypedLayoutBlock(
 }
 
 b8 IsMaterialBindNameLess(in StringView lhs, in StringView rhs){
-    const usize minLen = min(lhs.size(), rhs.size());
+    const usize minLen = Min(lhs.size(), rhs.size());
     for(usize i = 0u; i < minLen; ++i){
         const u8 a = cast<u8>(lhs[i]);
         const u8 b = cast<u8>(rhs[i]);
@@ -196,7 +196,7 @@ Expected<MaterialBlockClass> ParseMaterialBindBlockClass(in MaterialBindStruct b
         return MaterialBlockClass::MaterialConstant;
     if(bindStruct.hasAttribute(s_MaterialMutableAttribute))
         return MaterialBlockClass::MaterialMutable;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 BuildSortedMaterialBindInstanceIndices(

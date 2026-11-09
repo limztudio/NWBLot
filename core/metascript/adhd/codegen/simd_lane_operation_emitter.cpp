@@ -258,9 +258,9 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
         const MStringView callee = arguments[0]->lhs->text;
         const usize callArity = arguments[0]->arguments.size();
         const b8 supportedBuiltin = (callArity >= 1u && callArity <= 3u)
-            && (!MapSimdUnaryFloatIntrinsic(callee, isDouble).empty() || (callee == "lerp" && callArity == 3u));
+            && (!MapSimdUnaryFloatIntrinsic(callee, isDouble).empty() || (callee == "Lerp" && callArity == 3u));
         if(supportedBuiltin){
-            const b8 isMinMaxFamily = (callArity == 2u && (callee == "min" || callee == "max"));
+            const b8 isMinMaxFamily = (callArity == 2u && (callee == "Min" || callee == "Max"));
             u32 activeLanes = 0u;
             u8 minMask = 0u;
             u8 maxMask = 0u;
@@ -293,15 +293,15 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
                 }
                 const MStringView curCallee = arg->lhs->text;
                 const b8 calleeMatches = isMinMaxFamily
-                    ? (curCallee == "min" || curCallee == "max")
+                    ? (curCallee == "Min" || curCallee == "Max")
                     : (curCallee == callee);
                 if(!calleeMatches){
                     callMatch = false;
                     break;
                 }
-                if(curCallee == "min")
+                if(curCallee == "Min")
                     minMask |= static_cast<u8>(1u << i);
-                else if(curCallee == "max")
+                else if(curCallee == "Max")
                     maxMask |= static_cast<u8>(1u << i);
                 for(usize pIdx = 0u; pIdx < callArity; ++pIdx){
                     if(!arg->arguments[pIdx]){
@@ -361,22 +361,22 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
                                 break;
                             }
                         }
-                        const b8 zeroPreservingFn = callee == "abs"
-                            || callee == "sqrt"
-                            || callee == "floor"
-                            || callee == "ceil"
-                            || callee == "round"
+                        const b8 zeroPreservingFn = callee == "Abs"
+                            || callee == "Sqrt"
+                            || callee == "Floor"
+                            || callee == "Ceil"
+                            || callee == "Round"
                             || callee == "trunc"
                             || callee == "frac"
-                            || callee == "saturate"
-                            || callee == "sin"
-                            || callee == "tan"
+                            || callee == "Saturate"
+                            || callee == "Sin"
+                            || callee == "Tan"
                             || callee == "asin"
                             || callee == "atan"
-                            || callee == "min"
-                            || callee == "max"
-                            || callee == "clamp"
-                            || callee == "lerp";
+                            || callee == "Min"
+                            || callee == "Max"
+                            || callee == "Clamp"
+                            || callee == "Lerp";
                         const b8 alreadyZeroedAbove = (activeLanes == 4u) || (zeroPreservingFn && allParamsZeroedAtActive);
                         const u8 activeMask = static_cast<u8>((1u << activeLanes) - 1u);
                         const MStringView maskConst = !alreadyZeroedAbove ? SimdInPlaceLaneMaskConstant(activeMask, isDouble) : MStringView{};

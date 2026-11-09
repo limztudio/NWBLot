@@ -48,15 +48,15 @@ class SkinningSubsystem{
 
 b8 ValidSkinInfluenceWeights(in VectorSingle weights){
     if(
-        !isFinite(weights)
+        !IsFinite(weights)
         || weights.x < 0.0f
         || weights.y < 0.0f
         || weights.z < 0.0f
         || weights.w < 0.0f
     )
         return false;
-    const f32 sum = dot(weights, VectorSingle(1.0f));
-    return isFinite(sum) && abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
+    const f32 sum = Dot(weights, VectorSingle(1.0f));
+    return IsFinite(sum) && Abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
 Expected<usize> TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount){
@@ -66,7 +66,7 @@ Expected<usize> TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u
 
         return componentIndex;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 SkinInfluenceFitsSkeleton(in SkinInfluence4 skin, in u32 skeletonJointCount){
@@ -122,7 +122,7 @@ b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointC
 }
 
 b8 IsFiniteSkinJointRow(in VectorSingle row){
-    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+    return IsFinite(row.x) && IsFinite(row.y) && IsFinite(row.z) && IsFinite(row.w);
 }
 
 b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
@@ -133,7 +133,7 @@ b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
         || !IsFiniteSkinJointRow(matrix[3u])
     )
         return false;
-    const VectorSingle row3Diff = abs(matrix[3u] - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
+    const VectorSingle row3Diff = Abs(matrix[3u] - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
     if(
         row3Diff.x > s_SkinValidationEpsilon
         || row3Diff.y > s_SkinValidationEpsilon
@@ -141,8 +141,8 @@ b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
         || row3Diff.w > s_SkinValidationEpsilon
     )
         return false;
-    const f32 determinant = dot(matrix[0u].xyz, cross(matrix[1u].xyz, matrix[2u].xyz));
-    return isFinite(determinant) && abs(determinant) > s_SkinValidationEpsilon;
+    const f32 determinant = Dot(matrix[0u].xyz, Cross(matrix[1u].xyz, matrix[2u].xyz));
+    return IsFinite(determinant) && Abs(determinant) > s_SkinValidationEpsilon;
 }
 
 b8 ValidateSkinInverseBindMatrixAt(in MatrixSingle matrix, in usize index){

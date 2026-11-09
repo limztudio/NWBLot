@@ -75,23 +75,23 @@ b8 ValidCsgShapeParameterByteCounts(in u32 parameterByteSize, in usize defaultPa
 }
 
 b8 ValidCsgFinitePositiveScalar(in f32 value){
-    return isFinite(value) && value > 0.0f;
+    return IsFinite(value) && value > 0.0f;
 }
 
 b8 ValidCsgFiniteNonNegativeScalar(in f32 value){
-    return isFinite(value) && value >= 0.0f;
+    return IsFinite(value) && value >= 0.0f;
 }
 
 b8 ValidCsgFiniteVector3(in VectorSingle value){
-    return isFinite(value.xyz);
+    return IsFinite(value.xyz);
 }
 
 b8 ValidCsgFiniteVector4(in VectorSingle value){
-    return isFinite(value);
+    return IsFinite(value);
 }
 
 b8 ValidCsgPositiveVector3(in VectorSingle value){
-    return isFinite(value.xyz) && value.x > 0.0f && value.y > 0.0f && value.z > 0.0f;
+    return IsFinite(value.xyz) && value.x > 0.0f && value.y > 0.0f && value.z > 0.0f;
 }
 
 b8 ValidCsgLocalBounds(in VectorSingle minBounds, in VectorSingle maxBounds){
@@ -121,7 +121,7 @@ Expected<CsgShapeLocalBounds> MakeCsgUnboundedLocalBounds(){
 
 Expected<CsgShapeLocalBounds> MakeCsgLocalBounds(in VectorSingle minBounds, in VectorSingle maxBounds){
     if(!ValidCsgLocalBounds(minBounds, maxBounds))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     CsgShapeLocalBounds bounds;
     bounds.minBounds = f32x4(minBounds, s_CsgShapeBoundsW);
@@ -132,7 +132,7 @@ Expected<CsgShapeLocalBounds> MakeCsgLocalBounds(in VectorSingle minBounds, in V
 
 Expected<CsgShapeLocalBounds> MakeCsgSymmetricLocalBounds(in VectorSingle halfExtents){
     if(!ValidCsgPositiveVector3(halfExtents))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const VectorSingle localMin(-halfExtents, s_CsgShapeBoundsW);
     const VectorSingle localMax(halfExtents, s_CsgShapeBoundsW);
@@ -140,7 +140,7 @@ Expected<CsgShapeLocalBounds> MakeCsgSymmetricLocalBounds(in VectorSingle halfEx
 }
 
 f32 ReadCsgShapeParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
-    return bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, byteOffset));
+    return bit_cast<f32>(ReadPartialU32LittleEndian(parameterBytes, byteOffset));
 }
 
 VectorSingle ReadCsgShapeParameter0(in Span<u8> parameterBytes){
@@ -174,7 +174,7 @@ CsgShapeInlineParameters ReadCsgShapeInlineParameters(in Span<u8> parameterBytes
 Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> PackCsgShapeDefaultParameterBytes(in u32 parameterByteSize, in CsgShapeInlineParameters parameters){
     const usize byteCount = cast<usize>(parameterByteSize);
     if(byteCount > s_CsgShapeInlineParameterMaxBytes)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> outBytes;
     outBytes.clear();
@@ -184,23 +184,23 @@ Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> PackCsgShapeDefault
     if(byteCount == 0u)
         return outBytes;
 
-    writeF32LittleEndianAt(parameters.parameter0.x, 0u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter0.y, 4u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter0.z, 8u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter0.w, 12u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter0.x, 0u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter0.y, 4u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter0.z, 8u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter0.w, 12u, outBytes);
     if(byteCount <= 16u)
         return outBytes;
 
-    writeF32LittleEndianAt(parameters.parameter1.x, 16u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter1.y, 20u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter1.z, 24u, outBytes);
-    writeF32LittleEndianAt(parameters.parameter1.w, 28u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter1.x, 16u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter1.y, 20u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter1.z, 24u, outBytes);
+    WriteF32LittleEndianAt(parameters.parameter1.w, 28u, outBytes);
     return outBytes;
 }
 
 Expected<CsgShapeLocalBounds> ComputeCsgShapeLocalBoundsFromBytes(in ICsgShape shape, in Span<u8> parameterBytes){
     if(parameterBytes.size() != cast<usize>(shape.parameterByteSize()))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(parameterBytes);
     return shape.computeLocalBounds(parameters);

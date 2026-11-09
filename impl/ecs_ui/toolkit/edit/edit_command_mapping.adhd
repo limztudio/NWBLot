@@ -19,7 +19,7 @@ class EditCommandMapping{
         case EditCommand::WordRight: return EditMove::WordRight;
         case EditCommand::DocumentHome: return EditMove::DocumentHome;
         case EditCommand::DocumentEnd: return EditMove::DocumentEnd;
-        default: return makeUnexpected(Failure());
+        default: return MakeUnexpected(Failure());
         }
     }
 
@@ -32,7 +32,7 @@ class EditCommandMapping{
         case EditCommand::Paste: outResult.clipboard = EditClipboardAction::Paste; return outResult;
         case EditCommand::Submit: outResult.submitted = true; return outResult;
         case EditCommand::Cancel: outResult.cancelled = true; return outResult;
-        default: return makeUnexpected(Failure());
+        default: return MakeUnexpected(Failure());
         }
     }
 }

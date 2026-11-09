@@ -30,9 +30,9 @@ class CoincidentOpticalVolumeCandidate{
 
 b8 ValidCoincidentOpticalVolumeCandidateLanes(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
     if(
-        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
-        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
-        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
+        !IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z)
+        || !IsFinite(rotation.x) || !IsFinite(rotation.y) || !IsFinite(rotation.z) || !IsFinite(rotation.w)
+        || !IsFinite(scale.x) || !IsFinite(scale.y) || !IsFinite(scale.z)
     )
         return false;
     const b8 scaleNonzero = scale.x != 0.f && scale.y != 0.f && scale.z != 0.f;
@@ -95,29 +95,29 @@ u32 OpticalFloatingHashBits(in f32 value){
 u64 ComputeOpticalFnv64Bytes(in Span<u8> bytes){
     u64 hash = s_Fnv64OffsetBasis;
     for(in u8 byte : bytes)
-        hash = updateFnv64Byte(hash, byte);
+        hash = UpdateFnv64Byte(hash, byte);
     return hash;
 }
 
 usize HashCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
-    usize hash = hashValue(candidate.mesh.name());
-    hash = hashCombineValue(hash, candidate.material.name());
-    hash = hashCombineValue(hash, candidate.group);
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.x));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.y));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.z));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.x));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.y));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.z));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.w));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.x));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.y));
-    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.z));
+    usize hash = HashValue(candidate.mesh.name());
+    hash = HashCombineValue(hash, candidate.material.name());
+    hash = HashCombineValue(hash, candidate.group);
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.position.x));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.position.y));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.position.z));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.x));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.y));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.z));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.w));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.x));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.y));
+    hash = HashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.z));
     if(candidate.group == s_NameNone){
-        hash = hashCombineValue(hash, candidate.boundaryMode);
-        hash = hashCombineValue(hash, candidate.mediumPriority);
-        hash = hashCombineValue(hash, candidate.mutableTypedBytes.size());
-        hash = hashCombineValue(hash, ComputeOpticalFnv64Bytes(candidate.mutableTypedBytes));
+        hash = HashCombineValue(hash, candidate.boundaryMode);
+        hash = HashCombineValue(hash, candidate.mediumPriority);
+        hash = HashCombineValue(hash, candidate.mutableTypedBytes.size());
+        hash = HashCombineValue(hash, ComputeOpticalFnv64Bytes(candidate.mutableTypedBytes));
     }
     return hash;
 }

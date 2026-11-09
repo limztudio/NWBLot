@@ -66,7 +66,7 @@ Expected<MeshletRefChannelWidths> TryPrepareMeshletRefEncoding(
             AddMeshletRefEncodeIndex(ref.skin, skinRange);
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
     }
 
@@ -102,7 +102,7 @@ Expected<u16> TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, 
         return cast<u16>(localIndex);
     }
 
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<u16> TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs, in MeshletAttributeStreamRef targetRef){
@@ -114,7 +114,7 @@ Expected<u16> TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs
         return cast<u16>(localIndex);
     }
 
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 BuildZippedMeshletRefsFixed(

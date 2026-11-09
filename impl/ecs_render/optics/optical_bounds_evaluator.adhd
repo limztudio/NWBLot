@@ -28,8 +28,8 @@ class OpticalBoundsEvaluator{
         const VectorSingle localMin3 = VectorSingle(localMin.x, localMin.y, localMin.z, 0.0f);
         const VectorSingle localMax3 = VectorSingle(localMax.x, localMax.y, localMax.z, 0.0f);
         if(
-            !isFinite(localMin.xyz)
-            || !isFinite(localMax.xyz)
+            !IsFinite(localMin.xyz)
+            || !IsFinite(localMax.xyz)
             || localMin.x > localMax.x
             || localMin.y > localMax.y
             || localMin.z > localMax.z
@@ -39,10 +39,10 @@ class OpticalBoundsEvaluator{
         const VectorSingle row0 = objectToWorld[0u];
         const VectorSingle row1 = objectToWorld[1u];
         const VectorSingle row2 = objectToWorld[2u];
-        if(!isFinite(row0) || !isFinite(row1) || !isFinite(row2))
+        if(!IsFinite(row0) || !IsFinite(row1) || !IsFinite(row2))
             return false;
 
-        const MatrixSingle columns = transpose(MatrixSingle(row0, row1, row2, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)));
+        const MatrixSingle columns = Transpose(MatrixSingle(row0, row1, row2, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)));
         VectorSingle laneMin(0.0f, 0.0f, 0.0f, 0.0f);
         VectorSingle laneMax(0.0f, 0.0f, 0.0f, 0.0f);
         VectorSingle laneMagnitude(0.0f, 0.0f, 0.0f, 0.0f);
@@ -63,17 +63,17 @@ class OpticalBoundsEvaluator{
             cornerVec = columns[1u] * y + cornerVec;
             cornerVec = columns[2u] * z + cornerVec;
             cornerVec = cornerVec + columns[3u];
-            if(!isFinite(cornerVec.xyz))
+            if(!IsFinite(cornerVec.xyz))
                 return false;
             if(corner == 0u){
                 laneMin = cornerVec;
                 laneMax = cornerVec;
             }
             else{
-                laneMin = min(laneMin, cornerVec);
-                laneMax = max(laneMax, cornerVec);
+                laneMin = Min(laneMin, cornerVec);
+                laneMax = Max(laneMax, cornerVec);
             }
-            laneMagnitude = max(laneMagnitude, abs(cornerVec));
+            laneMagnitude = Max(laneMagnitude, Abs(cornerVec));
         }
 
         const f32 magnitudeSum = (laneMagnitude.x + laneMagnitude.y) + laneMagnitude.z;
@@ -81,7 +81,7 @@ class OpticalBoundsEvaluator{
         const VectorSingle marginVec(margin, margin, margin, margin);
         const VectorSingle minimum = laneMin - marginVec;
         const VectorSingle maximum = laneMax + marginVec;
-        if(!isFinite(minimum.xyz) || !isFinite(maximum.xyz))
+        if(!IsFinite(minimum.xyz) || !IsFinite(maximum.xyz))
             return false;
         outMinimum = VectorSingle(minimum.x, minimum.y, minimum.z, 0.0f);
         outMaximum = VectorSingle(maximum.x, maximum.y, maximum.z, 0.0f);

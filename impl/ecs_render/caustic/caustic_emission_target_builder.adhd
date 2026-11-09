@@ -28,8 +28,8 @@ class CausticEmissionTargetBuilder{
         mut VectorSingle inOutCombinedMin,
         mut VectorSingle inOutCombinedMax
     )const{
-        inOutCombinedMin = min(inOutCombinedMin, worldMin);
-        inOutCombinedMax = max(inOutCombinedMax, worldMax);
+        inOutCombinedMin = Min(inOutCombinedMin, worldMin);
+        inOutCombinedMax = Max(inOutCombinedMax, worldMax);
         NwbCausticEmissionTargetGpu target;
         target.aabbMin = f32x4(worldMin, 0.0f);
         target.aabbMax = f32x4(worldMax, 0.0f);
@@ -48,8 +48,8 @@ class CausticEmissionTargetBuilder{
         if(inOutCount == 0u)
             inOutFirstEntity = entityId;
         ++inOutCount;
-        inOutHash = updateFnv64U32(inOutHash, entityId);
-        inOutHash = updateFnv64Byte(inOutHash, cast<u8>(boundaryMode));
+        inOutHash = UpdateFnv64U32(inOutHash, entityId);
+        inOutHash = UpdateFnv64Byte(inOutHash, cast<u8>(boundaryMode));
     }
 
     public b8 validateUpload(

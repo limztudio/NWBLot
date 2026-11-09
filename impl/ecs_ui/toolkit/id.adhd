@@ -80,7 +80,7 @@ class WidgetRoot{
     }
 
     public usize hash()const{
-        return hashCombineValue(hashValue(this.value), this.generation);
+        return HashCombineValue(HashValue(this.value), this.generation);
     }
 
     public u64 value = 0u;
@@ -121,7 +121,7 @@ class ContextStateClaim{
     }
 
     public usize hash()const{
-        return hashCombineValue(hashValue(this.instanceGeneration), cast<u8>(this.kind));
+        return HashCombineValue(HashValue(this.instanceGeneration), cast<u8>(this.kind));
     }
 
     public u64 instanceGeneration = 0u;
@@ -133,15 +133,15 @@ class ContextStateClaim{
 
 
 usize ContextStateClaimHash(in ContextStateClaim claim){
-    const usize seed = hashValue(claim.instanceGeneration);
-    return hashCombineValue(seed, cast<u8>(claim.kind));
+    const usize seed = HashValue(claim.instanceGeneration);
+    return HashCombineValue(seed, cast<u8>(claim.kind));
 }
 
 Expected<WidgetId> TryMakeRootId(in WidgetRoot root){
     if(root.generation == 0u)
-        return makeUnexpected(Failure());
-    u64 hash = updateFnv64U64(s_Fnv64OffsetBasis, root.value);
-    hash = updateFnv64U64(hash, root.generation);
+        return MakeUnexpected(Failure());
+    u64 hash = UpdateFnv64U64(s_Fnv64OffsetBasis, root.value);
+    hash = UpdateFnv64U64(hash, root.generation);
     WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;
@@ -152,10 +152,10 @@ Expected<WidgetId> TryMakeRootId(in WidgetRoot root){
 
 Expected<WidgetId> TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey){
     if(!parent.valid() || stableKey == 0u)
-        return makeUnexpected(Failure());
-    u64 hash = updateFnv64U64(s_Fnv64OffsetBasis, parent.value);
-    hash = updateFnv64U64(hash, 0u);
-    hash = updateFnv64U64(hash, stableKey);
+        return MakeUnexpected(Failure());
+    u64 hash = UpdateFnv64U64(s_Fnv64OffsetBasis, parent.value);
+    hash = UpdateFnv64U64(hash, 0u);
+    hash = UpdateFnv64U64(hash, stableKey);
     WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;
@@ -166,11 +166,11 @@ Expected<WidgetId> TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey){
 
 Expected<WidgetId> TryMakeWidgetId(in WidgetId parent, in StringView stableKey){
     if(!parent.valid() || stableKey.empty())
-        return makeUnexpected(Failure());
-    u64 hash = updateFnv64U64(s_Fnv64OffsetBasis, parent.value);
-    hash = updateFnv64U64(hash, cast<u64>(stableKey.size()));
+        return MakeUnexpected(Failure());
+    u64 hash = UpdateFnv64U64(s_Fnv64OffsetBasis, parent.value);
+    hash = UpdateFnv64U64(hash, cast<u64>(stableKey.size()));
     for(usize i = 0u; i < stableKey.size(); ++i)
-        hash = updateFnv64Byte(hash, cast<u8>(stableKey[i]));
+        hash = UpdateFnv64Byte(hash, cast<u8>(stableKey[i]));
     WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;

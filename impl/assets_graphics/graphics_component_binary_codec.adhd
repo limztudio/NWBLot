@@ -38,7 +38,7 @@ class GraphicsComponentBinaryCodec{
             || binaryPayload.reserved0 != 0u
             || binaryPayload.reserved1 != 0u
         )
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         RendererComponent outComponent;
         outComponent.material.virtualPath = Name(binaryPayload.materialHash);
         outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);

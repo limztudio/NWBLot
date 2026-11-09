@@ -18,17 +18,17 @@ class UiEditClipboardPolicy{
         in b8 hasSelection
     )const{
         if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection))
-            return makeUnexpected(UiEditClipboardStatus::InvalidAction);
+            return MakeUnexpected(UiEditClipboardStatus::InvalidAction);
         if(!validChannel)
-            return makeUnexpected(UiEditClipboardStatus::Unsupported);
+            return MakeUnexpected(UiEditClipboardStatus::Unsupported);
         const b8 reads = action == EditClipboardAction::Paste;
         const b8 mutates = reads || action == EditClipboardAction::Cut;
         if(readOnly && mutates)
-            return makeUnexpected(UiEditClipboardStatus::ReadOnly);
+            return MakeUnexpected(UiEditClipboardStatus::ReadOnly);
         if(compositionActive)
-            return makeUnexpected(UiEditClipboardStatus::CompositionActive);
+            return MakeUnexpected(UiEditClipboardStatus::CompositionActive);
         if(!reads && !hasSelection)
-            return makeUnexpected(UiEditClipboardStatus::NoSelection);
+            return MakeUnexpected(UiEditClipboardStatus::NoSelection);
         return reads;
     }
 
@@ -53,7 +53,7 @@ class UiEditClipboardPolicy{
             if(retainedBytes > maxModelBytes)
                 return UiEditClipboardStatus::TooLarge;
             const usize maxBytes = maxModelBytes - retainedBytes;
-            Expected<usize, EditTextStatus> normalized = makeUnexpected(EditTextStatus::InvalidText);
+            Expected<usize, EditTextStatus> normalized = MakeUnexpected(EditTextStatus::InvalidText);
             if(textMode == EditTextMode::Multiline)
                 normalized = NormalizeMultilineTextInto(completionText, maxBytes, inOutInsertText);
             else

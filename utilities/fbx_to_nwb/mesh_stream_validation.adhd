@@ -162,23 +162,23 @@ b8 IsFiniteSourceTriangleCornerValues(
     in b8 wantsSkinning
 ){
     if(
-        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
-        || !isFinite(normal.x) || !isFinite(normal.y) || !isFinite(normal.z)
-        || !isFinite(corner.uv0.x) || !isFinite(corner.uv0.y)
-        || !isFinite(corner.color.x) || !isFinite(corner.color.y) || !isFinite(corner.color.z) || !isFinite(corner.color.w)
+        !IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z)
+        || !IsFinite(normal.x) || !IsFinite(normal.y) || !IsFinite(normal.z)
+        || !IsFinite(corner.uv0.x) || !IsFinite(corner.uv0.y)
+        || !IsFinite(corner.color.x) || !IsFinite(corner.color.y) || !IsFinite(corner.color.z) || !IsFinite(corner.color.w)
     )
         return false;
     if(
         corner.hasTangent
-        && (!isFinite(corner.tangent.x) || !isFinite(corner.tangent.y) || !isFinite(corner.tangent.z) || !isFinite(corner.tangent.w))
+        && (!IsFinite(corner.tangent.x) || !IsFinite(corner.tangent.y) || !IsFinite(corner.tangent.z) || !IsFinite(corner.tangent.w))
     )
         return false;
     return !wantsSkinning
         || (
-            isFinite(corner.skin.weight[0u])
-            && isFinite(corner.skin.weight[1u])
-            && isFinite(corner.skin.weight[2u])
-            && isFinite(corner.skin.weight[3u])
+            IsFinite(corner.skin.weight[0u])
+            && IsFinite(corner.skin.weight[1u])
+            && IsFinite(corner.skin.weight[2u])
+            && IsFinite(corner.skin.weight[3u])
         );
 }
 

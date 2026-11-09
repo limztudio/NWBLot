@@ -36,10 +36,10 @@ b8 IsAllowedCsgShapeAssetField(in StringView fieldName){
 // Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
 Expected<CsgShapeTypeId> TryResolveCsgShapeTypeIdFromName(in Name shapeName){
     if(shapeName == s_NameNone)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     // HashValue returns usize and would make the cooked ID host-dependent.
-    const u64 foldedHash = foldNameHash64(shapeName.hash());
+    const u64 foldedHash = FoldNameHash64(shapeName.hash());
 
     const CsgShapeTypeId typeId = cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));
     if(typeId != s_InvalidCsgShapeTypeId)

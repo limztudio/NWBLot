@@ -115,7 +115,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation parameters are invalid"));
         return;
     }
-    const auto inputInfo = input->NativeInfo();
+    const auto inputInfo = input->nativeInfo();
 
     if(opDesc.params.type == RayTracingClusterOperationType::ClasBuild || opDesc.params.type == RayTracingClusterOperationType::ClasBuildTemplates || opDesc.params.type == RayTracingClusterOperationType::ClasInstantiateTemplates){
         const auto& properties = m_context.nvClusterAccelerationStructureProperties;

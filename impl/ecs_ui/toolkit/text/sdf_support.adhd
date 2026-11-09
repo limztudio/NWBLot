@@ -14,13 +14,13 @@ Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
     const f64 endX = originX + cast<f64>(ink.width);
     const f64 endY = originY + cast<f64>(ink.height);
     if(!FitsTextCoordinate(originX) || !FitsTextCoordinate(originY) || !FitsTextCoordinate(endX) || !FitsTextCoordinate(endY))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f32 rectX = cast<f32>(originX);
     const f32 rectY = cast<f32>(originY);
     const f32 rectW = ink.width;
     const f32 rectH = ink.height;
-    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
-        return makeUnexpected(Failure());
+    if(!IsFinite(rectX + rectW) || !IsFinite(rectY + rectH))
+        return MakeUnexpected(Failure());
     return VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
 }
 
@@ -56,7 +56,7 @@ b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 i
     const f32 rectY = cast<f32>(originY);
     const f32 rectW = cast<f32>(sizeX);
     const f32 rectH = cast<f32>(sizeY);
-    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
+    if(!IsFinite(rectX + rectW) || !IsFinite(rectY + rectH))
         return false;
     inoutBounds = VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
     return true;
@@ -78,20 +78,20 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
     const f64 texelSizeY = plane.w / cast<f64>(glyph.height);
     const f64 physicalStepX = 1.0 / (texelSizeX * cast<f64>(display.pixelScaleX));
     const f64 physicalStepY = 1.0 / (texelSizeY * cast<f64>(display.pixelScaleY));
-    if(!isFinite(physicalStepX) || !isFinite(physicalStepY))
-        return makeUnexpected(Failure());
-    const f64 haloCandidateX = ceil(physicalStepX) + 1.0;
-    const f64 haloCandidateY = ceil(physicalStepY) + 1.0;
-    const u32 haloX = cast<u32>(min(cast<f64>(pageWidth), haloCandidateX));
-    const u32 haloY = cast<u32>(min(cast<f64>(pageHeight), haloCandidateY));
+    if(!IsFinite(physicalStepX) || !IsFinite(physicalStepY))
+        return MakeUnexpected(Failure());
+    const f64 haloCandidateX = Ceil(physicalStepX) + 1.0;
+    const f64 haloCandidateY = Ceil(physicalStepY) + 1.0;
+    const u32 haloX = cast<u32>(Min(cast<f64>(pageWidth), haloCandidateX));
+    const u32 haloY = cast<u32>(Min(cast<f64>(pageHeight), haloCandidateY));
     u32 firstX = 0u;
     if(glyph.x > haloX)
         firstX = glyph.x - haloX;
     u32 firstY = 0u;
     if(glyph.y > haloY)
         firstY = glyph.y - haloY;
-    const u32 lastX = min(pageWidth - 1u, glyph.x + glyph.width + haloX);
-    const u32 lastY = min(pageHeight - 1u, glyph.y + glyph.height + haloY);
+    const u32 lastX = Min(pageWidth - 1u, glyph.x + glyph.width + haloX);
+    const u32 lastY = Min(pageHeight - 1u, glyph.y + glyph.height + haloY);
     const usize stride = cast<usize>(pageWidth);
     const usize channels = cast<usize>(channelCount);
     const usize ch = cast<usize>(glyph.channel);
@@ -102,17 +102,17 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
             const i32 value = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x)) * channels + ch]);
             if(x != lastX){
                 const i32 rightValue = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x + 1u)) * channels + ch]);
-                gradientX = max(gradientX, abs(rightValue - value));
+                gradientX = Max(gradientX, Abs(rightValue - value));
             }
             if(y != lastY){
                 const i32 downValue = cast<i32>(pixels[((cast<usize>(y + 1u) * stride) + cast<usize>(x)) * channels + ch]);
-                gradientY = max(gradientY, abs(downValue - value));
+                gradientY = Max(gradientY, Abs(downValue - value));
             }
         }
     }
     const f64 derivative = (cast<f64>(gradientX) * physicalStepX) + (cast<f64>(gradientY) * physicalStepY);
     const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
-    const f64 halfWidth = s_TextHalfPixel * max(derivative, minimumDerivative);
+    const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
     const f64 glyphWidthF64 = cast<f64>(glyph.width);
     const f64 glyphHeightF64 = cast<f64>(glyph.height);
     f64 supportMinX = glyphWidthF64;
@@ -124,29 +124,29 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
         u32 y0 = 0u;
         if(glyph.y + y != 0u)
             y0 = glyph.y + y - 1u;
-        const u32 y1 = min(pageHeight - 1u, glyph.y + y);
+        const u32 y1 = Min(pageHeight - 1u, glyph.y + y);
         for(u32 x = 0u; x <= glyph.width; ++x){
             u32 x0 = 0u;
             if(glyph.x + x != 0u)
                 x0 = glyph.x + x - 1u;
-            const u32 x1 = min(pageWidth - 1u, glyph.x + x);
+            const u32 x1 = Min(pageWidth - 1u, glyph.x + x);
             const i32 s00 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x0)) * channels + ch]);
             const i32 s10 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x1)) * channels + ch]);
             const i32 s01 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x0)) * channels + ch]);
             const i32 s11 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x1)) * channels + ch]);
-            const i32 maximum = max(max(s00, s10), max(s01, s11));
+            const i32 maximum = Max(Max(s00, s10), Max(s01, s11));
             if(cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
                 continue;
             const f64 posX = cast<f64>(x);
             const f64 posY = cast<f64>(y);
-            const f64 firstCellX = max(0.0, posX - s_TextHalfPixel);
-            const f64 firstCellY = max(0.0, posY - s_TextHalfPixel);
-            const f64 lastCellX = min(glyphWidthF64, posX + s_TextHalfPixel);
-            const f64 lastCellY = min(glyphHeightF64, posY + s_TextHalfPixel);
-            supportMinX = min(supportMinX, firstCellX);
-            supportMinY = min(supportMinY, firstCellY);
-            supportMaxX = max(supportMaxX, lastCellX);
-            supportMaxY = max(supportMaxY, lastCellY);
+            const f64 firstCellX = Max(0.0, posX - s_TextHalfPixel);
+            const f64 firstCellY = Max(0.0, posY - s_TextHalfPixel);
+            const f64 lastCellX = Min(glyphWidthF64, posX + s_TextHalfPixel);
+            const f64 lastCellY = Min(glyphHeightF64, posY + s_TextHalfPixel);
+            supportMinX = Min(supportMinX, firstCellX);
+            supportMinY = Min(supportMinY, firstCellY);
+            supportMaxX = Max(supportMaxX, lastCellX);
+            supportMaxY = Max(supportMaxY, lastCellY);
             visible = true;
         }
     }
@@ -158,7 +158,7 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
     const f64 maxY = supportMaxY * texelSizeY + plane.y;
     const Expected<Rect> measured = TryMakeMeasuredTextRect(minX, minY, maxX, maxY);
     if(!measured.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
 }
 

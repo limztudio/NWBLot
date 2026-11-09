@@ -44,21 +44,21 @@ b8 IsAllowedSkinInfluenceMetadataField(in StringView fieldName){
 Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in f32x4u weights){
     const VectorSingle weightVec(weights);
     if(
-        !isFinite(weightVec)
+        !IsFinite(weightVec)
         || weightVec.x < 0.0f
         || weightVec.y < 0.0f
         || weightVec.z < 0.0f
         || weightVec.w < 0.0f
     )
-        return makeUnexpected(SkinInfluenceWeightFailure::NegativeWeight);
+        return MakeUnexpected(SkinInfluenceWeightFailure::NegativeWeight);
 
-    const f32 totalWeight = dot(weightVec, VectorSingle(1.0f));
-    if(!isFinite(totalWeight) || !(totalWeight > s_SkinValidationEpsilon))
-        return makeUnexpected(SkinInfluenceWeightFailure::ZeroTotalWeight);
+    const f32 totalWeight = Dot(weightVec, VectorSingle(1.0f));
+    if(!IsFinite(totalWeight) || !(totalWeight > s_SkinValidationEpsilon))
+        return MakeUnexpected(SkinInfluenceWeightFailure::ZeroTotalWeight);
 
     const VectorSingle normalizedWeights = weightVec / VectorSingle(totalWeight);
     if(!ValidSkinInfluenceWeights(normalizedWeights))
-        return makeUnexpected(SkinInfluenceWeightFailure::InvalidNormalized);
+        return MakeUnexpected(SkinInfluenceWeightFailure::InvalidNormalized);
 
     return f32x4u(normalizedWeights);
 }

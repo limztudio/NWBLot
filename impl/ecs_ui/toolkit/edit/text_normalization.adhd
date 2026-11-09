@@ -27,7 +27,7 @@ Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in u
         return outStep;
     }
     if(!IsCanonicalMultilineScalar(scalar))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     outStep.outputBytes = outStep.sourceBytes;
     return outStep;
 }
@@ -35,7 +35,7 @@ Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in u
 Expected<SingleLineTextStep> TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
     SingleLineTextStep outStep;
     if(IsSingleLineRejectedScalar(scalar))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const b8 space = IsSingleLineSpaceScalar(scalar);
     outStep.sourceBytes = decodedBytes;
     if(space)
@@ -55,7 +55,7 @@ b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
     while(offset < text.size()){
         u32 scalar = 0u;
         usize byteCount = 0u;
-        if(!tryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+        if(!TryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
             return false;
         if(singleLine && !IsSingleLineScalar(scalar))
             return false;
@@ -72,7 +72,7 @@ b8 ValidateMultilineText(in StringView text){
     while(offset < text.size()){
         u32 scalar = 0u;
         usize byteCount = 0u;
-        if(!tryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount) || !IsCanonicalMultilineScalar(scalar))
+        if(!TryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount) || !IsCanonicalMultilineScalar(scalar))
             return false;
         offset += byteCount;
     }
@@ -82,16 +82,16 @@ b8 ValidateMultilineText(in StringView text){
 Expected<SingleLineTextStep> ReadSingleLineTextStep(in StringView source, in usize offset){
     u32 scalar = 0u;
     usize byteCount = 0u;
-    if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
-        return makeUnexpected(Failure());
+    if(!TryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+        return MakeUnexpected(Failure());
     return TryBuildSingleLineTextStep(source, offset, scalar, byteCount);
 }
 
 Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize offset){
     u32 scalar = 0u;
     usize byteCount = 0u;
-    if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
-        return makeUnexpected(Failure());
+    if(!TryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+        return MakeUnexpected(Failure());
     return TryBuildMultilineTextStep(source, offset, scalar, byteCount);
 }
 
@@ -103,15 +103,15 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
 
 Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
-        return makeUnexpected(EditTextStatus::InvalidText);
+        return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
     usize offset = 0u;
     while(offset < source.size()){
         const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
         if(!step.has_value())
-            return makeUnexpected(EditTextStatus::InvalidText);
+            return MakeUnexpected(EditTextStatus::InvalidText);
         if(step.value().outputBytes > maxBytes - normalizedBytes)
-            return makeUnexpected(EditTextStatus::TooLarge);
+            return MakeUnexpected(EditTextStatus::TooLarge);
         normalizedBytes += step.value().outputBytes;
         offset += step.value().sourceBytes;
     }
@@ -132,15 +132,15 @@ Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source
 
 Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
-        return makeUnexpected(EditTextStatus::InvalidText);
+        return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
     usize offset = 0u;
     while(offset < source.size()){
         const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
         if(!step.has_value())
-            return makeUnexpected(EditTextStatus::InvalidText);
+            return MakeUnexpected(EditTextStatus::InvalidText);
         if(step.value().outputBytes > maxBytes - normalizedBytes)
-            return makeUnexpected(EditTextStatus::TooLarge);
+            return MakeUnexpected(EditTextStatus::TooLarge);
         normalizedBytes += step.value().outputBytes;
         offset += step.value().sourceBytes;
     }

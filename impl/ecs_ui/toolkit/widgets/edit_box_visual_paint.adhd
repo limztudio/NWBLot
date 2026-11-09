@@ -24,7 +24,7 @@ Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in Edit
         return outRegion;
     if(skin.tryFindRegion(style.fallback, outRegion))
         return outRegion;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedGlyph> glyphs){

@@ -47,8 +47,8 @@ b8 ValidateHardwareTransparentShadowScratchExtent(
     mut u32 outPixels,
     mut Array<u64, 3u> outSizes
 ){
-    const u64 halfWidth = divideUp(cast<u64>(width), cast<u64>(receiverFactor));
-    const u64 halfHeight = divideUp(cast<u64>(height), cast<u64>(receiverFactor));
+    const u64 halfWidth = DivideUp(cast<u64>(width), cast<u64>(receiverFactor));
+    const u64 halfHeight = DivideUp(cast<u64>(height), cast<u64>(receiverFactor));
     const u64 pixels = halfWidth * halfHeight;
     if(pixels == 0u || pixels > cast<u64>(u32.max) / wordsPerRay){
         error("RendererSystem: hardware transparent-shadow scratch extent is invalid");

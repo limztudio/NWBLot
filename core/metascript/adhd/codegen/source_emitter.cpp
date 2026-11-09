@@ -48,7 +48,7 @@ namespace __hidden_adhd_source_emitter{
             || SimdExpressionAnalysis::ExprContainsSimdMath(expr->rhs, symbols))
             return true;
     }
-    if(expr->kind == ExprKind::Call && expr->isBuiltinCall && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "isFinite"){
+    if(expr->kind == ExprKind::Call && expr->isBuiltinCall && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "IsFinite"){
         if(hasSimdScalarLocal)
             return true;
         for(const Expr* arg : expr->arguments){

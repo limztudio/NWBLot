@@ -7,25 +7,25 @@ const f32 s_DefaultSceneViewPitch = 0.94f;
 const f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
 VectorSingle RotateSceneVector3(in VectorSingle value, in VectorSingle rotationQuaternion){
-    const VectorSingle t = cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
-    const VectorSingle rotated = value + t * VectorSingle(rotationQuaternion.w) + cross(rotationQuaternion.xyz, t.xyz);
+    const VectorSingle t = Cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
+    const VectorSingle rotated = value + t * VectorSingle(rotationQuaternion.w) + Cross(rotationQuaternion.xyz, t.xyz);
     return VectorSingle(rotated, 0.0f);
 }
 
 VectorSingle NormalizeSceneVector3Or(in VectorSingle value, in VectorSingle fallback, in f32 lengthSquaredEpsilon){
-    const f32 lenSq = lengthSq(value.xyz);
-    if(!isFinite(lenSq) || !(lenSq > lengthSquaredEpsilon))
+    const f32 lenSq = LengthSq(value.xyz);
+    if(!IsFinite(lenSq) || !(lenSq > lengthSquaredEpsilon))
         return fallback;
-    const VectorSingle scaled = value * rsqrt(VectorSingle(lenSq));
+    const VectorSingle scaled = value * Rsqrt(VectorSingle(lenSq));
     return VectorSingle(scaled, 0.0f);
 }
 
 // Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
 MatrixSingle BuildDefaultSceneViewBasis(){
-    const f32 sinYaw = sin(s_DefaultSceneViewYaw);
-    const f32 cosYaw = cos(s_DefaultSceneViewYaw);
-    const f32 sinPitch = sin(s_DefaultSceneViewPitch);
-    const f32 cosPitch = cos(s_DefaultSceneViewPitch);
+    const f32 sinYaw = Sin(s_DefaultSceneViewYaw);
+    const f32 cosYaw = Cos(s_DefaultSceneViewYaw);
+    const f32 sinPitch = Sin(s_DefaultSceneViewPitch);
+    const f32 cosPitch = Cos(s_DefaultSceneViewPitch);
     return MatrixSingle(
         cosYaw, 0.0f, sinYaw, 0.0f,
         sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f,

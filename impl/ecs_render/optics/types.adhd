@@ -106,8 +106,8 @@ RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
         instance.flags |= s_RtOpticalInstanceFlagTransparent;
         ++inOutHeader.transparentCount;
         const b8 finiteBounds = boundsValid
-            && isFinite(boundsMin.x) && isFinite(boundsMin.y) && isFinite(boundsMin.z)
-            && isFinite(boundsMax.x) && isFinite(boundsMax.y) && isFinite(boundsMax.z)
+            && IsFinite(boundsMin.x) && IsFinite(boundsMin.y) && IsFinite(boundsMin.z)
+            && IsFinite(boundsMax.x) && IsFinite(boundsMax.y) && IsFinite(boundsMax.z)
             && boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
         if(finiteBounds){
             instance.flags |= s_RtOpticalInstanceFlagBoundsValid;
@@ -119,8 +119,8 @@ RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
             else{
                 const VectorSingle currentMin(inOutHeader.boundsMin);
                 const VectorSingle currentMax(inOutHeader.boundsMax);
-                const VectorSingle nextMin = min(currentMin, boundsMin);
-                const VectorSingle nextMax = max(currentMax, boundsMax);
+                const VectorSingle nextMin = Min(currentMin, boundsMin);
+                const VectorSingle nextMax = Max(currentMax, boundsMax);
                 inOutHeader.boundsMin = f32x3u(nextMin);
                 inOutHeader.boundsMax = f32x3u(nextMax);
             }

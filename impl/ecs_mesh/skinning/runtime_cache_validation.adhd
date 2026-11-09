@@ -97,7 +97,7 @@ Expected<u64> TryAllocateRuntimeMeshHandleValue(
     }
 
     error("MeshSkinningRuntimeCache: runtime mesh handle space exhausted");
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<EntityID> TryFindRuntimeMeshEntityByHandle(
@@ -105,10 +105,10 @@ Expected<EntityID> TryFindRuntimeMeshEntityByHandle(
     in u64 handleValue
 ){
     if(!handleToEntity.contains(handleValue))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const EntityID entity = handleToEntity.at(handleValue);
     if(!entity.valid())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return entity;
 }
 

@@ -57,12 +57,12 @@ class WidgetStateIndexPolicy{
         if(inOutIndexDirty){
             if(!this.rebuildIndex(entries, inOutIndex)){
                 outInvariantFailed = true;
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             }
             inOutIndexDirty = false;
         }
         if(!inOutIndex.contains(id.value))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const usize index = inOutIndex[id.value];
         assert(index < entries.size() && entries[index].id == id);
         return index;
@@ -94,19 +94,19 @@ class WidgetStateIndexPolicy{
     )const{
         outInvariantFailed = false;
         if(!this.validTouchRequest(id, root, kind, frameGeneration))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const Expected<usize> foundIndex = this.findIndex(inOutEntries, id, inOutIndex, inOutIndexDirty, outInvariantFailed);
         if(outInvariantFailed)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(foundIndex.has_value()){
             const usize index = foundIndex.value();
             WidgetState entry = inOutEntries[index];
             if(!this.canTouchExisting(entry, root, frameGeneration))
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             if(entry.kind != kind){
                 if(inOutNextDeclarationGeneration == u64.max){
                     outInvariantFailed = true;
-                    return makeUnexpected(Failure());
+                    return MakeUnexpected(Failure());
                 }
                 entry.declarationGeneration = inOutNextDeclarationGeneration;
                 ++inOutNextDeclarationGeneration;
@@ -117,17 +117,17 @@ class WidgetStateIndexPolicy{
             return index;
         }
         if(inOutEntries.size() >= s_WidgetStateRetainedCapacity)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(inOutNextDeclarationGeneration == u64.max){
             outInvariantFailed = true;
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         const usize newIndex = inOutEntries.size();
         inOutEntries.push_back(WidgetState(id, root, inOutNextDeclarationGeneration, frameGeneration, kind));
         if(inOutIndex.contains(id.value)){
             inOutEntries.pop_back();
             outInvariantFailed = true;
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         inOutIndex.try_emplace(id.value, newIndex);
         ++inOutNextDeclarationGeneration;

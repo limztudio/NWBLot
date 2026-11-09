@@ -21,9 +21,9 @@ class EditCompositionRules{
     ){
         if(!compositionActive || value.size() > maxBytes)
             return false;
-        if(!isUtf8ScalarBoundary(value, anchor) || !isUtf8ScalarBoundary(value, caret))
+        if(!IsUtf8ScalarBoundary(value, anchor) || !IsUtf8ScalarBoundary(value, caret))
             return false;
-        const usize replacedBytes = max(compositionAnchor, compositionCaret) - min(compositionAnchor, compositionCaret);
+        const usize replacedBytes = Max(compositionAnchor, compositionCaret) - Min(compositionAnchor, compositionCaret);
         const usize retainedBytes = textSize - replacedBytes;
         return retainedBytes <= maxBytes - value.size();
     }
@@ -109,8 +109,8 @@ class EditCompositionRules{
             preedit,
             preeditAnchor,
             preeditCaret,
-            min(compositionAnchor, compositionCaret),
-            max(compositionAnchor, compositionCaret),
+            Min(compositionAnchor, compositionCaret),
+            Max(compositionAnchor, compositionCaret),
             compositionActive
         );
     }

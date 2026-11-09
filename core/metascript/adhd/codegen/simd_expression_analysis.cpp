@@ -212,7 +212,7 @@ NWB_ADHD_BEGIN
         || !expr.isBuiltinCall
         || !expr.lhs
         || expr.lhs->kind != ExprKind::Identifier
-        || expr.lhs->text != "max"
+        || expr.lhs->text != "Max"
         || expr.arguments.size() != 2u
         || !expr.arguments[0]
         || !expr.arguments[1]
@@ -236,7 +236,7 @@ NWB_ADHD_BEGIN
             && node->isBuiltinCall
             && node->lhs
             && node->lhs->kind == ExprKind::Identifier
-            && node->lhs->text == "max"
+            && node->lhs->text == "Max"
             && node->arguments.size() == 2u
             && node->arguments[0]
             && node->arguments[1]
@@ -252,7 +252,7 @@ NWB_ADHD_BEGIN
             && node->isBuiltinCall
             && node->lhs
             && node->lhs->kind == ExprKind::Identifier
-            && node->lhs->text == "abs"
+            && node->lhs->text == "Abs"
             && node->arguments.size() == 1u
             && node->arguments[0]
         ){
@@ -344,7 +344,7 @@ NWB_ADHD_BEGIN
         if(expr->isBuiltinCall){
             if(!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty())
                 return true;
-            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "isFinite"){
+            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "IsFinite"){
                 for(const Expr* arg : expr->arguments){
                     if(arg && (!arg->resolvedSimdType.empty() || !arg->resolvedUnalignedType.empty()))
                         return true;

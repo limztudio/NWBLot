@@ -4,7 +4,7 @@
 
 const i32 s_InvalidEntityId = 44;
 
-i32 readShadowedGlobalConstant(){
+i32 ReadShadowedGlobalConstant(){
     auto value = s_InvalidEntityId;
     return value;
 }

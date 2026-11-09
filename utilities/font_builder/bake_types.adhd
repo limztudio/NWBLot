@@ -87,7 +87,7 @@ Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){
     if(rendererArgument == s_FontAtlasRasterModeOutline)
         return true;
     error("font_builder: unknown renderer; choose bitmap or outline");
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 StringView ResolveBakeFreeTypeSdfModule(in b8 outline){

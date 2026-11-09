@@ -31,7 +31,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.push_back(')');
             return true;
         }
-        if(callee == "isFinite" && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == "VectorSingle" || expr.arguments[0]->resolvedSimdType == "VectorDouble")){
+        if(callee == "IsFinite" && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == "VectorSingle" || expr.arguments[0]->resolvedSimdType == "VectorDouble")){
             const Expr& arg0 = *expr.arguments[0];
             const b8 isDouble = IsDoubleSimdType(arg0.resolvedSimdType);
             u8 activeMask = 0xFu;
@@ -67,7 +67,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(effLanes1 < effLanes)
                     effLanes = effLanes1;
             }
-            if(callee == "dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            if(callee == "Dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const Expr* sumArg = SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_emitter.m_symbols)
                     ? expr.arguments[0]
                     : (SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_emitter.m_symbols) ? expr.arguments[1] : nullptr);
@@ -89,7 +89,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
-        if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
+        if(callee == "Lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
             out.append("([](auto&& __adhd_lerp_a, auto&& __adhd_lerp_b, auto&& __adhd_lerp_t) -> decltype(auto) { return (::Forward<decltype(__adhd_lerp_a)>(__adhd_lerp_a) + ((::Forward<decltype(__adhd_lerp_b)>(__adhd_lerp_b) - __adhd_lerp_a) * ::Forward<decltype(__adhd_lerp_t)>(__adhd_lerp_t))); }(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append(", ");
@@ -99,7 +99,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
-        if(callee == "rsqrt" && expr.arguments.size() == 1u && expr.arguments[0] && expr.resolvedSimdType.empty()){
+        if(callee == "Rsqrt" && expr.arguments.size() == 1u && expr.arguments[0] && expr.resolvedSimdType.empty()){
             out.append("(static_cast<decltype(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append(")>(1) / ::Sqrt(");
@@ -111,7 +111,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
         b8 maxIsDouble = false;
         u32 maxLanes = 0u;
         b8 maxIsAbs = false;
-        if(callee == "max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxBaseVec){
+        if(callee == "Max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxBaseVec){
             out.append(maxIsDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
             AppendSimdLaneCountIntrinsicPrefix(out, maxIsDouble, maxLanes, "MaxComponent");
             if(maxIsAbs)

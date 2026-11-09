@@ -61,7 +61,7 @@ b8 ValidateIntegerBounds(in IntegerBounds bounds){
 }
 
 b8 ValidateFloatBounds(in FloatBounds bounds){
-    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
+    return IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 NumericParseStatus ToNumericParseStatus(in u8 status){
@@ -74,30 +74,30 @@ NumericParseStatus ToNumericParseStatus(in u8 status){
 
 // ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
 Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
-    const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ToNumericParseStatus(classifyIntegerGrammar(trimmed));
+    const StringView trimmed = TrimView(text);
+    const NumericParseStatus status = ToNumericParseStatus(ClassifyIntegerGrammar(trimmed));
     if(status != NumericParseStatus::Complete)
-        return makeUnexpected(status);
+        return MakeUnexpected(status);
     StringView number = trimmed;
     if(trimmed.front() == '+')
         number = trimmed.substr(1u);
-    const Expected<i64> value = parseI64(number);
+    const Expected<i64> value = ParseI64(number);
     if(!value.has_value())
-        return makeUnexpected(NumericParseStatus::OutOfRange);
+        return MakeUnexpected(NumericParseStatus::OutOfRange);
     return value.value();
 }
 
 Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
-    const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ToNumericParseStatus(classifyFloatGrammar(trimmed));
+    const StringView trimmed = TrimView(text);
+    const NumericParseStatus status = ToNumericParseStatus(ClassifyFloatGrammar(trimmed));
     if(status != NumericParseStatus::Complete)
-        return makeUnexpected(status);
+        return MakeUnexpected(status);
     StringView number = trimmed;
     if(trimmed.front() == '+')
         number = trimmed.substr(1u);
-    const Expected<f64> value = parseF64(number);
-    if(!value.has_value() || !isFinite(value.value()))
-        return makeUnexpected(NumericParseStatus::OutOfRange);
+    const Expected<f64> value = ParseF64(number);
+    if(!value.has_value() || !IsFinite(value.value()))
+        return MakeUnexpected(NumericParseStatus::OutOfRange);
     return value.value();
 }
 

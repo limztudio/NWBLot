@@ -136,12 +136,12 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
     if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Confidence))
         return false;
     if(
-        !isFinite(settings.maxRayDistance)
+        !IsFinite(settings.maxRayDistance)
         || settings.maxRayDistance <= 0.0f
-        || !isFinite(settings.distanceFadeStart)
+        || !IsFinite(settings.distanceFadeStart)
         || settings.distanceFadeStart < 0.0f
         || settings.distanceFadeStart >= settings.maxRayDistance
-        || !isFinite(settings.roughnessCutoff)
+        || !IsFinite(settings.roughnessCutoff)
         || settings.roughnessCutoff < 0.0f
         || settings.roughnessCutoff > 1.0f
     )
@@ -152,23 +152,23 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
     if(
         settings.screenMaxSteps < minScreenSteps
         || settings.screenMaxSteps > maxScreenSteps
-        || !isFinite(settings.screenThickness)
+        || !IsFinite(settings.screenThickness)
         || settings.screenThickness <= 0.0f
-        || !isFinite(settings.screenConfidenceThreshold)
+        || !IsFinite(settings.screenConfidenceThreshold)
         || settings.screenConfidenceThreshold <= 0.0f
         || settings.screenConfidenceThreshold > 1.0f
-        || !isFinite(settings.screenEdgeFade)
+        || !IsFinite(settings.screenEdgeFade)
         || settings.screenEdgeFade < 0.0f
         || settings.screenEdgeFade > maxScreenEdgeFade
     )
         return false;
     return
-        isFinite(settings.environmentTop.x)
-        && isFinite(settings.environmentTop.y)
-        && isFinite(settings.environmentTop.z)
-        && isFinite(settings.environmentBottom.x)
-        && isFinite(settings.environmentBottom.y)
-        && isFinite(settings.environmentBottom.z)
+        IsFinite(settings.environmentTop.x)
+        && IsFinite(settings.environmentTop.y)
+        && IsFinite(settings.environmentTop.z)
+        && IsFinite(settings.environmentBottom.x)
+        && IsFinite(settings.environmentBottom.y)
+        && IsFinite(settings.environmentBottom.z)
         && settings.environmentTop.x >= 0.0f
         && settings.environmentTop.y >= 0.0f
         && settings.environmentTop.z >= 0.0f

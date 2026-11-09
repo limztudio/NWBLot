@@ -72,8 +72,8 @@ class ShaderStageKey{
     }
 
     public usize hash()const{
-        usize seed = hashValue(this.shaderName);
-        return hashCombineValue(seed, this.stageName);
+        usize seed = HashValue(this.shaderName);
+        return HashCombineValue(seed, this.stageName);
     }
 }
 
@@ -82,13 +82,13 @@ class ShaderStageKey{
 
 
 b8 IsUnpaddedRendererOpticalVolumeGroup(in StringView text){
-    return !trimView(text).empty() && text == trimView(text);
+    return !TrimView(text).empty() && text == TrimView(text);
 }
 
 Expected<usize> TryComputeCsgClipDefineCapacity(in StringView entryName, in usize sourceCount){
     if(sourceCount > usize.max - s_CsgClipAddedDefineCount){
         error("GraphicsCook: CSG shader define combo size overflow for entry '{}'", entryName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return sourceCount + s_CsgClipAddedDefineCount;
 }
@@ -104,7 +104,7 @@ b8 ValidateShaderMergedDefineCount(in StringView entryName, in usize count){
 Expected<usize> TryComputeShaderIncludeRootCapacity(in StringView entryName, in usize authoredCount, in usize implicitCount){
     if(authoredCount > usize.max - implicitCount){
         error("GraphicsCook: include root count overflow for entry '{}'", entryName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return authoredCount + implicitCount;
 }
@@ -112,7 +112,7 @@ Expected<usize> TryComputeShaderIncludeRootCapacity(in StringView entryName, in 
 Expected<usize> TryComputePreparedShaderEntryCapacity(in usize entryCount){
     if(entryCount > usize.max / s_MaxPreparedEntriesPerShaderEntry){
         error("GraphicsCook: prepared shader entry reserve count overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return entryCount * s_MaxPreparedEntriesPerShaderEntry;
 }
@@ -120,7 +120,7 @@ Expected<usize> TryComputePreparedShaderEntryCapacity(in usize entryCount){
 Expected<usize> TryComputeImplicitShaderIncludeRootCapacity(in usize rootCount, in usize assetRootCount){
     if(rootCount > usize.max - assetRootCount){
         error("GraphicsCook: implicit shader include root count overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return rootCount + assetRootCount;
 }
@@ -196,10 +196,10 @@ b8 IsAllowedRendererComponentMetadataField(in StringView field){
 
 u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChecksum, in u64 bytecodeChecksum){
     u64 hash = s_Fnv64OffsetBasis;
-    hash = updateFnv64U32(hash, s_ShaderVariantCookKeyVersion);
-    hash = updateFnv64NameHash(hash, virtualPathHash);
-    hash = updateFnv64U64(hash, sourceChecksum);
-    hash = updateFnv64U64(hash, bytecodeChecksum);
+    hash = UpdateFnv64U32(hash, s_ShaderVariantCookKeyVersion);
+    hash = UpdateFnv64NameHash(hash, virtualPathHash);
+    hash = UpdateFnv64U64(hash, sourceChecksum);
+    hash = UpdateFnv64U64(hash, bytecodeChecksum);
     return hash;
 }
 

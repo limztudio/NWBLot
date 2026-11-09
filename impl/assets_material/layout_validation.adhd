@@ -13,7 +13,7 @@ Expected<usize> ComputeMaterialTypedBlockByteSize(in Span<MaterialTypedLayoutBlo
     for(usize b = 0u; b < blocks.size(); ++b){
         const usize blockBytes = cast<usize>(blocks[b].byteSize);
         if(blockBytes > 0xFFFFFFFFFFFFFFFFul - byteSize)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         byteSize += blockBytes;
     }
     return byteSize;
@@ -89,26 +89,26 @@ u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in 
 
     u64 hash = s_Fnv64OffsetBasis;
     for(usize i = 0u; i < s_MaterialTypedLayoutHashHeader.size(); ++i)
-        hash = updateFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
-    hash = updateFnv64U32(hash, cast<u32>(blocks.size()));
-    hash = updateFnv64U32(hash, cast<u32>(fields.size()));
+        hash = UpdateFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
+    hash = UpdateFnv64U32(hash, cast<u32>(blocks.size()));
+    hash = UpdateFnv64U32(hash, cast<u32>(fields.size()));
     for(usize i = 0u; i < blocks.size(); ++i){
         const MaterialTypedLayoutBlock block = blocks[i];
-        hash = updateFnv64NameHash(hash, block.blockName.hash());
-        hash = updateFnv64U32(hash, cast<u32>(block.blockClass));
-        hash = updateFnv64U32(hash, block.fieldBegin);
-        hash = updateFnv64U32(hash, block.fieldCount);
-        hash = updateFnv64U32(hash, block.byteSize);
+        hash = UpdateFnv64NameHash(hash, block.blockName.hash());
+        hash = UpdateFnv64U32(hash, cast<u32>(block.blockClass));
+        hash = UpdateFnv64U32(hash, block.fieldBegin);
+        hash = UpdateFnv64U32(hash, block.fieldCount);
+        hash = UpdateFnv64U32(hash, block.byteSize);
     }
     for(usize i = 0u; i < fields.size(); ++i){
         const MaterialTypedLayoutField field = fields[i];
-        hash = updateFnv64NameHash(hash, field.fieldName.hash());
-        hash = updateFnv64U32(hash, cast<u32>(field.fieldType));
-        hash = updateFnv64U32(hash, field.offset);
-        hash = updateFnv64U32(hash, field.defaultValue.x);
-        hash = updateFnv64U32(hash, field.defaultValue.y);
-        hash = updateFnv64U32(hash, field.defaultValue.z);
-        hash = updateFnv64U32(hash, field.defaultValue.w);
+        hash = UpdateFnv64NameHash(hash, field.fieldName.hash());
+        hash = UpdateFnv64U32(hash, cast<u32>(field.fieldType));
+        hash = UpdateFnv64U32(hash, field.offset);
+        hash = UpdateFnv64U32(hash, field.defaultValue.x);
+        hash = UpdateFnv64U32(hash, field.defaultValue.y);
+        hash = UpdateFnv64U32(hash, field.defaultValue.z);
+        hash = UpdateFnv64U32(hash, field.defaultValue.w);
     }
     return hash;
 }

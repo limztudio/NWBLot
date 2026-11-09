@@ -289,7 +289,7 @@ MatrixSingle BuildSkinningBenchmarkAnimatedJointMatrix(
         * VectorSingle(primarySpeed, secondarySpeed, 0.0f, 0.0f)
         + phase;
     wavePhases = wavePhases + VectorSingle(0.0f, 0.5f, 0.0f, 0.0f);
-    const VectorSingle waves = sin(wavePhases);
+    const VectorSingle waves = Sin(wavePhases);
     const VectorSingle coefficientIndices = VectorSingle(
         cast<f32>((seed >> 16u) % 5u),
         cast<f32>((seed >> 3u) & 3u),
@@ -307,20 +307,20 @@ MatrixSingle BuildSkinningBenchmarkAnimatedJointMatrix(
         0.0f
     );
 
-    const MatrixSingle rotation = matrixRotationRollPitchYawFromVector(rotationAngles);
-    const MatrixSingle matrix = mul(bindJoint, rotation);
-    if(!matrixIsInvertibleAffine(matrix, 0.000001f, 0.000000000001f))
+    const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
+    const MatrixSingle matrix = Mul(bindJoint, rotation);
+    if(!MatrixIsInvertibleAffine(matrix, 0.000001f, 0.000000000001f))
         return bindJoint;
 
     return matrix;
 }
 
 VectorSingle BuildTransparentSceneRotation(in f32 yaw){
-    return quaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
+    return QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
 }
 
 VectorSingle BuildTransparentCsgRotation(in f32 yaw){
-    return quaternionRotationRollPitchYawFromVector(VectorSingle(yaw * 0.32f, yaw, yaw * 0.16f, 0.0f));
+    return QuaternionRotationRollPitchYawFromVector(VectorSingle(yaw * 0.32f, yaw, yaw * 0.16f, 0.0f));
 }
 
 void ComputeTransparentSceneTransform(
@@ -330,8 +330,8 @@ void ComputeTransparentSceneTransform(
     mut VectorSingle outPosition,
     mut VectorSingle outRotation
 ){
-    outPosition = vector3Rotate(basePosition, sceneRotation);
-    outRotation = normalize(quaternionMultiply(sceneRotation, localRotation));
+    outPosition = Vector3Rotate(basePosition, sceneRotation);
+    outRotation = Normalize(QuaternionMultiply(sceneRotation, localRotation));
 }
 
 void ComputeCsgCutterTransforms(
@@ -340,13 +340,13 @@ void ComputeCsgCutterTransforms(
     mut MatrixSingle outWorldToShape,
     mut MatrixSingle outShapeToWorld
 ){
-    const MatrixSingle shapeToWorld = matrixAffineTransformation(
+    const MatrixSingle shapeToWorld = MatrixAffineTransformation(
         VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
         VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
         rotation,
         center
     );
-    outWorldToShape = inverse(shapeToWorld);
+    outWorldToShape = Inverse(shapeToWorld);
     outShapeToWorld = shapeToWorld;
 }
 

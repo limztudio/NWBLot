@@ -78,7 +78,7 @@ b8 DropSourceMeshTangentsStreams(
 Expected<usize> TryComputeTriangleIndexScratchCapacity(in usize maxFaceTriangles){
     if(maxFaceTriangles > usize.max / cast<usize>(s_MeshletTriangleIndexCount)){
         error("Failed to build mesh: mesh face triangulation scratch size overflows");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return maxFaceTriangles * cast<usize>(s_MeshletTriangleIndexCount);
 }

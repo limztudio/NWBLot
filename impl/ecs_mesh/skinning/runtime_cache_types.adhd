@@ -52,16 +52,16 @@ Array<u32, 2u> PackSkinInfluenceJoints(in SkinInfluence4 sourceSkin){
 
 Expected<MeshSkinningRestToSkinnedCopyByteCounts> TryResolveMeshSkinningRestToSkinnedCopyByteCounts(in usize positionCount, in usize normalCount, in usize tangentCount){
     if(positionCount == 0u || normalCount == 0u || tangentCount == 0u)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const usize positionBytes = positionCount * s_SkinRestPositionElementBytes;
     if(positionBytes / s_SkinRestPositionElementBytes != positionCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const usize normalBytes = normalCount * s_SkinRestNormalElementBytes;
     if(normalBytes / s_SkinRestNormalElementBytes != normalCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const usize tangentBytes = tangentCount * s_SkinRestTangentElementBytes;
     if(tangentBytes / s_SkinRestTangentElementBytes != tangentCount)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     MeshSkinningRestToSkinnedCopyByteCounts outCounts;
     outCounts.positionBytes = positionBytes;
     outCounts.normalBytes = normalBytes;
@@ -79,12 +79,12 @@ Expected<SkinnedRuntimeMeshIdentity> TryResolveSkinnedRuntimeMeshIdentity(
     in u32 editRevision
 ){
     if(!runtimeMesh.valid() || instanceEntity != entity)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if((dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != RuntimeMeshDirtyFlag::None)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Name meshKey = DeriveRuntimeResourceName(sourceName, handleValue, editRevision, s_SkinnedDrawSuffix);
     if(meshKey == s_NameNone)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     SkinnedRuntimeMeshIdentity outIdentity;
     outIdentity.meshKey = meshKey;
     outIdentity.version = cast<u64>(editRevision);

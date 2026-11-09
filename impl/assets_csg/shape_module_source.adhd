@@ -28,7 +28,7 @@ const usize s_FixedShapeSourceBytes = s_CsgFixedShapeSourceTemplate.size() + 2u 
 class CsgShapeModuleSource{
     public Expected<String> buildDefaultPath(in Name shaderModule, in StringView safeModuleName){
         if(shaderModule == s_NameNone || safeModuleName.empty())
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
 
         String include = "";
         include.reserve(s_DefaultGeneratedIncludeDirectory.size() + s_CsgGeneratedIncludePathSeparator.size() + safeModuleName.size() + s_CsgSlangIncludeExtension.size());

@@ -28,7 +28,7 @@ Expected<MeshletRefTotalCounts> TrySumRuntimeMeshletRefCounts(in Span<MeshletDes
         counts.attributeRefCount += cast<usize>(MeshletAttributeCount(meshlet));
     }
     if(counts.positionRefCount > cast<usize>(u32.max) || counts.attributeRefCount > cast<usize>(u32.max))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return counts;
 }
 
@@ -47,7 +47,7 @@ Expected<MeshletPositionStreamRef> TryDecodeSourceMeshletPositionRef(
         || cast<usize>(sourceRef.value().position) >= skinCount
     ){
         error("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid", meshletIndex, localPositionIndex);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return sourceRef.value();
 }
@@ -68,7 +68,7 @@ Expected<MeshletAttributeStreamRef> TryDecodeSourceMeshletAttributeRef(
         || !MeshletAttributeRefInRange(sourceRef.value(), normalCount, tangentCount, uv0Count, colorCount)
     ){
         error("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid", meshletIndex, localAttributeIndex);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return sourceRef.value();
 }
@@ -217,28 +217,28 @@ b8 ResolveRuntimeZippedAttributeSkins(
 Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceName, in Span<f32x3u> restPositions){
     if(restPositions.empty()){
         error("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds", sourceName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
     VectorSingle maxBounds(f32.min, f32.min, f32.min, 0.0f);
     for(in f32x3u pos : restPositions){
-        if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z)){
+        if(!IsFinite(pos.x) || !IsFinite(pos.y) || !IsFinite(pos.z)){
             error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         }
         const VectorSingle p(pos);
-        minBounds = min(minBounds, p);
-        maxBounds = max(maxBounds, p);
+        minBounds = Min(minBounds, p);
+        maxBounds = Max(maxBounds, p);
     }
     if(
-        !isFinite(minBounds.xyz)
-        || !isFinite(maxBounds.xyz)
+        !IsFinite(minBounds.xyz)
+        || !IsFinite(maxBounds.xyz)
         || minBounds.x > maxBounds.x
         || minBounds.y > maxBounds.y
         || minBounds.z > maxBounds.z
     ){
         error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     RuntimeMeshLocalBounds bounds;
     bounds.minBounds = f32x3_i32(minBounds, s_RuntimeMeshBoundsValidFlag);

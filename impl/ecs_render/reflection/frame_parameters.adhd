@@ -114,7 +114,7 @@ void PopulateReflectionSnapshotFrameParameters(
         inOutParameters.hardwareEnabled = 0u;
     inOutParameters.opaqueSpecularSlot = opaqueSpecularSlot;
     inOutParameters.glassSpecularSlot = glassSpecularSlot;
-    inOutParameters.maxHardwareRays = min(settings.maxHardwareRaysPerFrame, inOutParameters.queueCapacity);
+    inOutParameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, inOutParameters.queueCapacity);
     inOutParameters.sampleIndex = historySampleIndex;
     inOutParameters.opaqueOutputSlot = currentOpaqueOutputSlot;
     if(spatialEnabled)

@@ -87,13 +87,13 @@ Expected<MaterialParameterValueType> TryParseMaterialParameterBaseTypeText(in St
         case "float":
             return MaterialParameterValueType::f32;
         default:
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
     }
 }
 
 Expected<MaterialParameterType> TryParseMaterialParameterTypeText(in StringView typeText){
     if(typeText.empty())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const Expected<MaterialParameterValueType> valueType = TryParseMaterialParameterBaseTypeText(typeText);
     if(valueType.has_value()){
@@ -116,7 +116,7 @@ Expected<MaterialParameterType> TryParseMaterialParameterTypeText(in StringView 
         }
     }
 
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<MaterialLayoutFieldType> TryParseMaterialBindResourceFieldTypeText(in StringView typeText){
@@ -124,7 +124,7 @@ Expected<MaterialLayoutFieldType> TryParseMaterialBindResourceFieldTypeText(in S
         return MaterialLayoutFieldType::SampledImage2D;
     if(typeText == s_MaterialBindFieldTypeSampler)
         return MaterialLayoutFieldType::Sampler;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<MaterialLayoutFieldType> TryParseMaterialLayoutFieldTypeText(in StringView typeText){
@@ -134,11 +134,11 @@ Expected<MaterialLayoutFieldType> TryParseMaterialLayoutFieldTypeText(in StringV
 
     const Expected<MaterialParameterType> paramType = TryParseMaterialParameterTypeText(typeText);
     if(!paramType.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const MaterialLayoutFieldType fieldType = MaterialLayoutFieldTypeFromParameterType(paramType.value().valueType, paramType.value().componentCount);
     if(!IsValidMaterialLayoutFieldType(fieldType))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     return fieldType;
 }

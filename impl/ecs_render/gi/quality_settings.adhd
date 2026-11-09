@@ -135,7 +135,7 @@ b8 IsValidSurfelGiStorageCounts(in u32 poolCapacity, in u32 cellCount){
 }
 
 u32 ResolveSurfelSpawnDispatchGroup(in u32 dimension, in u32 groupSize){
-    return divideUp(divideUp(dimension, s_SurfelSpawnTile), groupSize);
+    return DivideUp(DivideUp(dimension, s_SurfelSpawnTile), groupSize);
 }
 
 u64 ComputeSurfelBufferByteSize(in u64 elementSize, in u32 count){
@@ -145,8 +145,8 @@ u64 ComputeSurfelBufferByteSize(in u64 elementSize, in u32 count){
 SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 factor){
     assert(factor == cast<u32>(SurfelGiResolveResolution::Half) || factor == cast<u32>(SurfelGiResolveResolution::Quarter));
     SurfelGiResolveSize size;
-    size.width = divideUp(width, factor);
-    size.height = divideUp(height, factor);
+    size.width = DivideUp(width, factor);
+    size.height = DivideUp(height, factor);
     return size;
 }
 
@@ -154,7 +154,7 @@ NwbSurfelConstantsGpu BuildSurfelFrameConstants(in b8 surfelSeeded, in u32 surfe
     // First frame traces every surfel; later frames use round-robin updates.
     u32 updateDivisor = 1u;
     if(surfelSeeded)
-        updateDivisor = max(s_SurfelUpdateDivisor, 1u);
+        updateDivisor = Max(s_SurfelUpdateDivisor, 1u);
 
     NwbSurfelConstantsGpu params;
     params.hashPoolFrameDivisor = f32x4(cast<f32>(surfelHashCellCount), cast<f32>(surfelPoolCapacity), cast<f32>(surfelFrameIndex), cast<f32>(updateDivisor));

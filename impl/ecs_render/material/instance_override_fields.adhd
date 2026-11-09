@@ -52,10 +52,10 @@ u32x4u PackMaterialInstanceBytes(in Span<u8> bytes){
         return u32x4u(0u, 0u, 0u, 0u);
 
     return u32x4u(
-        readPartialU32LittleEndian(bytes, 0u),
-        readPartialU32LittleEndian(bytes, 4u),
-        readPartialU32LittleEndian(bytes, 8u),
-        readPartialU32LittleEndian(bytes, 12u)
+        ReadPartialU32LittleEndian(bytes, 0u),
+        ReadPartialU32LittleEndian(bytes, 4u),
+        ReadPartialU32LittleEndian(bytes, 8u),
+        ReadPartialU32LittleEndian(bytes, 12u)
     );
 }
 
@@ -81,11 +81,11 @@ Expected<usize> TryFindMaterialParameterNameDotIndex(in StringView parameterName
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex >= parameterName.size() || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
         error("MaterialInstanceComponent: parameter '{}' must use block.field form", parameterName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     if(parameterName.find('.', dotIndex + 1u) < parameterName.size()){
         error("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator", parameterName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return dotIndex;
 }
@@ -130,7 +130,7 @@ b8 ValidateMaterialInstanceNumericFieldType(in MaterialLayoutFieldType fieldType
 Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(in StringView parameterName){
     const Expected<usize> dotIndex = TryFindMaterialParameterNameDotIndex(parameterName);
     if(!dotIndex.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
 
     const usize dotPos = dotIndex.value();
     Name resolvedParameterName = s_NameNone;
@@ -150,7 +150,7 @@ Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(in S
     }
     if(!validNames){
         error("MaterialInstanceComponent: parameter '{}' contains an embedded null", parameterName);
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     MaterialInstanceParameterNames result;
     result.parameterName = resolvedParameterName;

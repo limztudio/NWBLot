@@ -48,13 +48,13 @@ b8 IsFiniteFbxMatrix4x4(in MatrixSingle matrix){
 
 Expected<MatrixSingle> TryInvertFbxJointMatrix(in MatrixSingle matrix){
     if(!IsFiniteFbxMatrix4x4(matrix))
-        return makeUnexpected(Failure());
-    const f32 determinant = dot(matrix[0u].xyz, cross(matrix[1u].xyz, matrix[2u].xyz));
-    if(!isFinite(determinant) || !(abs(determinant) > s_InvertibleJointDeterminantEpsilon))
-        return makeUnexpected(Failure());
-    const MatrixSingle inverted = inverse(matrix);
+        return MakeUnexpected(Failure());
+    const f32 determinant = Dot(matrix[0u].xyz, Cross(matrix[1u].xyz, matrix[2u].xyz));
+    if(!IsFinite(determinant) || !(Abs(determinant) > s_InvertibleJointDeterminantEpsilon))
+        return MakeUnexpected(Failure());
+    const MatrixSingle inverted = Inverse(matrix);
     if(!IsFiniteFbxMatrix4x4(inverted))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return inverted;
 }
 
@@ -64,20 +64,20 @@ Expected<MatrixSingle> TryBuildFbxLocalBindPoseMatrix(
     in MatrixSingle parentGlobalBindPose
 ){
     if(!IsFiniteFbxMatrix4x4(globalBindPose))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(!hasParentGlobalBindPose)
         return globalBindPose;
     const Expected<MatrixSingle> parentInverse = TryInvertFbxJointMatrix(parentGlobalBindPose);
     if(!parentInverse.has_value())
-        return makeUnexpected(Failure());
-    const MatrixSingle localBindPose = mul(parentInverse.value(), globalBindPose);
+        return MakeUnexpected(Failure());
+    const MatrixSingle localBindPose = Mul(parentInverse.value(), globalBindPose);
     if(!IsFiniteFbxMatrix4x4(localBindPose))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return localBindPose;
 }
 
 b8 IsFiniteFbxMatrixDoubleRow(in VectorDouble row){
-    return isFinite(row);
+    return IsFinite(row);
 }
 
 b8 FiniteUfbxMatrix(in MatrixDouble matrix){
@@ -121,14 +121,14 @@ MatrixSingle ConvertJointMatrix(in MatrixDouble matrix){
 }
 
 Expected<MatrixSingle> TryConvertFbxInverseBindMatrix(in MatrixDouble inverseBindDouble, in f64 determinant){
-    if(!FiniteUfbxMatrix(inverseBindDouble) || !isFinite(determinant) || abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
+    if(!FiniteUfbxMatrix(inverseBindDouble) || !IsFinite(determinant) || Abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
         error("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const MatrixSingle inverseBindValue = ConvertJointMatrix(inverseBindDouble);
     if(!IsFiniteSkeletonJointMatrix(inverseBindValue)){
         error("Failed to build mesh: skin cluster inverse bind matrix is outside float range");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return inverseBindValue;
 }
@@ -136,21 +136,21 @@ Expected<MatrixSingle> TryConvertFbxInverseBindMatrix(in MatrixDouble inverseBin
 Expected<MatrixSingle> TryConvertFbxBindPoseMatrix(in MatrixDouble bindPoseDouble){
     if(!FiniteUfbxMatrix(bindPoseDouble)){
         error("Failed to build mesh: skin cluster bind pose matrix is not finite");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const MatrixSingle bindPoseValue = ConvertJointMatrix(bindPoseDouble);
     if(!IsFiniteSkeletonJointMatrix(bindPoseValue)){
         error("Failed to build mesh: skin cluster bind pose matrix is outside float range");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     return bindPoseValue;
 }
 
 b8 NearlyEqualFbxJointMatrices(in MatrixSingle lhs, in MatrixSingle rhs){
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
-        const VectorSingle diff = abs(lhs[rowIndex] - rhs[rowIndex]);
+        const VectorSingle diff = Abs(lhs[rowIndex] - rhs[rowIndex]);
         if(
-            !isFinite(diff)
+            !IsFinite(diff)
             || diff.x > s_JointMatrixRowEpsilon
             || diff.y > s_JointMatrixRowEpsilon
             || diff.z > s_JointMatrixRowEpsilon

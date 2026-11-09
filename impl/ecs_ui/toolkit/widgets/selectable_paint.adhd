@@ -20,7 +20,7 @@ Expected<UiSkinRegion> TryResolveSelectableStateRegion(in UiSkin skin, in Name p
         return outRegion;
     if(skin.tryFindRegion(fallback, outRegion))
         return outRegion;
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name fallback, mut SelectableMetrics metrics){
@@ -32,13 +32,13 @@ b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name f
     if(!IsBoundedUiPadding(padding) || !IsValidUiExtent(minimum))
         return false;
     metrics.padding = MaxUiPadding(metrics.padding, padding);
-    metrics.minimum = Point(max(metrics.minimum.x, minimum.x), max(metrics.minimum.y, minimum.y));
+    metrics.minimum = Point(Max(metrics.minimum.x, minimum.x), Max(metrics.minimum.y, minimum.y));
     return true;
 }
 
 Expected<SelectableMetrics> MeasureSelectable(in UiSkin skin, in SelectableStyle style){
     if(!IsBoundedUiPadding(style.padding))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     SelectableMetrics metrics;
     metrics.padding = style.padding;
     if(
@@ -48,7 +48,7 @@ Expected<SelectableMetrics> MeasureSelectable(in UiSkin skin, in SelectableStyle
         || !AccumulateSelectableStateMetrics(skin, style.disabled, style.disabledFallback, metrics)
         || !IsBoundedUiPadding(metrics.padding)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return metrics;
 }
 

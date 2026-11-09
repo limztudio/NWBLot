@@ -62,20 +62,20 @@ VolumeMipZSlabRange ComputeVolumeMipZSlabRange(in u32 z, in u32 sourceDepth, in 
     range.intervalBegin = cast<u64>(z) * cast<u64>(sourceDepth);
     range.intervalEnd = cast<u64>(z + 1u) * cast<u64>(sourceDepth);
     range.first = cast<u32>(range.intervalBegin / cast<u64>(targetDepth));
-    range.end = cast<u32>(divideUp(range.intervalEnd, cast<u64>(targetDepth)));
+    range.end = cast<u32>(DivideUp(range.intervalEnd, cast<u64>(targetDepth)));
     return range;
 }
 
 f32 ComputeVolumeMipZSlabOverlap(in VolumeMipZSlabRange range, in u32 sourceZ, in u32 targetDepth){
     const u64 slabBegin = cast<u64>(sourceZ) * cast<u64>(targetDepth);
     const u64 slabEnd = cast<u64>(sourceZ + 1u) * cast<u64>(targetDepth);
-    return cast<f32>(min(range.intervalEnd, slabEnd) - max(range.intervalBegin, slabBegin));
+    return cast<f32>(Min(range.intervalEnd, slabEnd) - Max(range.intervalBegin, slabBegin));
 }
 
 Expected<u8> TryQuantizeTexConvMipAlpha(in VectorSingle color){
-    if(!isFinite(color)){
+    if(!IsFinite(color)){
         error("tex_conv: mip filtering produced non-finite values.");
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
     const VectorSingle quantized = QuantizeUnorm(color);
     return cast<u8>(quantized.w);
@@ -86,7 +86,7 @@ Expected<usize> TryComputeTexConvPayloadByteCount(in u64 primaryByteCount, in b8
     if(separateAlpha)
         multiplier = cast<usize>(s_SeparateAlphaPayloadMultiplier);
     if(primaryByteCount > cast<u64>(usize.max / multiplier))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return cast<usize>(primaryByteCount) * multiplier;
 }
 
@@ -162,7 +162,7 @@ Expected<TexConvAlphaTransport> TryResolveTexConvAlphaTransport(
     in TextureAlphaModeEnum separateUastcLdr4x4Mode
 ){
     if(!found)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     TexConvAlphaTransport transport;
     transport.mode = opaqueMode;
     transport.constantUnorm8 = opaqueAlphaUnorm8;

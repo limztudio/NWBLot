@@ -116,18 +116,18 @@ class RayTracingDispatchGroups{
 
 
 RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize){
-    const u32 receiverWidth = divideUp(width, receiverFactor);
-    const u32 receiverHeight = divideUp(height, receiverFactor);
+    const u32 receiverWidth = DivideUp(width, receiverFactor);
+    const u32 receiverHeight = DivideUp(height, receiverFactor);
     RayTracingDispatchGroups groups;
     groups.width = receiverWidth;
     groups.height = receiverHeight;
-    groups.x = divideUp(receiverWidth, groupSize);
-    groups.y = divideUp(receiverHeight, groupSize);
+    groups.x = DivideUp(receiverWidth, groupSize);
+    groups.y = DivideUp(receiverHeight, groupSize);
     return groups;
 }
 
 u32 ResolveWrappingRayTracingDispatchGroup(in u32 dimension, in u32 receiverFactor, in u32 groupSize){
-    return divideUp(divideUpWrappingU32(dimension, receiverFactor), groupSize);
+    return DivideUp(DivideUpWrappingU32(dimension, receiverFactor), groupSize);
 }
 
 NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterialData(in u32 surfaceDispatchId, in u32 shadingModelId, in b8 transparent, in b8 refractive, in u32 materialConstantByteOffset, in u32 meshInstanceIndex){
@@ -164,8 +164,8 @@ u32 ResolveRayTracingCsgInstanceMask(in b8 transparent){
 
 void InflateSwShadowSceneBounds(mut VectorSingle inOutBoundsMin, mut VectorSingle inOutBoundsMax){
     const VectorSingle extent = inOutBoundsMax - inOutBoundsMin;
-    const f32 maxExtent = max(extent.x, max(extent.y, extent.z));
-    const f32 padding = max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const f32 maxExtent = Max(extent.x, Max(extent.y, extent.z));
+    const f32 padding = Max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
     const VectorSingle paddingVector(padding, padding, padding, 0.0f);
     inOutBoundsMin = inOutBoundsMin - paddingVector;
     inOutBoundsMax = inOutBoundsMax + paddingVector;

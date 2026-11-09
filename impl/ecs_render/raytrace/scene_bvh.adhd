@@ -80,8 +80,8 @@ SceneBvhNodeCalculation MakeSceneBvhInternalNode(
     in u32 rightChild
 ){
     SceneBvhNodeCalculation node;
-    node.aabbMin = f32x4(min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
-    node.aabbMax = f32x4(max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
+    node.aabbMin = f32x4(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
+    node.aabbMax = f32x4(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
     node.leftChild = leftChild;
     node.rightChild = rightChild;
     node.containsTransparentOccluder = leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder;
@@ -128,8 +128,8 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
     VectorSingle centroidMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
         const VectorSingle centroid(primitiveBounds[cast<usize>(indices[cast<usize>(i)])].centroid);
-        centroidMin = min(centroidMin, centroid);
-        centroidMax = max(centroidMax, centroid);
+        centroidMin = Min(centroidMin, centroid);
+        centroidMax = Max(centroidMax, centroid);
     }
 
     Array<f32x4, s_SceneBvhSahBinCount> binMin;
@@ -164,8 +164,8 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
             const usize binIdx = cast<usize>(b);
-            binMin[binIdx] = f32x4(min(VectorSingle(binMin[binIdx]), VectorSingle(prim.aabbMin)));
-            binMax[binIdx] = f32x4(max(VectorSingle(binMax[binIdx]), VectorSingle(prim.aabbMax)));
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), VectorSingle(prim.aabbMin)));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), VectorSingle(prim.aabbMax)));
             binCost[binIdx] += cast<f32>(instanceLeafCost[cast<usize>(instance)]);
             ++binCount[binIdx];
         }
@@ -176,8 +176,8 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
         u32 accCount = 0u;
         for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
             const usize idx = cast<usize>(b - 1u);
-            accMin = min(accMin, VectorSingle(binMin[idx]));
-            accMax = max(accMax, VectorSingle(binMax[idx]));
+            accMin = Min(accMin, VectorSingle(binMin[idx]));
+            accMax = Max(accMax, VectorSingle(binMax[idx]));
             accCost += binCost[idx];
             accCount += binCount[idx];
             suffixMin[idx] = f32x4(accMin);
@@ -193,8 +193,8 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
         u32 leftCount = 0u;
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
             const usize b = cast<usize>(k - 1u);
-            leftMin = min(leftMin, VectorSingle(binMin[b]));
-            leftMax = max(leftMax, VectorSingle(binMax[b]));
+            leftMin = Min(leftMin, VectorSingle(binMin[b]));
+            leftMax = Max(leftMax, VectorSingle(binMax[b]));
             leftCost += binCost[b];
             leftCount += binCount[b];
 

@@ -27,7 +27,7 @@ b8 IsPointerInputEventType(in InputEventType type){
 Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
     InputEvent outEvent;
     if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     switch(input.phase){
     case PointerPhase::Move:
         outEvent.type = InputEventType::PointerMove;
@@ -67,10 +67,10 @@ Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
 b8 HasValidHitTargetControlProperties(in HitTarget target){
     if(
         (!target.control.empty() && !target.control.valid())
-        || !isFinite(target.scrollStep) || target.scrollStep < 0.0
-        || !isFinite(target.scrollStepX) || target.scrollStepX < 0.0
-        || !isFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
-        || !isFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
+        || !IsFinite(target.scrollStep) || target.scrollStep < 0.0
+        || !IsFinite(target.scrollStepX) || target.scrollStepX < 0.0
+        || !IsFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
+        || !IsFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
         || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
         || (target.horizontalNavigation && !target.navigable)
         || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
@@ -93,12 +93,12 @@ Expected<ControlActionKind> TryTranslateControlNavigationCommand(in InputCommand
     case InputCommand::Left:
     case InputCommand::WordLeft:
         if(!horizontalNavigation)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return ControlActionKind::Left;
     case InputCommand::Right:
     case InputCommand::WordRight:
         if(!horizontalNavigation)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         return ControlActionKind::Right;
     case InputCommand::Up:
         return ControlActionKind::Up;
@@ -115,7 +115,7 @@ Expected<ControlActionKind> TryTranslateControlNavigationCommand(in InputCommand
     case InputCommand::End:
         return ControlActionKind::End;
     default:
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     }
 }
 
@@ -144,13 +144,13 @@ Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<Targe
             end = middle;
     }
     if(begin == lookup.size() || lookup[begin].value != id.value)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     usize targetIndex = cast<usize>(lookup[begin].index);
     if(targetIndex >= targets.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     HitTarget target = targets[targetIndex];
     if(declarationGeneration != 0u && target.declarationGeneration != declarationGeneration)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return targetIndex;
 }
 

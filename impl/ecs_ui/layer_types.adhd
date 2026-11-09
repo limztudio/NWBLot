@@ -25,9 +25,9 @@ enum<u8> UiLayerPresentation{
 // Retains CPU update time until a UI paint frame actually begins.
 class UiFrameDelta{
     public void add(in f32 deltaSeconds){
-        if(!isFinite(deltaSeconds) || deltaSeconds < 0.0f)
+        if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)
             return;
-        this.m_pendingSeconds = min(s_MaxUiFrameDeltaSeconds, this.m_pendingSeconds + cast<f64>(deltaSeconds));
+        this.m_pendingSeconds = Min(s_MaxUiFrameDeltaSeconds, this.m_pendingSeconds + cast<f64>(deltaSeconds));
     }
 
     public f32 consume(){
@@ -53,11 +53,11 @@ class UiLiveRoot{
 
 
 b8 ValidUiMouseCoordinate(in f64 xpos, in f64 ypos){
-    return isFinite(xpos) && isFinite(ypos) && abs(xpos) <= s_MaxUiFrameDeltaSeconds && abs(ypos) <= s_MaxUiFrameDeltaSeconds;
+    return IsFinite(xpos) && IsFinite(ypos) && Abs(xpos) <= s_MaxUiFrameDeltaSeconds && Abs(ypos) <= s_MaxUiFrameDeltaSeconds;
 }
 
 b8 ValidUiMouseScroll(in f64 xoffset, in f64 yoffset){
-    return isFinite(xoffset) && isFinite(yoffset);
+    return IsFinite(xoffset) && IsFinite(yoffset);
 }
 
 usize ResolveUiNativeKeySlot(in i32 key){
@@ -130,7 +130,7 @@ void FinalizeUiNativeKeyState(
 
 void AdvanceUiLayerFrameGeneration(mut u64 inOutFrameGeneration){
     if(inOutFrameGeneration == u64.max)
-        terminateInvariant();
+        TerminateInvariant();
     ++inOutFrameGeneration;
 }
 

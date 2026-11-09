@@ -104,7 +104,7 @@ b8 SameSliderPlacementGeometry(in SliderPlacement lhs, in SliderPlacement rhs){
 }
 
 b8 IsValidSliderRange(in f64 minimum, in f64 maximum){
-    return isFinite(minimum) && isFinite(maximum) && minimum <= maximum;
+    return IsFinite(minimum) && IsFinite(maximum) && minimum <= maximum;
 }
 
 b8 IsValidSliderPlacement(in SliderPlacement placement){
@@ -129,20 +129,20 @@ b8 IsValidSliderGesture(in PointerGesture gesture){
     return gesture.id.valid()
         && gesture.updateSequence != 0u
         && gesture.state <= PointerGestureState::Completed
-        && isFinite(gesture.origin.x)
-        && isFinite(gesture.origin.y)
-        && isFinite(gesture.position.x)
-        && isFinite(gesture.position.y)
+        && IsFinite(gesture.origin.x)
+        && IsFinite(gesture.origin.y)
+        && IsFinite(gesture.position.x)
+        && IsFinite(gesture.position.y)
         && IsPreciseUiRect(gesture.targetRectangle)
         && IsPreciseUiRect(gesture.referenceRectangle);
 }
 
 b8 IsValidSliderOptions(in SliderOptions options){
     return IsValidSliderRange(options.minimum, options.maximum)
-        && isFinite(options.keyStep)
+        && IsFinite(options.keyStep)
         && options.keyStep >= 0.0
         && IsValidLayoutSize(options.width)
-        && isFinite(options.height)
+        && IsFinite(options.height)
         && options.height >= 0.0f;
 }
 
@@ -155,16 +155,16 @@ void ApplySkinPaletteToSliderStyle(in UiSkinPalette palette, mut SliderStyle sty
 b8 IsValidSliderMetrics(in SliderMetrics metrics){
     if(
         !IsValidUiPadding(metrics.padding)
-        || !isFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
-        || !isFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
-        || !isFinite(metrics.trackHeight) || metrics.trackHeight <= 0.0f
+        || !IsFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
+        || !IsFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
+        || !IsFinite(metrics.trackHeight) || metrics.trackHeight <= 0.0f
         || !IsValidUiExtent(metrics.contentSize)
     )
         return false;
     const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
     const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
     const f64 width = padW + cast<f64>(metrics.thumbExtent.x);
-    const f64 height = padH + max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
+    const f64 height = padH + Max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
     return width <= s_UiMaxFloatF64
         && height <= s_UiMaxFloatF64
         && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(width))
@@ -175,12 +175,12 @@ Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle s
     if(
         !IsValidSliderOptions(options)
         || !IsValidUiPadding(style.padding)
-        || !isFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
-        || !isFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
-        || !isFinite(style.trackHeight) || style.trackHeight <= 0.0f
+        || !IsFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
+        || !IsFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
+        || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     SliderMetrics candidate;
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
@@ -188,33 +188,33 @@ Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle s
     const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
     const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
     const f64 width = padW + cast<f64>(style.thumbExtent.x);
-    const f64 intrinsicH = padH + max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
-    const f64 height = max(intrinsicH, cast<f64>(options.height));
-    if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
+    const f64 intrinsicH = padH + Max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
+    const f64 height = Max(intrinsicH, cast<f64>(options.height));
+    if(!IsFinite(width) || width > s_UiMaxFloatF64 || !IsFinite(height) || height > s_UiMaxFloatF64)
+        return MakeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
     if(!IsValidSliderMetrics(candidate))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return candidate;
 }
 
 Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
-    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !IsValidSliderMetrics(metrics) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return makeUnexpected(Failure());
+    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !IsValidSliderMetrics(metrics) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
+        return MakeUnexpected(Failure());
     SliderPlacement candidate;
     candidate.bounds = bounds;
     const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
     if(!clipped.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.clip = clipped.value();
     const VectorDouble insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
     const f64 x = insetRect.x;
     const f64 y = insetRect.y;
     const f64 w = insetRect.z;
     const f64 h = insetRect.w;
-    const f64 thumbW = min(cast<f64>(metrics.thumbExtent.x), max(0.0, w));
-    const f64 thumbH = min(cast<f64>(metrics.thumbExtent.y), max(0.0, h));
-    const f64 trackH = min(cast<f64>(metrics.trackHeight), h);
+    const f64 thumbW = Min(cast<f64>(metrics.thumbExtent.x), Max(0.0, w));
+    const f64 thumbH = Min(cast<f64>(metrics.thumbExtent.y), Max(0.0, h));
+    const f64 trackH = Min(cast<f64>(metrics.trackHeight), h);
     const f64 travelW = w - thumbW;
     const f64 centerStartX = x + thumbW * 0.5;
     const f64 thumbCenterX = x + travelW * normalized;
@@ -225,21 +225,21 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
         thumbX = x + travelW;
     const Expected<Rect> travelBounds = TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents);
     if(!travelBounds.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.travelBounds = travelBounds.value();
     const Expected<Rect> centerTravel = TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents);
     if(!centerTravel.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.centerTravel = centerTravel.value();
     const f64 trackY = y + (h - trackH) * 0.5;
     const f64 thumbY = y + (h - thumbH) * 0.5;
     const Expected<Rect> track = TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents);
     if(!track.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.track = track.value();
     const Expected<Rect> thumb = TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents);
     if(!thumb.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     candidate.thumb = thumb.value();
     candidate.thumbExtent = Point(cast<f32>(thumbW), cast<f32>(thumbH));
     return candidate;

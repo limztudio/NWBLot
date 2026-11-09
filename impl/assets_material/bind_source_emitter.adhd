@@ -209,7 +209,7 @@ class MaterialBindSourceEmitter{
             error("Material bind include '{}': failed to build key for '{}.{}'", includePath, instanceName, fieldName);
             return false;
         }
-        const u64 keyHash = computeFnv64AsciiLowerText(keyText.value().view());
+        const u64 keyHash = ComputeFnv64AsciiLowerText(keyText.value().view());
         if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, inOutSymbols, inOutSource))
             return false;
         if(!RegisterGeneratedMaterialBindSymbol(includePath, defaultSymbol, inOutSymbols))

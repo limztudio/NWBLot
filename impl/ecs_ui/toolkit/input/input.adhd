@@ -304,13 +304,13 @@ Expected<InputEvent> TryQueueRouterInputEvent(
     mut Vector<InputEvent> events
 ){
     if(events.size() == s_InputMaxEvents || cast<u8>(event.type) > cast<u8>(InputEventType::CommandUp))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<InputEvent> pointer = TryResolveRouterPointerEvent(event, pointerBindings);
     if(!pointer.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<InputEvent> candidate = TryResolveRouterSourceEvent(bindings, pointer.value(), boundSources);
     if(!candidate.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     events.push_back(candidate.value());
     return candidate.value();
 }
@@ -324,7 +324,7 @@ Expected<InputEvent> TryQueueRouterPointerInput(
 ){
     const Expected<InputEvent> event = TryMakePointerInputEvent(input);
     if(!event.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return TryQueueRouterInputEvent(bindings, event.value(), pointerBindings, boundSources, events);
 }
 

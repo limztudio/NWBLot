@@ -117,7 +117,7 @@ b8 CallableArgumentChecker::check(
                 }
             }
         }
-        if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply || calledMemberName == "isFinite")){
+        if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply || calledMemberName == "IsFinite")){
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
             if(SymbolTable::IsSimdStorageType(actualArgType) || SymbolTable::IsUnalignedVectorType(actualArgType)){
                 m_checker.reportError(errors, arg->span, "SIMD math intrinsics require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");

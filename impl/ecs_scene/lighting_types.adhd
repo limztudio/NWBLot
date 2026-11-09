@@ -47,7 +47,7 @@ class SceneLight{
 
 
 b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
-    return isFinite(innerConeCos) && isFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
+    return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
 }
 
 SceneLight MakeDefaultSceneLight(in VectorSingle direction){

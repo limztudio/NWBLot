@@ -51,7 +51,7 @@ u64 PositionSkinKey(in u32 position, in u32 skin){
 }
 
 f32 CleanFloat(in f32 value){
-    if(abs(value) < s_CleanFloatEpsilon)
+    if(Abs(value) < s_CleanFloatEpsilon)
         return 0.0f;
     return value;
 }
@@ -98,7 +98,7 @@ b8 HasSourceMeshStreamValueCapacity(in usize count){
 }
 
 b8 HasUsableSourceTriangleArea(in f64 areaLengthSquared, in f64 minimumAreaLengthSquared){
-    return isFinite(areaLengthSquared) && !(areaLengthSquared <= minimumAreaLengthSquared);
+    return IsFinite(areaLengthSquared) && !(areaLengthSquared <= minimumAreaLengthSquared);
 }
 
 SourceTangentMode ResolveGeneratedSourceTangentMode(in b8 usedDefaultUvs, in u32 degenerateUvTriangleCount, in u32 fallbackTangentVertexCount){
@@ -125,8 +125,8 @@ VectorSingle ResolveImportedFbxTangent(
 ){
     f32 sign = 1.0f;
     if(hasBitangent){
-        const VectorSingle tangentSpaceBitangent = cross(normal.xyz, tangent.xyz);
-        if(dot(tangentSpaceBitangent.xyz, bitangent.xyz) < 0.0f)
+        const VectorSingle tangentSpaceBitangent = Cross(normal.xyz, tangent.xyz);
+        if(Dot(tangentSpaceBitangent.xyz, bitangent.xyz) < 0.0f)
             sign = -1.0f;
     }
     return VectorSingle(tangent, sign);

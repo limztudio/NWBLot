@@ -70,7 +70,7 @@ b8 TryBeginArrangeLayoutTreeNode(
     if(row)
         mainExtent = inoutBox.content.width;
     const f64 mainSize = cast<f64>(mainExtent);
-    outAvailable = max(0.0, (mainSize - consumed) - spacing);
+    outAvailable = Max(0.0, (mainSize - consumed) - spacing);
     outWeight = weight;
     f32 startCoord = inoutBox.content.y;
     if(row)
@@ -113,7 +113,7 @@ Expected<Rect> TryArrangeLayoutTreeChild(
         y = cast<f32>(inoutCursor);
     const Rect rectangle(x, y, width, height);
     if(!IsValidUiRect(rectangle))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f64 gap = cast<f64>(parentGap);
     if(row)
         inoutCursor += cast<f64>(width) + gap;

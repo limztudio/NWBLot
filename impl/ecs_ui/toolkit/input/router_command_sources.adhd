@@ -20,7 +20,7 @@ Expected<InputEvent> TryResolveRouterSourceEvent(
         return resolved;
     if(physical){
         if(!IsValidInputKeyCode(event.key))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(event.type == InputEventType::KeyDown)
             resolved.type = InputEventType::CommandDown;
         else
@@ -28,7 +28,7 @@ Expected<InputEvent> TryResolveRouterSourceEvent(
         resolved.source = InputSource(0u, cast<u64>(event.key) + 1u);
     }
     else if(!event.source.valid() || event.command > InputCommand::ContextMenu)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     usize heldIndex = boundSources.size();
     for(usize index = 0u; index < boundSources.size(); ++index){
         if(boundSources[index].source == resolved.source){
@@ -52,7 +52,7 @@ Expected<InputEvent> TryResolveRouterSourceEvent(
     }
     else if(resolved.type == InputEventType::CommandDown){
         if(boundSources.size() == s_InputMaxSources)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(physical){
             const i32 modifiers = BuildInputEventModifierMask(event);
             const InputCommandIntent intent = ResolveInputKeyBinding(

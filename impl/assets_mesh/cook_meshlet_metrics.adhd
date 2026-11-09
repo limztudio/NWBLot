@@ -56,10 +56,10 @@ MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshl
         const MeshletBounds bounds = meshletBounds[meshletIndex];
         const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
         const u32 vertexCount = MeshletVertexCount(meshlet);
-        metrics.minPrimitiveCount = min(metrics.minPrimitiveCount, primitiveCount);
-        metrics.maxPrimitiveCount = max(metrics.maxPrimitiveCount, primitiveCount);
-        metrics.minVertexCount = min(metrics.minVertexCount, vertexCount);
-        metrics.maxVertexCount = max(metrics.maxVertexCount, vertexCount);
+        metrics.minPrimitiveCount = Min(metrics.minPrimitiveCount, primitiveCount);
+        metrics.maxPrimitiveCount = Max(metrics.maxPrimitiveCount, primitiveCount);
+        metrics.minVertexCount = Min(metrics.minVertexCount, vertexCount);
+        metrics.maxVertexCount = Max(metrics.maxVertexCount, vertexCount);
         metrics.primitiveCountSum += cast<u64>(primitiveCount);
         metrics.vertexCountSum += cast<u64>(vertexCount);
         metrics.positionCountSum += cast<u64>(MeshletPositionCount(meshlet));
@@ -73,7 +73,7 @@ MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshl
         const VectorSingle coneCutoff = VectorSingle(cast<f32>(MeshletConePackedCutoff(bounds))) * (1.0f / s_MeshletUnorm8Max);
         ++metrics.coneEnabledCount;
         radiusAndCutoffSums = radiusAndCutoffSums + VectorDouble(cast<f64>(bounds.sphere.w), cast<f64>(coneCutoff.x), 0.0, 0.0);
-        worstConeCutoff = min(worstConeCutoff, coneCutoff);
+        worstConeCutoff = Min(worstConeCutoff, coneCutoff);
     }
     metrics.worstConeCutoff = worstConeCutoff.x;
     metrics.radiusSum = radiusAndCutoffSums.x;

@@ -44,11 +44,11 @@ class TooltipOptions{
 }
 
 b8 IsValidTooltipOptions(in TooltipOptions options){
-    return isFinite(options.delaySeconds)
+    return IsFinite(options.delaySeconds)
         && options.delaySeconds >= 0.0f
-        && isFinite(options.maximumWidth)
+        && IsFinite(options.maximumWidth)
         && options.maximumWidth > 0.0f
-        && isFinite(options.gap)
+        && IsFinite(options.gap)
         && options.gap >= 0.0f
         && options.side <= PopupPlacementSide::Center;
 }
@@ -77,8 +77,8 @@ Expected<b8> TryEvaluateTooltipStateUpdate(
     mut b8 inOutVisible,
     mut f64 inOutElapsed
 ){
-    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !popup.empty()) || !isFinite(deltaSeconds) || deltaSeconds < 0.0f || !IsValidTooltipOptions(options))
-        return makeUnexpected(Failure());
+    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !popup.empty()) || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !IsValidTooltipOptions(options))
+        return MakeUnexpected(Failure());
     const b8 sameBinding = inOutAnchor == anchor
         && inOutDeclarationGeneration == declarationGeneration
         && inOutPopup == popup
@@ -88,7 +88,7 @@ Expected<b8> TryEvaluateTooltipStateUpdate(
     const b8 activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && inOutHovered && sameBinding && sameOptions)
-        elapsed = min(inOutElapsed + cast<f64>(deltaSeconds), cast<f64>(options.delaySeconds));
+        elapsed = Min(inOutElapsed + cast<f64>(deltaSeconds), cast<f64>(options.delaySeconds));
     const b8 visible = activeHover && elapsed >= cast<f64>(options.delaySeconds);
     b8 changed = false;
     if(!sameBinding || !sameOptions || inOutHovered != activeHover || inOutElapsed != elapsed || inOutVisible != visible){
@@ -117,9 +117,9 @@ PopupOptions BuildTooltipPopupOptions(
 ){
     PopupOptions options;
     options.anchor = anchorRect;
-    const f32 paddedWidth = max(measured.x + padding.left + padding.right, background.minimumWidth);
-    const f32 paddedHeight = max(measured.y + padding.top + padding.bottom, background.minimumHeight);
-    options.size = Point(min(paddedWidth, tooltipOptions.maximumWidth), paddedHeight);
+    const f32 paddedWidth = Max(measured.x + padding.left + padding.right, background.minimumWidth);
+    const f32 paddedHeight = Max(measured.y + padding.top + padding.bottom, background.minimumHeight);
+    options.size = Point(Min(paddedWidth, tooltipOptions.maximumWidth), paddedHeight);
     options.gap = tooltipOptions.gap;
     options.side = tooltipOptions.side;
     return options;

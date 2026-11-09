@@ -24,13 +24,13 @@ f32 ComputeEditScalarFraction(in StringView text, in usize begin, in usize end, 
 }
 
 Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in u32 lineIndex, in Point point){
-    if(stops.empty() || cast<usize>(lineIndex) >= lines.size() || !isFinite(point.x) || !isFinite(point.y))
-        return makeUnexpected(Failure());
+    if(stops.empty() || cast<usize>(lineIndex) >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
+        return MakeUnexpected(Failure());
     const EditCaretLine line = lines[lineIndex];
     if(cast<usize>(line.firstStop) > stops.size() || cast<usize>(line.stopCount) > stops.size() - cast<usize>(line.firstStop))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     if(line.stopCount == 0u && (line.firstStop == 0u || cast<usize>(line.firstStop) >= stops.size()))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     usize first = cast<usize>(line.firstStop);
     usize end = first + cast<usize>(line.stopCount);
     if(line.stopCount == 0u){
@@ -38,16 +38,16 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
         end = cast<usize>(line.firstStop) + 1u;
     }
     f32 minimumX = stops[first].x;
-    if(!isFinite(minimumX) || minimumX < 0.0f)
-        return makeUnexpected(Failure());
+    if(!IsFinite(minimumX) || minimumX < 0.0f)
+        return MakeUnexpected(Failure());
     f32 maximumX = minimumX;
     for(usize index = first + 1u; index < end; ++index){
-        if(!isFinite(stops[index].x) || stops[index].x < 0.0f)
-            return makeUnexpected(Failure());
-        minimumX = min(minimumX, stops[index].x);
-        maximumX = max(maximumX, stops[index].x);
+        if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
+            return MakeUnexpected(Failure());
+        minimumX = Min(minimumX, stops[index].x);
+        maximumX = Max(maximumX, stops[index].x);
     }
-    const f32 queryX = clamp(point.x, minimumX, maximumX);
+    const f32 queryX = Clamp(point.x, minimumX, maximumX);
     f64 nearestY = 0.0;
     f32 nearestX = 0.0f;
     b8 haveBest = false;
@@ -55,15 +55,15 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
     for(usize index = first; index < end; ++index){
         const EditBoxCaretStop stop = stops[index];
         if(cast<usize>(stop.lineIndex) >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         const EditCaretLine stopLine = lines[stop.lineIndex];
-        if(!isFinite(stopLine.top) || !isFinite(stopLine.height) || stopLine.height <= 0.0f || !isFinite(stopLine.top + stopLine.height))
-            return makeUnexpected(Failure());
+        if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(stopLine.top + stopLine.height))
+            return MakeUnexpected(Failure());
         const f64 lineCenter = cast<f64>(stopLine.top) + (cast<f64>(stopLine.height) * 0.5);
         f64 distanceY = 0.0;
         if(line.stopCount == 0u)
-            distanceY = abs(cast<f64>(point.y) - lineCenter);
-        const f32 distanceX = abs(queryX - stop.x);
+            distanceY = Abs(cast<f64>(point.y) - lineCenter);
+        const f32 distanceX = Abs(queryX - stop.x);
         if(!haveBest || distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
             nearestY = distanceY;
             nearestX = distanceX;
@@ -72,22 +72,22 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
         }
     }
     if(!haveBest)
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return result;
 }
 
 b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut u32 outLineIndex, mut usize outCommittedByte){
     outLineIndex = 0u;
     outCommittedByte = 0u;
-    if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !isFinite(localPoint.x) || !isFinite(localPoint.y))
+    if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
         return false;
     u32 lineIndex = cast<u32>(lines.size() - 1u);
     for(u32 index = 0u; cast<usize>(index) < lines.size(); ++index){
         const EditCaretLine line = lines[index];
-        if(!isFinite(line.top) || !isFinite(line.height) || line.height <= 0.0f)
+        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
             return false;
         const f32 bottom = line.top + line.height;
-        if(!isFinite(bottom))
+        if(!IsFinite(bottom))
             return false;
         if(localPoint.y < bottom){
             lineIndex = index;
@@ -107,7 +107,7 @@ Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditB
     u32 lineIndex = 0u;
     usize committedByte = 0u;
     if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, committedByte))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return committedByte;
 }
 
@@ -115,7 +115,7 @@ Expected<usize> TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Spa
     u32 lineIndex = 0u;
     usize byte = 0u;
     if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, byte))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const EditCaretLine line = lines[lineIndex];
     if(line.stopCount < s_UiEditMinInterpolatedStops)
         return byte;
@@ -124,7 +124,7 @@ Expected<usize> TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Spa
     usize selected = first;
     for(usize index = first + 1u; index < end; ++index){
         if(stops[index].lineIndex != lineIndex || stops[index].x < stops[index - 1u].x)
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         if(localPoint.x < stops[index].x)
             break;
         selected = index;
@@ -139,7 +139,7 @@ Expected<EditBoxCaretStop> TryFindEditCaretStopByCommittedByte(in Span<EditBoxCa
         if(stops[i].committedByte == committedByte)
             return stops[i];
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 Expected<usize> ResolveEditCaretPageTarget(
@@ -153,7 +153,7 @@ Expected<usize> ResolveEditCaretPageTarget(
 ){
     const Expected<EditBoxCaretStop> current = TryFindEditCaretStopByCommittedByte(stops, activeCaret);
     if(lines.empty() || !current.has_value() || cast<usize>(current.value().lineIndex) >= lines.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const f64 center = cast<f64>(caret.y) + (cast<f64>(caret.height) * s_RectCenterFractionF64);
     const f64 pageStep = cast<f64>(viewportHeight);
     f64 target = center - pageStep;
@@ -163,17 +163,17 @@ Expected<usize> ResolveEditCaretPageTarget(
     const EditCaretLine last = lines[lines.size() - 1u];
     const f64 minimum = cast<f64>(first.top) + (cast<f64>(first.height) * s_RectCenterFractionF64);
     const f64 maximum = cast<f64>(last.top) + (cast<f64>(last.height) * s_RectCenterFractionF64);
-    if(!isFinite(target) || !isFinite(minimum) || !isFinite(maximum) || minimum > maximum)
-        return makeUnexpected(Failure());
-    const Point point(preferredX, cast<f32>(clamp(target, minimum, maximum)));
-    if(!isFinite(point.y))
-        return makeUnexpected(Failure());
+    if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
+        return MakeUnexpected(Failure());
+    const Point point(preferredX, cast<f32>(Clamp(target, minimum, maximum)));
+    if(!IsFinite(point.y))
+        return MakeUnexpected(Failure());
     const Expected<usize> result = HitEditCaretGeometry(lines, stops, point);
     if(!result.has_value())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     const Expected<EditBoxCaretStop> resolved = TryFindEditCaretStopByCommittedByte(stops, result.value());
     if(!resolved.has_value() || cast<usize>(resolved.value().lineIndex) >= lines.size())
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     // A page that cannot reach another row preserves the active caret, including a short document boundary.
     if(resolved.value().lineIndex == current.value().lineIndex)
         return activeCaret;

@@ -199,10 +199,10 @@ Expected<InputEvent> TryResolveRouterPointerEvent(
 ){
     if(!IsPointerInputEventType(event.type))
         return event;
-    if(!event.source.valid() || !isFinite(event.position.x) || !isFinite(event.position.y))
-        return makeUnexpected(Failure());
-    if(event.type == InputEventType::PointerWheel && (!isFinite(event.scrollX) || !isFinite(event.scrollY)))
-        return makeUnexpected(Failure());
+    if(!event.source.valid() || !IsFinite(event.position.x) || !IsFinite(event.position.y))
+        return MakeUnexpected(Failure());
+    if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
+        return MakeUnexpected(Failure());
     InputEvent resolved = event;
     const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
     const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
@@ -224,7 +224,7 @@ Expected<InputEvent> TryResolveRouterPointerEvent(
     if(press){
         if(heldIndex == pointerBindings.size()){
             if(pointerBindings.size() == s_InputMaxSources)
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             pointerBindings.push_back(PointerBinding(event.source, intent, resolved.hoverCapable));
         }
         else

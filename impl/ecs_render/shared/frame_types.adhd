@@ -20,14 +20,14 @@ const Name s_FrameGraphNameEcsRenderAvboitTargets = "ecs_render/avboit_targets";
 // Hashes the immutable upload payload, including edits and light order.
 u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
     const u32 lightCount = cast<u32>(lights.size());
-    usize seed = hashValue(lightCount);
-    hashCombineF32x4(VectorSingle(shading.cameraPositionLightCount), seed);
+    usize seed = HashValue(lightCount);
+    HashCombineF32x4(VectorSingle(shading.cameraPositionLightCount), seed);
     for(usize i = 0u; i < lights.size(); ++i){
-        hashCombineF32x4(VectorSingle(lights[i].position), seed);
-        hashCombineF32x4(VectorSingle(lights[i].direction), seed);
-        hashCombineF32x4(VectorSingle(lights[i].colorIntensity), seed);
-        hashCombineF32x4(VectorSingle(lights[i].params), seed);
-        hashCombineF32x4(VectorSingle(lights[i].params2), seed);
+        HashCombineF32x4(VectorSingle(lights[i].position), seed);
+        HashCombineF32x4(VectorSingle(lights[i].direction), seed);
+        HashCombineF32x4(VectorSingle(lights[i].colorIntensity), seed);
+        HashCombineF32x4(VectorSingle(lights[i].params), seed);
+        HashCombineF32x4(VectorSingle(lights[i].params2), seed);
     }
     return cast<u64>(seed);
 }
@@ -104,8 +104,8 @@ TransparentDrawPushConstants ResolveTransparentDrawPushConstants(
 }
 
 f32 SceneLightRadiantImportance(in VectorSingle colorIntensity){
-    const f32 luminance = dot(colorIntensity, VectorSingle(0.2126f, 0.7152f, 0.0722f, 0.0f));
-    const f32 intensity = max(colorIntensity.w, 0.0f);
+    const f32 luminance = Dot(colorIntensity, VectorSingle(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const f32 intensity = Max(colorIntensity.w, 0.0f);
     return luminance * intensity;
 }
 
@@ -160,7 +160,7 @@ RendererTaskTimingFeedbackCollectionAction ResolveRendererTaskTimingFeedbackColl
 }
 
 b8 IsValidRendererTaskTimingSampleDuration(in f64 durationSeconds){
-    return isFinite(durationSeconds) && durationSeconds > 0.0 && durationSeconds < f64.max;
+    return IsFinite(durationSeconds) && durationSeconds > 0.0 && durationSeconds < f64.max;
 }
 
 b8 ContainsRendererTaskTimingFeedbackScope(in Span<Name> scopes, in Name scopeName){

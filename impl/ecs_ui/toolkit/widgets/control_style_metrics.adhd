@@ -56,7 +56,7 @@ class ControlStyleMetrics{
 
     public Expected<f32> checkboxExtent(in UiSkin skin, in WidgetStyle style)const{
         if(!skin.hasRegion(style.checkbox))
-            return makeUnexpected(Failure());
+            return MakeUnexpected(Failure());
         Array<Name, 4> names;
         names[0u] = style.checkbox;
         names[1u] = style.checkboxHover;
@@ -66,7 +66,7 @@ class ControlStyleMetrics{
         for(in Name name : names){
             const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.checkbox);
             if(!found.has_value())
-                return makeUnexpected(Failure());
+                return MakeUnexpected(Failure());
             checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, found.value());
         }
         return checkboxExtent;
@@ -117,7 +117,7 @@ class ControlStyleMetrics{
             const Expected<UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
             if(!skinRegion.has_value())
                 return false;
-            minimumSize = Point(max(minimumSize.x, skinRegion.value().minimumWidth), max(minimumSize.y, skinRegion.value().minimumHeight));
+            minimumSize = Point(Max(minimumSize.x, skinRegion.value().minimumWidth), Max(minimumSize.y, skinRegion.value().minimumHeight));
         }
         const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
         if(!arrow.has_value())
@@ -140,7 +140,7 @@ class ControlStyleMetrics{
         const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(skinRegion, referenceDensity);
         if(!minimum.has_value())
             return false;
-        inOutIndicatorExtent = max(inOutIndicatorExtent, max(minimum.value().x, minimum.value().y));
+        inOutIndicatorExtent = Max(inOutIndicatorExtent, Max(minimum.value().x, minimum.value().y));
         return true;
     }
 
@@ -156,15 +156,15 @@ class ControlStyleMetrics{
         const Expected<UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
         const Expected<UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
         const f32 referenceDensity = skin.referenceDensity();
-        if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !isFinite(referenceDensity) || referenceDensity <= 0.0f)
+        if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !IsFinite(referenceDensity) || referenceDensity <= 0.0f)
             return false;
         const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
         const Expected<Point> checkedMinimum = TryResolveSkinRegionMinimumSize(checked.value(), referenceDensity);
         if(!normalMinimum.has_value() || !checkedMinimum.has_value())
             return false;
         f32 indicatorExtent = inOutStyle.indicatorExtent;
-        indicatorExtent = max(indicatorExtent, max(normalMinimum.value().x, normalMinimum.value().y));
-        indicatorExtent = max(indicatorExtent, max(checkedMinimum.value().x, checkedMinimum.value().y));
+        indicatorExtent = Max(indicatorExtent, Max(normalMinimum.value().x, normalMinimum.value().y));
+        indicatorExtent = Max(indicatorExtent, Max(checkedMinimum.value().x, checkedMinimum.value().y));
         if(
             !this.accumulateRadioIndicator(skin, inOutStyle.hover, referenceDensity, indicatorExtent)
             || !this.accumulateRadioIndicator(skin, inOutStyle.pressed, referenceDensity, indicatorExtent)
@@ -191,7 +191,7 @@ class ControlStyleMetrics{
         const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(thumb, referenceDensity);
         if(!minimum.has_value())
             return false;
-        inOutThumbExtent = Point(max(inOutThumbExtent.x, minimum.value().x), max(inOutThumbExtent.y, minimum.value().y));
+        inOutThumbExtent = Point(Max(inOutThumbExtent.x, minimum.value().x), Max(inOutThumbExtent.y, minimum.value().y));
         return true;
     }
 
@@ -202,7 +202,7 @@ class ControlStyleMetrics{
         mut SliderMetrics outMetrics
     )const{
         const f32 referenceDensity = skin.referenceDensity();
-        if(!isFinite(referenceDensity) || referenceDensity <= 0.0f)
+        if(!IsFinite(referenceDensity) || referenceDensity <= 0.0f)
             return false;
         const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
         const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
@@ -212,8 +212,8 @@ class ControlStyleMetrics{
         const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
         if(!trackMinimum.has_value() || !normalMinimum.has_value())
             return false;
-        inOutStyle.trackHeight = max(inOutStyle.trackHeight, trackMinimum.value().y);
-        Point thumbExtent = Point(max(inOutStyle.thumbExtent.x, normalMinimum.value().x), max(inOutStyle.thumbExtent.y, normalMinimum.value().y));
+        inOutStyle.trackHeight = Max(inOutStyle.trackHeight, trackMinimum.value().y);
+        Point thumbExtent = Point(Max(inOutStyle.thumbExtent.x, normalMinimum.value().x), Max(inOutStyle.thumbExtent.y, normalMinimum.value().y));
         if(
             !this.accumulateSliderThumb(skin, inOutStyle.hover, referenceDensity, thumbExtent)
             || !this.accumulateSliderThumb(skin, inOutStyle.pressed, referenceDensity, thumbExtent)
@@ -240,7 +240,7 @@ class ControlStyleMetrics{
         mut ProgressStyle inOutStyle,
         mut ProgressMetrics outMetrics
     )const{
-        if(!isFinite(fraction))
+        if(!IsFinite(fraction))
             return false;
         const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
         const Expected<UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);

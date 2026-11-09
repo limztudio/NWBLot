@@ -189,15 +189,15 @@ b8 ResolveCsgTraceContextBufferCapacity(
     in u64 previousCapacity,
     mut u64 outCapacity
 ){
-    const u64 maximumCapacity = min(maxStorageBufferRange, cast<u64>(u32.max));
+    const u64 maximumCapacity = Min(maxStorageBufferRange, cast<u64>(u32.max));
     if(!heapInitialized || byteCount == 0u || cast<u64>(byteCount) > maximumCapacity){
         error("RendererSystem: current CSG ray context exceeds storage capacity");
         return false;
     }
     u64 capacity = cast<u64>(byteCount);
     if(hasExistingBuffer){
-        const u64 growth = min(previousCapacity / 2u, maximumCapacity - previousCapacity);
-        capacity = max(capacity, previousCapacity + growth);
+        const u64 growth = Min(previousCapacity / 2u, maximumCapacity - previousCapacity);
+        capacity = Max(capacity, previousCapacity + growth);
     }
     outCapacity = capacity;
     return true;

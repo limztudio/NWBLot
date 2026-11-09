@@ -55,8 +55,8 @@ b8 TryApplyTextAreaScrollControlAction(
 
 Expected<Point> TryResolveTextAreaScrollStep(in f32 fontSize, in f32 lineHeight, in f32 wheelLines){
     const Point step(fontSize * wheelLines, lineHeight * wheelLines);
-    if(!isFinite(step.x) || !isFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
-        return makeUnexpected(Failure());
+    if(!IsFinite(step.x) || !IsFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
+        return MakeUnexpected(Failure());
     return step;
 }
 

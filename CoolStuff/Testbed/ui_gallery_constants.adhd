@@ -32,8 +32,8 @@ Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferre
     const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;
     const f32 availableX = (display.logicalWidth - s_SelectorWidth) - s_GalleryMargin;
     const f32 availableY = (display.logicalHeight - height) - s_GalleryMargin;
-    const f32 x = max(s_GalleryMargin, availableX);
-    const f32 y = max(s_GalleryMargin, min(preferredTop, availableY));
+    const f32 x = Max(s_GalleryMargin, availableX);
+    const f32 y = Max(s_GalleryMargin, Min(preferredTop, availableY));
     return Rect(x, y, s_SelectorWidth, height);
 }
 
@@ -45,7 +45,7 @@ u64 ResolveImmutableListSourceKey(in u64 index, in usize labelCount){
 
 Expected<u64> TryResolveImmutableListSourceIndex(in u64 keyValue, in usize labelCount){
     if(keyValue == 0u || keyValue > cast<u64>(labelCount))
-        return makeUnexpected(Failure());
+        return MakeUnexpected(Failure());
     return keyValue - 1u;
 }
 
@@ -58,7 +58,7 @@ Expected<u64> TryFindFilteredListSourceIndex(in Span<u64> indices, in u64 count,
         if(ResolveImmutableListSourceKey(indices[cast<usize>(candidate)], labelCount) == keyValue)
             return candidate;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 StringView ResolvePopupGalleryCaption(in u32 choice){
@@ -133,7 +133,7 @@ f32 ResolveSkinGalleryPreferredTop(in f32 captionHeight){
 }
 
 f32 ResolveSkinGalleryOriginX(in f32 logicalWidth){
-    return max(s_GalleryMargin, (logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+    return Max(s_GalleryMargin, (logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
 }
 
 f32 ResolveSkinGalleryCenteredTextY(in f32 originY, in f32 boxOffsetY, in f32 boxHeight, in f32 textHeight){

@@ -108,7 +108,7 @@ Expected<usize> FindRouterCommandSourceIndex(in Span<CommandSource> commandSourc
         if(commandSources[index].source == source)
             return index;
     }
-    return makeUnexpected(Failure());
+    return MakeUnexpected(Failure());
 }
 
 b8 CanRouterEditCommand(

@@ -4,6 +4,9 @@
 
 #include <impl/ecs_ui/toolkit/widgets/list_coordinator.h>
 #include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/list_layout_preparer.h>
 #include <impl/ecs_ui/toolkit/widgets/list_input.h>
 
@@ -201,6 +204,212 @@ b8 Builder::listMatches(const ListFrame& frame)const{
         && frame.source->rowCount() == frame.rowCount
         && listStateMatches(frame)
     ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ListLayoutPreparer::ListRow> ListLayoutPreparer::prepareListRow(const ListFrame& frame, const u64 index){
+    ListRow row(m_builder.m_arena);
+    if(!m_builder.listMatches(frame) || index >= frame.rowCount)
+        return MakeUnexpected(Failure{});
+    const u64 key = frame.source->key(index);
+    if(key == 0u || !m_builder.listStateMatches(frame))
+        return MakeUnexpected(Failure{});
+    const auto resolved = frame.source->indexOf(key);
+    if(!resolved || *resolved != index || !m_builder.listStateMatches(frame))
+        return MakeUnexpected(Failure{});
+    const b8 enabled = frame.options.enabled && frame.source->enabled(index);
+    if(!m_builder.listStateMatches(frame))
+        return MakeUnexpected(Failure{});
+    const ShapeRequest request{ frame.source->text(index), StringView(reinterpret_cast<const char*>(frame.measureKey.language.data())), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
+    if(!m_builder.listStateMatches(frame))
+        return MakeUnexpected(Failure{});
+    // The source owns a temporary view; shaping must copy it before any further source callback.
+    auto layout = m_builder.m_text.layout(request);
+    if(!layout || !m_builder.listMatches(frame))
+        return MakeUnexpected(Failure{});
+    const auto bounds = m_builder.m_text.measure(*layout, m_builder.m_paint.displayMetrics());
+    if(!bounds)
+        return MakeUnexpected(Failure{});
+    row.index = index;
+    row.key = key;
+    row.enabled = enabled;
+    row.textBounds = *bounds;
+    row.text = Move(*layout);
+    if(!m_builder.listMatches(frame))
+        return MakeUnexpected(Failure{});
+    return row;
+}
+
+Expected<ScrollPlacement> ListLayoutPreparer::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip){
+    auto& rows = frame.rows;
+    ListState& state = *frame.state;
+    ScrollState scroll;
+    if(!m_builder.listMatches(frame) || !scroll.setOffset(frame.scrollOffset))
+        return MakeUnexpected(Failure{});
+    const b8 revealCursor = frame.revealCursor && frame.cursorKey != 0u;
+    u64 cursorIndex = 0u;
+    if(revealCursor){
+        const auto resolved = frame.source->indexOf(frame.cursorKey);
+        if(!resolved || *resolved >= frame.rowCount || !m_builder.listStateMatches(frame))
+            return MakeUnexpected(Failure{});
+        cursorIndex = *resolved;
+        if(frame.source->key(cursorIndex) != frame.cursorKey || !m_builder.listStateMatches(frame) || !frame.source->enabled(cursorIndex) || !m_builder.listMatches(frame))
+            return MakeUnexpected(Failure{});
+    }
+    for(;;){
+        auto candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+        if(!candidate)
+            return MakeUnexpected(Failure{});
+        if(revealCursor){
+            const f64 start = static_cast<f64>(cursorIndex) * static_cast<f64>(frame.rowHeight);
+            const f64 end = start + static_cast<f64>(frame.rowHeight);
+            if(!IsFinite(start) || !IsFinite(end) || end <= start || !scroll.ensureVisible(start, end, candidate->viewport.height))
+                return MakeUnexpected(Failure{});
+        }
+        if(revealCursor)
+            candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+        if(!candidate || candidate->endRow - candidate->firstRow > s_ListMaxPreparedRows)
+            return MakeUnexpected(Failure{});
+        f32 height = frame.rowHeight;
+        for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
+            const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
+            if(found != rows.end() && found->index == index)
+                continue;
+            // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
+            if(rows.size() >= s_ListMaxPreparedRows)
+                return MakeUnexpected(Failure{});
+            auto row = prepareListRow(frame, index);
+            if(!row)
+                return MakeUnexpected(Failure{});
+            height = ComputeListRowPaddedHeight(row->textBounds.height, frame.style.row.padding, height);
+            rows.insert(found, Move(*row));
+        }
+        if(!IsFinite(height) || height <= 0.0f || !m_builder.listMatches(frame))
+            return MakeUnexpected(Failure{});
+        if(height == frame.rowHeight){
+            frame.scrollOffset = candidate->offset;
+            // Another declaration can share this state with a different sizing context.
+            if(state.m_measureKey == frame.measureKey)
+                state.m_rowHeight = Max(state.m_rowHeight, frame.rowHeight);
+            return *candidate;
+        }
+        // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
+        const f64 offset = ComputeListExpandedScrollOffset(
+            candidate->contentClip.y,
+            candidate->viewport.y,
+            candidate->offset,
+            candidate->firstRow,
+            frame.rowHeight,
+            height
+        );
+        if(!scroll.setOffset(offset))
+            return MakeUnexpected(Failure{});
+        frame.rowHeight = height;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ListCoordinator::paintList(const Item& item, const LayoutBox& box){
+    if(item.list >= m_builder.m_scope->m_lists.size())
+        return false;
+    ListFrame& frame = m_builder.m_scope->m_lists[item.list];
+    if(!m_builder.listMatches(frame))
+        return false;
+    const Rect clip = m_builder.visibleClip(box.clip);
+    const auto measuredPlacement = ListLayoutPreparer(m_builder).measureListPlacement(frame, box, clip);
+    if(!measuredPlacement)
+        return false;
+    const ScrollPlacement& placement = *measuredPlacement;
+    if(!frame.state->m_scroll.setOffset(frame.scrollOffset))
+        return false;
+    frame.state->m_scrollRowHeight = frame.rowHeight;
+    frame.state->m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && frame.state->cursorKey() == frame.cursorKey)
+        frame.state->m_ensureCursor = false;
+    frame.state->m_placement = placement;
+    const UiSkinRegion* background = m_builder.region(frame.style.background, frame.style.backgroundFallback);
+    if(!background)
+        return false;
+    m_builder.m_paint.pushClip(clip);
+    const b8 painted = m_builder.m_paint.drawRegion(background->name, box.rectangle);
+    const b8 popped = m_builder.m_paint.popClip();
+    if(!painted || !popped)
+        return false;
+    const HitTarget host = HitTargetFactory().makeListHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        frame.token,
+        frame.rowHeight,
+        frame.options.wheelRows,
+        placement,
+        frame.rowCount,
+        frame.focusOnCommit
+    );
+    if(!m_builder.m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
+        return false;
+    // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
+    frame.rows.clear();
+    if(placement.scrollbarVisible){
+        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);
+        if(!thumbId)
+            return false;
+        const b8 hover = m_builder.m_context.input().hover() == *thumbId;
+        if(!ControlVisualPainter().paintListScrollbarVisual(m_builder.m_paint, *m_builder.m_skin, frame.style, placement, clip, hover))
+            return false;
+        if(item.enabled){
+            const HitTarget trackTarget = HitTargetFactory().makeListScrollbarTrackHitTarget(placement, clip, frame.token);
+            const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
+            if(!trackId || !m_builder.m_context.addPartTarget(item.state, *trackId, trackTarget))
+                return false;
+            const HitTarget thumbTarget = HitTargetFactory().makeListScrollbarThumbHitTarget(placement, clip, frame.token);
+            if(!m_builder.m_context.addPartTarget(item.state, *thumbId, thumbTarget))
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 ListCoordinator::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
+    const auto& rows = frame.rows;
+    const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
+    if(!rowsId)
+        return false;
+    const b8 focused = m_builder.m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_builder.m_context.input().focus() == frame.commandFocus);
+    auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
+    for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
+        if(found == rows.end() || found->index != index || !m_builder.listStateMatches(frame))
+            return false;
+        const ListRow& row = *found;
+        const u64 key = row.key;
+        const b8 enabled = item.enabled && row.enabled;
+        const auto part = TryMakeWidgetPartId(*rowsId, key);
+        if(!part)
+            return false;
+        const auto rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
+        if(!rectangle)
+            return false;
+        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_builder.m_context.input().hover() == *part, focused && frame.state->cursorKey() == key };
+        if(!PaintSelectable(m_builder.m_paint, m_builder.m_text, *m_builder.m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
+            return false;
+        if(item.enabled){
+            const HitTarget target = HitTargetFactory().makeListRowHitTarget(*rectangle, placement.contentClip, enabled, frame.token, key);
+            if(!m_builder.m_context.addPartTarget(item.state, *part, target))
+                return false;
+        }
+    }
+    return m_builder.listMatches(frame);
+}
+
+b8 Builder::paintList(const Item& item, const LayoutBox& box){
+    return ListCoordinator(*this).paintList(item, box);
 }
 
 

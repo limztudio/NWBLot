@@ -128,6 +128,12 @@ void FinalizeUiNativeKeyState(
     outConsumed = owner == cast<u8>(UiInputOwner::Custom);
 }
 
+void AdvanceUiLayerFrameGeneration(mut u64 inOutFrameGeneration){
+    if(inOutFrameGeneration == u64.max)
+        terminateInvariant();
+    ++inOutFrameGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

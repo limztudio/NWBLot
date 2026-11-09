@@ -31,9 +31,8 @@ A separator does not receive focus or activation. Its way picks a flat or tall s
 `BuilderScopeFrame` owns transient layout, declarations, borrowed control loans and the active window/popup state. `Builder` retains shared text, paint, skin, styles and edit services. Ended popup child frames retain their layout and control loans at stable arena-owned addresses until the outermost popup ends.
 
 - `window_style.adhd` owns initialization, dragging, resizing, viewport constraints, candidate validation, skin-derived metrics, and chrome/content geometry.
-- `builder_window.cpp` owns window declaration and balanced content arrangement.
-- `window_paint.cpp` owns chrome painting and matching hit targets.
-- `widget_builder_controls.cpp` owns divider declaration; `controls_paint.cpp` paints arranged content.
+- `builder_window.cpp` owns window declaration, balanced content arrangement, chrome painting and matching hit targets.
+- `widget_builder_controls.cpp` and `builder.cpp` own divider declaration and arranged content painting.
 
 ## Keyed lists and scrolling
 
@@ -61,7 +60,7 @@ Wheel scrolling preserves selection and uses the accepted step/range. Scrollbar 
 
 Explicit `state.select()`, `open()` and `close()` renew the field input lifetime even for unchanged values. Each opening/cancellation renews preview input lifetime. Reordering preserves valid committed and preview keys. Removing/disabling a key clears it. A new source instance clears selection/scroll and closes. Recreated or reparented declarations close the old popup while preserving the committed key. Accepted field/popup/list tokens fence old queued clicks, wheel, navigation, thumb drags and held keys. Focus returns only when an eligible field and its matching closed frame are accepted. Native focus loss prevents restoration.
 
-`comboStyle()` resolves `combo.normal`, `combo.hover`, `combo.open`, `combo.focused`, `combo.disabled` and `combo.arrow`. The default and replacement skins define the field states as semantic aliases of existing artwork, and popup/rows/scrollbar use their existing skin contracts. Field padding/minimum sizes use the maximum of all states. `combo.cpp`, `builder_combo.cpp`, `combo_input.cpp` and `combo_paint.cpp` separate lifetime, keyed behavior, declaration, input and painting. Popup rows share the existing list painter and scrollbar geometry. Dataset size does not determine allocations. Combos and searchable combos also declare inside nested user popups. Each automatic popup binds to its exact parent opening. Variable-height rows remain separate work.
+`comboStyle()` resolves `combo.normal`, `combo.hover`, `combo.open`, `combo.focused`, `combo.disabled` and `combo.arrow`. The default and replacement skins define the field states as semantic aliases of existing artwork, and popup/rows/scrollbar use their existing skin contracts. Field padding/minimum sizes use the maximum of all states. `combo_style.adhd`, `combo_state.h`, `builder_combo.cpp` and `combo_coordinator.cpp` separate lifetime, keyed behavior, declaration, input and painting. Popup rows share the existing list painter and scrollbar geometry. Dataset size does not determine allocations. Combos and searchable combos also declare inside nested user popups. Each automatic popup binds to its exact parent opening. Variable-height rows remain separate work.
 
 ## Searchable combos
 
@@ -73,7 +72,7 @@ The committed selection is reconciled against the full source, so a query that h
 
 Typing, selection, undo/redo, Home/End and clipboard use the shared edit box. Up/Down/PageUp/PageDown navigate the results while the query keeps focus. Enter commits its preview, and Space remains text input. Tab moves from the query to the results, and Shift-Tab moves back. Tab from the results or Shift-Tab from the query closes the popup and advances in the parent scope. Exiting cancels active preedit and preserves the committed value. Home/End and Space use normal list behavior while the results have focus. Only committed query bytes filter the view. Result navigation delegated from the query editor is suspended while composing, and editor-origin Enter requires a noncomposing submission. Escape first cancels preedit. A subsequent Escape closes the popup without committing. Outside-click and native focus loss preserve the committed value. All query and result input refers to the last accepted geometry and copied popup/control lifetimes.
 
-`builder_search_combo.cpp` owns editor declaration and popup query geometry. `search_combo.cpp` owns the query/view cache and transactional loan checks. Ordinary and searchable combos share field painting, popup placement, list rows, scrollbars and final GPU composition. Their appearances use the existing `combo.*`, `edit.*`, `popup.*` and `list.*` skin regions, so default and replacement texture/atlas skins use the same control behavior.
+`builder_search_combo.cpp` and `search_combo_coordinator.cpp` own editor declaration, popup query geometry, the query/view cache and transactional loan checks. Ordinary and searchable combos share field painting, popup placement, list rows, scrollbars and final GPU composition. Their appearances use the existing `combo.*`, `edit.*`, `popup.*` and `list.*` skin regions, so default and replacement texture/atlas skins use the same control behavior.
 
 ## Tooltip and context-menu attachments
 

@@ -235,6 +235,19 @@ void ResolveNineSliceCoordinates(
     );
 }
 
+b8 CanAdmitPaintImageBindingCounts(
+    in usize existingGlyphCount,
+    in usize existingSdfCount,
+    in usize existingTextureCount,
+    in usize addedGlyphs,
+    in usize addedSdf,
+    in usize addedTextures
+){
+    const usize existingCount = existingGlyphCount + existingSdfCount + existingTextureCount;
+    return existingCount <= s_PaintMaxImages
+        && addedGlyphs + addedSdf + addedTextures <= s_PaintMaxImages - existingCount;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

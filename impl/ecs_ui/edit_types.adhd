@@ -116,5 +116,33 @@ usize ResolveUiEditSelectionAnchor(
     return eventPosition;
 }
 
+b8 MatchesUiEditNativeSurroundingState(
+    in u64 modelRevision,
+    in u64 surroundingModelRevision,
+    in u64 externalRevision,
+    in u64 geometryExternalRevision,
+    in u64 selectionGeneration,
+    in u64 surroundingSelectionGeneration,
+    in usize anchor,
+    in usize surroundingAnchor,
+    in usize caret,
+    in usize surroundingCaret,
+    in b8 sessionMatches
+){
+    return modelRevision == surroundingModelRevision
+        && externalRevision == geometryExternalRevision
+        && selectionGeneration == surroundingSelectionGeneration
+        && anchor == surroundingAnchor
+        && caret == surroundingCaret
+        && sessionMatches;
+}
+
+u64 AdvanceUiEditFocusGeneration(mut u64 inOutFocusGeneration){
+    if(inOutFocusGeneration == u64.max)
+        terminateInvariant();
+    ++inOutFocusGeneration;
+    return inOutFocusGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

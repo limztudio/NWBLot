@@ -5,6 +5,8 @@
 #include "builder.h"
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -293,6 +295,344 @@ void Builder::loadButtonMetrics(Point& size, Insets& padding)const noexcept{
     if(!m_skin)
         return;
     ControlStyleMetrics().buttonMetrics(*m_skin, m_style, size, padding);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
+    const auto id = TryMakeWidgetId(m_context.scopeId(), stableKey);
+    if(!id)
+        return nullptr;
+    for(auto& item : m_scope->m_items){
+        if(item.state.id == *id && item.state.kind != WidgetKind::Separator)
+            return &item;
+    }
+    return nullptr;
+}
+
+b8 Builder::validateDeferredSources()const{
+    // Every loan remains live through all later source callbacks, including those in an ended child scope.
+    for(const auto& frame : m_scope->m_radioGroups){
+        if(!radioGroupMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_lists){
+        if(!listMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_combos){
+        if(!comboMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_contextMenus){
+        if(!contextMenuMatches(frame))
+            return false;
+    }
+    return true;
+}
+
+b8 Builder::validateDeferredStates()const noexcept{
+    // No source callbacks run after these model checks until every scope's loans have been released.
+    for(const auto& frame : m_scope->m_sliders){
+        if(!sliderMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_textAreas){
+        if(!textAreaMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_integerEdits){
+        if(!numericEditFrameMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_floatEdits){
+        if(!numericEditFrameMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_radioGroups){
+        if(!radioGroupStateMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_lists){
+        if(!listStateMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_combos){
+        if(!comboStateMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_contextMenus){
+        if(!contextMenuStateMatches(frame))
+            return false;
+    }
+    for(const auto& frame : m_scope->m_tooltips){
+        if(!frame.state || frame.state->revision() != frame.revision)
+            return false;
+    }
+    return true;
+}
+
+void Builder::releaseDeferredLoans()noexcept{
+    // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
+    m_scope->m_radioGroups.clear();
+    m_scope->m_sliders.clear();
+    const auto clearEditLoanFrames = [this](auto& frames)noexcept{
+        for(auto& frame : frames){
+            frame.model = nullptr;
+            frame.state = nullptr;
+            if(frame.item < m_scope->m_items.size())
+                m_scope->m_items[frame.item].editState = nullptr;
+        }
+    };
+    clearEditLoanFrames(m_scope->m_textAreas);
+    clearEditLoanFrames(m_scope->m_integerEdits);
+    clearEditLoanFrames(m_scope->m_floatEdits);
+    for(auto& frame : m_scope->m_lists){
+        frame.source = nullptr;
+        frame.state = nullptr;
+    }
+    for(auto& frame : m_scope->m_combos){
+        frame.source = nullptr;
+        frame.results = nullptr;
+        frame.searchSource = nullptr;
+        frame.search = nullptr;
+        frame.state = nullptr;
+        if(frame.editor != s_LayoutNoParent)
+            m_scope->m_comboEditors[frame.editor].editState = nullptr;
+    }
+    for(auto& frame : m_scope->m_contextMenus){
+        frame.source = nullptr;
+        frame.state = nullptr;
+    }
+    for(auto& frame : m_scope->m_tooltips)
+        frame.state = nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::image(const AStringView stableKey, const Name& regionName, const ImageOptions& options){
+    if(itemDeclarationBlocked() || !m_skin){
+        m_context.fail();
+        return false;
+    }
+    if(!synchronizePopup())
+        return true;
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
+    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
+    ImageFrame frame;
+    frame.options = options;
+    if(!widget || !ControlStyleMetrics().imageMetrics(*m_skin, regionName, options, frame.metrics, frame.region)){
+        m_context.fail();
+        return false;
+    }
+    return publishImageFrame(**widget, Move(frame));
+}
+
+b8 Builder::image(const AStringView stableKey, const SharedImageSource& source, const ImageOptions& options){
+    if(itemDeclarationBlocked() || !m_skin){
+        m_context.fail();
+        return false;
+    }
+    if(!synchronizePopup())
+        return true;
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
+    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
+    ImageFrame frame;
+    frame.source = source;
+    frame.options = options;
+    if(!widget || !frame.source){
+        m_context.fail();
+        return false;
+    }
+    const auto metrics = MeasureImage(frame.options, *frame.source);
+    if(!metrics){
+        m_context.fail();
+        return false;
+    }
+    frame.metrics = *metrics;
+    return publishImageFrame(**widget, Move(frame));
+}
+
+b8 Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
+    Item item(m_arena);
+    item.state = widget;
+    item.image = static_cast<u32>(m_scope->m_images.size());
+    LayoutNodeDesc description;
+    description.width = frame.options.width;
+    description.height = frame.options.height;
+    description.intrinsicSize = frame.metrics.contentSize;
+    if(!addItemNode(description, item))
+        return false;
+    m_scope->m_images.push_back(Move(frame));
+    m_scope->m_items.push_back(Move(item));
+    return true;
+}
+
+b8 Builder::paintImage(const Item& item, const LayoutBox& box){
+    if(item.image >= m_scope->m_images.size())
+        return false;
+    const ImageFrame& frame = m_scope->m_images[item.image];
+    const auto placement = PlaceImage(box.rectangle, visibleClip(box.clip));
+    if(!placement)
+        return false;
+    m_paint.pushClip(placement->clip);
+    const b8 painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, { 0.0f, 0.0f, 1.0f, 1.0f }, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
+    return finishClipPaint(item, placement->bounds, placement->clip, painted);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::progress(const AStringView stableKey, const f64 fraction, const ProgressOptions& options){
+    if(itemDeclarationBlocked() || !m_skin){
+        m_context.fail();
+        return false;
+    }
+    if(!synchronizePopup())
+        return true;
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
+    const auto widget = m_context.declare(stableKey, WidgetKind::Progress);
+    if(!widget)
+        return false;
+    ProgressFrame frame;
+    frame.fraction = fraction;
+    frame.options = options;
+    frame.style = m_progressStyle;
+    if(!ControlStyleMetrics().progressMetrics(*m_skin, fraction, options, frame.style, frame.metrics)){
+        m_context.fail();
+        return false;
+    }
+    Item item(m_arena);
+    item.state = **widget;
+    item.progress = static_cast<u32>(m_scope->m_progress.size());
+    LayoutNodeDesc description;
+    description.width = frame.options.width;
+    description.intrinsicSize = frame.metrics.contentSize;
+    if(!addItemNode(description, item))
+        return false;
+    m_scope->m_progress.push_back(Move(frame));
+    m_scope->m_items.push_back(Move(item));
+    return true;
+}
+
+b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
+    if(item.progress >= m_scope->m_progress.size())
+        return false;
+    const ProgressFrame& frame = m_scope->m_progress[item.progress];
+    const auto placement = PlaceProgress(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
+    if(!placement)
+        return false;
+    const b8 painted = ControlVisualPainter().paintProgressBarRegions(m_paint, frame.style, *placement);
+    return finishClipPaint(item, placement->bounds, placement->clip, painted);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::paintPanel(){
+    const LayoutBox* panel = m_scope->m_layout.box(0u);
+    if(!panel)
+        return false;
+    m_paint.pushClip(visibleClip(panel->clip));
+    const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
+    const b8 popped = m_paint.popClip();
+    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(panel->rectangle, visibleClip(panel->clip));
+    if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
+        return false;
+    return paintItems();
+}
+
+b8 Builder::paintItems(){
+    for(const auto& item : m_scope->m_items){
+        const LayoutBox* box = m_scope->m_layout.box(item.node);
+        if(!popupAncestorsVisible() || !box || !paintItem(item, *box))
+            return false;
+    }
+    return true;
+}
+
+b8 Builder::paintItem(const Item& item, const LayoutBox& box){
+    if(item.state.kind == WidgetKind::ComboBox || item.state.kind == WidgetKind::SearchComboBox)
+        return paintCombo(item, box);
+    if(item.state.kind == WidgetKind::TextArea)
+        return paintTextArea(item, box);
+    if(item.state.kind == WidgetKind::EditBox)
+        return paintEditBox(item, box);
+    if(item.state.kind == WidgetKind::Selectable)
+        return paintSelectable(item, box);
+    if(item.state.kind == WidgetKind::VirtualList)
+        return paintList(item, box);
+    if(item.state.kind == WidgetKind::RadioGroup)
+        return paintRadioGroup(item, box);
+    if(item.state.kind == WidgetKind::Slider)
+        return paintSlider(item, box);
+    if(item.state.kind == WidgetKind::Progress)
+        return paintProgress(item, box);
+    if(item.state.kind == WidgetKind::Image)
+        return paintImage(item, box);
+    const InputRouter& input = m_context.input();
+    const b8 hover = input.hover() == item.state.id;
+    const b8 pressed = input.pressed(item.state.id);
+    const b8 focused = input.focus() == item.state.id;
+    const b8 interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
+    const Rect clip = visibleClip(box.clip);
+    if(!ControlVisualPainter().paintBasicControlItemVisual(
+        m_paint,
+        m_text,
+        *m_skin,
+        item.state.kind,
+        item.style,
+        item.text,
+        item.textBounds,
+        item.padding,
+        item.checkboxExtent,
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.checked,
+        hover,
+        pressed,
+        focused,
+        interactive
+    ))
+        return false;
+    if(item.state.kind == WidgetKind::Separator)
+        return true;
+    if(interactive || item.annotated){
+        // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
+        const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
+        return m_context.addTarget(item.state, target);
+    }
+    return true;
+}
+
+b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
+    const InputRouter& input = m_context.input();
+    const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
+    const Rect clip = visibleClip(box.clip);
+    if(!PaintSelectable(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+        return false;
+    const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
+    return m_context.addTarget(item.state, target);
+}
+
+b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted){
+    const b8 popped = m_paint.popClip();
+    if(!painted || !popped)
+        return false;
+    if(!item.annotated)
+        return true;
+    const HitTarget target = HitTargetFactory().makeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
+    return m_context.addTarget(item.state, target);
 }
 
 

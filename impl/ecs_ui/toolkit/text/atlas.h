@@ -8,8 +8,10 @@
 #include "font.h"
 #include "glyph_page.h"
 
+#include <global/atomic_identity.h>
 #include <global/containers.h>
 #include <global/hash_utils.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +37,12 @@ struct AtlasPage{
 
 
 public:
-    AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font);
+    AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font)
+        : face(font)
+        , pixels(arena)
+    {
+        pixels.resize(static_cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
+    }
 };
 
 
@@ -45,11 +52,7 @@ public:
 // Only unused padded rectangles are written; page publication copies after a batch of mutations.
 class GlyphAtlas final : NoCopy{
 private:
-    struct Placement{
-        u32 x = 0u;
-        u32 y = 0u;
-        u32 rowHeight = 0u;
-    };
+    using Placement = GlyphAtlasPlacement;
 
     struct GlyphKey{
         SharedFontFace::pointer face = nullptr;
@@ -58,7 +61,13 @@ private:
     };
 
     struct GlyphKeyHasher{
-        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept;
+        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept{
+            usize seed = 0u;
+            ::HashCombine(seed, key.face);
+            ::HashCombine(seed, key.glyphId);
+            ::HashCombine(seed, key.pixelSize);
+            return seed;
+        }
     };
 
     struct GlyphKeyEqualTo{
@@ -72,23 +81,129 @@ private:
     using GlyphIndex = HashMap<GlyphKey, usize, Core::Alloc::GlobalArena, GlyphKeyHasher, GlyphKeyEqualTo>;
 
 
-public:
-    explicit GlyphAtlas(Core::Alloc::GlobalArena& arena);
+private:
+    [[nodiscard]] static u64 NextAtlasIdentity()noexcept{
+        static Atomic<u64> s_NextAtlasIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextAtlasIdentity);
+    }
 
 
 public:
-    void reset()noexcept;
-    [[nodiscard]] b8 prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
-    [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept;
-    [[nodiscard]] Expected<SharedGlyphPage> page(u32 index);
+    explicit GlyphAtlas(Core::Alloc::GlobalArena& arena)
+        : m_arena(arena)
+        , m_glyphs(arena)
+        , m_index(arena)
+        , m_pages(arena)
+        , m_bitmap(arena)
+        , m_identity(NextAtlasIdentity())
+    {
+        m_glyphs.reserve(s_GlyphAtlasMaxGlyphs);
+        m_pages.reserve(s_GlyphAtlasMaxPages);
+    }
+
+
+public:
+    void reset()noexcept{
+        m_index.clear();
+        m_glyphs.clear();
+        m_pages.clear();
+        m_identity = NextAtlasIdentity();
+    }
+
+    [[nodiscard]] b8 prepare(const SharedFontFace& face, const u32 glyphId, const u32 pixelSize){
+        if(!face || !face->valid() || pixelSize == 0u)
+            return false;
+        if(find(face, glyphId, pixelSize))
+            return true;
+        if(m_glyphs.size() >= s_GlyphAtlasMaxGlyphs || !face->rasterize(glyphId, pixelSize, m_bitmap))
+            return false;
+        AtlasGlyph record;
+        record.face = face;
+        record.glyphId = glyphId;
+        record.pixelSize = pixelSize;
+        record.bearingX = m_bitmap.bearingX;
+        record.bearingY = m_bitmap.bearingY;
+        if(m_bitmap.width == 0u || m_bitmap.height == 0u){
+            appendGlyph(Move(record));
+            return true;
+        }
+        if(m_bitmap.width > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter || m_bitmap.height > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter)
+            return false;
+        const u32 paddedWidth = m_bitmap.width + s_GlyphAtlasGlyphGutter;
+        const u32 paddedHeight = m_bitmap.height + s_GlyphAtlasGlyphGutter;
+        Placement placement;
+        usize pageIndex = 0u;
+        while(pageIndex < m_pages.size()){
+            const AtlasPage& page = m_pages[pageIndex];
+            if(page.face.get() == face.get()){
+                const auto placed = TryPlace(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
+                if(placed){
+                    placement = *placed;
+                    break;
+                }
+            }
+            ++pageIndex;
+        }
+        if(pageIndex == m_pages.size()){
+            if(m_pages.size() >= s_GlyphAtlasMaxPages)
+                return false;
+            m_pages.emplace_back(m_arena, face);
+            placement = { 0u, 0u, paddedHeight };
+        }
+        AtlasPage& page = m_pages[pageIndex];
+        record.pageIndex = static_cast<u32>(pageIndex);
+        record.pixels = { static_cast<f32>(placement.x + 1u), static_cast<f32>(placement.y + 1u), static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
+        CopyGlyphBitmapToAtlasPage(placement.x, placement.y, m_bitmap.width, m_bitmap.height, m_bitmap.pixels, page.pixels);
+        page.cursorX = placement.x + paddedWidth;
+        page.cursorY = placement.y;
+        page.rowHeight = placement.rowHeight;
+        page.dirty = true;
+        appendGlyph(Move(record));
+        return true;
+    }
+
+    [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, const u32 glyphId, const u32 pixelSize)const noexcept{
+        const auto found = m_index.find(GlyphKey{ face.get(), glyphId, pixelSize });
+        return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
+    }
+
+    [[nodiscard]] Expected<SharedGlyphPage> page(const u32 index){
+        if(index >= m_pages.size())
+            return MakeUnexpected(Failure{});
+        AtlasPage& page = m_pages[index];
+        if(page.dirty){
+            if(page.generation == Limit<u64>::s_Max)
+                return MakeUnexpected(Failure{});
+            GlyphPage::Pixels copy(m_arena);
+            copy.assign(page.pixels.begin(), page.pixels.end());
+            const GlyphPageBinding binding{ page.face->identity(), page.face->generation(), m_identity, page.generation + 1u, index, s_GlyphAtlasPageExtent, s_GlyphAtlasPageExtent };
+            auto published = CreateGlyphPage(m_arena, binding, Move(copy));
+            if(!published)
+                return MakeUnexpected(Failure{});
+            page.published = Move(*published);
+            ++page.generation;
+            page.dirty = false;
+        }
+        return page.published;
+    }
+
     [[nodiscard]] usize pageCount()const noexcept{ return m_pages.size(); }
 
     [[nodiscard]] usize glyphCount()const noexcept{ return m_glyphs.size(); }
 
 
 private:
-    [[nodiscard]] static Expected<Placement> TryPlace(u32 cursorX, u32 cursorY, u32 rowHeight, u32 width, u32 height)noexcept;
-    void appendGlyph(AtlasGlyph&& record);
+    [[nodiscard]] static Expected<Placement> TryPlace(const u32 cursorX, const u32 cursorY, const u32 rowHeight, const u32 width, const u32 height)noexcept{
+        return TryPlaceGlyphAtlasBitmap(cursorX, cursorY, rowHeight, width, height);
+    }
+
+    void appendGlyph(AtlasGlyph&& record){
+        const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };
+        const usize index = m_glyphs.size();
+        m_glyphs.push_back(Move(record));
+        if(!m_index.emplace(key, index).second)
+            TerminateInvariant();
+    }
 
 
 private:
@@ -108,4 +223,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

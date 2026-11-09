@@ -234,6 +234,31 @@ void CopyGlyphBitmapToAtlasPage(
     }
 }
 
+class GlyphAtlasPlacement{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 rowHeight = 0u;
+}
+
+Expected<GlyphAtlasPlacement> TryPlaceGlyphAtlasBitmap(
+    in u32 cursorX,
+    in u32 cursorY,
+    in u32 rowHeight,
+    in u32 width,
+    in u32 height
+){
+    GlyphAtlasPlacement placement(cursorX, cursorY, rowHeight);
+    if(placement.x + width > s_GlyphAtlasPageExtent){
+        placement.x = 0u;
+        placement.y += placement.rowHeight;
+        placement.rowHeight = 0u;
+    }
+    if(placement.y + height > s_GlyphAtlasPageExtent)
+        return makeUnexpected(Failure());
+    placement.rowHeight = max(placement.rowHeight, height);
+    return placement;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

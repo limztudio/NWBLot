@@ -182,6 +182,43 @@ void AssignGpuPaintMaterialPushConstants(
     }
 }
 
+b8 ShouldTrimGpuImageCache(
+    in usize glyphCount,
+    in usize sdfCount,
+    in usize textureCount,
+    in usize missingCount
+){
+    return glyphCount + sdfCount + textureCount + missingCount > s_PaintMaxImages;
+}
+
+b8 ShouldEvictGpuImageCacheBeforeInsert(
+    in usize glyphCount,
+    in usize sdfCount,
+    in usize textureCount
+){
+    return glyphCount + sdfCount + textureCount == s_PaintMaxImages;
+}
+
+b8 IsValidGpuPresentationAttachments(
+    in usize colorAttachmentCount,
+    in b8 colorTextureMatches,
+    in b8 hasDepthAttachment,
+    in b8 hasShadingRateAttachment,
+    in u32 backBufferWidth,
+    in u32 targetWidth,
+    in u32 backBufferHeight,
+    in u32 targetHeight,
+    in u32 backBufferSampleCount
+){
+    return colorAttachmentCount == 1u
+        && colorTextureMatches
+        && !hasDepthAttachment
+        && !hasShadingRateAttachment
+        && backBufferWidth == targetWidth
+        && backBufferHeight == targetHeight
+        && backBufferSampleCount == 1u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

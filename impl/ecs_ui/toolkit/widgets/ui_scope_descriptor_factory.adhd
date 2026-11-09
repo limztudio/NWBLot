@@ -151,5 +151,38 @@ b8 MatchesContextMenuFrameStateValues(
         && anchorDeclaration == expectedAnchorDeclaration;
 }
 
+b8 IsComboActionEligibleToOpen(in ControlActionKind kind){
+    return kind == ControlActionKind::Submit || kind == ControlActionKind::Up || kind == ControlActionKind::Down;
+}
+
+b8 ShouldIgnoreComboEditorAction(
+    in b8 fromEditor,
+    in b8 compositionActive,
+    in ControlActionKind kind,
+    in b8 editorSubmitted
+){
+    return fromEditor && (compositionActive || (kind == ControlActionKind::Submit && !editorSubmitted));
+}
+
+u8 SelectNextSliderInputStream(
+    in b8 hasControl,
+    in u64 controlSequence,
+    in b8 hasTrack,
+    in u64 trackSequence,
+    in b8 hasThumb,
+    in u64 thumbSequence
+){
+    if(hasControl && (!hasTrack || controlSequence < trackSequence) && (!hasThumb || controlSequence < thumbSequence))
+        return 0u;
+    if(hasTrack && (!hasThumb || trackSequence < thumbSequence))
+        return 1u;
+    return 2u;
+}
+
+f32 ComputeListRowPaddedHeight(in f32 textHeight, in Insets padding, in f32 currentHeight){
+    const f32 paddedHeight = (textHeight + padding.top) + padding.bottom;
+    return max(currentHeight, paddedHeight);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

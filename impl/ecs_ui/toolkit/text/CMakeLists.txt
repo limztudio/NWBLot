@@ -1,10 +1,6 @@
 nwb_declare_static_library(nwb_ui_text)
 target_sources(nwb_ui_text PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/font.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/font_glyph_rasterizer.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shaper.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/layout.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/atlas.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/service*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"

@@ -22,6 +22,7 @@
 #include <core/task/gpu/presentation_contributor.h>
 #include <core/task/gpu/task_graph.h>
 
+#include <global/range_algorithms.h>
 #include <global/refcount_ptr.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simd/vector_rounding.h>
@@ -135,6 +136,65 @@ public:
     SharedImageSource m_source;
     TextureGpuResource m_texture;
 };
+
+inline GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
+    : m_glyphCache(arena)
+    , m_sdfCache(arena)
+    , m_textureCache(arena)
+{}
+
+inline GpuImageCache::~GpuImageCache()noexcept = default;
+
+inline void GpuImageCache::reserve(){
+    m_glyphCache.reserve(s_PaintMaxImages);
+    m_sdfCache.reserve(s_PaintMaxImages);
+    m_textureCache.reserve(s_PaintMaxImages);
+}
+
+inline void GpuImageCache::clear()noexcept{
+    m_glyphCache.clear();
+    m_sdfCache.clear();
+    m_textureCache.clear();
+}
+
+inline void GpuImageCache::trim(const DrawSnapshot& snapshot){
+    const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
+        return SameGlyphPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameSdfKey = [](const GpuVersion<GpuSdfAtlasVersion>& cached, const SharedSdfAtlasPage& page)noexcept{
+        return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameTextureKey = [](const GpuVersion<GpuTextureImageVersion>& cached, const SharedImageSource& source)noexcept{
+        return SameTextureImageKey(*cached->m_source, *source);
+    };
+    const auto countMissing = [](const auto& cache, const auto& requested, const auto& sameKey)noexcept{
+        return CountMissingCacheEntries(cache, requested, sameKey);
+    };
+    const auto retainReferenced = [](const auto& requested, const auto& sameKey, auto& cache)noexcept{
+        RetainReferencedCacheEntries(requested, sameKey, cache);
+    };
+    const usize missing = countMissing(m_glyphCache, snapshot.glyphPages(), sameGlyphKey)
+        + countMissing(m_sdfCache, snapshot.sdfPages(), sameSdfKey)
+        + countMissing(m_textureCache, snapshot.textureImages(), sameTextureKey);
+    if(!ShouldTrimGpuImageCache(m_glyphCache.size(), m_sdfCache.size(), m_textureCache.size(), missing))
+        return;
+    // Retain requested logical keys even when their immutable metadata conflicts; preparation must reject that conflict.
+    // Live frames retain evicted versions.
+    // Removing only cache ownership never changes sampled pixels or live descriptors.
+    retainReferenced(snapshot.glyphPages(), sameGlyphKey, m_glyphCache);
+    retainReferenced(snapshot.sdfPages(), sameSdfKey, m_sdfCache);
+    retainReferenced(snapshot.textureImages(), sameTextureKey, m_textureCache);
+}
+
+inline void GpuImageCache::evict()noexcept{
+    // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
+    if(!m_glyphCache.empty())
+        m_glyphCache.erase(m_glyphCache.begin());
+    else if(!m_sdfCache.empty())
+        m_sdfCache.erase(m_sdfCache.begin());
+    else if(!m_textureCache.empty())
+        m_textureCache.erase(m_textureCache.begin());
+}
 
 class GpuTargetVersion : NoCopy{
 public:

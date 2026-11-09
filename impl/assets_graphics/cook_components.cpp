@@ -2,23 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "cook_components.h"
 #include "csg_shader_variants.h"
-#include "csg_evaluator_dependencies.h"
+#include <impl/assets_shader/cook.h>
+#include <global/containers.h>
+#include <global/span.h>
 #include "shader_cook_plan.h"
-#include "shader_include_directories.h"
-#include "shader_variant_bytecode_cache.h"
-
 #include <impl/assets_graphics/graphics_component_binary_codec.adhd.h>
 #include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_graphics/mesh_subsystem.adhd.h>
-
 #include <impl/assets_csg/asset.h>
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_csg/shape_module_writer.h>
@@ -35,7 +27,6 @@
 #include <impl/assets_shader/slang_compiler.h>
 #include <impl/assets_shader/source_dependencies.h>
 #include <impl/assets_subsystem/cook.h>
-
 #include <core/assets/asset_file_discovery.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
@@ -45,7 +36,6 @@
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
-
 #include <global/hash_utils.h>
 #include <global/overflow.h>
 #include <global/text_utils.h>
@@ -55,6 +45,103 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShaderVariantBytecodeCache final{
+public:
+    using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+
+    [[nodiscard]] static ScratchPath BuildPath(const Path& cacheDirectory, AStringView configurationSafeName, AStringView sourceChecksumHex, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 GetBytecode(const ShaderCook::ShaderEntry& entry, AStringView variantName, const ShaderCook::DefineCombo& defineCombo, Span<const Path> includeDirectories, Span<const Path> dependencies, const Path& sourcePath, const ScratchPath& bytecodeCachePath, b8 compilerInputsHaveBom, Core::Alloc::ScratchArena& scratchArena, Core::GraphicsBytes& outBytecode);
+
+private:
+    [[nodiscard]] static ShaderVariantCacheReadStatus::Enum ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetsGraphicsCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShaderIncludeDirectories final{
+public:
+    [[nodiscard]] static Expected<Core::Assets::CookVector<Path>> Build(
+        const Path& repoRoot,
+        Span<const Core::Assets::ResolvedAssetRoot> assetRoots,
+        Span<const NotNull<const Path*>> implicitIncludeRoots,
+        const ShaderCook::ShaderEntry& entry,
+        ShaderCook::CookArena& arena,
+        Core::Assets::ScratchArena& scratchArena
+    );
+
+
+private:
+    using IncludeDirectoryScratchSet = HashSet<Core::Assets::ScratchString, Core::Assets::ScratchArena, Hasher<Core::Assets::ScratchString>, EqualTo<Core::Assets::ScratchString>>;
+
+    [[nodiscard]] static b8 Append(
+        const Path& includeDirectory,
+        const ShaderCook::ShaderEntry& entry,
+        Core::Assets::ScratchArena& scratchArena,
+        Core::Assets::CookVector<Path>& outIncludeDirectories,
+        IncludeDirectoryScratchSet& inOutSeenIncludeDirectories
+    );
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetsGraphicsCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgEvaluatorDependencyCollector final{
+private:
+    using DependencyPathScratchSet = HashSet<Core::Assets::ScratchString, Core::Assets::ScratchArena, Hasher<Core::Assets::ScratchString>, EqualTo<Core::Assets::ScratchString>>;
+
+
+public:
+    CsgEvaluatorDependencyCollector(Core::Assets::ScratchArena& scratchArena, ShaderCook::CookVector<Path>& dependencies)noexcept
+        : m_scratchArena(scratchArena)
+        , m_dependencies(dependencies)
+    {}
+
+
+public:
+    [[nodiscard]] b8 collect(const ShaderCook::ShaderEntry& entry, Span<const Path> includeDirectories);
+
+
+private:
+    [[nodiscard]] Expected<::Path<Core::Assets::ScratchArena>> resolve(AStringView includeName, Span<const Path> includeDirectories);
+    [[nodiscard]] b8 appendUnique(const ::Path<Core::Assets::ScratchArena>& dependency, DependencyPathScratchSet& inOutSeenDependencies);
+
+
+private:
+    Core::Assets::ScratchArena& m_scratchArena;
+    ShaderCook::CookVector<Path>& m_dependencies;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1642,12 +1729,6 @@ b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistr
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

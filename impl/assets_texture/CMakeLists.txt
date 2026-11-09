@@ -17,7 +17,6 @@ nwb_declare_static_library(nwb_assets_texture_loader)
 target_sources(nwb_assets_texture_loader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/loader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/loader.h"
-    "${CMAKE_CURRENT_LIST_DIR}/texture_format_selector.h"
     "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.h"
 )
 target_link_libraries(nwb_assets_texture_loader PUBLIC nwb_assets nwb_assets_texture nwb_assets_texture_types nwb_graphics)

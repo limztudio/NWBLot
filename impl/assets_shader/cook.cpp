@@ -2,29 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "cook.h"
 #include "shader_define_planner.h"
 #include "slang_compiler.h"
-#include "slang_compiler_fingerprint.h"
-#include "slang_compiler_workspace.h"
+#include <impl/assets_shader/shader_source_fingerprint.adhd.h>
 #include "source_dependencies.h"
 #include "shader_types.h"
-
-#include <impl/assets_shader/shader_source_fingerprint.adhd.h>
 #include <impl/assets_shader/slang_compiler_request_validator.adhd.h>
-
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
 #include <core/common/log.h>
-
 #include <global/filesystem/cleanup.h>
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
@@ -34,15 +23,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SLANGC_EXECUTABLE
-#error "NWB_SLANGC_EXECUTABLE must be defined by the build configuration"
-#endif
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+// One isolated temporary directory per compiler invocation, plus the BOM-stripped source overlay the compiler reads when inputs carry a UTF-8 BOM.
+namespace SlangCompilerWorkspace{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = Core::Assets::ScratchString;
+template<typename T>
+using ScratchVector = Core::Assets::ScratchVector<T>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The common path allocates the source path last, so it is declared last to be released first from scratch.
+struct CompilerInputs final{
+    ScratchVector<ScratchPath> includeDirectories;
+    ScratchPath sourcePath;
+};
+
+// Removes the work directory when the invocation ends; a cleanup failure is reported, not returned.
+class ScopedDirectoryCleanupGuard final : NoCopy{
+public:
+    explicit ScopedDirectoryCleanupGuard(const ScratchPath& path)noexcept
+        : m_path(path)
+    {}
+    ~ScopedDirectoryCleanupGuard()noexcept;
+
+
+private:
+    const ScratchPath& m_path;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
+[[nodiscard]] Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
+// Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
+[[nodiscard]] Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
+[[nodiscard]] Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SlangCompilerFingerprint{
+public:
+    [[nodiscard]] static Expected<u64> Compute(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena, Span<const AStringView> commonArguments, Span<const AStringView> baselineCapabilities, Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1340,12 +1387,6 @@ b8 ShaderAssetSerialization::Serialize(const IShader& shader, Core::Assets::Asse
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

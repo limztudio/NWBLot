@@ -86,9 +86,27 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         MStringView code;
         if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
-        if(!isImported)
-            outUnit.topLevelNativeBlocks.push_back(code);
+        if(!isImported){
+            b8 hasPriorLocalDecl = false;
+            for(const Stmt* s : outUnit.globalConstants){ if(s && !s->isImported){ hasPriorLocalDecl = true; break; } }
+            if(!hasPriorLocalDecl){ for(const TypeAliasDecl* a : outUnit.typeAliases){ if(a && !a->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(!hasPriorLocalDecl){ for(const EnumDecl* e : outUnit.enums){ if(e && !e->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(!hasPriorLocalDecl){ for(const InterfaceDecl* i : outUnit.interfaces){ if(i && !i->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(!hasPriorLocalDecl){ for(const ClassDecl* c : outUnit.classes){ if(c && !c->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(!hasPriorLocalDecl){ for(const MethodDecl* f : outUnit.freeFunctions){ if(f && !f->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(!hasPriorLocalDecl){ for(const MethodDecl* m : outUnit.outOfLineMethods){ if(m && !m->isImported){ hasPriorLocalDecl = true; break; } } }
+            if(hasPriorLocalDecl)
+                outUnit.sourceNativeBlocks.push_back(code);
+            else
+                outUnit.topLevelNativeBlocks.push_back(code);
+        }
         return true;
+    }
+
+    if(!isImported && !outUnit.sourceNativeBlocks.empty()){
+        for(const MStringView& pending : outUnit.sourceNativeBlocks)
+            outUnit.topLevelNativeBlocks.push_back(pending);
+        outUnit.sourceNativeBlocks.clear();
     }
 
     if(m_cursor.matchIdentifier("const")){

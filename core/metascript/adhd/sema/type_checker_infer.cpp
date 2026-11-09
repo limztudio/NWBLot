@@ -157,6 +157,25 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             return m_symbols.unwrapTypeAlias(gc->varType);
     }
     else if(expr.kind == ExprKind::ThisMember && ownerClass){
+        if(expr.text.empty()){
+            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+            synth->name = ownerClass->name;
+            synth->span = expr.span;
+            for(const TemplateParamDecl& tp : ownerClass->templateParams){
+                TypeArg targ;
+                if(tp.constValueType){
+                    targ.constantText = tp.name;
+                }
+                else{
+                    TypeRef* paramType = AllocateAstNode<TypeRef>(m_arena);
+                    paramType->name = tp.name;
+                    paramType->span = expr.span;
+                    targ.type = paramType;
+                }
+                synth->templateArgs.push_back(targ);
+            }
+            return synth;
+        }
         if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text))
             return m_symbols.unwrapTypeAlias(field->type);
     }

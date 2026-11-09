@@ -209,6 +209,7 @@ public:
 
 struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
+    MVector<MStringView> sourceNativeBlocks;
     MVector<MString> includedAdhdFiles;
     MVector<MString> resolvedIncludedFiles;
     MVector<Stmt*> globalConstants;
@@ -224,6 +225,7 @@ struct TranslationUnit{
 public:
     explicit TranslationUnit(MetaArena& arena)noexcept
         : topLevelNativeBlocks(arena)
+        , sourceNativeBlocks(arena)
         , includedAdhdFiles(arena)
         , resolvedIncludedFiles(arena)
         , globalConstants(arena)

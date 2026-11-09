@@ -90,6 +90,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 break;
         }
         const b8 isConstThis = isThisConstInScope(method, scope);
+        if(expr.text.empty()){
+            if(isMutationTarget && isConstThis){
+                reportError(errors, expr.span, "cannot mutate 'this' inside a 'const' method or 'in this' lambda");
+                ok = false;
+            }
+            break;
+        }
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
         if(!field && !memberMethod){
@@ -134,6 +141,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(expr.lhs && !checkExpr(ownerClass, scope, false, method, *expr.lhs, errors)){
                 ok = false;
             }
+            const b8 hadVarOrMemberLhs = (expr.text == "this") || (expr.lhs != nullptr);
             const ClassDecl* accessedCls = nullptr;
             const FieldDecl* accessedField = nullptr;
             const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(ownerClass, &method, expr, scope, &accessedCls, &accessedField);
@@ -166,7 +174,20 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     }
                 }
             }
-            else{
+            else if(
+                !m_hasTopLevelNativeBlocks
+                || hadVarOrMemberLhs
+                || expr.scopeChain.size() != 2u
+                || FindScopedVar(scope, expr.scopeChain[0]) != nullptr
+                || m_symbols.findGlobalConstant(expr.scopeChain[0]) != nullptr
+                || m_symbols.findClass(expr.scopeChain[0]) != nullptr
+                || m_symbols.findInterface(expr.scopeChain[0]) != nullptr
+                || BuiltinTypeSemantics::IsScalarType(expr.scopeChain[0])
+                || FindBuiltinObjectType(expr.scopeChain[0]) != nullptr
+                || FindBuiltinGenericType(expr.scopeChain[0]) != nullptr
+                || SymbolTable::IsSimdType(expr.scopeChain[0])
+                || SymbolTable::IsUnalignedVectorType(expr.scopeChain[0])
+            ){
                 reportError(errors, expr.span, "invalid scope resolution '::'; only 'enum' and 'flag' types and variables support '::' access in adhd");
                 ok = false;
             }

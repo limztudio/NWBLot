@@ -1708,6 +1708,55 @@ TEST(AdhdCompiler, HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDupli
     EXPECT_NE(variadicSrcView.find("ConsumeVec(items);"), MStringView::npos);
     EXPECT_EQ(variadicSrcView.find("Move(items)"), MStringView::npos);
 
+    static constexpr MStringView s_CtorMemberLiftSource =
+        "class Child {\r\n"
+        "    private mut i32 m_target;\r\n"
+        "    public Child(mut i32 target) {\r\n"
+        "        this.m_target = target;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class Parent {\r\n"
+        "    private Child m_child;\r\n"
+        "    public Parent(mut i32 target) {\r\n"
+        "        this.m_child = Child(target);\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult ctorLiftRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_CtorMemberLiftSource, "impl/data/ctor_lift.adhd", arena.arena, ctorLiftRes));
+    const MStringView ctorLiftHdrView(ctorLiftRes.generatedHeader.data(), ctorLiftRes.generatedHeader.size());
+    const MStringView ctorLiftSrcView(ctorLiftRes.generatedSource.data(), ctorLiftRes.generatedSource.size());
+    EXPECT_NE(ctorLiftHdrView.find("Child m_child;"), MStringView::npos);
+    EXPECT_EQ(ctorLiftHdrView.find("Child m_child{};"), MStringView::npos);
+    EXPECT_NE(ctorLiftHdrView.find("Parent(i32& target)noexcept : m_child(target){"), MStringView::npos);
+    EXPECT_EQ(ctorLiftHdrView.find("this->m_child = Child(target)"), MStringView::npos);
+    EXPECT_EQ(ctorLiftSrcView.find("this->m_child = Child(target)"), MStringView::npos);
+
+    static constexpr MStringView s_ExternalIfaceAndTrailingNativeSource =
+        "native{\r\n"
+        "interface IExternalCallback;\r\n"
+        "}\r\n"
+        "class CallbackRunner : IExternalCallback {\r\n"
+        "    public ~CallbackRunner() {}\r\n"
+        "    public b8 onTick(in f32 dt)override {\r\n"
+        "        RegisterSelf(this);\r\n"
+        "        return dt > 0.0f && ExternalEnum::Active != 0;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "native{\r\n"
+        "void RegisterRunner(CallbackRunner& runner);\r\n"
+        "}\r\n";
+    CompileResult extIfaceRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ExternalIfaceAndTrailingNativeSource, "impl/data/ext_iface.adhd", arena.arena, extIfaceRes));
+    const MStringView extIfaceHdrView(extIfaceRes.generatedHeader.data(), extIfaceRes.generatedHeader.size());
+    const MStringView extIfaceSrcView(extIfaceRes.generatedSource.data(), extIfaceRes.generatedSource.size());
+    EXPECT_NE(extIfaceHdrView.find("class CallbackRunner final : public IExternalCallback{"), MStringView::npos);
+    EXPECT_NE(extIfaceHdrView.find("virtual ~CallbackRunner()noexcept override"), MStringView::npos);
+    EXPECT_NE(extIfaceHdrView.find("virtual b8 onTick(const f32 dt)noexcept override"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("RegisterSelf((*this));"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("ExternalEnum::Active"), MStringView::npos);
+    EXPECT_EQ(extIfaceHdrView.find("void RegisterRunner(CallbackRunner& runner);"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("void RegisterRunner(CallbackRunner& runner);"), MStringView::npos);
+
     static constexpr MStringView s_BadVariadicParamSource =
         "#define BAD_VARIADIC(..., x) (x)\r\n"
         "const i32 kVal = 1;\r\n";

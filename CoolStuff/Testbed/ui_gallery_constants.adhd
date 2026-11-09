@@ -53,6 +53,26 @@ b8 IsImmutableListSourceRowEnabled(in u64 index, in usize labelCount, in u64 dis
     return index < cast<u64>(labelCount) && index + 1u != disabledKey;
 }
 
+Expected<u64> FindEnabledImmutableListSourceRow(in u64 start, in b8 reverse, in usize labelCount, in u64 disabledKey){
+    const u64 count = cast<u64>(labelCount);
+    if(start >= count)
+        return MakeUnexpected(Failure());
+    u64 candidate = start;
+    while(candidate < count){
+        if(IsImmutableListSourceRowEnabled(candidate, labelCount, disabledKey))
+            return candidate;
+        if(reverse){
+            if(candidate == 0u)
+                break;
+            --candidate;
+        }
+        else{
+            ++candidate;
+        }
+    }
+    return MakeUnexpected(Failure());
+}
+
 Expected<u64> TryFindFilteredListSourceIndex(in Span<u64> indices, in u64 count, in usize labelCount, in u64 keyValue){
     for(u64 candidate = 0u; candidate < count && cast<usize>(candidate) < indices.size(); ++candidate){
         if(ResolveImmutableListSourceKey(indices[cast<usize>(candidate)], labelCount) == keyValue)

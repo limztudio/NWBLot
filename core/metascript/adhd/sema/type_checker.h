@@ -151,6 +151,7 @@ private:
     b8 m_activeLambdaMutatesContainer = false;
     b8 m_inClassArenaContext = false;
     b8 m_activeParallelBlockUsesScratch = false;
+    b8 m_hasTopLevelNativeBlocks = false;
 };
 
 

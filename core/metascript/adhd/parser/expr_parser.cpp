@@ -179,6 +179,10 @@ Expr* ExprParser::parsePostfix(){
         }
 
         if(m_cursor.match(TokenType::Dot)){
+            if(expr->kind == ExprKind::ThisMember && expr->text.empty()){
+                m_cursor.error("use 'this.member' directly instead of parenthesized '(this).member'");
+                return nullptr;
+            }
             if(!m_cursor.check(TokenType::Identifier)){
                 m_cursor.errorExpected("expected member or swizzle name after '.'");
                 return nullptr;
@@ -329,8 +333,12 @@ Expr* ExprParser::parsePrimary(){
 
         if(tok.text == "this"){
             m_cursor.advance();
-            if(!m_cursor.expect(TokenType::Dot, "expected '.' after 'this' (use 'this.member')"))
-                return nullptr;
+            if(!m_cursor.match(TokenType::Dot)){
+                Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
+                node->kind = ExprKind::ThisMember;
+                node->span = span;
+                return node;
+            }
             if(!m_cursor.check(TokenType::Identifier)){
                 m_cursor.errorExpected("expected member name after 'this.'");
                 return nullptr;

@@ -317,8 +317,21 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             continue;
         }
         if(!m_symbols.findInterface(ifaceName)){
-            reportError(errors, ifaceType->span, "unknown interface in class implementation list; classes may only implement declared 'interface' types");
-            ok = false;
+            if(
+                !m_hasTopLevelNativeBlocks
+                || m_symbols.findEnum(ifaceName)
+                || BuiltinTypeSemantics::IsScalarType(ifaceName)
+                || FindBuiltinObjectType(ifaceName)
+                || FindBuiltinGenericType(ifaceName)
+                || SymbolTable::IsSimdType(ifaceName)
+                || SymbolTable::IsUnalignedVectorType(ifaceName)
+            ){
+                reportError(errors, ifaceType->span, "unknown interface in class implementation list; classes may only implement declared 'interface' types");
+                ok = false;
+            }
+            else if(!checkTypeRef(*ifaceType, &classDecl, nullptr, errors)){
+                ok = false;
+            }
             continue;
         }
         if(!checkTypeRef(*ifaceType, &classDecl, nullptr, errors))

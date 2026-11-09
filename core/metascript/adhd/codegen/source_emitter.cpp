@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "constructor_argument_emitter.h"
 #include "parallel_statement_emitter.h"
 #include "simd_expression_analysis.h"
 #include "source_emitter.h"
@@ -111,22 +112,97 @@ namespace __hidden_adhd_source_emitter{
     return false;
 }
 
-[[nodiscard]] const Expr* FindConstructorFieldAssignment(const Span<const Stmt* const> stmts, const MStringView fieldName, const Expr*& outUniqueTopLevelAssignExpr)noexcept{
+[[nodiscard]] b8 StmtsReferenceIdentifier(const Span<const Stmt* const> stmts, const MStringView name)noexcept;
+
+[[nodiscard]] b8 ExprReferencesIdentifier(const Expr* const expr, const MStringView name)noexcept{
+    if(!expr)
+        return false;
+    if(expr->kind == ExprKind::Identifier && expr->text == name)
+        return true;
+    if(expr->kind == ExprKind::Lambda && StmtsReferenceIdentifier(expr->lambdaBody, name))
+        return true;
+    if(ExprReferencesIdentifier(expr->lhs, name) || ExprReferencesIdentifier(expr->rhs, name))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprReferencesIdentifier(arg, name))
+            return true;
+    }
+    for(const LambdaCapture& cap : expr->lambdaCaptures){
+        if(cap.name == name)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StmtsReferenceIdentifier(const Span<const Stmt* const> stmts, const MStringView name)noexcept{
+    for(const Stmt* stmt : stmts){
+        if(!stmt)
+            continue;
+        if(ExprReferencesIdentifier(stmt->expr, name)
+            || ExprReferencesIdentifier(stmt->condition, name)
+            || ExprReferencesIdentifier(stmt->stepExpr, name))
+            return true;
+        if(stmt->initStmt){
+            const Stmt* const initPtr = stmt->initStmt;
+            if(StmtsReferenceIdentifier(Span<const Stmt* const>(&initPtr, 1u), name))
+                return true;
+        }
+        for(const Expr* arg : stmt->arguments){
+            if(ExprReferencesIdentifier(arg, name))
+                return true;
+        }
+        if(StmtsReferenceIdentifier(stmt->statements, name) || StmtsReferenceIdentifier(stmt->elseStatements, name))
+            return true;
+        for(const SwitchCase& sc : stmt->switchCases){
+            if(ExprReferencesIdentifier(sc.matchExpr, name) || StmtsReferenceIdentifier(sc.statements, name))
+                return true;
+        }
+        for(const NativeBinding& nb : stmt->nativeBindings){
+            if(ExprReferencesIdentifier(nb.sourceExpr, name))
+                return true;
+        }
+        if(stmt->kind == StmtKind::NativeBlock && stmt->nativeCode.find(name) != MStringView::npos)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 ExprDisallowsMemberInitializerLift(const Expr* const expr)noexcept{
+    if(!expr)
+        return false;
+    if((expr->kind == ExprKind::ThisMember && !expr->text.empty()) || expr->kind == ExprKind::Lambda || expr->injectScratchArena)
+        return true;
+    if(ExprDisallowsMemberInitializerLift(expr->lhs) || ExprDisallowsMemberInitializerLift(expr->rhs))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprDisallowsMemberInitializerLift(arg))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] const Expr* FindConstructorFieldAssignment(const Span<const Stmt* const> stmts, const MStringView fieldName, const Expr*& outUniqueTopLevelAssignExpr, b8& outInLeadingAssignPrefix)noexcept{
     const Expr* firstFound = nullptr;
     usize totalMatches = 0u;
     b8 firstIsTopLevel = false;
+    b8 firstInLeadingPrefix = false;
+    b8 stillInLeadingPrefix = true;
 
     const auto countRecursive = [&](const auto& self, const Span<const Stmt* const> list, const b8 topLevel)noexcept -> void{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
+            const b8 isThisMemberAssign = IsThisMemberSimpleAssignStmt(*stmt);
             if(IsThisMemberSimpleAssignStmt(*stmt, fieldName) && stmt->expr->rhs){
                 if(!firstFound){
                     firstFound = stmt->expr;
                     firstIsTopLevel = topLevel;
+                    firstInLeadingPrefix = topLevel && stillInLeadingPrefix;
                 }
                 ++totalMatches;
             }
+            if(topLevel && !isThisMemberAssign)
+                stillInLeadingPrefix = false;
             if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::If){
                 self(self, stmt->statements, false);
                 self(self, stmt->elseStatements, false);
@@ -140,6 +216,7 @@ namespace __hidden_adhd_source_emitter{
 
     countRecursive(countRecursive, stmts, true);
     outUniqueTopLevelAssignExpr = (firstFound != nullptr && firstIsTopLevel && totalMatches == 1u) ? firstFound : nullptr;
+    outInLeadingAssignPrefix = (outUniqueTopLevelAssignExpr != nullptr) && firstInLeadingPrefix;
     return firstFound ? firstFound->rhs : nullptr;
 }
 
@@ -156,6 +233,7 @@ namespace __hidden_adhd_source_emitter{
 [[nodiscard]] static b8 HasOnlyGlobalConstants(const TranslationUnit& unit)noexcept{
     return !unit.globalConstants.empty()
         && unit.topLevelNativeBlocks.empty()
+        && unit.sourceNativeBlocks.empty()
         && unit.includedAdhdFiles.empty()
         && unit.resolvedIncludedFiles.empty()
         && unit.typeAliases.empty()
@@ -286,6 +364,19 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
         out.append("};\r\n\r\n\r\n");
     }
 
+    if(!unit.sourceNativeBlocks.empty()){
+        if(!namespacePath.empty()){
+            out.append("using namespace ");
+            out.append(namespacePath.data(), namespacePath.size());
+            out.append(";\r\n\r\n");
+        }
+        for(const MStringView& rawBlock : unit.sourceNativeBlocks){
+            AppendTextDiscardCrAndExpandLf(out, rawBlock);
+            out.append("\r\n");
+        }
+        out.append("\r\n");
+    }
+
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n");
     return out;
 }
@@ -313,6 +404,16 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
 void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
     if(statementsNeedSimdFloatingPointEnv(method.body))
         out.append("#pragma STDC FENV_ACCESS ON\r\n");
+    if(method.isOverride){
+        for(const ParamDecl& param : method.params){
+            if(!param.name.empty() && !__hidden_adhd_source_emitter::StmtsReferenceIdentifier(method.body, param.name)){
+                emitIndent(out, indent);
+                out.append("(void)");
+                out.append(param.name.data(), param.name.size());
+                out.append(";\r\n");
+            }
+        }
+    }
     if(method.usesScratchArena)
         emitScratchArenaPrologue(out, indent, method.name);
     if(method.usesTaskScope)
@@ -341,20 +442,51 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
     MVector<const Expr*>* skipped = AllocateAstNode<MVector<const Expr*>>(m_arena);
     b8 firstInit = true;
     for(const FieldDecl* field : orderedFields){
-        if(!field || !field->type || m_symbols.resolveRefMode(field->type) == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
+        if(!field || !field->type || field->defaultExpr || field->hasCtorInit)
             continue;
         const Expr* uniqueAssign = nullptr;
-        const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name, uniqueAssign);
+        b8 inLeadingPrefix = false;
+        const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name, uniqueAssign, inLeadingPrefix);
         if(!rhs)
             continue;
-        if(uniqueAssign)
+        const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
+        if(fieldRefMode != ParamPassingMode::None){
+            if(uniqueAssign)
+                skipped->push_back(uniqueAssign);
+            out.append(firstInit ? " : " : ", ");
+            firstInit = false;
+            out.append(field->name.data(), field->name.size());
+            out.append("(::MakeNotNull(&(");
+            emitExpr(out, *rhs);
+            out.append(")))");
+        }
+        else if(!field->usesClassArena && uniqueAssign && inLeadingPrefix && !__hidden_adhd_source_emitter::ExprDisallowsMemberInitializerLift(rhs)){
+            const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
+            const b8 isDirectCtorCall = rhs->kind == ExprKind::Call
+                && !rhs->isBuiltinCall
+                && rhs->lhs
+                && rhs->lhs->kind == ExprKind::Identifier
+                && m_symbols.resolveBaseTypeName(rhs->lhs->text) == baseFieldType
+                && !SymbolTable::IsSimdType(baseFieldType)
+                && !SymbolTable::IsUnalignedVectorType(baseFieldType)
+                && m_symbols.findFreeFunction(baseFieldType) == nullptr;
+            const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name);
+            if(!isDirectCtorCall && !requiresMemberInit)
+                continue;
             skipped->push_back(uniqueAssign);
-        out.append(firstInit ? " : " : ", ");
-        firstInit = false;
-        out.append(field->name.data(), field->name.size());
-        out.append("(::MakeNotNull(&(");
-        emitExpr(out, *rhs);
-        out.append(")))");
+            out.append(firstInit ? " : " : ", ");
+            firstInit = false;
+            out.append(field->name.data(), field->name.size());
+            if(isDirectCtorCall){
+                const MStringView injectedArena = rhs->injectClassArena ? MStringView("s_ClassArena") : MStringView{};
+                ConstructorArgumentEmitter(*this).emit(out, baseFieldType, rhs->arguments, injectedArena, false, true);
+            }
+            else{
+                out.push_back('(');
+                emitExpr(out, *rhs);
+                out.push_back(')');
+            }
+        }
     }
     if(!skipped->empty())
         m_skippedCtorAssignExprs = skipped;

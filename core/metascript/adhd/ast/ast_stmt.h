@@ -129,7 +129,7 @@ public:
 [[nodiscard]] constexpr b8 IsThisMemberSimpleAssignStmt(const Stmt& stmt, const MStringView expectedFieldName = {})noexcept{
     if(stmt.kind != StmtKind::ExprStmt || !stmt.expr || stmt.expr->kind != ExprKind::Binary || stmt.expr->op != TokenType::Equal)
         return false;
-    if(!stmt.expr->lhs || stmt.expr->lhs->kind != ExprKind::ThisMember)
+    if(!stmt.expr->lhs || stmt.expr->lhs->kind != ExprKind::ThisMember || stmt.expr->lhs->text.empty())
         return false;
     return expectedFieldName.empty() || stmt.expr->lhs->text == expectedFieldName;
 }

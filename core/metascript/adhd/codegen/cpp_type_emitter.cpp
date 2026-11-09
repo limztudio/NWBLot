@@ -193,6 +193,7 @@ void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const Templa
 }
 
 void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const b8 isDeclarationInClass)const{
+    const b8 isOverrideDestructor = method.isDestructor && ownerClass && !ownerClass->implementedInterfaces.empty();
     if(!method.isConstructor && !method.isDestructor){
         if(isDeclarationInClass && method.isOverride)
             out.append("virtual ");
@@ -201,6 +202,9 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
         else
             out.append("void");
         out.push_back(' ');
+    }
+    else if(isDeclarationInClass && isOverrideDestructor){
+        out.append("virtual ");
     }
 
     if(!isDeclarationInClass && ownerClass){
@@ -229,7 +233,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
         out.append("const noexcept");
     else
         out.append("noexcept");
-    if(isDeclarationInClass && method.isOverride)
+    if(isDeclarationInClass && (method.isOverride || isOverrideDestructor))
         out.append(" override");
 }
 

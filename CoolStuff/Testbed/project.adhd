@@ -1,0 +1,383 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ui_skin_preview.adhd"
+#include "fly_camera_motion.adhd"
+#include "scene_constants.adhd"
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_graphics/bindless/runtime_abi.h>
+#include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/assets_ui_skin/types.adhd.h>
+#include <impl/ecs_mesh/skinning/system.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_model/system.h>
+#include <impl/ecs_model_renderer/model_renderer.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_ui/layer_system.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/ecs/world.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/input/module.h>
+#include <core/telemetry/frame_graph_registry.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+namespace Testbed{
+using NWB::IProjectEntryCallbacks;
+using NWB::ProjectRuntimeContext;
+using NWB::Core::IInputEventHandler;
+using NWB::Core::KeyboardInputResult;
+using NWB::Core::ECS::World;
+using NWB::Impl::ActiveSceneSubsystems;
+using NWB::Impl::UiPaintContext;
+using NWB::Impl::Ui::SeparatorOptions;
+using NWB::Impl::Ui::WindowOptions;
+using NWB::Impl::Ui::WindowState;
+namespace CoreInputAction = NWB::Core::InputAction;
+namespace Key = NWB::Core::Key;
+namespace MouseButton = NWB::Core::MouseButton;
+
+inline constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+
+[[nodiscard]] inline Expected<UniquePtr<World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context){
+    static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+    static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+
+    auto world = MakeUnique<World>(context.objectArena, context.cpuTasks);
+    if(!world){
+        NWB_LOGGER_FATAL(s_WorldAllocFailed);
+        return MakeUnexpected(s_WorldAllocFailed);
+    }
+
+    if(!context.shaderPathResolver){
+        NWB_LOGGER_FATAL(s_ResolverNull);
+        return MakeUnexpected(s_ResolverNull);
+    }
+
+    auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
+    auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(*world, context.graphics, context.assetManager, context.shaderPathResolver);
+    world->addSystem<NWB::Impl::ModelSystem>(*world, context.assetManager, NWB::Impl::CreateModelObjectRendererHooks());
+    auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(*world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
+    auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
+        *world,
+        context.graphics,
+        context.input,
+        context.clipboard,
+        context.textInput,
+        context.assetManager,
+        context.shaderPathResolver,
+        NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin>{},
+        NWB::Impl::UiLayerPresentation::Scene
+    );
+    context.graphics.addRenderPassToBack(meshSkinningSystem);
+    context.graphics.addRenderPassToBack(rendererSystem);
+    context.graphics.addRenderPassToBack(uiLayerSystem);
+    context.frameGraphRegistry.registerContributor(rendererSystem);
+
+    return world;
+}
+
+inline void DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNullUniquePtr<World>& worldHandle)noexcept{
+    UniquePtr<World>& world = worldHandle.owner();
+    if(!world)
+        return;
+
+    NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<NWB::Impl::MeshSkinningSystem>());
+    NWB::Impl::RendererSystem& rendererSystem = *MakeNotNull(world->getSystem<NWB::Impl::RendererSystem>());
+    NWB::Impl::UiLayerSystem& uiLayerSystem = *MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>());
+
+    context.frameGraphRegistry.unregisterContributor(rendererSystem);
+    context.graphics.removeRenderPass(meshSkinningSystem);
+    context.graphics.removeRenderPass(rendererSystem);
+    context.graphics.removeRenderPass(uiLayerSystem);
+
+    const b8 deviceIdle = context.graphics.waitForIdle();
+    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
+
+    world->clear();
+    world.reset();
+}
+
+[[nodiscard]] inline NotNullUniquePtr<World> CreateInitialWorldOrDie(ProjectRuntimeContext& context){
+    auto world = CreateInitialProjectWorld(context);
+    if(!world){
+        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
+        throw RuntimeException(s_InitWorldFailedNarrow.data());
+    }
+    return MakeNotNullUnique(Move(*world));
+}
+
+inline void BindActiveSceneSubsystemsToWorld(NotNullUniquePtr<World>& world, const ActiveSceneSubsystems& sceneSubsystems)noexcept{
+    if(auto* const rendererSystem = world->getSystem<NWB::Impl::RendererSystem>())
+        rendererSystem->setActiveSceneSubsystems(&sceneSubsystems);
+    if(auto* const meshSkinningSystem = world->getSystem<NWB::Impl::MeshSkinningSystem>())
+        meshSkinningSystem->setActiveSceneSubsystems(&sceneSubsystems);
+    if(auto* const uiLayerSystem = world->getSystem<NWB::Impl::UiLayerSystem>())
+        uiLayerSystem->setActiveSceneSubsystems(&sceneSubsystems);
+}
+
+[[nodiscard]] inline b8 CreateStartupCameraAndLights(NotNullUniquePtr<World>& world){
+    auto activeCameraEntity = world->createEntity();
+    auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+    const Float4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth);
+    activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*world, cameraPosition);
+    NWB_ASSERT(activeCamera.camera.valid());
+    auto& cameraTransform = *MakeNotNull(world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), cameraTransform.rotation);
+    const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
+        *world,
+        s_DefaultDirectionalLightPitch,
+        s_DefaultDirectionalLightYaw,
+        s_DefaultDirectionalLightRoll,
+        s_DefaultDirectionalLightColor,
+        s_DefaultDirectionalLightIntensity
+    );
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
+        *world,
+        s_PointLightPosition,
+        s_PointLightColor,
+        s_PointLightIntensity,
+        s_PointLightRange
+    );
+    return directionalLight.valid() && pointLight.valid();
+}
+
+inline void SyncWorldModelRuntimes(NotNullUniquePtr<World>& world){
+    NWB::Impl::ModelSystem& modelSystem = *MakeNotNull(world->getSystem<NWB::Impl::ModelSystem>());
+    modelSystem.syncModelRuntimes();
+}
+
+[[nodiscard]] inline b8 TickProjectWorld(NotNullUniquePtr<World>& world, const f32 safeDelta){
+    const auto updated = world->tick(safeDelta);
+    if(!updated){
+        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] inline b8 WantsUiKeyboard(const NotNullUniquePtr<World>& world)noexcept{
+    return MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
+}
+
+[[nodiscard]] inline b8 WantsUiPointer(const NotNullUniquePtr<World>& world)noexcept{
+    return MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer();
+}
+
+inline void ApplyFlyCameraInputToMainCamera(NotNullUniquePtr<World>& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(*world);
+    NWB_ASSERT(cameraView.valid());
+
+    const SIMDVectorSingle resolvedRotation = FlyCameraMotion().resolveStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
+    const SIMDVectorSingle resolvedPosition = FlyCameraMotion().resolvePosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
+    StoreFloat(resolvedRotation, cameraView.transform->rotation);
+    StoreFloat(resolvedPosition, cameraView.transform->position);
+}
+
+[[nodiscard]] inline b8 InstantiateSceneSubsystemsEntities(const ActiveSceneSubsystems& sceneSubsystems, NotNullUniquePtr<World>& world){
+    return sceneSubsystems.instantiateEntities(*world);
+}
+
+template<typename ProjectT>
+inline void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world, ProjectT& project){
+    auto uiEntity = world->createEntity();
+    auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
+    customUi.paint = [&project](UiPaintContext& context){
+        project.paintUiLayer(context);
+    };
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Project : IProjectEntryCallbacks, IInputEventHandler{
+    public Project(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateInitialWorldOrDie(context);
+        this.m_sceneSubsystems = ActiveSceneSubsystems(context.objectArena);
+        this.m_uiPreview = UiSkinPreview(context.objectArena);
+    }
+
+    public ~Project(){
+        this.unregisterInputHandler();
+        this.destroyWorld();
+    }
+
+    public b8 onStartup()override{
+        if(!this.m_sceneSubsystems.loadProjectStartScene(this.m_context.assetManager))
+            return false;
+        if(!this.m_uiPreview.loadAssets(this.m_context.objectArena, this.m_context.assetManager, this.m_sceneSubsystems))
+            return false;
+        BindActiveSceneSubsystemsToWorld(this.m_world, this.m_sceneSubsystems);
+        if(!CreateStartupCameraAndLights(this.m_world))
+            return false;
+        if(!this.createDefaultScene())
+            return false;
+        SyncWorldModelRuntimes(this.m_world);
+        this.registerInputHandler();
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.unregisterInputHandler();
+        this.m_cameraInput.clear();
+        this.destroyWorld();
+        [essential] info("ProjectTestbed: shutdown");
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        const f32 safeDelta = FlyCameraMotion().sanitizeDelta(delta);
+        this.updateMainCamera(safeDelta);
+        return TickProjectWorld(this.m_world, safeDelta);
+    }
+
+    public void windowFocusUpdate(in b8 focused)override{
+        if(!focused)
+            this.m_cameraInput.clear();
+    }
+
+    public void pointerCaptureLost()override{
+        this.m_cameraInput.pointerCaptureLost();
+    }
+
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
+        if(action == CoreInputAction::Release)
+            this.m_cameraInput.setKeyState(key, false);
+
+        if(WantsUiKeyboard(this.m_world))
+            return false;
+
+        if(action == CoreInputAction::Press || action == CoreInputAction::Repeat)
+            this.m_cameraInput.setKeyState(key, true);
+
+        return false;
+    }
+
+    public b8 mousePosUpdate(in f64 xpos, in f64 ypos)override{
+        this.m_cameraInput.updatePointer(xpos, ypos, WantsUiPointer(this.m_world));
+        return false;
+    }
+
+    public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 mods)override{
+        this.m_cameraInput.updateButton(
+            WantsUiPointer(this.m_world),
+            button == MouseButton::Right,
+            action == CoreInputAction::Press,
+            action == CoreInputAction::Release
+        );
+        return false;
+    }
+
+    public void paintUiLayer(mut UiPaintContext context){
+        this.drawUiControls(context);
+        this.m_uiPreview.paint(context);
+    }
+
+    private b8 createDefaultScene(){
+        if(!InstantiateSceneSubsystemsEntities(this.m_sceneSubsystems, this.m_world)){
+            error("ProjectTestbed initialization failed: failed to instantiate scene entities");
+            return false;
+        }
+
+        AttachProjectUiPaintEntity(this.m_world, this);
+        [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character on a white ground plane");
+        return true;
+    }
+
+    private void registerInputHandler(){
+        if(this.m_inputRegistered)
+            return;
+
+        this.m_context.input.addHandlerToFront(this);
+        this.m_inputRegistered = true;
+    }
+
+    private void unregisterInputHandler(){
+        if(!this.m_inputRegistered)
+            return;
+
+        this.m_context.input.removeHandler(this);
+        this.m_inputRegistered = false;
+    }
+
+    private void updateMainCamera(in f32 delta){
+        const b8 pointerCaptured = WantsUiPointer(this.m_world);
+        const FlyCameraPointerDelta mouseDelta = this.m_cameraInput.takePointerDelta(pointerCaptured);
+
+        const b8 keyboardCaptured = WantsUiKeyboard(this.m_world);
+        const VectorSingle moveAxes = FlyCameraMotion().buildMoveAxes(
+            keyboardCaptured,
+            this.m_cameraInput.keyPressed(Key::D),
+            this.m_cameraInput.keyPressed(Key::A),
+            this.m_cameraInput.keyPressed(Key::W),
+            this.m_cameraInput.keyPressed(Key::S)
+        );
+        const b8 boosted = !keyboardCaptured && (this.m_cameraInput.keyPressed(Key::LeftShift) || this.m_cameraInput.keyPressed(Key::RightShift));
+
+        ApplyFlyCameraInputToMainCamera(this.m_world, moveAxes, boosted, VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f), delta);
+    }
+
+    private void destroyWorld(){
+        DestroyInitialProjectWorld(this.m_context, this.m_world);
+    }
+
+    private void drawUiControls(mut UiPaintContext context){
+        WindowOptions options = WindowOptions();
+        options.initialBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
+        options.contentHeightFirstUse = true;
+        const Expected<Rect> gallery = this.m_uiPreview.galleryBounds(context);
+        if(!gallery.has_value() || !CanShowTestbedOverviewWindow(gallery.value(), options.initialBounds))
+            return;
+        SeparatorOptions separator = SeparatorOptions();
+        separator.thickness = 1.0f;
+        if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
+            const b8 declared = context.ui.label("renderer", s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", s_CharacterLine);
+            [essential] assert(declared);
+        }
+        const b8 ended = context.ui.endWindow();
+        [essential] assert(ended);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private ActiveSceneSubsystems m_sceneSubsystems;
+    private UiSkinPreview m_uiPreview;
+    private WindowState m_uiWindow = WindowState();
+    private FlyCameraInput m_cameraInput = FlyCameraInput();
+    private b8 m_inputRegistered = false;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
+}
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{
+    return Testbed::s_WindowTitle;
+}
+
+b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
+    Core::GraphicsRuntime& graphics = context.graphics;
+    return graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<Testbed::Project>(context);
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

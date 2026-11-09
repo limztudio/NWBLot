@@ -30,19 +30,29 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             emitEnumDecl(out, *enumDecl);
     }
 
-    const b8 forwardDeclParamTypes = unit.topLevelNativeBlocks.empty();
+    const b8 forwardDeclRefTypes = unit.topLevelNativeBlocks.empty();
     MVector<MStringView> externalForwardClasses(m_arena);
+    const auto collectTypeForwardDecls = [&](const TypeRef& t, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams, const b8 includeDirectRef){
+        if(forwardDeclRefTypes){
+            declarationDependencies.collectExternalForwardDeclClasses(t, outerTemplateParams, innerTemplateParams, includeDirectRef, 0u, externalForwardClasses);
+        }
+        else{
+            TypeRef stripped = t;
+            stripped.refMode = ParamPassingMode::None;
+            declarationDependencies.collectExternalForwardDeclClasses(stripped, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
+        }
+    };
     const auto collectCallableForwardDeclClasses = [&](const MethodDecl& callable, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams){
         if(callable.returnType)
-            declarationDependencies.collectExternalForwardDeclClasses(*callable.returnType, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
+            collectTypeForwardDecls(*callable.returnType, outerTemplateParams, innerTemplateParams, false);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                declarationDependencies.collectExternalForwardDeclClasses(*p.type, outerTemplateParams, innerTemplateParams, forwardDeclParamTypes, 0u, externalForwardClasses);
+                collectTypeForwardDecls(*p.type, outerTemplateParams, innerTemplateParams, forwardDeclRefTypes);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
-            declarationDependencies.collectExternalForwardDeclClasses(*aliasDecl->aliasedType, aliasDecl->templateParams, {}, false, 0u, externalForwardClasses);
+            collectTypeForwardDecls(*aliasDecl->aliasedType, aliasDecl->templateParams, {}, false);
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(!ifaceDecl || ifaceDecl->isImported)
@@ -57,7 +67,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             continue;
         for(const FieldDecl* f : classDecl->fields){
             if(f && f->type)
-                declarationDependencies.collectExternalForwardDeclClasses(*f->type, classDecl->templateParams, {}, false, 0u, externalForwardClasses);
+                collectTypeForwardDecls(*f->type, classDecl->templateParams, {}, false);
         }
         for(const MethodDecl* m : classDecl->methods){
             if(m)

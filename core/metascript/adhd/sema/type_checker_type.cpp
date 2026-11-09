@@ -349,8 +349,13 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
     }
     else if(!typeRef.templateArgs.empty()){
-        reportError(errors, typeRef.span, "type does not accept template arguments");
-        ok = false;
+        const b8 isKnownNonTemplated = BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name)
+            || m_symbols.findEnum(typeRef.name) != nullptr
+            || FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name) != nullptr;
+        if(isKnownNonTemplated || !m_hasTopLevelNativeBlocks){
+            reportError(errors, typeRef.span, "type does not accept template arguments");
+            ok = false;
+        }
     }
 
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))

@@ -1,0 +1,932 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ui_gallery_constants.adhd"
+
+native{
+#include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/paint_context.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.h>
+#include <impl/ecs_ui/toolkit/images/image_loader.h>
+#include <impl/ecs_ui/toolkit/widgets/combo.h>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
+#include <impl/ecs_ui/toolkit/widgets/label.h>
+#include <impl/ecs_ui/toolkit/widgets/list.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.h>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+
+#include <global/numeric_text.h>
+#include <global/range_algorithms.h>
+#include <global/scope_exit.h>
+#include <global/text_utils.h>
+
+namespace Testbed{
+using NWB::Core::Alloc::GlobalArena;
+using NWB::Core::Alloc::ScratchArena;
+using NWB::Core::Assets::AssetManager;
+using NWB::Impl::ActiveSceneSubsystems;
+using NWB::Impl::UiPaintContext;
+using NWB::Impl::UiSkin;
+using NWB::Impl::UiSubsystem;
+using namespace NWB::Impl::Ui;
+
+template<typename... Args>
+[[nodiscard]] inline b8 DeclareFormattedLabel(Builder& ui, ScratchArena& scratchArena, const StringView key, AFormatString<Args...> formatStr, Args&&... args){
+    const auto text = StringFormat(scratchArena, formatStr, Forward<Args>(args)...);
+    return ui.label(key, { text.data(), text.size() });
+}
+
+[[nodiscard]] inline b8 DeclareSelectedKeyLabel(Builder& ui, ScratchArena& scratchArena, const u64 selectedKey){
+    const auto text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
+    return ui.label(s_SelectedKey, { text.data(), text.size() });
+}
+
+[[nodiscard]] inline f32 SetBuilderFontSize(Builder& ui, const f32 fontSize)noexcept{
+    const f32 previous = ui.style().fontSize;
+    ui.style().fontSize = fontSize;
+    return previous;
+}
+
+inline void RestoreBuilderFontSize(Builder& ui, const f32 previousFontSize)noexcept{
+    ui.style().fontSize = previousFontSize;
+}
+
+[[nodiscard]] inline f32 SetBuilderGap(Builder& ui, const f32 gap)noexcept{
+    const f32 previous = ui.style().gap;
+    ui.style().gap = gap;
+    return previous;
+}
+
+inline void RestoreBuilderGap(Builder& ui, const f32 previousGap)noexcept{
+    ui.style().gap = previousGap;
+}
+
+[[nodiscard]] inline StringView FormatVirtualListRowLabel(const u64 rowKey, const Array<u8, s_VirtualListLabelCapacity>& labelStorage)noexcept{
+    if(rowKey == 0u)
+        return {};
+    char* const label = reinterpret_cast<char*>(const_cast<u8*>(labelStorage.data()));
+    label[0] = 'R';
+    label[1] = 'o';
+    label[2] = 'w';
+    label[3] = ' ';
+    Array<char, s_VirtualListMaxDecimalDigits> digits{};
+    const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
+    for(usize offset = 0u; offset < formatted.size(); ++offset)
+        label[s_VirtualListRowPrefixLength + offset] = formatted[offset];
+    return { label, s_VirtualListRowPrefixLength + formatted.size() };
+}
+
+[[nodiscard]] inline b8 LoadUiGallerySkinImageSource(GlobalArena& arena, const AssetManager& assets, const ActiveSceneSubsystems& sceneSubsystems, SharedImageSource& outSource){
+    const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
+    if(!uiSubsystem || !uiSubsystem->basicSkin.valid())
+        return false;
+    auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
+    if(!skin)
+        return false;
+    auto source = LoadImageSource(arena, assets, (*skin)->texture());
+    if(!source)
+        return false;
+    outSource = Move(*source);
+    return true;
+}
+
+template<typename Source>
+[[nodiscard]] inline Expected<u64> FindEnabledListSourceRow(const Source& source, const u64 start, const b8 reverse)noexcept{
+    return FindDirectionalIndex(start, reverse, [&source]()noexcept{ return source.rowCount(); }, [&source](const u64 candidate)noexcept{ return source.enabled(candidate); });
+}
+
+template<typename Source, usize LabelCount, u64 DisabledKey>
+class UiFilteredListSource : public ISearchableListDataSource, NoCopy{
+private:
+    class View final : public IListDataSource, NoCopy{
+    public:
+        explicit View(const UiFilteredListSource& source)noexcept
+            : m_source(source)
+        {}
+
+    public:
+        virtual u64 instanceGeneration()const noexcept override{ return s_FilteredInstanceGeneration; }
+        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
+        virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
+        virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
+        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
+            return TryFindFilteredListSourceIndex(m_source.m_indices, rowCount(), LabelCount, keyValue);
+        }
+        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+            return FindEnabledListSourceRow(*this, start, reverse);
+        }
+        virtual StringView text(const u64 index)const noexcept override{
+            return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
+        }
+        virtual b8 enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
+
+    private:
+        const UiFilteredListSource& m_source;
+    };
+
+public:
+    explicit UiFilteredListSource(GlobalArena& arena)noexcept
+        : m_query(arena)
+        , m_view(*this)
+        , m_count(LabelCount)
+        , m_viewRevision(1u)
+    {
+        for(u64 index = 0u; index < LabelCount; ++index)
+            m_indices[index] = index;
+    }
+
+public:
+    virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
+    virtual u64 revision()const noexcept override final{ return 1u; }
+    virtual u64 rowCount()const noexcept override final{ return LabelCount; }
+    virtual u64 key(const u64 index)const noexcept override final{ return ResolveImmutableListSourceKey(index, LabelCount); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override final{ return TryResolveImmutableListSourceIndex(keyValue, LabelCount); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override final{ return FindEnabledListSourceRow(*this, start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return Source::ResolveLabel(index); }
+    virtual b8 enabled(const u64 index)const noexcept override final{ return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey); }
+
+    [[nodiscard]] virtual b8 filter(const AStringView query)override final{
+        if(m_viewRevision != 0u && query == AStringView(m_query.data(), m_query.size()))
+            return true;
+        if(query.empty())
+            m_query.clear();
+        else
+            m_query.assign(query.data(), query.size());
+        m_count = 0u;
+        for(u64 index = 0u; index < LabelCount; ++index){
+            if(!ContainsAsciiIgnoreCase<char>(this->text(index), query))
+                continue;
+            m_indices[m_count] = index;
+            ++m_count;
+        }
+        ++m_viewRevision;
+        return true;
+    }
+
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override final{ return m_view; }
+
+private:
+    AString<GlobalArena> m_query;
+    View m_view;
+    Array<u64, LabelCount> m_indices{};
+    u64 m_count = 0u;
+    u64 m_viewRevision = 0u;
+};
+
+class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>{
+    friend class UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
+public:
+    using UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>::UiFilteredListSource;
+private:
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveNestedPopupLabel(index); }
+};
+
+class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>{
+    friend class UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
+public:
+    using UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>::UiFilteredListSource;
+private:
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveSearchComboLabel(index); }
+};
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DrawSkinGallery(mut PaintBuilder paint, in f32 originX, in f32 originY, in f32 captionHeight){
+    const f32 leftColumnX = originX + s_LeftColumnX;
+    const f32 rightColumnX = originX + s_RightColumnX;
+    const f32 buttonTopY = originY + s_ButtonTopY;
+    const f32 buttonBottomY = originY + s_ButtonBottomY;
+    return
+        paint.drawRegion(s_Panel, Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight))
+        && paint.drawRegion(s_ButtonNormal, Rect(leftColumnX, buttonTopY, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonHover, Rect(rightColumnX, buttonTopY, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonPressed, Rect(leftColumnX, buttonBottomY, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonDisabled, Rect(rightColumnX, buttonBottomY, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_EditFocused, Rect(leftColumnX, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
+        && paint.drawRegion(s_ComboArrow, Rect(originX + s_ComboArrowX, originY + s_ComboArrowY, s_ComboArrowSize, s_ComboArrowSize))
+        && paint.drawRegion(s_Checkbox, Rect(originX + s_CheckboxX, originY + s_CheckboxY, s_CheckboxSize, s_CheckboxSize))
+        && paint.drawRegion(s_CheckboxMark, Rect(originX + s_CheckboxMarkX, originY + s_CheckboxMarkY, s_CheckboxMarkSize, s_CheckboxMarkSize))
+        && paint.drawRegion(s_ProgressTrack, Rect(leftColumnX, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
+        && paint.drawRegion(s_ProgressFill, Rect(originX + s_ProgressFillX, originY + s_ProgressFillY, s_ProgressFillWidth, s_ProgressFillHeight))
+        && paint.drawRegion(s_EditNormal, Rect(leftColumnX, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
+    ;
+}
+
+b8 ConfigureLabelWithSize(in StringView text, in f32 size, mut Label outLabel){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = size;
+    return outLabel.setText(request) == TextLayoutStatus::Success;
+}
+
+b8 ConfigureLabel(in StringView text, mut Label outLabel){
+    return ConfigureLabelWithSize(text, s_LabelFontSize, outLabel);
+}
+
+b8 ConfigureKoreanLabel(mut Label outLabel){
+    ShapeRequest request = ShapeRequest();
+    request.text = s_KoreanText;
+    request.language = "ko";
+    request.fontSize = s_LabelFontSize;
+    request.scriptTag = PackFourCharTag(72u, 97u, 110u, 103u);
+    return outLabel.setText(request) == TextLayoutStatus::Success;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiListSource : IListDataSource{
+    public u64 instanceGeneration()const override{ return 1u; }
+    public u64 revision()const override{ return 1u; }
+    public u64 rowCount()const override{ return s_VirtualListRowCount; }
+    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, cast<usize>(s_VirtualListRowCount)); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, cast<usize>(s_VirtualListRowCount)); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, cast<usize>(s_VirtualListRowCount), 0u); }
+    public StringView text(in u64 index)const override{ return FormatVirtualListRowLabel(this.key(index), this.m_label); }
+    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, cast<usize>(s_VirtualListRowCount), 0u); }
+
+    private Array<u8, s_VirtualListLabelCapacity> m_label;
+}
+
+class UiPopupToolsSource : IListDataSource{
+    public u64 instanceGeneration()const override{ return 1u; }
+    public u64 revision()const override{ return 1u; }
+    public u64 rowCount()const override{ return cast<u64>(s_PopupToolsLabelCount); }
+    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, s_PopupToolsLabelCount); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, s_PopupToolsLabelCount); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, s_PopupToolsLabelCount, s_PopupToolsDisabledKey); }
+    public StringView text(in u64 index)const override{ return ResolvePopupToolsLabel(index); }
+    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, s_PopupToolsLabelCount, s_PopupToolsDisabledKey); }
+}
+
+class UiRadioGroupSource : IListDataSource{
+    public u64 instanceGeneration()const override{ return 1u; }
+    public u64 revision()const override{ return 1u; }
+    public u64 rowCount()const override{ return cast<u64>(s_RadioGroupLabelCount); }
+    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, s_RadioGroupLabelCount); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, s_RadioGroupLabelCount); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, s_RadioGroupLabelCount, s_RadioGroupDisabledKey); }
+    public StringView text(in u64 index)const override{ return ResolveRadioGroupLabel(index); }
+    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, s_RadioGroupLabelCount, s_RadioGroupDisabledKey); }
+}
+
+class UiListGallery{
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("list_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ListGalleryPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "100000 virtual rows");
+        ListOptions options = ListOptions();
+        options.height = LayoutSize(LayoutSizePolicy::Fixed, s_ListGalleryListHeight);
+        const ListResult result = context.ui.virtualList("rows", this.m_source, this.m_state, options);
+        if(result.activated)
+            [essential] info("Testbed: custom list selected key={}", this.m_state.selectedKey());
+        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.selectedKey()) && result.valid && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom virtual list declaration failed");
+    }
+
+    private UiListSource m_source = UiListSource();
+    private ListState m_state = ListState();
+}
+
+class UiComboGallery{
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("combo_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ComboGalleryPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Keyed combo selection");
+        ComboOptions options = ComboOptions();
+        options.popupHeight = s_ComboGalleryPopupHeight;
+        const ComboResult result = context.ui.comboBox(s_ChoiceKey, this.m_source, this.m_state, options);
+        if(result.committed)
+            [essential] info("Testbed: custom combo selected key={}", this.m_state.selectedKey());
+        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.selectedKey()) && result.valid && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom combo declaration failed");
+    }
+
+    private UiListSource m_source = UiListSource();
+    private ComboState m_state = ComboState();
+}
+
+class UiEditGallery{
+    public UiEditGallery(mut GlobalArena arena){
+        this.m_text = EditModel(arena);
+        this.m_readOnly = EditModel(arena);
+        const b8 configured = this.m_text.setText("Edit me: \xED\x95\x9C\xEA\xB8\x80") && this.m_readOnly.setText("Read-only: copy this text");
+        [essential] assert(configured, "Testbed edit gallery must have valid initial text");
+    }
+
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("edit_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_EditGalleryPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Text editing");
+        EditBoxOptions options = EditBoxOptions();
+        const EditBoxResult text = context.ui.editBox("editable", this.m_text, this.m_textState, options);
+        if(text.textChanged)
+            [essential] info("Testbed: custom edit text bytes={}", this.m_text.text().size());
+        options.readOnly = true;
+        const EditBoxResult readOnly = context.ui.editBox(s_ReadOnlyKey, this.m_readOnly, this.m_readOnlyState, options);
+        declared = text.valid && readOnly.valid && declared;
+        declared = context.ui.label(s_HintKey, "Ctrl+A/C/X/V, undo and redo") && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom edit widget declaration failed");
+    }
+
+    private EditModel m_text;
+    private EditModel m_readOnly;
+    private EditBoxState m_textState = EditBoxState();
+    private EditBoxState m_readOnlyState = EditBoxState();
+}
+
+class UiImageGallery{
+    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
+        return LoadUiGallerySkinImageSource(arena, assets, sceneSubsystems, this.m_source);
+    }
+
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("image_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ImageGalleryPanelHeight)))
+            return;
+        b8 valid = context.ui.label(s_TitleKey, "Atlas and engine images");
+        valid = context.ui.beginRow("samples") && valid;
+        ImageOptions sprite = ImageOptions();
+        sprite.width = LayoutSize(LayoutSizePolicy::Fixed, s_ImageGallerySpriteSize);
+        sprite.height = LayoutSize(LayoutSizePolicy::Fixed, s_ImageGallerySpriteSize);
+        valid = context.ui.image("sprite", s_RadioMarkRegion, sprite) && valid;
+        ImageOptions slice = sprite;
+        slice.width.value = s_ImageGallerySliceWidth;
+        slice.tint = ResolveImageGallerySliceTint();
+        valid = context.ui.image("slice", s_ButtonNormal, slice) && valid;
+        valid = context.ui.image("natural", s_ComboArrow) && valid;
+        valid = context.ui.endContainer() && valid;
+        ImageOptions texture = ImageOptions();
+        texture.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        texture.height = LayoutSize(LayoutSizePolicy::Fixed, s_ImageGalleryTextureHeight);
+        valid = context.ui.image("engine_texture", this.m_source, texture) && valid;
+        valid = context.ui.label(s_HintKey, "Texture, sprite and nine-slice") && valid;
+        valid = context.ui.endPanel() && valid;
+        if(!valid)
+            error("Testbed: custom image declaration failed");
+    }
+
+    private SharedImageSource m_source = SharedImageSource();
+}
+
+class UiNestedPopupGallery{
+    public UiNestedPopupGallery(mut GlobalArena arena){
+        this.m_source = UiNestedPopupSource(arena);
+        this.m_search = SearchComboState(arena);
+        this.m_beforeText = EditModel(arena);
+        this.m_afterText = EditModel(arena);
+        this.m_childText = EditModel(arena);
+        const b8 initialized = this.m_beforeText.setText("Before child") && this.m_afterText.setText("After child") && this.m_childText.setText("Inside child");
+        [essential] assert(initialized);
+        this.m_combo.select(1u);
+        this.m_search.combo().select(1u);
+    }
+
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        const f32 previousGap = SetBuilderGap(context.ui, s_NestedPopupCompactGap);
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_NestedPopupFontSize);
+        if(context.ui.beginPanel("nested_popup_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_NestedPopupPanelHeight))){
+            b8 valid = context.ui.label(s_TitleKey, "Nested popup / parent scope");
+            if(context.ui.button("open", "Open parent and right child"))
+                this.m_parent.open();
+            valid = context.ui.label(s_HintKey, "Escape/outside closes the top child") && valid;
+            valid = context.ui.endPanel() && valid;
+            PopupOptions parent = PopupOptions();
+            parent.anchor = ResolveNestedPopupParentAnchorRect(x, y);
+            parent.size = Point(s_NestedPopupParentWidth, s_NestedPopupParentHeight);
+            if(context.ui.beginPopup("nested_parent", this.m_parent, parent)){
+                valid = this.paintParent(context.ui) && valid;
+                valid = context.ui.endPopup() && valid;
+            }
+            if(!valid || context.ui.failed())
+                error("Testbed: custom nested popup declaration failed");
+        }
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        RestoreBuilderGap(context.ui, previousGap);
+    }
+
+    private b8 paintParent(mut Builder ui){
+        WidgetOptions button = WidgetOptions();
+        button.width = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupButtonWidth);
+        WidgetOptions wide = WidgetOptions();
+        wide.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        ContainerOptions row = ContainerOptions();
+        row.gap = s_NestedPopupCompactGap;
+        EditBoxOptions edit = EditBoxOptions();
+        ListOptions list = ListOptions();
+        list.height = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupListHeight);
+        if(!ui.label(s_TitleKey, "Parent: controls before and after child") || !ui.beginRow("before", row))
+            return false;
+        ui.button(s_NestedPopupActionKey, "Before", button);
+        const EditBoxResult before = ui.editBox(s_NestedPopupEditKey, this.m_beforeText, this.m_beforeEdit, edit);
+        if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", this.m_source, this.m_beforeList, list).valid)
+            return false;
+        if(ui.button("open_child", "Open child outside parent clip", wide))
+            this.m_child.open();
+        if(!this.paintChild(ui) || !ui.beginRow("after", row))
+            return false;
+        ui.button(s_NestedPopupActionKey, "After", button);
+        const EditBoxResult after = ui.editBox(s_NestedPopupEditKey, this.m_afterText, this.m_afterEdit, edit);
+        if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", this.m_source, this.m_afterList, list).valid)
+            return false;
+        ComboOptions combo = ComboOptions();
+        combo.popupHeight = s_NestedPopupComboPopupHeight;
+        if(!ui.comboBox("combo", this.m_source, this.m_combo, combo).valid)
+            return false;
+        SearchComboOptions search = SearchComboOptions();
+        search.combo = combo;
+        search.combo.popupHeight = s_NestedPopupSearchPopupHeight;
+        if(!ui.searchComboBox("search", this.m_source, this.m_search, search).combo.valid)
+            return false;
+        ui.button(s_NestedPopupMenuAnchorKey, "Right-click / Menu for commands", wide);
+        ContextMenuOptions menu = ContextMenuOptions();
+        menu.size = Point(s_NestedPopupMenuWidth, s_NestedPopupMenuHeight);
+        const ContextMenuResult result = ui.contextMenu(s_CommandsKey, s_NestedPopupMenuAnchorKey, this.m_source, this.m_menu, menu);
+        if(result.activated)
+            [essential] info("Testbed: nested context command={}", result.key);
+        return result.valid;
+    }
+
+    private b8 paintChild(mut Builder ui){
+        const Rect parent = this.m_parent.placement().bounds;
+        PopupOptions options = PopupOptions();
+        options.anchor = ResolveNestedPopupChildAnchorRect(parent);
+        options.side = PopupPlacementSide::Right;
+        options.size = Point(s_NestedPopupChildWidth, s_NestedPopupChildHeight);
+        if(!ui.beginPopup("right_child", this.m_child, options))
+            return !ui.failed();
+        WidgetOptions button = WidgetOptions();
+        button.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        if(!ui.label(s_TitleKey, "Independent child overlay"))
+            return false;
+        ui.button(s_NestedPopupActionKey, "Child action", button);
+        EditBoxOptions edit = EditBoxOptions();
+        const EditBoxResult result = ui.editBox(s_NestedPopupEditKey, this.m_childText, this.m_childEdit, edit);
+        if(ui.button("close_branch", "Close ancestor and entire branch", button))
+            this.m_parent.close();
+        return result.valid && ui.endPopup();
+    }
+
+    private UiNestedPopupSource m_source;
+    private PopupState m_parent = PopupState();
+    private PopupState m_child = PopupState();
+    private ListState m_beforeList = ListState();
+    private ListState m_afterList = ListState();
+    private ComboState m_combo = ComboState();
+    private SearchComboState m_search;
+    private ContextMenuState m_menu = ContextMenuState();
+    private EditModel m_beforeText;
+    private EditModel m_afterText;
+    private EditModel m_childText;
+    private EditBoxState m_beforeEdit = EditBoxState();
+    private EditBoxState m_afterEdit = EditBoxState();
+    private EditBoxState m_childEdit = EditBoxState();
+}
+
+class UiNumericEditGallery{
+    public UiNumericEditGallery(mut GlobalArena arena){
+        this.m_integer = IntegerEditModel(arena);
+        this.m_float = FloatEditModel(arena);
+        const b8 initialized = this.m_integer.setValue(s_NumericEditInitialInteger) && this.m_float.setValue(s_NumericEditInitialDecimal);
+        [essential] assert(initialized);
+    }
+
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("numeric_edit_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_NumericEditPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Exact integer / decimal editing");
+        IntegerEditOptions integer = IntegerEditOptions();
+        const NumericEditBoxResult first = context.ui.integerEdit("integer", this.m_integer, this.m_integerState, integer);
+        FloatEditOptions floating = FloatEditOptions();
+        floating.bounds = FloatBounds(-s_NumericEditDecimalLimit, s_NumericEditDecimalLimit, NumericBoundsPolicy::Clamp);
+        const NumericEditBoxResult second = context.ui.floatEdit("float", this.m_float, this.m_floatState, floating);
+        declared = DeclareFormattedLabel(context.ui, scratchArena, "committed", "Committed: {} / {}", this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
+        declared = context.ui.label(s_HintKey, "Enter: commit, Escape: restore") && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom numeric editor declaration failed");
+    }
+
+    private IntegerEditModel m_integer;
+    private FloatEditModel m_float;
+    private EditBoxState m_integerState = EditBoxState();
+    private EditBoxState m_floatState = EditBoxState();
+}
+
+class UiPopupGallery{
+    public void trigger(mut Builder ui){
+        WidgetOptions options = WidgetOptions();
+        options.width = LayoutSize(LayoutSizePolicy::Fixed, s_PopupMenuButtonWidth);
+        if(ui.button("menu", "Menu", options))
+            this.m_popup.open();
+    }
+
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        PopupOptions options = PopupOptions();
+        options.anchor = ResolvePopupGalleryAnchorRect(x, y);
+        options.size = Point(s_PopupGalleryWidth, s_PopupGalleryHeight);
+        if(!context.ui.beginPopup("gallery_menu", this.m_popup, options))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        WidgetOptions row = WidgetOptions();
+        row.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        const StringView caption = ResolvePopupGalleryCaption(this.m_choice);
+        const b8 declared = context.ui.label(s_TitleKey, caption);
+        if(context.ui.button("first", "First choice", row)){
+            this.m_choice = s_PopupFirstChoice;
+            if(!this.m_keepOpen)
+                this.m_popup.close();
+        }
+        if(context.ui.button("second", "Second choice", row)){
+            this.m_choice = s_PopupSecondChoice;
+            if(!this.m_keepOpen)
+                this.m_popup.close();
+        }
+        if(context.ui.checkbox("keep_open", "Keep open on selection", this.m_keepOpen, row))
+            [essential] info("Testbed: popup keep open={}", this.m_keepOpen);
+        const b8 valid = context.ui.endPopup() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom popup declaration failed");
+    }
+
+    private PopupState m_popup = PopupState();
+    private u32 m_choice = 0u;
+    private b8 m_keepOpen = false;
+}
+
+class UiPopupToolsGallery{
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("popup_tools_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_PopupToolsPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Tooltip and context commands");
+        if(context.ui.button(s_PopupToolsAnchorKey, "Right-click / Menu / Shift+F10"))
+            ++this.m_anchorClicks;
+        declared = context.ui.tooltip("help", s_PopupToolsAnchorKey, "Open commands here; Delete is disabled.", this.m_tooltip) && declared;
+        ContextMenuOptions options = ContextMenuOptions();
+        options.size = Point(s_PopupToolsMenuWidth, s_PopupToolsMenuHeight);
+        const ContextMenuResult result = context.ui.contextMenu(s_CommandsKey, s_PopupToolsAnchorKey, this.m_source, this.m_menu, options);
+        if(result.activated){
+            this.m_command = result.key;
+            [essential] info("Testbed: custom context command key={}", this.m_command);
+        }
+        declared = DeclareFormattedLabel(context.ui, scratchArena, s_SelectedKey, "Command: {} / Clicks: {}", this.m_command, this.m_anchorClicks) && result.valid && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom popup tools declaration failed");
+    }
+
+    private UiPopupToolsSource m_source = UiPopupToolsSource();
+    private ContextMenuState m_menu = ContextMenuState();
+    private TooltipState m_tooltip = TooltipState();
+    private u64 m_command = 0u;
+    private u32 m_anchorClicks = 0u;
+}
+
+class UiProgressGallery{
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("progress_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ProgressGalleryPanelHeight)))
+            return;
+        b8 valid = context.ui.label(s_TitleKey, "Skinned progress bar");
+        if(context.ui.button("advance", "Advance by 25%"))
+            this.m_fraction = AdvanceProgressGalleryFraction(this.m_fraction);
+        valid = context.ui.progress(s_AmountKey, this.m_fraction) && valid;
+        valid = DeclareFormattedLabel(context.ui, scratchArena, "value", "Completed: {:.0f}%", this.m_fraction * s_ProgressPercentScale) && valid;
+        valid = context.ui.endPanel() && valid;
+        if(!valid)
+            error("Testbed: custom progress declaration failed");
+    }
+
+    private f64 m_fraction = s_DefaultProgressFraction;
+}
+
+class UiRadioGroupGallery{
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("radio_group_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_RadioGroupPanelHeight)))
+            return;
+        b8 valid = context.ui.label(s_TitleKey, "Radio choices");
+        const RadioGroupResult result = context.ui.radioGroup("quality", this.m_source, this.m_state);
+        valid = context.ui.label(s_HintKey, "Arrows select; Enter / Space sets") && result.valid && valid;
+        valid = context.ui.endPanel() && valid;
+        if(result.activated)
+            [essential] info("Testbed: custom radio choice key={}", this.m_state.selectedKey());
+        if(!valid)
+            error("Testbed: custom radio group declaration failed");
+    }
+
+    private UiRadioGroupSource m_source = UiRadioGroupSource();
+    private RadioGroupState m_state = RadioGroupState();
+}
+
+class UiSearchComboGallery{
+    public UiSearchComboGallery(mut GlobalArena arena){
+        this.m_source = UiSearchComboSource(arena);
+        this.m_state = SearchComboState(arena);
+    }
+
+    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("search_combo_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_SearchComboPanelHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Searchable fruit selection");
+        SearchComboOptions options = SearchComboOptions();
+        options.combo.popupHeight = s_SearchComboPopupHeight;
+        const SearchComboResult result = context.ui.searchComboBox(s_ChoiceKey, this.m_source, this.m_state, options);
+        if(result.combo.committed)
+            [essential] info("Testbed: custom searchable combo selected key={}", this.m_state.combo().selectedKey());
+        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.combo().selectedKey()) && result.combo.valid && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(!valid)
+            error("Testbed: custom searchable combo declaration failed");
+    }
+
+    private UiSearchComboSource m_source;
+    private SearchComboState m_state;
+}
+
+class UiSliderGallery{
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("slider_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_SliderGalleryPanelHeight)))
+            return;
+        b8 valid = context.ui.label(s_TitleKey, "Continuous slider");
+        if(context.ui.checkbox(s_EnabledKey, "Enable slider", this.m_enabled))
+            [essential] info("Testbed: custom slider enabled={}", this.m_enabled);
+        SliderOptions options = SliderOptions();
+        options.enabled = this.m_enabled;
+        options.keyStep = s_SliderKeyStep;
+        valid = context.ui.slider(s_AmountKey, this.m_state, options) && valid;
+        valid = context.ui.label(s_HintKey, "Drag, arrows, Home / End") && valid;
+        valid = context.ui.endPanel() && valid;
+        const SliderResult result = this.m_state.result();
+        if(valid && result.valid && result.valueChanged)
+            [essential] info("Testbed: custom slider value={}", this.m_state.value());
+        if(!valid)
+            error("Testbed: custom slider declaration failed");
+    }
+
+    private SliderState m_state = SliderState();
+    private b8 m_enabled = true;
+}
+
+class UiTextAreaGallery{
+    public UiTextAreaGallery(mut GlobalArena arena){
+        this.m_document = EditModel(arena, EditLimits(), EditTextMode::Multiline);
+        const b8 initialized = this.m_document.setText("Custom multiline editor\nUp / Down retain the preferred column.\nShift selects; Ctrl+Enter submits.\nClipboard and IME belong to the OS.\n\nLong lines scroll horizontally; longer documents scroll vertically.");
+        [essential] assert(initialized);
+    }
+
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("text_area_gallery", Rect(x, y, s_SelectorWidth, s_ContentHeight)))
+            return;
+        const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
+        b8 declared = context.ui.label(s_TitleKey, "Multiline text area");
+        if(context.ui.checkbox(s_ReadOnlyKey, "Read only", this.m_readOnly))
+            [essential] info("Testbed: text area read only={}", this.m_readOnly);
+        TextAreaOptions options = TextAreaOptions();
+        options.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        options.readOnly = this.m_readOnly;
+        const EditBoxResult result = context.ui.textArea("document", this.m_document, this.m_state, options);
+        declared = result.valid && context.ui.label(s_HintKey, "Home / End: line; Ctrl: whole document") && declared;
+        const b8 valid = context.ui.endPanel() && declared;
+        RestoreBuilderFontSize(context.ui, previousFontSize);
+        if(result.submitted)
+            [essential] info("Testbed: multiline document submitted, bytes={}", this.m_document.text().size());
+        if(!valid)
+            error("Testbed: custom text area declaration failed");
+    }
+
+    private EditModel m_document;
+    private TextAreaState m_state = TextAreaState();
+    private b8 m_readOnly = false;
+}
+
+class UiWidgetGallery{
+    public UiWidgetGallery(mut GlobalArena arena){
+        this.m_edits = UiEditGallery(arena);
+        this.m_searchCombos = UiSearchComboGallery(arena);
+        this.m_nestedPopups = UiNestedPopupGallery(arena);
+        this.m_numericEdits = UiNumericEditGallery(arena);
+        this.m_textAreas = UiTextAreaGallery(arena);
+    }
+
+    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
+        return this.m_images.loadAssets(arena, assets, sceneSubsystems);
+    }
+
+    public void paint(mut UiPaintContext context, in Rect bounds){
+        const u32 previous = this.m_selectedGallery;
+        if(!context.ui.beginPanel("gallery_selector", Rect(bounds.x, bounds.y, bounds.width, s_SelectorHeight)))
+            return;
+        ContainerOptions row = ContainerOptions();
+        b8 valid = context.ui.beginRow("navigation", row);
+        WidgetOptions navigation = WidgetOptions();
+        navigation.width = LayoutSize(LayoutSizePolicy::Fixed, s_NavigationButtonWidth);
+        navigation.enabled = this.m_selectedGallery != 0u && !context.ui.input().hasPopup();
+        if(context.ui.button("previous", "Previous", navigation))
+            --this.m_selectedGallery;
+        navigation.enabled = this.m_selectedGallery + 1u < cast<u32>(Section::kCount) && !context.ui.input().hasPopup();
+        if(context.ui.button("next", "Next", navigation))
+            ++this.m_selectedGallery;
+        valid = context.ui.endContainer() && valid;
+        const u32 selected = this.m_selectedGallery;
+        ScratchArena scratchArena(s_SelectorArena);
+        valid = DeclareFormattedLabel(context.ui, scratchArena, "section", "UI samples {}/{}: {}", selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
+        valid = context.ui.endPanel() && valid;
+        if(!valid){
+            error("Testbed: UI gallery selector declaration failed");
+            return;
+        }
+        if(previous != selected)
+            [essential] info("Testbed: UI gallery section={}", this.m_selectedGallery + 1u);
+
+        const Point contentOrigin = ResolveWidgetGalleryContentOrigin(bounds, selected);
+        const f32 x = contentOrigin.x;
+        const f32 y = contentOrigin.y;
+        switch(cast<Section>(selected)){
+        case Section::Controls:
+            this.paintControls(context, scratchArena, x, y);
+            this.m_popups.paint(context, x, y);
+            break;
+        case Section::Edit: this.m_edits.paint(context, x, y); break;
+        case Section::List: this.m_lists.paint(context, scratchArena, x, y); break;
+        case Section::Combo: this.m_combos.paint(context, scratchArena, x, y); break;
+        case Section::SearchCombo: this.m_searchCombos.paint(context, scratchArena, x, y); break;
+        case Section::PopupTools: this.m_popupTools.paint(context, scratchArena, x, y); break;
+        case Section::NestedPopup: this.m_nestedPopups.paint(context, x, y); break;
+        case Section::NumericEdit: this.m_numericEdits.paint(context, scratchArena, x, y); break;
+        case Section::TextArea: this.m_textAreas.paint(context, x, y); break;
+        case Section::RadioGroup: this.m_radioGroups.paint(context, x, y); break;
+        case Section::Slider: this.m_sliders.paint(context, x, y); break;
+        case Section::Progress: this.m_progress.paint(context, scratchArena, x, y); break;
+        case Section::Image: this.m_images.paint(context, x, y); break;
+        case Section::kCount: break;
+        }
+    }
+
+    private void paintControls(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+        if(!context.ui.beginPanel("interactive_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ControlsPanelHeight)))
+            return;
+        b8 valid = context.ui.label(s_TitleKey, "Interactive custom UI");
+        if(context.ui.checkbox(s_EnabledKey, "Enable counter", this.m_enabled))
+            [essential] info("Testbed: custom UI counter enabled={}", this.m_enabled);
+        valid = context.ui.beginRow("actions") && valid;
+        WidgetOptions options = WidgetOptions();
+        options.enabled = this.m_enabled;
+        options.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        if(context.ui.button("increase", "Increase", options)){
+            this.m_count = StepWidgetGalleryCounter(this.m_count);
+            [essential] info("Testbed: custom UI counter={}", this.m_count);
+        }
+        if(context.ui.button("reset", "Reset"))
+            this.m_count = 0u;
+        this.m_popups.trigger(context.ui);
+        valid = context.ui.endContainer() && valid;
+        valid = DeclareFormattedLabel(context.ui, scratchArena, "count", "Count: {}", this.m_count) && valid;
+        valid = context.ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
+        valid = context.ui.endPanel() && valid;
+        if(!valid)
+            error("Testbed: custom UI widget declaration failed");
+    }
+
+    private UiEditGallery m_edits;
+    private UiListGallery m_lists = UiListGallery();
+    private UiComboGallery m_combos = UiComboGallery();
+    private UiSearchComboGallery m_searchCombos;
+    private UiPopupGallery m_popups = UiPopupGallery();
+    private UiPopupToolsGallery m_popupTools = UiPopupToolsGallery();
+    private UiNestedPopupGallery m_nestedPopups;
+    private UiNumericEditGallery m_numericEdits;
+    private UiTextAreaGallery m_textAreas;
+    private UiRadioGroupGallery m_radioGroups = UiRadioGroupGallery();
+    private UiSliderGallery m_sliders = UiSliderGallery();
+    private UiProgressGallery m_progress = UiProgressGallery();
+    private UiImageGallery m_images = UiImageGallery();
+    private u32 m_count = 0u;
+    private u32 m_selectedGallery = 0u;
+    private b8 m_enabled = true;
+}
+
+class UiSkinPreview{
+    public UiSkinPreview(mut GlobalArena arena){
+        this.m_normal = Label(arena);
+        this.m_hover = Label(arena);
+        this.m_pressed = Label(arena);
+        this.m_disabled = Label(arena);
+        this.m_edit = Label(arena);
+        this.m_caption = Label(arena);
+        this.m_korean = Label(arena);
+        this.m_widgets = UiWidgetGallery(arena);
+        const b8 configured = ConfigureLabel("Normal", this.m_normal) && ConfigureLabel("Hover", this.m_hover)
+            && ConfigureLabel("Pressed", this.m_pressed) && ConfigureLabel("Disabled", this.m_disabled)
+            && ConfigureLabelWithSize("UTF-8 labels", s_GalleryFontSize, this.m_edit) && ConfigureLabelWithSize("FreeType + HarfBuzz", s_GalleryFontSize, this.m_caption)
+            && ConfigureKoreanLabel(this.m_korean);
+        [essential] assert(configured, "Testbed UI labels must have valid constant text");
+    }
+
+    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
+        return this.m_widgets.loadAssets(arena, assets, sceneSubsystems);
+    }
+
+    public Expected<Rect> galleryBounds(mut UiPaintContext context){
+        const Expected<Rect> caption = this.m_caption.measure(context.text, context.display);
+        const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
+        if(!caption.has_value() || !korean.has_value())
+            return MakeUnexpected(Failure());
+        const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption.value().height, korean.value().height);
+        return ResolveWidgetGalleryLayoutBounds(context.display, ResolveSkinGalleryPreferredTop(captionHeight));
+    }
+
+    public void paint(mut UiPaintContext context){
+        const f32 originX = ResolveSkinGalleryOriginX(context.display.logicalWidth);
+        const f32 originY = s_GalleryMargin;
+        const Expected<Rect> caption = this.m_caption.measure(context.text, context.display);
+        const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
+        const Expected<Rect> normal = this.m_normal.measure(context.text, context.display);
+        const Expected<Rect> hover = this.m_hover.measure(context.text, context.display);
+        const Expected<Rect> pressed = this.m_pressed.measure(context.text, context.display);
+        const Expected<Rect> disabled = this.m_disabled.measure(context.text, context.display);
+        const Expected<Rect> edit = this.m_edit.measure(context.text, context.display);
+        if(!caption.has_value() || !korean.has_value() || !normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
+            error("Testbed: custom UI label measurement failed");
+            return;
+        }
+        const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption.value().height, korean.value().height);
+        const f32 preferredTop = ResolveSkinGalleryPreferredTop(captionHeight);
+        const Rect gallery = ResolveWidgetGalleryLayoutBounds(context.display, preferredTop);
+        this.m_widgets.paint(context, gallery);
+        if(gallery.y < preferredTop || originX < s_MinimumGalleryX)
+            return;
+        if(!DrawSkinGallery(context.paint, originX, originY, captionHeight)){
+            error("Testbed: default UI skin is missing a gallery region");
+            return;
+        }
+
+        const f32 captionX = originX + s_CaptionX;
+        const f32 captionY = originY + s_CaptionY;
+        const f32 leftTextX = originX + s_LeftTextX;
+        const f32 rightTextX = originX + s_RightTextX;
+        const f32 normalY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, normal.value().height);
+        const f32 hoverY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, hover.value().height);
+        const f32 pressedY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, pressed.value().height);
+        const f32 disabledY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, disabled.value().height);
+        const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, edit.value().height);
+        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(captionX, captionY, s_CaptionWidth, caption.value().height))
+            && this.m_korean.paint(context.text, context.paint, Rect(captionX, captionY + caption.value().height, s_CaptionWidth, korean.value().height));
+        if(!captionPainted){
+            error("Testbed: custom UI caption shaping or rasterization failed");
+            return;
+        }
+        if(
+            !this.m_normal.paint(context.text, context.paint, Rect(leftTextX, normalY, s_ButtonTextWidth, normal.value().height), s_LabelTextColor)
+            || !this.m_hover.paint(context.text, context.paint, Rect(rightTextX, hoverY, s_ButtonTextWidth, hover.value().height), s_LabelTextColor)
+            || !this.m_pressed.paint(context.text, context.paint, Rect(leftTextX, pressedY, s_ButtonTextWidth, pressed.value().height), s_LabelTextColor)
+            || !this.m_disabled.paint(context.text, context.paint, Rect(rightTextX, disabledY, s_ButtonTextWidth, disabled.value().height), s_DisabledLabelTextColor)
+            || !this.m_edit.paint(context.text, context.paint, Rect(leftTextX, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
+        )
+            error("Testbed: custom UI label shaping or rasterization failed");
+    }
+
+    private Label m_normal;
+    private Label m_hover;
+    private Label m_pressed;
+    private Label m_disabled;
+    private Label m_edit;
+    private Label m_caption;
+    private Label m_korean;
+    private UiWidgetGallery m_widgets;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

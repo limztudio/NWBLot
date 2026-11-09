@@ -86,6 +86,10 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     const TypeRef* lhsMemberOrIndexTypeRef = nullptr;
     if(expr.op == TokenType::Equal && expr.lhs){
         if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
+            if(expr.lhs->text.empty()){
+                m_checker.reportError(errors, expr.lhs->span, "cannot assign to 'this'");
+                ok = false;
+            }
             lhsThisField = SymbolTable::FindClassField(*ownerClass, expr.lhs->text);
             if(lhsThisField && lhsThisField->type){
                 const MStringView baseFieldTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name);

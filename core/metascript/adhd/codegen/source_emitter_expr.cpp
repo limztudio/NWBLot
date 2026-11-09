@@ -95,7 +95,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::ThisMember:{
-        if(expr.derefNotNull){
+        if(expr.text.empty()){
+            out.append("(*this)");
+        }
+        else if(expr.derefNotNull){
             out.append("(*this->");
             out.append(expr.text.data(), expr.text.size());
             out.push_back(')');

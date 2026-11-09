@@ -257,7 +257,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 || SymbolTable::IsSimdType(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
-                || m_symbols.findClass(baseFieldType) != nullptr
+                || (m_symbols.findClass(baseFieldType) != nullptr && m_symbols.isSelfDefaultedType(baseFieldType))
             )
                 out.append("{}");
         }

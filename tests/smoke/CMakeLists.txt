@@ -334,7 +334,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_add_csg_temporal_smoke(cap_state cap_state static natural ${_nwb_csg_temporal_default_frame_interval})
         nwb_add_csg_temporal_smoke(cap_state_software cap_state static software ${_nwb_csg_temporal_default_frame_interval})
         nwb_add_csg_temporal_smoke(overlapping_spans span_state static natural ${_nwb_csg_temporal_default_frame_interval} "--overlapping")
-        nwb_add_csg_temporal_smoke(overlapping_spans_software span_state static software ${_nwb_csg_temporal_default_frame_interval} "--overlapping")
+        nwb_add_csg_temporal_smoke(overlapping_spans_software span_state static software ${_nwb_csg_temporal_default_frame_interval} "--overlapping" "--gpu-timing-output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_overlapping_spans_software/gpu_timing.txt")
+        set_tests_properties(nwb_csg_gi_overlapping_spans_software_smoke PROPERTIES ENVIRONMENT "NWB_SMOKE_QUIET_GPU_SCOPE_LOG=1")
 
         unset(_nwb_csg_visible_runtime_root)
 

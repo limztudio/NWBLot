@@ -100,6 +100,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
 
     public b8 onStartup()override{
         this.m_temporalEnabled = ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
+        this.m_gpuPassTimingProbe.setLogScopes(!ReadSmokeEnvironmentFlag("NWB_SMOKE_QUIET_GPU_SCOPE_LOG"));
         const b8 overlapping = this.m_temporalEnabled && ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(this.m_temporalEnabled){

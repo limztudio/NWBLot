@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererAvboitSystem;
+class RendererTaskTimingFeedback;
+struct AvboitFrameTargets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AvboitComputeEffectRecordInputs{
+    RendererAvboitSystem& avboitSystem;
+    AvboitFrameTargets& targets;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    RendererTaskTimingFeedback* timingFeedback = nullptr;
+    const Core::GpuTimingScopeDefinition* timingScope = nullptr;
+    mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+};
+
+template<typename DispatchMethod>
+[[nodiscard]] inline b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const DispatchMethod dispatch){
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+    b8 timingRecorded = false;
+    const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
+    if(!timingAttribution){
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+        return false;
+    }
+    payload.timingAttribution = *timingAttribution;
+    (payload.avboitSystem.*dispatch)(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
+    if(!timingRecorded && payload.timingFeedback){
+        payload.timingFeedback->discardRecording(payload.timingAttribution);
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+    }
+    return true;
+}
+
+inline void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
+    if(payload.timingFeedback)
+        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
+    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+}
+
+inline void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
+    if(payload.timingFeedback)
+        payload.timingFeedback->discardRecording(payload.timingAttribution);
+    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+}
+
+struct AvboitComputeEffectGraphTaskBase{
+    // The avboit system, the frame targets, and the timing ticket are required: effects always dispatch against this frame's targets.
+    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
+    using Payload = AvboitComputeEffectRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
+
+public:
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        AcceptAvboitComputeEffect(payload, token);
+    }
+
+    static void Discarded(Payload& payload)noexcept{
+        DiscardAvboitComputeEffect(payload);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderAvboitComputeEffectRecordInputsAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

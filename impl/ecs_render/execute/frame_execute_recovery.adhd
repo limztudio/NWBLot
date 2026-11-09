@@ -1,0 +1,114 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/avboit/avboit_system.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/deferred/deferred_system.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/compiled_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererFramePipeline;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// CPU-side packet-state restore for rejected frame recordings.
+// Stage restores live here so render() keeps only the call sites.
+namespace FrameExecuteCpuRestore{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct Snapshot{
+    RayTracingFrameCpuStateSnapshot rayTracing;
+    b8 avboitTargetsNeedClear = false;
+    b8 deferredBindlessSlotsUploaded = false;
+};
+
+void RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem)noexcept;
+void RestorePostGbufferPacketCpuState(
+    const Snapshot& snapshot,
+    b8 restoreBindlessSlots,
+    RendererMeshSystem& meshSystem,
+    RendererDeferredSystem& deferredSystem,
+    RendererRayTracingState& rayTracingState,
+    RendererAvboitSystem& avboitSystem,
+    DeferredFrameTargets& targets
+)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Recovers a partly accepted deferred frame: runs the graph-owned recovery packet, then rejects the remaining normal packets.
+class FrameExecuteRecovery final : NoCopy{
+public:
+    FrameExecuteRecovery(RendererFramePipeline& renderer, Core::Alloc::ScratchArena& scratchArena, Core::GpuTimingFrameTransaction& frameTimingTransaction, const Core::GpuCompiledGraph::ReadView& compiledPlan)noexcept
+        : m_renderer(renderer)
+        , m_scratchArena(scratchArena)
+        , m_frameTimingTransaction(frameTimingTransaction)
+        , m_compiledPlan(compiledPlan)
+    {}
+
+
+public:
+    [[nodiscard]] b8 discardUnacceptedGraphPackets();
+    [[nodiscard]] b8 executeFrameRecoveryTask();
+    [[nodiscard]] b8 recoverPendingFrameSubmission();
+    [[nodiscard]] b8 recoverPendingFrameThenDiscardUnaccepted();
+    void failFrameRenderRecovery();
+
+
+private:
+    RendererFramePipeline& m_renderer;
+    Core::Alloc::ScratchArena& m_scratchArena;
+    Core::GpuTimingFrameTransaction& m_frameTimingTransaction;
+    const Core::GpuCompiledGraph::ReadView& m_compiledPlan;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderExecuteFrameExecuteRecoveryAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

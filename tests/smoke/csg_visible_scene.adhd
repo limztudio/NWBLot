@@ -7,8 +7,8 @@
 #include "smoke_scene_helpers.adhd"
 
 native{
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_scene/module.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
 
 #include <global/simd/frame.h>
 

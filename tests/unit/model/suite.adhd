@@ -21,8 +21,8 @@ native{
 
 #include <tests/common/ecs_test_world.adhd.h>
 
-#include <impl/assets_model/asset.h>
-#include <impl/ecs_model/system.h>
+#include <impl/assets_model/asset.adhd.h>
+#include <impl/ecs_model/system.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
 #include <core/assets/manager.h>

@@ -1,0 +1,101 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeferredFrameTargets;
+
+
+// Opaque CSG interval clears own the interval-id plus receiver-event-count clears.
+struct OpaqueCsgIntervalClearInputs{
+    DeferredFrameTargets& targets;
+    CsgFrameGpuDataView csgFrameData{};
+    Core::GpuGraphResourceId csgIntervalId;
+    Core::GpuGraphResourceId csgReceiverEventCount;
+    Core::TextureSubresourceSet csgPeelSubresources{};
+    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
+    Core::GpuTaskId dependencyTask;
+    b8 hasOpaqueCsgFrameWork = false;
+};
+
+
+struct CsgIntervalRectClearDesc{
+    Name intervalClearIdentity = s_NameNone;
+    AStringView intervalClearMarkerLabel;
+    const tchar* intervalClearWarningMessage = nullptr;
+    Name receiverEventClearIdentity = s_NameNone;
+    AStringView receiverEventClearMarkerLabel;
+    const tchar* receiverEventClearWarningMessage = nullptr;
+    Core::GpuGraphResourceId csgIntervalId;
+    Core::GpuGraphResourceId csgReceiverEventCount;
+    Core::TextureSubresourceSet csgPeelSubresources{};
+    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
+    Core::Rect clearRect{};
+    Core::GpuTaskId dependencyTask;
+};
+
+[[nodiscard]] b8 DeclareCsgIntervalRectClearTasks(
+    const CsgIntervalRectClearDesc& desc,
+    Core::GpuTaskGraph& graph,
+    GraphClearTimingRecordState& clearTimingState,
+    Core::GpuTaskId& outFirstTask,
+    Core::GpuTaskId& outTailTask
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OpaqueCsgIntervalClearBuilder final : NoCopy{
+public:
+    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept
+        : m_graph(graph)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderCsgOpaqueCsgIntervalClearBuilderAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

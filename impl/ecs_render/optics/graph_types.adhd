@@ -3,8 +3,8 @@
 
 
 native{
-#include <impl/ecs_render/optics/optical_scene_upload.h>
-#include <impl/ecs_render/optics/optical_bounds_finalize.h>
+#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
+#include <impl/ecs_render/optics/optical_bounds_finalize.adhd.h>
 
 #include <core/task/gpu/types.h>
 namespace NWB::Impl{

@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A passive label caches logical layout; paint confines its ink to the supplied region and inherited clip at the current display scale.
+class Label final : NoCopy{
+public:
+    explicit Label(Core::Alloc::GlobalArena& arena)
+        : m_text(arena)
+        , m_language(s_TextDefaultLanguage, arena)
+        , m_layout(arena)
+    {}
+
+
+public:
+    [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request){
+        return SetLabelTextRequest(request, m_text, m_language, m_fontSize, m_scriptTag, m_direction, m_dirty);
+    }
+
+    [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display){
+        if(m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
+            const ShapeRequest request{
+                StringView(m_text.data(), m_text.size()),
+                StringView(m_language.data(), m_language.size()),
+                m_fontSize,
+                m_scriptTag,
+                m_direction,
+            };
+            auto layout = text.layout(request);
+            if(!layout)
+                return MakeUnexpected(Failure{});
+            m_layout = Move(*layout);
+            m_serviceIdentity = text.identity();
+            m_fontGeneration = text.generation();
+            m_dirty = false;
+        }
+        return text.measure(m_layout, display);
+    }
+
+    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {}){
+        const auto measured = measure(text, paint.displayMetrics());
+        if(!measured)
+            return false;
+        paint.pushClip(bounds);
+        const b8 painted = text.paint(paint, m_layout, ResolveLabelPaintOrigin(bounds, *measured), color);
+        const b8 restored = paint.popClip();
+        return painted && restored;
+    }
+
+    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_text;
+    AString<Core::Alloc::GlobalArena> m_language;
+    TextLayout m_layout;
+    u64 m_serviceIdentity = 0u;
+    u64 m_fontGeneration = 0u;
+    f32 m_fontSize = s_TextDefaultFontSize;
+    u32 m_scriptTag = s_TextDefaultScriptTag;
+    TextDirection::Enum m_direction = TextDirection::LeftToRight;
+    b8 m_dirty = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsLabelAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

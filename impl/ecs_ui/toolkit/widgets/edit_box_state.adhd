@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/actions.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
+#include <impl/ecs_ui/toolkit/state/store.adhd.h>
+#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The toolkit lends a model only during edit(). Native services and asynchronous exchange belong to the host adapter.
+interface IEditBoxHost : private NoCopy{
+public:
+    virtual ~IEditBoxHost()noexcept = default;
+
+
+public:
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& model) = 0;
+    // Deferred composite controls lend an explicit popup identity before its candidate geometry is emitted.
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model) = 0;
+    // Action-capable hosts invoke the borrowed sink in event order, before returning the draft for a paint snapshot.
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model, IEditActionSink& actions) = 0;
+    // Navigation resolves the current model between copied events; application objects are lent only for this call.
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model, EditNavigationState& navigation, IEditNavigationResolver& resolver, IEditActionSink& actions) = 0;
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsEditBoxStateAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,158 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/shared/frame_push_constants.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererFramePipeline;
+class RendererCsgSystem;
+class RendererDeferredSystem;
+class RendererMaterialSystem;
+class RendererMeshSystem;
+class RendererRayTracingSystem;
+class CsgFrameState;
+class MeshViewGpuData;
+class ObjectGeometryCacheGraph;
+struct DeferredFrameTargets;
+class DeferredGraphResourceImportResult;
+struct GraphClearTimingRecordState;
+namespace ECSRenderDetail{
+    struct MeshFrameBindingSnapshot;
+    struct CsgGraphResourceSnapshot;
+};
+
+
+struct GraphicsPrefixGraphContext{
+    Core::Alloc::GlobalArena& arena;
+    Core::GraphicsRuntime& graphics;
+    Core::GpuTaskGraph& graph;
+    RendererCsgSystem& csg;
+    RendererDeferredSystem& deferred;
+    RendererMaterialSystem& material;
+    RendererMeshSystem& mesh;
+    RendererRayTracingSystem& rayTracing;
+    // The shadow task is declared after this prefix and remains graph-owned.
+    const Core::GpuTaskId& shadowVisibilityTask;
+};
+
+
+class GraphicsPrefixGraphCoordinator final : NoCopy{
+    friend class RendererFramePipeline;
+    friend class DeferredFrameTopologyValidator;
+    friend class GraphicsPrefixTimingResolver;
+    friend class OpaqueEmulationMergeValidator;
+
+
+public:
+    GraphicsPrefixGraphCoordinator()noexcept = default;
+
+
+public:
+    [[nodiscard]] Expected<u64> declareDeferredGraphicsPrefixTasks(
+        const GraphicsPrefixGraphContext& context,
+        Core::GpuTaskId shadowPrepareTask,
+        const CsgFrameState& csgFrameState,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        b8 hasOpaqueCsgFrameWork,
+        f32 meshViewAspectRatio,
+        const MeshViewGpuData& meshViewState,
+        b8 meshViewUploadRequired,
+        const DeferredGraphResourceImportResult& resources,
+        Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
+        Core::GpuGraphResourceSetId shadowTraceGeometrySet,
+        const b8& asyncPrefixTimingSpansOnePacket,
+        Core::Alloc::ScratchArena& scratchArena,
+        DeferredFrameTargets& deferredTargets,
+        ObjectGeometryCacheGraph& objectGeometry,
+        Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Optional<Core::GpuTimingMeasure>& deferredClearTiming,
+        GraphClearTimingRecordState& deferredClearTimingState,
+        GraphClearTimingRecordState& csgIntervalClearTimingState,
+        Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
+        Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
+        Span<Core::GpuTimingSubmissionTicket*> timingTickets
+    );
+    void resetGraphicsPrefixTaskState()noexcept;
+
+
+private:
+    Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
+    Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
+    // LOAD_OP_CLEAR work counts as G-buffer timing. Deferred-clear timing covers only this opaque-color UAV clear, whose hooks share one graph task.
+    Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
+    // Opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks stay in one Graphics packet to keep the CSG-clear timing interval.
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalClearFirstTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalClearTask;
+    // Opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer shares G-buffer's primary packet.
+    Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
+    // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
+    // Keep every phase ID so validation can prove the strict D(A) -> R(A) -> ... order, not just endpoint coalescing.
+    // The active prefix holds four, six, eight, or ten phases for two through five draws.
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_graphicsPrefixOpaqueSharedComputeEmulationTasks = {};
+    usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
+    // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
+    Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
+    // Interval-sample CSG follows Combine. Both IDs stay in that primary Graphics packet with the existing CSG Interval Sample consumer.
+    Core::GpuTaskId m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask;
+    Core::GpuTaskId m_graphicsPrefixGbufferTask;
+    Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
+    Core::GpuTaskId m_graphicsPrefixTask;
+    b8 m_graphicsPrefixMeshViewSetupReady = false;
+    b8 m_graphicsPrefixSceneShadingSetupReady = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderDeferredGraphicsPrefixGraphCoordinatorAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

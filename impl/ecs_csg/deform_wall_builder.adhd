@@ -1,0 +1,89 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+
+#include <impl/ecs_csg/deform_cutter_field.adhd.h>
+#include <impl/ecs_csg/deform_wall_clip.adhd.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
+#include <core/alloc/general.h>
+#include <core/alloc/scratch.h>
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+using CsgDeformVertexVector = Vector<CsgDeformVertex, ArenaT>;
+template<typename ArenaT>
+using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Owns zero-crossing splits with the shared edge cache (never welds source verts) and interpolated attributes, emitting the kept split triangles.
+namespace CsgDeformWallBuilder{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
+[[nodiscard]] inline Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
+    Core::Alloc::ScratchArena& scratchArena,
+    const CsgDeformShape& shape,
+    const f32 boundaryEpsilon,
+    const CsgShapeRegistry* shapeRegistry,
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
+    Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
+    CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
+){
+    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, boundaryEpsilon, shapeRegistry, scratchDistances);
+    if(!shapeDistances)
+        return MakeUnexpected(shapeDistances.error());
+
+    CsgDeformEdgeSplitMap edgeSplits(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
+    const auto clipped = ClipCsgDeformShellWithDistances(scratchDistances, edgeSplits, scratchKept, inOutVertices, inOutTriangles);
+    if(!clipped)
+        return MakeUnexpected(clipped.error());
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsCsgDeformWallBuilderAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

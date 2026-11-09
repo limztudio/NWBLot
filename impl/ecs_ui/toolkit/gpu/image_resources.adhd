@@ -1,0 +1,68 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/gpu/renderer_internal.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuImageResources final : NoCopy{
+public:
+    GpuImageResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, GpuImageCache& imageCache)noexcept
+        : m_arena(arena), m_graphics(graphics), m_imageCache(imageCache)
+    {}
+
+
+public:
+    [[nodiscard]] static b8 ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] b8 prepareGlyphPages(GpuFrameData& frame);
+    [[nodiscard]] b8 prepareSdfPages(GpuFrameData& frame);
+    [[nodiscard]] b8 prepareTextureImages(GpuFrameData& frame);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+
+
+private:
+    [[nodiscard]] Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(const SharedGlyphPage& page);
+    [[nodiscard]] Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page);
+    [[nodiscard]] Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(const SharedImageSource& source);
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    GpuImageCache& m_imageCache;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitGpuImageResourcesAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

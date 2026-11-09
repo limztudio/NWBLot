@@ -4,10 +4,7 @@
 
 #include "mesh_refresh_parse.h"
 
-#include <impl/assets_mesh/cook_metadata.h>
-#include <impl/assets_mesh/cook_source_streams.h>
-#include <impl/assets_mesh/mesh_index_metadata_parser.h>
-#include <impl/assets_mesh/skin_influence_metadata_parser.h>
+#include <impl/assets_mesh/cook_metadata.adhd.h>
 
 #include <core/common/log.h>
 
@@ -114,4 +111,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

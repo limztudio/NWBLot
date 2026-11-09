@@ -1,0 +1,147 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_mesh/runtime/mesh.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+#include <global/allocation_size.h>
+#include <global/hash_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One liveness query owns identities and flags; no state survives the prune.
+class RuntimeMeshRequestSet final : NoCopy{
+private:
+    using Key = RuntimeMeshRequestKey;
+    using Entry = RuntimeMeshRequestEntry;
+
+
+private:
+    struct Lookup{
+        const NameHash& name;
+        u64 version;
+    };
+    struct KeyHash{
+        [[nodiscard]] usize operator()(const Key& key)const noexcept{ return key.hash(); }
+        [[nodiscard]] usize operator()(const Lookup& key)const noexcept{ return HashRuntimeMeshRequestKey(key.name, key.version); }
+    };
+    struct KeyEqual{
+        using is_transparent = void;
+
+
+    public:
+        [[nodiscard]] b8 operator()(const Key& lhs, const Key& rhs)const noexcept{ return lhs == rhs; }
+        [[nodiscard]] b8 operator()(const Key& lhs, const Lookup& rhs)const noexcept{ return lhs.version == rhs.version && lhs.name == rhs.name; }
+    };
+
+
+private:
+    using Index = HashMap<Key, b8, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
+
+
+public:
+    RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
+        : m_scratchArena(scratchArena)
+        , m_expectedRequestCount(expectedRequestCount)
+    {
+        if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity)
+            m_index.emplace(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
+    }
+
+
+public:
+    void add(const Name& meshKey, const u64 version){
+        if(!meshKey)
+            return;
+        if(!m_index){
+            if(TryAddInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, m_remainingCount, meshKey.identityHash(), version))
+                return;
+            promoteIndex();
+        }
+        if(m_index->try_emplace(Key(meshKey.identityHash(), version), false).second)
+            ++m_remainingCount;
+    }
+    void markLive(const Name& meshKey, const u64 version)noexcept{
+        if(!meshKey)
+            return;
+        if(m_index){
+            markIndexedLive(meshKey, version);
+            return;
+        }
+        MarkInlineRuntimeMeshRequestLive(m_inlineEntries, m_remainingCount, m_inlineCount, meshKey.identityHash(), version);
+    }
+
+    [[nodiscard]] b8 containsLive(const Name& meshKey, const u64 version)const noexcept{
+        if(!meshKey)
+            return false;
+        if(m_index)
+            return containsIndexedLive(meshKey, version);
+        return ContainsInlineRuntimeMeshRequestLive(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version);
+    }
+
+    [[nodiscard]] b8 complete()const noexcept{ return m_remainingCount == 0u; }
+
+
+private:
+    void promoteIndex(){
+        Index index(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(Max(m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
+        for(usize entryIndex = 0u; entryIndex < m_inlineCount; ++entryIndex){
+            const Entry& entry = m_inlineEntries[entryIndex];
+            index[entry.key] = entry.found;
+        }
+        static_assert(IsNothrowMoveConstructible_V<Index>);
+        m_index.emplace(Move(index));
+    }
+    void markIndexedLive(const Name& meshKey, const u64 version)noexcept{
+        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
+        if(found != m_index->end() && !found.value()){
+            found.value() = true;
+            --m_remainingCount;
+        }
+    }
+    [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
+        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
+        return found != m_index->end() && found.value();
+    }
+
+
+private:
+    Core::Alloc::ScratchArena& m_scratchArena;
+    usize m_expectedRequestCount;
+    Array<Entry, s_RuntimeMeshRequestInlineCapacity> m_inlineEntries{};
+    usize m_inlineCount = 0u;
+    usize m_remainingCount = 0u;
+    Optional<Index> m_index;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsMeshRuntimeMeshRequestsAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

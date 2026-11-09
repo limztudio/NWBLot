@@ -22,7 +22,7 @@ native{
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_render/reflection/types.adhd.h>
-#include <impl/ecs_render/shared/statistics_readback_state.h>
+#include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/graphics/rhi/command.h>
@@ -321,7 +321,7 @@ TEST(CausticResolveActivityTests, LastRawWordMayEndAtTheUintAddressBoundary){
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
@@ -653,7 +653,7 @@ TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets_mesh/asset.h>
+#include <impl/assets_mesh/asset.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -713,9 +713,9 @@ TEST(ComputeEmulationLayoutTests, LastIndexWordMayEndAtTheUintAddressBoundary){
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
+#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -837,11 +837,11 @@ TEST(CsgShaderVariantBuilderTests, RejectsMalformedSegmentsAndEmptyAssignmentVal
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
-#include <impl/ecs_render/shadow/light_space_csg.h>
+#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
+#include <impl/ecs_render/shadow/light_space_csg.adhd.h>
 #include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/entity.h>
@@ -1450,8 +1450,8 @@ TEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedSt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
 #include <tests/common/test_context.adhd.h>
 
 #include <global/limit.h>
@@ -1628,13 +1628,13 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_mesh/skinning/skin_payload.h>
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_render/csg/renderer_csg_types.h>
-#include <impl/ecs_render/avboit/avboit.h>
-#include <impl/ecs_render/material/renderer_pipeline_types.h>
-#include <impl/assets_mesh/meshlet_ref_encode.h>
+#include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+#include <impl/ecs_render/avboit/avboit.adhd.h>
+#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
 #include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 
@@ -2042,7 +2042,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
+#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd.h>
 
 #include <core/telemetry/frame_graph_contributor.h>
 #include <core/task/gpu/compiler_internal.h>
@@ -2804,8 +2804,8 @@ TEST(LightSpacePlan, ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/light_space_shadow.h>
-#include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
+#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
+#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
 #include <global/limit.h>
@@ -3003,7 +3003,7 @@ TEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/material_instance_mutable_cache.h>
+#include <impl/ecs_render/material/material_instance_mutable_cache.adhd.h>
 
 #include <tests/common/capturing_logger.adhd.h>
 #include <tests/common/ecs_test_world.adhd.h>
@@ -3174,7 +3174,7 @@ TEST(MaterialInstanceOverrideApplierTests, RejectsTruncatedStorageWithoutWriting
 
 
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/ecs_render/material/material_typed_private.h>
+#include <impl/ecs_render/material/material_typed_private.adhd.h>
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
@@ -3375,7 +3375,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
 #include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
@@ -3452,8 +3452,8 @@ TEST(MeshAccelerationUpdateTests, ImmutableStaticGeometryNeedsAcceptanceButNoRun
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -3555,7 +3555,7 @@ TEST(MeshViewStatePolicyTests, MissingTruncatedAndChangedSnapshotsRequireUpload)
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
 #include <impl/assets_mesh/payload_types.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -3657,7 +3657,7 @@ TEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfter
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -3735,8 +3735,8 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/deferred/graph_resource_import_builder.h>
-#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.h>
+#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
+#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -3816,7 +3816,7 @@ TEST(OpaqueGbufferResourceUses, CsgSparseValidityKeepsReadWriteRangesWithoutOpaq
 
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/optics/graph_types.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_upload.h>
+#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
 
 #include <core/alloc/general.h>
 
@@ -3915,7 +3915,7 @@ TEST(OpticalRuntimeBounds, RejectedUploadControlDoesNotAllocateOrPublish){
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.h>
+#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
 
 #include <core/alloc/general.h>
 
@@ -4320,7 +4320,7 @@ TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutput
 
 #include <gtest/gtest.h>
 
-#include <impl/ecs_render/deferred/task_graph_present_task.h>
+#include <impl/ecs_render/deferred/task_graph_present_task.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4381,7 +4381,7 @@ TEST(OutputLayer, MissingContributorInvalidTokenAndZeroGenerationCannotPublishAc
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -4500,7 +4500,7 @@ TEST(PresentationSettings, RejectsInvalidToneMapAndNonPositiveOrNonFiniteShoulde
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -4664,8 +4664,8 @@ TEST(RefractiveBoundsIsolation, TouchingTheCertifiedMarginIsNotIsolated){
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/reflection/feedback.h>
-#include <impl/ecs_render/reflection/feedback_resources.h>
+#include <impl/ecs_render/reflection/feedback.adhd.h>
+#include <impl/ecs_render/reflection/feedback_resources.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>
@@ -4995,7 +4995,7 @@ TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuara
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/reflection/history.h>
+#include <impl/ecs_render/reflection/history.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>
@@ -5286,7 +5286,7 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/reflection_system.h>
+#include <impl/ecs_render/reflection/reflection_system.adhd.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <global/limit.h>
@@ -5436,7 +5436,7 @@ TEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositive
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/reflection/statistics_readback.h>
+#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -5720,7 +5720,7 @@ TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/refraction/statistics_readback.h>
+#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -5899,8 +5899,8 @@ TEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication){
 #include <tests/common/ecs_test_world.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_render/mesh/runtime_mesh_pruning.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd.h>
 
 #include <core/ecs/entity.h>
 
@@ -6339,7 +6339,7 @@ TEST(ShadowQualitySettings, FailedSubmissionsRetainAcceptedFrontButCannotPublish
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.h>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
 
 #include <core/task/gpu/compiler_internal.h>
 
@@ -6636,9 +6636,9 @@ NWB_END
 
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
 
 #include <core/alloc/general.h>
 
@@ -6721,7 +6721,7 @@ TEST(SoftShadowResolveDispatchBuilder, AlternatingHistoryUsesTheNewMomentsAndGra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/soft_shadow_wavelet.h>
+#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -7323,7 +7323,7 @@ TEST(SurfelSpawnPolicy, DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel){
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
-#include <impl/ecs_render/kernel/task_timing_feedback.h>
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
 
 #include <core/perf/timing.h>
 

@@ -1,0 +1,189 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/text_edit_session.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/clipboard_types.adhd.h>
+#include <impl/ecs_ui/edit_clipboard_policy.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
+
+#include <core/os/clipboard.h>
+
+#include <global/termination.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The OS owns transfer and native selection.
+// This controller owns copied request fences, never a model pointer.
+// Cancel before any local edit/selection change, focus loss, owner removal or model replacement.
+// Drain before host edits.
+// End native text input before a drain that may apply cut/paste, and restart it with the resulting surrounding text.
+class UiEditClipboardController final : NoCopy{
+public:
+    UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept
+        : m_service(service)
+        , m_completion(arena)
+        , m_expectedModel(arena)
+        , m_insertText(arena)
+    {}
+
+    ~UiEditClipboardController()noexcept{
+        if(!cancel())
+            TerminateInvariant();
+    }
+
+
+public:
+    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, const b8 readOnly = false){
+        if(!m_service.isOwnerThread())
+            return { UiEditClipboardStatus::WrongThread };
+        if(!owner.valid())
+            return { UiEditClipboardStatus::InvalidOwner };
+        if(!cancel())
+            return { UiEditClipboardStatus::NativeFailure };
+        const auto reads = UiEditClipboardPolicy().validateAction(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection());
+        if(!reads)
+            return { reads.error() };
+        const auto capabilities = m_service.capabilities(channel);
+        if(*reads ? !capabilities.readText : !capabilities.writeText)
+            return { UiEditClipboardStatus::Unsupported };
+        const auto result = *reads ? m_service.requestReadText(channel) : m_service.requestWriteText(channel, model.selectedText());
+        if(!result)
+            return { result.error() == Core::ClipboardAdmission::WrongThread ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
+        if(!result->valid())
+            return { UiEditClipboardStatus::NativeFailure };
+        m_token = *result;
+        m_owner = owner;
+        m_channel = channel;
+        m_action = action;
+        m_expectedModel.capture(model);
+        return { UiEditClipboardStatus::Pending };
+    }
+
+    [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly = false){
+        if(!m_service.isOwnerThread())
+            return { UiEditClipboardStatus::WrongThread };
+        if(!m_token.valid())
+            return {};
+        if(!(m_owner == owner) || !m_expectedModel.matches(model)){
+            const auto status = m_owner == owner ? UiEditClipboardStatus::StaleModel : UiEditClipboardStatus::StaleOwner;
+            return { cancel() ? status : UiEditClipboardStatus::NativeFailure };
+        }
+        const auto poll = m_service.poll(m_token, m_completion);
+        if(poll == Core::ClipboardPollResult::Pending)
+            return { UiEditClipboardStatus::Pending };
+        if(poll == Core::ClipboardPollResult::WrongThread)
+            return { UiEditClipboardStatus::WrongThread };
+        UiEditClipboardResult result{ UiEditClipboardStatus::Cancelled };
+        if(poll == Core::ClipboardPollResult::Completed){
+            const auto operation = m_action == Ui::EditClipboardAction::Paste ? Core::ClipboardOperation::ReadText : Core::ClipboardOperation::WriteText;
+            if(m_completion.token == m_token && m_completion.channel == m_channel && m_completion.operation == operation)
+                result = applyCompletion(model, readOnly);
+            else
+                result.status = UiEditClipboardStatus::NativeFailure;
+        }
+        clearRequest();
+        return result;
+    }
+
+    [[nodiscard]] b8 cancel(){
+        if(!m_token.valid())
+            return true;
+        if(!m_service.isOwnerThread())
+            return false;
+        if(!m_service.cancel(m_token) && m_service.poll(m_token, m_completion) != Core::ClipboardPollResult::InvalidRequest)
+            return false;
+        clearRequest();
+        return true;
+    }
+
+    [[nodiscard]] b8 pending()const noexcept{ return m_token.valid(); }
+
+    [[nodiscard]] Core::ClipboardRequestToken token()const noexcept{ return m_token; }
+
+    [[nodiscard]] Ui::EditClipboardAction::Enum action()const noexcept{ return m_action; }
+
+
+private:
+    void clearRequest()noexcept{
+        m_token = {};
+        m_owner = {};
+        m_action = Ui::EditClipboardAction::None;
+        m_expectedModel.clear();
+        m_insertText.clear();
+    }
+
+    [[nodiscard]] UiEditClipboardResult applyCompletion(Ui::EditModel& model, const b8 readOnly){
+        switch(m_completion.status){
+        case Core::ClipboardStatus::Unsupported: return { UiEditClipboardStatus::Unsupported };
+        case Core::ClipboardStatus::InvalidText: return { UiEditClipboardStatus::InvalidText };
+        case Core::ClipboardStatus::TooLarge: return { UiEditClipboardStatus::TooLarge };
+        case Core::ClipboardStatus::Success: break;
+        default: return { UiEditClipboardStatus::NativeFailure };
+        }
+        const UiEditClipboardStatus::Enum prepStatus = UiEditClipboardPolicy().prepareInsertText(
+            m_action,
+            readOnly,
+            model.textMode(),
+            model.text().size(),
+            model.selectionStart(),
+            model.selectionEnd(),
+            model.limits().maxBytes,
+            AStringView(m_completion.text),
+            m_insertText
+        );
+        if(prepStatus != UiEditClipboardStatus::Pending)
+            return { prepStatus };
+        const u64 revision = model.revision();
+        const usize anchor = model.anchor();
+        const usize caret = model.caret();
+        if(!model.replaceSelection(AStringView(m_insertText)))
+            return { UiEditClipboardStatus::ModelRejected };
+        return { UiEditClipboardStatus::Applied, model.revision() != revision, model.anchor() != anchor || model.caret() != caret };
+    }
+
+
+private:
+    Core::IClipboardService& m_service;
+    Core::ClipboardCompletion m_completion;
+    Ui::EditModelSnapshot m_expectedModel;
+    AString<Core::Alloc::GlobalArena> m_insertText;
+    UiTextEditOwner m_owner;
+    Core::ClipboardRequestToken m_token;
+    Core::ClipboardChannel::Enum m_channel = Core::ClipboardChannel::Clipboard;
+    Ui::EditClipboardAction::Enum m_action = Ui::EditClipboardAction::None;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiEditClipboardControllerAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

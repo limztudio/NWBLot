@@ -8,7 +8,7 @@
 native{
 #include <tests/smoke/assets/shaders/refraction_tile_probe_layout.h>
 
-#include <impl/assets_scene/asset.h>
+#include <impl/assets_scene/asset.adhd.h>
 #include <impl/assets_graphics/refractive_subsystem.adhd.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/ecs_render/raytrace/types.adhd.h>
@@ -20,8 +20,8 @@ native{
 
 #include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_shader/loader.h>
-#include <impl/ecs_render/avboit/avboit.h>
+#include <impl/assets_shader/loader.adhd.h>
+#include <impl/ecs_render/avboit/avboit.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>

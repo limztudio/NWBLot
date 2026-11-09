@@ -1,0 +1,312 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+
+#include <impl/assets_subsystem/types.adhd.h>
+
+#include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/assets/module.h>
+#include <core/assets/ref.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_SubsystemAssetKindLabel = NWB_TEXT("subsystem");
+inline constexpr TStringView s_SubsystemLoadBinaryContext = NWB_TEXT("ISubsystem::loadBinary");
+#if defined(NWB_COOK)
+inline constexpr TStringView s_SubsystemSerializeContext = NWB_TEXT("SubsystemAssetCodec::serialize");
+#endif
+inline constexpr TStringView s_SubsystemDepsPayloadLabel = NWB_TEXT("subsystems");
+inline constexpr TStringView s_SubsystemFieldCountsPayloadLabel = NWB_TEXT("field_counts");
+inline constexpr TStringView s_SubsystemAssetsPayloadLabel = NWB_TEXT("assets");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename TAsset>
+using SubsystemAssetRefVector = Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>;
+
+interface ISubsystem : Core::Assets::IAsset{
+public:
+    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
+    using SubsystemRefVector = SubsystemAssetRefVector<ISubsystem>;
+
+
+public:
+    NWB_DEFINE_ASSET_TYPE("subsystem")
+
+
+public:
+    virtual ~ISubsystem()noexcept override = 0;
+
+
+protected:
+    explicit ISubsystem(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
+        : Core::Assets::IAsset(assetType, virtualPath)
+        , subsystems(arena)
+    {}
+    ISubsystem(const ISubsystem&) = default;
+    ISubsystem(ISubsystem&&)noexcept = default;
+
+
+protected:
+    ISubsystem& operator=(const ISubsystem&) = default;
+    ISubsystem& operator=(ISubsystem&&)noexcept = default;
+
+
+public:
+    [[nodiscard]] virtual b8 loadBinary(Span<const u8> binary) = 0;
+    [[nodiscard]] virtual b8 validatePayload()const = 0;
+    [[nodiscard]] virtual usize fieldCount()const noexcept = 0;
+    [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(usize index)const noexcept = 0;
+    [[nodiscard]] virtual usize fieldValueCount(usize index)const noexcept = 0;
+    [[nodiscard]] virtual Name fieldValue(usize index, usize elementIndex = 0u)const noexcept = 0;
+    virtual void clearFieldValues(usize index)noexcept = 0;
+    virtual void appendFieldValue(usize index, const Name& value) = 0;
+
+
+public:
+    SubsystemRefVector subsystems;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename SubsystemT>
+struct SubsystemFieldDescriptor{
+    AStringView fieldName;
+    Name expectedAssetType = s_NameNone;
+    b8 isArray = false;
+    usize (*count)(const SubsystemT& subsystem)noexcept = nullptr;
+    Name (*get)(const SubsystemT& subsystem, usize elementIndex)noexcept = nullptr;
+    void (*clear)(SubsystemT& subsystem)noexcept = nullptr;
+    void (*append)(SubsystemT& subsystem, const Name& value) = nullptr;
+};
+
+template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> SubsystemT::* Member>
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName, const Name& expectedAssetType)noexcept{
+    return SubsystemFieldDescriptor<SubsystemT>{
+        fieldName,
+        expectedAssetType,
+        false,
+        [](const SubsystemT&)noexcept -> usize{
+            return 1u;
+        },
+        [](const SubsystemT& subsystem, [[maybe_unused]] const usize elementIndex)noexcept -> Name{
+            NWB_ASSERT(elementIndex == 0u);
+            return (subsystem.*Member).name();
+        },
+        [](SubsystemT& subsystem)noexcept{
+            subsystem.*Member = {};
+        },
+        [](SubsystemT& subsystem, const Name& value){
+            subsystem.*Member = Core::Assets::AssetRef<TAsset>(value);
+        }
+    };
+}
+
+template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName, const Name& expectedAssetType)noexcept{
+    return SubsystemFieldDescriptor<SubsystemT>{
+        fieldName,
+        expectedAssetType,
+        true,
+        [](const SubsystemT& subsystem)noexcept -> usize{
+            return (subsystem.*Member).size();
+        },
+        [](const SubsystemT& subsystem, const usize elementIndex)noexcept -> Name{
+            NWB_ASSERT(elementIndex < (subsystem.*Member).size());
+            return (subsystem.*Member)[elementIndex].name();
+        },
+        [](SubsystemT& subsystem)noexcept{
+            (subsystem.*Member).clear();
+        },
+        [](SubsystemT& subsystem, const Name& value){
+            (subsystem.*Member).push_back(Core::Assets::AssetRef<TAsset>(value));
+        }
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SubsystemAssetRuntime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 ValidatePayload(const ISubsystem& subsystem);
+[[nodiscard]] b8 LoadBinary(Span<const u8> binary, ISubsystem& outSubsystem);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename SubsystemT>
+class TypedSubsystem : public ISubsystem{
+public:
+    [[nodiscard]] static Span<const SubsystemFieldDescriptor<SubsystemT>> FieldDescriptors()noexcept{
+        static_assert(LengthOf(SubsystemT::s_Fields) > 0u, "Concrete subsystem must declare at least one asset field");
+        return Span<const SubsystemFieldDescriptor<SubsystemT>>(SubsystemT::s_Fields, LengthOf(SubsystemT::s_Fields));
+    }
+
+
+public:
+    explicit TypedSubsystem(Core::Assets::AssetArena& arena)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
+        : ISubsystem(arena, SubsystemT::AssetTypeName())
+    {}
+    TypedSubsystem(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
+        : ISubsystem(arena, SubsystemT::AssetTypeName(), virtualPath)
+    {}
+    TypedSubsystem(const TypedSubsystem&) = default;
+    TypedSubsystem(TypedSubsystem&&)noexcept = default;
+    virtual ~TypedSubsystem()noexcept override = 0;
+
+
+public:
+    TypedSubsystem& operator=(const TypedSubsystem&) = default;
+    TypedSubsystem& operator=(TypedSubsystem&&)noexcept = default;
+
+
+public:
+    [[nodiscard]] virtual b8 loadBinary(const Span<const u8> binary)override{
+        return SubsystemAssetRuntime::LoadBinary(binary, *this);
+    }
+
+    [[nodiscard]] virtual b8 validatePayload()const override{
+        return SubsystemAssetRuntime::ValidatePayload(*this);
+    }
+
+    [[nodiscard]] virtual usize fieldCount()const noexcept override{
+        return LengthOf(SubsystemT::s_Fields);
+    }
+
+    [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
+        const auto descriptors = FieldDescriptors();
+        NWB_ASSERT(index < descriptors.size());
+        return SubsystemFieldValueDescriptor(descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray);
+    }
+
+    [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{
+        const auto descriptors = FieldDescriptors();
+        NWB_ASSERT(index < descriptors.size());
+        return descriptors[index].count(static_cast<const SubsystemT&>(*this));
+    }
+
+    [[nodiscard]] virtual Name fieldValue(const usize index, const usize elementIndex = 0u)const noexcept override{
+        const auto descriptors = FieldDescriptors();
+        NWB_ASSERT(index < descriptors.size());
+        return descriptors[index].get(static_cast<const SubsystemT&>(*this), elementIndex);
+    }
+
+    virtual void clearFieldValues(const usize index)noexcept override{
+        const auto descriptors = FieldDescriptors();
+        NWB_ASSERT(index < descriptors.size());
+        descriptors[index].clear(static_cast<SubsystemT&>(*this));
+    }
+
+    virtual void appendFieldValue(const usize index, const Name& value)override{
+        const auto descriptors = FieldDescriptors();
+        NWB_ASSERT(index < descriptors.size());
+        descriptors[index].append(static_cast<SubsystemT&>(*this), value);
+    }
+};
+
+template<typename SubsystemT>
+TypedSubsystem<SubsystemT>::~TypedSubsystem()noexcept = default;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using SubsystemTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<ISubsystem>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SubsystemAssetCodec final : public Core::Assets::IAssetCodec{
+public:
+    SubsystemAssetCodec()noexcept
+        : Core::Assets::IAssetCodec(ISubsystem::AssetTypeName())
+    {}
+
+
+public:
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(const Name& virtualPath, Span<const u8> binary, Core::Assets::AssetArena& arena)const override;
+#if defined(NWB_COOK)
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+#endif
+};
+
+#if defined(NWB_COOK)
+namespace SubsystemAssetSerialization{
+[[nodiscard]] b8 Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary);
+};
+#endif
+
+template<typename SubsystemT>
+class TypedSubsystemAssetCodec final : public Core::Assets::AssetCodec<SubsystemT>{
+public:
+    TypedSubsystemAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName()))) = default;
+
+
+#if defined(NWB_COOK)
+public:
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
+        if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedSubsystemAssetCodec::serialize")))
+            return false;
+
+        return SubsystemAssetSerialization::Serialize(*MakeNotNull(checked_cast<const SubsystemT*>(&asset)), outBinary);
+    }
+#endif
+};
+
+template<typename SubsystemT>
+using TypedSubsystemAutoRegistrar = Core::Assets::TypedPolymorphicAssetAutoRegistrar<ISubsystem, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>;
+
+#define NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(registrarVariable, subsystemType) \
+    TypedSubsystemAutoRegistrar<subsystemType> registrarVariable
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsSubsystemAssetAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

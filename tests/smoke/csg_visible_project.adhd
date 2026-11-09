@@ -12,11 +12,11 @@ native{
 #include <loader/project_entry.h>
 
 #include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/material/material_instance.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

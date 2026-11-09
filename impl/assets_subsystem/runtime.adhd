@@ -1,0 +1,171 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsSubsystemRuntimeAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/assets_subsystem/asset.adhd.h>
+#include <core/assets/polymorphic_asset_codec.h>
+
+#include <impl/assets_subsystem/subsystem_binary_codec.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_subsystem_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SubsystemAssetCodecAutoRegistrar, SubsystemAssetCodec);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ISubsystem::~ISubsystem()noexcept = default;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SubsystemAssetRuntime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidatePayload(const ISubsystem& subsystem){
+    if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
+        return false;
+
+    for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
+        const ISubsystem::SubsystemRef& ref = subsystem.subsystems[i];
+        if(!ValidateSubsystemDependentRef(subsystem.virtualPath(), ref.name(), ref.valid(), i))
+            return false;
+    }
+
+    const usize count = subsystem.fieldCount();
+    if(count == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
+        return false;
+    }
+
+    for(usize i = 0u; i < count; ++i){
+        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+        const usize valueCount = subsystem.fieldValueCount(i);
+        if(!ValidateSubsystemFieldValueCount(subsystem.virtualPath(), descriptor, valueCount))
+            return false;
+
+        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex){
+            const Name value = subsystem.fieldValue(i, elementIndex);
+            b8 isDuplicate = false;
+            for(usize prevIndex = 0u; prevIndex < elementIndex; ++prevIndex){
+                if(subsystem.fieldValue(i, prevIndex) == value){
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if(!ValidateSubsystemFieldElementValue(subsystem.virtualPath(), descriptor, value, isDuplicate))
+                return false;
+        }
+    }
+
+    return true;
+}
+
+b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
+    Core::Alloc::ScratchArena scratchArena(s_SubsystemLoadBinaryArena);
+    const usize expectedFieldCount = outSubsystem.fieldCount();
+    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
+    Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
+    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
+    if(!SubsystemBinaryCodec().read(
+        binary,
+        outSubsystem.assetType(),
+        expectedFieldCount,
+        subsystemHashes,
+        fieldCounts,
+        assetHashes
+    ) || !UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
+        return false;
+
+    usize hashOffset = 0u;
+    for(usize i = 0u; i < expectedFieldCount; ++i){
+        const SubsystemFieldValueDescriptor descriptor = outSubsystem.fieldDescriptor(i);
+        const u64 elementCount = fieldCounts[i];
+        if(!ValidateSubsystemBinaryScalarFieldCount(outSubsystem.assetType(), descriptor, elementCount))
+            return false;
+        outSubsystem.clearFieldValues(i);
+        for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
+            const Name assetName(assetHashes[hashOffset++]);
+            if(!assetName){
+                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
+                return false;
+            }
+            outSubsystem.appendFieldValue(i, assetName);
+        }
+    }
+
+    return outSubsystem.validatePayload();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
+    return Core::Assets::PolymorphicAssetCodec::DeserializePolymorphicAsset<ISubsystem, SubsystemHeaderBinary, &SubsystemHeaderBinary::subsystemTypeHash>(
+        virtualPath,
+        binary,
+        s_SubsystemMagic,
+        s_SubsystemLoadBinaryContext,
+        s_SubsystemAssetKindLabel,
+        NWB_TEXT("SubsystemAssetCodec::deserialize"),
+        arena
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

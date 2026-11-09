@@ -1,0 +1,220 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_mesh/skinning/deformation_state.adhd.h>
+
+#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
+
+#include <core/graphics/api.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinningRuntimeInstance{
+    using PositionVector = Vector<Float3U, Core::Alloc::GlobalArena>;
+    using Float2Vector = Vector<Float2U, Core::Alloc::GlobalArena>;
+    using Half4Vector = Vector<Half4U, Core::Alloc::GlobalArena>;
+    using SkinVector = Vector<SkinInfluence4, Core::Alloc::GlobalArena>;
+    using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
+    using MeshletVector = Vector<MeshletDesc, Core::Alloc::GlobalArena>;
+    using MeshletBoundsVector = Vector<MeshletBounds, Core::Alloc::GlobalArena>;
+    using MeshletRefDeltaVector = Vector<u8, Core::Alloc::GlobalArena>;
+    using MeshletLocalVertexRefVector = Vector<MeshletLocalVertexRef, Core::Alloc::GlobalArena>;
+    using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
+    using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
+
+
+public:
+    RuntimeMeshHandle handle;
+    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
+    Name sourceName = s_NameNone;
+    RuntimeMeshLocalBounds localBounds;
+    PositionVector restPositions;
+    Half4Vector restNormals;
+    Half4Vector restTangents;
+    Float2Vector uv0;
+    Half4Vector colors;
+    MeshletVector meshlets;
+    MeshletBoundsVector meshletBounds;
+    MeshletRefDeltaVector meshletPositionRefDeltas;
+    MeshletRefDeltaVector meshletAttributeRefDeltas;
+    MeshletLocalVertexRefVector meshletLocalVertexRefs;
+    MeshletPrimitiveIndexVector meshletPrimitiveIndices;
+    AttributeSkinVector attributeSkins;
+    // The source mesh stays owned by the runtime cache until this instance is released.
+    Span<const u32> solidTriangleWords;
+    SkinVector skin;
+    JointVector inverseBindMatrices;
+    MeshSkinningDeformationState deformationState;
+    Core::BufferHandle restPositionBuffer;
+    Core::BufferHandle restNormalBuffer;
+    Core::BufferHandle restTangentBuffer;
+    Core::BufferHandle skinnedPositionBuffer;
+    Core::BufferHandle skinnedNormalBuffer;
+    Core::BufferHandle skinnedTangentBuffer;
+    Core::BufferHandle uv0Buffer;
+    Core::BufferHandle colorBuffer;
+    Core::BufferHandle meshletDescBuffer;
+    Core::BufferHandle meshletBoundsBuffer;
+    Core::BufferHandle meshletPositionRefDeltaBuffer;
+    Core::BufferHandle meshletAttributeRefDeltaBuffer;
+    Core::BufferHandle meshletLocalVertexRefBuffer;
+    Core::BufferHandle meshletPrimitiveIndexBuffer;
+    Core::BufferHandle attributeSkinBuffer;
+    Core::BufferHandle triangleIndexBuffer;   // Canonical triangle indices shared by hardware and software tracing
+    Core::BufferHandle attributeBuffer;       // Bind-pose per-corner attributes shared by hardware and software tracing
+    Core::BufferHandle meshletLocalBoundsBuffer;
+    Core::BufferHandle localBoundsBuffer;
+    u32 skeletonJointCount = 0;
+    u32 meshletPositionRefCount = 0u;
+    u32 meshletAttributeRefCount = 0u;
+    u32 editRevision = 0;
+    RuntimeMeshDirtyFlag::Flag dirtyFlags = RuntimeMeshDirtyFlag::All;
+
+
+public:
+    explicit MeshSkinningRuntimeInstance(Core::Alloc::GlobalArena& arena)noexcept
+        : restPositions(arena)
+        , restNormals(arena)
+        , restTangents(arena)
+        , uv0(arena)
+        , colors(arena)
+        , meshlets(arena)
+        , meshletBounds(arena)
+        , meshletPositionRefDeltas(arena)
+        , meshletAttributeRefDeltas(arena)
+        , meshletLocalVertexRefs(arena)
+        , meshletPrimitiveIndices(arena)
+        , attributeSkins(arena)
+        , skin(arena)
+        , inverseBindMatrices(arena)
+        , deformationState(arena)
+    {}
+
+
+public:
+    [[nodiscard]] b8 hasCompleteSplitMeshPayload()const noexcept{
+        return HasCompleteSplitMeshSkinningPayload(
+            restPositions.size(),
+            restNormals.size(),
+            restTangents.size(),
+            uv0.size(),
+            colors.size(),
+            skin.size(),
+            meshlets.size(),
+            meshletBounds.size(),
+            meshletPositionRefDeltas.size(),
+            meshletAttributeRefDeltas.size(),
+            meshletLocalVertexRefs.size(),
+            meshletPrimitiveIndices.size(),
+            meshletPositionRefCount,
+            meshletAttributeRefCount,
+            attributeSkins.size()
+        );
+    }
+
+    [[nodiscard]] RuntimeMeshBuffers runtimeMeshBuffers()const noexcept{
+        return {
+            .positionBuffer = skinnedPositionBuffer,
+            .normalBuffer = skinnedNormalBuffer,
+            .tangentBuffer = skinnedTangentBuffer,
+            .uv0Buffer = uv0Buffer,
+            .colorBuffer = colorBuffer,
+            .meshletDescBuffer = meshletDescBuffer,
+            .meshletBoundsBuffer = meshletBoundsBuffer,
+            .meshletPositionRefDeltaBuffer = meshletPositionRefDeltaBuffer,
+            .meshletAttributeRefDeltaBuffer = meshletAttributeRefDeltaBuffer,
+            .meshletLocalVertexRefBuffer = meshletLocalVertexRefBuffer,
+            .meshletPrimitiveIndexBuffer = meshletPrimitiveIndexBuffer,
+        };
+    }
+
+    [[nodiscard]] b8 hasPersistentComputeBuffers()const noexcept{
+        return
+            restPositionBuffer != nullptr
+            && restNormalBuffer != nullptr
+            && restTangentBuffer != nullptr
+            && skinnedPositionBuffer != nullptr
+            && skinnedNormalBuffer != nullptr
+            && skinnedTangentBuffer != nullptr
+            && meshletDescBuffer != nullptr
+            && meshletBoundsBuffer != nullptr
+            && meshletPositionRefDeltaBuffer != nullptr
+            && meshletAttributeRefDeltaBuffer != nullptr
+            && meshletLocalVertexRefBuffer != nullptr
+            && meshletPrimitiveIndexBuffer != nullptr
+            && attributeSkinBuffer != nullptr
+            && meshletLocalBoundsBuffer != nullptr
+            && localBoundsBuffer != nullptr
+        ;
+    }
+
+    [[nodiscard]] b8 valid()const noexcept{
+        return
+            entity.valid()
+            && handle.valid()
+            && sourceName
+            && hasCompleteSplitMeshPayload()
+            && solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(static_cast<u32>(meshletPrimitiveIndices.size()))
+            && localBounds.valid()
+            && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
+            && hasPersistentComputeBuffers()
+            && runtimeMeshBuffers().buffersValid()
+        ;
+    }
+};
+
+inline MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
+    return {
+        instance.restPositionBuffer,
+        instance.restNormalBuffer,
+        instance.restTangentBuffer,
+        instance.skinnedPositionBuffer,
+        instance.skinnedNormalBuffer,
+        instance.skinnedTangentBuffer,
+        instance.uv0Buffer,
+        instance.colorBuffer,
+        instance.meshletDescBuffer,
+        instance.meshletBoundsBuffer,
+        instance.meshletPositionRefDeltaBuffer,
+        instance.meshletAttributeRefDeltaBuffer,
+        instance.meshletLocalVertexRefBuffer,
+        instance.meshletPrimitiveIndexBuffer,
+        instance.attributeSkinBuffer,
+        instance.triangleIndexBuffer,
+        instance.attributeBuffer,
+        instance.meshletLocalBoundsBuffer,
+        instance.localBoundsBuffer,
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsMeshSkinningRuntimeInstanceAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

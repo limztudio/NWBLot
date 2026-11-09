@@ -63,7 +63,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/shape_registry.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
 
 #include <global/simd/constant.h>
 #include <global/simd/frame.h>
@@ -622,8 +622,8 @@ NWB_END
 
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
 #include <impl/ecs_csg/components.adhd.h>
 
 #include <core/alloc/scratch.h>
@@ -923,7 +923,7 @@ private:
 
 
 
-#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -1416,7 +1416,7 @@ NWB_END
 
 #include <loader/project_entry.h>
 
-#include <impl/assets_skeleton/asset.h>
+#include <impl/assets_skeleton/asset.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1487,7 +1487,7 @@ NWB_END
 
 
 
-#include <impl/assets_skeleton/asset.h>
+#include <impl/assets_skeleton/asset.adhd.h>
 
 #include <core/common/log.h>
 #include <core/assets/manager.h>
@@ -1787,7 +1787,7 @@ NWB_END
 
 
 
-#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/module.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -2041,8 +2041,8 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -2258,7 +2258,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/module.adhd.h>
 
 #include <core/common/log.h>
 
@@ -2446,8 +2446,8 @@ NWB_END
 
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -2538,10 +2538,10 @@ NWB_END
 #include <loader/project_entry.h>
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_scene/module.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

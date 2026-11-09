@@ -1,0 +1,118 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/rhi/framebuffer.h>
+#include <core/graphics/rhi/presentation.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/output_layer_contributor.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererDeferredSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Composite/present suffix owns terminal color resolve and presentation handoff.
+struct DeferredGraphSuffixInputs{
+    DeferredFrameTargets& targets;
+    Core::GpuGraphResourceId opaqueColor;
+    Core::GpuGraphResourceId avboitAccumColor;
+    Core::GpuGraphResourceId avboitAccumExtinction;
+    Core::GpuGraphResourceId avboitForegroundColor;
+    Core::GpuGraphResourceId avboitForegroundExtinction;
+    Core::GpuGraphResourceId refractionResolve;
+    Core::GpuGraphResourceId refractionDepth;
+    Core::GpuGraphResourceId currentBindlessSlots;
+    RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
+    ReflectionCompositeInputs reflectionCompositeInputs;
+    b8 useLaggedLightingHistory = false;
+    Core::GpuTaskId lightingTask;
+    Core::GpuTaskId avboitFinalTask;
+    Core::GpuTaskId refractionResolveTask;
+    Core::GpuTaskId surfelGiTask;
+    Core::GpuTaskId hardwareCausticsTask;
+    const Core::AcquiredPresentationFrame& presentationFrame;
+    const Core::FramebufferDesc& presentationFramebufferDesc;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredGraphSuffixBuilder final : NoCopy{
+public:
+    DeferredGraphSuffixBuilder(
+        Core::GpuTaskGraph& graph,
+        RendererDeferredSystem& deferredSystem,
+        Core::GraphicsRuntime& graphics,
+        Core::IGpuTaskGraphPresentationContributor* presentationContributor,
+        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
+    )noexcept
+        : m_graph(graph)
+        , m_deferredSystem(deferredSystem)
+        , m_graphics(graphics)
+        , m_presentationContributor(presentationContributor)
+        , m_outputLayerContributor(outputLayerContributor)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<DeferredGraphSuffixResult> declare(
+        const DeferredGraphSuffixInputs& inputs,
+        const Core::GpuTaskId& shadowVisibilityTask,
+        Core::GpuTimingSubmissionTicket& compositeTimingTicket,
+        Core::GpuTimingSubmissionTicket& presentTimingTicket,
+        Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction
+    );
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererDeferredSystem& m_deferredSystem;
+    Core::GraphicsRuntime& m_graphics;
+    Core::IGpuTaskGraphPresentationContributor* m_presentationContributor;
+    Core::IGpuTaskGraphOutputLayerContributor* m_outputLayerContributor;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderDeferredTaskGraphSuffixBuilderAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

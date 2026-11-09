@@ -1,0 +1,428 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/gpu/renderer.adhd.h>
+#include <impl/ecs_ui/toolkit/gpu/image_cache.adhd.h>
+#include <impl/ecs_ui/toolkit/gpu/sampled_texture_resources.adhd.h>
+
+#include <impl/assets/graphics/ui/output_push_constants.h>
+#include <impl/assets/graphics/ui/push_constants.h>
+#include <impl/assets_texture/loader.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+#include <impl/ecs_ui/toolkit/text/glyph_page.adhd.h>
+#include <impl/ecs_ui/toolkit/text/sdf_page.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/range_algorithms.h>
+#include <global/refcount_ptr.h>
+#include <global/simd/vector_arithmetic.h>
+#include <global/simd/vector_rounding.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(Vertex) == NWB_UI_VERTEX_BYTE_SIZE);
+static_assert(offsetof(Vertex, position) == NWB_UI_VERTEX_POSITION_BYTE_OFFSET);
+static_assert(offsetof(Vertex, texCoord) == NWB_UI_VERTEX_UV_BYTE_OFFSET);
+static_assert(offsetof(Vertex, color) == NWB_UI_VERTEX_COLOR_BYTE_OFFSET);
+static_assert(sizeof(GpuPaintPushConstants) == NWB_UI_PUSH_CONSTANTS_BYTE_SIZE);
+static_assert(offsetof(GpuPaintPushConstants, scale) == NWB_UI_PUSH_CONSTANTS_SCALE_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, translate) == NWB_UI_PUSH_CONSTANTS_TRANSLATE_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, textureSlot) == NWB_UI_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, samplerSlot) == NWB_UI_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, material) == NWB_UI_PUSH_CONSTANTS_MATERIAL_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfChannel) == NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfSpreadPixels) == NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfDistanceEncoding) == NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET);
+static_assert(sizeof(GpuOutputPushConstants) == NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE);
+static_assert(offsetof(GpuOutputPushConstants, textureSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET);
+static_assert(offsetof(GpuOutputPushConstants, samplerSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET);
+static_assert(offsetof(GpuOutputPushConstants, presentationMode) == NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET);
+static_assert(static_cast<u32>(PaintMaterial::Solid) == NWB_UI_MATERIAL_SOLID);
+static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
+static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);
+static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_GLYPH);
+static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
+static_assert(s_FontAtlasDistanceEncoding == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
+
+inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
+inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using GpuSampledGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+
+template<typename T, typename... Args>
+[[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<RefCounter<T>, Args...>()){
+    auto* const value = NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...);
+    if(!value)
+        return MakeUnexpected(Failure{});
+    return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
+[[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuSkinVersion : NoCopy{
+public:
+    explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuSkinVersion()noexcept{
+        TextureAssetLoader::Release(m_graphics, m_texture);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    SkinBinding m_binding;
+    TextureGpuResource m_texture;
+};
+
+template<typename TPage>
+class GpuPageVersion : NoCopy{
+public:
+    GpuPageVersion(Core::GraphicsRuntime& graphics, TPage page)noexcept
+        : m_graphics(graphics)
+        , m_page(Move(page))
+    {}
+    ~GpuPageVersion()noexcept{
+        FreeGpuDescriptor(m_graphics, m_sampledImage);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    TPage m_page;
+    Core::TextureHandle m_texture;
+    Core::GpuDescriptorHandle m_sampledImage;
+    Core::QueueSubmissionToken m_readinessToken;
+};
+
+class GpuTextureImageVersion : NoCopy{
+public:
+    GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)noexcept
+        : m_graphics(graphics)
+        , m_source(Move(source))
+    {}
+    ~GpuTextureImageVersion()noexcept{
+        TextureAssetLoader::Release(m_graphics, m_texture);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    SharedImageSource m_source;
+    TextureGpuResource m_texture;
+};
+
+inline GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
+    : m_glyphCache(arena)
+    , m_sdfCache(arena)
+    , m_textureCache(arena)
+{}
+
+inline GpuImageCache::~GpuImageCache()noexcept = default;
+
+inline void GpuImageCache::reserve(){
+    m_glyphCache.reserve(s_PaintMaxImages);
+    m_sdfCache.reserve(s_PaintMaxImages);
+    m_textureCache.reserve(s_PaintMaxImages);
+}
+
+inline void GpuImageCache::clear()noexcept{
+    m_glyphCache.clear();
+    m_sdfCache.clear();
+    m_textureCache.clear();
+}
+
+inline void GpuImageCache::trim(const DrawSnapshot& snapshot){
+    const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
+        return SameGlyphPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameSdfKey = [](const GpuVersion<GpuSdfAtlasVersion>& cached, const SharedSdfAtlasPage& page)noexcept{
+        return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameTextureKey = [](const GpuVersion<GpuTextureImageVersion>& cached, const SharedImageSource& source)noexcept{
+        return SameTextureImageKey(*cached->m_source, *source);
+    };
+    const auto countMissing = [](const auto& cache, const auto& requested, const auto& sameKey)noexcept{
+        return CountMissingCacheEntries(cache, requested, sameKey);
+    };
+    const auto retainReferenced = [](const auto& requested, const auto& sameKey, auto& cache)noexcept{
+        RetainReferencedCacheEntries(requested, sameKey, cache);
+    };
+    const usize missing = countMissing(m_glyphCache, snapshot.glyphPages(), sameGlyphKey)
+        + countMissing(m_sdfCache, snapshot.sdfPages(), sameSdfKey)
+        + countMissing(m_textureCache, snapshot.textureImages(), sameTextureKey);
+    if(!ShouldTrimGpuImageCache(m_glyphCache.size(), m_sdfCache.size(), m_textureCache.size(), missing))
+        return;
+    // Retain requested logical keys even when their immutable metadata conflicts; preparation must reject that conflict.
+    // Live frames retain evicted versions.
+    // Removing only cache ownership never changes sampled pixels or live descriptors.
+    retainReferenced(snapshot.glyphPages(), sameGlyphKey, m_glyphCache);
+    retainReferenced(snapshot.sdfPages(), sameSdfKey, m_sdfCache);
+    retainReferenced(snapshot.textureImages(), sameTextureKey, m_textureCache);
+}
+
+inline void GpuImageCache::evict()noexcept{
+    // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
+    if(!m_glyphCache.empty())
+        m_glyphCache.erase(m_glyphCache.begin());
+    else if(!m_sdfCache.empty())
+        m_sdfCache.erase(m_sdfCache.begin());
+    else if(!m_textureCache.empty())
+        m_textureCache.erase(m_textureCache.begin());
+}
+
+class GpuTargetVersion : NoCopy{
+public:
+    explicit GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuTargetVersion()noexcept{
+        FreeGpuDescriptor(m_graphics, m_sampledImage);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    Core::TextureHandle m_color;
+    Core::FramebufferHandle m_framebuffer;
+    Core::GpuDescriptorHandle m_sampledImage;
+    Core::QueueSubmissionToken m_readinessToken;
+};
+
+class GpuSharedResources : NoCopy{
+public:
+    explicit GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuSharedResources()noexcept{
+        FreeGpuDescriptor(m_graphics, m_samplerDescriptor);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    Core::ShaderHandle m_vertexShader;
+    Core::ShaderHandle m_pixelShader;
+    Core::ShaderHandle m_outputVertexShader;
+    Core::ShaderHandle m_outputPixelShader;
+    Core::InputLayoutHandle m_inputLayout;
+    Core::BindingLayoutHandle m_layout;
+    Core::BindingLayoutHandle m_outputLayout;
+    Core::GraphicsPipelineHandle m_pipeline;
+    Core::GraphicsPipelineHandle m_outputPipeline;
+    Core::SamplerHandle m_sampler;
+    Core::GpuDescriptorHandle m_samplerDescriptor;
+};
+
+class GpuFrameData : NoCopy{
+public:
+    explicit GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept
+        : m_arena(arena)
+        , m_snapshot(arena)
+        , m_glyphPages(arena)
+        , m_sdfPages(arena)
+        , m_textureImages(arena)
+    {}
+
+
+public:
+    void reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
+
+
+public:
+    [[nodiscard]] b8 prefixComplete(Core::Device& device)const;
+    [[nodiscard]] b8 recyclable(Core::Device& device)const;
+    [[nodiscard]] b8 complete(Core::Device& device)const;
+
+
+public:
+    // Strong version owners keep descriptors allocated through pending recording and final GPU completion.
+    Core::Alloc::GlobalArena& m_arena;
+    DrawSnapshot m_snapshot;
+    GpuVersion<GpuSkinVersion> m_skin;
+    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphPages;
+    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfPages;
+    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureImages;
+    GpuVersion<GpuTargetVersion> m_target;
+    GpuVersion<GpuSharedResources> m_resources;
+    Core::BufferHandle m_vertices;
+    Core::BufferHandle m_indices;
+    Core::GraphicsPipelineHandle m_outputPipeline;
+    Core::AcquiredPresentationFrame m_acquired;
+    Core::QueueSubmissionToken m_vertexUpload;
+    Core::QueueSubmissionToken m_indexUpload;
+    Core::QueueSubmissionToken m_clear;
+    Core::QueueSubmissionToken m_raster;
+    Core::QueueSubmissionToken m_finalConsumer;
+    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
+    b8 m_prepared = false;
+    u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
+};
+
+using GpuFrame = GpuVersion<GpuFrameData>;
+
+struct GpuFrameSlot{
+    GpuVersion<GpuTargetVersion> target;
+    Core::BufferHandle vertices;
+    Core::BufferHandle indices;
+    GpuFrame inFlight;
+    usize vertexCapacity = 0u;
+    usize indexCapacity = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Optional<Core::Rect> ResolveGpuScissorRect(const GpuRasterGeometry& geometry, const DrawCommand& draw)noexcept;
+
+// Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
+[[nodiscard]] b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GpuRasterTask{
+    struct Payload{
+        GpuFrame frame;
+        Core::GpuGraphResourceId color;
+        Core::GpuGraphResourceId skin;
+        Core::GpuGraphPipelineId pipeline;
+        Core::GpuGraphResourceId vertices;
+        Core::GpuGraphResourceId indices;
+        GpuSampledGraphResources glyphPages;
+        GpuSampledGraphResources sdfPages;
+        GpuSampledGraphResources textureImages;
+    };
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, false };
+
+
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        payload.frame->m_raster = token;
+    }
+};
+
+struct GpuOutputTask{
+    struct Payload{
+        GpuFrame frame;
+        Core::GpuGraphResourceId backBuffer;
+        Core::GpuGraphResourceId color;
+        Core::GpuGraphPipelineId graphPipeline;
+        Core::AcquiredPresentationFrame acquired;
+        Core::GraphicsPipelineHandle pipeline;
+        u32 presentationMode = NWB_UI_PRESENTATION_SDR;
+    };
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
+
+
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        payload.frame->m_finalConsumer = token;
+    }
+};
+
+[[nodiscard]] b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands);
+[[nodiscard]] b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuRendererState final : NoCopy{
+public:
+    [[nodiscard]] static b8 MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
+
+
+public:
+    GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver);
+
+
+public:
+    [[nodiscard]] b8 createResources();
+    [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> createTarget(u32 width, u32 height);
+    [[nodiscard]] b8 prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
+    [[nodiscard]] b8 prepareOutputPipeline(const Core::FramebufferInfo& info);
+    [[nodiscard]] b8 prepare(const Core::AcquiredPresentationFrame& acquired);
+    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, b8 allowEmptySceneLayer);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
+
+
+public:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    Core::Assets::AssetManager& m_assets;
+    GpuRenderer::ShaderPathResolveCallback m_resolver;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
+    GpuVersion<GpuSharedResources> m_resources;
+    GpuVersion<GpuSkinVersion> m_skin;
+    GpuImageCache m_imageCache;
+    Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
+    Array<GpuFrame, s_GpuFrameCount> m_frames;
+    GpuFrame m_pending;
+    Core::AcquiredPresentationFrame m_lastAcceptedAcquired;
+    Core::IGpuTaskGraphPresentationContributor* m_presentationContributor = nullptr;
+    const Core::GpuTaskGraph* m_declaredGraph = nullptr;
+    Core::GpuTaskGraphOutputLayer m_declaredLayer;
+    u64 m_graphGeneration = 0u;
+    u64 m_lastAcceptedGeneration = 0u;
+    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
+    u32 m_width = 0u;
+    u32 m_height = 0u;
+    b8 m_frameTimingScopePrepared = false;
+    b8 m_claimed = false;
+    b8 m_readyToDeclare = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitGpuRendererInternalAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

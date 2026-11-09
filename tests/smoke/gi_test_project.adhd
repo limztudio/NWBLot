@@ -14,7 +14,7 @@
 native{
 
 
-#include <impl/assets_material/asset.h>
+#include <impl/assets_material/asset.adhd.h>
 #include <core/assets/ref.h>
 #include <global/simdmath.h>
 
@@ -377,8 +377,8 @@ private:
 
 
 
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_scene/module.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -670,11 +670,11 @@ void CsgGiScene::update(){
 
 #include <loader/project_entry.h>
 
-#include <impl/assets_material/asset.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/material/material_instance.h>
+#include <impl/assets_material/asset.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/material/material_instance.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

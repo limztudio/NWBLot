@@ -1,0 +1,115 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/assets_mesh/asset.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
+#include <impl/assets_skeleton/asset.adhd.h>
+
+#include <core/assets/module.h>
+#include <core/assets/ref.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
+inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
+#if defined(NWB_COOK)
+inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");
+#endif
+inline constexpr TStringView s_SkinInfluencesPayloadLabel = NWB_TEXT("influences");
+inline constexpr TStringView s_SkinInverseBindMatricesPayloadLabel = NWB_TEXT("inverse bind matrices");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Skin final : public Core::Assets::TypedAsset<Skin>{
+public:
+    using InfluenceVector = Core::Assets::AssetVector<SkinInfluence4>;
+    using InverseBindMatrixVector = Core::Assets::AssetVector<SkeletonJointMatrix>;
+
+
+public:
+    NWB_DEFINE_ASSET_TYPE("skin")
+
+
+public:
+    explicit Skin(Core::Assets::AssetArena& arena)noexcept
+        : m_influences(arena)
+        , m_inverseBindMatrices(arena)
+    {}
+    Skin(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
+        : Core::Assets::TypedAsset<Skin>(virtualPath)
+        , m_influences(arena)
+        , m_inverseBindMatrices(arena)
+    {}
+
+
+public:
+    b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
+
+
+public:
+    void setMesh(const Core::Assets::AssetRef<Mesh>& mesh)noexcept{ m_mesh = mesh; }
+
+    void setSkeleton(const Core::Assets::AssetRef<Skeleton>& skeleton)noexcept{ m_skeleton = skeleton; }
+
+    void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept{
+        m_influences = Move(influences);
+        m_inverseBindMatrices = Move(inverseBindMatrices);
+    }
+
+
+public:
+    [[nodiscard]] const Core::Assets::AssetRef<Mesh>& mesh()const noexcept{ return m_mesh; }
+
+    [[nodiscard]] const Core::Assets::AssetRef<Skeleton>& skeleton()const noexcept{ return m_skeleton; }
+
+    [[nodiscard]] const InfluenceVector& influences()const noexcept{ return m_influences; }
+
+    [[nodiscard]] const InverseBindMatrixVector& inverseBindMatrices()const noexcept{ return m_inverseBindMatrices; }
+
+
+private:
+    Core::Assets::AssetRef<Mesh> m_mesh;
+    Core::Assets::AssetRef<Skeleton> m_skeleton;
+    InfluenceVector m_influences;
+    InverseBindMatrixVector m_inverseBindMatrices;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_ASSET_CODEC(SkinAssetCodec, Skin);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsMeshSkinAssetAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

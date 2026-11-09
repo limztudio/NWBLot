@@ -3,10 +3,10 @@
 
 
 native{
-#include <impl/ecs_render/kernel/task_timing_feedback.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/reflection/statistics_readback.h>
-#include <impl/ecs_render/refraction/statistics_readback.h>
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
+#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
 #include <core/task/gpu/task_graph.h>
 #include <gtest/gtest.h>
 

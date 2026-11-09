@@ -1,0 +1,390 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsFontAtlasRuntimeAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/assets_font_atlas/asset.adhd.h>
+
+#include <core/assets/auto_registration.h>
+
+#include <global/binary_little_endian.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(s_FontAtlasBinaryHeaderBytes == 17u * sizeof(u32) + sizeof(NameHash) + sizeof(Sha256Digest), "Font atlas header must contain the full identity");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_atlas_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAtlasAssetCodecAutoRegistrar, FontAtlasAssetCodec);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_atlas_binary{
+
+static_assert(s_NameHashLaneCount == s_FontAtlasIdentityLaneCount);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Span<const u8> bytes, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    usize cursor = 0u;
+    FontAtlasPayload payload(arena);
+    NameHash identity;
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords{};
+    if(!TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor, identityQwords))
+        return MakeUnexpected(Failure{});
+    for(usize lane = 0u; lane < s_NameHashLaneCount; ++lane)
+        identity.qwords[lane] = identityQwords[lane];
+    payload.font.virtualPath = Name(identity);
+    if(!ReadBytes(bytes, sizeof(payload.fontSha256.bytes), cursor, payload.fontSha256.bytes))
+        return MakeUnexpected(Failure{});
+    const auto headerResult = TryReadFontAtlasBinaryHeaderTail(bytes, cursor);
+    if(!headerResult)
+        return MakeUnexpected(Failure{});
+    const FontAtlasBinaryDecodedHeader& header = *headerResult;
+    payload.faceIndex = header.faceIndex;
+    payload.unitsPerEm = header.unitsPerEm;
+    payload.sourceGlyphCount = header.sourceGlyphCount;
+    payload.bakePpem = header.bakePpem;
+    payload.spreadPixels = header.spreadPixels;
+    payload.guardTexels = header.guardTexels;
+    payload.ascenderUnits = header.ascenderUnits;
+    payload.descenderUnits = header.descenderUnits;
+    payload.lineGapUnits = header.lineGapUnits;
+    payload.rasterMode = header.rasterMode;
+    if(!TryReadFontAtlasGlyphs(bytes, header.glyphCount, cursor, payload.glyphs))
+        return MakeUnexpected(Failure{});
+    payload.groups.reserve(header.groupCount);
+    u64 pixelBytes = 0u;
+    for(u32 index = 0u; index < header.groupCount; ++index){
+        FontAtlasGroup group(arena);
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasGroupHeader(bytes, cursor, group.width, group.height, group.channelCount, byteCount))
+            return MakeUnexpected(Failure{});
+        if(!ReadBytes(bytes, sizeof(group.sha256.bytes), cursor, group.sha256.bytes))
+            return MakeUnexpected(Failure{});
+        if(!ValidateFontAtlasBinaryGroupChunk(group.width, group.height, group.channelCount, byteCount, pixelBytes, cursor, bytes.size()))
+            return MakeUnexpected(Failure{});
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, group.pixels))
+            return MakeUnexpected(Failure{});
+        pixelBytes += byteCount;
+        payload.groups.push_back(Move(group));
+    }
+    payload.positioningTables.reserve(header.tableCount);
+    u64 tableBytes = 0u;
+    for(u32 index = 0u; index < header.tableCount; ++index){
+        FontAtlasPositioningTable table(arena);
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasTableHeader(bytes, cursor, table.tag, byteCount))
+            return MakeUnexpected(Failure{});
+        if(!ReadBytes(bytes, sizeof(table.sha256.bytes), cursor, table.sha256.bytes))
+            return MakeUnexpected(Failure{});
+        if(!ValidateFontAtlasBinaryTableChunk(byteCount, tableBytes, cursor, bytes.size()))
+            return MakeUnexpected(Failure{});
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, table.bytes))
+            return MakeUnexpected(Failure{});
+        tableBytes += byteCount;
+        payload.positioningTables.push_back(Move(table));
+    }
+    if(cursor != bytes.size() || !ValidateFontAtlasPayload(payload, scratchArena))
+        return MakeUnexpected(Failure{});
+    return payload;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_atlas_validation{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload){
+    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
+        const FontAtlasGroup& group = payload.groups[groupIndex];
+        if(!ValidateFontAtlasGroupGuardedOverlap(
+            payload.glyphs,
+            static_cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        ))
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_font_atlas_binary;
+    if(!ValidateFontAtlasPayload(payload, scratchArena))
+        return MakeUnexpected(Failure{});
+    Core::Assets::AssetBytes binary(arena);
+    usize size = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
+    for(const FontAtlasGroup& group : payload.groups)
+        size += s_FontAtlasBinaryGroupHeaderBytes + group.pixels.size();
+    for(const FontAtlasPositioningTable& table : payload.positioningTables)
+        size += s_FontAtlasBinaryTableHeaderBytes + table.bytes.size();
+    binary.reserve(size);
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords{};
+    for(usize lane = 0u; lane < s_NameHashLaneCount; ++lane)
+        identityQwords[lane] = payload.font.name().hash().qwords[lane];
+    AppendFontAtlasBinaryPreambleAndIdentity(identityQwords, binary);
+    binary.insert(binary.end(), payload.fontSha256.bytes, payload.fontSha256.bytes + sizeof(payload.fontSha256.bytes));
+    AppendFontAtlasBinaryHeaderTail(
+        payload.faceIndex,
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        payload.bakePpem,
+        payload.spreadPixels,
+        payload.guardTexels,
+        payload.rasterMode,
+        payload.ascenderUnits,
+        payload.descenderUnits,
+        payload.lineGapUnits,
+        static_cast<u32>(payload.glyphs.size()),
+        static_cast<u32>(payload.groups.size()),
+        static_cast<u32>(payload.positioningTables.size()),
+        binary
+    );
+    AppendFontAtlasGlyphsBinary(payload.glyphs, binary);
+    for(const FontAtlasGroup& group : payload.groups)
+        AppendFontAtlasGroupChunk(group.width, group.height, group.channelCount, Span<const u8>(group.sha256.bytes, sizeof(group.sha256.bytes)), group.pixels, binary);
+    for(const FontAtlasPositioningTable& table : payload.positioningTables)
+        AppendFontAtlasTableChunk(table.tag, Span<const u8>(table.sha256.bytes, sizeof(table.sha256.bytes)), table.bytes, binary);
+    return binary;
+}
+
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena, scratchArena);
+    if(!payload){
+        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
+        return MakeUnexpected(payload.error());
+    }
+    return payload;
+}
+
+b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena&){
+    if(!payload.font || !IsFontAtlasDigestNonZero(Span<const u8>(payload.fontSha256.bytes, sizeof(payload.fontSha256.bytes))) || payload.faceIndex != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
+        return false;
+    }
+    if(!ValidateFontAtlasHeaderParameters(
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        payload.glyphs.size(),
+        payload.bakePpem,
+        payload.spreadPixels,
+        payload.guardTexels,
+        payload.rasterMode,
+        payload.ascenderUnits,
+        payload.descenderUnits,
+        payload.lineGapUnits,
+        payload.groups.size()
+    ))
+        return false;
+    u64 pixelBytes = 0u;
+    for(const FontAtlasGroup& group : payload.groups){
+        if(!ValidateFontAtlasGroupPixelChunk(
+            group.width,
+            group.height,
+            group.channelCount,
+            group.pixels,
+            Span<const u8>(group.sha256.bytes, sizeof(group.sha256.bytes)),
+            pixelBytes
+        ))
+            return false;
+    }
+    const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
+    for(usize index = 0u; index < payload.glyphs.size(); ++index){
+        const FontAtlasGlyph& glyph = payload.glyphs[index];
+        if(!ValidateFontAtlasGlyphRecord(glyph, index, payload.groups.size(), unitsPerPixel))
+            return false;
+        if(glyph.drawable == 0u)
+            continue;
+        const FontAtlasGroup& group = payload.groups[glyph.group];
+        if(!ValidateFontAtlasGlyphGroupRect(glyph, index, group.width, group.height, group.channelCount, payload.guardTexels))
+            return false;
+    }
+    if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
+        return false;
+    if(payload.positioningTables.size() > s_FontAtlasMaxPositioningTableCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));
+        return false;
+    }
+    u64 positioningBytes = 0u;
+    u32 previousTag = 0u;
+    for(const FontAtlasPositioningTable& table : payload.positioningTables){
+        if(!ValidateFontAtlasPositioningTableEntry(
+            table.tag,
+            table.bytes,
+            Span<const u8>(table.sha256.bytes, sizeof(table.sha256.bytes)),
+            payload.sourceGlyphCount,
+            previousTag,
+            positioningBytes
+        ))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
+    const Core::Assets::AssetBytes& source = font.fontBytes();
+    FontSfntDirectory directory;
+    if(!ValidateFontAtlasSourceHeaderAndMetrics(
+        payload.font.name(),
+        font.virtualPath(),
+        payload.faceIndex,
+        font.faceIndex(),
+        source,
+        Span<const u8>(payload.fontSha256.bytes, sizeof(payload.fontSha256.bytes)),
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        directory
+    ))
+        return false;
+    usize matched = 0u;
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const Expected<FontSfntTable> sourceTable = directory.table(index);
+        if(!sourceTable)
+            return false;
+        const u32 tag = sourceTable->tag;
+        if(!IsFontAtlasPositioningTableTag(tag) || sourceTable->bytes.empty())
+            continue;
+        const FontAtlasPositioningTable* exported = nullptr;
+        for(const FontAtlasPositioningTable& table : payload.positioningTables){
+            if(table.tag == tag){
+                exported = &table;
+                break;
+            }
+        }
+        if(!exported || !AreFontAtlasByteSpansEqual(exported->bytes, sourceTable->bytes)){
+            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
+            return false;
+        }
+        ++matched;
+    }
+    if(matched != payload.positioningTables.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
+        return false;
+    }
+    return true;
+}
+
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
+    if(faceIndex != 0u)
+        return MakeUnexpected(Failure{});
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
+    if(!directory)
+        return MakeUnexpected(Failure{});
+    static constexpr Array<u32, s_FontAtlasMaxPositioningTableCount> s_Tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
+    Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
+    tables.reserve(s_FontAtlasMaxPositioningTableCount);
+    u64 totalBytes = 0u;
+    for(const u32 tag : s_Tags){
+        const Expected<Span<const u8>> sourceBytesResult = FindFontAtlasSourcePositioningTableBytes(*directory, tag, sourceGlyphCount, totalBytes);
+        if(!sourceBytesResult)
+            return MakeUnexpected(Failure{});
+        if(sourceBytesResult->empty())
+            continue;
+        FontAtlasPositioningTable table(arena);
+        table.tag = tag;
+        table.bytes.assign(sourceBytesResult->begin(), sourceBytesResult->end());
+        table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
+        tables.push_back(Move(table));
+    }
+    return tables;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 FontAtlas::loadBinary(const Span<const u8> binary){
+    if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
+        return false;
+    Core::Alloc::ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
+    auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena(), scratchArena);
+    if(!payload)
+        return false;
+    FontAtlas candidate(m_payload.glyphs.get_allocator().arena(), virtualPath());
+    candidate.m_payload = Move(*payload);
+    *this = Move(candidate);
+    return true;
+}
+
+b8 FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+    return checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(m_payload, scratchArena);
+}
+
+void FontAtlas::setPayload(FontAtlasPayload&& payload)noexcept{
+    m_payload = Move(payload);
+}
+
+const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
+    return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

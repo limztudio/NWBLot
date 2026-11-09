@@ -1,0 +1,113 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMaterialSystem;
+class DeferredGraphResourceImportResult;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct OpaqueSharedComputeEmulationChainInputs{
+    DeferredFrameTargets& targets;
+    const DeferredGraphResourceImportResult& resources;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
+    Span<const Core::GpuTaskResourceUse> objectGeometryReads;
+    Core::GpuTimingSubmissionTicket*& timingTicket;
+    const b8& meshViewSetupReady;
+    const b8& sceneShadingSetupReady;
+    Optional<Core::GpuTimingMeasure>& sharedComputeEmulationTiming;
+    Core::GpuTaskResourceSetUse materialGeometrySetUse{};
+    Core::GpuTaskResourceSetUse materialSampledTextureSetUse{};
+    Core::BufferRange materialInstanceRange{};
+    Core::BufferRange materialTypedRange{};
+    Core::GpuGraphResourceId sharedOutput;
+    Core::GpuTaskId gbufferTask;
+    usize instanceCount = 0u;
+    usize materialTypedByteCount = 0u;
+    b8 materialDrawBuffersUploaded = false;
+    b8 materialFrameStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Two to five regular opaque draws share one generated-vertex output, so each draw gets an explicit generate then raster phase after the G-buffer.
+// The immediate chain keeps every Common -> UAV -> vertex/index state step with the graph, not the material callback.
+class OpaqueSharedComputeEmulationChainBuilder final : NoCopy{
+public:
+    OpaqueSharedComputeEmulationChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+    {}
+
+
+public:
+    // Writes each declared phase task into `tasks` in order.
+    [[nodiscard]] Expected<OpaqueSharedComputeEmulationChainResult> declare(const OpaqueSharedComputeEmulationChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, Span<Core::GpuTaskId> tasks);
+
+
+private:
+    [[nodiscard]] Expected<Core::GpuTaskId> declarePhase(
+        const OpaqueSharedComputeEmulationChainInputs& inputs,
+        const Name& identity,
+        AStringView markerLabel,
+        const Core::GpuTaskId& dependency,
+        SharedComputeEmulationPhase::Enum phase,
+        usize drawIndex,
+        b8 finishTiming,
+        Span<const Core::GpuTaskResourceUse> resourceUses,
+        Span<const Core::GpuTaskResourceSetUse> resourceSetUses
+    );
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererMaterialSystem& m_materialSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderDeferredOpaqueSharedComputeEmulationChainAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

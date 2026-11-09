@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FrameExecuteRecovery;
+class RendererFramePipeline;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Records the optional tasks that follow accepted presentation: the surfel counter readback and the lagged lighting-history copy.
+class FrameExecutePresentTails final : NoCopy{
+public:
+    FrameExecutePresentTails(
+        RendererFramePipeline& renderer,
+        Core::Alloc::ScratchArena& scratchArena,
+        FrameExecuteRecovery& recovery,
+        const Core::GpuCompiledGraph::ReadView& compiledPlan,
+        const Core::QueueSubmissionToken& finalPresentationSubmissionToken
+    )noexcept
+        : m_renderer(renderer)
+        , m_scratchArena(scratchArena)
+        , m_recovery(recovery)
+        , m_compiledPlan(compiledPlan)
+        , m_finalPresentationSubmissionToken(finalPresentationSubmissionToken)
+    {}
+
+
+public:
+    // Returns false when an accepted readback lost its retained state and the frame must stop.
+    [[nodiscard]] b8 executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* readbackQueue, Span<const Core::BufferHandle> counterBuffers);
+    void executeLaggedLightingHistoryCapture(DeferredFrameTargets& targets, const Core::GpuPhysicalQueueInfo* historyQueue, b8 requestsCapture, b8 captureDeclared, b8 laggedAsyncLightingSchedule);
+
+
+private:
+    RendererFramePipeline& m_renderer;
+    Core::Alloc::ScratchArena& m_scratchArena;
+    FrameExecuteRecovery& m_recovery;
+    const Core::GpuCompiledGraph::ReadView& m_compiledPlan;
+    const Core::QueueSubmissionToken& m_finalPresentationSubmissionToken;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderExecuteFrameExecutePresentTailsAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

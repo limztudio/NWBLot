@@ -681,7 +681,7 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
 
     static constexpr MStringView s_NativeBlockParamNoShadowForwardDecl =
         "native{\r\n"
-        "#include <impl/assets_ui_skin/asset.h>\r\n"
+        "#include <impl/assets_ui_skin/asset.adhd.h>\r\n"
         "}\r\n"
         "b8 CheckSkin(in UiSkin skin, in Name region) {\r\n"
         "    return skin.hasRegion(region);\r\n"

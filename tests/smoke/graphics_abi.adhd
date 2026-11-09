@@ -5,7 +5,7 @@
 native{
 #include <loader/project_entry.h>
 
-#include <impl/assets_graphics/bindless/runtime_abi.h>
+#include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
 
 #include <core/graphics/runtime/runtime.h>
 }

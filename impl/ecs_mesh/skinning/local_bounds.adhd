@@ -1,0 +1,98 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/task_desc.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+struct GpuTaskRecordContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinningRuntimeInstance;
+
+// Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
+[[nodiscard]] b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance);
+
+// Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
+struct MeshSkinningLocalBoundsDispatch{
+    Core::GpuGraphResourceId bindlessResourceSlotsResource;
+    Core::GpuGraphResourceId meshletLocalBoundsResource;
+    Core::GpuGraphResourceId localBoundsResource;
+    Core::GpuGraphPipelineId localBoundsPipeline;
+    u32 meshletCount = 0u;
+    u32 bindlessResourceSlots = 0u;
+};
+
+struct MeshSkinningLocalBoundsTask{
+    struct Payload{
+        Core::GraphicsRuntime& graphics;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Span<const MeshSkinningLocalBoundsDispatch> dispatches;
+
+
+    public:
+        Payload(Core::GraphicsRuntime& inGraphics, Core::GpuTimingSubmissionTicket& inTimingTicket, const Span<const MeshSkinningLocalBoundsDispatch> inDispatches)noexcept
+            : graphics(inGraphics)
+            , timingTicket(inTimingTicket)
+            , dispatches(inDispatches)
+        {}
+    };
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
+
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsMeshSkinningLocalBoundsAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

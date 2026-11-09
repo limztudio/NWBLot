@@ -1,0 +1,119 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/assets_skeleton/joint_types.adhd.h>
+#include <impl/ecs_mesh/runtime/mesh.adhd.h>
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
+#include <impl/ecs_skeleton/components.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinningRuntimeInstance;
+using MeshSkinningResourceBuffers = Array<Core::BufferHandle, s_MeshSkinningResourceBufferCount>;
+
+// Retains exact buffer identities so resource replacement cannot reuse old descriptor bindings.
+[[nodiscard]] MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept;
+
+struct MeshSkinningDeformationInputs{
+    Core::BufferHandle resourceSlotsBuffer;
+    u32 editRevision = 0u;
+    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+};
+
+// Accepted object-space output is reusable only for the same resolved GPU palette and resource generation.
+class MeshSkinningDeformationState final{
+public:
+    explicit MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)noexcept
+        : m_acceptedJoints(arena)
+        , m_pendingJoints(arena)
+    {}
+
+
+public:
+    void invalidateCurrent()noexcept{
+        m_current = false;
+        m_pendingCandidate = 0u;
+    }
+    void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints, const b8 inputDirty)noexcept{
+        invalidateCurrent();
+        m_current = CanReuseMeshSkinningDeformationState(
+            inputDirty,
+            m_acceptedRevision,
+            inputs.resourceSlotsBuffer != nullptr && inputs.resourceSlotsBuffer == m_acceptedInputs.resourceSlotsBuffer,
+            inputs.editRevision,
+            m_acceptedInputs.editRevision,
+            inputs.skinningMode,
+            m_acceptedInputs.skinningMode,
+            joints.data() != nullptr,
+            joints,
+            Span<const SkeletonJointMatrix>(m_acceptedJoints.data(), m_acceptedJoints.size())
+        );
+    }
+    [[nodiscard]] Expected<u64> stage(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints){
+        invalidateCurrent();
+        const auto candidate = TryStageMeshSkinningDeformationCandidate(
+            inputs.resourceSlotsBuffer != nullptr,
+            joints,
+            joints.data() != nullptr,
+            m_acceptedRevision,
+            m_candidateSerial,
+            m_pendingJoints
+        );
+        if(!candidate)
+            return MakeUnexpected(Failure{});
+        m_pendingInputs = inputs;
+        m_pendingCandidate = *candidate;
+        return m_pendingCandidate;
+    }
+    [[nodiscard]] b8 accept(const u64 candidate)noexcept{
+        if(!TryAcceptMeshSkinningDeformationCandidate(candidate, m_pendingCandidate, m_acceptedRevision, m_current))
+            return false;
+        m_acceptedJoints.swap(m_pendingJoints);
+        m_acceptedInputs = m_pendingInputs;
+        return true;
+    }
+    // Zero also covers a changed pose awaiting this frame's graph submission.
+    [[nodiscard]] u64 contentRevision()const noexcept{ return m_current ? m_acceptedRevision : 0u; }
+
+
+private:
+    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_acceptedJoints;
+    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_pendingJoints;
+    MeshSkinningDeformationInputs m_acceptedInputs;
+    MeshSkinningDeformationInputs m_pendingInputs;
+    u64 m_acceptedRevision = 0u;
+    u64 m_candidateSerial = 0u;
+    u64 m_pendingCandidate = 0u;
+    b8 m_current = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsMeshSkinningDeformationStateAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

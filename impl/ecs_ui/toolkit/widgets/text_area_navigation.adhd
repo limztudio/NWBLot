@@ -1,0 +1,109 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shape event-current text during a synchronous host loan; the resolver keeps no model or layout between keys.
+class TextAreaNavigationResolver final : public IEditNavigationResolver{
+public:
+    TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context, const TextAreaState& state, const f32 fontSize, const u32 scriptTag = s_TextDefaultScriptTag, const StringView language = s_TextDefaultLanguage)
+        : m_arena(arena)
+        , m_text(text)
+        , m_context(context)
+        , m_state(state)
+        , m_instanceGeneration(state.instanceGeneration())
+        , m_revision(state.revision())
+        , m_fontSize(fontSize)
+        , m_scriptTag(scriptTag)
+        , m_language(language.data(), language.size(), arena)
+    {}
+    virtual ~TextAreaNavigationResolver()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight)override{
+        const auto page = ValidateTextAreaNavigationInputs(model.textMode(), model.composition().active, direction, m_fontSize, viewportHeight, preferred);
+        if(
+            !current()
+            || !page
+            || !m_state.navigation().matches(preferred)
+        )
+            return MakeUnexpected(Failure{});
+        const TextAreaModelStamp expected = model.stamp();
+        EditBoxView view(m_arena);
+        const ShapeRequest request{ {}, StringView(m_language.data(), m_language.size()), m_fontSize, m_scriptTag, TextDirection::LeftToRight };
+        if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
+            return MakeUnexpected(Failure{});
+        if(!current() || !model.matchesStamp(expected) || model.composition().active || !m_state.navigation().matches(preferred))
+            return MakeUnexpected(Failure{});
+        const EditCaretGeometry& geometry = view.caretGeometry();
+        return TryResolveTextAreaNavigationTarget(
+            geometry.ready(),
+            *page,
+            direction,
+            preferred,
+            viewportHeight,
+            model.caret(),
+            view.displayCaret(),
+            geometry.layout().utf8(),
+            geometry.layout().lines(),
+            geometry.layout().clusters(),
+            geometry.boundaries(),
+            geometry.lines(),
+            geometry.caretStops()
+        );
+    }
+
+
+private:
+    [[nodiscard]] b8 current()const noexcept{
+        return !m_context.failed() && m_state.instanceGeneration() == m_instanceGeneration && m_state.revision() == m_revision;
+    }
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    TextService& m_text;
+    const Context& m_context;
+    const TextAreaState& m_state;
+    const u64 m_instanceGeneration;
+    const u64 m_revision;
+    const f32 m_fontSize;
+    const u32 m_scriptTag;
+    AString<Core::Alloc::GlobalArena> m_language;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsTextAreaNavigationAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

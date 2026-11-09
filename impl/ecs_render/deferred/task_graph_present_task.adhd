@@ -1,0 +1,90 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_graph.h>
+#include <core/task/gpu/output_layer_contributor.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererDeferredSystem;
+struct DeferredFrameTargets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeferredPresentGraphTask{
+    // Acquired backbuffer recording belongs to the primary presentation timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
+
+
+public:
+    // All bindings required: present closes the async-final range when shadow runs on compute.
+    // Only the output-layer contributor stays optional.
+    struct Payload{
+        RendererDeferredSystem& deferredSystem;
+        Core::GraphicsRuntime& graphics;
+        DeferredFrameTargets& targets;
+        Core::AcquiredPresentationFrame presentationFrame;
+        Core::GpuGraphResourceId backBuffer;
+        Core::GpuTaskGraphOutputLayer outputLayer;
+        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor = nullptr;
+        Optional<Core::GpuTimingMeasure>& asyncFinalTiming;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const Core::GpuTaskId& shadowVisibilityTask;
+    };
+
+
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    // Narrow output-layer acceptance: the only optional coupling inside Accepted.
+    static void AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, u64 frameGeneration, const Core::QueueSubmissionToken& token);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderDeferredTaskGraphPresentTaskAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

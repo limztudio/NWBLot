@@ -1,0 +1,133 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/assets/graphics/caustic/hw_binding_slots.h>
+#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+#include <impl/assets/graphics/caustic/sw_binding_slots.h>
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
+#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd.h>
+
+#include <core/graphics/rhi/device.h>
+
+#include <global/simplemath.h>
+#include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Caustic splats are fixed-point R32_UINT (no float atomics), one RGB layer each; resolve converts to RGBA16F.
+inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT);
+
+// Assigns caustic slots to top caustic-enabled lights after ResolveSceneLights when a refractive instance and caustic opt-in are present.
+[[nodiscard]] u32 ResolveCausticLights(Span<const f32> causticImportance, u32 refractiveInstanceCount, Span<SceneLightGpuData> lights)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
+static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
+static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 7u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
+
+// Frame-parity reuse retains the same two-phase checkerboard for both photon producers.
+static_assert(s_CausticTemporalPhaseCount == 2u);
+static_assert(s_CausticTemporalPhaseCount > s_CausticTemporalDisabledPhaseCount);
+static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
+static_assert((NWB_CAUSTIC_SW_GRID_SIDE % s_CausticTemporalPhaseCount) == 0u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtCausticState{
+    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+
+    // Software caustics are push-only and reuse the SW trace geometry.
+    Core::BindingLayoutHandle m_swCausticBindingLayout;
+    Core::ShaderHandle m_swCausticShader;
+    Core::ComputePipelineHandle m_swCausticPipeline;
+    Core::ShaderHandle m_swCausticCsgShader;
+    Core::ComputePipelineHandle m_swCausticCsgPipeline;
+    // Hardware caustics are push-only and use the TLAS plus global heap views.
+    Core::BindingLayoutHandle m_hwCausticBindingLayout;
+    Core::RayTracingPipelineHandle m_hwCausticPipeline;
+    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
+    Core::RayTracingPipelineHandle m_hwCausticCsgPipeline;
+    Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
+    // Per-frame refractive-instance AABBs shared by caustic lights.
+    CausticEmissionTargetBuffer m_causticEmissionTargets;
+    // Push-only a-trous caustic resolve.
+    CausticResolveState m_causticResolve;
+    // Half-resolution geometry cache for edge-aware caustic resolve.
+    Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
+    Core::ShaderHandle m_causticGeometryDownsampleShader;
+    Core::ComputePipelineHandle m_causticGeometryDownsamplePipeline;
+    // Decay persistent accumulator after seeding; clear it after target recreation.
+    Core::BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
+    Core::ShaderHandle m_causticAccumulatorDecayShader;
+    Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
+
+    // Fresh heap views preserve old buffers for recorded dispatches.
+    u32 m_causticRefractiveInstanceCount = 0u;
+    // Producer runs only when refractive instances and caustic lights exist.
+    u32 m_causticLightCount = 0u;
+
+    b8 m_swCausticDispatchLogged = false;
+    b8 m_swCausticPipelineFailed = false;
+    b8 m_swCausticCsgPipelineFailed = false;
+    b8 m_hwCausticPipelineFailed = false;
+    b8 m_hwCausticCsgPipelineFailed = false;
+    b8 m_hwCausticDispatchLogged = false;
+    b8 m_causticEmissionGateLogged = false;
+    b8 m_causticGeometryDownsamplePipelineFailed = false;
+    b8 m_causticAccumulatorInitialized = false;
+    b8 m_causticAccumulatorDecayPipelineFailed = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderCausticRtCausticStateAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

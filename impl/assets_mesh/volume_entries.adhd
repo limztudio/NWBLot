@@ -1,0 +1,125 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsMeshVolumeEntriesAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook.adhd.h>
+#include <impl/assets_mesh/skin_cook.adhd.h>
+#include <impl/assets_mesh/binary_payload_io.adhd.h>
+
+#include <impl/assets_subsystem/cook.adhd.h>
+
+#include <core/assets/cook_dependency_registry.h>
+#include <core/assets/cook_entry_registry.h>
+#include <core/assets/cook_metadata.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_mesh_volume_entries{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static b8 ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+    const auto meshRef = Core::Assets::ReadMetadataAssetRefField<Mesh>(context.nwbFilePath, context.asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
+    if(!meshRef)
+        return false;
+    const auto skeletonRef = Core::Assets::ReadMetadataAssetRefField<Skeleton>(context.nwbFilePath, context.asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaSkeletonField, true);
+    if(!skeletonRef)
+        return false;
+    if(!collector.addAssetDependency(meshRef->name(), Mesh::AssetTypeName()))
+        return false;
+    return collector.addAssetDependency(skeletonRef->name(), Skeleton::AssetTypeName());
+}
+
+static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
+    return
+        Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
+            MeshBinaryPayload::s_MeshAssetKindLabel,
+            [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+                return ParseMeshCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.cpuScheduler, context.scratchArena);
+            },
+            [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+                return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
+            },
+            &BuildMeshAsset,
+            true,
+            registry
+        )
+        && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
+            s_SkinAssetKindLabel,
+            [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+                return ParseSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+            },
+            [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+                return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
+            },
+            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); },
+            true,
+            registry
+        )
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<SkinningSubsystem>(registry)
+    ;
+}
+
+static b8 RegisterSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
+    return
+        registry.registerType(Skin::AssetTypeName(), &ExtractSkinDependencies)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<SkinningSubsystem>(registry)
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MeshCookEntryRegistrar, RegisterMeshCookEntries);
+NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_SkinCookDependencyRegistrar, RegisterSkinCookDependency);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -10,7 +10,7 @@
 #include <utilities/font_builder/bake_types.adhd.h>
 #include <utilities/font_builder/font_atlas_packer.adhd.h>
 
-#include <impl/assets_font_atlas/model.h>
+#include <impl/assets_font_atlas/model.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

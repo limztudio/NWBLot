@@ -1,0 +1,89 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsModelRuntimeAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/assets_model/asset.adhd.h>
+
+#include <impl/assets_model/model_binary_codec.adhd.h>
+
+#include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_model_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ModelAssetCodecAutoRegistrar, ModelAssetCodec);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+    if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
+        return false;
+
+    return ValidateModelPayloadObjects(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, scratchArena);
+}
+
+b8 Model::loadBinary(const Span<const u8> binary){
+    Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
+    Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
+    if(!ModelBinaryCodec().deserialize(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
+        return false;
+    *this = Move(candidate);
+    return true;
+}
+
+void Model::setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{
+    m_skeletonObjects = Move(skeletonObjects);
+    m_staticMeshObjects = Move(staticMeshObjects);
+    m_skinnedMeshObjects = Move(skinnedMeshObjects);
+}
+
+void Model::takeObjects(SkeletonObjectVector& outSkeletonObjects, StaticMeshObjectVector& outStaticMeshObjects, SkinnedMeshObjectVector& outSkinnedMeshObjects)noexcept{
+    outSkeletonObjects = Move(m_skeletonObjects);
+    outStaticMeshObjects = Move(m_staticMeshObjects);
+    outSkinnedMeshObjects = Move(m_skinnedMeshObjects);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -40,9 +40,9 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <core/assets/ref.h>\r\n");
         out.append("#include <core/ecs/entity_id.h>\r\n");
         if(namespacePath == "NWB::Impl::Scene")
-            out.append("#include <impl/ecs_scene/global.h>\r\n");
+            out.append("#include <impl/ecs_scene/global.adhd.h>\r\n");
         else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
-            out.append("#include <impl/global.h>\r\n");
+            out.append("#include <impl/global.adhd.h>\r\n");
     }
 
     b8 hasSubsystemDecl = false;
@@ -67,9 +67,9 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
             hasComponentAssetDecl = true;
     }
     if(hasSubsystemDecl)
-        out.append("#include <impl/assets_subsystem/asset.h>\r\n");
+        out.append("#include <impl/assets_subsystem/asset.adhd.h>\r\n");
     if(hasComponentAssetDecl)
-        out.append("#include <impl/assets_scene/components.h>\r\n");
+        out.append("#include <impl/assets_scene/components.adhd.h>\r\n");
     if(!hasHeaderTaskScope){
         for(const MethodDecl* fn : unit.freeFunctions){
             if(fn && !fn->isImported && fn->hasBody && fn->usesTaskScope && (fn->isInline || !fn->templateParams.empty())){

@@ -1,0 +1,138 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
+#include <impl/assets_material/asset.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/global.h>
+#include <core/graphics/api.h>
+
+#include <global/containers.h>
+#include <global/hash_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PixelShader;
+class MeshShader;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using MaterialTypedByteVector = Vector<u8, Core::Alloc::GlobalArena>;
+using MaterialTypedLayoutBlockVector = Vector<MaterialTypedLayoutBlock, Core::Alloc::GlobalArena>;
+using MaterialTypedLayoutFieldVector = Vector<MaterialTypedLayoutField, Core::Alloc::GlobalArena>;
+using MaterialResourceReferenceVector = Vector<MaterialResourceReference, Core::Alloc::GlobalArena>;
+using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MaterialPipelineKeyHasher{
+    [[nodiscard]] usize operator()(const MaterialPipelineKey& key)const noexcept{
+        usize seed = ComputeMaterialPipelineBaseHash(
+            key.material,
+            key.pass,
+            key.twoSided,
+            key.csgMode,
+            key.csgEvaluatorVariant,
+            key.csgShapeRegistryRevision,
+            static_cast<u32>(key.framebufferInfo.depthFormat),
+            key.framebufferInfo.sampleCount,
+            key.framebufferInfo.sampleQuality
+        );
+        for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
+            ::HashCombine(seed, format);
+        return seed;
+    }
+};
+struct MaterialPipelineKeyEqualTo{
+    [[nodiscard]] b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
+        return
+            lhs.material == rhs.material
+            && lhs.pass == rhs.pass
+            && lhs.twoSided == rhs.twoSided
+            && lhs.csgMode == rhs.csgMode
+            && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
+            && lhs.csgShapeRegistryRevision == rhs.csgShapeRegistryRevision
+            && lhs.framebufferInfo == rhs.framebufferInfo
+        ;
+    }
+};
+
+struct MaterialSurfaceInfo{
+    Name materialName = s_NameNone;
+    Name materialInterface = s_NameNone;
+    Core::GraphicsString shaderVariant;
+    Core::Assets::AssetRef<PixelShader> pixelShader;
+    Core::Assets::AssetRef<MeshShader> meshShader;
+    // Transparent surface materials require this cook-generated AVBOIT accumulation shader; opaque materials carry none.
+    Core::Assets::AssetRef<PixelShader> avboitAccumulatePixelShader;
+    // Occupancy/extinction must evaluate the same surface.renderCoverage and follow the same presence contract.
+    Core::Assets::AssetRef<PixelShader> avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<PixelShader> avboitExtinctionPixelShader;
+    u64 typedLayoutHash = 0u;
+    MaterialTypedLayoutBlockVector typedLayoutBlocks;
+    MaterialTypedLayoutFieldVector typedLayoutFields;
+    MaterialResourceReferenceVector resourceReferences;
+    // The cooked constants have zero-filled resource words. The renderer patches a working copy and restores from this copy on invalidation.
+    MaterialTypedByteVector unpatchedConstantTypedBytes;
+    MaterialTypedByteVector constantTypedBytes;
+    MaterialTypedByteVector mutableDefaultTypedBytes;
+    u32 shadingModelId = 0u;
+    u32 surfaceDispatchId = 0u;
+    // CSG caps evaluate the generated surface hook with this material's constants. Opaque stage shaders have no hook.
+    b8 csgCapSurfaceDispatchAvailable = false;
+    b8 csgCapSurfaceDispatchUnavailableLogged = false;
+    b8 resourceReferencesResolved = false;
+    // Refractive classifies RT casters; NwbMeshSurface owns IOR and shadow absorption values.
+    b8 transparent = false;
+    b8 twoSided = false;
+    b8 refractive = false;
+
+
+public:
+    explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)noexcept
+        : shaderVariant(arena)
+        , typedLayoutBlocks(arena)
+        , typedLayoutFields(arena)
+        , resourceReferences(arena)
+        , unpatchedConstantTypedBytes(arena)
+        , constantTypedBytes(arena)
+        , mutableDefaultTypedBytes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderMaterialRendererPipelineTypesAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

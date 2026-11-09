@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/assets_font/types.adhd.h>
+
+#include <core/assets/module.h>
+
+#include <global/filesystem.h>
+#include <global/sha256.h>
+#include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct PreparedFontImageGroup{
+    Sha256Digest sha256;
+    Core::Assets::AssetBytes pixels;
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 channelCount = 0u;
+
+
+public:
+    explicit PreparedFontImageGroup(Core::Assets::AssetArena& arena)noexcept
+        : pixels(arena)
+    {}
+};
+
+struct PreparedFontSource{
+    Core::Assets::AssetBytes fontBytes;
+    Core::Assets::AssetVector<PreparedFontImageGroup> groups;
+    u32 faceIndex = 0u;
+    Sha256Digest fontSha256;
+
+
+public:
+    explicit PreparedFontSource(Core::Assets::AssetArena& arena)noexcept
+        : fontBytes(arena)
+        , groups(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// FON2 stores the exact prepared SFNT and compact images; readable atlas mappings remain in paired .nwb metadata.
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(BinaryByteView sfnt, u32 faceIndex, Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena);
+
+// Font-only reads retain image directory metadata, with empty pixel arrays, and validate the complete file layout.
+[[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, b8 includePixels, Core::Assets::AssetArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsFontPreparedSourceAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

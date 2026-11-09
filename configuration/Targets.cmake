@@ -5,12 +5,23 @@ include("${CMAKE_CURRENT_LIST_DIR}/BasicInclude.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/SimdAVX2.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/UnicodeChar.cmake")
 
+if(NOT TARGET nwb_impl_adhd_headers)
+    add_custom_target(nwb_impl_adhd_headers)
+endif()
+
 function(nwb_apply_internal_target_defaults target)
     set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
     nwb_apply_codegen(${target})
     nwb_apply_basic_include(${target})
 
     target_link_libraries(${target} PUBLIC nwb::tsl_headers nwb_internal_headers)
+
+    file(RELATIVE_PATH _target_rel_dir "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+    if(_target_rel_dir MATCHES "^(impl|tests|CoolStuff|utilities|loader|pipeline)(/|$)"
+        AND NOT target MATCHES "^nwb_(pipeline_)?adhd_compiler$"
+        AND NOT target STREQUAL "nwb_pipeline_command_line")
+        add_dependencies(${target} nwb_impl_adhd_headers)
+    endif()
 
     if(WIN32)
         nwb_apply_unicode_char(${target})
@@ -146,6 +157,10 @@ function(nwb_target_adhd_sources target_name)
     set(out_root "${CMAKE_BINARY_DIR}/adhd_gen/${target_name}")
     file(MAKE_DIRECTORY "${out_root}")
     target_include_directories(${target_name} PUBLIC "${out_root}")
+    file(RELATIVE_PATH _target_rel_dir "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+    if(_target_rel_dir MATCHES "^impl(/|$)")
+        target_include_directories(nwb_internal_headers INTERFACE "${out_root}")
+    endif()
 
     set(extra_args "")
     if(DEFINED ADHD_NAMESPACE AND NOT "${ADHD_NAMESPACE}" STREQUAL "")
@@ -190,5 +205,8 @@ function(nwb_target_adhd_sources target_name)
         endwhile()
         add_custom_target(${gen_target} DEPENDS ${gen_headers})
         add_dependencies(${target_name} ${gen_target})
+        if(_target_rel_dir MATCHES "^impl(/|$)")
+            add_dependencies(nwb_impl_adhd_headers ${gen_target})
+        endif()
     endif()
 endfunction()

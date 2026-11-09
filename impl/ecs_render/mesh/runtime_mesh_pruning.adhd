@@ -1,0 +1,91 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
+
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_mesh/runtime/mesh_requests.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Release geometry before its cache entry is erased, in iteration order; prunes every runtime mesh when no MeshSystem is available.
+template<typename ReleaseMesh>
+void PruneRuntimeMeshResources(HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>& meshes, const MeshSystem* meshSystem, ReleaseMesh&& releaseMesh, Core::Alloc::ScratchArena& scratchArena){
+    Optional<RuntimeMeshRequestSet> requests;
+    if(meshSystem){
+        usize runtimeMeshCount = 0u;
+        for(const auto& entry : meshes){
+            if(entry.second.runtimeMesh)
+                ++runtimeMeshCount;
+        }
+        if(runtimeMeshCount == 0u)
+            return;
+        requests.emplace(scratchArena, runtimeMeshCount);
+        for(const auto& entry : meshes){
+            const MeshResources& mesh = entry.second;
+            if(mesh.runtimeMesh)
+                requests->add(mesh.meshName, mesh.runtimeMeshVersion);
+        }
+        meshSystem->markLiveRuntimeMeshes(*requests);
+    }
+    for(auto it = meshes.begin(); it != meshes.end();){
+        const MeshResources& mesh = it.value();
+        if(!mesh.runtimeMesh){
+            ++it;
+            continue;
+        }
+
+        if(requests && requests->containsLive(mesh.meshName, mesh.runtimeMeshVersion)){
+            ++it;
+            continue;
+        }
+
+        releaseMesh(it.value());
+        it = meshes.erase(it);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderMeshRuntimeMeshPruningAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

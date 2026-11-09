@@ -1,0 +1,121 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+#include <impl/ecs_render/material/compute_emulation_output_index.adhd.h>
+#include <impl/ecs_render/material/generated_geometry_validation.adhd.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct OpaqueCsgReceiverComputeEmulationGraphPlan{
+    DrawItemVector meshDrawItems;
+    DrawItemVector indexedDrawItems;
+    DrawItemVector drawItems;
+    DrawItemVector regularDrawItems;
+    BufferVector outputBuffers;
+    OutputLayoutVector outputLayouts;
+    BufferVector regularOutputBuffers;
+    OutputLayoutVector regularOutputLayouts;
+    ReceiverRangeVector receiverRanges;
+    CutterVector cutters;
+    CsgFrameWorkRegion workRegion;
+    b8 captured = false;
+
+
+public:
+    explicit OpaqueCsgReceiverComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
+        : meshDrawItems(arena)
+        , indexedDrawItems(arena)
+        , drawItems(arena)
+        , regularDrawItems(arena)
+        , outputBuffers(arena)
+        , outputLayouts(arena)
+        , regularOutputBuffers(arena)
+        , regularOutputLayouts(arena)
+        , receiverRanges(arena)
+        , cutters(arena)
+    {}
+
+
+public:
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 matches(Core::Alloc::ScratchArena& scratchArena)const;
+
+    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
+        return { meshDrawItems, indexedDrawItems, drawItems };
+    }
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { receiverRanges, cutters, workRegion };
+    }
+};
+
+
+struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan : OpaqueRegularComputeEmulationGraphPlan{
+    ReceiverRangeVector receiverRanges;
+    CutterVector cutters;
+    CsgFrameWorkRegion workRegion;
+
+
+public:
+    explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
+        : OpaqueRegularComputeEmulationGraphPlan(arena)
+        , receiverRanges(arena)
+        , cutters(arena)
+    {}
+
+
+public:
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { receiverRanges, cutters, workRegion };
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderCsgTaskGraphOpaqueComputeEmulationPlanAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

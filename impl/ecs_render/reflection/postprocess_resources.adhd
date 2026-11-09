@@ -1,0 +1,123 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/reflection/history.adhd.h>
+
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
+#include <impl/assets/graphics/reflection/spatial_constants.h>
+#include <impl/assets_graphics/components.adhd.h>
+
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/rhi/pipeline.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererShaderSystem;
+
+struct ReflectionRadianceBinding{
+    Core::TextureHandle texture;
+    u32 sampledSlot = 0u;
+    u32 storageSlot = 0u;
+};
+
+struct ReflectionPostprocessSnapshot{
+    ReflectionHistoryControlHandle control;
+    ReflectionHistoryPlan history;
+    ReflectionRadianceBinding current;
+    ReflectionRadianceBinding previous;
+    ReflectionRadianceBinding spatial;
+    Core::ComputePipelineHandle temporalPipeline;
+    Core::ComputePipelineHandle spatialPipeline;
+    u32 deferredResourcesSlot = 0u;
+    u32 opaqueSpecularSlot = 0u;
+    u32 viewSlot = 0u;
+    b8 spatialEnabled = false;
+};
+
+// Only the extra opaque history bank and spatial destination live here.
+class RendererReflectionPostprocess final : NoCopy{
+public:
+    RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_shaders(shaders)
+    {}
+
+
+public:
+    void invalidateResources();
+    [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
+    [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const noexcept;
+
+
+private:
+    void releaseTargets();
+    [[nodiscard]] b8 preparePipeline(const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant, Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader);
+    [[nodiscard]] b8 prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    RendererShaderSystem& m_shaders;
+    ReflectionHistoryControlHandle m_control;
+    ReflectionRadianceBinding m_history;
+    ReflectionRadianceBinding m_spatial;
+    Core::BindingLayoutHandle m_layout;
+    Core::ComputePipelineHandle m_temporalPipeline;
+    Array<Core::ComputePipelineHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialPipelines{};
+    Core::ShaderHandle m_temporalShader;
+    Array<Core::ShaderHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialShaders{};
+    Array<Core::GpuDescriptorHandle, s_ReflectionPostprocessDescriptorCount> m_descriptors{};
+    u32 m_width = 0u;
+    u32 m_height = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderReflectionPostprocessResourcesAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

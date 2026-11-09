@@ -7,8 +7,8 @@
 native{
 #include <logger/client/module.h>
 
-#include <impl/assets_font/cook.h>
-#include <impl/assets_font_atlas/cook.h>
+#include <impl/assets_font/cook.adhd.h>
+#include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/common/application_entry.h>

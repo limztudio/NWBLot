@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/rhi/raytracing.h>
+
+#include <global/hash_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LightSpaceShadowSceneGather final : NoCopy{
+public:
+    LightSpaceShadowSceneGather(LightSpaceShadowState& state, const CsgShapeRegistry& registry, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena)noexcept
+        : m_state(state)
+        , m_registry(registry)
+        , m_world(world)
+        , m_scratchArena(scratchArena)
+        , m_softwareCasters(scratchArena)
+    {}
+
+
+public:
+    void begin(usize capacity, b8 hardware);
+    void reserveSoftwareCasters(usize capacity);
+    void appendSoftwareReceiver(Core::ECS::EntityID entity, b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
+    void appendSoftwareCaster(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
+    void appendHardwareReceiver(Core::ECS::EntityID entity, b8 transparent, u32 instanceIndex, const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
+    [[nodiscard]] b8 finishSoftware(Span<const SceneSwBvhInstanceGpu> instances, Span<NwbRtInstanceMaterialGpu> materials, b8 contentComplete);
+    [[nodiscard]] b8 finishHardware(Span<Core::RayTracingInstanceDesc> instances, Span<NwbRtInstanceMaterialGpu> materials, b8 contentComplete, b8& sceneHasTransparentOccluder);
+    void appendSoftwareCaptureIdentity(Core::ECS::EntityID entity, b8 runtimeMesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const NwbRtInstanceMaterialGpu& material, const InstanceGpuData& instance, const RayTracingOpticalInstanceGpu& opticalInstance);
+    void publishSoftwareCaptureIdentity(u32 instanceCount, Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances, Span<const u8> materialBytes, Span<const Core::TextureHandle> textures, b8 contentComplete);
+    void publishHardwareCaptureIdentity(u64 materialHash, u64 tlasHash, b8 staticScene, b8 contentComplete, Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances, Span<const u8> materialBytes, Span<const Core::TextureHandle> textures);
+
+
+private:
+    LightSpaceShadowState& m_state;
+    const CsgShapeRegistry& m_registry;
+    Core::ECS::World& m_world;
+    Core::Alloc::ScratchArena& m_scratchArena;
+    Vector<LightSpaceShadowCaster, Core::Alloc::ScratchArena> m_softwareCasters;
+    u64 m_captureSceneIdentity = s_Fnv64OffsetBasis;
+    b8 m_captureSceneTrusted = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderShadowLightSpaceSceneGatherAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

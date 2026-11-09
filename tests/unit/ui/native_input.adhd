@@ -3,7 +3,7 @@
 
 
 native{
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <gtest/gtest.h>
 

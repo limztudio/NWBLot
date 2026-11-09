@@ -1,0 +1,285 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/global.adhd.h>
+#include <impl/ecs_ui/toolkit/paint_image_bindings.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+#include <impl/ecs_ui/toolkit/text/glyph_page.adhd.h>
+#include <impl/ecs_ui/toolkit/text/sdf_page.adhd.h>
+
+#include <impl/assets_ui_skin/asset.adhd.h>
+#include <impl/ecs_ui/toolkit/layout/paint_skin_emission.adhd.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+#include <impl/ecs_ui/toolkit/paint_types.adhd.h>
+
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+using PaintVector = Vector<T, Core::Alloc::GlobalArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The caller's arena must outlive the snapshot and every consumer of it.
+class DrawSnapshot final{
+    friend class PaintBuilder;
+
+
+public:
+    explicit DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept
+        : m_vertices(arena)
+        , m_indices(arena)
+        , m_commands(arena)
+        , m_images(arena)
+    {}
+    DrawSnapshot(DrawSnapshot&&)noexcept = default;
+    DrawSnapshot(const DrawSnapshot&) = delete;
+
+
+public:
+    DrawSnapshot& operator=(DrawSnapshot&&)noexcept = default;
+
+    DrawSnapshot& operator=(const DrawSnapshot&) = delete;
+
+
+public:
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
+    [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_displayMetrics; }
+
+    [[nodiscard]] const SkinBinding& skinBinding()const noexcept{ return m_skinBinding; }
+
+    [[nodiscard]] const PaintVector<Vertex>& vertices()const noexcept{ return m_vertices; }
+
+    [[nodiscard]] const PaintVector<u32>& indices()const noexcept{ return m_indices; }
+
+    [[nodiscard]] const PaintVector<DrawCommand>& commands()const noexcept{ return m_commands; }
+
+    [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const noexcept{ return m_images.glyphPages(); }
+
+    [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const noexcept{ return m_images.sdfPages(); }
+
+    [[nodiscard]] const PaintVector<SharedImageSource>& textureImages()const noexcept{ return m_images.textureImages(); }
+
+
+private:
+    u64 m_generation = 0u;
+    DisplayMetrics m_displayMetrics;
+    SkinBinding m_skinBinding;
+    PaintVector<Vertex> m_vertices;
+    PaintVector<u32> m_indices;
+    PaintVector<DrawCommand> m_commands;
+    PaintImageBindings m_images;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PaintBuilder final : NoCopy{
+public:
+    explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
+        : m_snapshot(arena)
+        , m_regions(arena)
+        , m_clips(arena)
+    {}
+
+
+public:
+    // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
+    void begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
+        NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
+        NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
+        NWB_ASSERT(IsFinite(skin.referenceDensity()));
+        m_snapshot.m_generation = generation;
+        m_snapshot.m_displayMetrics = metrics;
+        m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
+        m_snapshot.m_images.clear();
+        BeginPaintBuilderRecording(
+            metrics,
+            skin.regions(),
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_regions,
+            m_clips,
+            m_overlayDepth,
+            m_layer,
+            m_commandsOrdered,
+            m_recording
+        );
+    }
+    void reserve(const usize quadCount, const usize clipDepth = s_PaintDefaultClipDepth){
+        ReservePaintSnapshot(quadCount, clipDepth, m_snapshot.m_vertices, m_snapshot.m_indices, m_snapshot.m_commands, m_clips);
+    }
+    void pushClip(const Rect& clip){
+        PushPaintClip(m_recording, clip, m_clips);
+    }
+    [[nodiscard]] b8 popClip()noexcept{
+        return PopPaintClip(m_recording, m_overlayDepth, m_overlays, m_clips);
+    }
+    // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
+    [[nodiscard]] b8 beginOverlay(const u32 layer){
+        return BeginPaintOverlay(m_recording, layer, m_snapshot.m_displayMetrics, m_overlays, m_overlayDepth, m_layer, m_clips);
+    }
+    [[nodiscard]] b8 endOverlay()noexcept{
+        return EndPaintOverlay(m_recording, m_overlays, m_overlayDepth, m_layer, m_clips);
+    }
+    void fillRect(const Rect& rectangle, const Color& color = {}){ emitQuad(rectangle, {}, color, PaintMaterial::Solid); }
+    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {}){
+        NWB_ASSERT(m_recording);
+        return DrawPaintSkinRegion(
+            m_recording,
+            m_clips.back(),
+            m_regions,
+            regionName,
+            rectangle,
+            tint,
+            m_snapshot.m_skinBinding.atlasWidth,
+            m_snapshot.m_skinBinding.atlasHeight,
+            m_snapshot.m_skinBinding.referenceDensity,
+            m_layer,
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_commandsOrdered
+        );
+    }
+    // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
+    [[nodiscard]] b8 prepareGlyphPages(const Span<const SharedGlyphPage> pages){ return prepareImages(pages, {}); }
+    [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
+        NWB_ASSERT(m_recording);
+        if(!page || !IsValidPaintUvRect(uv))
+            return false;
+        u32 index = 0u;
+        if(!PaintImageBindings::Resolve(
+            m_snapshot.m_images.glyphPages(),
+            page,
+            [this](const Span<const SharedGlyphPage> pages){ return prepareGlyphPages(pages); },
+            [](const GlyphPage& lhs, const GlyphPage& rhs)noexcept{ return SameGlyphPageKey(lhs.binding(), rhs.binding()); },
+            index
+        ))
+            return false;
+        emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);
+        return true;
+    }
+    [[nodiscard]] b8 prepareSdfPages(const Span<const SharedSdfAtlasPage> pages){ return prepareImages({}, pages); }
+    [[nodiscard]] b8 prepareImages(const Span<const SharedGlyphPage> glyphPages, const Span<const SharedSdfAtlasPage> sdfPages, const Span<const SharedImageSource> textureImages = {}){
+        NWB_ASSERT(m_recording);
+        return m_snapshot.m_images.prepare(glyphPages, sdfPages, textureImages);
+    }
+    [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
+        NWB_ASSERT(m_recording);
+        if(!page || channel >= page->binding().channelCount || !IsValidPaintUvRect(uv))
+            return false;
+        u32 index = 0u;
+        if(!PaintImageBindings::Resolve(
+            m_snapshot.m_images.sdfPages(),
+            page,
+            [this](const Span<const SharedSdfAtlasPage> pages){ return prepareSdfPages(pages); },
+            [](const SdfAtlasPage& lhs, const SdfAtlasPage& rhs)noexcept{ return lhs.binding() == rhs.binding(); },
+            index
+        ))
+            return false;
+        emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, Limit<u32>::s_Max, index, channel);
+        return true;
+    }
+    [[nodiscard]] b8 prepareTextureImages(const Span<const SharedImageSource> images){ return prepareImages({}, {}, images); }
+    // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
+    [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {}){
+        NWB_ASSERT(m_recording);
+        if(!source || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
+            return false;
+        const Rect clip = m_clips.back();
+        if(IsPaintImageInvisible(rectangle, clip, tint))
+            return true;
+        u32 index = 0u;
+        if(!PaintImageBindings::Resolve(
+            m_snapshot.m_images.textureImages(),
+            source,
+            [this](const Span<const SharedImageSource> images){ return prepareTextureImages(images); },
+            [](const ImageSource& lhs, const ImageSource& rhs)noexcept{ return SameTextureImageKey(lhs, rhs); },
+            index
+        ))
+            return false;
+        emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);
+        return true;
+    }
+    [[nodiscard]] DrawSnapshot freeze(){
+        FinalizePaintBuilderRecording(m_commandsOrdered, m_overlayDepth, m_snapshot.m_commands, m_clips, m_recording);
+        return Move(m_snapshot);
+    }
+    [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
+    [[nodiscard]] Rect currentClip()const noexcept{
+        NWB_ASSERT(m_recording);
+        return m_clips.back();
+    }
+
+
+private:
+    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex = Limit<u32>::s_Max, const u32 sdfPageIndex = Limit<u32>::s_Max, const u32 sdfChannel = 0u, const u32 textureImageIndex = Limit<u32>::s_Max){
+        NWB_ASSERT(m_recording);
+        EmitPaintQuad(
+            m_recording,
+            m_clips.back(),
+            rectangle,
+            uv,
+            color,
+            material,
+            m_layer,
+            glyphPageIndex,
+            sdfPageIndex,
+            sdfChannel,
+            textureImageIndex,
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_commandsOrdered
+        );
+    }
+
+
+private:
+    DrawSnapshot m_snapshot;
+    PaintVector<UiSkinRegion> m_regions;
+    PaintVector<Rect> m_clips;
+    Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> m_overlays{};
+    usize m_overlayDepth = 0u;
+    u32 m_layer = 0u;
+    b8 m_commandsOrdered = true;
+    b8 m_recording = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitPaintAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

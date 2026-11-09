@@ -1,0 +1,67 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
+#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem;
+struct DeferredFrameTargets;
+
+
+class RefractionRenderer final : NoCopy{
+public:
+    RefractionRenderer(RendererRayTracingSystem& system, Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
+        : m_system(system)
+        , m_statistics(arena, graphics)
+    {}
+
+
+public:
+    void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_diagnosticsEnabled = enabled; }
+    void pollRefractionStatistics(){ m_statistics.pollCompleted(); }
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept{ return m_statistics.latestStatistics(); }
+    void invalidateResources()noexcept{ m_statistics.invalidateResources(); }
+    [[nodiscard]] b8 prepareRefractionResources();
+    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources(u32 width, u32 height, u32 frameIndex)const noexcept;
+    [[nodiscard]] b8 recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
+    [[nodiscard]] b8 recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
+
+
+private:
+    RendererRayTracingSystem& m_system;
+    RefractionStatisticsReadback m_statistics;
+    b8 m_diagnosticsEnabled = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderRefractionRefractionRendererAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

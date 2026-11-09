@@ -5,9 +5,9 @@
 #include "list_style.adhd"
 
 native{
-#include <impl/assets_ui_skin/asset.h>
-#include <impl/ecs_ui/toolkit/paint.h>
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
 }
 
 

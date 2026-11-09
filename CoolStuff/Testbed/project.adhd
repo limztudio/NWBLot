@@ -9,17 +9,17 @@
 native{
 #include <loader/project_entry.h>
 
-#include <impl/assets_graphics/bindless/runtime_abi.h>
-#include <impl/assets_scene/asset.h>
-#include <impl/assets_ui_skin/asset.h>
+#include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
+#include <impl/assets_scene/asset.adhd.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
 #include <impl/assets_ui_skin/types.adhd.h>
-#include <impl/ecs_mesh/skinning/system.h>
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_model/system.h>
-#include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_ui/layer_system.h>
+#include <impl/ecs_mesh/skinning/system.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_model/system.adhd.h>
+#include <impl/ecs_model_renderer/model_renderer.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_ui/layer_system.adhd.h>
 
 #include <core/common/log.h>
 #include <core/ecs/module.h>

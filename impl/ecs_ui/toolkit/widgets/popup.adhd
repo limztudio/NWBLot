@@ -1,0 +1,108 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
+
+#include <global/atomic_identity.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The host lends state through the outermost popup end; each opening binds to its exact parent lifetime.
+class PopupState final : NoCopy{
+    friend class Builder;
+    friend class ComboCoordinator;
+    friend class ContextMenuCoordinator;
+
+
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
+public:
+    PopupState()noexcept
+        : m_instanceGeneration(NextIdentity())
+    {}
+    PopupState(PopupState&&) = delete;
+
+
+public:
+    PopupState& operator=(PopupState&&) = delete;
+
+
+public:
+    void open()noexcept{
+        if(m_open)
+            return;
+        AdvanceNonWrappingRevision(m_openGeneration);
+        m_open = true;
+    }
+    void close()noexcept{ m_open = false; }
+
+    [[nodiscard]] b8 isOpen()const noexcept{ return m_open; }
+
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
+    [[nodiscard]] u64 openGeneration()const noexcept{ return m_openGeneration; }
+
+    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
+
+
+private:
+    void bindParent(const PopupToken& parent)noexcept{
+        BindPopupParentState(
+            parent,
+            m_openGeneration,
+            m_open,
+            m_parentBound,
+            m_parent,
+            m_parentOpenGeneration
+        );
+    }
+
+
+private:
+    const u64 m_instanceGeneration;
+    u64 m_openGeneration = 0u;
+    PopupPlacement m_placement;
+    b8 m_parentBound = false;
+    b8 m_open = false;
+    PopupToken m_parent;
+    u64 m_parentOpenGeneration = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsPopupAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

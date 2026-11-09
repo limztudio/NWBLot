@@ -19,7 +19,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_box_host.h>
+#include <impl/ecs_ui/edit_box_host.adhd.h>
 
 #include <core/os/clipboard_service.h>
 #include <core/os/text_input_service.h>
@@ -311,7 +311,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
 
 #include <global/simd/vector.h>
 
@@ -459,7 +459,7 @@ protected:
 #include <tests/unit/ui/fixture_text_shaping.adhd.h>
 #include <tests/unit/ui/native_input.adhd.h>
 
-#include <impl/ecs_ui/toolkit/widgets/popup.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -1219,7 +1219,7 @@ void UiPopupInputTests::focusPopup(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/clipboard_publications.h>
+#include <impl/ecs_ui/clipboard_publications.adhd.h>
 
 #include <tests/common/test_context.adhd.h>
 
@@ -2421,7 +2421,7 @@ TEST(UiEditClickTracker, PopupReopenModelReplacementFocusLossAndShiftFenceTheSeq
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_clipboard_controller.h>
+#include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
 
 #include <core/os/clipboard_service.h>
 
@@ -4392,8 +4392,8 @@ TEST_F(UiPopupInputTests, NestedFocusLossCancelsTheWholeFamilyWithoutRestoringAn
 
 
 #include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/paint_context.h>
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/paint_context.adhd.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <core/ecs/entity.h>
 #include <core/task/cpu/scheduler.h>
@@ -5504,7 +5504,7 @@ TEST_F(UiSelectionEpochTests, OrderedHostRetiresOldNativeTextAndKeepsTheApplicat
 
 
 #include <impl/ecs_ui/skin_selection.adhd.h>
-#include <impl/assets_ui_skin/asset.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -5594,7 +5594,7 @@ TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/text_edit_session.h>
+#include <impl/ecs_ui/text_edit_session.adhd.h>
 
 #include <tests/common/test_context.adhd.h>
 
@@ -5786,7 +5786,7 @@ TEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/text_edit_session.h>
+#include <impl/ecs_ui/text_edit_session.adhd.h>
 
 #include <tests/common/test_context.adhd.h>
 

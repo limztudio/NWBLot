@@ -11,18 +11,18 @@
 native{
 #include <loader/project_entry.h>
 
-#include <impl/assets_model/asset.h>
-#include <impl/assets_material/asset.h>
-#include <impl/assets_skeleton/asset.h>
+#include <impl/assets_model/asset.adhd.h>
+#include <impl/assets_material/asset.adhd.h>
+#include <impl/assets_skeleton/asset.adhd.h>
 #include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/system.h>
-#include <impl/ecs_model/system.h>
-#include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/material/material_instance.h>
-#include <impl/ecs_mesh/skinning/system.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_model/system.adhd.h>
+#include <impl/ecs_model_renderer/model_renderer.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/material/material_instance.adhd.h>
+#include <impl/ecs_mesh/skinning/system.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>

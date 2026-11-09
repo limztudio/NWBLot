@@ -23,8 +23,8 @@ native{
 #include <tests/common/ecs_test_world.adhd.h>
 #include <tests/unit/csg/name_cases.adhd.h>
 
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_csg/deform_edit.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_csg/deform_edit.adhd.h>
 
 #include <core/common/module.h>
 #include <core/ecs/module.h>
@@ -204,8 +204,8 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
 #include <tests/common/ecs_test_world.adhd.h>
 #include <tests/unit/csg/name_cases.adhd.h>
 
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_csg/deform_edit.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_csg/deform_edit.adhd.h>
 
 #include <core/common/module.h>
 #include <core/ecs/module.h>
@@ -419,8 +419,8 @@ TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
 #include <tests/common/ecs_test_world.adhd.h>
 #include <tests/unit/csg/name_cases.adhd.h>
 
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_csg/deform_edit.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_csg/deform_edit.adhd.h>
 
 #include <core/common/module.h>
 #include <core/ecs/module.h>

@@ -4,8 +4,8 @@
 
 #include "font_source.h"
 
-#include <impl/assets_font/asset.h>
-#include <impl/assets_font/prepared_source.h>
+#include <impl/assets_font/asset.adhd.h>
+#include <impl/assets_font/prepared_source.adhd.h>
 
 #include <core/common/log.h>
 

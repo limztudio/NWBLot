@@ -1,0 +1,137 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_csg/deform_cap_builder.adhd.h>
+#include <impl/ecs_csg/deform_wall_builder.adhd.h>
+
+#include <global/algorithm.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Preview and commit share split-at-zero rebuilds, unwelded seams, epsilon, edge-cache and cap rules.
+
+// Preview rebuild into scratch storage. Same code path as commit.
+[[nodiscard]] inline Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
+    const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry,
+    CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
+){
+    const usize inputVertexCount = inputVertices.size();
+    const usize inputTriangleCount = inputTriangles.size();
+    const usize cutCount = cuts.size();
+    CsgDeformStats stats;
+    outVertices.clear();
+    outTriangles.clear();
+    stats.inputVertexCount = static_cast<u32>(inputVertexCount);
+    stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
+    const auto boundaryEpsilonResult = TryValidateCsgDeformPreviewInputs(inputVertices, inputTriangles, options);
+    if(!boundaryEpsilonResult)
+        return MakeUnexpected(MakeCsgDeformFailure(boundaryEpsilonResult.error(), stats));
+
+    const f32 boundaryEpsilon = *boundaryEpsilonResult;
+    PrepareCsgDeformPreviewBuffers(inputVertices, inputTriangles, cutCount, outVertices, outTriangles);
+
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena> scratchKept(scratchArena);
+    Vector<f32, Core::Alloc::ScratchArena> scratchDistances(scratchArena);
+    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena> scratchEdges(scratchArena);
+
+    u32 appliedCuts = 0u;
+    u32 capTriangles = 0u;
+    for(const CsgDeformCutDesc& cut : cuts){
+        if(!cut.active)
+            continue;
+        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, boundaryEpsilon, shapeRegistry, scratchKept, scratchDistances, outVertices, outTriangles);
+        if(!clipped)
+            return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
+        ++appliedCuts;
+        const CsgDeformViabilityReason::Enum postCutReason = ClassifyPostCutCsgDeformViability(outVertices.size(), outTriangles.size());
+        if(postCutReason != CsgDeformViabilityReason::Ok)
+            return MakeUnexpected(MakeCsgDeformFailure(postCutReason, stats));
+        if(options.fillCaps){
+            const auto cutCaps = FillCsgDeformCutCaps(scratchEdges, outVertices, outTriangles);
+            if(!cutCaps)
+                return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::CapLoopFailed, stats));
+            capTriangles += *cutCaps;
+        }
+    }
+
+    return FinalizeCsgDeformStats(outVertices, outTriangles, appliedCuts, capTriangles, stats);
+}
+
+// Shared viability classifier used by both preview and commit.
+[[nodiscard]] inline CsgDeformViability CheckCsgDeformCutsViability(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
+    const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry = nullptr
+){
+    CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
+    const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, vertices, triangles);
+    return result ? MakeCsgDeformViability(true, CsgDeformViabilityReason::Ok) : MakeCsgDeformViability(false, result.error().reason);
+}
+
+// Rebuild in scratch, then copy into the commit arena; viability matches preview.
+[[nodiscard]] inline Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
+    Core::Alloc::ScratchArena& scratchArena,
+    Core::Alloc::GlobalArena& commitArena,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
+    const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry,
+    CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
+    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
+){
+    if(outVertices.get_allocator().arenaPtr() != &commitArena || outTriangles.get_allocator().arenaPtr() != &commitArena)
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidOutputArena, {}));
+    outVertices.clear();
+    outTriangles.clear();
+    // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
+    CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, previewVertices, previewTriangles);
+    if(!preview)
+        return MakeUnexpected(preview.error());
+    AssignVector(outVertices, previewVertices);
+    AssignVector(outTriangles, previewTriangles);
+    return *preview;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsCsgDeformEditAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

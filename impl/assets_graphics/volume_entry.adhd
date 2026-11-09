@@ -1,0 +1,113 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsGraphicsVolumeEntryAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_graphics/cook_components.adhd.h>
+#include <impl/assets_graphics/bvh_subsystem.adhd.h>
+#include <impl/assets_graphics/csg_subsystem.adhd.h>
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
+#include <impl/assets_graphics/gi_subsystem.adhd.h>
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
+
+#include <impl/assets_subsystem/cook.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_volume_entry{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static b8 RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry& registry){
+    return
+        AssetsSubsystemCook::RegisterSubsystemCookEntry<RendererSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<MeshSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<DeferredSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<BvhSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<GiSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<ReflectionSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<ShadowSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<TransparentSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<RefractiveSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<CsgSubsystem>(registry)
+        && RegisterGraphicsComponentCookEntries(registry)
+    ;
+}
+
+static b8 RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependencyRegistry& registry){
+    return
+        AssetsSubsystemCook::RegisterSubsystemCookDependency<RendererSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<MeshSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<DeferredSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<BvhSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<GiSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<ReflectionSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<ShadowSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<TransparentSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<RefractiveSubsystem>(registry)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<CsgSubsystem>(registry)
+        && RegisterGraphicsComponentCookDependencies(registry)
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_GraphicsSubsystemCookEntryRegistrar, RegisterGraphicsSubsystemCookEntries);
+NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_GraphicsSubsystemCookDependencyRegistrar, RegisterGraphicsSubsystemCookDependencies);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -19,8 +19,8 @@ native{
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/mesh/skinning_name_cases.adhd.h>
 
-#include <impl/ecs_mesh/skinning/graph_resource_uses.h>
-#include <impl/ecs_mesh/skinning/skinning_state_handoff.h>
+#include <impl/ecs_mesh/skinning/graph_resource_uses.adhd.h>
+#include <impl/ecs_mesh/skinning/skinning_state_handoff.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -261,8 +261,8 @@ TEST(SkinningStateHandoff, RejectsUnpreparedAcceptanceAndMissingRecordedState){
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/mesh/skinning_name_cases.adhd.h>
 
-#include <impl/ecs_mesh/skinning/skin_payload.h>
-#include <impl/ecs_mesh/skinning/deformation_state.h>
+#include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
+#include <impl/ecs_mesh/skinning/deformation_state.adhd.h>
 
 #include <core/alloc/general.h>
 

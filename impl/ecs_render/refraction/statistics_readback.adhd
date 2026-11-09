@@ -1,0 +1,86 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/refraction/types.adhd.h>
+#include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
+
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// CPU lifecycle shared by owner and leases; completion follows GPU token completion.
+class RefractionStatisticsState : public StatisticsReadbackStateBase<RefractionStatistics>{
+public:
+    using StatisticsReadbackStateBase<RefractionStatistics>::StatisticsReadbackStateBase;
+
+
+public:
+    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, Span<const u32> counters = {})noexcept;
+};
+
+using RefractionStatisticsControl = RefCounter<RefractionStatisticsState>;
+using RefractionStatisticsControlHandle = StatisticsControlHandle<RefractionStatisticsState>;
+
+
+// Destruction releases only an unaccepted reservation.
+class RefractionStatisticsReservation final : public StatisticsReservationBase<RefractionStatisticsControlHandle, RefractionStatistics>{
+public:
+    using StatisticsReservationBase<RefractionStatisticsControlHandle, RefractionStatistics>::StatisticsReservationBase;
+};
+
+struct RefractionStatisticsReadbackSnapshot{
+    RefractionStatisticsControlHandle control;
+    Core::BufferHandle counters;
+    Core::GpuDescriptorHandle counterDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> buffers{};
+    RefractionStatistics metadata;
+};
+
+class RefractionStatisticsReadback final : public StatisticsReadbackBase<RefractionStatisticsState, RefractionStatistics>{
+public:
+    using StatisticsReadbackBase<RefractionStatisticsState, RefractionStatistics>::StatisticsReadbackBase;
+
+
+public:
+    void invalidateResources()noexcept;
+    [[nodiscard]] b8 prepareResources();
+    void pollCompleted();
+    [[nodiscard]] RefractionStatisticsReadbackSnapshot snapshot(const RefractionStatistics& metadata)const noexcept;
+
+
+private:
+    Core::BufferHandle m_counters;
+    Core::GpuDescriptorHandle m_counterDescriptor = Core::GpuDescriptorHandle::Invalid();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderRefractionStatisticsReadbackAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

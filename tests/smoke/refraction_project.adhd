@@ -44,7 +44,7 @@ NWB_END
 
 
 
-#include <impl/ecs_csg/shape_registry.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
 
 #include <global/expected.h>
 #include <global/simd/constant.h>
@@ -532,7 +532,7 @@ NWB_END
 
 
 
-#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/module.adhd.h>
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -866,8 +866,8 @@ NWB_END
 
 #include <loader/project_entry.h>
 
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_render/module.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

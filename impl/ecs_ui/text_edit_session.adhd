@@ -1,0 +1,294 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/global.adhd.h>
+#include <impl/ecs_ui/edit_types.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/model_snapshot.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
+
+#include <core/os/text_input.h>
+#include <core/os/text_input_text.h>
+
+#include <global/termination.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The host validates token, sequence and owner before lending a model to a copied event.
+// Surrounding deletion additionally requires the exact native publication that the event addressed.
+[[nodiscard]] inline UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const b8 matchesPublishedModel){
+    switch(event.kind){
+    case Core::TextInputEventKind::Commit: {
+        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted)
+            return UiTextEditStatus::InvalidEvent;
+        if(event.text.empty())
+            return UiTextEditStatus::Applied;
+        if(model.textMode() == Ui::EditTextMode::Multiline){
+            const auto composition = model.composition();
+            const usize retainedBytes = ComputeUiTextEditRetainedBytes(composition, model.text().size(), model.selectionStart(), model.selectionEnd());
+            const auto normalized = Ui::NormalizeMultilineText(event.text.get_allocator().arena(), event.text, model.limits().maxBytes - retainedBytes);
+            if(!normalized)
+                return UiTextEditStatus::ModelRejected;
+            return (composition.active ? model.commitComposition(*normalized) : model.replaceSelection(*normalized)) ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
+        }
+        return (model.composition().active ? model.commitComposition(event.text) : model.replaceSelection(event.text)) ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
+    }
+    case Core::TextInputEventKind::Preedit: {
+        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted || !IsUtf8ScalarBoundary(event.text, event.anchorByte) || !IsUtf8ScalarBoundary(event.text, event.caretByte))
+            return UiTextEditStatus::InvalidEvent;
+        if(event.text.empty()){
+            model.cancelComposition();
+            return UiTextEditStatus::Applied;
+        }
+        const b8 wasActive = model.composition().active;
+        if(!wasActive && !model.beginComposition())
+            return UiTextEditStatus::ModelRejected;
+        if(model.updateComposition(event.text, event.anchorByte, event.caretByte))
+            return UiTextEditStatus::Applied;
+        if(!wasActive)
+            model.cancelComposition();
+        return UiTextEditStatus::ModelRejected;
+    }
+    case Core::TextInputEventKind::DeleteSurrounding: {
+        if(expectedSurroundingRevision == 0u || event.surroundingRevision != expectedSurroundingRevision || !matchesPublishedModel)
+            return UiTextEditStatus::StaleSurrounding;
+        if(event.deletionBasis >= Core::TextInputDeletionBasis::Count)
+            return UiTextEditStatus::InvalidEvent;
+        if(event.deletionBasis == Core::TextInputDeletionBasis::Selection){
+            if(!ValidateUiTextEditSurroundingDeleteRange(event.deleteBeforeBytes, event.deleteAfterBytes, model.selectionStart(), model.selectionEnd(), model.text().size()))
+                return UiTextEditStatus::InvalidEvent;
+            return model.eraseAroundSelection(event.deleteBeforeBytes, event.deleteAfterBytes) ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
+        }
+        if(model.hasSelection() && (event.deleteBeforeBytes != 0u || event.deleteAfterBytes != 0u))
+            return UiTextEditStatus::ModelRejected;
+        const usize caret = model.caret();
+        if(!ValidateUiTextEditSurroundingDeleteRange(event.deleteBeforeBytes, event.deleteAfterBytes, caret, caret, model.text().size()))
+            return UiTextEditStatus::InvalidEvent;
+        return model.eraseSurrounding(event.deleteBeforeBytes, event.deleteAfterBytes) ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
+    }
+    case Core::TextInputEventKind::Cancelled:
+        model.cancelComposition();
+        return UiTextEditStatus::Cancelled;
+    default:
+        return UiTextEditStatus::InvalidEvent;
+    }
+}
+
+// Owned OS events are applied only during a host call that lends the matching model.
+// No model pointer is retained.
+// Drain before host edits.
+// End before a local edit/selection change, then begin again to fence queued old-selection events.
+// End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
+class UiTextEditSession final : NoCopy{
+public:
+    UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept
+        : m_service(service)
+        , m_event(arena)
+        , m_expectedModel(arena)
+        , m_publishedModel(arena)
+    {}
+
+    ~UiTextEditSession()noexcept{
+        if(!cancel())
+            TerminateInvariant();
+    }
+
+
+public:
+    [[nodiscard]] Core::TextInputAdmission::Enum begin(const UiTextEditOwner& owner, const Core::TextInputRect caret, Ui::EditModel& model){
+        if(!m_service.isOwnerThread())
+            return Core::TextInputAdmission::WrongThread;
+        if(!owner.valid() || model.composition().active)
+            return Core::TextInputAdmission::InvalidSession;
+        if(m_token.valid())
+            return Core::TextInputAdmission::Busy;
+        const Core::TextInputSessionDesc desc{ caret, model.text(), model.anchor(), model.caret() };
+        const auto result = m_service.begin(desc);
+        if(!result)
+            return result.error();
+        m_token = *result;
+        m_owner = owner;
+        m_lastSequence = 0u;
+        m_expectedModel.capture(model);
+        m_publishedModel.captureSurrounding(model);
+        m_surroundingRevision = m_service.surroundingRevision(m_token);
+        return Core::TextInputAdmission::Accepted;
+    }
+
+    // Only a model matching the last applied event can refresh the native snapshot; external edits require a new session.
+    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
+        return syncSession(owner, model, caret, Core::TextInputChangeCause::InputMethod, false);
+    }
+
+    [[nodiscard]] UiTextEditResult drain(const UiTextEditOwner& owner, Ui::EditModel& model){
+        UiTextEditResult result;
+        if(!m_service.isOwnerThread()){
+            result.status = UiTextEditStatus::WrongThread;
+            return result;
+        }
+        if(!m_token.valid())
+            return result;
+        if(!(m_owner == owner) || !m_expectedModel.matches(model)){
+            result.status = m_owner == owner ? UiTextEditStatus::StaleModel : UiTextEditStatus::StaleOwner;
+            if(!cancel())
+                result.status = UiTextEditStatus::NativeFailure;
+            return result;
+        }
+        const auto initialRevision = model.revision();
+        for(usize index = 0u; index <= Core::s_TextInputMaxEvents; ++index){
+            const auto poll = m_service.poll(m_token, m_event);
+            if(poll == Core::TextInputPollResult::Pending)
+                break;
+            if(poll != Core::TextInputPollResult::Event){
+                result.status = poll == Core::TextInputPollResult::WrongThread ? UiTextEditStatus::WrongThread : UiTextEditStatus::Cancelled;
+                model.cancelComposition();
+                if(!cancel())
+                    result.status = UiTextEditStatus::NativeFailure;
+                break;
+            }
+            if(m_event.token != m_token || !ValidateUiTextEditPollSequence(m_event.sequence, m_lastSequence, index, Core::s_TextInputMaxEvents)){
+                result.status = UiTextEditStatus::InvalidEvent;
+            }
+            else{
+                m_lastSequence = m_event.sequence;
+                result.status = ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, m_publishedModel.matchesSurrounding(model));
+            }
+            if(result.status != UiTextEditStatus::Applied){
+                model.cancelComposition();
+                if(!cancel())
+                    result.status = UiTextEditStatus::NativeFailure;
+                break;
+            }
+            ++result.eventsApplied;
+            m_expectedModel.capture(model);
+        }
+        result.textChanged = model.revision() != initialRevision;
+        if(m_token.valid() && !m_publishedModel.matchesSurrounding(model)){
+            if(publishSurrounding(model) != Core::TextInputAdmission::Accepted){
+                model.cancelComposition();
+                result.status = UiTextEditStatus::NativeFailure;
+                if(!cancel())
+                    TerminateInvariant();
+            }
+        }
+        return result;
+    }
+
+    // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
+    [[nodiscard]] Core::TextInputPollResult::Enum pollOwned(Core::TextInputEvent& event){
+        if(!m_service.isOwnerThread())
+            return Core::TextInputPollResult::WrongThread;
+        if(!m_token.valid())
+            return Core::TextInputPollResult::InvalidSession;
+        return m_service.poll(m_token, event);
+    }
+
+    // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
+    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret, const Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other){
+        return syncSession(owner, model, caret, cause, true);
+    }
+
+    [[nodiscard]] b8 end(const UiTextEditOwner& owner, Ui::EditModel& model){
+        if(!m_service.isOwnerThread() || !m_token.valid() || !(m_owner == owner))
+            return false;
+        if(m_expectedModel.matches(model))
+            model.cancelComposition();
+        return cancel();
+    }
+
+    // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
+    [[nodiscard]] b8 cancel(){
+        if(!m_token.valid())
+            return true;
+        if(!m_service.isOwnerThread())
+            return false;
+        if(!m_service.end(m_token) && m_service.activeSession() == m_token)
+            return false;
+        m_token = {};
+        m_owner = {};
+        m_expectedModel.clear();
+        m_publishedModel.clear();
+        return true;
+    }
+
+    [[nodiscard]] Core::TextInputSessionToken token()const noexcept{ return m_token; }
+
+    [[nodiscard]] const UiTextEditOwner& owner()const noexcept{ return m_owner; }
+
+    [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_token.valid() ? m_surroundingRevision : 0u; }
+
+    [[nodiscard]] b8 matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
+        return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && m_publishedModel.matchesSurrounding(model);
+    }
+
+
+private:
+    [[nodiscard]] Core::TextInputAdmission::Enum syncSession(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret, const Core::TextInputChangeCause::Enum cause, const b8 adoptExpected){
+        if(!m_service.isOwnerThread())
+            return Core::TextInputAdmission::WrongThread;
+        if(!m_token.valid() || !(m_owner == owner) || (adoptExpected ? m_service.activeSession() != m_token : !m_expectedModel.matches(model)))
+            return Core::TextInputAdmission::InvalidSession;
+        const auto admission = m_service.updateCaret(m_token, caret);
+        if(admission != Core::TextInputAdmission::Accepted)
+            return admission;
+        if(!m_publishedModel.matchesSurrounding(model)){
+            const auto publish = publishSurrounding(model, cause);
+            if(publish != Core::TextInputAdmission::Accepted)
+                return publish;
+        }
+        if(adoptExpected)
+            m_expectedModel.capture(model);
+        return Core::TextInputAdmission::Accepted;
+    }
+
+    [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(const Ui::EditModel& model, const Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod){
+        const auto admission = m_service.updateSurrounding(m_token, model.text(), model.anchor(), model.caret(), cause);
+        if(admission != Core::TextInputAdmission::Accepted)
+            return admission;
+        m_publishedModel.captureSurrounding(model);
+        m_surroundingRevision = m_service.surroundingRevision(m_token);
+        return Core::TextInputAdmission::Accepted;
+    }
+
+
+private:
+    Core::ITextInputService& m_service;
+    Core::TextInputEvent m_event;
+    Ui::EditModelSnapshot m_expectedModel;
+    Ui::EditModelSnapshot m_publishedModel;
+    UiTextEditOwner m_owner;
+    Core::TextInputSessionToken m_token;
+    u64 m_surroundingRevision = 0u;
+    u64 m_lastSequence = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiTextEditSessionAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

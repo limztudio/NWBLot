@@ -13,7 +13,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <global/expected.h>
 #include <global/simd/vector_arithmetic.h>
@@ -123,7 +123,7 @@ UI_INPUT_BENCHMARK_END
 #include <tests/performance/ui_input/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/edit_box_host.h>
+#include <impl/ecs_ui/edit_box_host.adhd.h>
 
 #include <core/os/clipboard_service.h>
 #include <core/os/text_input_service.h>
@@ -393,7 +393,7 @@ UI_INPUT_BENCHMARK_END
 
 #include <tests/performance/ui_input/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

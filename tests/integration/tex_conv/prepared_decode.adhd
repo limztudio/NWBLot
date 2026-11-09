@@ -7,8 +7,8 @@
 native{
 #include <logger/client/module.h>
 
-#include <impl/assets_texture/cook.h>
-#include <impl/assets_texture/texture_mip_decoder.h>
+#include <impl/assets_texture/cook.adhd.h>
+#include <impl/assets_texture/texture_mip_decoder.adhd.h>
 
 #include <core/common/application_entry.h>
 

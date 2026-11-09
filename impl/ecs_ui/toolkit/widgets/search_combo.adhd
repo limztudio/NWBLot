@@ -1,0 +1,178 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
+#include "search_combo_filter.adhd.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The source owns a cached stable-key view and copies the query; filtering must not change its full-source metadata.
+interface ISearchableListDataSource : public IListDataSource{
+    virtual ~ISearchableListDataSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual b8 filter(AStringView query) = 0;
+    [[nodiscard]] virtual const IListDataSource& filtered()const = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SearchComboState final : NoCopy{
+    friend class Builder;
+    friend class ComboCoordinator;
+    friend class SearchComboBehavior;
+
+
+public:
+    explicit SearchComboState(Core::Alloc::GlobalArena& arena)
+        : m_arena(arena)
+        , m_query(arena)
+        , m_filteredQuery(arena)
+    {}
+    SearchComboState(SearchComboState&&) = delete;
+
+
+public:
+    SearchComboState& operator=(SearchComboState&&) = delete;
+
+
+public:
+    [[nodiscard]] const ComboState& combo()const noexcept{ return m_combo; }
+
+    [[nodiscard]] ComboState& combo()noexcept{ return m_combo; }
+
+    [[nodiscard]] const EditModel& query()const noexcept{ return m_query; }
+
+    [[nodiscard]] EditModel& query()noexcept{ return m_query; }
+
+    [[nodiscard]] const EditBoxState& editorState()const noexcept{ return m_editor; }
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    ComboState m_combo;
+    EditModel m_query;
+    EditBoxState m_editor;
+    AString<Core::Alloc::GlobalArena> m_filteredQuery;
+    u64 m_sourceGeneration = 0u;
+    u64 m_sourceRevision = 0u;
+    u64 m_sourceCount = 0u;
+    u64 m_viewGeneration = 0u;
+    u64 m_viewRevision = 0u;
+    u64 m_viewCount = 0u;
+    u64 m_queryGeneration = 0u;
+    u64 m_queryExternalRevision = 0u;
+    b8 m_filterValid = false;
+};
+
+class SearchComboBehavior final{
+public:
+    // Reconcile the committed combo against the full source first; reconcile its preview against filtered() afterward.
+    [[nodiscard]] static b8 Filter(SearchComboState& state, ISearchableListDataSource& source){
+        const TextAreaModelStamp query = state.m_query.stamp();
+        const u64 comboGeneration = state.m_combo.inputGeneration();
+        const u64 previewGeneration = state.m_combo.listState().inputGeneration();
+        const SearchComboSourceSnapshot full(source.instanceGeneration(), source.revision(), source.rowCount());
+        const IListDataSource& previousView = source.filtered();
+        const SearchComboSourceSnapshot previous(previousView.instanceGeneration(), previousView.revision(), previousView.rowCount());
+        if(full.generation == 0u || full.revision == 0u || !Matches(state, query, comboGeneration, previewGeneration))
+            return false;
+        const StringView cachedQuery(state.m_filteredQuery.data(), state.m_filteredQuery.size());
+        const b8 rebuild = SearchComboFilterRules().evaluateSearchComboRebuildNeed(
+            state.m_filterValid,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            state.m_sourceCount,
+            full,
+            state.m_viewGeneration,
+            state.m_viewRevision,
+            state.m_viewCount,
+            previous,
+            cachedQuery,
+            state.m_query.text()
+        );
+        AString<Core::Alloc::GlobalArena> candidate(state.m_arena);
+        if(rebuild){
+            const AStringView text = state.m_query.text();
+            if(!text.empty())
+                candidate.assign(text.data(), text.size());
+            if(!source.filter({ candidate.data(), candidate.size() }))
+                return false;
+        }
+        const IListDataSource& view = source.filtered();
+        const SearchComboSourceSnapshot filtered(view.instanceGeneration(), view.revision(), view.rowCount());
+        if(
+            !SearchComboFilterRules().validateSearchComboFilteredSnapshot(full, filtered)
+            || !ListBehavior::SourceMatches(view, filtered.generation, filtered.revision, filtered.count)
+            || !ListBehavior::SourceMatches(source, full.generation, full.revision, full.count)
+            || !Matches(state, query, comboGeneration, previewGeneration)
+        )
+            return false;
+        if(SearchComboFilterRules().shouldResetSearchComboPreviewOnFilter(rebuild, state.m_filterValid, state.m_queryGeneration, state.m_queryExternalRevision, query)){
+            if(!state.m_combo.m_list.scrollTo(0.0))
+                return false;
+            state.m_combo.m_list.select(state.m_combo.selectedKey());
+        }
+        SearchComboFilterRules().commitSearchComboFilterState(
+            rebuild,
+            AStringView(candidate.data(), candidate.size()),
+            full,
+            filtered,
+            query,
+            state.m_filteredQuery,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            state.m_sourceCount,
+            state.m_viewGeneration,
+            state.m_viewRevision,
+            state.m_viewCount,
+            state.m_queryGeneration,
+            state.m_queryExternalRevision,
+            state.m_filterValid
+        );
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] static b8 Matches(const SearchComboState& state, const TextAreaModelStamp& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
+        return state.query().matchesStamp(query)
+            && state.combo().inputGeneration() == comboGeneration
+            && state.combo().listState().inputGeneration() == previewGeneration;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsSearchComboAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

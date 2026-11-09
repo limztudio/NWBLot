@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/assets/graphics/bindless/binding_slots.h>
+
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetsGraphicsBindless{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 0u);
+static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == NWB_BINDLESS_HEAP_RESOURCE_SET + 1u);
+static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == NWB_BINDLESS_HEAP_SAMPLER_SET + 1u);
+
+
+// Adapts the shared ABI into the runtime payload; keeps the renderer off asset constants.
+[[nodiscard]] constexpr Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi()noexcept{
+    Core::GpuDescriptorHeapAbi abi;
+    abi.resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
+    abi.samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;
+    abi.accelStructSetIndex = NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET;
+    abi.sampledImageBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE;
+    abi.storageImageBinding = NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE;
+    abi.sampledBufferBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER;
+    abi.storageBufferBinding = NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER;
+    abi.uniformBufferBinding = NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER;
+    abi.sampledImage2DArrayBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
+    abi.sampledImage3DBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D;
+    abi.sampledImage2DArrayUintBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT;
+    abi.sampledImageCubeBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE;
+    abi.samplerBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLER;
+    abi.accelStructBinding = NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
+    return abi;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsGraphicsBindlessRuntimeAbiAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

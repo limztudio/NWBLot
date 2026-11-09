@@ -18,10 +18,10 @@ native{
 #include <tests/common/capturing_logger.adhd.h>
 #include <tests/unit/mesh/solid_test_types.adhd.h>
 
-#include <impl/assets_mesh/cook.h>
-#include <impl/assets_mesh/binary_payload_io.h>
-#include <impl/assets_mesh/cook_meshlets.h>
-#include <impl/assets_mesh/meshlet_triangle_visit.h>
+#include <impl/assets_mesh/cook.adhd.h>
+#include <impl/assets_mesh/binary_payload_io.adhd.h>
+#include <impl/assets_mesh/cook_meshlet_growth.adhd.h>
+#include <impl/assets_mesh/meshlet_triangle_visit.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
 

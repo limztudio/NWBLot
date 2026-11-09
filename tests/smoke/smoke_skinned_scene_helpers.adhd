@@ -5,11 +5,11 @@
 #include "smoke_scene_helpers.adhd"
 
 native{
-#include <impl/assets_model/asset.h>
-#include <impl/assets_skeleton/asset.h>
-#include <impl/ecs_mesh/skinning/system.h>
-#include <impl/ecs_model/system.h>
-#include <impl/ecs_model_renderer/model_renderer.h>
+#include <impl/assets_model/asset.adhd.h>
+#include <impl/assets_skeleton/asset.adhd.h>
+#include <impl/ecs_mesh/skinning/system.adhd.h>
+#include <impl/ecs_model/system.adhd.h>
+#include <impl/ecs_model_renderer/model_renderer.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/ecs/entity.h>

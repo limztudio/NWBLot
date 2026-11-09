@@ -26,8 +26,8 @@ native{
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_font_atlas/name_cases.adhd.h>
 
-#include <impl/assets_font_atlas/asset.h>
-#include <impl/assets_font_atlas/cook.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
+#include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <global/binary_big_endian.h>
 #include <global/filesystem.h>
@@ -576,8 +576,8 @@ NWB_END
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_font_atlas/name_cases.adhd.h>
 
-#include <impl/assets_font/cook.h>
-#include <impl/assets_font_atlas/cook.h>
+#include <impl/assets_font/cook.adhd.h>
+#include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_entry_registry.h>

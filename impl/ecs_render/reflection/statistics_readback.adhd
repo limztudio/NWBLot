@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/reflection/history.adhd.h>
+
+#include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// CPU lifecycle shared by owner and leases; completion follows GPU token completion.
+class ReflectionStatisticsState : public StatisticsReadbackStateBase<ReflectionStatistics>{
+public:
+    using StatisticsReadbackStateBase<ReflectionStatistics>::StatisticsReadbackStateBase;
+
+
+public:
+    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, Span<const u32> counters = {})noexcept;
+};
+
+using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
+using ReflectionStatisticsControlHandle = StatisticsControlHandle<ReflectionStatisticsState>;
+
+
+// Destruction releases only an unaccepted reservation.
+class ReflectionStatisticsReservation final : public StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>{
+public:
+    using StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>::StatisticsReservationBase;
+};
+
+struct ReflectionStatisticsReadbackSnapshot{
+    ReflectionStatisticsControlHandle control;
+    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> buffers{};
+    ReflectionStatistics metadata;
+};
+
+class ReflectionStatisticsReadback final : public StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>{
+public:
+    using StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>::StatisticsReadbackBase;
+
+
+public:
+    [[nodiscard]] b8 prepareResources();
+    void pollCompleted();
+    [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderReflectionStatisticsReadbackAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

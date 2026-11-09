@@ -776,20 +776,20 @@ NWB_END
 #include <pipeline/asset_builder/build.h>
 #include <pipeline/asset_gatherer/gather.h>
 
-#include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_ref_encode.h>
-#include <impl/assets_csg/cook.h>
-#include <impl/assets_graphics/gather.h>
-#include <impl/assets_model/asset.h>
-#include <impl/assets_material/cook.h>
-#include <impl/assets_shader/asset.h>
-#include <impl/assets_shader/cook.h>
-#include <impl/assets_texture/asset.h>
-#include <impl/assets_texture/cook.h>
-#include <impl/assets_sampler/asset.h>
-#include <impl/assets_sampler/cook.h>
+#include <impl/assets_mesh/asset.adhd.h>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
+#include <impl/assets_csg/cook.adhd.h>
+#include <impl/assets_graphics/gather.adhd.h>
+#include <impl/assets_model/asset.adhd.h>
+#include <impl/assets_material/cook.adhd.h>
+#include <impl/assets_shader/asset.adhd.h>
+#include <impl/assets_shader/cook.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
+#include <impl/assets_texture/cook.adhd.h>
+#include <impl/assets_sampler/asset.adhd.h>
+#include <impl/assets_sampler/cook.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/ecs_csg/shape_registry.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_entry_registry.h>
@@ -1556,7 +1556,7 @@ NWB_END
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_model/cook.h>
+#include <impl/assets_model/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_metadata.h>
@@ -2366,7 +2366,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/asset.h>
+#include <impl/assets_shader/asset.adhd.h>
 
 #include <core/assets/cook_metadata.h>
 
@@ -3325,8 +3325,8 @@ NWB_END
 
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_mesh/skin_asset.h>
-#include <impl/assets_skeleton/asset.h>
+#include <impl/assets_mesh/skin_asset.adhd.h>
+#include <impl/assets_skeleton/asset.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -3896,9 +3896,9 @@ NWB_END
 
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_csg/shape_module_writer.h>
-#include <impl/assets_graphics/csg_shader_variants.h>
-#include <impl/assets_graphics/shader_cook_plan.h>
+#include <impl/assets_csg/shape_module_writer.adhd.h>
+#include <impl/assets_graphics/csg_shader_variants.adhd.h>
+#include <impl/assets_graphics/shader_cook_plan.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -4527,7 +4527,7 @@ TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_material/material_avboit_shader_generator.h>
+#include <impl/assets_material/material_avboit_shader_generator.adhd.h>
 #include <tests/common/capturing_logger.adhd.h>
 
 #include <gtest/gtest.h>
@@ -4583,7 +4583,7 @@ TEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWitho
 
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_material/cook_private.h>
+#include <impl/assets_material/cook_private.adhd.h>
 #include <impl/assets_material/cook_types.adhd.h>
 
 #include <gtest/gtest.h>
@@ -5883,7 +5883,7 @@ NWB_END
 
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
 
 #include <global/not_null.h>
 
@@ -6623,9 +6623,9 @@ TEST(MetadataDiscoveryAdmission, PathsInSameHashBucketKeepDistinctOwnedPaths){
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_model/cook.h>
-#include <impl/assets_sampler/cook.h>
-#include <impl/assets_shader/asset.h>
+#include <impl/assets_model/cook.adhd.h>
+#include <impl/assets_sampler/cook.adhd.h>
+#include <impl/assets_shader/asset.adhd.h>
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -7032,8 +7032,8 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_model/cook.h>
-#include <impl/assets_sampler/cook.h>
+#include <impl/assets_model/cook.adhd.h>
+#include <impl/assets_sampler/cook.adhd.h>
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -7278,7 +7278,7 @@ TEST(MetadataRegistryPublication, ConcurrentMetadataRegistrationsKeepDistinctTok
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_model/cook.h>
+#include <impl/assets_model/cook.adhd.h>
 
 #include <global/text_utils.h>
 
@@ -7548,7 +7548,7 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThr
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_model/asset.h>
+#include <impl/assets_model/asset.adhd.h>
 
 #include <global/arena_memory.h>
 #include <global/binary.h>
@@ -8882,7 +8882,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/source_dependencies.h>
+#include <impl/assets_shader/source_dependencies.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -9479,7 +9479,7 @@ NWB_END
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_skeleton/cook.h>
+#include <impl/assets_skeleton/cook.adhd.h>
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
@@ -9831,7 +9831,7 @@ NWB_END
 
 #include <tests/integration/assets_graphics/case_types.adhd.h>
 
-#include <impl/assets_texture/texture_mip_decoder.h>
+#include <impl/assets_texture/texture_mip_decoder.adhd.h>
 
 #include <gtest/gtest.h>
 

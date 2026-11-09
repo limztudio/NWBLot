@@ -5,22 +5,22 @@
 #include "ui_gallery_constants.adhd"
 
 native{
-#include <impl/assets_scene/asset.h>
-#include <impl/assets_ui_skin/asset.h>
-#include <impl/ecs_ui/paint_context.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.h>
-#include <impl/ecs_ui/toolkit/images/image_loader.h>
-#include <impl/ecs_ui/toolkit/widgets/combo.h>
-#include <impl/ecs_ui/toolkit/widgets/context_menu.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
-#include <impl/ecs_ui/toolkit/widgets/label.h>
-#include <impl/ecs_ui/toolkit/widgets/list.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
-#include <impl/ecs_ui/toolkit/widgets/search_combo.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area.h>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.h>
+#include <impl/assets_scene/asset.adhd.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
+#include <impl/ecs_ui/paint_context.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>

@@ -1,0 +1,219 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd.h>
+
+#include <global/atomic_identity.h>
+#include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Application state is borrowed through its enclosing Builder scope; accepted public intents retire copied input.
+class RadioGroupState final : NoCopy{
+    friend class Builder;
+    friend class RadioGroupBehavior;
+
+
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
+public:
+    RadioGroupState()noexcept
+        : m_instanceGeneration(NextIdentity())
+        , m_inputGeneration(NextIdentity())
+    {}
+    RadioGroupState(RadioGroupState&&) = delete;
+
+
+public:
+    RadioGroupState& operator=(RadioGroupState&&) = delete;
+
+
+public:
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
+    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
+    [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
+
+    [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
+
+    [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
+
+    [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept{ return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision }; }
+
+    [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept{ return snapshot() == value; }
+    void select(const u64 key)noexcept{
+        AdvanceNonWrappingRevision(m_revision);
+        m_inputGeneration = NextIdentity();
+        m_selected = key;
+        m_cursor = key;
+    }
+    void reset()noexcept{
+        AdvanceNonWrappingRevision(m_revision);
+        m_inputGeneration = NextIdentity();
+        ResetRadioGroupStateFields(m_selected, m_cursor, m_sourceGeneration, m_sourceRevision, m_placement);
+    }
+
+
+private:
+    const u64 m_instanceGeneration;
+    u64 m_inputGeneration;
+    u64 m_revision = 1u;
+    u64 m_selected = 0u;
+    u64 m_cursor = 0u;
+    u64 m_sourceGeneration = 0u;
+    u64 m_sourceRevision = 0u;
+    RadioGroupPlacement m_placement;
+    b8 m_reconciling = false;
+    b8 m_reentryObserved = false;
+};
+
+// An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
+interface IRadioGroupReconcileGuard{
+public:
+    virtual ~IRadioGroupReconcileGuard()noexcept = default;
+
+
+public:
+    [[nodiscard]] virtual b8 current()const = 0;
+};
+
+class RadioGroupBehavior final{
+private:
+    [[nodiscard]] static b8 StateCurrent(const RadioGroupState& state, const RadioGroupSnapshot& snapshot, const b8& reentryObserved, const IRadioGroupReconcileGuard* const guard){
+        if(reentryObserved || !state.matches(snapshot) || (guard && !guard->current()))
+            return false;
+        return !reentryObserved && state.matches(snapshot);
+    }
+
+    [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const RadioGroupState& state, const RadioGroupSnapshot& snapshot, const b8& reentryObserved, const RadioGroupChoices& choices, const IRadioGroupReconcileGuard* const guard){
+        if(!StateCurrent(state, snapshot, reentryObserved, guard))
+            return false;
+        const u64 generation = source.instanceGeneration();
+        if(!StateCurrent(state, snapshot, reentryObserved, guard) || generation != choices.sourceGeneration)
+            return false;
+        const u64 revision = source.revision();
+        if(!StateCurrent(state, snapshot, reentryObserved, guard) || revision != choices.sourceRevision)
+            return false;
+        const u64 count = source.rowCount();
+        return StateCurrent(state, snapshot, reentryObserved, guard) && count == choices.count;
+    }
+
+
+public:
+    // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
+    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(const IListDataSource& source, const IRadioGroupReconcileGuard* const guard, RadioGroupState& state, RadioGroupResult& result){
+        if(state.m_reconciling){
+            state.m_reentryObserved = true;
+            return MakeUnexpected(Failure{});
+        }
+        const RadioGroupSnapshot snapshot = state.snapshot();
+        state.m_reconciling = true;
+        state.m_reentryObserved = false;
+        ScopeExit finish([&state]()noexcept{ state.m_reconciling = false; state.m_reentryObserved = false; });
+
+        RadioGroupChoices candidate;
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
+            return MakeUnexpected(Failure{});
+        candidate.sourceGeneration = source.instanceGeneration();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceGeneration == 0u)
+            return MakeUnexpected(Failure{});
+        candidate.sourceRevision = source.revision();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceRevision == 0u)
+            return MakeUnexpected(Failure{});
+        const u64 count = source.rowCount();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || count > s_RadioGroupMaxChoices)
+            return MakeUnexpected(Failure{});
+        candidate.count = static_cast<u32>(count);
+        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+            return MakeUnexpected(Failure{});
+        for(u32 index = 0u; index < candidate.count; ++index){
+            if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
+                return MakeUnexpected(Failure{});
+            const u64 key = source.key(index);
+            if(!IsUniqueRadioGroupChoiceKey(candidate, index, key) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+                return MakeUnexpected(Failure{});
+            const auto resolved = source.indexOf(key);
+            if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !resolved || *resolved != index)
+                return MakeUnexpected(Failure{});
+            const b8 enabled = source.enabled(index);
+            if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+                return MakeUnexpected(Failure{});
+            candidate.rows[index] = { key, enabled };
+        }
+        u64 selected = 0u;
+        u64 cursor = 0u;
+        ReconcileRadioGroupSelectionAndCursor(snapshot, candidate, selected, cursor);
+        // A second observation catches one-shot metadata mutation from the preceding final count callback.
+        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+            return MakeUnexpected(Failure{});
+        AdvanceNonWrappingRevision(state.m_revision);
+        CommitRadioGroupReconcileState(
+            snapshot,
+            candidate,
+            selected,
+            cursor,
+            state.m_selected,
+            state.m_cursor,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            result
+        );
+        return candidate;
+    }
+    // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
+    [[nodiscard]] static b8 Apply(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result)noexcept{
+        if(state.m_reconciling){
+            state.m_reentryObserved = true;
+            return false;
+        }
+        const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
+        u64 selected = state.m_selected;
+        u64 cursor = state.m_cursor;
+        if(!TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, selected, cursor, result))
+            return false;
+        AdvanceNonWrappingRevision(state.m_revision);
+        state.m_selected = selected;
+        state.m_cursor = cursor;
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsUiToolkitWidgetsRadioGroupAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

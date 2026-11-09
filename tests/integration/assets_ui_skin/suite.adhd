@@ -25,8 +25,8 @@ native{
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_ui_skin/name_cases.adhd.h>
 
-#include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_texture/asset.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -261,7 +261,7 @@ NWB_END
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_ui_skin/name_cases.adhd.h>
 
-#include <impl/assets_ui_skin/cook.h>
+#include <impl/assets_ui_skin/cook.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -447,8 +447,8 @@ NWB_END
 #include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_ui_skin/name_cases.adhd.h>
 
-#include <impl/assets_ui_skin/cook.h>
-#include <impl/assets_texture/asset.h>
+#include <impl/assets_ui_skin/cook.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
 
 #include <global/binary.h>
 

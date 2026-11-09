@@ -21,8 +21,8 @@ native{
 
 #include <tests/unit/scene/name_cases.adhd.h>
 
-#include <impl/assets_scene/asset.h>
-#include <impl/assets_subsystem/asset.h>
+#include <impl/assets_scene/asset.adhd.h>
+#include <impl/assets_subsystem/asset.adhd.h>
 
 #include <core/assets/manager.h>
 
@@ -274,7 +274,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_scene/module.h>
+#include <impl/ecs_scene/module.adhd.h>
 
 #include <core/ecs/entity.h>
 

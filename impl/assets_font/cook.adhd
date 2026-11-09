@@ -1,0 +1,197 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/asset.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/metascript/parser.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct FontCookEntry{
+    Core::Assets::AssetBytes fontBytes;
+    Name virtualPath = s_NameNone;
+    u32 faceIndex = 0u;
+
+
+public:
+    explicit FontCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
+        : fontBytes(memoryArena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplAssetsFontCookAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include <impl/assets_font/font_binary_codec.adhd.h>
+#include <impl/assets_font/prepared_source.adhd.h>
+
+#include <core/assets/cook_metadata.h>
+#include <core/assets/paths.h>
+
+#include <global/binary.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_cook_metadata{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontPairedSidecarRuleAutoRegistrar({
+    .sidecarExtension = s_PreparedFontExtension,
+});
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    if(!checkSerializeAssetType(asset, NWB_TEXT("FontAssetCodec::serialize")))
+        return false;
+    const Font& font = *MakeNotNull(checked_cast<const Font*>(&asset));
+    if(!font.validatePayload())
+        return false;
+
+    FontBinaryCodec{}.serialize(font.faceIndex(), font.fontBytes(), outBinary);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return Core::Assets::ParseCookMetadataDocument<FontCookEntry>(
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        doc,
+        s_FontMetaDiagnosticPrefix,
+        [&nwbFilePath, &arena](const Name virtualPath, const Core::Metascript::Value& asset){
+            return ParseFontCookMetadataValue(virtualPath, nwbFilePath, asset, arena);
+        },
+        scratchArena
+    );
+}
+
+Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
+    FontCookEntry entry(arena);
+    if(!virtualPath)
+        return MakeUnexpected(Failure{});
+    if(!asset.isNull()){
+        if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontMetaDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontMetaDiagnosticPrefix, InitializerList<AStringView>{}))
+            return MakeUnexpected(Failure{});
+    }
+    Path fontPath = nwbFilePath;
+    fontPath.replaceExtension(s_PreparedFontExtension);
+    auto source = ReadPreparedFontSource(fontPath, false, arena);
+    if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
+        return MakeUnexpected(Failure{});
+    entry.fontBytes = Move(source->fontBytes);
+    entry.virtualPath = virtualPath;
+    entry.faceIndex = source->faceIndex;
+    return entry;
+}
+
+Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena){
+    Font candidate(arena, entry.virtualPath);
+    if(&entry.fontBytes.get_allocator().arena() == &arena){
+        candidate.setFontBytes(Move(entry.fontBytes), entry.faceIndex);
+    }
+    else{
+        Core::Assets::AssetBytes bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
+        candidate.setFontBytes(Move(bytes), entry.faceIndex);
+    }
+    if(!candidate.validatePayload())
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

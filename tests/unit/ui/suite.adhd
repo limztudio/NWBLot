@@ -22,8 +22,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/asset.h>
-#include <impl/assets_font_atlas/asset.h>
+#include <impl/assets_font/asset.adhd.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,7 +144,7 @@ namespace UiTestSupport{
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -461,7 +461,7 @@ NWB_END
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd.h>
 
 #include <global/simplemath.h>
 
@@ -564,8 +564,8 @@ NWB_END
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/edit/model.h>
-#include <impl/ecs_ui/toolkit/edit/grapheme.h>
+#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -619,7 +619,7 @@ NWB_END
 
 #include <tests/unit/ui/native_input.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -691,7 +691,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/images/image_source.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -730,7 +730,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/list.h>
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -981,7 +981,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/edit_box.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
 
 #include <tests/unit/ui/fixture_text_shaping.adhd.h>
 
@@ -1070,8 +1070,8 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/edit/commands.h>
-#include <impl/ecs_ui/toolkit/input/bindings.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1207,8 +1207,8 @@ NWB_END
 #include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -1266,8 +1266,8 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
-#include <impl/ecs_ui/toolkit/images/image_source.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -1335,7 +1335,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -1513,7 +1513,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1813,7 +1813,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1924,8 +1924,8 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/text_area.h>
-#include <impl/ecs_ui/toolkit/input/bindings.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2106,7 +2106,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -5044,7 +5044,7 @@ TEST_F(UiBuilderSkinPaletteTests, SkinChangeInsidePanelFailsWithoutReplacingActi
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/sha256.h>
@@ -5654,7 +5654,7 @@ TEST(UiCaretClockTests, InvalidPhaseStartsAtZeroAndFinitePhaseIsNormalized){
 
 #include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
 
-#include <impl/ecs_ui/toolkit/widgets/combo.h>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -7125,7 +7125,7 @@ TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanW
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -7803,7 +7803,7 @@ TEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedC
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -8179,7 +8179,7 @@ TEST_F(UiCommandOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -8382,7 +8382,7 @@ TEST_F(UiContextClaimTests, CapacityCountsDistinctKindAndInstancePairs){
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -9134,7 +9134,7 @@ TEST_F(UiContextMenuInputTests, FocusTransferAwayAndBackCannotReviveTheOriginalH
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -9864,7 +9864,7 @@ TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry)
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -10533,7 +10533,7 @@ TEST_F(UiControlInputTests, EscapeAndControlRebindingCancelHeldSubmitWithoutRele
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/widgets/edit_box.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -11503,8 +11503,8 @@ TEST_F(EditCaretFixture, OverflowingSelectedBreakWidthRejectsQuery){
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/commands.h>
-#include <impl/ecs_ui/toolkit/input/bindings.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12006,7 +12006,7 @@ TEST_F(UiEditGraphemeTests, ScalarPositionsDifferFromGraphemePositionsWithoutSpl
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/single_line_text.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12293,8 +12293,8 @@ TEST_F(UiEditModelTests, ExternalValueResetsSelectionHistoryAndComposition){
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
-#include <impl/ecs_ui/toolkit/input/bindings.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 #include <global/bit.h>
 
@@ -12426,7 +12426,7 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation)
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/single_line_text.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
 
 #include <tests/common/test_context.adhd.h>
 
@@ -12913,7 +12913,7 @@ TEST_F(FloatModelTests, ExternalFiniteValueCanRemainOutsideUserBounds){
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/gpu/image_resources.h>
+#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14050,8 +14050,8 @@ NWB_END
 #include <tests/common/capturing_logger.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/images/image_loader.h>
-#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
 
 #include <global/binary.h>
 
@@ -14335,7 +14335,7 @@ TEST_F(ImageLoaderTests, FailedReplacementPreservesRetainedSourceAndLaterSuccess
 #include <tests/common/capturing_logger.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/images/image_source.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -14708,7 +14708,7 @@ TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAccepte
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/bindings.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -14863,7 +14863,7 @@ TEST_F(UiInputBindingsTests, EmptyAndAliasedProfileReplacementCanRecoverToDefaul
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -15686,7 +15686,7 @@ TEST_F(IntegerModelTests, MalformedDraftAbandonRestoresTheAuthoritativeCommitted
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/layout/tree.h>
+#include <impl/ecs_ui/toolkit/layout/tree.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -17481,7 +17481,7 @@ TEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue){
 #include <tests/unit/ui/multiline_fixture.adhd.h>
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/commands.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18007,7 +18007,7 @@ TEST_F(MultilineModelTests, AliasedSameTextAndEmptyReplacementRetireSelectionBut
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/single_line_text.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
 
 #include <tests/common/test_context.adhd.h>
 
@@ -18922,7 +18922,7 @@ TEST_F(UiNestedPopupBuilderTests, UnbalancedChildContainerPreventsTheOuterFrameF
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -20604,7 +20604,7 @@ TEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllR
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -23887,7 +23887,7 @@ TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsRele
 #include <tests/common/floating_point_environment_guard.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 #include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
@@ -24107,7 +24107,7 @@ TEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChang
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -24803,7 +24803,7 @@ TEST_F(UiPointerGestureTests, ContextRootRetirementCancelsPendingGestureAndRepla
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <global/bit.h>
 
@@ -25202,7 +25202,7 @@ TEST_F(UiPointerGestureValueTests, NativeCaptureLossDiscardsActivePayloadAndKeep
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -25413,7 +25413,7 @@ TEST_F(UiPointerHitTests, CrossTargetTouchDragKeepsCaptureWhileAnotherCursorRefr
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -26262,7 +26262,7 @@ TEST_F(UiPopupBuilderTests, MissingPopupAndPanelSkinRejectsAdmissionWithoutChang
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/context.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -27005,7 +27005,7 @@ TEST_F(UiPopupContextTests, NativeFocusGainNeverRestoresAlreadyClosingScopes){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/popup.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -27253,7 +27253,7 @@ TEST(UiPopupStateTests, IndependentAndRecreatedStatesNeverShareInstanceIdentity)
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -29389,7 +29389,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
 
 #include <global/simplemath.h>
 
@@ -30357,7 +30357,7 @@ TEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrState
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -30963,7 +30963,7 @@ TEST_F(UiRadioGroupPopupTests, InstanceCallbackClosingThePopupRetiresQueuedRight
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -31046,7 +31046,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/scroll.h>
+#include <impl/ecs_ui/toolkit/widgets/scroll.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -31877,7 +31877,7 @@ NWB_END
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/widgets/search_combo.h>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -33289,7 +33289,7 @@ TEST_F(UiSeparatorTests, DuplicateKeyAndUnbalancedScopeRejectDeclarations){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>
@@ -34065,7 +34065,7 @@ TEST_F(UiSliderInputTests, EnterAndWheelDoNotChangeTheSliderOrCreateActivationAc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -34467,7 +34467,7 @@ TEST_F(UiSliderLifetimeTests, SuccessfulScopeEndReleasesTheValueLoanBeforeLaterF
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>
@@ -34786,7 +34786,7 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -35963,7 +35963,7 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
 
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>
@@ -37279,7 +37279,7 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/text_area.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
 
 #include <global/bit.h>
 
@@ -37480,7 +37480,7 @@ TEST_F(UiTextAreaViewTests, FailedManualArrangementPreservesThePriorPlacement){
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -37742,7 +37742,7 @@ TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -37998,8 +37998,8 @@ TEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesMainTextCap
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/atlas.h>
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
 
 #include <core/common/log.h>
 
@@ -38464,8 +38464,8 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/atlas.h>
-#include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
 
 #include <global/filesystem.h>
 
@@ -38859,7 +38859,7 @@ NWB_END
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/layout.h>
+#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -39058,7 +39058,7 @@ TEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomica
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/layout.h>
+#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
 #include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
 
 #include <gtest/gtest.h>
@@ -39286,7 +39286,7 @@ TEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/widgets/label.h>
+#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -40379,8 +40379,8 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/text/atlas.h>
-#include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
 
 #include <global/algorithm.h>
 #include <global/simdmath.h>
@@ -40943,7 +40943,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/images/image_source.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>
@@ -41525,7 +41525,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/tooltip.h>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -41932,7 +41932,7 @@ TEST(UiTooltipBehaviorTests, ExplicitResetRetiresVisibleStateAndAllAccumulatedHo
 
 #include <tests/unit/ui/glyph_shader_case_types.adhd.h>
 
-#include <impl/assets_font_atlas/model.h>
+#include <impl/assets_font_atlas/model.adhd.h>
 
 #include <global/simd/vector.h>
 
@@ -42013,7 +42013,7 @@ TEST(UiGlyphSdf, FlatFieldsRemainFiniteAcrossEveryAdmittedSpread){
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
 
-#include <impl/ecs_ui/toolkit/input/router.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
 
 #include <gtest/gtest.h>
 

@@ -3,7 +3,7 @@
 
 
 native{
-#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 namespace NWB::Tests::Smoke{
 using SnapshotRect = Impl::Ui::Rect;

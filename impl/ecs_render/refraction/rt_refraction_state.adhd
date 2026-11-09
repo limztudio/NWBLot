@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
+
+#include <core/graphics/rhi/device.h>
+
+#include <global/containers.h>
+#include <global/limit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtRefractionState{
+    Array<Array<Core::ShaderHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwShaders;
+    Array<Array<Core::ComputePipelineHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelines;
+    Array<Array<b8, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelineFailed = {};
+    Core::BindingLayoutHandle m_refractionBindingLayout;
+    Core::ShaderHandle m_refractionClassifyTilesShader;
+    Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;
+    Core::ShaderHandle m_refractionFinalizeTilesShader;
+    Core::ComputePipelineHandle m_refractionFinalizeTilesPipeline;
+    Core::ShaderHandle m_refractionScreenShader;
+    Core::ShaderHandle m_refractionHwShader;
+    Core::ShaderHandle m_refractionCsgHwShader;
+    Core::ShaderHandle m_refractionDenseScreenShader;
+    Core::ShaderHandle m_refractionDenseHwShader;
+    Core::ShaderHandle m_refractionDenseCsgHwShader;
+    Core::ComputePipelineHandle m_refractionScreenPipeline;
+    Core::ComputePipelineHandle m_refractionHwPipeline;
+    Core::ComputePipelineHandle m_refractionCsgHwPipeline;
+    Core::ComputePipelineHandle m_refractionDenseScreenPipeline;
+    Core::ComputePipelineHandle m_refractionDenseHwPipeline;
+    Core::ComputePipelineHandle m_refractionDenseCsgHwPipeline;
+    b8 m_refractionScreenPipelineFailed = false;
+    b8 m_refractionHwPipelineFailed = false;
+    b8 m_refractionCsgHwPipelineFailed = false;
+    b8 m_refractionDenseScreenPipelineFailed = false;
+    b8 m_refractionDenseHwPipelineFailed = false;
+    b8 m_refractionDenseCsgHwPipelineFailed = false;
+    u32 m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
+    b8 m_refractionUseHardwareTrace = false;
+    b8 m_refractionHardwareTracingEnabled = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderRefractionRtRefractionStateAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

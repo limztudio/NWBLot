@@ -31,11 +31,10 @@ inline void ApplyModelObjectRenderer(const Core::ECS::EntityID owner, const Core
     auto& renderer = entity.addComponent<RendererComponent>();
     renderer = *resolvedRenderer;
 
+    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>();
     const MaterialInstanceComponent* const ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner);
     if(!ownerMaterialInstance)
         return;
-
-    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>();
     CopyModelObjectMaterialInstance(*ownerMaterialInstance, materialInstance);
 }
 

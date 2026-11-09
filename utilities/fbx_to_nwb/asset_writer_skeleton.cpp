@@ -5,8 +5,6 @@
 #include "asset_writer_skeleton.h"
 #include "source_mesh_streams.h"
 
-#include <impl/assets_mesh/cook_source_streams.h>
-
 #include <core/common/log.h>
 
 

@@ -4,8 +4,6 @@
 
 #include "source_mesh_streams.h"
 
-#include <impl/assets_mesh/cook_source_streams.h>
-
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/mesh/tangent_frame_rebuild.h>

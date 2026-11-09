@@ -68,6 +68,8 @@ public:
 
 public:
     [[nodiscard]] static usize AppendPreprocessorNumber(MStringView text, usize index, b8 allowSignedExponent, MString& out);
+    [[nodiscard]] static b8 TryParseRawStringOpening(MStringView text, usize quoteIndex, MStringView& outDelimiter)noexcept;
+    [[nodiscard]] static b8 FindRawStringClosing(MStringView text, usize searchStart, MStringView delimiter, usize& outAfterCloseQuote)noexcept;
 
 
 public:

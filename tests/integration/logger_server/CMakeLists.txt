@@ -3,8 +3,8 @@ nwb_target_adhd_sources(nwb_logserver_crash_test_names NAMESPACE "NWB::Tests::Lo
 
 nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Log" SOURCES "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.adhd" "${PROJECT_SOURCE_DIR}/logger/server/crash_retention.adhd" "${PROJECT_SOURCE_DIR}/logger/server/arena_names.adhd")
+nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Tests::LoggerCrashCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/suite.adhd")
 target_sources(nwb_logserver_crash_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/suite.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_archive_extractor.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_manifest_validator.cpp"
@@ -16,7 +16,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_rgd.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_aftermath.cpp"
 )
-target_link_libraries(nwb_logserver_crash_tests PRIVATE nwb_logserver_crash_test_names nwb_common nwb_crash_package nwb_alloc nwb_logclient nwb::aftermath_headers nwb::microhttpd nwb_logrgd)
+target_link_libraries(nwb_logserver_crash_tests PRIVATE nwb_crash_test_paths nwb_logserver_crash_test_names nwb_common nwb_crash_package nwb_alloc nwb_logclient nwb::aftermath_headers nwb::microhttpd nwb_logrgd)
 target_link_libraries(nwb_logserver_crash_tests PRIVATE nwb_logserver_crash_path_names nwb_logserver_crash_values)
 nwb_copy_aftermath_runtime(nwb_logserver_crash_tests)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET nwb_logserver AND Python3_Interpreter_FOUND)

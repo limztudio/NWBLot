@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "skin_name_cases.adhd"
+
+native{
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 #include <tests/integration/fbx_to_nwb/skin_name_cases.adhd.h>
@@ -18,6 +25,46 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyFbxTriangleAreas(){
+    native{
+        using NWB::FbxToNwb::HasUsableSourceTriangleArea;
+        EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_QuietNaN, 1.0));
+        EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_Infinity, 1.0));
+        EXPECT_FALSE(HasUsableSourceTriangleArea(-Limit<f64>::s_Infinity, 1.0));
+        EXPECT_FALSE(HasUsableSourceTriangleArea(1.0, 1.0));
+        EXPECT_TRUE(HasUsableSourceTriangleArea(1.0, Limit<f64>::s_QuietNaN));
+        EXPECT_TRUE(HasUsableSourceTriangleArea(1.0 + 0x1p-52, 1.0));
+    }
+}
+
+void VerifyFbxOptionsScaleAndEpsilon(){
+    native{
+        using namespace NWB::FbxToNwb;
+        EXPECT_FALSE(IsValidFbxImportScale(0.0));
+        EXPECT_FALSE(IsValidFbxImportScale(-0.0));
+        EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_QuietNaN));
+        EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_Infinity));
+        EXPECT_TRUE(IsValidFbxImportScale(0x1p-1022));
+        EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(0.0));
+        EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(-0.0));
+        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(-0x1p-1022));
+        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_QuietNaN));
+        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_Infinity));
+    }
+}
+
+native{
 namespace __hidden_fbx_skin_tests{
 
 
@@ -232,3 +279,8 @@ TEST(FbxSkin, RejectsMismatchedOrNonFiniteSkeletonMatrices){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

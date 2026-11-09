@@ -24,7 +24,8 @@ nwb_declare_static_library(nwb_fbx_skin_test_names)
 nwb_target_adhd_sources(nwb_fbx_skin_test_names NAMESPACE "NWB::Tests::FbxSkinCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/skin_name_cases.adhd")
 
 nwb_declare_gtest_executable(nwb_fbx_skin_tests)
-target_sources(nwb_fbx_skin_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/skin_tests.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/skin.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/asset_writer_skeleton.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/source_mesh_streams.cpp")
+target_sources(nwb_fbx_skin_tests PRIVATE "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/skin.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/asset_writer_skeleton.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/source_mesh_streams.cpp")
 nwb_target_adhd_sources(nwb_fbx_skin_tests NAMESPACE "NWB::FbxToNwb" SOURCES "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/*.adhd")
+nwb_target_adhd_sources(nwb_fbx_skin_tests NAMESPACE "NWB::Tests::FbxSkinCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/skin_tests.adhd")
 target_link_libraries(nwb_fbx_skin_tests PRIVATE nwb_fbx_skin_test_names nwb_assets_mesh nwb_mesh nwb_common nwb_alloc nwb_cpu_task nwb::ufbx)
 

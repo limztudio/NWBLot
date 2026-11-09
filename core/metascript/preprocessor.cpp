@@ -27,6 +27,17 @@ constexpr u32 s_MaxIncludeDepth = 64u;
     b8 inString = false;
     b8 inChar = false;
     for(usize i = 0u; i < line.size(); ++i){
+        if(!inString && !inChar && line[i] == '"'){
+            MStringView rawDelim;
+            if(Preprocessor::TryParseRawStringOpening(line, i, rawDelim)){
+                const usize bodyStart = i + 1u + rawDelim.size() + 1u;
+                usize afterClose = 0u;
+                if(!Preprocessor::FindRawStringClosing(line, bodyStart, rawDelim, afterClose))
+                    return line;
+                i = afterClose - 1u;
+                continue;
+            }
+        }
         if(!inChar && line[i] == '"' && !IsEscapedQuoteAt(line, i))
             inString = !inString;
         else if(!inString && line[i] == '\'' && !IsEscapedQuoteAt(line, i))
@@ -53,6 +64,17 @@ constexpr u32 s_MaxIncludeDepth = 64u;
 [[nodiscard]] b8 HasUnclosedFunctionMacroCall(const MStringView text, const Preprocessor::MacroMap& macros)noexcept{
     usize i = 0u;
     while(i < text.size()){
+        if(text[i] == '"'){
+            MStringView rawDelim;
+            if(Preprocessor::TryParseRawStringOpening(text, i, rawDelim)){
+                const usize bodyStart = i + 1u + rawDelim.size() + 1u;
+                usize afterClose = 0u;
+                if(!Preprocessor::FindRawStringClosing(text, bodyStart, rawDelim, afterClose))
+                    break;
+                i = afterClose;
+                continue;
+            }
+        }
         if(text[i] == '"' || text[i] == '\''){
             i = SkipQuotedLiteral(text, i);
             continue;
@@ -88,6 +110,19 @@ constexpr u32 s_MaxIncludeDepth = 64u;
                 if(ch == '\'' && scan > 0u && (IsAsciiDigit(text[scan - 1u]) || IsAsciiIdentifierChar(text[scan - 1u]))){
                     ++scan;
                     continue;
+                }
+                if(ch == '"'){
+                    MStringView rawDelim;
+                    if(Preprocessor::TryParseRawStringOpening(text, scan, rawDelim)){
+                        const usize bodyStart = scan + 1u + rawDelim.size() + 1u;
+                        usize afterClose = 0u;
+                        if(!Preprocessor::FindRawStringClosing(text, bodyStart, rawDelim, afterClose)){
+                            scan = text.size();
+                            break;
+                        }
+                        scan = afterClose;
+                        continue;
+                    }
                 }
                 if(ch == '"' || ch == '\''){
                     scan = SkipQuotedLiteral(text, scan);
@@ -148,6 +183,46 @@ usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index
         break;
     }
     return index;
+}
+
+b8 Preprocessor::TryParseRawStringOpening(const MStringView text, const usize quoteIndex, MStringView& outDelimiter)noexcept{
+    if(quoteIndex == 0u || quoteIndex >= text.size() || text[quoteIndex] != '"' || text[quoteIndex - 1u] != 'R')
+        return false;
+
+    usize prefixStart = quoteIndex - 1u;
+    while(prefixStart > 0u && IsAsciiIdentifierChar(text[prefixStart - 1u]))
+        --prefixStart;
+
+    const MStringView prefix = text.substr(prefixStart, (quoteIndex - 1u) - prefixStart);
+    if(!prefix.empty() && prefix != "L" && prefix != "u" && prefix != "U" && prefix != "u8")
+        return false;
+
+    const usize delimStart = quoteIndex + 1u;
+    usize cursor = delimStart;
+    while(cursor < text.size() && (cursor - delimStart) <= 16u){
+        const MChar c = text[cursor];
+        if(c == '('){
+            outDelimiter = text.substr(delimStart, cursor - delimStart);
+            return true;
+        }
+        if(c == ')' || c == '\\' || c == '"' || c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r' || c == '\n')
+            return false;
+        ++cursor;
+    }
+    return false;
+}
+
+b8 Preprocessor::FindRawStringClosing(const MStringView text, const usize searchStart, const MStringView delimiter, usize& outAfterCloseQuote)noexcept{
+    const usize closeSeqLen = delimiter.size() + 2u;
+    if(searchStart + closeSeqLen > text.size())
+        return false;
+    for(usize pos = searchStart; pos + closeSeqLen <= text.size(); ++pos){
+        if(text[pos] == ')' && text[pos + 1u + delimiter.size()] == '"' && text.substr(pos + 1u, delimiter.size()) == delimiter){
+            outAfterCloseQuote = pos + closeSeqLen;
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -211,10 +286,78 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
     condStack.reserve(8u);
 
     b8 inBlockComment = false;
+    b8 inRawString = false;
+    MString rawStringDelimiter(m_arena);
     b8 inNativeKeywordPendingBrace = false;
     u32 nativeBraceDepth = 0u;
     u32 currentLine = 1u;
     usize pos = 0u;
+
+    const auto updateLineScanState = [&](const MStringView lineToScan, const usize startOffset, const b8 updateNativeBraces){
+        for(usize scanIdx = startOffset; scanIdx < lineToScan.size();){
+            const MChar ch = lineToScan[scanIdx];
+            if(ch == '/' && scanIdx + 1u < lineToScan.size() && lineToScan[scanIdx + 1u] == '/')
+                break;
+            if(ch == '/' && scanIdx + 1u < lineToScan.size() && lineToScan[scanIdx + 1u] == '*'){
+                const usize closeComment = lineToScan.find("*/", scanIdx + 2u);
+                if(closeComment == MStringView::npos){
+                    inBlockComment = true;
+                    break;
+                }
+                scanIdx = closeComment + 2u;
+                continue;
+            }
+            if(ch == '\'' && scanIdx > startOffset && (IsAsciiDigit(lineToScan[scanIdx - 1u]) || IsAsciiIdentifierChar(lineToScan[scanIdx - 1u]))){
+                ++scanIdx;
+                continue;
+            }
+            if(ch == '"'){
+                MStringView rawDelim;
+                if(TryParseRawStringOpening(lineToScan, scanIdx, rawDelim)){
+                    const usize bodyStart = scanIdx + 1u + rawDelim.size() + 1u;
+                    usize afterClose = 0u;
+                    if(!FindRawStringClosing(lineToScan, bodyStart, rawDelim, afterClose)){
+                        inRawString = true;
+                        rawStringDelimiter.assign(rawDelim.data(), rawDelim.size());
+                        break;
+                    }
+                    scanIdx = afterClose;
+                    continue;
+                }
+            }
+            if(ch == '"' || ch == '\''){
+                scanIdx = SkipQuotedLiteral(lineToScan, scanIdx);
+                continue;
+            }
+            if(IsAsciiIdentifierStart(ch)){
+                const usize idStart = scanIdx;
+                while(scanIdx < lineToScan.size() && IsAsciiIdentifierChar(lineToScan[scanIdx]))
+                    ++scanIdx;
+                if(updateNativeBraces){
+                    const MStringView idText = lineToScan.substr(idStart, scanIdx - idStart);
+                    if(idText == "native" && nativeBraceDepth == 0u)
+                        inNativeKeywordPendingBrace = true;
+                }
+                continue;
+            }
+            if(updateNativeBraces){
+                if(ch == '{'){
+                    if(inNativeKeywordPendingBrace || nativeBraceDepth > 0u){
+                        ++nativeBraceDepth;
+                        inNativeKeywordPendingBrace = false;
+                    }
+                }
+                else if(ch == '}'){
+                    if(nativeBraceDepth > 0u)
+                        --nativeBraceDepth;
+                }
+                else if(ch == ';' && nativeBraceDepth == 0u){
+                    inNativeKeywordPendingBrace = false;
+                }
+            }
+            ++scanIdx;
+        }
+    };
 
     while(pos < source.size()){
         usize lineEnd = pos;
@@ -230,7 +373,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         u32 joinedLines = 0u;
 
         MString joinedBuffer(m_arena);
-        if(!inBlockComment && nativeBraceDepth == 0u){
+        if(!inBlockComment && !inRawString && nativeBraceDepth == 0u){
             b8 hasBackslashCont = !rawLine.empty() && rawLine.back() == '\\';
             const MStringView initialTrimmed = TrimView(rawLine);
             const b8 isDirectiveLine = !initialTrimmed.empty() && initialTrimmed[0] == '#';
@@ -278,7 +421,22 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
 
         MStringView effectiveLine = rawLine;
         MStringView commentPrefix;
-        if(inBlockComment){
+        if(inRawString){
+            usize afterClose = 0u;
+            if(!FindRawStringClosing(rawLine, 0u, MStringView(rawStringDelimiter.data(), rawStringDelimiter.size()), afterClose)){
+                if(isActive)
+                    outProcessed.append(rawLine.data(), rawLine.size());
+                outProcessed.push_back('\n');
+                pos = (lineEnd < source.size()) ? (lineEnd + 1u) : lineEnd;
+                ++currentLine;
+                continue;
+            }
+            commentPrefix = rawLine.substr(0u, afterClose);
+            effectiveLine = rawLine.substr(afterClose);
+            inRawString = false;
+            rawStringDelimiter.clear();
+        }
+        else if(inBlockComment){
             const usize closeIdx = rawLine.find("*/");
             if(closeIdx == MStringView::npos){
                 if(isActive)
@@ -304,8 +462,10 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
 
         if(!trimmed.empty() && trimmed[0] == '#'){
             if(nativeBraceDepth > 0u){
-                if(isActive)
+                if(isActive){
+                    updateLineScanState(rawLine, commentPrefix.size(), true);
                     outProcessed.append(rawLine.data(), rawLine.size());
+                }
                 outProcessed.push_back('\n');
             }
             else{
@@ -327,68 +487,13 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                 return false;
             expandedLine.append(expandedTail.data(), expandedTail.size());
 
-            for(usize scanIdx = commentPrefix.size(); scanIdx < expandedLine.size();){
-                const MChar ch = expandedLine[scanIdx];
-                if(ch == '/' && scanIdx + 1u < expandedLine.size() && expandedLine[scanIdx + 1u] == '/')
-                    break;
-                if(ch == '/' && scanIdx + 1u < expandedLine.size() && expandedLine[scanIdx + 1u] == '*'){
-                    const usize closeComment = MStringView(expandedLine.data(), expandedLine.size()).find("*/", scanIdx + 2u);
-                    if(closeComment == MStringView::npos){
-                        inBlockComment = true;
-                        break;
-                    }
-                    scanIdx = closeComment + 2u;
-                    continue;
-                }
-                if(ch == '\'' && scanIdx > commentPrefix.size() && (IsAsciiDigit(expandedLine[scanIdx - 1u]) || IsAsciiIdentifierChar(expandedLine[scanIdx - 1u]))){
-                    ++scanIdx;
-                    continue;
-                }
-                if(ch == '"' || ch == '\''){
-                    scanIdx = SkipQuotedLiteral(MStringView(expandedLine.data(), expandedLine.size()), scanIdx);
-                    continue;
-                }
-                if(IsAsciiIdentifierStart(ch)){
-                    const usize idStart = scanIdx;
-                    while(scanIdx < expandedLine.size() && IsAsciiIdentifierChar(expandedLine[scanIdx]))
-                        ++scanIdx;
-                    const MStringView idText(expandedLine.data() + idStart, scanIdx - idStart);
-                    if(idText == "native" && nativeBraceDepth == 0u)
-                        inNativeKeywordPendingBrace = true;
-                    continue;
-                }
-                if(ch == '{'){
-                    if(inNativeKeywordPendingBrace || nativeBraceDepth > 0u){
-                        ++nativeBraceDepth;
-                        inNativeKeywordPendingBrace = false;
-                    }
-                }
-                else if(ch == '}'){
-                    if(nativeBraceDepth > 0u)
-                        --nativeBraceDepth;
-                }
-                else if(ch == ';' && nativeBraceDepth == 0u){
-                    inNativeKeywordPendingBrace = false;
-                }
-                ++scanIdx;
-            }
+            updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size(), true);
 
             outProcessed.append(expandedLine.data(), expandedLine.size());
             outProcessed.push_back('\n');
         }
         else{
-            for(usize scanIdx = 0u; scanIdx + 1u < effectiveLine.size(); ++scanIdx){
-                if(effectiveLine[scanIdx] == '/' && effectiveLine[scanIdx + 1u] == '/')
-                    break;
-                if(effectiveLine[scanIdx] == '/' && effectiveLine[scanIdx + 1u] == '*'){
-                    const usize closeComment = effectiveLine.find("*/", scanIdx + 2u);
-                    if(closeComment == MStringView::npos){
-                        inBlockComment = true;
-                        break;
-                    }
-                    scanIdx = closeComment + 1u;
-                }
-            }
+            updateLineScanState(effectiveLine, 0u, false);
             outProcessed.push_back('\n');
         }
 

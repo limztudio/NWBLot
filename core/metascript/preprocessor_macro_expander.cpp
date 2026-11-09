@@ -51,6 +51,20 @@ b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line,
                 next.push_back(current[i++]);
                 continue;
             }
+            if(current[i] == '"'){
+                MStringView rawDelim;
+                if(Preprocessor::TryParseRawStringOpening(currentView, i, rawDelim)){
+                    const usize bodyStart = i + 1u + rawDelim.size() + 1u;
+                    usize afterClose = 0u;
+                    if(!Preprocessor::FindRawStringClosing(currentView, bodyStart, rawDelim, afterClose)){
+                        next.append(current.data() + i, current.size() - i);
+                        break;
+                    }
+                    next.append(current.data() + i, afterClose - i);
+                    i = afterClose;
+                    continue;
+                }
+            }
             if(current[i] == '"' || current[i] == '\''){
                 i = AppendQuotedLiteral(currentView, i, next);
                 continue;
@@ -138,6 +152,19 @@ b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line,
                     if(ch == '\'' && argScan > lookahead + 1u && (IsAsciiDigit(current[argScan - 1u]) || IsAsciiIdentifierChar(current[argScan - 1u]))){
                         ++argScan;
                         continue;
+                    }
+                    if(ch == '"'){
+                        MStringView rawDelim;
+                        if(Preprocessor::TryParseRawStringOpening(currentView, argScan, rawDelim)){
+                            const usize bodyStart = argScan + 1u + rawDelim.size() + 1u;
+                            usize afterClose = 0u;
+                            if(!Preprocessor::FindRawStringClosing(currentView, bodyStart, rawDelim, afterClose)){
+                                argScan = current.size();
+                                break;
+                            }
+                            argScan = afterClose;
+                            continue;
+                        }
                     }
                     if(ch == '"' || ch == '\''){
                         argScan = SkipQuotedLiteral(currentView, argScan);

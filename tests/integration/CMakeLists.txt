@@ -5,6 +5,10 @@ if(TARGET nwb_assets_volume_cook)
     add_subdirectory(assets_font_atlas)
 endif()
 
+nwb_declare_static_library(nwb_crash_test_paths)
+nwb_target_adhd_sources(nwb_crash_test_paths NAMESPACE "NWB::Tests::CrashTestPaths" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash/crash_test_paths.adhd")
+target_link_libraries(nwb_crash_test_paths PUBLIC nwb_crash_package nwb_common nwb_alloc nwb::gtest)
+
 if(TARGET nwb_crash)
     add_subdirectory(crash)
 endif()

@@ -146,6 +146,20 @@ TEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes){
     CompileResult result(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_AdhdSource, "impl/math/compute.adhd", &resolver, arena.arena, result));
     EXPECT_EQ(resolver.resolveCallCount, 1u);
+
+    static constexpr MStringView s_NativeRawStringSource =
+        "native{\r\n"
+        "static constexpr const char* s_Shader = R\"SLANG(struct Out{\r\n"
+        "#include \"inner.slangi\"\r\n"
+        "#endif\r\n"
+        "};\r\n"
+        "};\r\n"
+        ")SLANG\";\r\n"
+        "#include <core/global.h>\r\n"
+        "}\r\n"
+        "u32 Ok(in u32 x){ return x; }\r\n";
+    CompileResult rawStringResult(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_NativeRawStringSource, "impl/math/raw_string.adhd", &resolver, arena.arena, rawStringResult));
 }
 
 TEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize){

@@ -4,14 +4,7 @@ nwb_target_adhd_sources(nwb_logserver_crash_test_names NAMESPACE "NWB::Tests::Lo
 nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Log" SOURCES "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.adhd" "${PROJECT_SOURCE_DIR}/logger/server/crash_retention.adhd" "${PROJECT_SOURCE_DIR}/logger/server/arena_names.adhd")
 target_sources(nwb_logserver_crash_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_report_composer_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
-    "${CMAKE_CURRENT_LIST_DIR}/logclient_shutdown_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/logger_protocol_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/telemetry_publication_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/logger_producer_contract_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/suite.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_archive_extractor.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_manifest_validator.cpp"
@@ -42,11 +35,8 @@ if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/logger/server/clipboard_text.cpp"
         "${PROJECT_SOURCE_DIR}/logger/server/log_row_painter.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/log_row_painter_tests.cpp"
         "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_win32.cpp"
         "${PROJECT_SOURCE_DIR}/logger/server/minidump_image.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/minidump_boundary_tests.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
     )
     target_link_libraries(nwb_logserver_crash_tests PRIVATE dbghelp)
 endif()

@@ -38,7 +38,7 @@ namespace __hidden_transparent_multi_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr TStringView s_TransparentProjectName = FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl");
+constexpr TStringView s_TransparentProjectName = FOUNDATION_TEXT("TransparentMultiSmokeProject");
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 constexpr TStringView s_CausticProjectName = FOUNDATION_TEXT("CausticSphereSmokeProject");
 constexpr AStringView s_CausticTimingEnvironment = "NWB_CAUSTIC_SMOKE_TIMING";
@@ -217,7 +217,7 @@ public:
         removeFrameLaggedAsyncLightingUnfocusedPass();
 #endif
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProject: shutdown"));
     }
 
     virtual b8 onUpdate(const f32 delta)override{
@@ -232,7 +232,7 @@ public:
             if(!m_rendererBaselineCapturePaused){
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }

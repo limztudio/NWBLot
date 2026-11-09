@@ -350,7 +350,7 @@ b8 TransparentMultiScene::Populate(const f32 cameraDistance, [[maybe_unused]] co
     const b8 csgEntitiesValid = true;
 #endif
     transforms.update(yaw, world);
-    FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl failed to create all scene entities"));
+    FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, FOUNDATION_TEXT("TransparentMultiSmokeProject failed to create all scene entities"));
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     if(causticTiming){
@@ -359,7 +359,7 @@ b8 TransparentMultiScene::Populate(const f32 cameraDistance, [[maybe_unused]] co
         NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
     }
 #endif
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: shared transparent material with three mutable instance overrides created"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
     return true;
 }
 
@@ -382,9 +382,9 @@ void TransparentMultiRendererSetup::Configure(Core::ECS::World& world, ProjectRu
 #endif
     const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
     if(rayQueryHardwareAvailable)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: natural hardware shadow route selected on RayQuery-capable hardware"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware"));
     else
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     auto& rendererSystem = AddSmokeRenderSystems(world, context);

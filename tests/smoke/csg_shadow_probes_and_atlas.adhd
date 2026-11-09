@@ -561,7 +561,7 @@ EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const S
         transparent && m_mode.openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_CsgShadowMaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
         center, extent, m_world
     );
-    FOUNDATION_FATAL_ASSERT_MSG(entity.valid(), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: box creation failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(entity.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: box creation failed"));
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
     if(transparent)
         m_world.entity(entity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
@@ -572,12 +572,12 @@ EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const S
         FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
             NWB::Impl::PackMaterialInstanceValue(packedIor)
-        ), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open-sheet IOR override failed")
+        ), FOUNDATION_TEXT("CsgShadowSmokeProject: open-sheet IOR override failed")
         );
         FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
             NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-        ), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open-sheet transmission override failed")
+        ), FOUNDATION_TEXT("CsgShadowSmokeProject: open-sheet transmission override failed")
         );
     }
     return entity;
@@ -711,7 +711,7 @@ void CsgShadowAtlas::createAnalyticAtlas(){
     // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
     plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
     addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
 }
 
 b8 CsgShadowAtlas::createOpenAtlas(){
@@ -756,7 +756,7 @@ b8 CsgShadowAtlas::createOpenAtlas(){
         }
     }
     const u32 firstCount = m_mode.openCase == OpenCase::Boundary64 ? 64u : m_mode.openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProject: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
         , ConvertString(m_mode.openCaseName())
         , firstCount
         , clipped ? 5u : 6u

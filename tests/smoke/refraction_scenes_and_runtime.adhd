@@ -64,7 +64,7 @@ private:
 b8 RefractionQueryDiagnostics::configure(Core::Alloc::ScratchArena& arena, const b8 densityEnabled, const b8 lifecycleEnabled, const b8 timingEnabled){
     const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
     if(!configured || (*configured && **configured != "0" && **configured != "1")){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionSmokeProjectImpl: diagnostics must be absent, 0, or 1"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionSmokeProject: diagnostics must be absent, 0, or 1"));
         return false;
     }
     m_enabled = *configured && **configured == "1";
@@ -74,7 +74,7 @@ b8 RefractionQueryDiagnostics::configure(Core::Alloc::ScratchArena& arena, const
     const auto readback = ReadSmokeEnvironmentText(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
     if(!freeze || !hardware || *freeze || !readback || !densityEnabled || lifecycleEnabled || timingEnabled || (*hardware && **hardware != "1")){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionSmokeProjectImpl: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionSmokeProject: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
         return false;
     }
     auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());

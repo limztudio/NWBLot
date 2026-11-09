@@ -109,19 +109,19 @@ b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, cons
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
     if(AStringView(value->data(), value->size()) != "waist_bands"){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: CSG profile must be none or waist_bands"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
         return false;
     }
     const usize ownerCount = owners.size();
     if(ownerCount != __hidden_stress_csg_scene::s_BodyCount || opaqueOnly){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: waist_bands requires twenty bodies with ten per material class"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class"));
         return false;
     }
     Array<Core::ECS::EntityID, __hidden_stress_csg_scene::s_BodyCount> meshes = {};
     for(usize index = 0u; index < ownerCount; ++index){
         meshes[index] = FindSpawnedModelObject(owners[index], __hidden_stress_csg_scene::s_SmokeNameMesh, Impl::ModelObjectKind::SkinnedMesh, world);
         if(!meshes[index].valid()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: CSG receiver mesh child missing for body {}"), index);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
             return false;
         }
     }
@@ -142,7 +142,7 @@ b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, cons
     m_enabled = true;
     if(!update(0.0f, world))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}") FOUNDATION_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}") FOUNDATION_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
         , ownerCount
         , ownerCount / m_cutters.size()
         , ownerCount / m_cutters.size()
@@ -162,7 +162,7 @@ b8 StressCsgScene::update(const f32 yaw, Core::ECS::World& world){
     if(!m_enabled)
         return true;
     if(!IsFinite(yaw)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: nonfinite CSG cutter yaw"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: nonfinite CSG cutter yaw"));
         return false;
     }
     const SIMDVectorSingle phases = VectorAdd(VectorReplicate(yaw), VectorSet(0.0f, s_PI, 0.0f, 0.0f));
@@ -170,7 +170,7 @@ b8 StressCsgScene::update(const f32 yaw, Core::ECS::World& world){
     for(usize row = 0u; row < m_cutters.size(); ++row){
         auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(m_cutters[row]);
         if(!cutter){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: CSG cutter disappeared"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
             return false;
         }
         const f32 height = row == 0u ? VectorGetX(heights) : VectorGetY(heights);
@@ -332,7 +332,7 @@ b8 StressCrowdScene::initialize([[maybe_unused]] ProjectRuntimeContext& context,
     const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(cameraHeight, cameraDistance, cameraPitch, m_world);
     const auto* const camera = m_world.tryGetComponent<NWB::Impl::Scene::CameraComponent>(activeCamera);
     if(!camera){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: workload camera is unavailable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: workload camera is unavailable"));
         return false;
     }
 
@@ -364,7 +364,7 @@ b8 StressCrowdScene::initialize([[maybe_unused]] ProjectRuntimeContext& context,
         const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_characterOwners[index], Name(NWB::Tests::Smoke::s_SmokeNameMesh), NWB::Impl::ModelObjectKind::SkinnedMesh, m_world);
         auto* const renderer = m_world.tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: closed refractor renderer is unavailable (index {})"), index);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: closed refractor renderer is unavailable (index {})"), index);
             return false;
         }
         renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
@@ -379,31 +379,31 @@ b8 StressCrowdScene::initialize([[maybe_unused]] ProjectRuntimeContext& context,
     FOUNDATION_FATAL_ASSERT_MSG(
         activeCamera.valid() && directionalLight.valid() && pointLight.valid() && m_groundEntity.valid() && allCharactersValid
         && m_wallPosX.valid() && m_wallNegX.valid() && m_wallPosZ.valid() && m_ceiling.valid(),
-        FOUNDATION_TEXT("StressTestSmokeProjectImpl failed to create all scene entities")
+        FOUNDATION_TEXT("StressTestSmokeProject failed to create all scene entities")
     );
 
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
     const b8 rayQueryCapable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
     if(!rayQueryCapable)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"));
     else{
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: RayQuery-capable hardware shadow route available"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available"));
         if(m_opaqueOnly)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: enabled natural opaque hardware-shadow baseline"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
         else
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: enabled healthy hardware transparent-shadow benchmark"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"));
     }
 #endif
 
     const u32 transparentCharacterCount = m_opaqueOnly ? 0u : m_charactersPerClass;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
         , m_characterOwners.size()
         , transparentCharacterCount
         , characterCount - transparentCharacterCount
     );
     const TStringView layout = comparison ? FOUNDATION_TEXT("zigzag_v1") : FOUNDATION_TEXT("two_rows_v1");
     const SIMDVectorSingle rowSpacing = VectorMultiply(VectorReplicate(s_CharacterSpacingX), VectorSet(comparison ? 2.0f : 1.0f, comparison ? 0.5f : 0.25f, 0.0f, 0.0f));
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: workload characters_per_class={} total={} transparent={} opaque={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: workload characters_per_class={} total={} transparent={} opaque={}")
         FOUNDATION_TEXT(" layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1")
         FOUNDATION_TEXT(" camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}")
         , m_charactersPerClass
@@ -460,7 +460,7 @@ NWB::Core::ECS::EntityID StressCrowdScene::createCharacter(const u32 index){
     );
     const NWB::Core::ECS::EntityID entity = modelResult.entity;
     if(!modelResult.tintApplied)
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: failed to set character tint (index {})"), index);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);
 
     return entity;
 }

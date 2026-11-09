@@ -3,19 +3,22 @@
 
 
 #include "renderer_graph_runtime_label.h"
-
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/frame_push_constants.adhd.h>
-
 #include <core/graphics/backend_selection.h>
-
 #include <global/simd/vector_arithmetic.h>
+#include "renderer_device_diagnostics_label.h"
+#include "frame_graph_runtime_statistics.h"
+#include <core/task/gpu/telemetry_queue_class.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_renderer_frame_pipeline_telemetry{
@@ -348,6 +351,307 @@ b8 RendererGraphRuntimeLabel::Append(
         label += s_RendererFrameTitle;
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererDeviceDiagnosticsLabel::Append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label){
+    Core::Device& device = graphics.getDevice();
+    const Core::GpuTimingRecorderStatistics gpuTimingStatistics = graphics.gpuTiming().statistics(device);
+    StringAppendFormat(
+        label,
+        "\nGPU timing (device-wide cumulative since query reset): generation={} query collection={} timing sink={} feedback={} active={} comparable timestamps={} prepared scopes={} requested/materialized queries={}/{} materialization failures={}"
+        "\nGPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={} discarded before acceptance={} quarantined={} begin failures={} "
+        "skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}",
+        gpuTimingStatistics.deviceGeneration,
+        gpuTimingStatistics.queryCollectionEnabled,
+        gpuTimingStatistics.timingSinkEnabled,
+        gpuTimingStatistics.feedbackCollectionEnabled,
+        gpuTimingStatistics.collectionActive,
+        gpuTimingStatistics.comparableTimestampsSupported,
+        gpuTimingStatistics.preparedScopeCount,
+        gpuTimingStatistics.requestedQueryCount,
+        gpuTimingStatistics.materializedQueryCount,
+        gpuTimingStatistics.queryMaterializationFailureCount,
+        gpuTimingStatistics.scopeAttemptCount,
+        gpuTimingStatistics.recordedScopeCount,
+        gpuTimingStatistics.acceptedScopeCount,
+        gpuTimingStatistics.publishedSampleCount,
+        gpuTimingStatistics.unpublishedSampleCount,
+        gpuTimingStatistics.discardedScopeCount,
+        gpuTimingStatistics.quarantinedScopeCount,
+        gpuTimingStatistics.beginFailureCount,
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::CollectionInactive],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ScopeNotPrepared],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueryCapacityUnavailable],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::RecordingPositionUnavailable]
+    );
+
+    const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology = device.getPhysicalQueueTopology();
+    for(usize queueIndex = 0u; queueIndex < gpuTimingQueueTopology.queueCount; ++queueIndex){
+        const Core::GpuPhysicalQueueInfo& queueInfo = gpuTimingQueueTopology.queues[queueIndex];
+        StringAppendFormat(
+            label,
+            "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
+            queueInfo.id.index,
+            queueInfo.id.deviceGeneration,
+            ResolveTelemetryPhysicalQueueClassLabel(static_cast<u8>(queueInfo.queueClass)),
+            queueInfo.familyIndex,
+            queueInfo.queueIndex,
+            static_cast<u32>(queueInfo.capabilities),
+            queueInfo.timestampValidBits,
+            queueInfo.timestampValidBits != 0u,
+            device.supportsComparableGpuTimestamps(queueInfo.id)
+        );
+    }
+
+    const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics = device.getDescriptorHeap().lifecycleStatistics();
+    StringAppendFormat(
+        label,
+        "\nDescriptor heap lifecycle (device-wide current): initialized={} "
+        "resource live/capacity={}/{} sampler live/capacity={}/{} "
+        "acceleration structure live/capacity={}/{} pending retired slots={} "
+        "accepted heap uses={} unsubmitted heap uses={} abandoned heap uses={}",
+        descriptorHeapLifecycleStatistics.initialized,
+        descriptorHeapLifecycleStatistics.resourceLiveSlotCount,
+        descriptorHeapLifecycleStatistics.resourceCapacity,
+        descriptorHeapLifecycleStatistics.samplerLiveSlotCount,
+        descriptorHeapLifecycleStatistics.samplerCapacity,
+        descriptorHeapLifecycleStatistics.accelStructLiveSlotCount,
+        descriptorHeapLifecycleStatistics.accelStructCapacity,
+        descriptorHeapLifecycleStatistics.pendingRetiredSlotCount,
+        descriptorHeapLifecycleStatistics.acceptedHeapUseCount,
+        descriptorHeapLifecycleStatistics.unsubmittedHeapUseCount,
+        descriptorHeapLifecycleStatistics.abandonedHeapUseCount
+    );
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_frame_graph_runtime_statistics{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Result, typename Statistics>
+[[nodiscard]] static Result TranslateSubmissionStatistics(const Statistics& submissionStatistics)noexcept{
+    return {
+        .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
+        .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
+        .rejectedPacketCount = static_cast<u64>(submissionStatistics.rejectedPacketCount),
+        .rejectedTaskCount = static_cast<u64>(submissionStatistics.rejectedTaskCount),
+        .nativeSubmissionCount = static_cast<u64>(submissionStatistics.nativeSubmissionCount),
+        .rejectedSubmissionCount = static_cast<u64>(submissionStatistics.rejectedSubmissionCount),
+        .nativeCommandListCount = static_cast<u64>(submissionStatistics.nativeCommandListCount),
+        .plannedWaitTokenCount = static_cast<u64>(submissionStatistics.plannedWaitTokenCount),
+        .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
+        .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
+        .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
+        .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
+        .acceptedFrontierSubmissionCount = static_cast<u64>(submissionStatistics.acceptedFrontierSubmissionCount),
+        .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
+        .submissionSeconds = submissionStatistics.submissionSeconds,
+    };
+}
+
+
+template<typename Result, typename Statistics>
+[[nodiscard]] static Result TranslateRecordingStatistics(const Statistics& recordingStatistics)noexcept{
+    Result result{
+        .packetCount = static_cast<u64>(recordingStatistics.packetCount),
+        .taskCount = static_cast<u64>(recordingStatistics.taskCount),
+        .commandListCount = static_cast<u64>(recordingStatistics.commandListCount),
+        .barrierCount = static_cast<u64>(recordingStatistics.barrierCount),
+        .workerRoutedPacketCount = static_cast<u64>(recordingStatistics.workerRoutedPacketCount),
+        .parallelPacketCount = static_cast<u64>(recordingStatistics.parallelPacketCount),
+        .commandListAcquisitionSeconds = recordingStatistics.commandListAcquisitionSeconds,
+        .graphBarrierRecordingSeconds = recordingStatistics.graphBarrierRecordingSeconds,
+        .taskRecordSeconds = recordingStatistics.taskRecordSeconds,
+        .recordingSeconds = recordingStatistics.recordingSeconds,
+    };
+    if constexpr(requires{ result.recordingElapsedSeconds; }){
+        result.recordingElapsedSeconds = recordingStatistics.recordingElapsedSeconds;
+        result.readyFrontierElapsedSeconds = recordingStatistics.readyFrontierElapsedSeconds;
+        result.readyFrontierWorkerBusySeconds = recordingStatistics.readyFrontierWorkerBusySeconds;
+        result.readyFrontierWorkerCapacitySeconds = recordingStatistics.readyFrontierWorkerCapacitySeconds;
+    }
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics(const Core::GpuTaskGraphRuntimeStatistics& statistics, const u64 captureFrameIndex, const u64 sourceFrameIndex)noexcept{
+    if(captureFrameIndex != sourceFrameIndex || !statistics.valid())
+        return {};
+
+    const Core::GpuTaskGraphCompileStatistics& compileStatistics = statistics.compile;
+    const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = statistics.recording;
+    const Core::GpuTaskGraphSubmissionStatistics& submissionStatistics = statistics.submission;
+    const Core::Telemetry::FrameGraphRuntimeStatistics result{
+        .graphGeneration = compileStatistics.graphGeneration,
+        .planGeneration = compileStatistics.planGeneration,
+        .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
+        .compile = {
+            .taskCount = static_cast<u64>(compileStatistics.taskCount),
+            .resourceCount = static_cast<u64>(compileStatistics.resourceCount),
+            .resourceVersionCount = static_cast<u64>(compileStatistics.resourceVersionCount),
+            .resourceVersionEdgeCount = static_cast<u64>(compileStatistics.resourceVersionEdgeCount),
+            .resourceUseCount = static_cast<u64>(compileStatistics.resourceUseCount),
+            .explicitDependencyCount = static_cast<u64>(compileStatistics.explicitDependencyCount),
+            .inferredDependencyCount = static_cast<u64>(compileStatistics.inferredDependencyCount),
+            .packetCount = static_cast<u64>(compileStatistics.packetCount),
+            .packetDependencyCount = static_cast<u64>(compileStatistics.packetDependencyCount),
+            .mergedTaskCount = static_cast<u64>(compileStatistics.mergedTaskCount),
+            .transitionBarrierCount = static_cast<u64>(compileStatistics.transitionBarrierCount),
+            .uavBarrierCount = static_cast<u64>(compileStatistics.uavBarrierCount),
+            .ownershipReleaseBarrierCount = static_cast<u64>(compileStatistics.ownershipReleaseBarrierCount),
+            .ownershipAcquireBarrierCount = static_cast<u64>(compileStatistics.ownershipAcquireBarrierCount),
+            .stateExportBarrierCount = static_cast<u64>(compileStatistics.stateExportBarrierCount),
+            .logicalOwnershipTransferCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCount),
+            .logicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferSignatureCount),
+            .repeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.repeatedOwnershipTransferSignatureCount),
+            .concurrentSharingCouldAvoidTransferCount = static_cast<u64>(compileStatistics.concurrentSharingCouldAvoidTransferCount),
+            .concurrentSharingAdviceResourceCount = static_cast<u64>(compileStatistics.concurrentSharingAdviceResourceCount),
+            .logicalOwnershipTransferInternalCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal]),
+            .logicalOwnershipTransferExternalImportCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalImport]),
+            .logicalOwnershipTransferExternalExportCount = static_cast<u64>(compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalExport]),
+            .resourceSetCount = static_cast<u64>(compileStatistics.resourceSetCount),
+            .resourceSetMemberCount = static_cast<u64>(compileStatistics.resourceSetMemberCount),
+            .directResourceUseCount = static_cast<u64>(compileStatistics.directResourceUseCount),
+            .declaredResourceSetUseCount = static_cast<u64>(compileStatistics.declaredResourceSetUseCount),
+            .expandedResourceSetMemberUseCount = static_cast<u64>(compileStatistics.expandedResourceSetMemberUseCount),
+            .payloadObjectCount = static_cast<u64>(compileStatistics.payloadObjectCount),
+            .payloadObjectBytes = static_cast<u64>(compileStatistics.payloadObjectBytes),
+            .uploadBlobCount = static_cast<u64>(compileStatistics.uploadBlobCount),
+            .uploadBlobBytes = static_cast<u64>(compileStatistics.uploadBlobBytes),
+            .declarationSeconds = compileStatistics.declarationSeconds,
+            .analysisSeconds = compileStatistics.analysisSeconds,
+            .validationSeconds = compileStatistics.validationSeconds,
+            .dependencyAnalysisSeconds = compileStatistics.dependencyAnalysisSeconds,
+            .hazardAnalysisSeconds = compileStatistics.hazardAnalysisSeconds,
+            .topologicalOrderSeconds = compileStatistics.topologicalOrderSeconds,
+            .queueAssignmentSeconds = compileStatistics.queueAssignmentSeconds,
+            .planningSeconds = compileStatistics.planningSeconds,
+            .packetizationSeconds = compileStatistics.packetizationSeconds,
+            .resourceStatePlanningSeconds = compileStatistics.resourceStatePlanningSeconds,
+            .packetDependencyPlanningSeconds = compileStatistics.packetDependencyPlanningSeconds,
+            .totalSeconds = compileStatistics.totalSeconds,
+        },
+        .recording = __hidden_frame_graph_runtime_statistics::TranslateRecordingStatistics<Core::Telemetry::FrameGraphRecordingRuntimeStatistics>(recordingStatistics),
+        .submission = __hidden_frame_graph_runtime_statistics::TranslateSubmissionStatistics<Core::Telemetry::FrameGraphSubmissionRuntimeStatistics>(submissionStatistics),
+        .deviceGeneration = compileStatistics.deviceGeneration,
+        .present = true,
+    };
+    if(!Core::Telemetry::IsValidFrameGraphRuntimeStatistics(result))
+        return {};
+    return result;
+}
+
+Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(const Core::GpuTaskGraphPacketSubmissionStatistics& statistics, const u32 ownerNodeIndex)noexcept{
+    if(!statistics.valid() || ownerNodeIndex == Limit<u32>::s_Max)
+        return {};
+
+    const auto queueClass = Core::GpuTaskTelemetryDetail::TranslateQueueClass(statistics.queueClass);
+    if(!queueClass)
+        return {};
+
+    const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord result{
+        .packetGeneration = statistics.packet.generation,
+        .taskCount = static_cast<u64>(statistics.taskCount),
+        .commandListCount = static_cast<u64>(statistics.nativeCommandListCount),
+        .plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),
+        .sameQueueWaitElisionCount = static_cast<u64>(statistics.sameQueueWaitElisionCount),
+        .timelineWaitCount = static_cast<u64>(statistics.timelineWaitCount),
+        .mergedTimelineWaitCount = static_cast<u64>(statistics.mergedTimelineWaitCount),
+        .inheritedTimelineWaitElisionCount = static_cast<u64>(statistics.inheritedTimelineWaitElisionCount),
+        .submissionSeconds = statistics.submissionSeconds,
+        .queue = { .index = statistics.queue.index, .deviceGeneration = statistics.queue.deviceGeneration, },
+        .ownerNodeIndex = ownerNodeIndex,
+        .packetIndex = statistics.packet.index,
+        .queueClass = *queueClass,
+        .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
+        .recoverySubmission = statistics.isRecoverySubmission,
+    };
+    if(!Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(result))
+        return {};
+    return result;
+}
+
+Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+    const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,
+    const Core::GpuTaskGraphPhysicalQueueRecordingStatistics& recordingStatistics,
+    const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics& submissionStatistics
+)noexcept{
+    if(
+        !compileStatistics.valid()
+        || !recordingStatistics.valid()
+        || !submissionStatistics.valid()
+        || compileStatistics.graphGeneration != recordingStatistics.graphGeneration
+        || compileStatistics.graphGeneration != submissionStatistics.graphGeneration
+        || compileStatistics.planGeneration != recordingStatistics.planGeneration
+        || compileStatistics.planGeneration != submissionStatistics.planGeneration
+        || recordingStatistics.recordingAttemptGeneration != submissionStatistics.recordingAttemptGeneration
+        || compileStatistics.deviceGeneration != recordingStatistics.deviceGeneration
+        || compileStatistics.deviceGeneration != submissionStatistics.deviceGeneration
+        || compileStatistics.queue != recordingStatistics.queue
+        || compileStatistics.queue != submissionStatistics.queue
+        || compileStatistics.queueClass != recordingStatistics.queueClass
+        || compileStatistics.queueClass != submissionStatistics.queueClass
+    )
+        return {};
+
+    const auto queueClass = Core::GpuTaskTelemetryDetail::TranslateQueueClass(compileStatistics.queueClass);
+    if(!queueClass)
+        return {};
+
+    const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics result{
+        .graphGeneration = compileStatistics.graphGeneration,
+        .planGeneration = compileStatistics.planGeneration,
+        .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
+        .queue = { .index = compileStatistics.queue.index, .deviceGeneration = compileStatistics.queue.deviceGeneration, },
+        .deviceGeneration = compileStatistics.deviceGeneration,
+        .queueClass = *queueClass,
+        .compile = {
+            .taskCount = static_cast<u64>(compileStatistics.taskCount),
+            .packetCount = static_cast<u64>(compileStatistics.packetCount),
+            .mergedTaskCount = static_cast<u64>(compileStatistics.mergedTaskCount),
+            .prologueBarrierCount = static_cast<u64>(compileStatistics.prologueBarrierCount),
+            .epilogueBarrierCount = static_cast<u64>(compileStatistics.epilogueBarrierCount),
+            .ownershipReleaseBarrierCount = static_cast<u64>(compileStatistics.ownershipReleaseBarrierCount),
+            .ownershipAcquireBarrierCount = static_cast<u64>(compileStatistics.ownershipAcquireBarrierCount),
+            .incomingLogicalOwnershipTransferCount = static_cast<u64>(compileStatistics.incomingLogicalOwnershipTransferCount),
+            .outgoingLogicalOwnershipTransferCount = static_cast<u64>(compileStatistics.outgoingLogicalOwnershipTransferCount),
+            .incomingLogicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.incomingLogicalOwnershipTransferSignatureCount),
+            .outgoingLogicalOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.outgoingLogicalOwnershipTransferSignatureCount),
+            .incomingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.incomingRepeatedOwnershipTransferSignatureCount),
+            .outgoingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(compileStatistics.outgoingRepeatedOwnershipTransferSignatureCount),
+            .concurrentSharingAdviceResourceCount = static_cast<u64>(compileStatistics.concurrentSharingAdviceResourceCount),
+        },
+        .recording = __hidden_frame_graph_runtime_statistics::TranslateRecordingStatistics<Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics>(recordingStatistics),
+        .submission = __hidden_frame_graph_runtime_statistics::TranslateSubmissionStatistics<Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics>(submissionStatistics),
+    };
+    if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(result))
+        return {};
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

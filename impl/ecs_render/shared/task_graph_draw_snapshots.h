@@ -8,6 +8,8 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +43,14 @@ public:
 
 
 public:
-    void captureCsgFrameData(const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount);
+    inline void captureCsgFrameData(const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+        AssignVector(csgReceiverRanges, csgFrameData.receiverRanges);
+        AssignVector(csgCutters, csgFrameData.cutters);
+        csgWorkRegion = csgFrameData.workRegion;
+        instanceCount = inInstanceCount;
+        materialTypedByteCount = inMaterialTypedByteCount;
+        captured = true;
+    }
 
     [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
         return { csgReceiverRanges, csgCutters, csgWorkRegion };
@@ -65,7 +74,12 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount);
+    inline void capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
+        receiverSurfaceMeshDrawItems.assign(receiverSurfaceDrawItems.meshDrawItems.begin(), receiverSurfaceDrawItems.meshDrawItems.end());
+        receiverSurfaceIndexedDrawItems.assign(receiverSurfaceDrawItems.indexedDrawItems.begin(), receiverSurfaceDrawItems.indexedDrawItems.end());
+        receiverSurfaceComputeDrawItems.assign(receiverSurfaceDrawItems.computeDrawItems.begin(), receiverSurfaceDrawItems.computeDrawItems.end());
+        captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    }
 
     [[nodiscard]] MaterialPassDrawItemsView receiverSurfaceDrawItemsView()const noexcept{
         return { receiverSurfaceMeshDrawItems, receiverSurfaceIndexedDrawItems, receiverSurfaceComputeDrawItems };
@@ -95,7 +109,15 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount);
+    inline void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
+        regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
+        regularIndexedDrawItems.assign(drawItems.regular.indexedDrawItems.begin(), drawItems.regular.indexedDrawItems.end());
+        regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
+        csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
+        csgIndexedDrawItems.assign(drawItems.csg.indexedDrawItems.begin(), drawItems.csg.indexedDrawItems.end());
+        csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
+        captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    }
 
     [[nodiscard]] MaterialPassDrawItemsView regularView()const noexcept{
         return { regularMeshDrawItems, regularIndexedDrawItems, regularComputeDrawItems };
@@ -127,7 +149,12 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount);
+    inline void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
+        TransparentMaterialPassGraphSnapshot::capture(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+        csgReceiverSurfaceMeshDrawItems.assign(drawItems.csgReceiverSurface.meshDrawItems.begin(), drawItems.csgReceiverSurface.meshDrawItems.end());
+        csgReceiverSurfaceIndexedDrawItems.assign(drawItems.csgReceiverSurface.indexedDrawItems.begin(), drawItems.csgReceiverSurface.indexedDrawItems.end());
+        csgReceiverSurfaceComputeDrawItems.assign(drawItems.csgReceiverSurface.computeDrawItems.begin(), drawItems.csgReceiverSurface.computeDrawItems.end());
+    }
 
     [[nodiscard]] MaterialPassDrawItemsView csgReceiverSurfaceView()const noexcept{
         return { csgReceiverSurfaceMeshDrawItems, csgReceiverSurfaceIndexedDrawItems, csgReceiverSurfaceComputeDrawItems };
@@ -152,4 +179,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

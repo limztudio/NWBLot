@@ -77,9 +77,8 @@ namespace ECSRenderDetail{
 
 class RendererAvboitSystem final : NoCopy{
 public:
-    RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
+    RendererAvboitSystem([[maybe_unused]] Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
+        : m_graphics(graphics)
         , m_avboitState(avboitState)
         , m_shaderSystem(shaderSystem)
         , m_materialSystem(materialSystem)
@@ -199,7 +198,6 @@ private:
 
 
 private:
-    Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     RendererAvboitState& m_avboitState;
     RendererShaderSystem& m_shaderSystem;

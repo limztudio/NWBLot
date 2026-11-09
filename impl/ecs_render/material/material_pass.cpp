@@ -4,7 +4,6 @@
 
 #include "material_system.h"
 #include "material_pass_gatherer.h"
-
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -14,11 +13,22 @@
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_scene/module.h>
-
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
+#include <impl/ecs_render/shared/renderer_push_constants_private.h>
+#include "material_pass_draw_recorder.h"
+#include <impl/assets/graphics/mesh/object_geometry_constants.h>
+#include "material_typed_stager.h"
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/assets_graphics/components.adhd.h>
+#include <core/graphics/shader_archive.h>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,8 +233,973 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+void RendererMaterialSystem::invalidateResources(){
+    releaseMaterialResourceReferences();
+    m_materialState.invalidateResources();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 MaterialPassDrawRecorder::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        if(!materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline)
+            return false;
+    }
+    return true;
+}
+
+b8 MaterialPassDrawRecorder::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+    if(drawItems.empty())
+        return true;
+
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+        if(
+            !materialPassDrawResourcesReady(mesh, frameBindings)
+            || !pipelineResources.computePipeline
+            || !pipelineResources.emulationPipeline
+            || !mesh.emulationVertexHeapHandle.valid()
+            || !mesh.emulationVertexBuffer
+            || (pipelineResources.indexedGeometryOutput && mesh.emulationIndexByteOffset == 0u)
+        )
+            return false;
+    }
+    return true;
+}
+
+void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh){
+    if(!context.materialGeometryStatesGraphOwned){
+        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
+            context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
+        });
+    }
+    if(!context.materialFrameStatesGraphOwned){
+        NWB_ASSERT(context.frameBindings.bindingValid());
+        context.commandList.setBufferState(context.frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(context.frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
+        context.commandList.setBufferState(context.frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    }
+}
+
+b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh){
+    const u32 dispatchFlags = ResolveMaterialPassDrawDispatchFlags(
+        mesh.runtimeMesh,
+        mesh.dynamicMeshletBoundsFresh,
+        mesh.dynamicMeshletConesFresh,
+        context.pass,
+        drawItem.pipelineKey.twoSided,
+        drawItem.meshletConeCullScaleSafe,
+        drawItem.pipelineKey.csgMode,
+        drawItem.shadingModelId
+    );
+    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey.csgMode, context.pass);
+    u32 csgContextHeapSlot = 0u;
+    if(csgBindingUse.clip){
+        if(!context.csgResources)
+            return false;
+        const auto resolvedClipContext = context.csgResources->findClipContextHeapSlot();
+        NWB_ASSERT(resolvedClipContext);
+        if(!resolvedClipContext)
+            return false;
+        csgContextHeapSlot = *resolvedClipContext;
+    }
+    MeshFrameHeapSlots frameHeapSlots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings);
+    if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
+        ECSRenderDetail::SetTransparentDrawPushConstants(
+            context.commandList,
+            mesh.meshletCount,
+            drawItem.instanceIndex,
+            drawItem.materialConstantByteOffset,
+            context.viewportState,
+            *context.avboitTargets,
+            frameHeapSlots,
+            dispatchFlags,
+            m_graphics.isHDR10OutputActive(),
+            csgContextHeapSlot,
+            context.pass == MaterialPipelinePass::AvboitRefractionCapture
+        );
+        return true;
+    }
+
+    // Pixel-only CSG variants reuse the unused generated-vertex lane as the context selector; geometry reads it per instance.
+    frameHeapSlots.generatedVertex = csgContextHeapSlot;
+
+    ECSRenderDetail::SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);
+    return true;
+}
+
+void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources){
+    Core::ComputeState computeState;
+    computeState.setPipeline(pipelineResources.computePipeline.get());
+    // Set 0 contains only the compute push range; the unified generated vertex/index UAV uses one global heap selector.
+
+    context.commandList.setComputeState(computeState);
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
+
+    const MeshFrameHeapSlots frameHeapSlots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings, mesh.emulationVertexHeapHandle.slot());
+    ShaderDrivenPushConstants pushConstants = ECSRenderDetail::BuildShaderDrivenPushConstants(
+        mesh.meshletCount,
+        drawItem.instanceIndex,
+        drawItem.materialConstantByteOffset,
+        context.viewportState,
+        frameHeapSlots,
+        ResolveMaterialPassDrawDispatchFlags(
+            mesh.runtimeMesh,
+            mesh.dynamicMeshletBoundsFresh,
+            mesh.dynamicMeshletConesFresh,
+            context.pass,
+            drawItem.pipelineKey.twoSided,
+            drawItem.meshletConeCullScaleSafe,
+            drawItem.pipelineKey.csgMode,
+            drawItem.shadingModelId
+        )
+    );
+    if(context.conservativeGeometryScissor){
+        NWB_ASSERT(pipelineResources.sharedGeometryComputeProgram);
+        pushConstants.dispatchFlags &= ~s_MeshDispatchFlagScissorCull;
+    }
+    if(pipelineResources.indexedGeometryOutput){
+        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        const MeshComputePushConstants computePush{ .mesh = pushConstants, .generatedIndexByteOffset = mesh.emulationIndexByteOffset, };
+        context.commandList.setPushConstants(&computePush, sizeof(computePush));
+    }
+    else
+        context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+
+        context.commandList.dispatch(mesh.meshletCount);
+    }
+}
+
+void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources){
+    Core::GraphicsState graphicsState;
+    graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
+    graphicsState.setFramebuffer(context.framebuffer);
+    graphicsState.setViewport(context.viewportState);
+    graphicsState.addVertexBuffer(Core::VertexBufferBinding().setBuffer(mesh.emulationVertexBuffer.get()).setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(0));
+    if(pipelineResources.indexedGeometryOutput){
+        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        graphicsState.setIndexBuffer(Core::IndexBufferBinding().setBuffer(mesh.emulationVertexBuffer.get()).setFormat(Core::Format::R32_UINT).setOffset(mesh.emulationIndexByteOffset));
+    }
+
+    context.commandList.setGraphicsState(graphicsState);
+    m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
+
+    if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
+        return;
+
+    Core::DrawArguments drawArgs;
+    drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
+
+        if(pipelineResources.indexedGeometryOutput)
+            context.commandList.drawIndexed(drawArgs);
+        else
+            context.commandList.draw(drawArgs);
+    }
+}
+
+void MaterialPassDrawRecorder::renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemsView& drawItems){
+    renderMeshMaterialPassDrawItems(context, drawItems.meshDrawItems);
+    renderIndexedMaterialPassDrawItems(context, drawItems.indexedDrawItems);
+    if(context.emulationOutputEntryStateGraphOwned)
+        renderComputeMaterialPassDrawItemsRasterOnly(context, drawItems.computeDrawItems);
+    else
+        renderComputeMaterialPassDrawItems(context, drawItems.computeDrawItems);
+}
+
+void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        NWB_ASSERT(pipelineResources.meshletPipeline);
+        setMaterialPassCommonBufferStates(context, mesh);
+
+        Core::MeshletState meshletState;
+        meshletState.setPipeline(pipelineResources.meshletPipeline.get());
+        meshletState.setFramebuffer(context.framebuffer);
+        meshletState.setViewport(context.viewportState);
+
+        context.commandList.setMeshletState(meshletState);
+        // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
+        m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
+
+        if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
+            continue;
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+
+            context.commandList.dispatchMesh(mesh.meshletCount);
+        }
+    }
+}
+
+void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
+    if(drawItems.empty())
+        return;
+    // No local output transition here. A graph producer must have declared every selected buffer as a UAV first.
+    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    NWB_ASSERT(context.frameBindings.meshView.buffer);
+
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
+        NWB_ASSERT(mesh.emulationVertexBuffer);
+        setMaterialPassCommonBufferStates(context, mesh);
+        dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+    }
+}
+
+void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
+    if(drawItems.empty())
+        return;
+    // This half has no local output transition. The graph declares each unified generated buffer for vertex and index reads.
+    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    NWB_ASSERT(context.frameBindings.meshView.buffer);
+
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        NWB_ASSERT(pipelineResources.emulationPipeline);
+        NWB_ASSERT(mesh.emulationVertexBuffer);
+        setMaterialPassCommonBufferStates(context, mesh);
+        drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+    }
+}
+
+void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
+    if(drawItems.empty())
+        return;
+    NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);
+    NWB_ASSERT(context.frameBindings.meshView.buffer);
+
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(pipelineResources.emulationPipeline);
+        NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
+        NWB_ASSERT(mesh.emulationVertexBuffer);
+
+        setMaterialPassCommonBufferStates(context, mesh);
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
+        dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
+        drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+    }
+}
+
+b8 MaterialPassDrawRecorder::prepareIndexedMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
+    for(const MaterialPassDrawItem& draw : drawItems){
+        const auto& cache = draw.meshResources.objectGeometryCache;
+        if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)
+            return false;
+    }
+    return true;
+}
+
+void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
+    if(drawItems.empty())
+        return;
+    NWB_ASSERT(context.materialGeometryStatesGraphOwned);
+    NWB_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const auto& mesh = drawItem.meshResources;
+        const auto& cache = mesh.objectGeometryCache;
+        const Core::GraphicsPipelineHandle& pipeline = drawItem.pipelineResources.indexedPipeline;
+        setMaterialPassCommonBufferStates(context, mesh);
+        Core::GraphicsState state;
+        state.setPipeline(pipeline.get());
+        state.setFramebuffer(context.framebuffer);
+        state.setViewport(context.viewportState);
+        state.addVertexBuffer(Core::VertexBufferBinding().setBuffer(cache.buffer.get()).setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(0u));
+        state.setIndexBuffer(Core::IndexBufferBinding().setBuffer(cache.buffer.get()).setFormat(Core::Format::R32_UINT).setOffset(cache.indexByteOffset));
+        context.commandList.setGraphicsState(state);
+        m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipeline.get());
+        if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
+            continue;
+        Core::DrawArguments arguments;
+        arguments.setVertexCount(cache.indexCount);
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
+
+            context.commandList.drawIndexed(arguments);
+        }
+    }
+}
+
+
+b8 MaterialPassDrawRecorder::prepareMaterialPassResourceBindingsImpl(const Span<const MaterialPassDrawItem> drawItems, const b8 computeEmulation)noexcept{
+    if(drawItems.empty())
+        return true;
+
+    b8 ready = true;
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        if(!ready)
+            break;
+
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+
+        if(!computeEmulation){
+            ready = pipelineResources.meshletPipeline && mesh.valid();
+            continue;
+        }
+
+        ready = pipelineResources.computePipeline
+            && pipelineResources.emulationPipeline
+            && mesh.valid()
+            && mesh.emulationVertexBuffer
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
+        ;
+    }
+    return ready;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_material_pass_gatherer{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh)noexcept{
+    MaterialPassMeshResourceSnapshot snapshot;
+    snapshot.sourceBuffers = mesh;
+    snapshot.geometryHeapHandles = mesh.geometryHeapHandles;
+    snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
+    snapshot.objectGeometryCache = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+    snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
+    snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
+    snapshot.meshletCount = mesh.meshletCount;
+    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
+    snapshot.runtimeMesh = mesh.runtimeMesh;
+    snapshot.dynamicMeshletBoundsFresh = mesh.dynamicMeshletBoundsFresh;
+    snapshot.dynamicMeshletConesFresh = mesh.dynamicMeshletConesFresh;
+    return snapshot;
+}
+
+[[nodiscard]] static MaterialPassPipelineResourceSnapshot CapturePipelineResourceSnapshot(const MaterialPipelineResources& pipelineResources)noexcept{
+    return {
+        .indexedPipeline = pipelineResources.indexedPipeline,
+        .emulationPipeline = pipelineResources.emulationPipeline,
+        .meshletPipeline = pipelineResources.meshletPipeline,
+        .computePipeline = pipelineResources.computePipeline,
+        .objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline,
+        .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
+        .indexedGeometryOutput = pipelineResources.indexedGeometryOutput,
+    };
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void MaterialPassGatherer::gather(
+    Core::Framebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const b8 transparent,
+    const CsgFrameState& csgFrameState,
+    const RendererResourceLookupMode::Enum lookupMode,
+    const MeshViewGpuData* const csgWorkRegionMeshViewState,
+    MaterialPassDrawItemPartitions& drawItems,
+    InstanceGpuDataVector& instanceData,
+    CsgFrameGpuData& csgFrameData,
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
+#endif
+    MaterialTypedByteDataVector& materialTypedBytes
+){
+    if(!framebuffer)
+        return;
+
+    auto rendererView = m_world.view<RendererComponent>();
+    auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!ecsMeshSystemPtr){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes"));
+        return;
+    }
+    NWB::Impl::MeshSystem& ecsMeshSystem = *ecsMeshSystemPtr;
+    const usize rendererCapacity = rendererView.candidateCount();
+    drawItems.reserve(rendererCapacity);
+    instanceData.reserve(rendererCapacity);
+#if defined(NWB_DEBUG)
+    materialTypedRanges.reserve(rendererCapacity);
+#endif
+    const usize materialTypedByteReserve = ResolveMaterialTypedReserve(rendererCapacity);
+    materialTypedBytes.reserve(materialTypedByteReserve);
+
+    MaterialTypedStager typedStager(m_system, m_world, lookupMode, materialTypedBytes, rendererCapacity);
+
+    const Core::FramebufferInfoEx& framebufferInfo = framebuffer->getFramebufferInfo();
+    const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
+    const b8 csgPassActive = MaterialPipelinePassUsesRendererCsgClip(pass, transparent) && CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass);
+    Optional<CsgFrameReceiverLookup> csgReceiverLookup;
+    const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
+    if(csgPassActive){
+        csgReceiverLookup.emplace(m_world, materialTypedBytes.get_allocator().arena());
+        if(!csgReceiverLookup->empty()){
+            csgReceiverLookupPtr = &*csgReceiverLookup;
+            csgFrameData.reserve(rendererCapacity, csgReceiverLookupPtr->cutterCount());
+        }
+    }
+
+    auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> b8{
+        NWB_ASSERT(mesh.valid());
+        // Mesh creation establishes source-stream descriptors before draw gathering.
+        NWB_ASSERT(RendererMeshSystem::GeometryHeapHandlesReady(mesh.geometryHeapHandles));
+        NWB_ASSERT(materialInfo->transparent == transparent);
+
+        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+
+        MaterialPipelineKey pipelineKey;
+        pipelineKey.material = materialInfo->materialName;
+        pipelineKey.framebufferInfo = framebufferInfo;
+        pipelineKey.pass = pass;
+        pipelineKey.twoSided = materialInfo->twoSided;
+        const b8 csgClipRequested = csgReceiverLookupPtr && csgReceiverState.active && MaterialPipelinePassUsesRendererCsgClip(pass, transparent);
+        LogCsgCapSurfaceDispatchUnavailableIfNeeded(
+            csgClipRequested,
+            materialInfo->csgCapSurfaceDispatchAvailable,
+            materialInfo->materialName,
+            materialInfo->csgCapSurfaceDispatchUnavailableLogged
+        );
+        const b8 csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
+        const auto csgClipInfo = csgClipCandidate ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform) : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}));
+        const b8 csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;
+        if(csgClipActive){
+            pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
+            pipelineKey.csgEvaluatorVariant = csgClipInfo->evaluatorVariant;
+            pipelineKey.csgShapeRegistryRevision = m_csgShapeRegistry.revision();
+            pipelineKey.twoSided = true;
+        }
+
+        auto appendInstance = [&]() -> Expected<MaterialInstanceAppend>{
+            NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
+
+            const auto constantRange = typedStager.constant(*materialInfo);
+            if(!constantRange)
+                return MakeUnexpected(Failure{});
+            const auto mutableRange = typedStager.mutableInstance(entity, *materialInfo);
+            if(!mutableRange)
+                return MakeUnexpected(Failure{});
+            const MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
+
+            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.constantRange));
+            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.mutableRange));
+            const u32 instanceIndex = static_cast<u32>(instanceData.size());
+            const NWB::Impl::Scene::TransformComponent defaultTransform;
+            const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
+            InstanceGpuData instance = ::NWB::Impl::BuildInstanceGpuData(
+                entity,
+                transform != nullptr,
+                LoadFloat(resolvedTransform.position),
+                LoadFloat(resolvedTransform.rotation),
+                LoadFloat(resolvedTransform.scale),
+                typedRanges.mutableRange.byteOffset
+            );
+            m_meshSystem.populateMeshGeometryHeapSlots(mesh, instance);
+            instanceData.push_back(Move(instance));
+            if(csgReceiverLookupPtr)
+                csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
+#if defined(NWB_DEBUG)
+            materialTypedRanges.push_back(typedRanges);
+#endif
+            return MaterialInstanceAppend(instanceIndex, typedRanges);
+        };
+
+        if(pass == MaterialPipelinePass::CsgReceiverSurface && !csgClipActive){
+            if(!csgReceiverLookupPtr)
+                return false;
+
+            return appendInstance().has_value();
+        }
+
+        const auto pipelineResult = lookupMode == RendererResourceLookupMode::CreateMissing ? m_system.createRendererPipeline(*materialInfo, pipelineKey, *framebuffer) : m_system.findRendererPipeline(pipelineKey);
+        if(!pipelineResult)
+            return false;
+        const NotNull<MaterialPipelineResources*> pipelineResources = *pipelineResult;
+        const auto prepareGeometryResources = [&](const MaterialPipelineResources& resources){
+            switch(resources.renderPath){
+            case RenderPath::MeshShader:
+                return true;
+            case RenderPath::VertexIndexed:{
+                if(lookupMode == RendererResourceLookupMode::CreateMissing && !m_meshSystem.prepareObjectGeometryCache(mesh, resources.objectGeometryDecodePipeline))
+                    return false;
+                const auto cache = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+                return cache.valid() && cache.decoderPipeline == resources.objectGeometryDecodePipeline;
+            }
+            case RenderPath::ComputeEmulation:
+                if(lookupMode == RendererResourceLookupMode::CreateMissing && !m_meshSystem.prepareComputeEmulationResources(mesh))
+                    return false;
+                return
+                    mesh.emulationVertexBuffer
+                    && mesh.emulationVertexHeapHandle.valid()
+                    && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+                    && (!resources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
+                ;
+            default:
+                return false;
+            }
+        };
+        if(!prepareGeometryResources(*pipelineResources))
+            return false;
+        const RenderPath::Enum renderPath = pipelineResources->renderPath;
+        // Freeze primary handles first; sibling cache creation may invalidate this pointer.
+        const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot = __hidden_material_pass_gatherer::CapturePipelineResourceSnapshot(*pipelineResources);
+
+        const b8 passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
+        const b8 csgReceiverSurfaceActive = csgClipActive && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface);
+        MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
+        MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
+        RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
+        if(csgReceiverSurfaceActive){
+            csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
+            if(pass == MaterialPipelinePass::CsgReceiverSurface)
+                csgReceiverSurfacePipelineResources = pipelineResources.get();
+            else{
+                const auto csgReceiverSurfacePipeline = lookupMode == RendererResourceLookupMode::CreateMissing ? m_system.createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer) : m_system.findRendererPipeline(csgReceiverSurfacePipelineKey);
+                if(!csgReceiverSurfacePipeline)
+                    return false;
+                csgReceiverSurfacePipelineResources = csgReceiverSurfacePipeline->get();
+            }
+            if(!prepareGeometryResources(*csgReceiverSurfacePipelineResources))
+                return false;
+            csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
+        }
+
+        auto appendDrawItemForRenderPath = [](const RenderPath::Enum renderPath, MaterialPassDrawItem drawItem, MaterialPassDrawItems& targetDrawItems){
+            switch(renderPath){
+            case RenderPath::MeshShader:{
+                targetDrawItems.meshDrawItems.push_back(Move(drawItem));
+                break;
+            }
+            case RenderPath::VertexIndexed:{
+                targetDrawItems.indexedDrawItems.push_back(Move(drawItem));
+                break;
+            }
+            case RenderPath::ComputeEmulation:{
+                targetDrawItems.computeDrawItems.push_back(Move(drawItem));
+                break;
+            }
+            default:
+                NWB_ASSERT(false);
+                break;
+            }
+        };
+
+        const auto appendedInstance = appendInstance();
+        if(!appendedInstance)
+            return false;
+        const u32 instanceIndex = appendedInstance->instanceIndex;
+        const auto& typedRanges = appendedInstance->typedRanges;
+
+        if(csgClipActive){
+            auto csgRange = m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform, framebufferInfo.width, framebufferInfo.height, csgWorkRegionMeshViewState, csgFrameData);
+            if(!csgRange)
+                return false;
+            // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.
+            csgRange->shadingModelId = materialInfo->shadingModelId;
+            csgRange->surfaceDispatchId = materialInfo->surfaceDispatchId;
+            csgRange->materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+            csgRange->meshInstanceIndex = instanceIndex;
+            NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
+            csgFrameData.receiverRanges[instanceIndex] = *csgRange;
+        }
+
+        MaterialPassDrawItem drawItem;
+        drawItem.meshKey = mesh.meshName;
+        drawItem.pipelineKey = pipelineKey;
+        drawItem.meshResources = __hidden_material_pass_gatherer::CaptureMeshResourceSnapshot(mesh);
+        drawItem.pipelineResources = pipelineResourceSnapshot;
+        drawItem.instanceIndex = instanceIndex;
+        drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+        drawItem.shadingModelId = materialInfo->shadingModelId;
+        drawItem.meshletConeCullScaleSafe = transform ? MeshletConeCullScaleSafe(LoadFloat(transform->scale)) : true;
+
+        if(passDrawItemActive){
+            MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
+            if(csgReceiverSurfaceActive)
+                appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
+            else
+                appendDrawItemForRenderPath(renderPath, Move(drawItem), targetDrawItems);
+        }
+
+        if(csgReceiverSurfaceActive){
+            drawItem.pipelineKey = csgReceiverSurfacePipelineKey;
+            drawItem.pipelineResources = __hidden_material_pass_gatherer::CapturePipelineResourceSnapshot(*csgReceiverSurfacePipelineResources);
+            appendDrawItemForRenderPath(csgReceiverSurfaceRenderPath, Move(drawItem), drawItems.csgReceiverSurface);
+        }
+
+        return true;
+    };
+
+    for(auto&& [entity, renderer] : rendererView){
+        // Every pass consumes the same frozen selection before assigning indices.
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
+            continue;
+
+        MaterialSurfaceInfo* preparedMaterialInfo = nullptr;
+        if(lookupMode == RendererResourceLookupMode::PreparedOnly){
+            const auto materialInfoResult = m_system.findMaterialSurfaceInfo(renderer.material);
+            if(!materialInfoResult || (*materialInfoResult)->transparent != transparent)
+                continue;
+            preparedMaterialInfo = materialInfoResult->get();
+        }
+
+        const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
+        if(!resolvedMeshResult)
+            continue;
+        const auto& resolvedMesh = *resolvedMeshResult;
+
+        const auto meshResult = resolvedMesh.runtime
+            ? (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh))
+            : (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createMeshResources(resolvedMesh.mesh, materialTypedBytes.get_allocator().arena()) : m_meshSystem.findMeshResources(resolvedMesh.mesh.name()))
+        ;
+        if(!meshResult)
+            continue;
+        const NotNull<MeshResources*> mesh = *meshResult;
+
+        MaterialSurfaceInfo* materialInfo = preparedMaterialInfo;
+        if(!materialInfo){
+            const auto materialInfoResult = m_system.createMaterialSurfaceInfo(renderer.material);
+            if(!materialInfoResult || (*materialInfoResult)->transparent != transparent)
+                continue;
+            materialInfo = materialInfoResult->get();
+        }
+
+        CsgReceiverDrawState csgReceiverState;
+        if(csgReceiverLookupPtr){
+            if(const auto resolvedState = csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass))
+                csgReceiverState = *resolvedState;
+        }
+
+        if(!appendDrawForMesh(entity, MakeNotNull(materialInfo), *mesh, csgReceiverState))
+            continue;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
+    // Every material pass uses this push-only layout; transparent consumes the full payload.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+        return MakeUnexpected(Failure{});
+    }
+    return m_materialState.m_materialPassBindingLayout;
+}
+
+
+b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
+    // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
+        return false;
+    }
+
+    return true;
+}
+
+b8 RendererMaterialSystem::createComputeEmulationResources(){
+    if(!prepareMeshComputeBindingLayout())
+        return false;
+
+    if(!m_materialState.m_emulationVertexShader){
+        if(!m_shaderSystem.loadShader<VertexShader>(&MeshSubsystem::emulationVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS", m_materialState.m_emulationVertexShader))
+            return false;
+    }
+
+    if(!m_materialState.m_emulationInputLayout){
+        Array<Core::VertexAttributeDesc, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT> attributes{};
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION", attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL", attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT", attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD", attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR", attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1", attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION]);
+
+        auto& device = m_graphics.getDevice();
+        auto emulationInputLayoutResult = device.createInputLayout(attributes.data(), NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
+        if(emulationInputLayoutResult)
+            m_materialState.m_emulationInputLayout = Move(*emulationInputLayoutResult);
+        else
+            m_materialState.m_emulationInputLayout.reset();
+        if(!emulationInputLayoutResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
+    if(instanceCount == 0)
+        return true;
+    NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    if(m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)
+        return true;
+
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_instanceBufferCapacity, instanceCount);
+#if defined(NWB_DEBUG)
+    if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
+        return false;
+    }
+#endif
+
+    Core::BufferDesc instanceBufferDesc;
+    instanceBufferDesc
+        .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
+        .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_InstanceBufferName)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
+    if(!instanceBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create instance data buffer"));
+        return false;
+    }
+    Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
+
+    m_materialState.m_instanceBuffer = Move(instanceBuffer);
+    m_materialState.m_instanceBufferCapacity = capacity;
+    return true;
+}
+
+b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
+#if defined(NWB_DEBUG)
+    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
+    const auto alignedByteCount = AlignUpChecked(requiredByteCount, sizeof(u32));
+    if(!alignedByteCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
+        return false;
+    }
+    requiredByteCount = *alignedByteCount;
+    if(requiredByteCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
+        return false;
+    }
+#else
+    const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
+#endif
+    if(m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredByteCount)
+        return true;
+
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_materialTypedBufferCapacity, requiredByteCount);
+    Core::BufferDesc materialTypedBufferDesc;
+    materialTypedBufferDesc
+        .setByteSize(static_cast<u64>(capacity))
+        .setStructStride(sizeof(u32))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_MaterialTypedBufferName)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material typed buffer"));
+        return false;
+    }
+    Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);
+
+    m_materialState.m_materialTypedBuffer = Move(materialTypedBuffer);
+    m_materialState.m_materialTypedBufferCapacity = capacity;
+    return true;
+}
+
+b8 RendererMaterialSystem::prepareMaterialPassDrawBuffers(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes){
+    const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
+
+    return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
+}
+
+b8 RendererMaterialSystem::materialPassDrawBuffersReady(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)const noexcept{
+    const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
+
+    return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
+}
+
+b8 RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+    return IsMaterialPassDrawBuffersReady(
+        instanceCount,
+        materialTypedByteCount,
+        static_cast<b8>(m_materialState.m_instanceBuffer),
+        m_materialState.m_instanceBufferCapacity,
+        static_cast<b8>(m_materialState.m_materialTypedBuffer),
+        m_materialState.m_materialTypedBufferCapacity
+    );
+}
+
+ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{
+    return {
+        .instanceBuffer = m_materialState.m_instanceBuffer,
+        .materialTypedBuffer = m_materialState.m_materialTypedBuffer,
+        .instanceBufferCapacity = m_materialState.m_instanceBufferCapacity,
+        .materialTypedBufferCapacity = m_materialState.m_materialTypedBufferCapacity,
+    };
+}
+
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Span<InstanceGpuData> instanceData)noexcept{
+    // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
+    const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
+    for(InstanceGpuData& instance : instanceData)
+        instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MaterialTypedStager::MaterialTypedStager(RendererMaterialSystem& system, Core::ECS::World& world, const RendererResourceLookupMode::Enum lookupMode, MaterialTypedByteDataVector& bytes, const usize capacity)
+    : m_system(system)
+    , m_world(world)
+    , m_lookupMode(lookupMode)
+    , m_bytes(bytes)
+    , m_ranges(0, ECSRenderDetail::MaterialTypedByteRangeKeyHasher(), EqualTo<MaterialTypedByteRangeKey>(), bytes.get_allocator().arena())
+    , m_mutableRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), bytes.get_allocator().arena())
+{
+    m_ranges.reserve(capacity);
+    m_mutableRanges.reserve(capacity);
+}
+
+Expected<MaterialTypedByteRange> MaterialTypedStager::constant(const MaterialSurfaceInfo& materialInfo){
+    const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+    auto cacheIt = m_ranges.try_emplace(rangeKey).first;
+    MaterialTypedByteRangeCache& cache = cacheIt.value();
+    if(cache.constantRangeCached)
+        return cache.constantRange;
+    const auto range = ECSRenderDetail::AppendMaterialTypedByteRange(materialInfo.constantTypedBytes, m_bytes);
+    if(!range)
+        return MakeUnexpected(Failure{});
+    cache.constantRange = *range;
+    cache.constantRangeCached = true;
+    return range;
+}
+
+Expected<MaterialTypedByteRange> MaterialTypedStager::defaultMutable(const MaterialSurfaceInfo& materialInfo){
+    const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+    auto cacheIt = m_ranges.try_emplace(rangeKey).first;
+    MaterialTypedByteRangeCache& cache = cacheIt.value();
+    if(cache.defaultMutableRangeCached)
+        return cache.defaultMutableRange;
+    const auto range = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialInfo.mutableDefaultTypedBytes, m_bytes, m_mutableRanges);
+    if(!range)
+        return MakeUnexpected(Failure{});
+    cache.defaultMutableRange = *range;
+    cache.defaultMutableRangeCached = true;
+    return range;
+}
+
+Expected<MaterialTypedByteRange> MaterialTypedStager::mutableInstance(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo){
+    const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
+    if(!materialInstance || materialInstance->overrides.empty())
+        return defaultMutable(materialInfo);
+    const auto mutableTypedBytes = m_lookupMode == RendererResourceLookupMode::CreateMissing
+        ? m_system.prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
+        : m_system.findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
+    ;
+    if(!mutableTypedBytes)
+        return MakeUnexpected(Failure{});
+    return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(*mutableTypedBytes, m_bytes, m_mutableRanges);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelineResources& resources){
+    if(!prepareMeshComputeBindingLayout())
+        return false;
+    auto& device = m_graphics.getDevice();
+    // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
+    if(!m_materialState.m_objectGeometryDecodePipeline){
+        if(!m_shaderSystem.loadShader<ComputeShader>(&MeshSubsystem::objectDecodeCs, Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryDecodeDebugName, m_materialState.m_objectGeometryDecodeShader))
+            return false;
+        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_materialState.m_objectGeometryDecodeShader, m_materialState.m_computeBindingLayout, false, m_materialState.m_objectGeometryDecodePipeline))
+            return false;
+    }
+    if(!m_shaderSystem.loadShader<VertexShader>(&MeshSubsystem::objectVs, Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryVsDebugName, resources.objectGeometryVertexShader))
+        return false;
+    if(!m_materialState.m_objectGeometryInputLayout){
+        Array<Core::VertexAttributeDesc, s_ObjectGeometryVertexAttributeCount> attributes{};
+        const Array<Core::Format::Enum, 5u> formats = { Core::Format::RGBA32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RG32_FLOAT, Core::Format::RGBA16_FLOAT, };
+        const Array<u32, 5u> offsets = { NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET, };
+        const Array<Name, 5u> names = { s_VertexAttributePositionName, s_VertexAttributeNormalName, s_VertexAttributeTangentName, s_VertexAttributeTexCoordName, s_VertexAttributeColorName };
+        for(u32 index = 0u; index < attributes.size(); ++index)
+            attributes[index].setFormat(formats[index]).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsets[index]).setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setName(names[index]);
+        auto objectGeometryInputLayoutResult = device.createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), resources.objectGeometryVertexShader.get());
+        if(objectGeometryInputLayoutResult)
+            m_materialState.m_objectGeometryInputLayout = Move(*objectGeometryInputLayoutResult);
+        else
+            m_materialState.m_objectGeometryInputLayout.reset();
+        if(!objectGeometryInputLayoutResult)
+            return false;
+    }
+    resources.objectGeometryDecodePipeline = m_materialState.m_objectGeometryDecodePipeline;
+    return true;
+}
+
+b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
+    const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+    const auto& cache = mesh.objectGeometryCache;
+    const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
+    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !m_drawRecorder.materialPassDrawResourcesReady(mesh, context.frameBindings))
+        return false;
+    Core::ComputeState state;
+    state.setPipeline(pipeline.get());
+    context.commandList.setComputeState(state);
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipeline.get());
+    const MeshFrameHeapSlots slots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
+    const ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(
+        mesh.meshletCount,
+        drawItem.instanceIndex,
+        drawItem.materialConstantByteOffset,
+        context.viewportState,
+        slots,
+        0u
+    );
+    const MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
+    context.commandList.setPushConstants(&push, sizeof(push));
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+
+        context.commandList.dispatch(Max(mesh.meshletCount, 1u));
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

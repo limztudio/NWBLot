@@ -7,10 +7,23 @@
 #include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-
 #include <impl/assets/graphics/refraction/push_constants.h>
-
 #include <global/algorithm.h>
+#include "refraction_target_builder.h"
+#include <impl/ecs_render/avboit/avboit_target_factory.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/ecs_render/refraction/types.adhd.h>
+#include <core/common/log.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/runtime.h>
+#include "statistics_readback.h"
+#include <impl/assets/graphics/refraction/diagnostics_layout.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
+#include <impl/ecs_render/shared/statistics_readback_detail.h>
+#include <core/alloc/general.h>
+#include "task_graph_refraction_resolve.h"
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -232,8 +245,434 @@ b8 RefractionRenderer::recordRefractionResolve(Core::CommandList& commandList, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets, const Core::Format::Enum accumColorFormat, const Core::Format::Enum accumExtinctionFormat, const Core::Color& transparentBlack){
+    auto& device = m_graphics.getDevice();
+    auto foregroundAccumColorResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumColorFormat, "engine/avboit/foreground_color", transparentBlack, true);
+    auto foregroundAccumExtinctionResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat, "engine/avboit/foreground_extinction", transparentBlack, true);
+    auto refractionNormalIorResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_normal_ior", transparentBlack, true);
+    auto refractionTintCoverageResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_tint_coverage", transparentBlack, true);
+    auto refractionInstanceResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT, "engine/avboit/refraction_instance", transparentBlack, true);
+    auto refractionSpecularRoughnessResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
+    Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
+    refractionDepthDesc.setName("engine/avboit/refraction_depth").setInitialState(Core::ResourceStates::Common).setKeepInitialState(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    auto refractionDepthResult = m_graphics.createTexture(refractionDepthDesc);
+    if(refractionDepthResult)
+        avboitTargets.refractionDepth = Move(*refractionDepthResult);
+    else
+        avboitTargets.refractionDepth.reset();
+    Core::TextureDesc refractionResolveDesc;
+    refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
+        .setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName("engine/avboit/refraction_resolve").setClearValue(transparentBlack)
+        .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
+    ;
+    auto refractionResolveResult = m_graphics.createTexture(refractionResolveDesc);
+    if(refractionResolveResult)
+        avboitTargets.refractionResolve = Move(*refractionResolveResult);
+    else
+        avboitTargets.refractionResolve.reset();
+    if(!foregroundAccumColorResult || !foregroundAccumExtinctionResult || !refractionNormalIorResult || !refractionTintCoverageResult || !refractionInstanceResult || !refractionSpecularRoughnessResult || !refractionDepthResult || !refractionResolveResult)
+        return false;
+    avboitTargets.foregroundAccumColor = Move(*foregroundAccumColorResult);
+    avboitTargets.foregroundAccumExtinction = Move(*foregroundAccumExtinctionResult);
+    avboitTargets.refractionNormalIor = Move(*refractionNormalIorResult);
+    avboitTargets.refractionTintCoverage = Move(*refractionTintCoverageResult);
+    avboitTargets.refractionInstance = Move(*refractionInstanceResult);
+    avboitTargets.refractionSpecularRoughness = Move(*refractionSpecularRoughnessResult);
+    Core::FramebufferDesc refractionFramebufferDesc;
+    refractionFramebufferDesc
+        .addColorAttachment(avboitTargets.refractionNormalIor.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionTintCoverage.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionInstance.get(), ECSRenderDetail::s_FramebufferSubresources)
+        // Fourth output carries reflection inputs; keep it off foreground extinction.
+        .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), ECSRenderDetail::s_FramebufferSubresources).setDepthAttachment(avboitTargets.refractionDepth.get(), ECSRenderDetail::s_FramebufferSubresources)
+    ;
+    auto refractionFramebufferResult = device.createFramebuffer(refractionFramebufferDesc);
+    if(refractionFramebufferResult)
+        avboitTargets.refractionFramebuffer = Move(*refractionFramebufferResult);
+    else
+        avboitTargets.refractionFramebuffer.reset();
+    if(!refractionFramebufferResult)
+        return false;
+
+    return true;
+}
+
+b8 RefractionTargetBuilder::createTileBuffers(const u64 tileCount, AvboitFrameTargets& avboitTargets){
+    const auto createTileBuffer = [&](const u64 byteSize, const Name name, const b8 indirect){
+        Core::BufferDesc desc;
+        desc.setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
+        return m_graphics.createBuffer(desc);
+    };
+    auto tileList = createTileBuffer(tileCount * sizeof(u32), Name(s_RenderIdentityEngineRefractionTileList), false);
+    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, Name(s_RenderIdentityEngineRefractionTileArguments), true);
+    if(!tileList || !tileArguments){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create refraction tile scheduling buffers"));
+        return false;
+    }
+    avboitTargets.refractionTileList = Move(*tileList);
+    avboitTargets.refractionTileArguments = Move(*tileArguments);
+
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void RefractionStatisticsState::accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
+    NothrowScopedLock lock(m_mutex);
+
+    Slot* slot = beginAcceptWithinLock(key, token, hardwareReady);
+    if(!slot)
+        return;
+    slot->metadata.csgHardwareEnabled = slot->metadata.csgHardwareEnabled && hardwareReady;
+}
+
+void RefractionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters)noexcept{
+    constexpr usize s_RequiredCounterCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
+    completeSlot<s_RequiredCounterCount>(
+        key,
+        token,
+        counters,
+        [](RefractionStatistics& latest, [[maybe_unused]] const RefractionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
+            CopyRefractionDiagnosticCounters(completedCounters, latest);
+        });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RefractionStatisticsReadback::invalidateResources()noexcept{
+    // Renderer invalidation follows the runtime's device join or terminal loss and graph-payload reset.
+    // Retire the descriptor only at that boundary; disabling diagnostics keeps pending resources alive.
+    RendererDescriptorRegisterDetail::RetireDescriptor(m_graphics.getDevice().getDescriptorHeap(), m_counterDescriptor);
+    m_counters = nullptr;
+    resetReadbackBuffers();
+}
+
+b8 RefractionStatisticsReadback::prepareResources(){
+    if(m_counters && m_counterDescriptor.valid() && m_buffers[0])
+        return true;
+    static constexpr Array<Name, s_StatisticsReadbackSlotCount> s_Names = { s_RefractionStatisticsReadback0Name, s_RefractionStatisticsReadback1Name, s_RefractionStatisticsReadback2Name, };
+    Core::BufferDesc counterDesc;
+    counterDesc.setByteSize(NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setDebugName(s_RefractionDiagnosticCountersName).enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess);
+    const auto counterResult = m_graphics.createBuffer(counterDesc);
+    if(!counterResult)
+        return false;
+    Core::BufferHandle counters = *counterResult;
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+    const auto descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get()));
+    if(!descriptor)
+        return false;
+    Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
+    if(!ECSRenderDetail::PrepareStatisticsReadbackControlAndBuffers<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(
+        s_Names,
+        NWB_TEXT("Refraction statistics: failed to allocate readback control"),
+        m_arena,
+        m_graphics,
+        m_control,
+        m_buffers
+    ))
+        return false;
+    m_counters = Move(counters);
+    m_counterDescriptor = *descriptor;
+    retireDescriptor.release();
+    return true;
+}
+
+void RefractionStatisticsReadback::pollCompleted(){
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(m_buffers, NWB_TEXT("Refraction statistics: failed to map a completed readback"), m_control, m_graphics);
+}
+
+RefractionStatisticsReadbackSnapshot RefractionStatisticsReadback::snapshot(const RefractionStatistics& metadata)const noexcept{
+    RefractionStatisticsReadbackSnapshot result;
+    if(!m_control || !m_counters || !m_counterDescriptor.valid() || !m_buffers[0])
+        return result;
+    populateSnapshot(metadata, result);
+    result.counters = m_counters;
+    result.counterDescriptor = m_counterDescriptor;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RefractionClearTileArgumentsGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
+        return false;
+    commandList.endRenderPass();
+    Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClearTileArguments, payload.graphics.getDevice(), commandList);
+
+    commandList.clearBufferUInt(*payload.destination, 0u);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RefractionClearStatisticsGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    if(!payload.destination)
+        return false;
+    if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
+        return false;
+    commandList.endRenderPass();
+    commandList.clearBufferUInt(*payload.destination, 0u);
+    return !commandList.commandRecordingFailed();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RefractionStatisticsReadbackGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    if(!payload.source || !payload.destination || !payload.reservation.valid())
+        return false;
+    if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE))
+        return false;
+    commandList.endRenderPass();
+    commandList.copyBuffer(*payload.destination, 0u, *payload.source, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE);
+    return !commandList.commandRecordingFailed();
+}
+
+void RefractionStatisticsReadbackGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+    const b8 hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+    payload.reservation.acceptReservation(token, hardwareReady);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RefractionResolveGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    RayTracingRefractionGraphResources resources = payload.resources;
+    if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
+        // A nonfatal TLAS miss still accepts. Use the screen pipeline (its inputs subset this task's) instead of a stale TLAS.
+        resources.pipeline = resources.screenFallbackPipeline;
+        resources.densePipeline = resources.denseScreenFallbackPipeline;
+        resources.usesHardwareTrace = false;
+        resources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        resources.materialContextSlotsHeapSlot = 0u;
+    }
+    return payload.system.refraction().recordRefractionResolve(commandList, payload.targets, resources);
+}
+
+void RefractionResolveGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    // Only an accepted packet publishes diagnostics. Rejected retries leave the latch; selection/recording stays stateless.
+    const b8 usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+    if(usedHardware)
+        payload.system.confirmRayTraceContextReadSubmission(token);
+    b8* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
+    if(dispatchLogged)
+        LogAcceptedRefractionResolveIfNeeded(usedHardware, *dispatchLogged);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphRefractionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads){
+    using namespace RendererTaskGraphDetail;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const RayTracingSceneGraphResources& sceneResources = inputs.sceneResources;
+    const RayTracingRefractionGraphResources& refractionResources = inputs.refractionResources;
+    const b8 refractionActive = inputs.refractionActive;
+    const Core::GpuGraphResourceId depth = inputs.depth;
+    const Core::GpuGraphResourceId worldPosition = inputs.worldPosition;
+    const Core::GpuGraphResourceId refractionDepth = inputs.refractionDepth;
+    const Core::GpuGraphResourceId refractionNormalIor = inputs.refractionNormalIor;
+    const Core::GpuGraphResourceId refractionTintCoverage = inputs.refractionTintCoverage;
+    const Core::GpuGraphResourceId refractionInstance = inputs.refractionInstance;
+    const Core::GpuGraphResourceId refractionResolve = inputs.refractionResolve;
+    const Core::GpuGraphResourceId opaqueColor = inputs.opaqueColor;
+    const Core::GpuGraphResourceId opaqueReflectionRadiance = inputs.opaqueReflectionRadiance;
+    const Core::GpuGraphResourceId meshView = inputs.meshView;
+    const Core::GpuGraphResourceId currentBindlessSlots = inputs.currentBindlessSlots;
+    const Core::GpuGraphResourceId sceneShading = inputs.sceneShading;
+    const Core::GpuGraphResourceId lights = inputs.lights;
+    const Core::GpuGraphResourceId avboitAccumColor = inputs.avboitAccumColor;
+    const Core::GpuGraphResourceId avboitAccumExtinction = inputs.avboitAccumExtinction;
+    const Core::GpuGraphResourceId avboitForegroundColor = inputs.avboitForegroundColor;
+    const Core::GpuGraphResourceId avboitForegroundExtinction = inputs.avboitForegroundExtinction;
+    const Core::GpuGraphResourceSetId hardwareTraceGeometrySet = inputs.hardwareTraceGeometrySet;
+    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet = inputs.traceMaterialSampledTextureSet;
+
+    if(!refractionActive || !refractionResources.valid()){
+        Core::GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionResolveClear)).setMarkerLabel("AVBOIT Refraction Resolve Clear").setDependencies({ &inputs.avboitFinalTask, 1u });
+        Core::GpuClearTextureTaskDesc clear;
+        clear.destination = refractionResolve;
+        clear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        clear.valueType = Core::GpuClearTextureTaskValueType::Float;
+        clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
+        return m_graph.addClearTextureTask(clearDesc, clear);
+    }
+
+    if(!sceneReads.valid() && refractionResources.usesHardwareTrace){
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), inputs.traceContextUploadTask, m_graph, scratchArena);
+        if(!sceneReadsResult){
+            sceneReads = RayTracingSceneGraphReads(scratchArena);
+            return MakeUnexpected(Failure{});
+        }
+        sceneReads = Move(*sceneReadsResult);
+    }
+
+    const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(Name(s_RenderNameRenderRefractionTileList), "Refraction Tile List"));
+    const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(Name(s_RenderNameRenderRefractionTileArguments), "Refraction Tile Arguments"));
+    if(!tileListResult || !tileArgumentsResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId tileList = *tileListResult;
+    const Core::GpuGraphResourceId tileArguments = *tileArgumentsResult;
+    const Core::GpuTaskResourceUse tileClearUse = WriteUse(tileArguments, Core::ResourceStates::CopyDest);
+    Core::GpuTaskDesc tileClearDesc;
+    tileClearDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionTileArgumentsClear)).setMarkerLabel("Refraction Tile Arguments Clear").setDependencies({ &inputs.avboitFinalTask, 1u }).setResourceUses({ &tileClearUse, 1u });
+    const auto tileClearTask = m_graph.addTask<RefractionClearTileArgumentsGraphTask>(tileClearDesc, RefractionClearTileArgumentsGraphTask::Payload{ m_graphics, deferredTargets.avboit.refractionTileArguments, tileArguments });
+    if(!tileClearTask)
+        return MakeUnexpected(Failure{});
+    const Array<Core::GpuTaskResourceUse, 4> tileUses = {
+        ReadUse(refractionDepth),
+        ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+        WriteUse(tileList, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(tileArguments, Core::ResourceStates::UnorderedAccess),
+    };
+    Core::GpuTaskSchedulingHint refractionTileScheduling;
+    refractionTileScheduling.mergeWithPrevious = true;
+    refractionTileScheduling.allowMergeAcrossConsumerFrontier = true;
+    Core::GpuTaskDesc tileDesc;
+    tileDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionClassifyTiles)).setMarkerLabel("Refraction Classify Tiles").setScheduling(refractionTileScheduling).setDependencies({ &*tileClearTask, 1u }).setResourceUses(tileUses);
+    const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
+    if(!tileTask)
+        return MakeUnexpected(Failure{});
+    Core::GpuGraphResourceId refractionCounters;
+    Core::GpuTaskId refractionDiagnosticClear;
+    if(refractionResources.statistics.control){
+        const auto counters = m_graph.importBuffer(refractionResources.statistics.counters, BufferResourceDesc(Name(s_RefractionCounters), "Refraction Diagnostic Counters").setExternalFinalState(Core::ResourceStates::UnorderedAccess));
+        if(!counters)
+            return MakeUnexpected(Failure{});
+        refractionCounters = *counters;
+        const Core::GpuTaskResourceUse clearUse = WriteUse(refractionCounters, Core::ResourceStates::CopyDest);
+        Core::GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(Name(s_RenderNameRenderRefractionDiagnosticsClear)).setMarkerLabel("Refraction Diagnostics Clear").setScheduling(refractionTileScheduling).setDependencies({ &*tileTask, 1u }).setResourceUses({ &clearUse, 1u });
+        const auto clearTask = m_graph.addTask<RefractionClearStatisticsGraphTask>(clearDesc, RefractionClearStatisticsGraphTask::Payload{ refractionResources.statistics.counters, refractionCounters });
+        if(!clearTask)
+            return MakeUnexpected(Failure{});
+        refractionDiagnosticClear = *clearTask;
+    }
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
+    const Array<Core::GpuGraphResourceId, 12> refractionInputs = {
+        refractionDepth,
+        refractionNormalIor,
+        refractionTintCoverage,
+        refractionInstance,
+        opaqueColor,
+        opaqueReflectionRadiance,
+        worldPosition,
+        depth,
+        avboitAccumColor,
+        avboitAccumExtinction,
+        avboitForegroundColor,
+        avboitForegroundExtinction,
+    };
+    // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
+    refractionUses.reserve(refractionInputs.size() + s_RefractionFixedUseCapacity + sceneReads.uses.size() + sceneReads.csgUses.size());
+    for(const auto input : refractionInputs)
+        refractionUses.push_back(ReadUse(input));
+    refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(lights));
+    refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
+    refractionUses.push_back(ReadUse(tileList));
+    refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
+    if(refractionCounters.valid())
+        refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
+    RendererFramePipelineDetail::TraceResourceSetUses refractionSets{};
+    if(refractionResources.usesHardwareTrace){
+        for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+            refractionUses.push_back(read);
+        for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
+            refractionUses.push_back(read);
+        refractionSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
+    }
+    const Array<Core::GpuTaskId, 3> refractionDependencies = { inputs.reflectionCompletionTask, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
+    Core::GpuTaskDesc refractionDesc;
+    refractionDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionResolve))
+        .setMarkerLabel("AVBOIT Refraction Resolve")
+        .setScheduling(refractionTileScheduling)
+        .setDependencies(refractionDependencies)
+        .setResourceUses(refractionUses)
+        .setResourceSetUses({ refractionSets.uses.data(), refractionSets.useCount })
+    ;
+    RefractionResolveGraphTask::Payload resolvePayload{
+        .system = m_raytracingSystem,
+        .targets = deferredTargets,
+        .resources = refractionResources,
+        .hardwarePreparationReady = &inputs.hardwarePreparationReady,
+        .dispatchLogged = refractionResources.usesHardwareTrace ? &inputs.refractionHardwareLogged : &inputs.refractionScreenLogged,
+        .screenFallbackDispatchLogged = &inputs.refractionScreenLogged,
+    };
+    Expected<Core::GpuTaskId> refractionResolveTask = refractionCounters.valid()
+        ? m_graph.addTask<RefractionDiagnosticResolveGraphTask>(refractionDesc, Move(resolvePayload))
+        : m_graph.addTask<RefractionResolveGraphTask>(refractionDesc, Move(resolvePayload))
+    ;
+    if(!refractionResolveTask)
+        return MakeUnexpected(Failure{});
+    if(refractionCounters.valid()){
+        RefractionStatisticsReservation reservation(refractionResources.statistics.control, refractionResources.statistics.metadata);
+        // All slots may still be in flight; diagnostic collection is lossy rather than blocking rendering.
+        if(reservation.valid()){
+            const Core::BufferHandle& readback = refractionResources.statistics.buffers[reservation.slotIndex()];
+            if(!readback)
+                return MakeUnexpected(Failure{});
+            const auto readbackResource = m_graph.importBuffer(readback, BufferResourceDesc(readback->getCreationDescription().debugName, "Refraction Statistics Readback").setExternalFinalState(Core::ResourceStates::CopyDest));
+            if(!readbackResource)
+                return MakeUnexpected(Failure{});
+            const Array<Core::GpuTaskResourceUse, 2> copyUses = {
+                ReadUse(refractionCounters, Core::ResourceStates::CopySource),
+                WriteUse(*readbackResource, Core::ResourceStates::CopyDest),
+            };
+            Core::GpuTaskDesc copyDesc;
+            copyDesc.setIdentity(Name(s_RenderNameRenderRefractionStatistics)).setMarkerLabel("Refraction Statistics Readback").setScheduling(refractionTileScheduling).setDependencies({ &*refractionResolveTask, 1u }).setResourceUses(copyUses);
+            refractionResolveTask = m_graph.addTask<RefractionStatisticsReadbackGraphTask>(
+                copyDesc,
+                RefractionStatisticsReadbackGraphTask::Payload{
+                    refractionResources.statistics.counters,
+                    readback,
+                    refractionCounters,
+                    *readbackResource,
+                    Move(reservation),
+                    &inputs.hardwarePreparationReady,
+                    refractionResources.usesHardwareTrace,
+                });
+        }
+    }
+    return refractionResolveTask;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

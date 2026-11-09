@@ -3,11 +3,8 @@
 
 
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-
 #include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd.h>
-
 #include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
-
 #include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
@@ -17,6 +14,15 @@
 #include <impl/ecs_render/shadow/light_space_scene_gather.h>
 #include <impl/ecs_render/shadow/shadow_material_context_preparer.h>
 #include <impl/ecs_render/shadow/shadow_occluder_material_gather.h>
+#include <impl/ecs_render/raytrace/software_bvh_builder.h>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
+#include <impl/ecs_render/raytrace/prepared_mesh_blas_builder.h>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
+#include "prepared_scene_tlas_build.h"
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/common/log.h>
+#include <impl/ecs_render/raytrace/rt_private.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -344,8 +350,800 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
+    using namespace RayTracingSoftwareBvhDetail;
+
+    m_preparedSceneContentStamp = {};
+    m_lightSpaceShadow.m_captureSceneTrusted = false;
+
+    // Software scene BVH and material context share hardware instance ordering.
+    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystemPtr)
+        return false;
+
+    auto rendererView = m_world.view<RendererComponent>();
+    const usize candidateCount = rendererView.candidateCount();
+    LightSpaceShadowSceneGather lightSpaceGather(m_lightSpaceShadow, m_csgShapeRegistry, m_world, scratchArena);
+    lightSpaceGather.begin(candidateCount, false);
+
+    // Parallel instance records and CPU BVH build values.
+    Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
+    Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::ScratchArena> sceneRefitInputs{ scratchArena };
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sceneRefitRoots{ scratchArena };
+    Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
+    // Parallel material records index scene-BVH leaves.
+    Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
+    // All-occluder trace context; draw buffers hold one transparency class.
+    InstanceGpuDataVector shadowInstanceData{ scratchArena };
+    MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
+    Vector<PreparedSceneSwBvhMesh, Core::Alloc::ScratchArena> preparedMeshes{ scratchArena };
+    ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
+    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
+    instances.reserve(candidateCount);
+    sceneRefitInputs.reserve(candidateCount);
+    sceneRefitRoots.reserve(candidateCount);
+    lightSpaceGather.reserveSoftwareCasters(candidateCount);
+    instanceBvhPrimitives.reserve(candidateCount);
+    instanceMaterials.reserve(candidateCount);
+    shadowInstanceData.reserve(candidateCount);
+    preparedMeshes.reserve(candidateCount);
+    shadowConstantTypedRanges.reserve(candidateCount);
+    shadowMutableTypedRanges.reserve(candidateCount);
+    MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
+    meshSlotLookup.reserve(candidateCount);
+
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
+        return false;
+    }
+    MeshHeapHandleGather meshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
+    meshHeapHandles.begin();
+    m_rayTracingState.m_swShadowMeshNodeBuffers.clear();
+    m_rayTracingState.m_swShadowMeshPositionBuffers.clear();
+    m_rayTracingState.m_swShadowMeshIndexBuffers.clear();
+    m_rayTracingState.m_swShadowMeshAttributeBuffers.clear();
+    m_rayTracingState.m_swShadowMeshNodeHandles.clear();
+    m_rayTracingState.m_swShadowMeshPositionHandles.clear();
+    m_rayTracingState.m_swShadowMeshIndexHandles.clear();
+    m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
+    m_rayTracingState.m_swShadowMeshCount = 0u;
+    b8 staticScene = true;
+    b8 contentComplete = true;
+    RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
+
+    ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
+    ShadowOccluderMaterialGather occluderMaterials(m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
+
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
+            continue;
+
+        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
+        if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
+            continue;
+        const b8 meshReady = meshResult.has_value();
+        // Preflight selects pending mesh storage; the prepared build and traversal validate topology before use.
+        const b8 topologyReady = meshReady && (meshResult->meshResources.swBvhTopologyBuilt || meshResult->meshResources.runtimeMesh || meshResult->meshResources.swBvhBuildPending);
+        if(
+            !meshReady
+            || !topologyReady
+            || !meshResult->meshResources.swBvhNodeBuffer
+            || !RayTracingDetail::IsHeapHandle(meshResult->meshResources.swBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !meshResult->meshResources.positionBuffer
+            || !meshResult->meshResources.triangleIndexBuffer
+            || !meshResult->meshResources.attributeBuffer
+            || !meshResult->meshResources.csgLocalBounds.valid()
+        ){
+            contentComplete = false;
+            opticalScene.markIncomplete();
+            continue;
+        }
+        // Runtime mesh updates disable static scene-BVH reuse.
+        if(meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
+            staticScene = false;
+
+        // Reuse one table slot for instances sharing geometry.
+        const NotNull<Core::Buffer*> meshNodeBuffer(meshResult->meshResources.swBvhNodeBuffer.get());
+        u32 meshSlot = 0u;
+        const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
+        if(foundMeshSlot != meshSlotLookup.end())
+            meshSlot = foundMeshSlot.value();
+        else{
+            const Core::GpuDescriptorHandle nodeHandle = meshResult->meshResources.swBvhNodeHeapHandle;
+            const Core::GpuDescriptorHandle positionHandle = meshResult->meshResources.swBvhPositionHeapHandle;
+            const Core::GpuDescriptorHandle indexHandle = meshResult->meshResources.swBvhTriangleIndexHeapHandle;
+            if(!positionHandle.valid() || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
+                meshHeapHandles.sweep();
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                return false;
+            }
+
+            const auto attributeHandle = meshHeapHandles.acquire(meshResult->meshResources.attributeBuffer);
+            if(!attributeHandle){
+                meshHeapHandles.sweep();
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                return false;
+            }
+
+            const Core::BufferDesc& nodeDesc = meshResult->meshResources.swBvhNodeBuffer->getCreationDescription();
+            const Core::BufferDesc& positionDesc = meshResult->meshResources.positionBuffer->getCreationDescription();
+            const Core::BufferDesc& indexDesc = meshResult->meshResources.triangleIndexBuffer->getCreationDescription();
+            const Core::BufferDesc& attributeDesc = meshResult->meshResources.attributeBuffer->getCreationDescription();
+            preparedMeshes.push_back(PreparedSceneSwBvhMesh{
+                .meshName = meshResult->meshResources.meshName,
+                .nodeBuffer = meshResult->meshResources.swBvhNodeBuffer,
+                .positionBuffer = meshResult->meshResources.positionBuffer,
+                .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
+                .attributeBuffer = meshResult->meshResources.attributeBuffer,
+                .nodeHeapHandle = nodeHandle,
+                .positionHeapHandle = positionHandle,
+                .triangleIndexHeapHandle = indexHandle,
+                .attributeHeapHandle = *attributeHandle,
+                .runtimeMeshVersion = meshResult->meshResources.runtimeMeshVersion,
+                .geometryContentRevision = meshResult->meshResources.runtimeGeometryContentRevision,
+                .nodeByteSize = nodeDesc.byteSize,
+                .positionByteSize = positionDesc.byteSize,
+                .triangleIndexByteSize = indexDesc.byteSize,
+                .attributeByteSize = attributeDesc.byteSize,
+                .primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
+                .runtimeMesh = meshResult->meshResources.runtimeMesh,
+            });
+
+            meshSlot = m_rayTracingState.m_swShadowMeshCount;
+            m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
+            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(MakeNotNull(meshResult->meshResources.positionBuffer.get()));
+            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(MakeNotNull(meshResult->meshResources.triangleIndexBuffer.get()));
+            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
+            m_rayTracingState.m_swShadowMeshNodeHandles.push_back(nodeHandle);
+            m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
+            m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
+            m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(*attributeHandle);
+            if(!meshSlotLookup.emplace(meshNodeBuffer, meshSlot).second){
+                NWB_ASSERT(false);
+                meshHeapHandles.sweep();
+                return false;
+            }
+            ++m_rayTracingState.m_swShadowMeshCount;
+        }
+
+        const NWB::Impl::Scene::TransformComponent* objectTransformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const SIMDMatrix objectToWorld = objectTransformPtr ? MatrixAffineTransformation(LoadFloat(objectTransformPtr->scale), VectorZero(), LoadFloat(objectTransformPtr->rotation), LoadFloat(objectTransformPtr->position)) : MatrixIdentity();
+        SIMDVectorSingle determinant;
+        const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
+
+        const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
+        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
+        if(!worldBounds){
+            contentComplete = false;
+            opticalScene.markIncomplete();
+            continue;
+        }
+        SIMDVectorSingle worldMin = worldBounds->minBounds;
+        SIMDVectorSingle worldMax = worldBounds->maxBounds;
+        InflateSwShadowSceneBounds(worldMin, worldMax);
+
+        SceneSwBvhInstanceGpu instance;
+        StoreFloat(worldToObject, instance.worldToObject);
+        instance.primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+
+        // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
+        const u32 meshInstanceIndex = static_cast<u32>(instances.size());
+        NwbRtInstanceMaterialGpu instanceMaterial;
+        InstanceGpuData shadowInstance;
+        if(!occluderMaterials.resolve(
+            entity,
+            renderer.material,
+            objectTransformPtr,
+            meshInstanceIndex,
+            instanceMaterial,
+            shadowInstance
+        ))
+            return false;
+        instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
+        const SceneBvhPrimitiveCalculation bvhPrimitive = MakeSceneBvhPrimitiveCalculation(worldMin, worldMax, instanceMaterial.flags);
+
+        SIMDVectorSingle opticalMin = VectorZero();
+        SIMDVectorSingle opticalMax = VectorZero();
+        b8 opticalBoundsValid = false;
+        if(bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh){
+            const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
+            if(bounds){
+                opticalMin = bounds->minimum;
+                opticalMax = bounds->maximum;
+                opticalBoundsValid = true;
+            }
+        }
+        const b8 runtimeOpticalBounds =
+            bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
+            && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
+        ;
+        Float34 instanceWorld{};
+        StoreFloat(objectToWorld, instanceWorld);
+        if(runtimeOpticalBounds)
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, instanceWorld);
+        else
+            opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
+
+        lightSpaceGather.appendSoftwareCaptureIdentity(entity, meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh, meshResult->meshResources, instanceMaterial, shadowInstance, opticalScene.instances.back());
+        lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult->meshResources);
+        sceneRefitInputs.push_back({ instanceWorld, instanceMaterial.nodeSlot, {} });
+        sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
+        lightSpaceGather.appendSoftwareCaster(meshResult->meshResources);
+        instances.push_back(instance);
+        instanceBvhPrimitives.push_back(bvhPrimitive);
+        instanceMaterials.push_back(instanceMaterial);
+        shadowInstanceData.push_back(shadowInstance);
+    }
+
+    RayTracingDiagnostics().shadowMeshHeapHighWater(
+        false,
+        m_rayTracingState.m_swShadowMeshCount,
+        m_rayTracingState.m_swShadowMeshHeapHighWater
+    );
+    meshHeapHandles.sweep();
+
+    if(!lightSpaceGather.finishSoftware(instances, instanceMaterials, contentComplete))
+        return false;
+    const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
+    const u32 instanceCount = static_cast<u32>(instances.size());
+    if(instanceCount == 0u){
+        m_rayTracingState.m_sceneBvhInstanceCount = 0u;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+        return true;
+    }
+
+    // Topology hash includes bounds, transforms, and transparent-subtree class.
+    const u64 sceneStaticHash = staticScene ? RayTracingSceneIdentityBuilder().staticSceneHash(instances, instanceBvhPrimitives) : 0u;
+    const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
+    if(!RayTracingBuildPolicy().validateSceneSwBvhNodeCount(requiredNodeCount))
+        return false;
+    const b8 canReuseSceneBvh =
+        staticScene
+        && m_rayTracingState.m_sceneSwBvhStaticSceneHashValid
+        && m_rayTracingState.m_sceneSwBvhStaticSceneHash == sceneStaticHash
+        && m_rayTracingState.m_sceneBvhInstanceCount == instanceCount
+        && HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount)
+    ;
+    if(!staticScene || !canReuseSceneBvh)
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+    if(canReuseSceneBvh && !capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount))
+        return false;
+
+    if(!canReuseSceneBvh){
+        RayTraceMaterialResources materials(m_graphics, m_rayTracingState, m_rayTracingState);
+        SoftwareBvhBuilder builder(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
+        if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount))
+            return false;
+        // CPU-build the small scene BVH and upload the shared node layout.
+        Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
+        Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
+        Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
+        Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
+        if(!BuildAndPackSceneBvhNodesInto(instances, instanceBvhPrimitives, indices, instanceLeafCost, buildNodes, nodes))
+            return false;
+
+        if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes, instances))
+            return false;
+    }
+
+    if(!staticScene){
+        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs, sceneRefitRoots, m_preparedSceneBvh.nodeBuffer(), m_preparedSceneBvh.nodeHeapHandle(), static_cast<u32>(requiredNodeCount), m_shaderSystem);
+        if(!preparedRefit){
+            m_preparedSceneSwBvhRefit.reset();
+            return false;
+        }
+        m_preparedSceneSwBvhRefit = Move(*preparedRefit);
+    }
+
+    ShadowMaterialContextPreparer materialContextPreparer(*this);
+    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Software, staticScene, instances.size(), instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
+    if(!materialContextHash)
+        return false;
+    const u64 swMaterialContextHash = *materialContextHash;
+
+    m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
+    const b8 frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
+    if(frozenGraphScene){
+        if(!m_preparedSceneSwBvhTraversal.capture(preparedMeshes, instanceCount)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
+            clearPreparedSceneBvh();
+            clearPreparedShadowMaterialContext();
+            return false;
+        }
+    }
+    else
+        m_preparedSceneSwBvhTraversal.clear();
+    if(!m_softwareOpticalScene.prepare(opticalScene) || !m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
+        return false;
+    m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(
+        sceneStaticHash,
+        swMaterialContextHash,
+        opticalScene.contentHash(),
+        csg.hasCsg,
+        csg.identity,
+        staticScene,
+        contentComplete
+    );
+    // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(m_preparedSceneContentStamp);
+    lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures, contentComplete);
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
+    if(!m_preparedMeshBlasBuildsReady)
+        return;
+
+    b8 allPlansCurrent = true;
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::Matches((*meshResourcesResult), build)){
+            allPlansCurrent = false;
+            continue;
+        }
+
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResourcesResult);
+        u64 firstBuilds = m_blasLedgerFirstBuilds;
+        u64 refits = m_blasLedgerRefits;
+        u64 rebuilds = m_blasLedgerRebuilds;
+        u64 uploadedBytes = m_blasLedgerUploadedBytes;
+        RayTracingBuildPolicy().applyConfirmedMeshBlasBuild(
+            build.firstBuild,
+            build.performRefit,
+            build.refitsAfterBuild,
+            build.geometryContentRevision,
+            build.positionByteSize,
+            meshResourcesResult->blasBuildPending,
+            meshResourcesResult->blasBackingFresh,
+            meshResourcesResult->blasRefitsSinceRebuild,
+            meshResourcesResult->blasBuildAccepted,
+            meshResourcesResult->blasGeometryContentRevision,
+            firstBuilds,
+            refits,
+            rebuilds,
+            uploadedBytes
+        );
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResourcesResult))){
+            allPlansCurrent = false;
+            continue;
+        }
+        m_blasLedgerFirstBuilds = firstBuilds;
+        m_blasLedgerRefits = refits;
+        m_blasLedgerRebuilds = rebuilds;
+        m_blasLedgerUploadedBytes = uploadedBytes;
+        RayTracingDiagnostics().meshBlasFirstBuild(build.firstBuild, build.meshName, build.runtimeMesh, build.vertexCount, build.indexCount);
+    }
+    // A replacement after recording never joins the accepted cache. Force a future TLAS rebuild, not a retired hash.
+    RayTracingBuildPolicy().finalizeConfirmedMeshBlasBuilds(
+        allPlansCurrent,
+        m_blasLedgerStaticSkipped,
+        m_blasLedgerFirstBuilds,
+        m_blasLedgerRefits,
+        m_blasLedgerRebuilds,
+        m_blasLedgerUploadedBytes,
+        m_rayTracingState.m_tlasStaticSceneHashValid
+    );
+    clearPreparedMeshBlasBuilds();
+}
+
+b8 RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return false;
+
+    b8 allResourcesReady = true;
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
+        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision))
+            continue;
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
+        if(!prepareMeshBlasResources(meshResources)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            allResourcesReady = false;
+        }
+        else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            allResourcesReady = false;
+        }
+    }
+    return allResourcesReady;
+}
+
+b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena){
+    clearPreparedMeshBlasBuilds();
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return false;
+
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
+        // Reuse only accepted, unchanged object-space geometry, including off-screen mesh resources.
+        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision)){
+            if(!meshResources.runtimeMesh)
+                ++m_blasLedgerStaticSkipped;
+            continue;
+        }
+
+        auto build = PreparedMeshBlasBuilder::Resolve(meshResources);
+        if(!build){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            clearPreparedMeshBlasBuilds();
+            return false;
+        }
+        m_preparedMeshBlasBuilds.push_back(Move(*build));
+    }
+    m_preparedMeshBlasBuildsReady = !m_preparedMeshBlasBuilds.empty();
+    return true;
+}
+
+b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& commandList, const b8 meshBlasGeometryBuildInputStatesGraphOwned){
+    if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
+        return false;
+
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::Matches((*meshResourcesResult), build)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
+            return false;
+        }
+    }
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        if(!PreparedMeshBlasBuilder::Record(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
+            return false;
+        }
+    }
+    return true;
+}
+
+void RendererRayTracingSystem::clearPreparedMeshBlasBuilds()noexcept{
+    m_preparedMeshBlasBuilds.clear();
+    m_preparedMeshBlasBuildsReady = false;
+}
+
+b8 RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
+    if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
+        return false;
+
+    if(meshResources.blas)
+        return true;
+
+    const u32 vertexStride = static_cast<u32>(positionDesc.structStride);
+    const u32 vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    Core::RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(meshResources.positionBuffer.get())
+        .setVertexFormat(Core::Format::RGB32_FLOAT)
+        .setVertexStride(vertexStride)
+        .setVertexCount(vertexCount)
+        .setIndexBuffer(meshResources.triangleIndexBuffer.get())
+        .setIndexFormat(Core::Format::R32_UINT)
+        .setIndexCount(meshResources.meshletPrimitiveIndexCount)
+    ;
+    Core::RayTracingGeometryDesc geometry;
+    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(meshResources.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
+    Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
+    accelStructDesc.addBottomLevelGeometry(geometry);
+    accelStructDesc.setBuildFlags(buildFlags);
+    accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto blasName = DeriveName(meshResources.meshName, s_BlasNameSuffix);
+    if(!blasName){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        return false;
+    }
+    accelStructDesc.setDebugName(*blasName);
+    auto blasResult = m_graphics.getDevice().createAccelStruct(accelStructDesc);
+    if(!blasResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        return false;
+    }
+    Core::RayTracingAccelStructHandle blas = Move(*blasResult);
+    meshResources.blas = Move(blas);
+    RayTracingBuildPolicy().initializeCreatedMeshBlas(
+        meshResources.blasBuildPending,
+        meshResources.blasBuildAccepted,
+        meshResources.blasGeometryContentRevision,
+        meshResources.blasBackingFresh,
+        meshResources.blasRefitsSinceRebuild
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<PreparedMeshBlasBuild> PreparedMeshBlasBuilder::Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
+    PreparedMeshBlasBuild build;
+    if(!meshResources.meshName || !meshResources.positionBuffer || !meshResources.triangleIndexBuffer || !meshResources.blas || !meshResources.blas->getBackingBufferHandle())
+        return MakeUnexpected(Failure{});
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
+        return MakeUnexpected(Failure{});
+
+    const b8 firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
+    const b8 performRefit = meshResources.runtimeMesh && !firstBuild && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount);
+    build.meshName = meshResources.meshName;
+    build.positionBuffer = meshResources.positionBuffer;
+    build.triangleIndexBuffer = meshResources.triangleIndexBuffer;
+    build.blas = meshResources.blas;
+    build.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
+    build.runtimeMeshVersion = meshResources.runtimeMeshVersion;
+    build.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
+    build.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
+    build.positionByteSize = positionDesc.byteSize;
+    build.vertexStride = static_cast<u32>(positionDesc.structStride);
+    build.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    build.indexCount = meshResources.meshletPrimitiveIndexCount;
+    build.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
+    build.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
+    build.runtimeMesh = meshResources.runtimeMesh;
+    build.buildPending = meshResources.blasBuildPending;
+    build.firstBuild = firstBuild;
+    build.backingFresh = meshResources.blasBackingFresh;
+    build.performRefit = performRefit;
+    return build;
+}
+
+b8 PreparedMeshBlasBuilder::Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
+    if(
+        meshResources.meshName != build.meshName
+        || meshResources.runtimeMesh != build.runtimeMesh
+        || meshResources.runtimeMeshVersion != build.runtimeMeshVersion
+        || meshResources.runtimeGeometryContentRevision != build.geometryContentRevision
+        || meshResources.blasGeometryContentRevision != build.acceptedGeometryContentRevision
+        || meshResources.positionBuffer.get() != build.positionBuffer.get()
+        || meshResources.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+        || meshResources.blas.get() != build.blas.get()
+        || !meshResources.blas
+        || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+        || meshResources.meshletPrimitiveIndexCount != build.indexCount
+        || meshResources.blasBuildPending != build.buildPending
+        || (meshResources.blasBuildPending || !meshResources.blasBuildAccepted) != build.firstBuild
+        || meshResources.blasBackingFresh != build.backingFresh
+        || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
+    )
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    return positionDesc.structStride == build.vertexStride && positionDesc.byteSize == build.positionByteSize && build.vertexStride != 0u && build.vertexCount == positionDesc.byteSize / build.vertexStride;
+}
+
+b8 PreparedMeshBlasBuilder::Record(const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList){
+    if(
+        !build.positionBuffer
+        || !build.triangleIndexBuffer
+        || !build.blas
+        || !build.blasBackingBuffer
+        || build.vertexStride == 0u
+        || build.vertexCount == 0u
+        || build.indexCount == 0u
+        || build.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+    )
+        return false;
+
+    Core::RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(build.positionBuffer.get())
+        .setVertexFormat(Core::Format::RGB32_FLOAT)
+        .setVertexStride(build.vertexStride)
+        .setVertexCount(build.vertexCount)
+        .setIndexBuffer(build.triangleIndexBuffer.get())
+        .setIndexFormat(Core::Format::R32_UINT)
+        .setIndexCount(build.indexCount)
+    ;
+    Core::RayTracingGeometryDesc geometry;
+    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(build.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
+    if(build.performRefit)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
+
+    // Mixed geometry input ownership establishes these states locally; fully declared inputs use the packet prologue.
+    if(!meshBlasGeometryBuildInputStatesGraphOwned){
+        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    }
+    commandList.commitBarriers();
+    commandList.buildBottomLevelAccelStruct(build.blas.get(), &geometry, 1u, buildFlags);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PreparedSceneTlasBuild::StorageReady(const RendererRayTracingState& state, const usize instanceCount)noexcept{
+    return
+        state.m_tlas
+        && state.m_tlas->getBackingBufferHandle()
+        && state.m_tlasMaxInstances >= instanceCount
+        && state.m_tlasHeapHandle.valid()
+        && state.m_tlasHeapHandle.descriptorClass() == Core::GpuDescriptorClass::AccelStruct
+    ;
+}
+
+b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const Core::RayTracingInstanceDesc> instances, const Span<const Core::RayTracingAccelStructHandle> instanceBlases){
+    clear();
+    if(instances.empty() || instances.size() != instanceBlases.size() || !StorageReady(state, instances.size()))
+        return false;
+
+    m_instances.reserve(instances.size());
+    m_blases.reserve(instanceBlases.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const Core::RayTracingAccelStructHandle& blas = instanceBlases[index];
+        if(!blas || instances[index].bottomLevelAS != blas.get()){
+            clear();
+            return false;
+        }
+        m_instances.push_back(instances[index]);
+        m_blases.push_back(blas);
+    }
+    m_tlas = state.m_tlas;
+    m_backingBuffer = state.m_tlas->getBackingBufferHandle();
+    m_heapHandle = state.m_tlasHeapHandle;
+    m_maxInstances = state.m_tlasMaxInstances;
+    m_staticSceneHash = staticSceneHash;
+    m_static = staticScene;
+    m_ready = true;
+    return true;
+}
+
+b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandList& commandList){
+    if(!m_ready || m_instances.empty() || m_instances.size() != m_blases.size() || !storageMatches(state) || !StorageReady(state, m_instances.size())){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
+        return false;
+    }
+    for(usize index = 0u; index < m_instances.size(); ++index){
+        if(!m_blases[index] || m_instances[index].bottomLevelAS != m_blases[index].get()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
+            return false;
+        }
+    }
+
+    commandList.buildTopLevelAccelStruct(m_tlas.get(), m_instances.data(), m_instances.size(), Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
+    return true;
+}
+
+void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
+    if(!m_ready)
+        return;
+
+    // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
+    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(
+        storageMatches(state),
+        m_static,
+        m_staticSceneHash,
+        state.m_tlasStaticSceneHash,
+        state.m_tlasStaticSceneHashValid,
+        state.m_tlasBackingFresh
+    );
+    clear();
+}
+
+void PreparedSceneTlasBuild::clear()noexcept{
+    m_instances.clear();
+    m_blases.clear();
+    m_tlas = nullptr;
+    m_backingBuffer = nullptr;
+    m_heapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_maxInstances = 0u;
+    m_staticSceneHash = 0u;
+    m_static = false;
+    m_ready = false;
+}
+
+b8 PreparedSceneTlasBuild::storageMatches(const RendererRayTracingState& state)const noexcept{
+    return
+        state.m_tlas
+        && state.m_tlas.get() == m_tlas.get()
+        && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get()
+        && state.m_tlasMaxInstances == m_maxInstances
+        && state.m_tlasHeapHandle == m_heapHandle
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void TlasStaticSceneIdentity::Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
+    RayTracingSceneIdentityBuilder().updateTlasStaticInput(
+        LoadFloat(instance.transform),
+        static_cast<u32>(instance.instanceID),
+        static_cast<u32>(instance.instanceMask),
+        static_cast<u32>(instance.instanceContributionToHitGroupIndex),
+        static_cast<u32>(instance.flags),
+        inOutHash
+    );
+    Fnv64AppendValue(inOutHash, instance.bottomLevelAS);
+}
+
+u64 TlasStaticSceneIdentity::Compute(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(const Core::RayTracingInstanceDesc& instance : instances)
+        TlasStaticSceneIdentity::Append(instance, hash);
+    return hash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Core::GpuDescriptorHandle> MeshHeapHandleGather::acquire(const Core::BufferHandle& bufferHandle){
+    if(!bufferHandle)
+        return MakeUnexpected(Failure{});
+
+    Core::Buffer& buffer = *bufferHandle;
+    const NotNull<const Core::Buffer*> bufferKey(&buffer);
+    auto found = m_cache.find(bufferKey);
+    if(found != m_cache.end()){
+        NWB_ASSERT(found.value().handle.valid());
+        found.value().seenThisFrame = true;
+        return found.value().handle;
+    }
+
+    const auto handle = RayTracingDetail::RegisterHeapBuffer(m_heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
+    if(!handle)
+        return MakeUnexpected(Failure{});
+
+    Core::GpuDescriptorRetirementGuard descriptorRetirement(m_heap, *handle);
+    RtMeshHeapHandleCacheEntry entry;
+    entry.keepAlive = bufferHandle;
+    entry.handle = *handle;
+    entry.seenThisFrame = true;
+    if(!m_cache.insert({bufferKey, Move(entry)}).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    descriptorRetirement.release();
+    return *handle;
+}
+
+void MeshHeapHandleGather::sweep(){
+    for(auto it = m_cache.begin(); it != m_cache.end(); ){
+        if(it.value().seenThisFrame){
+            it.value().seenThisFrame = false;
+            ++it;
+        }
+        else{
+            m_heap.free(it.value().handle);
+            it = m_cache.erase(it);
+        }
+    }
+}
+
+void MeshHeapHandleGather::begin()noexcept{
+    for(auto it = m_cache.begin(); it != m_cache.end(); ++it)
+        it.value().seenThisFrame = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

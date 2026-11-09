@@ -39,6 +39,20 @@ using MaterialInstanceParameter = Impl::MaterialInstanceParameter;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifyMissingOwnerOverridesDoNotCreateMaterialInstance(){
+    native{
+        NWB::Tests::EcsTestWorld context;
+        auto owner = context.world.createEntity();
+        auto child = context.world.createEntity();
+        const NWB::Core::Assets::AssetRef<NWB::Impl::Material> material("tests/model_renderer/material");
+        NWB::Impl::ApplyModelObjectRenderer(owner.id(), material, context.world, child);
+        EXPECT_NE(context.world.tryGetComponent<NWB::Impl::RendererComponent>(child.id()), nullptr);
+        EXPECT_EQ(context.world.tryGetComponent<NWB::Impl::MaterialInstanceComponent>(child.id()), nullptr);
+    }
+}
+
+NWB_ADHD_GTEST(ModelRenderer, MissingOwnerOverridesDoNotCreateMaterialInstance, VerifyMissingOwnerOverridesDoNotCreateMaterialInstance)
+
 usize MaterialInstanceComponentAddress(in World world, in EntityID entity){
     usize address = 0u;
     native(in world, in entity, mut address){

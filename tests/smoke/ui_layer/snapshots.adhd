@@ -2,10 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
+#include <tests/smoke/smoke_environment.adhd>
+
 native{
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 namespace NWB::Tests::Smoke{
+using Impl::Ui::Color;
 using SnapshotRect = Impl::Ui::Rect;
 using SnapshotDisplay = Impl::Ui::DisplayMetrics;
 using SnapshotPoint = Impl::Ui::Point;
@@ -24,6 +28,8 @@ const Name s_UiSmokeNameComboArrow = "combo.arrow";
 const Name s_UiSmokeNameTestsUiLayerPersistentState = "tests/ui_layer/persistent_state";
 const Name s_UiSmokeNameTestsUiLayerPersistentStateBuffer = "tests/ui_layer/persistent_state_buffer";
 const Name s_UiSmokeNameProgressFill = "progress.fill";
+const u64 s_ResizePreparationPresentations = 4u;
+const u32 s_DefaultCaptureFrameCount = 60u;
 
 
 // Snapshot of copied image declaration inputs and expected display geometry.
@@ -98,7 +104,6 @@ class UiTextAreaSnapshot{
 }
 
 
-
 class PassiveSmokeColumns{
     public f32 mainWidth = 0.0f;
     public f32 rightColumn = 0.0f;
@@ -134,6 +139,137 @@ PassiveSmokeColumns ResolvePassiveSmokeColumns(in SnapshotDisplay display){
     result.rightColumn = 24.0f + result.mainWidth + 32.0f;
     result.rightWidth = Max(220.0f, display.logicalWidth - result.rightColumn - 24.0f);
     return result;
+}
+
+Color EncodeSmokeColor(in u64 value){
+    const VectorSingle channels(cast<f32>(value & 15u), cast<f32>((value >> 4u) & 15u), cast<f32>((value >> 8u) & 15u), 15.0f);
+    const VectorSingle color = channels / VectorSingle(15.0f);
+    return Color(color.x, color.y, color.z, 1.0f);
+}
+
+Color EncodeSmokeColor(in u32 value){
+    return EncodeSmokeColor(cast<u64>(value));
+}
+
+Color EncodeSmokeColor(in f32 value){
+    return EncodeSmokeColor(cast<u64>(Max(0.0f, value) + 0.5f));
+}
+
+SnapshotRect ScaleSmokeSceneRect(in VectorSingle extent, in f32 x, in f32 y, in f32 w, in f32 h){
+    const VectorSingle scaled = VectorSingle(x, y, w, h) * extent;
+    return SnapshotRect(scaled.x, scaled.y, scaled.z, scaled.w);
+}
+
+b8 IsUiLayerComboSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_COMBO");
+}
+
+b8 IsUiLayerComboSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_COMBO_SKIN");
+}
+
+b8 IsUiLayerEditSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_EDIT");
+}
+
+b8 IsUiLayerImageSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_IMAGE");
+}
+
+b8 IsUiLayerImageSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_IMAGE_SKIN");
+}
+
+b8 IsUiLayerInteractionSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INTERACTIVE");
+}
+
+b8 IsUiLayerListSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_LIST");
+}
+
+b8 IsUiLayerListSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_LIST_SKIN");
+}
+
+b8 IsUiLayerNestedPopupSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NESTED_POPUP");
+}
+
+b8 IsUiLayerNestedPopupSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NESTED_POPUP_SKIN");
+}
+
+b8 IsUiLayerNumericEditSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NUMERIC_EDIT");
+}
+
+b8 IsUiLayerNumericEditSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NUMERIC_EDIT_SKIN");
+}
+
+b8 IsUiLayerPopupSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP");
+}
+
+b8 IsUiLayerPopupSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_SKIN");
+}
+
+b8 IsUiLayerPopupToolsSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_TOOLS");
+}
+
+b8 IsUiLayerPopupToolsSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_TOOLS_SKIN");
+}
+
+b8 IsUiLayerProgressSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_PROGRESS");
+}
+
+b8 IsUiLayerProgressSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_PROGRESS_SKIN");
+}
+
+b8 IsUiLayerRadioGroupSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RADIO_GROUP");
+}
+
+b8 IsUiLayerRadioGroupSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RADIO_GROUP_SKIN");
+}
+
+b8 IsUiLayerSearchComboSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SEARCH_COMBO");
+}
+
+b8 IsUiLayerSearchComboSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SEARCH_COMBO_SKIN");
+}
+
+b8 IsUiLayerSliderSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SLIDER");
+}
+
+b8 IsUiLayerSliderSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SLIDER_SKIN");
+}
+
+b8 IsUiLayerTextureImageSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE");
+}
+
+b8 IsUiLayerTextureImageSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE_SKIN");
+}
+
+b8 IsUiLayerWindowSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_WINDOW");
+}
+
+b8 IsUiLayerWindowSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_WINDOW_SKIN");
 }
 
 

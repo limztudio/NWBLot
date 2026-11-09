@@ -1,0 +1,1349 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "combo_edit_scenes.adhd"
+
+native{
+NWB_BEGIN
+namespace Tests::Smoke{
+
+// Fixed five-key combo source with a filtered view.
+class UiNestedPopupSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
+private:
+    class View final : public Impl::Ui::IListDataSource, NoCopy{
+    public:
+        explicit View(const UiNestedPopupSmokeSource& source)noexcept : m_source(source){}
+
+
+    public:
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+
+        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
+
+        virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
+        virtual u64 key(u64 index)const noexcept override;
+        virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
+        virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+        virtual StringView text(u64 index)const noexcept override;
+        virtual b8 enabled(u64 index)const noexcept override;
+
+
+    private:
+        const UiNestedPopupSmokeSource& m_source;
+    };
+
+
+public:
+    explicit UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena)noexcept;
+
+
+public:
+    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
+
+    virtual u64 revision()const noexcept override{ return 1u; }
+
+    virtual u64 rowCount()const noexcept override{ return 5u; }
+
+    virtual u64 key(u64 index)const noexcept override{ return index < rowCount() ? index + 1u : 0u; }
+    virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    virtual StringView text(u64 index)const noexcept override;
+    virtual b8 enabled(u64 index)const noexcept override{ return index < rowCount() && key(index) != 3u; }
+    [[nodiscard]] virtual b8 filter(AStringView query)override;
+    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
+
+    void beginFrame()noexcept{ m_labelReads = 0u; }
+
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_query;
+    View m_view;
+    Array<u64, 5u> m_indices{};
+    u64 m_count = 0u;
+    u64 m_viewRevision = 0u;
+    mutable u32 m_labelReads = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Every nested state is a member and remains lent through the outermost endPopup.
+class UiNestedPopupSmokeScene : public Core::IInputEventHandler, NoCopy{
+public:
+    UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    virtual ~UiNestedPopupSmokeScene()noexcept override;
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+
+
+private:
+    [[nodiscard]] b8 paintRoot(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintParent(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintChild(Impl::Ui::Builder& ui);
+    // Copy accepted popup observations during the callback.
+    void observeState(Impl::UiPaintContext& context);
+    void paintMarkers(Impl::UiPaintContext& context)const;
+    [[nodiscard]] Array<u64, 29u> values()const noexcept;
+    [[nodiscard]] Impl::Ui::Rect rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, u64 key)const;
+
+
+private:
+    Core::InputDispatcher& m_input;
+    UiNestedPopupSmokeSource m_source;
+    Impl::Ui::PopupState m_parent;
+    Impl::Ui::PopupState m_child;
+    Impl::Ui::ListState m_beforeList;
+    Impl::Ui::ListState m_afterList;
+    Impl::Ui::ComboState m_combo;
+    Impl::Ui::SearchComboState m_search;
+    Impl::Ui::ContextMenuState m_menu;
+    Impl::Ui::EditModel m_beforeText;
+    Impl::Ui::EditModel m_afterText;
+    Impl::Ui::EditModel m_childText;
+    Impl::Ui::EditBoxState m_beforeEdit;
+    Impl::Ui::EditBoxState m_afterEdit;
+    Impl::Ui::EditBoxState m_childEdit;
+    Impl::Ui::DisplayMetrics m_lastDisplay;
+    Array<Impl::Ui::Rect, 26u> m_rectangles{};
+    Array<Impl::Ui::Rect, 26u> m_lastRectangles{};
+    Array<u64, 29u> m_lastValues{};
+    u64 m_command = 0u;
+    u32 m_sequence = 0u;
+    u32 m_beforeClicks = 0u;
+    u32 m_afterClicks = 0u;
+    u32 m_childClicks = 0u;
+    u32 m_outside = 0u;
+    u32 m_focusScope = 0u;
+    u32 m_focusCode = 0u;
+    u32 m_popupTargets = 0u;
+    u32 m_popupCount = 0u;
+    b8 m_childParentScope = false;
+    b8 m_childDeclared = false;
+    b8 m_displayChanged = false;
+};
+
+using SharedUiNestedPopupSmokeScene = RefCountPtr< RefCounter<UiNestedPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena> >;
+
+[[nodiscard]] SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+
+class UiNumericEditSmokeScene : public Core::IInputEventHandler, NoCopy{
+public:
+    UiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    virtual ~UiNumericEditSmokeScene()noexcept override;
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+
+
+private:
+    void resetModels();
+    [[nodiscard]] Array<u64, 30u> values()const noexcept;
+    void observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text);
+    void paintMarkers(Impl::UiPaintContext& context)const;
+    void count(const Impl::Ui::NumericEditResult& result)noexcept;
+    [[nodiscard]] Impl::Ui::FloatBounds floatBounds()const noexcept;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::InputDispatcher& m_input;
+    Impl::Ui::IntegerEditModel m_integer;
+    Impl::Ui::FloatEditModel m_float;
+    Impl::Ui::EditModel m_clipboard;
+    Array<Impl::Ui::EditBoxState, 3u> m_states{};
+    UiNumericEditSnapshot m_snapshot;
+    u32 m_commits = 0u;
+    u32 m_cancels = 0u;
+    u32 m_rejects = 0u;
+    u32 m_clamps = 0u;
+    u32 m_restored = 0u;
+    b8 m_enabled = true;
+    b8 m_readOnly = false;
+    b8 m_clamp = true;
+};
+
+using SharedUiNumericEditSmokeScene = RefCountPtr<RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>>;
+
+[[nodiscard]] SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+
+class UiPopupSmokeScene : public Core::IInputEventHandler, NoCopy{
+public:
+    UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    virtual ~UiPopupSmokeScene()noexcept override;
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paintLaterRoot(Impl::UiPaintContext& context)const;
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+
+
+private:
+    [[nodiscard]] Array<u32, 12u> values()const noexcept;
+    void observeState();
+
+
+private:
+    Core::InputDispatcher& m_input;
+    Impl::Ui::PopupState m_popup;
+    Impl::Ui::EditModel m_popupText;
+    Impl::Ui::EditModel m_outsideText;
+    Impl::Ui::EditBoxState m_popupEdit;
+    Impl::Ui::EditBoxState m_outsideEdit;
+    Impl::Ui::PopupPlacement m_lastPlacement;
+    Impl::Ui::DisplayMetrics m_lastDisplay;
+    Array<u32, 12u> m_lastValues{};
+    u32 m_sequence = 0u;
+    u32 m_underlying = 0u;
+    u32 m_selected = 0u;
+    b8 m_modal = false;
+    b8 m_checked = false;
+    b8 m_popupFocused = false;
+    b8 m_outsideFocused = false;
+    b8 m_edge = false;
+    b8 m_right = false;
+    b8 m_visible = true;
+    b8 m_displayChanged = false;
+};
+
+using SharedUiPopupSmokeScene = RefCountPtr< RefCounter<UiPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena> >;
+
+[[nodiscard]] SharedUiPopupSmokeScene CreateUiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+
+class UiPopupToolsSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
+public:
+    virtual u64 instanceGeneration()const noexcept override{ return m_generation; }
+
+    virtual u64 revision()const noexcept override{ return m_revision; }
+
+    virtual u64 rowCount()const noexcept override{ return 5u; }
+    virtual u64 key(u64 index)const noexcept override;
+    virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    virtual StringView text(u64 index)const noexcept override;
+    virtual b8 enabled(u64 index)const noexcept override{ return index < rowCount() && key(index) != 3u; }
+
+
+public:
+    void reverse()noexcept;
+
+    void replace()noexcept;
+
+    void beginFrame()noexcept{ m_labelReads = 0u; }
+
+    [[nodiscard]] b8 reversed()const noexcept{ return m_reversed; }
+
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
+
+
+private:
+    u64 m_generation = 1u;
+    u64 m_revision = 1u;
+    b8 m_reversed = false;
+    mutable u32 m_labelReads = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPopupToolsSmokeScene : public Core::IInputEventHandler, NoCopy{
+public:
+    UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    virtual ~UiPopupToolsSmokeScene()noexcept override;
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+
+
+private:
+    [[nodiscard]] Array<u64, 15u> values()const noexcept;
+    [[nodiscard]] Impl::Ui::Rect rowBounds(u64 key)const noexcept;
+    void observeState();
+
+
+private:
+    Core::InputDispatcher& m_input;
+    UiPopupToolsSmokeSource m_source;
+    Impl::Ui::ContextMenuState m_menu;
+    Impl::Ui::TooltipState m_tooltip;
+    Impl::Ui::EditModel m_sentinel;
+    Impl::Ui::EditBoxState m_sentinelState;
+    Impl::Ui::ScrollPlacement m_lastList;
+    Impl::Ui::PopupPlacement m_lastMenu;
+    Impl::Ui::PopupPlacement m_lastTooltip;
+    Impl::Ui::Rect m_lastSentinel;
+    Impl::Ui::DisplayMetrics m_lastDisplay;
+    Array<u64, 15u> m_lastValues{};
+    u64 m_command = 0u;
+    u32 m_sequence = 0u;
+    u32 m_commits = 0u;
+    u32 m_anchorClicks = 0u;
+    u32 m_underlying = 0u;
+    b8 m_sentinelFocused = false;
+    b8 m_enabled = true;
+    b8 m_displayChanged = false;
+};
+
+using SharedUiPopupToolsSmokeScene = RefCountPtr< RefCounter<UiPopupToolsSmokeScene>, ArenaRefDeleter<RefCounter<UiPopupToolsSmokeScene>, Core::Alloc::GlobalArena> >;
+
+[[nodiscard]] SharedUiPopupToolsSmokeScene CreateUiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+
+namespace __hidden_ui_nested_popup_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_TitleKey = "title";
+constexpr AStringView s_ActionKey = "action";
+constexpr AStringView s_EditKey = "edit";
+constexpr TStringView s_MenuAnchorLabel = NWB_TEXT("menu_anchor");
+constexpr AStringView s_MenuAnchorKey = "menu_anchor";
+static constexpr Impl::Ui::Rect s_Open{ 32.0f, 52.0f, 140.0f, 28.0f };
+static constexpr Impl::Ui::Rect s_Counter{ 176.0f, 52.0f, 140.0f, 28.0f };
+static constexpr Array<TStringView, 26u> s_RectNames{
+    NWB_TEXT("open"), NWB_TEXT("counter"), NWB_TEXT("parent"), NWB_TEXT("child"),
+    NWB_TEXT("before_button"), NWB_TEXT("before_edit"), NWB_TEXT("before_list"), NWB_TEXT("before_row2"),
+    NWB_TEXT("child_open"), NWB_TEXT("after_button"), NWB_TEXT("after_edit"), NWB_TEXT("after_list"),
+    NWB_TEXT("after_row2"), NWB_TEXT("child_action"), NWB_TEXT("child_edit"), NWB_TEXT("close_branch"),
+    NWB_TEXT("combo"), NWB_TEXT("combo_popup"), NWB_TEXT("combo_row2"), NWB_TEXT("search"),
+    NWB_TEXT("search_popup"), NWB_TEXT("search_query"), NWB_TEXT("search_row2"), __hidden_ui_nested_popup_smoke::s_MenuAnchorLabel,
+    NWB_TEXT("menu"), NWB_TEXT("menu_row2")
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+    : m_input(input)
+    , m_source(arena)
+    , m_search(arena)
+    , m_beforeText(arena)
+    , m_afterText(arena)
+    , m_childText(arena)
+{
+    const b8 initialized = m_beforeText.setText("Before") && m_afterText.setText("After") && m_childText.setText("Child");
+    NWB_FATAL_ASSERT(initialized);
+    m_combo.select(1u);
+    m_search.combo().select(1u);
+    m_input.addHandlerToBack(*this);
+}
+
+UiNestedPopupSmokeScene::~UiNestedPopupSmokeScene()noexcept{
+    m_input.removeHandler(*this);
+}
+
+b8 UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
+    ObserveSmokeDisplay(NWB_TEXT("UiNestedPopupSmoke"), context.display, m_lastDisplay, m_displayChanged);
+    m_source.beginFrame();
+    m_childDeclared = false;
+    auto& ui = context.ui;
+    ui.style().fontSize = 12.0f;
+    ui.style().gap = 4.0f;
+    if(!paintRoot(ui))
+        return false;
+    Impl::Ui::PopupOptions options;
+    options.anchor = { 72.0f, 54.0f, 120.0f, 24.0f };
+    options.size = { 300.0f, 420.0f };
+    if(ui.beginPopup("parent", m_parent, options)){
+        if(!paintParent(ui) || !ui.endPopup())
+            return false;
+    }
+    if(ui.failed())
+        return false;
+    observeState(context);
+    paintMarkers(context);
+    return true;
+}
+
+::NWB::Core::KeyboardInputResult UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+    if(key != Core::Key::F8)
+        return false;
+    if(action == Core::InputAction::Press)
+        m_parent.close();
+    return true;
+}
+
+b8 UiNestedPopupSmokeScene::paintRoot(Impl::Ui::Builder& ui){
+    using namespace Impl::Ui;
+    if(!ui.beginPanel("nested_root", { 24.0f, 24.0f, 300.0f, 80.0f }))
+        return false;
+    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Nested popup ownership / F8 closes ancestor", caption))
+        return false;
+    ContainerOptions row;
+    row.height = { LayoutSizePolicy::Fixed, 28.0f };
+    row.gap = 4.0f;
+    if(!ui.beginRow("root_buttons", row))
+        return false;
+    const WidgetOptions button{ { LayoutSizePolicy::Fixed, 140.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
+    if(ui.button("open", "Open parent", button))
+        m_parent.open();
+    if(ui.button("counter", "Outside counter", button))
+        ++m_outside;
+    return ui.endContainer() && ui.endPanel();
+}
+
+b8 UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
+    using namespace Impl::Ui;
+    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
+    const WidgetOptions button{ { LayoutSizePolicy::Fixed, 100.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+    const WidgetOptions wide{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+    ContainerOptions row;
+    row.height = { LayoutSizePolicy::Fixed, 32.0f };
+    row.gap = 4.0f;
+    EditBoxOptions edit;
+    edit.height = { LayoutSizePolicy::Fixed, 32.0f };
+    ListOptions list;
+    list.height = { LayoutSizePolicy::Fixed, 56.0f };
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Parent scope resumes after nested child", caption) || !ui.beginRow("before", row))
+        return false;
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "Before", button))
+        ++m_beforeClicks;
+    const EditBoxResult before = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_beforeText, m_beforeEdit, edit);
+    if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", m_source, m_beforeList, list).valid)
+        return false;
+    if(ui.button("child_open", "Open right child", wide))
+        m_child.open();
+    if(!paintChild(ui) || !ui.beginRow("after", row))
+        return false;
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "After", button))
+        ++m_afterClicks;
+    const EditBoxResult after = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_afterText, m_afterEdit, edit);
+    if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", m_source, m_afterList, list).valid)
+        return false;
+    ComboOptions combo;
+    combo.height = { LayoutSizePolicy::Fixed, 32.0f };
+    combo.popupHeight = 172.0f;
+    if(!ui.comboBox("combo", m_source, m_combo, combo).valid)
+        return false;
+    SearchComboOptions search;
+    search.combo = combo;
+    search.combo.popupHeight = 196.0f;
+    if(!ui.searchComboBox("search", m_source, m_search, search).combo.valid)
+        return false;
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_MenuAnchorKey, "Right-click for context commands", wide))
+        m_command = 0u;
+    ContextMenuOptions menu;
+    menu.size = { 200.0f, 172.0f };
+    const ContextMenuResult command = ui.contextMenu("commands", __hidden_ui_nested_popup_smoke::s_MenuAnchorKey, m_source, m_menu, menu);
+    if(command.activated)
+        m_command = command.key;
+    return command.valid;
+}
+
+b8 UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
+    using namespace Impl::Ui;
+    PopupOptions options;
+    const Rect& parent = m_parent.placement().bounds;
+    options.anchor = Impl::Ui::StoreRect(VectorSubtract(VectorAdd(VectorSet(parent.x, parent.y, 8.0f, 32.0f), VectorSet(parent.width, 124.0f, 0.0f, 0.0f)), VectorSet(8.0f, 0.0f, 0.0f, 0.0f)));
+    options.side = PopupPlacementSide::Right;
+    options.size = { 220.0f, 178.0f };
+    if(!ui.beginPopup("child", m_child, options))
+        return !ui.failed();
+    m_childDeclared = true;
+    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
+    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Child escapes parent clip", caption))
+        return false;
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "Child action", button))
+        ++m_childClicks;
+    EditBoxOptions edit;
+    edit.height = { LayoutSizePolicy::Fixed, 32.0f };
+    const EditBoxResult text = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_childText, m_childEdit, edit);
+    if(ui.button("close_branch", "Close whole ancestor branch", button))
+        m_parent.close();
+    return text.valid && ui.endPopup();
+}
+
+void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
+    using namespace Impl::Ui;
+    m_rectangles.fill({});
+    m_rectangles[0] = __hidden_ui_nested_popup_smoke::s_Open;
+    m_rectangles[1] = __hidden_ui_nested_popup_smoke::s_Counter;
+    if(m_parent.isOpen()){
+        const Rect parent = m_parent.placement().bounds;
+        m_rectangles[2] = parent;
+        const SIMDVectorSingle parentFrame = VectorSet(parent.x, parent.y, parent.width, 0.0f);
+        m_rectangles[4] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f)));
+        m_rectangles[5] = m_beforeEdit.placement.bounds;
+        m_rectangles[6] = m_beforeList.placement().bounds;
+        m_rectangles[7] = rowBounds(m_beforeList, m_source, 2u);
+        m_rectangles[8] = Impl::Ui::StoreRect(VectorAdd(parentFrame, VectorSet(8.0f, 124.0f, -16.0f, 32.0f)));
+        m_rectangles[9] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 160.0f, 0.0f, 0.0f)));
+        m_rectangles[10] = m_afterEdit.placement.bounds;
+        m_rectangles[11] = m_afterList.placement().bounds;
+        m_rectangles[12] = rowBounds(m_afterList, m_source, 2u);
+        m_rectangles[16] = m_combo.bounds();
+        m_rectangles[19] = m_search.combo().bounds();
+        m_rectangles[23] = Impl::Ui::StoreRect(VectorAdd(parentFrame, VectorSet(8.0f, 328.0f, -16.0f, 32.0f)));
+        if(m_childDeclared && m_child.isOpen()){
+            const Rect child = m_child.placement().bounds;
+            m_rectangles[3] = child;
+            const SIMDVectorSingle childFrame = VectorSet(child.x, child.y, child.width, 0.0f);
+            m_rectangles[13] = Impl::Ui::StoreRect(VectorAdd(childFrame, VectorSet(8.0f, 28.0f, -16.0f, 32.0f)));
+            m_rectangles[14] = m_childEdit.placement.bounds;
+            m_rectangles[15] = Impl::Ui::StoreRect(VectorAdd(childFrame, VectorSet(8.0f, 100.0f, -16.0f, 32.0f)));
+        }
+        if(m_combo.isOpen()){
+            m_rectangles[17] = m_combo.placement().bounds;
+            m_rectangles[18] = rowBounds(m_combo.listState(), m_source, 2u);
+        }
+        if(m_search.combo().isOpen()){
+            m_rectangles[20] = m_search.combo().placement().bounds;
+            m_rectangles[21] = m_search.editorState().placement.bounds;
+            m_rectangles[22] = rowBounds(m_search.combo().listState(), m_source.filtered(), 2u);
+        }
+        if(m_menu.isOpen()){
+            m_rectangles[24] = m_menu.placement().bounds;
+            m_rectangles[25] = rowBounds(m_menu.listState(), m_source, 2u);
+        }
+    }
+    m_focusScope = 0u;
+    m_focusCode = 0u;
+    m_popupTargets = 0u;
+    const auto& input = context.ui.input();
+    m_popupCount = static_cast<u32>(input.popupCount());
+    m_childParentScope = false;
+    for(const auto& target : input.targets()){
+        if(target.popup.valid())
+            ++m_popupTargets;
+        if(target.popup.instanceGeneration == m_child.instanceGeneration()){
+            const PopupScope* scope = input.popupScope(target.popup);
+            m_childParentScope |= scope && scope->parent.instanceGeneration == m_parent.instanceGeneration();
+        }
+        if(target.id != input.focus())
+            continue;
+        if(target.popup.valid()){
+            m_focusScope = target.popup.instanceGeneration == m_child.instanceGeneration() ? 2u : target.popup.instanceGeneration == m_parent.instanceGeneration() ? 1u : 3u;
+        }
+        for(usize index = 0u; index < m_rectangles.size(); ++index){
+            if(SameSmokeRect(target.rectangle, m_rectangles[index])){
+                m_focusCode = static_cast<u32>(index + 1u);
+                break;
+            }
+        }
+    }
+    const auto current = values();
+    b8 geometryChanged = false;
+    for(usize index = 0u; index < m_rectangles.size(); ++index)
+        geometryChanged |= !SameSmokeRect(m_rectangles[index], m_lastRectangles[index]);
+    if(m_sequence != 0u && !m_displayChanged && !geometryChanged && current == m_lastValues)
+        return;
+    ++m_sequence;
+    m_lastValues = current;
+    m_lastRectangles = m_rectangles;
+    m_displayChanged = false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+        , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6]
+        , current[7], current[8], current[9], current[10], current[11], current[12], current[13]
+        , current[14], current[15], current[16], current[17], current[18], current[19], current[20]
+        , current[21], current[22], current[23], current[24], current[25], current[26], current[27], current[28]
+    );
+    for(usize index = 0u; index < m_rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiNestedPopupSmoke"), m_sequence, __hidden_ui_nested_popup_smoke::s_RectNames[index], m_rectangles[index]);
+}
+
+void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(values(), m_sequence, context);
+}
+
+Array<u64, 29u> UiNestedPopupSmokeScene::values()const noexcept{
+    const b8 parent = m_parent.isOpen();
+    return { static_cast<u64>(parent), static_cast<u64>(parent && m_childDeclared && m_child.isOpen()), m_focusScope, m_focusCode,
+        m_beforeClicks, m_afterClicks, m_childClicks, m_outside, static_cast<u64>(m_beforeText.text().size()),
+        static_cast<u64>(m_afterText.text().size()), static_cast<u64>(m_childText.text().size()),
+        m_beforeList.selectedKey(), m_afterList.selectedKey(), static_cast<u64>(parent && m_combo.isOpen()), m_combo.selectedKey(),
+        static_cast<u64>(parent && m_search.combo().isOpen()), m_search.combo().selectedKey(),
+        static_cast<u64>(m_search.query().text().size()), static_cast<u64>(parent && m_menu.isOpen()), m_menu.cursorKey(), m_command,
+        m_source.labelReads(), static_cast<u64>(m_child.isOpen()), static_cast<u64>(m_combo.isOpen()),
+        static_cast<u64>(m_search.combo().isOpen()), static_cast<u64>(m_menu.isOpen()), m_popupTargets, m_popupCount,
+        static_cast<u64>(m_childParentScope) };
+}
+
+Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, const u64 key)const{
+    const auto& placement = state.placement();
+    const auto index = source.indexOf(key);
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
+        return {};
+    return VisibleSmokeListRow(placement, *index);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
+    return SharedUiNestedPopupSmokeScene(NewArenaObject<RefCounter<UiNestedPopupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_nested_popup_source{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Echo" };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 UiNestedPopupSmokeSource::View::key(const u64 index)const noexcept{
+    return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u;
+}
+
+Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const noexcept{
+    u64 index = 0u;
+    for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
+        if(key(candidate) == keyValue){
+            index = candidate;
+            return index;
+        }
+    }
+    return MakeUnexpected(Failure{});
+}
+
+Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    u64 index = 0u;
+    if(start >= rowCount())
+        return MakeUnexpected(Failure{});
+    for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
+        if(enabled(candidate)){
+            index = candidate;
+            return index;
+        }
+        if(reverse && candidate == 0u)
+            break;
+    }
+    return MakeUnexpected(Failure{});
+}
+
+StringView UiNestedPopupSmokeSource::View::text(const u64 index)const noexcept{
+    return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
+}
+
+b8 UiNestedPopupSmokeSource::View::enabled(const u64 index)const noexcept{
+    return index < rowCount() && m_source.enabled(m_source.m_indices[index]);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena)noexcept
+    : m_query(arena)
+    , m_view(*this)
+{
+    const b8 initialized = filter({});
+    NWB_FATAL_ASSERT(initialized);
+}
+
+Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const noexcept{
+    u64 index = 0u;
+    if(keyValue == 0u || keyValue > rowCount())
+        return MakeUnexpected(Failure{});
+    index = keyValue - 1u;
+    return index;
+}
+
+Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    return FindAdjacentEnabledRow(*this, start, reverse);
+}
+
+StringView UiNestedPopupSmokeSource::text(const u64 index)const noexcept{
+    ++m_labelReads;
+    return index < rowCount() ? __hidden_ui_nested_popup_source::s_Labels[index] : StringView{};
+}
+
+b8 UiNestedPopupSmokeSource::filter(const AStringView query){
+    if(m_viewRevision != 0u && query == AStringView(m_query.data(), m_query.size()))
+        return true;
+    if(query.empty())
+        m_query.clear();
+    else
+        m_query.assign(query.data(), query.size());
+    m_count = 0u;
+    for(u64 index = 0u; index < rowCount(); ++index){
+        if(!ContainsAsciiIgnoreCase(__hidden_ui_nested_popup_source::s_Labels[index], query))
+            continue;
+        m_indices[m_count] = index;
+        ++m_count;
+    }
+    ++m_viewRevision;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiNumericEditSmokeScene::UiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+    : m_arena(arena)
+    , m_input(input)
+    , m_integer(arena)
+    , m_float(arena)
+    , m_clipboard(arena)
+{
+    resetModels();
+    m_input.addHandlerToBack(*this);
+}
+
+UiNumericEditSmokeScene::~UiNumericEditSmokeScene()noexcept{
+    m_input.removeHandler(*this);
+}
+
+b8 UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
+    using namespace Impl::Ui;
+    Builder& ui = context.ui;
+    ui.style().fontSize = 16.0f;
+    ui.style().gap = 8.0f;
+    if(!ui.beginPanel("numeric_edit_fixture", { 24.0f, 24.0f, 480.0f, 340.0f }))
+        return false;
+    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
+    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 18.0f } };
+    if(!ui.label("title", "Integer and decimal editors", title) || !ui.label("integer_caption", "Signed 64-bit integer", caption))
+        return false;
+    EditBoxOptions edit;
+    edit.width = { LayoutSizePolicy::Fixed, 400.0f };
+    edit.height = { LayoutSizePolicy::Fixed, 40.0f };
+    edit.enabled = m_enabled;
+    edit.readOnly = m_readOnly;
+    IntegerEditOptions integer;
+    integer.edit = edit;
+    const NumericEditBoxResult first = ui.integerEdit("integer", m_integer, m_states[0u], integer);
+    if(!first.edit.valid)
+        return false;
+    count(first.numeric);
+    if(!ui.label("float_caption", "Decimal, range -10 to 10", caption))
+        return false;
+    FloatEditOptions floating;
+    floating.edit = edit;
+    floating.bounds = floatBounds();
+    const NumericEditBoxResult second = ui.floatEdit("float", m_float, m_states[1u], floating);
+    if(!second.edit.valid)
+        return false;
+    count(second.numeric);
+    if(!ui.label("clipboard_caption", "Clipboard destination", caption))
+        return false;
+    edit.enabled = true;
+    edit.readOnly = false;
+    if(!ui.editBox("clipboard", m_clipboard, m_states[2u], edit).valid)
+        return false;
+    if(!ui.label("policy", m_clamp ? "Range policy: clamp" : "Range policy: reject", caption) || !ui.label("hint", "Enter: commit / Escape: restore", caption) || !ui.endPanel())
+        return false;
+    observeState(context.display, context.text);
+    paintMarkers(context);
+    return true;
+}
+
+::NWB::Core::KeyboardInputResult UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
+    if(key < Core::Key::F5 || key > Core::Key::F9)
+        return false;
+    if(action == Core::InputAction::Press){
+        if(key == Core::Key::F5)
+            m_readOnly = !m_readOnly;
+        else if(key == Core::Key::F6)
+            m_enabled = !m_enabled;
+        else if(key == Core::Key::F7){
+            const b8 assigned = m_integer.setValue(9007199254740995ll) && m_float.setValue(2.5);
+            NWB_FATAL_ASSERT(assigned);
+        }
+        else if(key == Core::Key::F8)
+            m_clamp = !m_clamp;
+        else
+            resetModels();
+    }
+    return true;
+}
+
+void UiNumericEditSmokeScene::resetModels(){
+    const b8 reset = m_integer.setValue(7ll) && m_float.setValue(1.25) && m_clipboard.setText("");
+    NWB_FATAL_ASSERT(reset);
+    m_enabled = true;
+    m_readOnly = false;
+    m_clamp = true;
+}
+
+void UiNumericEditSmokeScene::count(const Impl::Ui::NumericEditResult& result)noexcept{
+    m_commits += result.committed ? 1u : 0u;
+    m_cancels += result.cancelled ? 1u : 0u;
+    m_rejects += result.rejected ? 1u : 0u;
+    m_clamps += result.clamped ? 1u : 0u;
+    m_restored += result.restored ? 1u : 0u;
+}
+
+Impl::Ui::FloatBounds UiNumericEditSmokeScene::floatBounds()const noexcept{
+    return { -10.0, 10.0, m_clamp ? Impl::Ui::NumericBoundsPolicy::Clamp : Impl::Ui::NumericBoundsPolicy::Reject };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
+    return SharedUiNumericEditSmokeScene(NewArenaObject<RefCounter<UiNumericEditSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_edit_snapshot{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<TStringView, 12> s_RectNames = { NWB_TEXT("integer_bounds"), NWB_TEXT("integer_content"),
+    NWB_TEXT("integer_caret"), NWB_TEXT("integer_selection"), NWB_TEXT("float_bounds"), NWB_TEXT("float_content"),
+    NWB_TEXT("float_caret"), NWB_TEXT("float_selection"), NWB_TEXT("clipboard_bounds"), NWB_TEXT("clipboard_content"),
+    NWB_TEXT("clipboard_caret"), NWB_TEXT("clipboard_selection") };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static b8 Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state)noexcept{
+    return state.modelGeneration == model.instanceGeneration() && state.revision == model.revision() && state.selectionGeneration == model.selectionGeneration() && state.anchor == model.anchor() && state.caret == model.caret();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<u64, 30u> UiNumericEditSmokeScene::values()const noexcept{
+    using namespace __hidden_ui_numeric_edit_snapshot;
+    const auto& integer = m_integer.draft();
+    const auto& floating = m_float.draft();
+    return { BitCast<u64>(m_integer.value()), BitCast<u64>(m_float.value()), static_cast<u64>(integer.text().size()),
+        ComputeFnv32TextHash(integer.text()), static_cast<u64>(integer.anchor()), static_cast<u64>(integer.caret()),
+        static_cast<u64>(m_integer.status()), static_cast<u64>(m_integer.dirty()), static_cast<u64>(m_states[0u].focused),
+        static_cast<u64>(floating.text().size()), ComputeFnv32TextHash(floating.text()), static_cast<u64>(floating.anchor()),
+        static_cast<u64>(floating.caret()), static_cast<u64>(m_float.status(floatBounds())), static_cast<u64>(m_float.dirty()),
+        static_cast<u64>(m_states[1u].focused), static_cast<u64>(m_clipboard.text().size()), ComputeFnv32TextHash(m_clipboard.text()),
+        static_cast<u64>(m_clipboard.anchor()), static_cast<u64>(m_clipboard.caret()), static_cast<u64>(m_states[2u].focused),
+        static_cast<u64>(m_enabled), static_cast<u64>(m_readOnly), static_cast<u64>(m_clamp), m_commits, m_cancels,
+        m_rejects, m_clamps, m_restored, static_cast<u64>(Coherent(integer, m_states[0u]) && Coherent(floating, m_states[1u]) && Coherent(m_clipboard, m_states[2u])) };
+}
+
+void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text){
+    using namespace Impl::Ui;
+    using namespace __hidden_ui_numeric_edit_snapshot;
+    UiNumericEditSnapshot current;
+    current.values = values();
+    current.display = display;
+    const Array<NotNull<const EditModel*>, 3> models = { MakeNotNull(&m_integer.draft()), MakeNotNull(&m_float.draft()), MakeNotNull(&m_clipboard) };
+    for(usize index = 0u; index < m_states.size(); ++index){
+        const auto& placement = m_states[index].placement;
+        current.rectangles[index * 4u] = placement.bounds;
+        current.rectangles[index * 4u + 1u] = placement.content;
+        current.rectangles[index * 4u + 2u] = placement.caret;
+        current.rectangles[index * 4u + 3u] = CaptureEditSelection(m_arena, text, *models[index], placement, 16.0f);
+    }
+    b8 changed = current.values != m_snapshot.values;
+    for(usize index = 0u; index < current.rectangles.size(); ++index)
+        changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
+    const auto& previous = m_snapshot.display;
+    const b8 displayChanged = display.logicalWidth != previous.logicalWidth || display.logicalHeight != previous.logicalHeight || display.pixelScaleX != previous.pixelScaleX || display.pixelScaleY != previous.pixelScaleY;
+    if(m_snapshot.sequence != 0u && !changed && !displayChanged)
+        return;
+    current.sequence = m_snapshot.sequence + 1u;
+    m_snapshot = current;
+    if(displayChanged){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
+    }
+    const auto& value = m_snapshot.values;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+        , m_snapshot.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
+        , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
+        , value[16], value[17], value[18], value[19], value[20], value[21], value[22], value[23]
+        , value[24], value[25], value[26], value[27], value[28], value[29]
+    );
+    for(usize index = 0u; index < m_snapshot.rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiNumericEditSmoke"), m_snapshot.sequence, s_RectNames[index], m_snapshot.rectangles[index]);
+}
+
+void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
+    const f32 y = context.display.logicalHeight - 18.0f;
+    constexpr usize s_ValueCount = TupleSize_V<decltype(m_snapshot.values)>;
+    constexpr usize s_MarkerCount = []()noexcept{
+        usize count = 0u;
+        for(usize index = 0u; index <= s_ValueCount; ++index)
+            count += index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;
+        return count;
+    }();
+    const auto positions = BuildSmokeMarkerPositions<s_MarkerCount, 8u, 8u>();
+    usize marker = 0u;
+    for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
+        const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
+        const u32 parts = index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;
+        for(u32 part = 0u; part < parts; ++part){
+            context.paint.fillRect({ positions[marker], y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            ++marker;
+        }
+    }
+}
+
+
+namespace __hidden_ui_popup_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr TStringView s_ModalLabel = NWB_TEXT("modal");
+constexpr AStringView s_ModalKey = "modal";
+constexpr TStringView s_OutsideLabel = NWB_TEXT("outside");
+constexpr AStringView s_OutsideKey = "outside";
+constexpr TStringView s_PopupLabel = NWB_TEXT("popup");
+constexpr AStringView s_PopupKey = "popup";
+constexpr TStringView s_FirstLabel = NWB_TEXT("first");
+constexpr AStringView s_FirstKey = "first";
+constexpr TStringView s_SecondLabel = NWB_TEXT("second");
+constexpr AStringView s_SecondKey = "second";
+constexpr TStringView s_LogTag = NWB_TEXT("UiPopupSmoke");
+static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 320.0f, 216.0f };
+static constexpr Impl::Ui::Rect s_Anchor{ 200.0f, 64.0f, 120.0f, 36.0f };
+static constexpr Impl::Ui::Rect s_Trigger{ 32.0f, 64.0f, 120.0f, 36.0f };
+static constexpr Impl::Ui::Rect s_ModalTrigger{ 160.0f, 64.0f, 120.0f, 36.0f };
+static constexpr Impl::Ui::Rect s_Counter{ 32.0f, 112.0f, 130.0f, 36.0f };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiPopupSmokeScene::UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+    : m_input(input)
+    , m_popupText(arena)
+    , m_outsideText(arena)
+{
+    const b8 initialized = m_popupText.setText("Popup") && m_outsideText.setText("Outside focus sentinel");
+    NWB_FATAL_ASSERT_MSG(initialized, NWB_TEXT("Popup smoke text models must contain valid UTF8"));
+    m_input.addHandlerToBack(*this);
+}
+
+UiPopupSmokeScene::~UiPopupSmokeScene()noexcept{
+    m_input.removeHandler(*this);
+}
+
+b8 UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
+    using namespace Impl::Ui;
+    ObserveSmokeDisplay(__hidden_ui_popup_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
+    Builder& ui = context.ui;
+    ui.style().fontSize = 12.0f;
+    ui.style().gap = 8.0f;
+    if(!ui.beginPanel("popup_fixture", __hidden_ui_popup_smoke::s_Panel))
+        return false;
+    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
+    if(!ui.label("title", "Popup focus and overlay fixture", title))
+        return false;
+    ContainerOptions row;
+    row.height = { LayoutSizePolicy::Fixed, 40.0f };
+    row.gap = 8.0f;
+    if(!ui.beginRow("triggers", row))
+        return false;
+    const WidgetOptions trigger{ { LayoutSizePolicy::Fixed, 120.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
+    if(ui.button("open", "Open popup", trigger)){
+        m_modal = false;
+        m_popup.open();
+    }
+    if(ui.button(__hidden_ui_popup_smoke::s_ModalKey, "Open modal", trigger)){
+        m_modal = true;
+        m_popup.open();
+    }
+    if(!ui.endContainer())
+        return false;
+    const WidgetOptions counter{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
+    if(ui.button("underlying", "Underlying", counter))
+        ++m_underlying;
+    EditBoxOptions edit;
+    edit.width = { LayoutSizePolicy::Fixed, 260.0f };
+    edit.height = { LayoutSizePolicy::Fixed, 32.0f };
+    const EditBoxResult outside = ui.editBox(__hidden_ui_popup_smoke::s_OutsideKey, m_outsideText, m_outsideEdit, edit);
+    m_outsideFocused = outside.focused;
+    if(!outside.valid || !ui.endPanel())
+        return false;
+
+    PopupOptions options;
+    options.anchor = __hidden_ui_popup_smoke::s_Anchor;
+    options.size = { 220.0f, 236.0f };
+    options.modal = m_modal;
+    options.dismissOutside = !m_modal;
+    if(m_edge)
+        options.anchor = Impl::Ui::StoreRect(VectorSubtract(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 48.0f, 24.0f), VectorSet(60.0f, 48.0f, 0.0f, 0.0f)));
+    options.side = m_right ? PopupPlacementSide::Right : PopupPlacementSide::Below;
+    m_popupFocused = false;
+    if(m_visible && ui.beginPopup(__hidden_ui_popup_smoke::s_PopupKey, m_popup, options)){
+        const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
+        const WidgetOptions choice{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+        if(!ui.label("caption", "Choose, edit, or dismiss", caption))
+            return false;
+        if(ui.button(__hidden_ui_popup_smoke::s_FirstKey, "First choice", choice)){
+            m_selected = 1u;
+            m_popup.close();
+        }
+        if(ui.button(__hidden_ui_popup_smoke::s_SecondKey, "Second choice", choice)){
+            m_selected = 2u;
+            m_popup.close();
+        }
+        if(ui.checkbox("checked", "Popup checkbox", m_checked, choice))
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: checked={}"), static_cast<u32>(m_checked));
+        edit.width = {};
+        const EditBoxResult popupEdit = ui.editBox("text", m_popupText, m_popupEdit, edit);
+        m_popupFocused = popupEdit.focused;
+        if(!popupEdit.valid || !ui.endPopup())
+            return false;
+    }
+    observeState();
+    PaintSingleSmokeValueMarkers(values(), m_sequence, context);
+    return true;
+}
+
+b8 UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
+    using namespace Impl::Ui;
+    Rect bounds = m_popup.placement().bounds;
+    if(bounds.width <= 0.0f)
+        bounds = { 200.0f, 104.0f, 220.0f, 236.0f };
+    if(!context.ui.beginPanel("later_root", Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(-8.0f, -8.0f, 16.0f, 16.0f)))))
+        return false;
+    if(!context.ui.endPanel())
+        return false;
+    context.paint.fillRect(bounds, { 0.72f, 0.02f, 0.04f, 1.0f });
+    context.paint.fillRect({ context.display.logicalWidth - 40.0f, 24.0f, 16.0f, 16.0f }, { 0.12f, 0.52f, 0.86f, 1.0f });
+    return true;
+}
+
+::NWB::Core::KeyboardInputResult UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+    if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
+        return false;
+    if(action == Core::InputAction::Press){
+        if(key == Core::Key::F5)
+            m_edge = !m_edge;
+        else if(key == Core::Key::F6)
+            m_right = !m_right;
+        else{
+            m_visible = !m_visible;
+            if(m_visible)
+                m_popup.close();
+        }
+    }
+    return true;
+}
+
+Array<u32, 12u> UiPopupSmokeScene::values()const noexcept{
+    return { static_cast<u32>(m_visible && m_popup.isOpen()), static_cast<u32>(m_modal), m_underlying, m_selected,
+        static_cast<u32>(m_checked), static_cast<u32>(m_popupFocused), static_cast<u32>(m_outsideFocused),
+        static_cast<u32>(m_edge), static_cast<u32>(m_right), static_cast<u32>(m_visible),
+        static_cast<u32>(m_popupText.text().size()), static_cast<u32>(m_popup.placement().side) };
+}
+
+void UiPopupSmokeScene::observeState(){
+    const auto current = values();
+    const auto& placement = m_popup.placement();
+    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.viewport, m_lastPlacement.viewport))
+        return;
+    ++m_sequence;
+    m_lastValues = current;
+    m_lastPlacement = placement;
+    m_displayChanged = false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
+        , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
+        , current[6], current[7], current[8], current[9], current[10], current[11]
+    );
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_PopupLabel, placement.bounds);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("trigger"), __hidden_ui_popup_smoke::s_Trigger);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_ModalLabel, __hidden_ui_popup_smoke::s_ModalTrigger);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_OutsideLabel, m_outsideEdit.placement.bounds);
+    const Impl::Ui::Rect first = Impl::Ui::StoreRect(VectorAdd(VectorSet(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f), VectorSet(8.0f, 36.0f, -16.0f, 32.0f)));
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_FirstLabel, first);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_SecondLabel, { first.x, first.y + 40.0f, first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+SharedUiPopupSmokeScene CreateUiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
+    return SharedUiPopupSmokeScene(NewArenaObject<RefCounter<UiPopupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_tools_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr TStringView s_AnchorLabel = NWB_TEXT("anchor");
+constexpr AStringView s_AnchorKey = "anchor";
+constexpr TStringView s_SentinelLabel = NWB_TEXT("sentinel");
+constexpr AStringView s_SentinelKey = "sentinel";
+constexpr TStringView s_LogTag = NWB_TEXT("UiPopupToolsSmoke");
+static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 200.0f };
+static constexpr Impl::Ui::Rect s_Anchor{ 32.0f, 64.0f, 220.0f, 36.0f };
+static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+    : m_input(input)
+    , m_sentinel(arena)
+{
+    const b8 initialized = m_sentinel.setText("Sentinel");
+    NWB_FATAL_ASSERT(initialized);
+    m_input.addHandlerToBack(*this);
+}
+
+UiPopupToolsSmokeScene::~UiPopupToolsSmokeScene()noexcept{
+    m_input.removeHandler(*this);
+}
+
+b8 UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
+    using namespace Impl::Ui;
+    ObserveSmokeDisplay(__hidden_ui_popup_tools_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
+    m_source.beginFrame();
+    m_sentinelFocused = false;
+    Builder& ui = context.ui;
+    ui.style().fontSize = 12.0f;
+    ui.style().gap = 8.0f;
+    if(!ui.beginPanel("popup_tools_fixture", __hidden_ui_popup_tools_smoke::s_Panel))
+        return false;
+    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
+    if(!ui.label("title", "Delayed tooltip and five context commands", caption))
+        return false;
+    WidgetOptions anchor{ { LayoutSizePolicy::Fixed, 220.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
+    anchor.enabled = m_enabled;
+    if(ui.button(__hidden_ui_popup_tools_smoke::s_AnchorKey, "Right-click / Menu / Shift+F10", anchor))
+        ++m_anchorClicks;
+    TooltipOptions tooltip;
+    constexpr f32 s_TooltipDelaySeconds = 8.0f;
+    tooltip.delaySeconds = s_TooltipDelaySeconds;
+    if(!ui.tooltip("hint", __hidden_ui_popup_tools_smoke::s_AnchorKey, "Open commands here; Delete is disabled.", m_tooltip, tooltip))
+        return false;
+    ContextMenuOptions menu;
+    menu.size = { 220.0f, 180.0f };
+    const ContextMenuResult result = ui.contextMenu("commands", __hidden_ui_popup_tools_smoke::s_AnchorKey, m_source, m_menu, menu);
+    if(!result.valid)
+        return false;
+    if(result.activated){
+        m_command = result.key;
+        ++m_commits;
+    }
+    if(!ui.label("keys", "F5 reorder / F6 replace source / F9 disabled", caption))
+        return false;
+    EditBoxOptions edit;
+    edit.width = { LayoutSizePolicy::Fixed, 260.0f };
+    edit.height = { LayoutSizePolicy::Fixed, 36.0f };
+    const EditBoxResult sentinel = ui.editBox(__hidden_ui_popup_tools_smoke::s_SentinelKey, m_sentinel, m_sentinelState, edit);
+    m_sentinelFocused = sentinel.focused;
+    if(!sentinel.valid || !ui.endPanel())
+        return false;
+    if(!ui.beginPanel("outside_fixture", { 448.0f, 24.0f, 146.0f, 52.0f }))
+        return false;
+    const WidgetOptions counter{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
+    if(ui.button("underlying", "Outside counter", counter))
+        ++m_underlying;
+    if(!ui.endPanel())
+        return false;
+    observeState();
+    PaintKeyedSmokeValueMarkers<16u, 12u>(values(), m_sequence, context);
+    return true;
+}
+
+::NWB::Core::KeyboardInputResult UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+    if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F9)
+        return false;
+    if(action == Core::InputAction::Press){
+        if(key == Core::Key::F5)
+            m_source.reverse();
+        else if(key == Core::Key::F6)
+            m_source.replace();
+        else
+            m_enabled = !m_enabled;
+    }
+    return true;
+}
+
+Array<u64, 15u> UiPopupToolsSmokeScene::values()const noexcept{
+    return { static_cast<u64>(m_tooltip.visible()), static_cast<u64>(m_menu.isOpen()), m_menu.cursorKey(), m_command,
+        m_commits, m_anchorClicks, m_underlying, static_cast<u64>(m_sentinelFocused), static_cast<u64>(m_enabled),
+        static_cast<u64>(m_source.reversed()), m_source.revision(), m_source.instanceGeneration(), m_source.labelReads(),
+        static_cast<u64>(m_sentinel.text().size()), m_menu.listState().selectedKey() };
+}
+
+Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const noexcept{
+    const auto& placement = m_menu.listState().placement();
+    if(!m_menu.isOpen())
+        return {};
+    const auto index = m_source.indexOf(key);
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
+        return {};
+    return VisibleSmokeListRow(placement, *index);
+}
+
+void UiPopupToolsSmokeScene::observeState(){
+    const auto current = values();
+    const auto& menu = m_menu.placement();
+    const auto& tooltip = m_tooltip.placement();
+    const auto& sentinel = m_sentinelState.placement.bounds;
+    const auto& list = m_menu.listState().placement();
+    if(
+        m_sequence != 0u && !m_displayChanged && current == m_lastValues
+        && list.offset == m_lastList.offset && list.contentHeight == m_lastList.contentHeight
+        && SameSmokeRect(list.viewport, m_lastList.viewport) && SameSmokeRect(menu.bounds, m_lastMenu.bounds)
+        && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds) && SameSmokeRect(sentinel, m_lastSentinel)
+    )
+        return;
+    ++m_sequence;
+    m_lastValues = current;
+    m_lastMenu = menu;
+    m_lastList = list;
+    m_lastTooltip = tooltip;
+    m_lastSentinel = sentinel;
+    m_displayChanged = false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+        , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
+        , current[8], current[9], current[10], current[11], current[12], current[13], current[14]
+    );
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, __hidden_ui_popup_tools_smoke::s_AnchorLabel, __hidden_ui_popup_tools_smoke::s_Anchor);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("menu"), menu.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("list"), list.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), list.viewport);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("first"), rowBounds(1u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("second"), rowBounds(2u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("last"), rowBounds(5u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, __hidden_ui_popup_tools_smoke::s_SentinelLabel, sentinel);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+SharedUiPopupToolsSmokeScene CreateUiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
+    return SharedUiPopupToolsSmokeScene(NewArenaObject<RefCounter<UiPopupToolsSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiPopupToolsSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_tools_source{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<StringView, 5u> s_Labels{ "Inspect", "Duplicate", "Delete (disabled)", "Rename", "Reset view" };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 UiPopupToolsSmokeSource::key(const u64 index)const noexcept{
+    return index < rowCount() ? UiWidgetTests::ArithmeticFixtureRowKey(rowCount(), 0u, m_reversed, index) : 0u;
+}
+
+Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const noexcept{
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(rowCount(), 0u, m_reversed, keyValue);
+}
+
+Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    return FindAdjacentEnabledRow(*this, start, reverse);
+}
+
+StringView UiPopupToolsSmokeSource::text(const u64 index)const noexcept{
+    ++m_labelReads;
+    const u64 rowKey = key(index);
+    return rowKey == 0u ? StringView{} : __hidden_ui_popup_tools_source::s_Labels[rowKey - 1u];
+}
+
+void UiPopupToolsSmokeSource::reverse()noexcept{
+    m_reversed = !m_reversed;
+    ++m_revision;
+}
+
+void UiPopupToolsSmokeSource::replace()noexcept{
+    ++m_generation;
+    ++m_revision;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+};
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

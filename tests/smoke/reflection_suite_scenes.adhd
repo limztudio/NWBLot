@@ -1,0 +1,524 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "reflection_optical_scenes.adhd"
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_skeleton/asset.adhd.h>
+
+#include <core/common/log.h>
+#include <core/assets/manager.h>
+
+#include <global/assert.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionFeedbackScene final{
+public:
+    explicit ReflectionFeedbackScene(Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return IsReflectionFeedbackMutationCase(m_case); }
+    [[nodiscard]] b8 applyMutation()noexcept;
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, b8 horizontal = false);
+
+
+private:
+    Core::ECS::World& m_world;
+    Core::ECS::EntityID m_green;
+    ReflectionFeedbackCase::Enum m_case = ReflectionFeedbackCase::Boundary;
+    b8 m_finalState = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_feedback_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionFeedbackScene::ReflectionFeedbackScene(Core::ECS::World& world)noexcept
+    : m_world(world){}
+
+b8 ReflectionFeedbackScene::create(const AStringView caseName, const b8 finalState){
+    if(caseName == "feedback_mutation")
+        m_case = ReflectionFeedbackCase::Mutation;
+    else if(caseName == "feedback_long_miss")
+        m_case = ReflectionFeedbackCase::LongMiss;
+    else if(caseName != "feedback_boundary")
+        return false;
+    if(m_case == ReflectionFeedbackCase::LongMiss){
+        if(!createPanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 8.f, 0.f), Float4(6.f, 1.f, 6.f, 0.f)).valid())
+            return false;
+        if(!createPanel(Float4(0.008f, 0.008f, 0.008f, 1.f), Float4(0.f, 0.f, 2.f, 0.f), Float4(4.f, 1.f, 6.f, 0.f), 0.95f, true).valid())
+            return false;
+        const auto red = createPanel(Float4(1.f, 0.01f, 0.01f, 1.f), Float4(-1.7f, 3.6f, 6.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+        m_green = createPanel(Float4(0.01f, 1.f, 0.01f, 1.f), Float4(1.7f, 3.6f, 6.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+        return red.valid() && m_green.valid() && !finalState;
+    }
+    if(!createPanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f)).valid())
+        return false;
+    if(!createPanel(Float4(0.008f, 0.008f, 0.008f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), 0.95f).valid())
+        return false;
+    const auto red = createPanel(Float4(1.f, 0.01f, 0.01f, 1.f), Float4(-1.7f, 1.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.25f, 0.f));
+    // Move the off-screen green panel into view to trigger provisional SSR feedback.
+    m_green = createPanel(Float4(0.01f, 1.f, 0.01f, 1.f), Float4(3.f, 2.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+    if(!red.valid() || !m_green.valid())
+        return false;
+    return !finalState || applyMutation();
+}
+
+b8 ReflectionFeedbackScene::applyMutation()noexcept{
+    if(m_case != ReflectionFeedbackCase::Mutation)
+        return false;
+    if(m_finalState)
+        return true;
+    m_world.entity(m_green).getComponent<Impl::Scene::TransformComponent>().position.x = 1.7f;
+    m_finalState = true;
+    return true;
+}
+
+Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const b8 horizontal){
+    using namespace __hidden_reflection_feedback_scene;
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, color, position, scale, m_world);
+    if(!entity.valid())
+        return entity;
+    if(!horizontal){
+        auto& transform = m_world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    }
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(0.f);
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return Core::ECS::s_InvalidEntityId;
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
+        return Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionReferenceScene final{
+public:
+    ReflectionReferenceScene(Core::ECS::World& world, b8 glassRoughnessCase, f32 authoredRoughness)noexcept;
+
+
+public:
+    void createMirrorScene(b8 moved);
+    void createOnscreenMirrorScene(b8 moved, b8 boundary);
+    void createFloorMirrorScene();
+    void createOpaqueGlassScene();
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 specularF0 = 0.0f);
+    void createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 specularF0 = 0.0f);
+    void createMirrorBackdrop();
+
+
+private:
+    Core::ECS::World& m_world;
+    b8 m_glassRoughnessCase;
+    f32 m_authoredRoughness;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_reference_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
+static constexpr SmokeMeshRef s_SphereMesh{"project/meshes/caustic_sphere"};
+static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/reflection/materials/opaque"};
+static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/reflection/materials/glass"};
+static constexpr SmokeMaterialRef s_TransparentMaterial{"project/smoke/refraction/materials/transparent"};
+static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
+static constexpr f32 s_GlassIor = s_ReflectionReferenceGlassIor;
+static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / ((s_GlassIor + 1.0f) * (s_GlassIor + 1.0f));
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace __hidden_reflection_reference_scene;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionReferenceScene::ReflectionReferenceScene(Core::ECS::World& world, const b8 glassRoughnessCase, const f32 authoredRoughness)noexcept
+    : m_world(world)
+    , m_glassRoughnessCase(glassRoughnessCase)
+    , m_authoredRoughness(authoredRoughness)
+{}
+
+void ReflectionReferenceScene::createMirrorScene(const b8 moved){
+    createMirrorBackdrop();
+    const f32 shift = moved ? 0.9f : 0.0f;
+    // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
+    const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+    const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+    NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: offscreen markers failed"));
+}
+
+void ReflectionReferenceScene::createOnscreenMirrorScene(const b8 moved, const b8 boundary){
+    createMirrorBackdrop();
+    const f32 redX = moved ? -1.45f : -1.7f;
+    const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
+    // Hybrid reflection resolves provisional screen hits against virtual images at z=+3.
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+}
+
+void ReflectionReferenceScene::createFloorMirrorScene(){
+    createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+    const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
+    NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: floor mirror creation failed"));
+    // Reflection through y=0 places virtual marker centers at y=-2.
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+}
+
+void ReflectionReferenceScene::createOpaqueGlassScene(){
+    for(u32 stripe = 0u; stripe < 24u; ++stripe){
+        const f32 value = (stripe & 1u) != 0u ? 0.55f : 0.015f;
+        const f32 x = static_cast<f32>(stripe) * 0.3f - 3.45f;
+        createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(x, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 3.0f, 0.0f));
+    }
+    const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
+    const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
+    NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: opaque/glass spheres failed"));
+    m_world.entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+    createPanel(s_TransparentMaterial, Float4(0.015f, 0.025f, 1.0f, 0.90f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(2.0f, 1.0f, 0.08f, 0.0f));
+}
+
+NWB::Core::ECS::EntityID ReflectionReferenceScene::createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0){
+    const auto entity = CreateTintedStaticMeshEntity(mesh, material, s_MaterialInterface, color, position, scale, m_world);
+    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: mesh creation failed"));
+    const Name materialInterface(s_MaterialInterface);
+    const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
+    const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
+    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3,
+        NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
+    ), NWB_TEXT("ReflectionSmokeProjectImpl: F0 override failed")
+    );
+    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16,
+        NWB::Impl::PackMaterialInstanceValue(roughness)
+    ), NWB_TEXT("ReflectionSmokeProjectImpl: roughness override failed")
+    );
+    return entity;
+}
+
+void ReflectionReferenceScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0){
+    const auto entity = createMesh(s_PlaneMesh, material, color, position, scale, specularF0);
+    auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+}
+
+void ReflectionReferenceScene::createMirrorBackdrop(){
+    createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 2.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionRoughnessScene final{
+public:
+    ReflectionRoughnessScene(Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness, ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return IsReflectionRoughnessMutationCase(m_case); }
+    [[nodiscard]] b8 deforming()const noexcept{ return IsReflectionRoughnessDeformingCase(m_case); }
+    [[nodiscard]] b8 applyMutation();
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
+    [[nodiscard]] b8 createDeformingSource();
+
+
+private:
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
+    ProjectRuntimeContext& m_context;
+    Core::ECS::World& m_world;
+    Core::ECS::EntityID m_camera;
+    Core::ECS::EntityID m_light;
+    Core::ECS::EntityID m_red;
+    Core::ECS::EntityID m_skeleton;
+    f32 m_roughness;
+    ReflectionRoughnessCase::Enum m_case = ReflectionRoughnessCase::Static;
+    b8 m_finalState = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_roughness_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+static constexpr SmokeMaterialRef s_Lit("project/smoke/reflection/materials/roughness_lit");
+static constexpr SmokeModelRef s_Model("project/characters/body/model");
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionRoughnessScene::ReflectionRoughnessScene(const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness, ProjectRuntimeContext& context, NWB::Core::ECS::World& world)noexcept
+    : m_bindJoints(context.objectArena)
+    , m_context(context)
+    , m_world(world)
+    , m_camera(camera)
+    , m_light(light)
+    , m_roughness(roughness){}
+
+b8 ReflectionRoughnessScene::create(const AStringView caseName, const b8 finalState){
+    using namespace __hidden_reflection_roughness_scene;
+    if(caseName == "rough_furnace")
+        m_case = ReflectionRoughnessCase::Furnace;
+    else if(caseName == "temporal_camera")
+        m_case = ReflectionRoughnessCase::Camera;
+    else if(caseName == "temporal_transform")
+        m_case = ReflectionRoughnessCase::Transform;
+    else if(caseName == "temporal_material")
+        m_case = ReflectionRoughnessCase::Material;
+    else if(caseName == "temporal_light")
+        m_case = ReflectionRoughnessCase::Light;
+    else if(caseName == "temporal_deform")
+        m_case = ReflectionRoughnessCase::Deform;
+    else if(caseName == "rough_deform")
+        m_case = ReflectionRoughnessCase::StaticDeform;
+    else if(caseName != "rough")
+        return false;
+    const auto backdrop = createPanel(s_Opaque, Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f));
+    const auto mirror = createPanel(s_Opaque, Float4(0.f, 0.f, 0.f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), m_case == ReflectionRoughnessCase::Furnace ? 1.f : 0.95f, m_roughness);
+    if(!backdrop.valid() || !mirror.valid())
+        return false;
+    if(m_case == ReflectionRoughnessCase::Furnace)
+        return true;
+    const auto green = createPanel(s_Opaque, Float4(0.f, 1.f, 0.f, 1.f), Float4(1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
+    if(!green.valid())
+        return false;
+    if(deforming()){
+        if(!createDeformingSource())
+            return false;
+    }
+    else{
+        m_red = createPanel(m_case == ReflectionRoughnessCase::Light ? s_Lit : s_Opaque, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
+        if(!m_red.valid())
+            return false;
+    }
+    return !finalState || applyMutation();
+}
+
+b8 ReflectionRoughnessScene::applyMutation(){
+    using namespace __hidden_reflection_roughness_scene;
+    if(m_finalState)
+        return true;
+    switch(m_case){
+    case ReflectionRoughnessCase::Camera:
+        m_world.entity(m_camera).getComponent<NWB::Impl::Scene::TransformComponent>().position.x = 0.6f;
+        break;
+    case ReflectionRoughnessCase::Transform:
+        m_world.entity(m_red).getComponent<NWB::Impl::Scene::TransformComponent>().position.z = -150.f;
+        break;
+    case ReflectionRoughnessCase::Material:
+        if(!NWB::Impl::SetMaterialMutableHalf4(m_world, m_red, Name(s_Interface), "runtime.color_tint", Float4(0.f, 0.f, 0.f, 1.f)))
+            return false;
+        break;
+    case ReflectionRoughnessCase::Light:
+        // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
+        m_world.entity(m_light).getComponent<NWB::Impl::Scene::LightComponent>().setColor(VectorZero());
+        break;
+    case ReflectionRoughnessCase::Deform:{
+        auto& pose = m_world.entity(m_skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
+        if(pose.localJoints.size() != m_bindJoints.size())
+            return false;
+        for(u32 joint = 1u; joint < pose.localJoints.size(); ++joint){
+            const f32 angle = (joint & 1u) != 0u ? 0.32f : -0.32f;
+            StoreFloat(MatrixMultiply(LoadFloat(m_bindJoints[joint]), MatrixRotationRollPitchYaw(0.15f, angle, 0.12f)), pose.localJoints[joint]);
+        }
+        break;
+    }
+    default:
+        return false;
+    }
+    m_finalState = true;
+    return true;
+}
+
+NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
+    using namespace __hidden_reflection_roughness_scene;
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, material, s_Interface, color, position, scale, m_world);
+    if(!entity.valid())
+        return entity;
+    auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(roughness);
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return NWB::Core::ECS::s_InvalidEntityId;
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(packedRoughness)))
+        return NWB::Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+b8 ReflectionRoughnessScene::createDeformingSource(){
+    using namespace __hidden_reflection_roughness_scene;
+    const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
+    if(!modelAsset)
+        return false;
+    NWB_ASSERT(*modelAsset);
+    const NWB::Impl::Model* modelPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset->get());
+    if(!modelPtr)
+        return false;
+    const auto& model = *modelPtr;
+    if(model.skeletonObjects().empty())
+        return false;
+    const auto skeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name());
+    if(!skeletonAsset)
+        return false;
+    NWB_ASSERT(*skeletonAsset);
+    const NWB::Impl::Skeleton* skeletonPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset->get());
+    if(!skeletonPtr)
+        return false;
+    const auto& skeleton = *skeletonPtr;
+    if(skeleton.joints().size() < 2u)
+        return false;
+    m_bindJoints.reserve(skeleton.joints().size());
+    for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
+        m_bindJoints.push_back(joint.localBindPose);
+    const auto redModel = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), m_world);
+    m_red = redModel.entity;
+    if(!m_red.valid() || !redModel.tintApplied)
+        return false;
+    SyncSmokeModelRuntimes(m_world);
+    m_skeleton = FindSpawnedModelObject(m_red, s_SmokeNameSkeleton, NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    return m_skeleton.valid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

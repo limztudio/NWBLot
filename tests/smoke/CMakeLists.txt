@@ -109,6 +109,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     nwb_declare_static_library(nwb_smoke_runtime_helpers)
     set_target_properties(nwb_smoke_runtime_helpers PROPERTIES UNITY_BUILD OFF)
     nwb_target_adhd_sources(nwb_smoke_runtime_helpers NAMESPACE "NWB::Tests::Smoke" SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/bitmap_capture_writer.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.adhd"
@@ -173,6 +174,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_transparent_multi_smoke)
         nwb_target_adhd_sources(nwb_transparent_multi_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_and_setup.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
@@ -180,6 +183,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # F1 exercises frame-lagged lighting teardown and re-bootstrap on the shared scene.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
         nwb_target_adhd_sources(nwb_frame_lagged_async_lighting_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_and_setup.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
         target_compile_definitions(nwb_frame_lagged_async_lighting_smoke PRIVATE NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1)
@@ -199,6 +204,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_avboit_depth_warp_probe_smoke)
         nwb_target_adhd_sources(nwb_avboit_depth_warp_probe_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_integration_and_refraction_tile_probes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_interop.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}")
@@ -217,6 +224,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
         nwb_target_adhd_sources(nwb_transparent_csg_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_and_setup.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
         target_compile_definitions(nwb_transparent_csg_smoke PRIVATE NWB_TRANSPARENT_MULTI_ENABLE_CSG=1)
@@ -254,6 +263,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_caustic_sphere_smoke)
         nwb_target_adhd_sources(nwb_caustic_sphere_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_and_setup.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
         target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -401,6 +412,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # Shadows and caustics must follow live deformed geometry rather than bind pose.
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         nwb_target_adhd_sources(nwb_skinned_caustic_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_transition.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.adhd"
         )
         target_compile_definitions(nwb_skinned_caustic_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -419,6 +432,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # The crowd stresses scene updates and opaque/transparent shadows across two lights.
         nwb_declare_executable(nwb_stress_test_smoke)
         nwb_target_adhd_sources(nwb_stress_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_stress_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
@@ -433,6 +448,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # The A/B harness runs this binary for both transparent and opaque-only shadow arms.
         nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
         nwb_target_adhd_sources(nwb_hardware_shadow_boundary_healthy_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
         target_compile_definitions(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK=1)
@@ -442,6 +459,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # Both M4 arms share assets while the async arm requires a dedicated Compute queue.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         nwb_target_adhd_sources(nwb_async_shadow_m4_sync_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
         target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1 NWB_SMOKE_DISABLE_ASYNC_COMPUTE=1)
@@ -451,6 +470,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         nwb_target_adhd_sources(nwb_async_shadow_m4_async_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
         target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1)
@@ -478,6 +499,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_gi_test_smoke)
         target_compile_definitions(nwb_gi_test_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_target_adhd_sources(nwb_gi_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/gi_test_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/gi_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg)

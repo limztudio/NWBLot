@@ -1,6 +1,8 @@
         set(_nwb_csg_shadow_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_shadow_smoke_runtime/$<CONFIG>")
         nwb_declare_executable(nwb_csg_shadow_smoke)
         nwb_target_adhd_sources(nwb_csg_shadow_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_probes_and_atlas.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         target_compile_definitions(nwb_csg_shadow_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -49,6 +51,8 @@
         set(_nwb_csg_caustic_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_caustic_smoke_runtime/$<CONFIG>")
         nwb_declare_executable(nwb_csg_caustic_smoke)
         nwb_target_adhd_sources(nwb_csg_caustic_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_probes_and_atlas.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         target_compile_definitions(nwb_csg_caustic_smoke PRIVATE NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -60,4 +64,3 @@
         set_tests_properties(nwb_csg_caustic_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_caustic_capture_smoke_timeout_seconds} LABELS
             "csg;caustic;hardware_raytracing;software_raytracing")
         unset(_nwb_csg_caustic_runtime_root)
-

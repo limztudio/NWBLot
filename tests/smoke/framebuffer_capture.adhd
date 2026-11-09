@@ -2,159 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "smoke_environment.adhd"
-#include "presentation_types.adhd"
-#include "scene_types.adhd"
+#include "bitmap_capture_writer.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
-#include <loader/project_entry.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/command.h>
-#include <core/graphics/rhi/resource.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/presentation_contributor.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/refcount_ptr.h>
-
 NWB_BEGIN
-
-namespace __hidden_bitmap_capture{
-inline constexpr usize s_BitmapFileHeaderSize = Tests::Smoke::s_BitmapFileHeaderSize;
-inline constexpr usize s_BitmapInfoHeaderSize = Tests::Smoke::s_BitmapInfoHeaderSize;
-inline constexpr usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
-inline constexpr usize s_BitmapBytesPerPixel = Tests::Smoke::s_BitmapBytesPerPixel;
-inline constexpr usize s_SourceBytesPerPixel = Tests::Smoke::s_BitmapSourceBytesPerPixel;
-inline constexpr u32 s_ByteMask = Tests::Smoke::s_BitmapByteMask;
-inline constexpr u32 s_Byte1Shift = Tests::Smoke::s_BitmapByte1Shift;
-inline constexpr u32 s_Byte2Shift = Tests::Smoke::s_BitmapByte2Shift;
-inline constexpr u32 s_Byte3Shift = Tests::Smoke::s_BitmapByte3Shift;
-
-inline void WriteU16LE(const u16 value, const NotNull<u8*> destination)noexcept{
-    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
-    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
-}
-
-inline void WriteU32LE(const u32 value, const NotNull<u8*> destination)noexcept{
-    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
-    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
-    destination.get()[2] = static_cast<u8>((value >> s_Byte2Shift) & s_ByteMask);
-    destination.get()[3] = static_cast<u8>((value >> s_Byte3Shift) & s_ByteMask);
-}
-
-inline b8 IsBgraFormat(const Core::Format::Enum format)noexcept{
-    return format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
-}
-};
-
-namespace __hidden_framebuffer_capture{
-inline constexpr Name s_BitmapScratchArena = NWB::Tests::Smoke::s_SmokeNameSmokeFramebufferCaptureBitmap;
-inline b8 IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
-    return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
-}
-};
 
 namespace Tests::Smoke{
 
-class BitmapCaptureWriter{
-public:
-    BitmapCaptureWriter(const ::Path<Core::Alloc::GlobalArena>& outputPath, const Core::TextureDesc& captureDescription)noexcept
-        : m_outputPath(outputPath)
-        , m_captureDescription(captureDescription)
-    {}
-
-public:
-    [[nodiscard]] b8 write(const NotNull<const u8*> sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
-        const u32 width = m_captureDescription.width;
-        const u32 height = m_captureDescription.height;
-        if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
-            return false;
-
-        const auto sourceRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_bitmap_capture::s_SourceBytesPerPixel);
-        if(!sourceRowBytes)
-            return false;
-        const auto bitmapRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_bitmap_capture::s_BitmapBytesPerPixel);
-        if(!bitmapRowBytes || sourceRowPitch < *sourceRowBytes || AddOverflows<usize>(*bitmapRowBytes, 3u))
-            return false;
-
-        const usize bitmapRowPitch = (*bitmapRowBytes + 3u) & ~usize(3u);
-        const auto bitmapPixelBytes = TryMultiply<usize>(bitmapRowPitch, static_cast<usize>(height));
-        if(!bitmapPixelBytes)
-            return false;
-        if(AddOverflows<usize>(__hidden_bitmap_capture::s_BitmapPixelOffset, *bitmapPixelBytes))
-            return false;
-
-        const usize bitmapFileBytes = __hidden_bitmap_capture::s_BitmapPixelOffset + *bitmapPixelBytes;
-        if(*bitmapPixelBytes > static_cast<usize>(Limit<u32>::s_Max) || bitmapFileBytes > static_cast<usize>(Limit<u32>::s_Max))
-            return false;
-
-        Vector<u8, Core::Alloc::ScratchArena> bitmapBytes(bitmapFileBytes, 0u, scratchArena);
-        bitmapBytes[0] = static_cast<u8>('B');
-        bitmapBytes[1] = static_cast<u8>('M');
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(bitmapFileBytes), MakeNotNull(bitmapBytes.data() + 2u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(__hidden_bitmap_capture::s_BitmapPixelOffset), MakeNotNull(bitmapBytes.data() + 10u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(__hidden_bitmap_capture::s_BitmapInfoHeaderSize), MakeNotNull(bitmapBytes.data() + __hidden_bitmap_capture::s_BitmapFileHeaderSize));
-        __hidden_bitmap_capture::WriteU32LE(width, MakeNotNull(bitmapBytes.data() + 18u));
-        __hidden_bitmap_capture::WriteU32LE(height, MakeNotNull(bitmapBytes.data() + 22u));
-        __hidden_bitmap_capture::WriteU16LE(1u, MakeNotNull(bitmapBytes.data() + 26u));
-        __hidden_bitmap_capture::WriteU16LE(24u, MakeNotNull(bitmapBytes.data() + 28u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(*bitmapPixelBytes), MakeNotNull(bitmapBytes.data() + 34u));
-
-        const b8 sourceIsBgra = __hidden_bitmap_capture::IsBgraFormat(m_captureDescription.format);
-        for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
-            const usize sourceY = static_cast<usize>(height - 1u - bitmapY);
-            const auto sourceRowOffset = TryMultiply<usize>(sourceY, sourceRowPitch);
-            if(!sourceRowOffset)
-                return false;
-            const auto sourceRow = MakeNotNull(sourceBytes.get() + *sourceRowOffset);
-            const auto bitmapRow = MakeNotNull(bitmapBytes.data() + __hidden_bitmap_capture::s_BitmapPixelOffset + static_cast<usize>(bitmapY) * bitmapRowPitch);
-            for(u32 x = 0u; x < width; ++x){
-                const auto sourcePixel = MakeNotNull(sourceRow.get() + static_cast<usize>(x) * __hidden_bitmap_capture::s_SourceBytesPerPixel);
-                const auto bitmapPixel = MakeNotNull(bitmapRow.get() + static_cast<usize>(x) * __hidden_bitmap_capture::s_BitmapBytesPerPixel);
-                bitmapPixel.get()[0] = sourceIsBgra ? sourcePixel.get()[0] : sourcePixel.get()[2];
-                bitmapPixel.get()[1] = sourcePixel.get()[1];
-                bitmapPixel.get()[2] = sourceIsBgra ? sourcePixel.get()[2] : sourcePixel.get()[0];
-            }
-        }
-
-        const ::Path<Core::Alloc::ScratchArena> outputPath(scratchArena, m_outputPath);
-        {
-            const auto outputDirectory = outputPath.parentPath();
-            if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory))
-                return false;
-        }
-
-        ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, outputPath);
-        partialPath += NWB_TEXT(".partial");
-        if(!WriteBinaryFile(partialPath, bitmapBytes)){
-            const auto removed = RemoveFile(partialPath);
-            if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
-            return false;
-        }
-        if(!RenamePath(partialPath, outputPath)){
-            const auto removed = RemoveFile(partialPath);
-            if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
-            return false;
-        }
-        return true;
-    }
-
-private:
-    const ::Path<Core::Alloc::GlobalArena>& m_outputPath;
-    const Core::TextureDesc& m_captureDescription;
-};
-
 struct FramebufferCaptureOptions{
-    // Borrowed predicate context must outlive stop.
     b8 (*shouldCapture)(void*, u64) = nullptr;
     void* predicateContext = nullptr;
     u32 requiredWidth = 0u;
@@ -162,7 +21,6 @@ struct FramebufferCaptureOptions{
     b8 quitWhenReady = true;
 };
 
-// Ref-count completion state so teardown can finish after the project stops the observer.
 class FramebufferCapture final
     : public Core::IRenderPass
     , public Core::IGpuTaskGraphPresentationContributor
@@ -368,7 +226,7 @@ public:
 public:
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 
-    virtual b8 validateResources(const u32 width, const u32 height, const u32 /*sampleCount*/)override{
+    virtual b8 validateResources(const u32 width, const u32 height, const u32)override{
         if(m_skipped || m_failed || width == 0u || height == 0u)
             return true;
         if((m_options.requiredWidth != 0u && width != m_options.requiredWidth) || (m_options.requiredHeight != 0u && height != m_options.requiredHeight))

@@ -1,5 +1,8 @@
 nwb_declare_executable(nwb_reflection_smoke)
 nwb_target_adhd_sources(nwb_reflection_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_suite_scenes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_probes_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.adhd"
         )
 target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)

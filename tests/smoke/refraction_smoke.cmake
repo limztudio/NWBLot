@@ -1,5 +1,7 @@
 nwb_declare_executable(nwb_refraction_smoke)
 nwb_target_adhd_sources(nwb_refraction_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_scenes_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/refraction_project.adhd"
         )
 target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)

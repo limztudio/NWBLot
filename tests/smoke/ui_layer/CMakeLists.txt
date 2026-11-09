@@ -12,6 +12,12 @@ math(EXPR _nwb_ui_smoke_default_ctest_timeout_seconds "${_nwb_ui_smoke_default_t
 nwb_declare_executable(nwb_ui_layer_smoke)
 nwb_target_adhd_sources(nwb_ui_layer_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/snapshots.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/smoke_common.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/combo_edit_scenes.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/popup_scenes.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/value_widget_scenes.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/document_window_scenes.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/smoke_world.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/entry.adhd"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES WIN32_EXECUTABLE ON DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}" VS_DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}")

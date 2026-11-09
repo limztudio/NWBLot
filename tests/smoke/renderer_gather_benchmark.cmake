@@ -13,9 +13,10 @@ if(NWB_BUILD_RENDERER_GATHER_BENCHMARK)
     add_custom_target(nwb_renderer_gather_benchmark_assets DEPENDS "${_nwb_gather_asset_stamp}")
     nwb_declare_executable(nwb_renderer_gather_benchmark)
     nwb_target_adhd_sources(nwb_renderer_gather_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_probes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_scene_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_project.adhd"
         )
     nwb_configure_runtime_smoke_target(nwb_renderer_gather_benchmark "${_nwb_gather_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
     add_dependencies(nwb_renderer_gather_benchmark nwb_renderer_gather_benchmark_assets)
 endif()
-

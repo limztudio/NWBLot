@@ -149,7 +149,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     if(!m_symbols.build(unit, errors))
         ok = false;
 
-    m_hasTopLevelNativeBlocks = !unit.topLevelNativeBlocks.empty();
+    m_hasTopLevelNativeBlocks = !unit.topLevelNativeBlocks.empty() || unit.hasImportedNativeBlocks;
 
     if(!CallableDeclarationLinker(m_arena, m_symbols).link(unit, errors))
         ok = false;

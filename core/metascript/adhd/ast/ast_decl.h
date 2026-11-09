@@ -220,6 +220,7 @@ struct TranslationUnit{
     MVector<ClassTemplateInstantiation*> templateInstantiations;
     MVector<MethodDecl*> freeFunctions;
     MVector<MethodDecl*> outOfLineMethods;
+    b8 hasImportedNativeBlocks = false;
 
 
 public:

@@ -1,0 +1,202 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "fly_camera_motion.adhd"
+#include "scene_constants.adhd"
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
+#include <impl/assets_scene/asset.adhd.h>
+#include <impl/assets_ui_skin/asset.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
+#include <impl/ecs_mesh/skinning/system.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_model/system.adhd.h>
+#include <impl/ecs_model_renderer/model_renderer.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+#include <impl/ecs_ui/layer_system.adhd.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/ecs/world.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/input/module.h>
+#include <core/telemetry/frame_graph_registry.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+namespace Testbed{
+using NWB::IProjectEntryCallbacks;
+using NWB::ProjectRuntimeContext;
+using NWB::Core::IInputEventHandler;
+using NWB::Core::KeyboardInputResult;
+using NWB::Core::ECS::World;
+using NWB::Impl::ActiveSceneSubsystems;
+using NWB::Impl::UiPaintContext;
+using NWB::Impl::Ui::SeparatorOptions;
+using NWB::Impl::Ui::WindowOptions;
+using NWB::Impl::Ui::WindowState;
+namespace CoreInputAction = NWB::Core::InputAction;
+namespace Key = NWB::Core::Key;
+namespace MouseButton = NWB::Core::MouseButton;
+
+inline constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+
+[[nodiscard]] inline Expected<UniquePtr<World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context){
+    static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+    static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+
+    auto world = MakeUnique<World>(context.objectArena, context.cpuTasks);
+    if(!world){
+        NWB_LOGGER_FATAL(s_WorldAllocFailed);
+        return MakeUnexpected(s_WorldAllocFailed);
+    }
+
+    if(!context.shaderPathResolver){
+        NWB_LOGGER_FATAL(s_ResolverNull);
+        return MakeUnexpected(s_ResolverNull);
+    }
+
+    auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
+    auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(*world, context.graphics, context.assetManager, context.shaderPathResolver);
+    world->addSystem<NWB::Impl::ModelSystem>(*world, context.assetManager, NWB::Impl::CreateModelObjectRendererHooks());
+    auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(*world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
+    auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
+        *world,
+        context.graphics,
+        context.input,
+        context.clipboard,
+        context.textInput,
+        context.assetManager,
+        context.shaderPathResolver,
+        NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin>{},
+        NWB::Impl::UiLayerPresentation::Scene
+    );
+    context.graphics.addRenderPassToBack(meshSkinningSystem);
+    context.graphics.addRenderPassToBack(rendererSystem);
+    context.graphics.addRenderPassToBack(uiLayerSystem);
+    context.frameGraphRegistry.registerContributor(rendererSystem);
+
+    return world;
+}
+
+inline void DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNullUniquePtr<World>& worldHandle)noexcept{
+    UniquePtr<World>& world = worldHandle.owner();
+    if(!world)
+        return;
+
+    NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<NWB::Impl::MeshSkinningSystem>());
+    NWB::Impl::RendererSystem& rendererSystem = *MakeNotNull(world->getSystem<NWB::Impl::RendererSystem>());
+    NWB::Impl::UiLayerSystem& uiLayerSystem = *MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>());
+
+    context.frameGraphRegistry.unregisterContributor(rendererSystem);
+    context.graphics.removeRenderPass(meshSkinningSystem);
+    context.graphics.removeRenderPass(rendererSystem);
+    context.graphics.removeRenderPass(uiLayerSystem);
+
+    const b8 deviceIdle = context.graphics.waitForIdle();
+    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
+
+    world->clear();
+    world.reset();
+}
+
+[[nodiscard]] inline NotNullUniquePtr<World> CreateInitialWorldOrDie(ProjectRuntimeContext& context){
+    auto world = CreateInitialProjectWorld(context);
+    if(!world){
+        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
+        throw RuntimeException(s_InitWorldFailedNarrow.data());
+    }
+    return MakeNotNullUnique(Move(*world));
+}
+
+inline void BindActiveSceneSubsystemsToWorld(NotNullUniquePtr<World>& world, const ActiveSceneSubsystems& sceneSubsystems)noexcept{
+    if(auto* const rendererSystem = world->getSystem<NWB::Impl::RendererSystem>())
+        rendererSystem->setActiveSceneSubsystems(&sceneSubsystems);
+    if(auto* const meshSkinningSystem = world->getSystem<NWB::Impl::MeshSkinningSystem>())
+        meshSkinningSystem->setActiveSceneSubsystems(&sceneSubsystems);
+    if(auto* const uiLayerSystem = world->getSystem<NWB::Impl::UiLayerSystem>())
+        uiLayerSystem->setActiveSceneSubsystems(&sceneSubsystems);
+}
+
+[[nodiscard]] inline b8 CreateStartupCameraAndLights(NotNullUniquePtr<World>& world){
+    auto activeCameraEntity = world->createEntity();
+    auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+    const Float4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth);
+    activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*world, cameraPosition);
+    NWB_ASSERT(activeCamera.camera.valid());
+    auto& cameraTransform = *MakeNotNull(world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), cameraTransform.rotation);
+    const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
+        *world,
+        s_DefaultDirectionalLightPitch,
+        s_DefaultDirectionalLightYaw,
+        s_DefaultDirectionalLightRoll,
+        s_DefaultDirectionalLightColor,
+        s_DefaultDirectionalLightIntensity
+    );
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
+        *world,
+        s_PointLightPosition,
+        s_PointLightColor,
+        s_PointLightIntensity,
+        s_PointLightRange
+    );
+    return directionalLight.valid() && pointLight.valid();
+}
+
+inline void SyncWorldModelRuntimes(NotNullUniquePtr<World>& world){
+    NWB::Impl::ModelSystem& modelSystem = *MakeNotNull(world->getSystem<NWB::Impl::ModelSystem>());
+    modelSystem.syncModelRuntimes();
+}
+
+[[nodiscard]] inline b8 TickProjectWorld(NotNullUniquePtr<World>& world, const f32 safeDelta){
+    const auto updated = world->tick(safeDelta);
+    if(!updated){
+        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] inline b8 WantsUiKeyboard(const NotNullUniquePtr<World>& world)noexcept{
+    return MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
+}
+
+[[nodiscard]] inline b8 WantsUiPointer(const NotNullUniquePtr<World>& world)noexcept{
+    return MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer();
+}
+
+inline void ApplyFlyCameraInputToMainCamera(NotNullUniquePtr<World>& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(*world);
+    NWB_ASSERT(cameraView.valid());
+
+    const SIMDVectorSingle resolvedRotation = FlyCameraMotion().resolveStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
+    const SIMDVectorSingle resolvedPosition = FlyCameraMotion().resolvePosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
+    StoreFloat(resolvedRotation, cameraView.transform->rotation);
+    StoreFloat(resolvedPosition, cameraView.transform->position);
+}
+
+[[nodiscard]] inline b8 InstantiateSceneSubsystemsEntities(const ActiveSceneSubsystems& sceneSubsystems, NotNullUniquePtr<World>& world){
+    return sceneSubsystems.instantiateEntities(*world);
+}
+
+template<typename ProjectT>
+inline void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world, ProjectT& project){
+    auto uiEntity = world->createEntity();
+    auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
+    customUi.paint = [&project](UiPaintContext& context){
+        project.paintUiLayer(context);
+    };
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

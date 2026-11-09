@@ -30,7 +30,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             emitEnumDecl(out, *enumDecl);
     }
 
-    const b8 forwardDeclRefTypes = unit.topLevelNativeBlocks.empty();
+    const b8 forwardDeclRefTypes = unit.topLevelNativeBlocks.empty() && !unit.hasImportedNativeBlocks;
     MVector<MStringView> externalForwardClasses(m_arena);
     const auto collectTypeForwardDecls = [&](const TypeRef& t, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams, const b8 includeDirectRef){
         if(forwardDeclRefTypes){

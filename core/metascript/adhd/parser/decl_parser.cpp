@@ -100,6 +100,9 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
             else
                 outUnit.topLevelNativeBlocks.push_back(code);
         }
+        else{
+            outUnit.hasImportedNativeBlocks = true;
+        }
         return true;
     }
 

@@ -3,6 +3,7 @@
 
 
 #include "asset.h"
+#include "skin_asset.h"
 #include "binary_payload_io.h"
 #include "meshlet_triangle_indices.h"
 #include "meshlet_triangle_visit.h"
@@ -11,9 +12,11 @@
 #include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
 #include <impl/assets_mesh/payload_validation.adhd.h>
 #include <impl/assets_mesh/mesh_binary_codec.adhd.h>
+#include <impl/assets_mesh/skin_binary_codec.adhd.h>
 
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +29,25 @@ NWB_IMPL_BEGIN
 
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_skin_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, SkinningSubsystem);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,6 +149,24 @@ b8 Mesh::hasIncompleteGeometryPayload()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 Skin::loadBinary(const Span<const u8> binary){
+    Skin candidate(m_influences.get_allocator().arena(), virtualPath());
+    if(!SkinBinaryCodec().deserialize(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
+        return false;
+    *this = Move(candidate);
+    return true;
+}
+
+b8 Skin::validatePayload()const{
+    if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
+        return false;
+    return ValidateSkinAssetPayload(m_mesh.valid(), m_skeleton.valid(), m_influences, m_inverseBindMatrices);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
     const Span<const MeshletDesc> meshlets,
     const Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -164,4 +204,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

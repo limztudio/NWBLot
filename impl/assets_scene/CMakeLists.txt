@@ -8,7 +8,6 @@ target_link_libraries(nwb_assets_scene_types PUBLIC nwb_assets nwb_assets_subsys
 
 nwb_declare_static_library(nwb_assets_scene)
 target_sources(nwb_assets_scene PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/active_scene_subsystems.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
@@ -44,4 +43,3 @@ if(NWB_BUILD_PIPELINE)
     )
     target_compile_definitions(nwb_assets_scene_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

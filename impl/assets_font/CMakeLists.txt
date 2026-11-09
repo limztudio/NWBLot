@@ -8,8 +8,6 @@ target_link_libraries(nwb_assets_font_types PUBLIC nwb_assets)
 
 set(_nwb_font_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/font_validation.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/prepared_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
@@ -40,4 +38,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_font_volume_entry PRIVATE nwb_assets_font_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_font_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

@@ -17,9 +17,7 @@ nwb_declare_static_library(nwb_assets_texture_loader)
 target_sources(nwb_assets_texture_loader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/loader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/loader.h"
-    "${CMAKE_CURRENT_LIST_DIR}/texture_format_selector.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_format_selector.h"
-    "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.h"
 )
 target_link_libraries(nwb_assets_texture_loader PUBLIC nwb_assets nwb_assets_texture nwb_assets_texture_types nwb_graphics)
@@ -47,4 +45,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_texture_volume_entry PRIVATE nwb_assets_texture_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_texture_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

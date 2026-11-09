@@ -13,6 +13,7 @@
 #include <impl/assets_ui_skin/validation.adhd.h>
 #include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
 
+#include <core/assets/cook_metadata.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -22,6 +23,190 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_skin_cook_metadata{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Core::Metascript;
+
+static constexpr Array<::NamedEnumCase<UiSkinDrawMode::Enum>, 2u> s_DrawModeCases = {
+    ::NamedEnumCase<UiSkinDrawMode::Enum>{ s_UiSkinDrawModeSprite, UiSkinDrawMode::Sprite },
+    ::NamedEnumCase<UiSkinDrawMode::Enum>{ s_UiSkinDrawModeNineSlice, UiSkinDrawMode::NineSlice },
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<u32> ReadU32Value(const Path& path, const Value& value, const AStringView fieldName){
+    if(!value.isInteger() || !FitsU32(value.asInteger())){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName));
+        return MakeUnexpected(Failure{});
+    }
+    return static_cast<u32>(value.asInteger());
+}
+
+template<usize Count>
+[[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(const Path& path, const Value& object, const AStringView fieldName, const b8 required){
+    Array<u32, Count> values{};
+
+    const Value* field = object.findField(fieldName);
+    if(!field && !required)
+        return values;
+    if(!field || !field->isList() || field->asList().size() != Count){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
+        return MakeUnexpected(Failure{});
+    }
+    for(usize index = 0u; index < Count; ++index){
+        auto valueResult = ReadU32Value(path, field->asList()[index], fieldName);
+        if(!valueResult)
+            return MakeUnexpected(Failure{});
+        values[index] = *valueResult;
+    }
+    return values;
+}
+
+template<usize Count>
+[[nodiscard]] static Expected<Array<f32, Count>> ReadLogicalList(const Path& path, const Value& object, const AStringView fieldName){
+    Array<f32, Count> values{};
+
+    const Value* field = object.findField(fieldName);
+    if(!field)
+        return values;
+    if(!field->isList() || field->asList().size() != Count){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
+        return MakeUnexpected(Failure{});
+    }
+    for(usize index = 0u; index < Count; ++index){
+        auto indexResult = Core::Assets::ReadMetadataFiniteF32Value(path, field->asList()[index], s_UiSkinDiagnosticPrefix, fieldName);
+        if(!indexResult)
+            return MakeUnexpected(Failure{});
+        values[index] = *indexResult;
+    }
+    return values;
+}
+
+[[nodiscard]] static Expected<UiSkinRegion> ParseRegion(const Path& path, const Value& object){
+    UiSkinRegion region{};
+
+    if(!Core::Assets::CheckMetadataAssetMap(path, object, s_UiSkinDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(object.findField(s_UiSkinDrawModeField)){
+        auto drawModeResult = Core::Assets::ParseNamedMetadataEnumField<UiSkinDrawMode::Enum>(path, object, s_UiSkinDiagnosticPrefix, s_UiSkinDrawModeField, s_DrawModeCases, s_UiSkinDrawModeHint);
+        if(!drawModeResult)
+            return MakeUnexpected(Failure{});
+        region.drawMode = *drawModeResult;
+    }
+
+    if(!Core::Assets::ValidateMetadataAssetFields(path, object, s_UiSkinDiagnosticPrefix, [hasSlice = region.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
+        return IsAllowedUiSkinRegionField(field, hasSlice);
+    }))
+        return MakeUnexpected(Failure{});
+    auto nameResult = Core::Assets::ReadMetadataNameField(path, object, s_UiSkinDiagnosticPrefix, s_UiSkinNameField, true);
+    if(!nameResult)
+        return MakeUnexpected(Failure{});
+    region.name = *nameResult;
+
+    auto rectangleResult = ReadU32List<s_UiSkinRectComponentCount>(path, object, s_UiSkinRectField, true);
+    if(!rectangleResult)
+        return MakeUnexpected(Failure{});
+    auto sliceResult = ReadU32List<s_UiSkinSliceComponentCount>(path, object, s_UiSkinSliceField, region.drawMode == UiSkinDrawMode::NineSlice);
+    if(!sliceResult)
+        return MakeUnexpected(Failure{});
+    auto paddingResult = ReadLogicalList<s_UiSkinPaddingComponentCount>(path, object, s_UiSkinPaddingField);
+    if(!paddingResult)
+        return MakeUnexpected(Failure{});
+    auto minimumSizeResult = ReadLogicalList<s_UiSkinMinimumSizeComponentCount>(path, object, s_UiSkinMinimumSizeField);
+    if(!minimumSizeResult)
+        return MakeUnexpected(Failure{});
+
+    region.rectangle = UiSkinRect((*rectangleResult)[0u], (*rectangleResult)[1u], (*rectangleResult)[2u], (*rectangleResult)[3u]);
+    region.sliceInsets = UiSkinSliceInsets((*sliceResult)[0u], (*sliceResult)[1u], (*sliceResult)[2u], (*sliceResult)[3u]);
+    region.padding = UiSkinInsets((*paddingResult)[0u], (*paddingResult)[1u], (*paddingResult)[2u], (*paddingResult)[3u]);
+    region.minimumWidth = (*minimumSizeResult)[0u];
+    region.minimumHeight = (*minimumSizeResult)[1u];
+    return region;
+}
+
+[[nodiscard]] static Expected<UiSkinPalette> ParsePalette(const Path& path, const Value& asset){
+    UiSkinPalette palette{};
+
+    const auto colors = Core::Assets::FindMetadataListField(path, asset, s_UiSkinDiagnosticPrefix, s_UiSkinColorsField);
+    if(!colors)
+        return MakeUnexpected(colors.error());
+    if((*colors)->asList().size() != UiSkinColorRole::kCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::kCount));
+        return MakeUnexpected(Failure{});
+    }
+
+    Array<b8, UiSkinColorRole::kCount> seen{};
+    for(const Value& value : (*colors)->asList()){
+        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinPaletteRoleField))
+            return MakeUnexpected(Failure{});
+        auto nameResultValue = Core::Assets::ReadMetadataStringField(path, value, s_UiSkinDiagnosticPrefix, s_UiSkinNameField, true);
+        if(!nameResultValue)
+            return MakeUnexpected(Failure{});
+        const AStringView name = nameResultValue->text;
+        const usize role = ResolveUiSkinColorRole(name);
+        if(role == UiSkinColorRole::kCount || seen[role]){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+            return MakeUnexpected(Failure{});
+        }
+        const Value* rgba = value.findField(s_UiSkinRgbaField);
+        if(!rgba || !rgba->isList() || rgba->asList().size() != s_UiSkinRgbaComponentCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+            return MakeUnexpected(Failure{});
+        }
+        Array<f32, s_UiSkinRgbaComponentCount> components{};
+        for(usize index = 0u; index < s_UiSkinRgbaComponentCount; ++index){
+            auto indexResultValue = Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_UiSkinDiagnosticPrefix, s_UiSkinRgbaField);
+            if(!indexResultValue)
+                return MakeUnexpected(Failure{});
+            components[index] = *indexResultValue;
+            if(!IsValidUiSkinPaletteChannelValue(components[index], index)){
+                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+                return MakeUnexpected(Failure{});
+            }
+        }
+        palette.colors[role] = UiSkinColor(components[0u], components[1u], components[2u], components[3u]);
+        seen[role] = true;
+    }
+    return palette;
+}
+
+[[nodiscard]] static Expected<UiSkinTypography> ParseTypography(const Path& path, const Value& asset){
+    UiSkinTypography typographyResult{};
+
+    const Value* typography = asset.findField(s_UiSkinTypographyField);
+    if(!typography){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path));
+        return MakeUnexpected(Failure{});
+    }
+    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinTypographyField))
+        return MakeUnexpected(Failure{});
+    auto defaultFontSizeResult = Core::Assets::ReadMetadataFiniteF32Field(path, *typography, s_UiSkinDiagnosticPrefix, s_UiSkinDefaultFontSizeField, true);
+    if(!defaultFontSizeResult)
+        return MakeUnexpected(Failure{});
+    typographyResult.defaultFontSize = *defaultFontSizeResult;
+    if(!IsValidUiSkinDefaultFontSize(typographyResult.defaultFontSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path));
+        return MakeUnexpected(Failure{});
+    }
+    return typographyResult;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,6 +252,83 @@ Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    using namespace __hidden_ui_skin_cook_metadata;
+
+    UiSkinCookEntry parsed(arena);
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_UiSkinDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_UiSkinDiagnosticPrefix, parsed))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinMetadataField))
+        return MakeUnexpected(Failure{});
+
+    auto paletteResult = ParsePalette(nwbFilePath, asset);
+    if(!paletteResult)
+        return MakeUnexpected(Failure{});
+    parsed.palette = *paletteResult;
+    auto typographyResult = ParseTypography(nwbFilePath, asset);
+    if(!typographyResult)
+        return MakeUnexpected(Failure{});
+    parsed.typography = *typographyResult;
+    auto textureResult = Core::Assets::ReadMetadataAssetRefField<Texture>(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinTextureField, true);
+    if(!textureResult)
+        return MakeUnexpected(Failure{});
+    parsed.texture = *textureResult;
+
+    auto extentResult = ReadU32List<s_UiSkinAtlasExtentComponentCount>(nwbFilePath, asset, s_UiSkinAtlasExtentField, true);
+    if(!extentResult)
+        return MakeUnexpected(Failure{});
+    parsed.atlasWidth = (*extentResult)[0u];
+    parsed.atlasHeight = (*extentResult)[1u];
+    auto referenceDensityResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinReferenceDensityField, true);
+    if(!referenceDensityResult)
+        return MakeUnexpected(Failure{});
+    parsed.referenceDensity = *referenceDensityResult;
+
+    auto toolkitContractResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinToolkitContractField, false);
+    if(!toolkitContractResult)
+        return MakeUnexpected(Failure{});
+    const AStringView toolkitContract = toolkitContractResult->text;
+    const b8 hasToolkitContract = toolkitContractResult->present;
+    if(hasToolkitContract && toolkitContract != s_UiSkinWidgetsContract){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+        return MakeUnexpected(Failure{});
+    }
+    parsed.completeToolkitSkin = hasToolkitContract;
+
+    const auto regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinRegionsField);
+    if(!regions)
+        return MakeUnexpected(regions.error());
+    if((*regions)->asList().size() > s_UiSkinMaxRegionCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
+        return MakeUnexpected(Failure{});
+    }
+    if((*regions)->asList().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+        return MakeUnexpected(Failure{});
+    }
+    parsed.regions.reserve((*regions)->asList().size());
+    for(const Value& value : (*regions)->asList()){
+        auto regionResult = ParseRegion(nwbFilePath, value);
+        if(!regionResult)
+            return MakeUnexpected(Failure{});
+        parsed.regions.push_back(*regionResult);
+    }
+
+    if(!BuildUiSkinAsset(parsed, arena))
+        return MakeUnexpected(Failure{});
+    return parsed;
+}
+
+Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return Core::Assets::ParseCookMetadataDocument<UiSkinCookEntry, &ParseUiSkinCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_UiSkinDiagnosticPrefix, arena, scratchArena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
@@ -77,4 +339,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

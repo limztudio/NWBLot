@@ -3,10 +3,18 @@
 
 
 #include "asset.h"
+#include <core/assets/polymorphic_asset_codec.h>
 
+#include <impl/assets_scene/component_asset_binary_codec.adhd.h>
 #include <impl/assets_scene/scene_asset_binary_codec.adhd.h>
+#include <impl/ecs_scene/camera.h>
 
 #include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/common/log.h>
+
+#include <global/binary.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,12 +35,123 @@ namespace __hidden_scene_runtime{
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_EntityAssetCodecAutoRegistrar, EntityAssetCodec);
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ProjectAssetCodecAutoRegistrar, ProjectAssetCodec);
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ComponentAssetCodecAutoRegistrar, ComponentAssetCodec);
+NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_TransformComponentAssetAutoRegistrar, TransformComponentAsset);
+NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_CameraComponentAssetAutoRegistrar, CameraComponentAsset);
+NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_LightComponentAssetAutoRegistrar, LightComponentAsset);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_active_scene_subsystems{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_ActiveSceneSubsystemsOwner = NWB_TEXT("ActiveSceneSubsystems");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+IComponent::~IComponent()noexcept = default;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ComponentAssetRuntime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
+    const auto payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, outComponent.assetType());
+    if(!payload)
+        return false;
+    if(!outComponent.loadComponentPayload(*payload))
+        return false;
+    return outComponent.validatePayload();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
+    return Core::Assets::PolymorphicAssetCodec::DeserializePolymorphicAsset<IComponent, ComponentHeaderBinary, &ComponentHeaderBinary::componentTypeHash>(
+        virtualPath,
+        binary,
+        s_ComponentMagic,
+        s_ComponentLoadBinaryContext,
+        s_ComponentAssetKindLabel,
+        NWB_TEXT("ComponentAssetCodec::deserialize"),
+        arena
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
+    return ComponentAssetBinaryCodec().deserializeTransform(payload, component);
+}
+
+b8 TransformComponentAsset::validatePayload()const{
+    if(!checkVirtualPath(NWB_TEXT("TransformComponentAsset::validatePayload")))
+        return false;
+    return ValidateTransformComponentAssetPayload(component, virtualPath());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
+    return ComponentAssetBinaryCodec().deserializeCamera(payload, component);
+}
+
+b8 CameraComponentAsset::validatePayload()const{
+    if(!checkVirtualPath(NWB_TEXT("CameraComponentAsset::validatePayload")))
+        return false;
+    return ValidateCameraComponentAssetPayload(component, virtualPath());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
+    return ComponentAssetBinaryCodec().deserializeLight(payload, component);
+}
+
+b8 LightComponentAsset::validatePayload()const{
+    if(!checkVirtualPath(NWB_TEXT("LightComponentAsset::validatePayload")))
+        return false;
+    return ValidateLightComponentAssetPayload(component, virtualPath());
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,8 +259,150 @@ void SceneAsset::takeContents(SubsystemRefVector& outSubsystems, AssetMap& outAs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+b8 ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
+    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
+    if(!projectAsset)
+        return false;
+    return loadScene((*projectAsset)->startScene(), assetManager);
+}
+
+b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetManager& assetManager){
+    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
+    if(!sceneAssetResult)
+        return false;
+    const SceneAsset& sceneAsset = **sceneAssetResult;
+
+    AssetMap nextSceneAssets(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
+    LoadedSubsystemVector nextLoadedSubsystems(m_arena);
+    LoadedEntityVector nextLoadedEntities(m_arena);
+
+    nextSceneAssets.reserve(sceneAsset.assets().size());
+    for(const auto& [nickname, asset] : sceneAsset.assets()){
+        if(!nextSceneAssets.emplace(nickname, asset).second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
+
+    Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
+    SceneScratchNameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    Vector<SubsystemRef, Core::Alloc::ScratchArena> pendingSubsystems(scratchArena);
+    pendingSubsystems.reserve(sceneAsset.subsystems().size());
+
+    const auto enqueueSubsystem = [&](const SubsystemRef& subsystemRef){
+        if(!subsystemRef.valid())
+            return;
+        if(seenSubsystems.insert(subsystemRef.name().hash()).second)
+            pendingSubsystems.push_back(subsystemRef);
+    };
+
+    for(const SubsystemRef& subsystemRef : sceneAsset.subsystems())
+        enqueueSubsystem(subsystemRef);
+
+    nextLoadedSubsystems.reserve(pendingSubsystems.size());
+    for(usize queueIndex = 0u; queueIndex < pendingSubsystems.size(); ++queueIndex){
+        const SubsystemRef currentSubsystem = pendingSubsystems[queueIndex];
+        auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
+        if(!loadedAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load subsystem asset '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
+            return false;
+        }
+        const ISubsystem* const subsystemPtr = SubsystemTypeAutoRegistrar::Cast(loadedAsset->get());
+        if(!subsystemPtr){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a subsystem"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
+            return false;
+        }
+        for(const UniquePtr<ISubsystem>& existing : nextLoadedSubsystems){
+            if(existing && existing->assetType() == subsystemPtr->assetType()){
+                NWB_LOGGER_ERROR(NWB_TEXT("{}: duplicate subsystem type '{}' in scene '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(subsystemPtr->assetType().resolvedText()), ConvertString(scene.name().resolvedText()));
+                return false;
+            }
+        }
+        for(const SubsystemRef& nestedSubsystem : subsystemPtr->subsystems)
+            enqueueSubsystem(nestedSubsystem);
+
+        nextLoadedSubsystems.push_back(UniquePtr<ISubsystem>(checked_cast<ISubsystem*>(loadedAsset->release())));
+    }
+
+    nextLoadedEntities.reserve(sceneAsset.entities().size());
+    for(const EntityRef& currentEntity : sceneAsset.entities()){
+        auto entityAssetResult = assetManager.loadTypedSync<EntityAsset>(currentEntity.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
+        if(!entityAssetResult)
+            return false;
+        const EntityAsset& entityAsset = **entityAssetResult;
+
+        LoadedComponentVector loadedComponents(m_arena);
+        loadedComponents.reserve(entityAsset.components().size());
+        for(const ComponentRef& currentComponent : entityAsset.components()){
+            auto loadedComponentAsset = assetManager.loadSync(IComponent::AssetTypeName(), currentComponent.name());
+            if(!loadedComponentAsset){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("{}: failed to load component asset '{}' for entity '{}'")
+                    , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
+                    , ConvertString(currentComponent.name().resolvedText())
+                    , ConvertString(currentEntity.name().resolvedText())
+                );
+                return false;
+            }
+            const IComponent* const componentPtr = ComponentTypeAutoRegistrar::Cast(loadedComponentAsset->get());
+            if(!componentPtr){
+                NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a component"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentComponent.name().resolvedText()));
+                return false;
+            }
+            for(const UniquePtr<IComponent>& existing : loadedComponents){
+                if(existing && existing->assetType() == componentPtr->assetType()){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("{}: duplicate component type '{}' on entity '{}'")
+                        , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
+                        , ConvertString(componentPtr->assetType().resolvedText())
+                        , ConvertString(currentEntity.name().resolvedText())
+                    );
+                    return false;
+                }
+            }
+            loadedComponents.push_back(UniquePtr<IComponent>(checked_cast<IComponent*>(loadedComponentAsset->release())));
+        }
+
+        nextLoadedEntities.emplace_back(currentEntity, Move(loadedComponents));
+    }
+
+    m_scene = scene;
+    m_sceneAssets = Move(nextSceneAssets);
+    m_loadedSubsystems = Move(nextLoadedSubsystems);
+    m_loadedEntities = Move(nextLoadedEntities);
+    return true;
+}
+
+b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
+    if(!valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot instantiate entities before loading a valid scene"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
+        return false;
+    }
+
+    for(const LoadedEntity& loadedEntity : m_loadedEntities){
+        if(loadedEntity.components.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded entity '{}' has no components"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
+            return false;
+        }
+        Core::ECS::Entity entity = world.createEntity();
+        if(!entity.id().valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create ECS entity for '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
+            return false;
+        }
+        for(const UniquePtr<IComponent>& component : loadedEntity.components){
+            if(!component)
+                return false;
+            component->applyToEntity(entity);
+        }
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

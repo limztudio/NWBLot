@@ -38,11 +38,6 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_graphics_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime*.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_components.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/csg_evaluator_dependencies.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_validation.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/shader_*.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/volume_prepare.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/*.h"
         "${CMAKE_CURRENT_LIST_DIR}/*.hh"
         "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
@@ -64,4 +59,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_graphics_volume_entry PRIVATE nwb_assets_graphics_cook nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_graphics_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

@@ -9,14 +9,138 @@
 
 
 #include "cook.h"
+#include "cook_component_metadata.h"
+#include <core/assets/polymorphic_asset_codec.h>
 
+#include <impl/assets_scene/component_assets.adhd.h>
+#include <impl/assets_scene/component_asset_binary_codec.adhd.h>
 #include <impl/assets_scene/scene_asset_binary_codec.adhd.h>
+
+#include <core/assets/reserved_asset_ref_parser.h>
+#include <core/common/log.h>
+
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scene_cook_components{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Core::Metascript;
+using namespace SceneAssetCook;
+
+[[nodiscard]] static b8 CheckOptionalMetadataAssetMap(const Path& nwbFilePath, const Value& asset, const AStringView diagnosticPrefix){
+    if(asset.isNull() || asset.isMap())
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    return false;
+}
+
+[[nodiscard]] static Expected<Float4> ParseFloat3Field(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
+    if(!listValue.isList() || listValue.asList().size() != 3u){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 3-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return MakeUnexpected(Failure{});
+    }
+    const auto& items = listValue.asList();
+    const auto x = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[0], diagnosticPrefix, fieldLabel);
+    const auto y = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[1], diagnosticPrefix, fieldLabel);
+    const auto z = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[2], diagnosticPrefix, fieldLabel);
+    if(!x || !y || !z)
+        return MakeUnexpected(Failure{});
+    return Float4(*x, *y, *z, 0.0f);
+}
+
+[[nodiscard]] static Expected<Float4> ParseQuaternionField(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
+    if(!listValue.isList() || listValue.asList().size() != 4u){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 4-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return MakeUnexpected(Failure{});
+    }
+    const auto& items = listValue.asList();
+    const auto x = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[0], diagnosticPrefix, fieldLabel);
+    const auto y = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[1], diagnosticPrefix, fieldLabel);
+    const auto z = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[2], diagnosticPrefix, fieldLabel);
+    const auto w = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, items[3], diagnosticPrefix, fieldLabel);
+    if(!x || !y || !z || !w)
+        return MakeUnexpected(Failure{});
+
+    const Expected<SIMDVectorSingleResult> normalized = TryNormalizeTransformQuaternion(*x, *y, *z, *w);
+    if(!normalized){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return MakeUnexpected(Failure{});
+    }
+    Float4 result{};
+    StoreFloat(normalized->value, result);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scene_cook_metadata{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Core::Metascript;
+
+[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    if(!mapValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneAssetsField));
+        return MakeUnexpected(Failure{});
+    }
+
+    const auto& map = mapValue.asMap();
+    SceneAsset::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    assets.reserve(map.size());
+    for(const auto& [nicknameKey, assetValue] : map){
+        const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
+        if(!IsValidSceneAssetNicknameText(nicknameView)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            return MakeUnexpected(Failure{});
+        }
+        const auto nickname = Name::FromText(nicknameView);
+        if(!nickname || !*nickname){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            return MakeUnexpected(Failure{});
+        }
+        const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
+        if(!parsedRef)
+            return MakeUnexpected(Failure{});
+        if(!assets.emplace(*nickname, *parsedRef).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    return assets;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +192,386 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    return Core::Assets::PolymorphicAssetCodec::SerializePolymorphicAsset<IComponent, &ComponentAssetSerialization::Serialize>(asset, s_ComponentSerializeContext, outBinary);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ComponentAssetSerialization{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
+    if(!component.validatePayload())
+        return false;
+
+    auto& assetArena = outBinary.get_allocator().arena();
+    Core::Assets::AssetBytes payload(assetArena);
+    if(!component.serializeComponentPayload(payload))
+        return false;
+
+    ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    return ComponentAssetBinaryCodec().serializeTransform(component, outPayload);
+}
+
+b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    return ComponentAssetBinaryCodec().serializeCamera(component, outPayload);
+}
+
+b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    return ComponentAssetBinaryCodec().serializeLight(component, outPayload);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<TransformComponentCookEntry> SceneComponentMetadataParser::ParseTransform(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    using namespace __hidden_scene_cook_components;
+
+    TransformComponentCookEntry entry(arena);
+    if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_TransformDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TransformDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+
+    if(asset.isMap()){
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, &IsAllowedTransformComponentField))
+            return MakeUnexpected(Failure{});
+
+        if(const Core::Metascript::Value* positionValue = asset.findField(s_TransformPositionField)){
+            const auto position = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *positionValue, s_TransformPositionField);
+            if(!position)
+                return MakeUnexpected(Failure{});
+            entry.component.position = *position;
+        }
+
+        const Core::Metascript::Value* const rotationValue = asset.findField(s_TransformRotationField);
+        const Core::Metascript::Value* const eulerValue = asset.findField(s_TransformRotationEulerField);
+        const Core::Metascript::Value* const eulerDegreesValue = asset.findField(s_TransformRotationEulerDegreesField);
+        const usize rotationFieldCount = static_cast<usize>(rotationValue != nullptr) + static_cast<usize>(eulerValue != nullptr) + static_cast<usize>(eulerDegreesValue != nullptr);
+        if(rotationFieldCount > 1u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"), ConvertString(s_TransformDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+            return MakeUnexpected(Failure{});
+        }
+        if(rotationValue){
+            const auto rotation = ParseQuaternionField(nwbFilePath, s_TransformDiagnosticPrefix, *rotationValue, s_TransformRotationField);
+            if(!rotation)
+                return MakeUnexpected(Failure{});
+            entry.component.rotation = *rotation;
+        }
+        else if(eulerValue){
+            const auto eulerRadians = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerValue, s_TransformRotationEulerField);
+            if(!eulerRadians)
+                return MakeUnexpected(Failure{});
+            StoreFloat(QuaternionRotationRollPitchYaw(eulerRadians->x, eulerRadians->y, eulerRadians->z), entry.component.rotation);
+        }
+        else if(eulerDegreesValue){
+            const auto eulerDegrees = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerDegreesValue, s_TransformRotationEulerDegreesField);
+            if(!eulerDegrees)
+                return MakeUnexpected(Failure{});
+            StoreFloat(QuaternionRotationRollPitchYaw(eulerDegrees->x * s_SceneDegreesToRadians, eulerDegrees->y * s_SceneDegreesToRadians, eulerDegrees->z * s_SceneDegreesToRadians), entry.component.rotation);
+        }
+
+        if(const Core::Metascript::Value* scaleValue = asset.findField(s_TransformScaleField)){
+            const auto scale = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *scaleValue, s_TransformScaleField);
+            if(!scale)
+                return MakeUnexpected(Failure{});
+            entry.component.scale = *scale;
+        }
+    }
+
+    if(!BuildComponentAssetFromEntry<TransformComponentAsset>(entry, arena))
+        return MakeUnexpected(Failure{});
+
+    return entry;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CameraComponentCookEntry> SceneComponentMetadataParser::ParseCamera(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    using namespace __hidden_scene_cook_components;
+
+    CameraComponentCookEntry entry(arena);
+    if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_CameraDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_CameraDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+
+    if(asset.isMap()){
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, &IsAllowedCameraComponentField))
+            return MakeUnexpected(Failure{});
+
+        const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_CameraVerticalFovDegreesField);
+        const Core::Metascript::Value* const fovRadiansValue = asset.findField(s_CameraVerticalFovRadiansField);
+        if(fovDegreesValue && fovRadiansValue){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"), ConvertString(s_CameraDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+            return MakeUnexpected(Failure{});
+        }
+        if(fovDegreesValue){
+            const auto fovDegrees = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovDegreesValue, s_CameraDiagnosticPrefix, s_CameraVerticalFovDegreesField);
+            if(!fovDegrees)
+                return MakeUnexpected(Failure{});
+            entry.component.setVerticalFovRadians(*fovDegrees * s_SceneDegreesToRadians);
+        }
+        else if(fovRadiansValue){
+            const auto fovRadians = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovRadiansValue, s_CameraDiagnosticPrefix, s_CameraVerticalFovRadiansField);
+            if(!fovRadians)
+                return MakeUnexpected(Failure{});
+            entry.component.setVerticalFovRadians(*fovRadians);
+        }
+
+        f32 nearPlane = entry.component.nearPlane();
+        f32 farPlane = entry.component.farPlane();
+        f32 aspectRatio = entry.component.aspectRatio();
+        if(
+            !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
+        )
+            return MakeUnexpected(Failure{});
+        entry.component.setNearPlane(nearPlane);
+        entry.component.setFarPlane(farPlane);
+        entry.component.setAspectRatio(aspectRatio);
+    }
+
+    if(!BuildComponentAssetFromEntry<CameraComponentAsset>(entry, arena))
+        return MakeUnexpected(Failure{});
+
+    return entry;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<LightComponentCookEntry> SceneComponentMetadataParser::ParseLight(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    using namespace __hidden_scene_cook_components;
+
+    LightComponentCookEntry entry(arena);
+    if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_LightDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_LightDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+
+    if(asset.isMap()){
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_LightDiagnosticPrefix, &IsAllowedLightComponentField))
+            return MakeUnexpected(Failure{});
+
+        if(asset.findField(s_LightTypeField)){
+            static constexpr Array<::NamedEnumCase<Scene::LightType::Enum>, 3u> s_LightTypeCases = {{
+                { s_LightTypeDirectional, Scene::LightType::Directional },
+                { s_LightTypePoint, Scene::LightType::Point },
+                { s_LightTypeSpot, Scene::LightType::Spot },
+            }};
+            const auto parsedType = Core::Assets::ParseNamedMetadataEnumField<Scene::LightType::Enum>(
+                nwbFilePath,
+                asset,
+                s_LightDiagnosticPrefix,
+                s_LightTypeField,
+                Span<const ::NamedEnumCase<Scene::LightType::Enum>>(s_LightTypeCases.data(), s_LightTypeCases.size()),
+                s_LightTypeHint
+            );
+            if(!parsedType)
+                return MakeUnexpected(Failure{});
+            entry.component.type = *parsedType;
+        }
+
+        if(const Core::Metascript::Value* colorValue = asset.findField(s_LightColorField)){
+            const auto color = ParseFloat3Field(nwbFilePath, s_LightDiagnosticPrefix, *colorValue, s_LightColorField);
+            if(!color)
+                return MakeUnexpected(Failure{});
+            entry.component.setColor(LoadFloat(*color));
+        }
+
+        f32 intensity = entry.component.intensity();
+        if(
+            !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, entry.component.range)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, entry.component.innerConeCos)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, entry.component.outerConeCos)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, entry.component.angularRadius)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, entry.component.sourceRadius)
+        )
+            return MakeUnexpected(Failure{});
+        entry.component.setIntensity(intensity);
+
+        if(const Core::Metascript::Value* enableCausticsValue = asset.findField(s_LightEnableCausticsField)){
+            const auto enableCaustics = Core::Assets::ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, *enableCausticsValue, s_LightEnableCausticsField);
+            if(!enableCaustics)
+                return MakeUnexpected(Failure{});
+            entry.component.enableCaustics = *enableCaustics;
+        }
+    }
+
+    if(!BuildComponentAssetFromEntry<LightComponentAsset>(entry, arena))
+        return MakeUnexpected(Failure{});
+
+    return entry;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_scene_cook_metadata;
+
+    EntityCookEntry entry(arena);
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_EntityDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_EntityDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, &IsAllowedEntityAssetField))
+        return MakeUnexpected(Failure{});
+
+    const Core::Metascript::Value* componentsValue = asset.findField(s_EntityComponentsField);
+    if(!componentsValue){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EntityComponentsField));
+        return MakeUnexpected(Failure{});
+    }
+    auto components = Core::Assets::ReservedAssetRefParser::ParseList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
+    if(!components)
+        return MakeUnexpected(Failure{});
+
+    EntityAsset candidate(arena, entry.virtualPath);
+    candidate.setComponents(Move(*components));
+    if(!candidate.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    entry.components = candidate.takeComponents();
+
+    return entry;
+}
+
+Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    EntityAsset asset(arena, entry.virtualPath);
+    asset.setComponents(Move(entry.components));
+    if(!asset.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    return asset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_scene_cook_metadata;
+
+    ProjectCookEntry entry(arena);
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ProjectDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ProjectDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, &IsAllowedProjectAssetField))
+        return MakeUnexpected(Failure{});
+
+    const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
+    if(!startSceneField)
+        return MakeUnexpected(Failure{});
+    const auto startSceneRef = Core::Assets::ReservedAssetRefParser::ParseText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, startSceneField->text, scratchArena);
+    if(!startSceneRef)
+        return MakeUnexpected(Failure{});
+    entry.startScene = *startSceneRef;
+
+    ProjectAsset candidate(arena, entry.virtualPath);
+    candidate.setStartScene(entry.startScene);
+    if(!candidate.validatePayload())
+        return MakeUnexpected(Failure{});
+
+    return entry;
+}
+
+Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    ProjectAsset asset(arena, entry.virtualPath);
+    asset.setStartScene(entry.startScene);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure{});
+    return asset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_scene_cook_metadata;
+
+    SceneCookEntry entry(arena);
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SceneDiagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SceneDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, &IsAllowedSceneAssetField))
+        return MakeUnexpected(Failure{});
+
+    const Core::Metascript::Value* subsystemsValue = asset.findField(s_SceneSubsystemsField);
+    if(!subsystemsValue){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneSubsystemsField));
+        return MakeUnexpected(Failure{});
+    }
+    auto subsystems = Core::Assets::ReservedAssetRefParser::ParseList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
+    if(!subsystems)
+        return MakeUnexpected(Failure{});
+    DeduplicateSubsystemRefs(*subsystems);
+    entry.subsystems = Move(*subsystems);
+
+    if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){
+        auto entities = Core::Assets::ReservedAssetRefParser::ParseList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
+        if(!entities)
+            return MakeUnexpected(Failure{});
+        entry.entities = Move(*entities);
+    }
+
+    if(const Core::Metascript::Value* assetsValue = asset.findField(s_SceneAssetsField)){
+        auto assets = ParseAssetsMap(nwbFilePath, *assetsValue, arena, scratchArena);
+        if(!assets)
+            return MakeUnexpected(Failure{});
+        entry.assets = Move(*assets);
+    }
+
+    SceneAsset candidate(arena, entry.virtualPath);
+    candidate.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.entities));
+    if(!candidate.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    candidate.takeContents(entry.subsystems, entry.assets, entry.entities);
+
+    return entry;
+}
+
+Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    SceneAsset asset(arena, entry.virtualPath);
+    asset.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.entities));
+    if(!asset.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    return asset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
@@ -78,4 +582,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

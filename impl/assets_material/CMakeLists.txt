@@ -24,8 +24,6 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_material_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_*.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind*.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/*.h"
         "${CMAKE_CURRENT_LIST_DIR}/*.hh"
         "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
@@ -44,4 +42,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_material_volume_entry PRIVATE nwb_assets_material_cook nwb_assets_shader_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_material_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

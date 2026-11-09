@@ -8,9 +8,6 @@ target_link_libraries(nwb_assets_font_atlas_types PUBLIC nwb_assets nwb_assets_f
 
 set(_nwb_font_atlas_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/binary.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/validation.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/source_*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
@@ -41,4 +38,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_font_atlas_volume_entry PRIVATE nwb_assets_font_atlas_cook nwb_assets_font_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_font_atlas_volume_entry PRIVATE NWB_COOK=1)
 endif()
-

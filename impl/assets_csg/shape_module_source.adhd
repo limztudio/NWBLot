@@ -74,6 +74,22 @@ class CsgShapeModuleSource{
     }
 }
 
+b8 ValidateCsgModuleIncludeConsistency(
+    in Name shaderModule,
+    in StringView expectedModuleInclude,
+    in StringView entryModuleInclude
+){
+    if(entryModuleInclude == expectedModuleInclude)
+        return true;
+
+    error(
+        "CSG shape include generation: module '{}' uses multiple generated include paths ('{}' and '{}')",
+        shaderModule.resolvedText(),
+        expectedModuleInclude,
+        entryModuleInclude
+    );
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

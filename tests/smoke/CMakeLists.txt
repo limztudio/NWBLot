@@ -518,7 +518,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                 "--expect-log-message" "GiTestSmokeProject: complex GI capture source_frame="
                 "--expect-log-message" "GiTestSmokeProject: shutdown"
             "--expect-surfel-coverage-probe")
-        set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=1" TIMEOUT ${_nwb_gi_coverage_probe_ctest_timeout_seconds})
+        set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=1;NWB_SMOKE_QUIET_GPU_SCOPE_LOG=1;NWB_GPU_TIMING_FILE=${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/gi_coverage_gpu_timing.txt" TIMEOUT ${_nwb_gi_coverage_probe_ctest_timeout_seconds})
 
         foreach(_nwb_csg_gi_route IN ITEMS natural software)
             foreach(_nwb_csg_gi_lighting IN ITEMS current lagged)

@@ -98,6 +98,7 @@ public:
 
 public:
     virtual b8 onStartup()override{
+        m_gpuPassTimingProbe.setLogScopes(!NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SMOKE_QUIET_GPU_SCOPE_LOG"));
         const auto csgGi = m_csgGiScene.start();
         if(!csgGi)
             return false;

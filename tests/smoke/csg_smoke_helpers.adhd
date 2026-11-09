@@ -24,23 +24,6 @@ inline void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCut
     cutter.parameterBytes.resize(sizeof(ParameterT));
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
-
-template<typename ReceiverComponentT>
-inline ReceiverComponentT& AddCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    auto& receiver = world.entity(entity).addComponent<ReceiverComponentT>();
-    receiver.receiverGroup = receiverGroup;
-    receiver.affectOpaquePass = affectOpaquePass;
-    receiver.affectTransparentPass = affectTransparentPass;
-    return receiver;
-}
-
-inline Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    return AddCsgMeshReceiver<Impl::StaticCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
-}
-
-inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    return AddCsgMeshReceiver<Impl::SkinnedCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
-}
 };
 }
 
@@ -48,13 +31,32 @@ inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(const Core::ECS:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AddStaticCsgMeshReceiver(in EntityID entity, in Name receiverGroup, in b8 affectOpaquePass, in b8 affectTransparentPass, mut World world){
+    native(in entity, in receiverGroup, in affectOpaquePass, in affectTransparentPass, mut world){
+        auto& receiver = world.entity(entity).addComponent<Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = receiverGroup;
+        receiver.affectOpaquePass = affectOpaquePass;
+        receiver.affectTransparentPass = affectTransparentPass;
+    }
+}
+
+void AddSkinnedCsgMeshReceiver(in EntityID entity, in Name receiverGroup, in b8 affectOpaquePass, in b8 affectTransparentPass, mut World world){
+    native(in entity, in receiverGroup, in affectOpaquePass, in affectTransparentPass, mut world){
+        auto& receiver = world.entity(entity).addComponent<Impl::SkinnedCsgMeshComponent>();
+        receiver.receiverGroup = receiverGroup;
+        receiver.affectOpaquePass = affectOpaquePass;
+        receiver.affectTransparentPass = affectTransparentPass;
+    }
+}
+
 void AssignCsgCutterTransform(in VectorSingle center, in VectorSingle rotation, mut CsgCutterComponent cutter){
     MatrixSingle worldToShape = MatrixSingle();
     MatrixSingle shapeToWorld = MatrixSingle();
     ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
-    StoreFloat(worldToShape, cutter.worldToShape);
-    StoreFloat(shapeToWorld, cutter.shapeToWorld);
+    cutter.worldToShape = f32x3x4(worldToShape);
+    cutter.shapeToWorld = f32x3x4(shapeToWorld);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

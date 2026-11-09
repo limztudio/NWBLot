@@ -83,6 +83,11 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
             m_emitter.emitExpr(out, *arguments[0]);
         }
     }
+    else if(!useBracesForList && injectedArenaName.empty() && arguments.size() == 1u && arguments[0] && arguments[0]->kind == ExprKind::Call){
+        out.push_back('(');
+        m_emitter.emitExpr(out, *arguments[0]);
+        out.push_back(')');
+    }
     else{
         for(usize i = 0u; i < arguments.size(); ++i){
             if(i > 0u)

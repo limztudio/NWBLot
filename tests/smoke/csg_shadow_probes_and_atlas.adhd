@@ -4,6 +4,7 @@
 
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
+#include "avboit_timing_render_pass.adhd"
 #include "framebuffer_capture.adhd"
 #include "csg_smoke_helpers.adhd"
 #include "smoke_cpu_gpu_timing_probe.adhd"
@@ -23,124 +24,12 @@ native{
 #include <global/expected.h>
 #include <global/filesystem.h>
 #include <global/filesystem/path.h>
+#include <global/simd/convert_half.h>
 #include <global/simd/frame.h>
 #include <global/simdmath.h>
 
 namespace NWB::Tests::Smoke{
-using Core::Perf::TimingStats;
-}
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_CsgCausticGpuScopeCount = 6;
-const usize s_CsgCausticCpuScopeCount = 5;
-const usize s_CsgCausticMaxIntervals = 2048;
-const usize s_CsgCausticMaxNativeEndpoints = 131072;
-const u64 s_CsgCausticPreparationPresentations = 64;
-const u32 s_CsgCausticMinimumPositiveIntervals = 11u;
-
-class CsgCausticTimingRecord{
-    public TimingStats stats = TimingStats();
-    public u64 observation = 0;
-    public u32 scope = 0u;
-}
-
-class CsgCausticTimingNativeEndpoint{
-    public Timer timestamp = Timer();
-    public u64 source = 0;
-    public u64 presentations = 0;
-    public u32 completeMask = 0u;
-    public u32 positiveMask = 0u;
-    public u32 beginMask = 0u;
-    public u32 endMask = 0u;
-}
-
-class CsgCausticTimingInterval{
-    public PresentationFpsSample presentation;
-    public u64 firstSource = 0;
-    public u64 endSource = 0;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-native{
-namespace NWB::Tests::Smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgCausticTimingProbe final : public Core::IRenderPass{
-private:
-    using Record = CsgCausticTimingRecord;
-    using NativeEndpoint = CsgCausticTimingNativeEndpoint;
-    using Interval = CsgCausticTimingInterval;
-
-
-private:
-    static constexpr usize s_GpuScopeCount = s_CsgCausticGpuScopeCount;
-    static constexpr usize s_CpuScopeCount = s_CsgCausticCpuScopeCount;
-    static constexpr usize s_ScopeCount = s_GpuScopeCount + s_CpuScopeCount;
-    static constexpr usize s_MaxRecords = NWB::Tests::Smoke::s_SmokeTimingMaxRecords;
-    static constexpr usize s_MaxIntervals = s_CsgCausticMaxIntervals;
-    static constexpr usize s_MaxNativeEndpoints = s_CsgCausticMaxNativeEndpoints;
-    static constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
-    static constexpr u64 s_PreparationPresentations = s_CsgCausticPreparationPresentations;
-    static constexpr u64 s_MinimumPresentations = NWB::Tests::Smoke::s_SmokeProbeMinimumPresentations;
-    static constexpr u32 s_MinimumPositiveIntervals = s_CsgCausticMinimumPositiveIntervals;
-    static constexpr f64 s_MinimumMeasurementSeconds = NWB::Tests::Smoke::s_SmokeProbeMinimumMeasurementSeconds;
-
-
-public:
-    explicit CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept;
-
-
-public:
-    [[nodiscard]] b8 initialize(b8 diagnostic, b8 csg, b8 hardware, AStringView outputPath, AStringView cpuOutputPath, AStringView startPath);
-    [[nodiscard]] b8 update();
-    void finish();
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-
-
-private:
-    [[nodiscard]] b8 capture(const Core::Perf::TimingView& view, u64 sourceFrame, b8 cpu);
-    [[nodiscard]] Expected<b8> selectCommonWindow();
-    [[nodiscard]] b8 write(u64 collectionEndSource);
-
-
-private:
-    SmokeCpuGpuTimingProbe m_cpu;
-    PresentationFpsProbe m_presentation{ 30.0 };
-    Array<u64, s_ScopeCount> m_lastPublication{};
-    Array<u32, s_ScopeCount> m_generations{};
-    ::Path<Core::Alloc::GlobalArena> m_startPath;
-    Vector<Record, Core::Alloc::GlobalArena> m_records;
-    Vector<NativeEndpoint, Core::Alloc::GlobalArena> m_native;
-    Vector<Interval, Core::Alloc::GlobalArena> m_intervals;
-    SmokeEnvironmentString m_output;
-    PresentationFpsSample m_commonPresentation;
-    ProjectRuntimeContext& m_context;
-    Timer m_preparationBegin = {};
-    u64 m_firstSource = 0u;
-    usize m_commonBegin = Limit<usize>::s_Max;
-    usize m_commonEnd = 0u;
-    u32 m_positiveIntervals = 0u;
-    b8 m_diagnostic = false;
-    b8 m_prepared = false;
-    b8 m_measuring = false;
-    b8 m_complete = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
+inline constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
     Impl::RendererGpuTimingScope::s_Frame,
     Impl::RendererGpuTimingScope::s_CausticPhotons,
     Impl::RendererGpuTimingScope::s_CausticResolve,
@@ -149,627 +38,879 @@ static constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScop
     Impl::RendererGpuTimingScope::s_DeferredPresent,
 };
 
-static constexpr Array<Name, 5> s_CausticCpuTimingScopes = {
-    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsFrame),
-    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPrepareResources),
-    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsRenderPasses),
-    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsBeginFrame),
-    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPresent),
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+inline constexpr b8 s_CsgCausticSmokeEnabled = true;
+inline constexpr SmokeMaterialRef s_CsgShadowGlassMaterial{"project/smoke/csg_caustic/materials/glass"};
+inline constexpr SmokeMaterialRef s_CsgShadowOpaqueMaterial{"project/smoke/csg_caustic/materials/receiver"};
+#else
+inline constexpr b8 s_CsgCausticSmokeEnabled = false;
+inline constexpr SmokeMaterialRef s_CsgShadowGlassMaterial{"project/smoke/csg_shadow/materials/glass"};
+inline constexpr SmokeMaterialRef s_CsgShadowOpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
+#endif
+
+[[nodiscard]] inline TStringView CsgCausticProbeOwnerLabel()noexcept{
+    return NWB_TEXT("csg_caustic");
+}
 };
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept
-    : IRenderPass(context.graphics)
-    , m_cpu(NWB_TEXT("csg_caustic"), context.objectArena)
-    , m_startPath(context.objectArena)
-    , m_records(context.objectArena)
-    , m_native(context.objectArena)
-    , m_intervals(context.objectArena)
-    , m_output(context.objectArena)
-    , m_context(context)
-{}
+const usize s_CsgCausticGpuScopeCount = 6u;
+const usize s_CsgCausticCpuScopeCount = 5u;
+const usize s_CsgCausticScopeCount = s_CsgCausticGpuScopeCount + s_CsgCausticCpuScopeCount;
+const usize s_CsgCausticMaxIntervals = 2048u;
+const usize s_CsgCausticMaxNativeEndpoints = 131072u;
+const u64 s_CsgCausticPreparationPresentations = 64u;
+const u32 s_CsgCausticMinimumPositiveIntervals = 11u;
+const u32 s_CsgCausticQueryInFlightRanges = 32u;
+const i32 s_CsgCausticTimingOutputPrecision = 17;
 
-b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8 hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
-    if(!m_context.requestQuit || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
-        return false;
-    }
-    static_assert(s_CausticGpuTimingScopes.size() == s_GpuScopeCount);
-    static_assert(s_CausticCpuTimingScopes.size() == s_CpuScopeCount);
-    m_diagnostic = diagnostic;
-    m_output.assign(outputPath.data(), outputPath.size());
-    m_startPath = startPath;
-    m_records.resize(s_MaxRecords);
-    m_records.clear();
-    m_native.resize(s_MaxNativeEndpoints);
-    m_native.clear();
-    m_intervals.resize(s_MaxIntervals);
-    m_intervals.clear();
-    if(!m_cpu.initialize(diagnostic, true, cpuOutputPath))
-        return false;
-    auto capture = Core::Perf::CaptureOptions::GpuTimingOnly();
-    capture.cpuTiming = diagnostic;
-    m_context.setPerfCapture(capture);
-    for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
-        if(!m_context.graphics.gpuTiming().prepareScopeQueries(scope.identity, m_context.graphics.getDevice(), 32u))
-            return false;
-    }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: configured mode={} csg={} hardware={} preparation_presentations=64 warmup_seconds=30 minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 capture=0")
-        , diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), csg ? 1u : 0u, hardware ? 1u : 0u
-    );
-    return true;
+const SmokeMeshRef s_CsgShadowCubeMesh = "project/meshes/cube_hard_edges";
+const SmokeMeshRef s_CsgCausticSplitMesh = "project/meshes/csg_caustic_split";
+const SmokeMeshRef s_CsgShadowOpenPairMesh = "project/meshes/csg_shadow_open_2";
+const SmokeMeshRef s_CsgShadowOpenFiveMesh = "project/meshes/csg_shadow_open_5";
+const SmokeMeshRef s_CsgShadowOpenSixMesh = "project/meshes/csg_shadow_open_6";
+const SmokeMeshRef s_CsgShadowOpenBoundaryMesh = "project/meshes/csg_shadow_open_64";
+const SmokeMeshRef s_CsgShadowOpenOverflowMesh = "project/meshes/csg_shadow_open_65";
+const SmokeMaterialRef s_CsgShadowOpenMaterial = "project/smoke/reflection/materials/optical_volume";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgCausticTimingRecord{
+    public TimingStats stats = TimingStats();
+    public u64 observation = 0u;
+    public u32 scope = 0u;
 }
 
-b8 CsgCausticTimingProbe::update(){
-    if(m_complete)
-        return true;
-    const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
-    const u64 frame = m_context.perfSession.frameIndex();
-    const Timer now = TimerNow();
-    if(!m_prepared){
-        const auto started = FileExists(m_startPath);
-        if(!started){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: focus gate status failed"));
+class CsgCausticTimingNativeEndpoint{
+    public Timer timestamp = Timer();
+    public u64 source = 0u;
+    public u64 presentations = 0u;
+    public u32 completeMask = 0u;
+    public u32 positiveMask = 0u;
+    public u32 beginMask = 0u;
+    public u32 endMask = 0u;
+}
+
+class CsgCausticTimingInterval{
+    public PresentationFpsSample presentation = PresentationFpsSample();
+    public u64 firstSource = 0u;
+    public u64 endSource = 0u;
+}
+
+Name CsgCausticGpuTimingScopeName(in usize index){
+    Name scopeName = s_NameNone;
+    native(in index, mut scopeName){
+        scopeName = s_CausticGpuTimingScopes[index].identity;
+    }
+    return scopeName;
+}
+
+Name CsgCausticCpuTimingScopeName(in usize index){
+    if(index == 0u)
+        return s_SmokeTimingNameGraphicsFrame;
+    if(index == 1u)
+        return s_SmokeTimingNameGraphicsPrepareResources;
+    if(index == 2u)
+        return s_SmokeTimingNameGraphicsRenderPasses;
+    if(index == 3u)
+        return s_SmokeTimingNameGraphicsBeginFrame;
+    return s_SmokeTimingNameGraphicsPresent;
+}
+
+class CsgCausticTimingProbe{
+    public CsgCausticTimingProbe(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_cpu = SmokeCpuGpuTimingProbe(CsgCausticProbeOwnerLabel());
+        this.m_unfocusedPass = TimingProbeUnfocusedPass(context.graphics);
+    }
+
+    public ~CsgCausticTimingProbe(){
+        this.unregisterPass();
+    }
+
+    public void registerPass(){
+        if(this.m_registered)
+            return;
+        native(mut ctx = this.m_context, mut pass = this.m_unfocusedPass){
+            ctx.graphics.addRenderPassToBack(pass);
+        }
+        this.m_registered = true;
+    }
+
+    public void unregisterPass(){
+        if(!this.m_registered)
+            return;
+        this.m_context.graphics.removeRenderPass(this.m_unfocusedPass);
+        this.m_registered = false;
+    }
+
+    public b8 initialize(in b8 diagnostic, in b8 csg, in b8 hardware, in StringView outputPath, in StringView cpuOutputPath, in StringView startPath){
+        b8 hasQuitCallback = false;
+        native(in ctx = this.m_context, mut hasQuitCallback){
+            hasQuitCallback = static_cast<b8>(ctx.requestQuit);
+        }
+        if(!hasQuitCallback || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
+            error("CsgCausticTiming: explicit outputs, focus gate and quit callback are required");
             return false;
         }
-        if(!*started)
-            return true;
-        if(presentations < s_PreparationPresentations)
-            return true;
-        const Core::Perf::TimingView& view = m_context.perfSession.gpuTimingView();
-        if(!view.valid())
-            return true;
-        // Steady warm-up starts only after every measured GPU pass has completed real work.
-        for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
-            b8 ready = false;
-            for(usize index = 0u; index < view.scopeCount(); ++index){
-                if(view.scopeNameAt(index) == scope.identity && view.statsAt(index).valid() && view.statsAt(index).seconds > 0.0)
-                    ready = true;
+        this.m_diagnostic = diagnostic;
+        this.m_output = String(outputPath);
+        this.m_startPath = String(startPath);
+        this.m_records.clear();
+        this.m_records.reserve(s_SmokeTimingMaxRecords);
+        this.m_native.clear();
+        this.m_native.reserve(s_CsgCausticMaxNativeEndpoints);
+        this.m_intervals.clear();
+        this.m_intervals.reserve(s_CsgCausticMaxIntervals);
+        if(!this.m_cpu.initialize(diagnostic, true, cpuOutputPath))
+            return false;
+
+        b8 queriesPrepared = true;
+        native(in diagnostic, mut ctx = this.m_context, mut queriesPrepared){
+            static_assert(s_CausticGpuTimingScopes.size() == s_CsgCausticGpuScopeCount);
+            auto capture = Core::Perf::CaptureOptions::GpuTimingOnly();
+            capture.cpuTiming = diagnostic;
+            ctx.setPerfCapture(capture);
+            for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
+                if(!ctx.graphics.gpuTiming().prepareScopeQueries(scope.identity, ctx.graphics.getDevice(), s_CsgCausticQueryInFlightRanges)){
+                    queriesPrepared = false;
+                    break;
+                }
             }
-            if(!ready)
+        }
+        if(!queriesPrepared)
+            return false;
+
+        StringView modeText = "performance";
+        if(diagnostic)
+            modeText = "diagnostic";
+        u32 csgVal = 0u;
+        if(csg)
+            csgVal = 1u;
+        u32 hwVal = 0u;
+        if(hardware)
+            hwVal = 1u;
+        [essential] info(
+            "CsgCausticTiming: configured mode={} csg={} hardware={} preparation_presentations=64 warmup_seconds=30 minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 capture=0"
+            , modeText
+            , csgVal
+            , hwVal
+        );
+        return true;
+    }
+
+    public b8 update(){
+        if(this.m_complete)
+            return true;
+        const u64 presentations = this.m_context.graphics.getSuccessfulPresentationCount();
+        const u64 frame = this.m_context.perfSession.frameIndex();
+        Timer now = Timer();
+        native(mut now){
+            now = TimerNow();
+        }
+        if(!this.m_prepared){
+            b8 gateChecked = true;
+            b8 gateStarted = false;
+            native(in startPath = this.m_startPath, in ctx = this.m_context, mut gateChecked, mut gateStarted){
+                const ::Path<Core::Alloc::GlobalArena> path(ctx.objectArena, AStringView(startPath));
+                const auto started = FileExists(path);
+                if(!started)
+                    gateChecked = false;
+                else
+                    gateStarted = *started;
+            }
+            if(!gateChecked){
+                error("CsgCausticTiming: focus gate status failed");
+                return false;
+            }
+            if(!gateStarted)
                 return true;
+            if(presentations < s_CsgCausticPreparationPresentations)
+                return true;
+
+            const TimingView view = this.m_context.perfSession.gpuTimingView();
+            if(!view.valid())
+                return true;
+            // Steady warm-up starts only after every measured GPU pass has completed real work.
+            for(usize scopeIdx = 0u; scopeIdx < s_CsgCausticGpuScopeCount; ++scopeIdx){
+                const Name expectedName = CsgCausticGpuTimingScopeName(scopeIdx);
+                b8 ready = false;
+                for(usize index = 0u; index < view.scopeCount(); ++index){
+                    const TimingStats stats = view.statsAt(index);
+                    if(view.scopeNameAt(index) == expectedName && stats.valid() && stats.seconds > 0.0)
+                        ready = true;
+                }
+                if(!ready)
+                    return true;
+            }
+            this.m_prepared = true;
+            this.m_preparationBegin = now;
+            [essential] info("CsgCausticTiming: preparation presentations={} source={} gpu_ready_scopes=6", presentations, frame);
         }
-        m_prepared = true;
-        m_preparationBegin = now;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: preparation presentations={} source={} gpu_ready_scopes=6"), presentations, frame);
-    }
-    const auto status = m_presentation.observe(presentations, now);
-    if(status == PresentationFpsStatus::Invalid){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native counter or clock regressed"));
-        return false;
-    }
-    if(m_presentation.measurementStarted() && !m_measuring){
-        m_measuring = true;
-        m_firstSource = frame;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: begin presentations={} source={} warmup_seconds={}"), presentations, frame, DurationInSeconds<f64>(now, m_preparationBegin));
-    }
-    if(!m_measuring)
-        return true;
-    const auto options = m_context.perfSession.captureOptions();
-    if(!options.gpuTimingActive() || options.cpuTimingActive() != m_diagnostic || options.memoryActive()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: capture mode changed inside measurement"));
-        return false;
-    }
-    if(m_native.size() == s_MaxNativeEndpoints || (!m_native.empty() && (frame != m_native.back().source + 1u || presentations > m_native.back().presentations + 1u))){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native source endpoints are not contiguous or capacity was exceeded"));
-        return false;
-    }
-    NativeEndpoint endpoint;
-    endpoint.timestamp = now;
-    endpoint.source = frame;
-    endpoint.presentations = presentations;
-    m_native.push_back(endpoint);
-    if(!capture(m_context.perfSession.gpuTimingView(), frame, false) || (m_diagnostic && !capture(m_context.perfSession.cpuTimingView(), frame, true)))
-        return false;
-    if(m_diagnostic && !m_cpu.observe(m_context.perfSession, m_presentation, presentations, false))
-        return false;
-    const auto common = selectCommonWindow();
-    if(!common)
-        return false;
-    if(!*common)
-        return true;
-    if((m_diagnostic && !m_cpu.observe(m_context.perfSession, m_presentation, presentations, true)) || !write(frame))
-        return false;
-    m_complete = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: common first={} last={} first_source={} end_source={} collection_end={}")
-        , m_commonPresentation.firstPresentationCount, m_commonPresentation.lastPresentationCount, m_native[m_commonBegin].source, m_native[m_commonEnd].source, frame
-    );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: complete mode={} presentations={} seconds={} positive_intervals={}")
-        , m_diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), m_commonPresentation.presentations(), m_commonPresentation.wallSeconds, m_positiveIntervals
-    );
-    m_context.requestQuit();
-    return true;
-}
 
-void CsgCausticTimingProbe::finish(){
-    if(!m_complete)
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: shutdown before measurement completion"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 sourceFrame, const b8 cpu){
-    if(!view.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing view is invalid"));
-        return false;
-    }
-    const usize scopeBegin = cpu ? s_GpuScopeCount : 0u;
-    const usize scopeEnd = cpu ? s_ScopeCount : s_GpuScopeCount;
-    for(usize scope = scopeBegin; scope < scopeEnd; ++scope){
-        const Name& name = cpu ? s_CausticCpuTimingScopes[scope - s_GpuScopeCount] : s_CausticGpuTimingScopes[scope].identity;
-        for(usize index = 0u; index < view.scopeCount(); ++index){
-            if(view.scopeNameAt(index) != name)
-                continue;
-            const Core::Perf::TimingStats& stats = view.statsAt(index);
-            if(!stats.valid() || stats.publishFrameIndex == m_lastPublication[scope])
-                continue;
-            const u32 generation = view.scopeAt(index).generation;
-            if((m_generations[scope] != 0u && generation != m_generations[scope]) || stats.publishFrameIndex < m_lastPublication[scope]){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing identity or publication order changed"));
-                return false;
+        const PresentationFpsStatus status = this.m_presentation.observe(presentations, now);
+        if(status == PresentationFpsStatus::Invalid){
+            error("CsgCausticTiming: native counter or clock regressed");
+            return false;
+        }
+        if(this.m_presentation.measurementStarted() && !this.m_measuring){
+            this.m_measuring = true;
+            this.m_firstSource = frame;
+            f64 warmupSeconds = 0.0;
+            native(in now, in prepBegin = this.m_preparationBegin, mut warmupSeconds){
+                warmupSeconds = DurationInSeconds<f64>(now, prepBegin);
             }
-            m_generations[scope] = generation;
-            m_lastPublication[scope] = stats.publishFrameIndex;
-            if(stats.firstSampleFrameIndex < m_firstSource)
-                continue;
-            // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
-            if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || m_records.size() == s_MaxRecords){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints"));
-                return false;
-            }
-            const u32 bit = 1u << static_cast<u32>(scope);
-            const usize first = static_cast<usize>(stats.firstSampleFrameIndex - m_firstSource);
-            const usize end = static_cast<usize>(stats.lastSampleFrameIndex - m_firstSource + 1u);
-            for(usize frame = first; frame < end; ++frame){
-                NativeEndpoint& endpoint = m_native[frame];
-                if((endpoint.completeMask & bit) != 0u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: same-scope publication source ranges overlap"));
+            [essential] info("CsgCausticTiming: begin presentations={} source={} warmup_seconds={}", presentations, frame, warmupSeconds);
+        }
+        if(!this.m_measuring)
+            return true;
+
+        const CaptureOptions options = this.m_context.perfSession.captureOptions();
+        if(!options.gpuTimingActive() || options.cpuTimingActive() != this.m_diagnostic || options.memoryActive()){
+            error("CsgCausticTiming: capture mode changed inside measurement");
+            return false;
+        }
+        if(this.m_native.size() == s_CsgCausticMaxNativeEndpoints || (!this.m_native.empty() && (frame != this.m_native.back().source + 1u || presentations > this.m_native.back().presentations + 1u))){
+            error("CsgCausticTiming: native source endpoints are not contiguous or capacity was exceeded");
+            return false;
+        }
+        CsgCausticTimingNativeEndpoint endpoint = CsgCausticTimingNativeEndpoint();
+        endpoint.timestamp = now;
+        endpoint.source = frame;
+        endpoint.presentations = presentations;
+        this.m_native.push_back(endpoint);
+
+        if(!this.capture(this.m_context.perfSession.gpuTimingView(), frame, false))
+            return false;
+        if(this.m_diagnostic && !this.capture(this.m_context.perfSession.cpuTimingView(), frame, true))
+            return false;
+        if(this.m_diagnostic && !this.m_cpu.observe(this.m_context.perfSession, this.m_presentation, presentations, false))
+            return false;
+
+        const Expected<b8> common = this.selectCommonWindow();
+        if(!common.has_value())
+            return false;
+        if(!common.value())
+            return true;
+        if((this.m_diagnostic && !this.m_cpu.observe(this.m_context.perfSession, this.m_presentation, presentations, true)) || !this.write(frame))
+            return false;
+
+        this.m_complete = true;
+        [essential] info(
+            "CsgCausticTiming: common first={} last={} first_source={} end_source={} collection_end={}"
+            , this.m_commonPresentation.firstPresentationCount
+            , this.m_commonPresentation.lastPresentationCount
+            , this.m_native[this.m_commonBegin].source
+            , this.m_native[this.m_commonEnd].source
+            , frame
+        );
+        StringView modeText = "performance";
+        if(this.m_diagnostic)
+            modeText = "diagnostic";
+        [essential] info(
+            "CsgCausticTiming: complete mode={} presentations={} seconds={} positive_intervals={}"
+            , modeText
+            , this.m_commonPresentation.presentations()
+            , this.m_commonPresentation.wallSeconds
+            , this.m_positiveIntervals
+        );
+        this.m_context.requestQuit();
+        return true;
+    }
+
+    public void finish(){
+        if(!this.m_complete)
+            error("CsgCausticTiming: shutdown before measurement completion");
+    }
+
+    private b8 capture(in TimingView view, in u64 sourceFrame, in b8 cpu){
+        if(!view.valid()){
+            error("CsgCausticTiming: timing view is invalid");
+            return false;
+        }
+        usize scopeBegin = 0u;
+        usize scopeEnd = s_CsgCausticGpuScopeCount;
+        if(cpu){
+            scopeBegin = s_CsgCausticGpuScopeCount;
+            scopeEnd = s_CsgCausticScopeCount;
+        }
+        for(usize scope = scopeBegin; scope < scopeEnd; ++scope){
+            Name name = s_NameNone;
+            if(cpu)
+                name = CsgCausticCpuTimingScopeName(scope - s_CsgCausticGpuScopeCount);
+            else
+                name = CsgCausticGpuTimingScopeName(scope);
+            for(usize index = 0u; index < view.scopeCount(); ++index){
+                if(view.scopeNameAt(index) != name)
+                    continue;
+                const TimingStats stats = view.statsAt(index);
+                if(!stats.valid() || stats.publishFrameIndex == this.m_lastPublication[scope])
+                    continue;
+                const u32 generation = view.scopeAt(index).generation;
+                if((this.m_generations[scope] != 0u && generation != this.m_generations[scope]) || stats.publishFrameIndex < this.m_lastPublication[scope]){
+                    error("CsgCausticTiming: timing identity or publication order changed");
                     return false;
                 }
-                endpoint.completeMask |= bit;
-                if(stats.minSeconds > 0.0)
-                    endpoint.positiveMask |= bit;
+                this.m_generations[scope] = generation;
+                this.m_lastPublication[scope] = stats.publishFrameIndex;
+                if(stats.firstSampleFrameIndex < this.m_firstSource)
+                    continue;
+                // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
+                if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || this.m_records.size() == s_SmokeTimingMaxRecords){
+                    error("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints");
+                    return false;
+                }
+                const u32 bit = 1u << cast<u32>(scope);
+                const usize first = cast<usize>(stats.firstSampleFrameIndex - this.m_firstSource);
+                const usize end = cast<usize>(stats.lastSampleFrameIndex - this.m_firstSource + 1u);
+                for(usize frame = first; frame < end; ++frame){
+                    if((this.m_native[frame].completeMask & bit) != 0u){
+                        error("CsgCausticTiming: same-scope publication source ranges overlap");
+                        return false;
+                    }
+                    this.m_native[frame].completeMask |= bit;
+                    if(stats.minSeconds > 0.0)
+                        this.m_native[frame].positiveMask |= bit;
+                }
+                this.m_native[first].beginMask |= bit;
+                this.m_native[end].endMask |= bit;
+                CsgCausticTimingRecord row = CsgCausticTimingRecord();
+                row.stats = stats;
+                row.observation = sourceFrame;
+                row.scope = cast<u32>(scope);
+                this.m_records.push_back(row);
             }
-            m_native[first].beginMask |= bit;
-            m_native[end].endMask |= bit;
-            Record row;
-            row.stats = stats;
-            row.observation = sourceFrame;
-            row.scope = static_cast<u32>(scope);
-            m_records.push_back(row);
         }
+        return true;
     }
-    return true;
-}
 
-Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
-    const u32 mask = (1u << static_cast<u32>(m_diagnostic ? s_ScopeCount : s_GpuScopeCount)) - 1u;
-    if(m_commonBegin == Limit<usize>::s_Max){
-        for(usize index = 0u; index + 1u < m_native.size(); ++index){
-            if(m_native[index].beginMask == mask && m_native[index].completeMask == mask){
-                m_commonBegin = index;
-                m_commonEnd = index;
-                break;
+    private Expected<b8> selectCommonWindow(){
+        usize activeScopes = s_CsgCausticGpuScopeCount;
+        if(this.m_diagnostic)
+            activeScopes = s_CsgCausticScopeCount;
+        const u32 mask = (1u << cast<u32>(activeScopes)) - 1u;
+        const usize invalidIndex = ~cast<usize>(0u);
+        if(this.m_commonBegin == invalidIndex){
+            for(usize index = 0u; index + 1u < this.m_native.size(); ++index){
+                if(this.m_native[index].beginMask == mask && this.m_native[index].completeMask == mask){
+                    this.m_commonBegin = index;
+                    this.m_commonEnd = index;
+                    break;
+                }
             }
         }
-    }
-    if(m_commonBegin == Limit<usize>::s_Max)
-        return false;
-    while(m_commonEnd + 1u < m_native.size() && m_native[m_commonEnd].completeMask == mask)
-        ++m_commonEnd;
-    usize end = m_commonEnd;
-    while(end > m_commonBegin && m_native[end].endMask != mask)
-        --end;
-    const NativeEndpoint& first = m_native[m_commonBegin];
-    const NativeEndpoint& last = m_native[end];
-    const f64 seconds = DurationInSeconds<f64>(last.timestamp, first.timestamp);
-    if(seconds < s_MinimumMeasurementSeconds || last.presentations < first.presentations + s_MinimumPresentations)
-        return false;
-    m_intervals.clear();
-    usize begin = m_commonBegin;
-    u32 positiveMask = 0u;
-    m_positiveIntervals = 0u;
-    Array<u32, s_ScopeCount> positiveScopeIntervals{};
-    for(usize frame = begin + 1u; frame <= end; ++frame){
-        positiveMask |= m_native[frame - 1u].positiveMask;
-        if(DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp) < s_ReportIntervalSeconds && frame != end)
-            continue;
-        if(m_intervals.size() == s_MaxIntervals){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native interval capacity exceeded"));
-            return MakeUnexpected(Failure{});
-        }
-        const PresentationFpsSample interval{
-            .firstPresentationCount = m_native[begin].presentations,
-            .lastPresentationCount = m_native[frame].presentations,
-            .wallSeconds = DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp),
-        };
-        if(interval.presentations() != 0u){
-            ++m_positiveIntervals;
-            for(usize scope = 0u; scope < (m_diagnostic ? s_ScopeCount : s_GpuScopeCount); ++scope){
-                if((positiveMask & (1u << static_cast<u32>(scope))) != 0u)
-                    ++positiveScopeIntervals[scope];
-            }
-        }
-        Interval entry;
-        entry.presentation = interval;
-        entry.firstSource = m_native[begin].source;
-        entry.endSource = m_native[frame].source;
-        m_intervals.push_back(entry);
-        begin = frame;
-        positiveMask = 0u;
-    }
-    if(m_positiveIntervals < s_MinimumPositiveIntervals)
-        return false;
-    for(usize scope = 0u; scope < (m_diagnostic ? s_ScopeCount : s_GpuScopeCount); ++scope){
-        if(positiveScopeIntervals[scope] < s_MinimumPositiveIntervals)
+        if(this.m_commonBegin == invalidIndex)
             return false;
-    }
-    m_commonPresentation = { .firstPresentationCount = first.presentations, .lastPresentationCount = last.presentations, .wallSeconds = seconds };
-    m_commonEnd = end;
-    return true;
-}
+        while(this.m_commonEnd + 1u < this.m_native.size() && this.m_native[this.m_commonEnd].completeMask == mask)
+            ++this.m_commonEnd;
+        usize end = this.m_commonEnd;
+        while(end > this.m_commonBegin && this.m_native[end].endMask != mask)
+            --end;
 
-b8 CsgCausticTimingProbe::write(const u64 collectionEndSource){
-    OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
-    if(!output.is_open()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output open failed"));
-        return false;
+        const u64 firstPresentations = this.m_native[this.m_commonBegin].presentations;
+        const u64 lastPresentations = this.m_native[end].presentations;
+        f64 seconds = 0.0;
+        native(in firstTime = this.m_native[this.m_commonBegin].timestamp, in lastTime = this.m_native[end].timestamp, mut seconds){
+            seconds = DurationInSeconds<f64>(lastTime, firstTime);
+        }
+        if(seconds < s_SmokeProbeMinimumMeasurementSeconds || lastPresentations < firstPresentations + s_SmokeProbeMinimumPresentations)
+            return false;
+
+        this.m_intervals.clear();
+        usize begin = this.m_commonBegin;
+        u32 positiveMask = 0u;
+        this.m_positiveIntervals = 0u;
+        Array<u32, 11u> positiveScopeIntervals = Array<u32, 11u>();
+        for(usize frame = begin + 1u; frame <= end; ++frame){
+            positiveMask |= this.m_native[frame - 1u].positiveMask;
+            f64 intervalSeconds = 0.0;
+            native(in beginTime = this.m_native[begin].timestamp, in frameTime = this.m_native[frame].timestamp, mut intervalSeconds){
+                intervalSeconds = DurationInSeconds<f64>(frameTime, beginTime);
+            }
+            if(intervalSeconds < s_SmokeProbeReportIntervalSeconds && frame != end)
+                continue;
+            if(this.m_intervals.size() == s_CsgCausticMaxIntervals){
+                error("CsgCausticTiming: native interval capacity exceeded");
+                return MakeUnexpected(Failure());
+            }
+            PresentationFpsSample interval = PresentationFpsSample();
+            interval.firstPresentationCount = this.m_native[begin].presentations;
+            interval.lastPresentationCount = this.m_native[frame].presentations;
+            interval.wallSeconds = intervalSeconds;
+            if(interval.presentations() != 0u){
+                ++this.m_positiveIntervals;
+                for(usize scope = 0u; scope < activeScopes; ++scope){
+                    if((positiveMask & (1u << cast<u32>(scope))) != 0u)
+                        ++positiveScopeIntervals[scope];
+                }
+            }
+            CsgCausticTimingInterval entry = CsgCausticTimingInterval();
+            entry.presentation = interval;
+            entry.firstSource = this.m_native[begin].source;
+            entry.endSource = this.m_native[frame].source;
+            this.m_intervals.push_back(entry);
+            begin = frame;
+            positiveMask = 0u;
+        }
+        if(this.m_positiveIntervals < s_CsgCausticMinimumPositiveIntervals)
+            return false;
+        for(usize scope = 0u; scope < activeScopes; ++scope){
+            if(positiveScopeIntervals[scope] < s_CsgCausticMinimumPositiveIntervals)
+                return false;
+        }
+        PresentationFpsSample commonSample = PresentationFpsSample();
+        commonSample.firstPresentationCount = firstPresentations;
+        commonSample.lastPresentationCount = lastPresentations;
+        commonSample.wallSeconds = seconds;
+        this.m_commonPresentation = commonSample;
+        this.m_commonEnd = end;
+        return true;
     }
-    output.precision(17);
-    const auto& total = m_commonPresentation;
-    const u64 firstSource = m_native[m_commonBegin].source;
-    const u64 endSource = m_native[m_commonEnd].source;
-    output << "NWB_CSG_CAUSTIC_TIMING 2\nmode " << (m_diagnostic ? "diagnostic" : "performance") << '\n';
-    output << "window " << total.firstPresentationCount << ' ' << total.lastPresentationCount << ' ' << firstSource << ' ' << endSource << ' ' << total.wallSeconds << '\n';
-    const auto& collection = m_presentation.total();
-    output << "collection " << collection.firstPresentationCount << ' ' << collection.lastPresentationCount << ' ' << m_firstSource << ' ' << collectionEndSource << ' ' << collection.wallSeconds << '\n';
-    for(usize scope = 0u; scope < s_GpuScopeCount; ++scope)
-        output << "scope " << scope << ' ' << s_CausticGpuTimingScopes[scope].identity.resolvedText() << '\n';
-    for(const Interval& interval : m_intervals){
-        output << "interval " << interval.presentation.firstPresentationCount << ' ' << interval.presentation.lastPresentationCount << ' ' << interval.firstSource << ' ' << interval.endSource << ' ' << interval.presentation.wallSeconds << '\n';
+
+    private b8 write(in u64 collectionEndSource){
+        const PresentationFpsSample total = this.m_commonPresentation;
+        const PresentationFpsSample collection = this.m_presentation.total();
+        const u64 firstSource = this.m_native[this.m_commonBegin].source;
+        const u64 endSource = this.m_native[this.m_commonEnd].source;
+        b8 openFailed = false;
+        b8 writeFailed = false;
+        native(
+            in outputPath = this.m_output,
+            in diagnostic = this.m_diagnostic,
+            in total,
+            in collection,
+            in firstSource,
+            in endSource,
+            in collectionBeginSource = this.m_firstSource,
+            in collectionEndSource,
+            in intervals = this.m_intervals,
+            in records = this.m_records,
+            mut openFailed,
+            mut writeFailed
+        ){
+            OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
+            if(!output.is_open()){
+                openFailed = true;
+            }
+            else{
+                output.precision(s_CsgCausticTimingOutputPrecision);
+                output << "NWB_CSG_CAUSTIC_TIMING 2\nmode " << (diagnostic ? "diagnostic" : "performance") << '\n';
+                output << "window " << total.firstPresentationCount << ' ' << total.lastPresentationCount << ' ' << firstSource << ' ' << endSource << ' ' << total.wallSeconds << '\n';
+                output << "collection " << collection.firstPresentationCount << ' ' << collection.lastPresentationCount << ' ' << collectionBeginSource << ' ' << collectionEndSource << ' ' << collection.wallSeconds << '\n';
+                for(usize scope = 0u; scope < s_CsgCausticGpuScopeCount; ++scope)
+                    output << "scope " << scope << ' ' << s_CausticGpuTimingScopes[scope].identity.resolvedText() << '\n';
+                for(const CsgCausticTimingInterval& interval : intervals){
+                    output << "interval " << interval.presentation.firstPresentationCount << ' ' << interval.presentation.lastPresentationCount << ' ' << interval.firstSource << ' ' << interval.endSource << ' ' << interval.presentation.wallSeconds << '\n';
+                }
+                usize recordCount = 0u;
+                for(const CsgCausticTimingRecord& row : records){
+                    const auto& stats = row.stats;
+                    if(row.scope >= s_CsgCausticGpuScopeCount || stats.firstSampleFrameIndex < firstSource || stats.lastSampleFrameIndex >= endSource)
+                        continue;
+                    ++recordCount;
+                    output << "gpu " << row.scope << ' ' << row.observation << ' ' << stats.publishFrameIndex << ' ' << stats.firstSampleFrameIndex << ' '
+                        << stats.lastSampleFrameIndex << ' ' << stats.sampleCount << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
+                    ;
+                }
+                output << "complete " << intervals.size() << ' ' << recordCount << '\n';
+                output.close();
+                writeFailed = !output.good();
+            }
+        }
+        if(openFailed){
+            error("CsgCausticTiming: output open failed");
+            return false;
+        }
+        if(writeFailed){
+            error("CsgCausticTiming: output write or close failed");
+            return false;
+        }
+        return true;
     }
-    usize recordCount = 0u;
-    for(const Record& row : m_records){
-        const auto& stats = row.stats;
-        if(row.scope >= s_GpuScopeCount || stats.firstSampleFrameIndex < firstSource || stats.lastSampleFrameIndex >= endSource)
-            continue;
-        ++recordCount;
-        output << "gpu " << row.scope << ' ' << row.observation << ' ' << stats.publishFrameIndex << ' ' << stats.firstSampleFrameIndex << ' '
-            << stats.lastSampleFrameIndex << ' ' << stats.sampleCount << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
-        ;
-    }
-    output << "complete " << m_intervals.size() << ' ' << recordCount << '\n';
-    output.close();
-    if(!output.good()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output write or close failed"));
-        return false;
-    }
-    return true;
+
+    private SmokeCpuGpuTimingProbe m_cpu;
+    private PresentationFpsProbe m_presentation = PresentationFpsProbe(30.0);
+    private Array<u64, s_CsgCausticScopeCount> m_lastPublication;
+    private Array<u32, s_CsgCausticScopeCount> m_generations;
+    private String m_startPath;
+    private Vector<CsgCausticTimingRecord> m_records;
+    private Vector<CsgCausticTimingNativeEndpoint> m_native;
+    private Vector<CsgCausticTimingInterval> m_intervals;
+    private String m_output;
+    private PresentationFpsSample m_commonPresentation = PresentationFpsSample();
+    private mut ProjectRuntimeContext m_context;
+    private TimingProbeUnfocusedPass m_unfocusedPass;
+    private Timer m_preparationBegin = Timer();
+    private u64 m_firstSource = 0u;
+    private usize m_commonBegin = ~cast<usize>(0u);
+    private usize m_commonEnd = 0u;
+    private u32 m_positiveIntervals = 0u;
+    private b8 m_registered = false;
+    private b8 m_diagnostic = false;
+    private b8 m_prepared = false;
+    private b8 m_measuring = false;
+    private b8 m_complete = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_CsgShadowMaterialInterface = s_ShadowSmokeMaterialInterface;
-
-
-class CsgShadowAtlas final{
-public:
-    CsgShadowAtlas(Core::ECS::World& world, const CsgShadowMode& mode, const SmokeMaterialRef& opaqueMaterial)noexcept
-        : m_world(world)
-        , m_mode(mode)
-        , m_opaqueMaterial(opaqueMaterial)
-    {}
-
-
-public:
-    [[nodiscard]] b8 create();
-    void moveCutters();
-
-private:
-    using Box = SmokeBoxBounds;
-    using EntityID = Core::ECS::EntityID;
-    EntityID createBox(const Box& box, b8 transparent, const SmokeMeshRef& mesh = SmokeMeshRef{"project/meshes/cube_hard_edges"});
-    void createReferencePieces(const Box& box, const Box& cutter, b8 transparent);
-    void addCaster(const Box& box, const Box& cutterBox, u32 groupIndex, b8 transparent, b8 moving);
-    void createAtlas();
-    template<typename ParameterT>
-    void addAnalyticCutter(u32 groupIndex, Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld);
-    void createAnalyticAtlas();
-    [[nodiscard]] b8 createOpenAtlas();
-
-private:
-    Core::ECS::World& m_world;
-    const CsgShadowMode& m_mode;
-    SmokeMaterialRef m_opaqueMaterial;
-    Array<Float4, 2u> m_finalCutterCenters{};
-    Array<EntityID, 2u> m_movingCutters{};
-    u32 m_movingCount = 0u;
-};
-
-
-namespace Arm = CsgShadowArm;
-namespace OpenCase = CsgShadowOpenCase;
-using EntityID = Core::ECS::EntityID;
-using Box = SmokeBoxBounds;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_PlaneShapePath = NWB::Tests::Smoke::s_ShadowSmokePlaneShapePath;
-constexpr AStringView s_CapsuleShapePath = NWB::Tests::Smoke::s_ShadowSmokeCapsuleShapePath;
-static constexpr AStringView s_EngineCsgSphere = NWB::Tests::Smoke::s_ShadowSmokeEngineCsgSphere;
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_caustic/materials/glass"};
-#else
-static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/materials/glass"};
-#endif
-static constexpr SmokeMaterialRef s_OpenMaterial{"project/smoke/reflection/materials/optical_volume"};
-static constexpr AStringView s_OpenInterface = NWB::Tests::Smoke::s_ShadowSmokeOpenInterface;
-static constexpr Array<Name, 7> s_Groups = {
-    Name(s_SmokeSceneNameCsgShadowOpaqueHole), Name(s_SmokeSceneNameCsgShadowOpaqueCap), Name(s_SmokeSceneNameCsgShadowGlassDepth), Name(s_SmokeSceneNameCsgShadowGlassHole),
-    Name(s_SmokeSceneNameCsgShadowOverlapA), Name(s_SmokeSceneNameCsgShadowOverlapB), Name(s_SmokeSceneNameCsgShadowGlassControl),
-};
-static constexpr Array<Name, 6> s_AnalyticGroups = {
-    Name(s_SmokeSceneNameCsgShadowAnalyticPlane), Name(s_SmokeSceneNameCsgShadowAnalyticSphere), Name(s_SmokeSceneNameCsgShadowAnalyticCapsule),
-    Name(s_SmokeSceneNameCsgShadowAnalyticAxialCapsule), Name(s_SmokeSceneNameCsgShadowAnalyticUnion), Name(s_SmokeSceneNameCsgShadowAnalyticControl),
-};
-static constexpr Array<Name, 2> s_OpenGroups = { Name(s_SmokeSceneNameCsgShadowOpenFive), Name(s_SmokeSceneNameCsgShadowOpenSix) };
-static constexpr SmokeMeshRef s_OpenPairMesh{"project/meshes/csg_shadow_open_2"};
-static constexpr SmokeMeshRef s_OpenFiveMesh{"project/meshes/csg_shadow_open_5"};
-static constexpr SmokeMeshRef s_OpenSixMesh{"project/meshes/csg_shadow_open_6"};
-static constexpr SmokeMeshRef s_OpenBoundaryMesh{"project/meshes/csg_shadow_open_64"};
-static constexpr SmokeMeshRef s_OpenOverflowMesh{"project/meshes/csg_shadow_open_65"};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CsgShadowAtlas::create(){
-    if(m_mode.openAtlas)
-        return createOpenAtlas();
-    if(m_mode.analyticAtlas)
-        createAnalyticAtlas();
-    else
-        createAtlas();
-    return true;
+Name CsgShadowGroupName(in u32 index){
+    if(index == 0u) return s_SmokeSceneNameCsgShadowOpaqueHole;
+    if(index == 1u) return s_SmokeSceneNameCsgShadowOpaqueCap;
+    if(index == 2u) return s_SmokeSceneNameCsgShadowGlassDepth;
+    if(index == 3u) return s_SmokeSceneNameCsgShadowGlassHole;
+    if(index == 4u) return s_SmokeSceneNameCsgShadowOverlapA;
+    if(index == 5u) return s_SmokeSceneNameCsgShadowOverlapB;
+    return s_SmokeSceneNameCsgShadowGlassControl;
 }
 
-void CsgShadowAtlas::moveCutters(){
-    for(u32 index = 0u; index < m_movingCount; ++index){
-        auto& cutter = *MakeNotNull(m_world.tryGetComponent<Impl::CsgCutterComponent>(m_movingCutters[index]));
-        AssignCsgCutterTransform(LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity(), cutter);
+Name CsgShadowAnalyticGroupName(in u32 index){
+    if(index == 0u) return s_SmokeSceneNameCsgShadowAnalyticPlane;
+    if(index == 1u) return s_SmokeSceneNameCsgShadowAnalyticSphere;
+    if(index == 2u) return s_SmokeSceneNameCsgShadowAnalyticCapsule;
+    if(index == 3u) return s_SmokeSceneNameCsgShadowAnalyticAxialCapsule;
+    if(index == 4u) return s_SmokeSceneNameCsgShadowAnalyticUnion;
+    return s_SmokeSceneNameCsgShadowAnalyticControl;
+}
+
+Name CsgShadowOpenGroupName(in u32 index){
+    if(index == 0u)
+        return s_SmokeSceneNameCsgShadowOpenFive;
+    return s_SmokeSceneNameCsgShadowOpenSix;
+}
+
+class CsgShadowAtlas{
+    public b8 create(in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        if(mode.openAtlas)
+            return this.createOpenAtlas(mode, opaqueMaterial, world);
+        if(mode.analyticAtlas)
+            this.createAnalyticAtlas(mode, opaqueMaterial, world);
+        else
+            this.createAtlas(mode, opaqueMaterial, world);
+        return true;
     }
-}
 
+    public void moveCutters(mut World world){
+        const VectorSingle identityRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+        for(u32 index = 0u; index < this.m_movingCount; ++index){
+            const EntityID cutterId = this.m_movingCutters[index];
+            const VectorSingle finalCenter = VectorSingle(this.m_finalCutterCenters[index]);
+            native(in cutterId, in finalCenter, in identityRot, mut world){
+                auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterId));
+                AssignCsgCutterTransform(finalCenter, identityRot, cutter);
+            }
+        }
+    }
 
-EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const SmokeMeshRef& mesh){
-    const SIMDVectorSingle minimum = LoadFloat(box.minimum);
-    const SIMDVectorSingle maximum = LoadFloat(box.maximum);
-    Float4 center;
-    Float4 extent;
-    StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
-    StoreFloat(VectorSubtract(maximum, minimum), extent);
-    const auto entity = CreateTintedStaticMeshEntity(
-        mesh, transparent ? (m_mode.openAtlas ? s_OpenMaterial : s_GlassMaterial) : m_opaqueMaterial,
-        transparent && m_mode.openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_CsgShadowMaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
-        center, extent, m_world
-    );
-    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: box creation failed"));
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-    if(transparent)
-        m_world.entity(entity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
-#endif
-    if(transparent && m_mode.openAtlas){
-        const Half packedIor = ConvertFloatToHalf(1.5f);
-        const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-            m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
-            NWB::Impl::PackMaterialInstanceValue(packedIor)
-        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet IOR override failed")
+    private EntityID createBox(in SmokeBoxBounds box, in b8 transparent, in SmokeMeshRef mesh, in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        const VectorSingle minimum = VectorSingle(box.minimum, 0.0f);
+        const VectorSingle maximum = VectorSingle(box.maximum, 0.0f);
+        const VectorSingle center = (minimum + maximum) * 0.5f;
+        const VectorSingle extent = maximum - minimum;
+
+        SmokeMaterialRef material = opaqueMaterial;
+        if(transparent){
+            if(mode.openAtlas)
+                material = s_CsgShadowOpenMaterial;
+            else
+                material = s_CsgShadowGlassMaterial;
+        }
+        NameTextAscii materialInterface = NameTextAscii(s_ShadowSmokeMaterialInterface);
+        if(transparent && mode.openAtlas)
+            materialInterface = NameTextAscii(s_ShadowSmokeOpenInterface);
+
+        const EntityID entity = CreateTintedStaticMeshEntity(
+            mesh,
+            material,
+            materialInterface,
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            center,
+            extent,
+            world
         );
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-            m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
-            NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet transmission override failed")
+        [essential] assert(entity.valid(), "CsgShadowSmokeProjectImpl: box creation failed");
+        if(s_CsgCausticSmokeEnabled && transparent){
+            native(in entity, mut world){
+                world.entity(entity).getComponent<Impl::RendererComponent>().opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
+            }
+        }
+        if(transparent && mode.openAtlas){
+            b8 iorOk = false;
+            b8 transmissionOk = false;
+            native(in entity, mut world, mut iorOk, mut transmissionOk){
+                const Half packedIor = ConvertFloatToHalf(1.5f);
+                const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
+                iorOk = Impl::SetMaterialMutableParameter(
+                    world, entity, Name(s_ShadowSmokeOpenInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16,
+                    Impl::PackMaterialInstanceValue(packedIor)
+                );
+                transmissionOk = Impl::SetMaterialMutableParameter(
+                    world, entity, Name(s_ShadowSmokeOpenInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3,
+                    Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
+                );
+            }
+            [essential] assert(iorOk, "CsgShadowSmokeProjectImpl: open-sheet IOR override failed");
+            [essential] assert(transmissionOk, "CsgShadowSmokeProjectImpl: open-sheet transmission override failed");
+        }
+        return entity;
+    }
+
+    private EntityID createBox(in SmokeBoxBounds box, in b8 transparent, in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        return this.createBox(box, transparent, s_CsgShadowCubeMesh, mode, opaqueMaterial, world);
+    }
+
+    private void createReferencePieces(in SmokeBoxBounds box, in SmokeBoxBounds cutter, in b8 transparent, in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        // Six disjoint ordinary boxes represent the subtraction without CSG components or generated caps.
+        Array<SmokeBoxBounds, 6u> pieces = Array<SmokeBoxBounds, 6u>();
+        if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces)){
+            this.createBox(box, transparent, mode, opaqueMaterial, world);
+            return;
+        }
+        for(in SmokeBoxBounds piece : pieces){
+            if(SmokeBoxBoundsValid(piece))
+                this.createBox(piece, transparent, mode, opaqueMaterial, world);
+        }
+    }
+
+    private void addCaster(in SmokeBoxBounds box, in SmokeBoxBounds cutterBox, in u32 groupIndex, in b8 transparent, in b8 moving, in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        if(mode.arm == CsgShadowArm::Reference){
+            this.createReferencePieces(box, cutterBox, transparent, mode, opaqueMaterial, world);
+            return;
+        }
+        const EntityID entity = this.createBox(box, transparent, mode, opaqueMaterial, world);
+        const Name groupName = CsgShadowGroupName(groupIndex);
+        AddStaticCsgMeshReceiver(entity, groupName, !transparent, transparent, world);
+
+        const VectorSingle minimum = VectorSingle(cutterBox.minimum, 0.0f);
+        const VectorSingle maximum = VectorSingle(cutterBox.maximum, 0.0f);
+        const f32x4 halfExtents = f32x4((maximum - minimum) * 0.5f);
+        const VectorSingle finalCenter = (minimum + maximum) * 0.5f;
+        VectorSingle initialCenter = finalCenter;
+        if(moving && mode.arm == CsgShadowArm::Moved){
+            f32 shiftScale = 1.0f;
+            if(mode.pointLight)
+                shiftScale = 0.5f;
+            initialCenter = initialCenter - VectorSingle(0.6f, 0.0f, 0.0f, 0.0f) * shiftScale;
+        }
+        const b8 active = mode.arm != CsgShadowArm::Uncut;
+        const VectorSingle identityRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+        EntityID cutterId = s_InvalidEntityId;
+        native(in groupName, in active, in halfExtents, in initialCenter, in identityRot, mut world, mut cutterId){
+            auto cutterEntity = world.createEntity();
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+            cutter.receiverGroup = groupName;
+            cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
+            cutter.active = active;
+            Impl::CsgBoxShapeParameters parameters;
+            parameters.halfExtents = halfExtents;
+            AssignCsgCutterParameters(parameters, cutter);
+            AssignCsgCutterTransform(initialCenter, identityRot, cutter);
+            cutterId = cutterEntity.id();
+        }
+        if(moving){
+            assert(this.m_movingCount < this.m_movingCutters.size(), "Moving cutter capacity exceeded");
+            this.m_movingCutters[this.m_movingCount] = cutterId;
+            this.m_finalCutterCenters[this.m_movingCount] = f32x4(finalCenter);
+            ++this.m_movingCount;
+        }
+    }
+
+    private void createAtlas(in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        if(s_CsgCausticSmokeEnabled){
+            const SmokeBoxBounds split = SmokeBoxBounds(f32x3u(-2.0f, -0.7f, -7.0f), f32x3u(-0.6f, 0.7f, -5.0f));
+            const SmokeBoxBounds cavity = SmokeBoxBounds(f32x3u(-2.2f, -0.9f, -6.5f), f32x3u(-0.4f, 0.9f, -5.5f));
+            if(mode.arm == CsgShadowArm::Reference)
+                this.createBox(split, true, s_CsgCausticSplitMesh, mode, opaqueMaterial, world);
+            else
+                this.addCaster(split, cavity, 2u, true, false, mode, opaqueMaterial, world);
+            const SmokeBoxBounds control = SmokeBoxBounds(f32x3u(0.6f, -0.7f, -7.0f), f32x3u(2.0f, 0.7f, -5.0f));
+            this.createBox(control, true, mode, opaqueMaterial, world);
+            [essential] info("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two");
+            return;
+        }
+
+        f32 xyScale = 1.0f;
+        if(mode.pointLight)
+            xyScale = 0.5f;
+        for(u32 slot = 0u; slot < 6u; ++slot){
+            const f32 centerX = (cast<f32>(slot % 3u) - 1.0f) * 2.0f * xyScale;
+            f32 rowSign = -1.0f;
+            if(slot < 3u)
+                rowSign = 1.0f;
+            const f32 centerY = rowSign * xyScale;
+            const f32 halfExtent = 0.7f * xyScale;
+            const SmokeBoxBounds box = SmokeBoxBounds(f32x3u(centerX - halfExtent, centerY - halfExtent, -7.0f), f32x3u(centerX + halfExtent, centerY + halfExtent, -5.0f));
+            const b8 hole = slot == 0u || slot == 3u;
+            f32 holeHalfWidth = 0.24f;
+            if(mode.pointLight)
+                holeHalfWidth = 0.36f;
+            const f32 holeCenterX = centerX + 0.3f * xyScale;
+            const f32 holeHalfHeight = 0.4f * xyScale;
+            SmokeBoxBounds cutter = SmokeBoxBounds(f32x3u(centerX - 1.0f, centerY - 1.0f, -6.0f), f32x3u(centerX + 1.0f, centerY + 1.0f, -4.8f));
+            if(hole)
+                cutter = SmokeBoxBounds(f32x3u(holeCenterX - holeHalfWidth, centerY - holeHalfHeight, -7.2f), f32x3u(holeCenterX + holeHalfWidth, centerY + holeHalfHeight, -4.8f));
+            if(slot == 5u){
+                cutter.minimum.x += 20.0f;
+                cutter.maximum.x += 20.0f;
+            }
+            u32 groupIndex = slot;
+            if(slot == 5u)
+                groupIndex = 6u;
+            this.addCaster(box, cutter, groupIndex, slot >= 2u, hole, mode, opaqueMaterial, world);
+            if(slot == 4u){
+                const SmokeBoxBounds shiftedBox = SmokeBoxBounds(f32x3u(box.minimum.x, box.minimum.y, box.minimum.z - 0.5f), f32x3u(box.maximum.x, box.maximum.y, box.maximum.z - 0.5f));
+                const SmokeBoxBounds shiftedCutter = SmokeBoxBounds(f32x3u(cutter.minimum.x, cutter.minimum.y, cutter.minimum.z - 0.5f), f32x3u(cutter.maximum.x, cutter.maximum.y, cutter.maximum.z - 0.5f));
+                this.addCaster(shiftedBox, shiftedCutter, 5u, true, false, mode, opaqueMaterial, world);
+            }
+        }
+    }
+
+    private void createAnalyticAtlas(in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        for(u32 slot = 0u; slot < 6u; ++slot){
+            const f32 centerX = (cast<f32>(slot % 3u) - 1.0f) * 2.0f;
+            f32 centerY = -1.0f;
+            if(slot < 3u)
+                centerY = 1.0f;
+            const SmokeBoxBounds box = SmokeBoxBounds(f32x3u(centerX - 0.7f, centerY - 0.7f, -7.0f), f32x3u(centerX + 0.7f, centerY + 0.7f, -5.0f));
+            const EntityID entity = this.createBox(box, true, mode, opaqueMaterial, world);
+            AddStaticCsgMeshReceiver(entity, CsgShadowAnalyticGroupName(slot), false, true, world);
+        }
+
+        const b8 active = mode.arm == CsgShadowArm::Cut;
+        native(in active, mut world){
+            const auto addAnalyticCutter = [&](const u32 groupIndex, const Name shapeType, const auto& parameters, const SIMDMatrix& shapeToWorld){
+                auto cutterEntity = world.createEntity();
+                auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+                cutter.receiverGroup = CsgShadowAnalyticGroupName(groupIndex);
+                cutter.shapeType = shapeType;
+                cutter.active = active;
+                AssignCsgCutterParameters(parameters, cutter);
+                SIMDVectorSingle determinant;
+                StoreFloat(MatrixInverse(&determinant, shapeToWorld), cutter.worldToShape);
+                StoreFloat(shapeToWorld, cutter.shapeToWorld);
+            };
+
+            Impl::CsgPlaneShapeParameters plane;
+            plane.normalDistance = Float4(0.5f, 0.0f, 1.0f, 0.0f);
+            addAnalyticCutter(0u, Name(s_ShadowSmokePlaneShapePath), plane, MatrixTranslation(-2.0f, 1.0f, -6.0f));
+
+            Impl::CsgSphereShapeParameters sphere;
+            sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+            const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
+            addAnalyticCutter(1u, Name(s_ShadowSmokeEngineCsgSphere), sphere, ellipsoid);
+
+            Impl::CsgCapsuleShapeParameters capsule;
+            capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
+            addAnalyticCutter(2u, Name(s_ShadowSmokeCapsuleShapePath), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
+            capsule.radiusHalfHeight = Float4(0.3f, 0.4f, 0.0f, 0.0f);
+            // An exact axis permutation exercises the capsule's zero radial-speed branch.
+            const SIMDMatrix alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+            addAnalyticCutter(3u, Name(s_ShadowSmokeCapsuleShapePath), capsule, alongLight);
+
+            sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
+            addAnalyticCutter(4u, Name(s_ShadowSmokeEngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+            addAnalyticCutter(4u, Name(s_ShadowSmokeEngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+            // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
+            plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
+            addAnalyticCutter(5u, Name(s_ShadowSmokePlaneShapePath), plane, MatrixIdentity());
+        }
+        [essential] info("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule");
+    }
+
+    private b8 createOpenAtlas(in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
+        const b8 clipped = mode.openCase == CsgShadowOpenCase::Clipped || mode.openCase == CsgShadowOpenCase::ClippedReference;
+        if(mode.openCase == CsgShadowOpenCase::Reference){
+            if(!this.createBox(SmokeBoxBounds(f32x3u(-1.9f, -0.7f, -7.0f), f32x3u(-0.5f, 0.7f, -5.0f)), true, s_CsgShadowOpenFiveMesh, mode, opaqueMaterial, world).valid())
+                return false;
+            // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
+            for(u32 pair = 0u; pair < 3u; ++pair){
+                const f32 lower = -7.0f + cast<f32>(pair) * 0.8f;
+                if(!this.createBox(SmokeBoxBounds(f32x3u(0.5f, -0.7f, lower), f32x3u(1.9f, 0.7f, lower + 0.4f)), true, s_CsgShadowOpenPairMesh, mode, opaqueMaterial, world).valid())
+                    return false;
+            }
+        }
+        else if(mode.openCase == CsgShadowOpenCase::ClippedReference){
+            for(u32 pair = 0u; pair < 2u; ++pair){
+                const f32 lower = -6.5f + cast<f32>(pair);
+                if(!this.createBox(SmokeBoxBounds(f32x3u(-1.9f, -0.7f, lower), f32x3u(-0.5f, 0.7f, lower + 0.5f)), true, s_CsgShadowOpenPairMesh, mode, opaqueMaterial, world).valid())
+                    return false;
+            }
+            if(!this.createBox(SmokeBoxBounds(f32x3u(0.5f, -0.7f, -6.6f), f32x3u(1.9f, 0.7f, -5.0f)), true, s_CsgShadowOpenFiveMesh, mode, opaqueMaterial, world).valid())
+                return false;
+        }
+        else{
+            SmokeMeshRef firstMesh = s_CsgShadowOpenFiveMesh;
+            if(mode.openCase == CsgShadowOpenCase::Boundary64)
+                firstMesh = s_CsgShadowOpenBoundaryMesh;
+            else if(mode.openCase == CsgShadowOpenCase::Terminal65)
+                firstMesh = s_CsgShadowOpenOverflowMesh;
+
+            for(u32 tile = 0u; tile < 2u; ++tile){
+                SmokeMeshRef tileMesh = s_CsgShadowOpenSixMesh;
+                f32 x = 1.2f;
+                if(tile == 0u){
+                    tileMesh = firstMesh;
+                    x = -1.2f;
+                }
+                const SmokeBoxBounds bounds = SmokeBoxBounds(f32x3u(x - 0.7f, -0.7f, -7.0f), f32x3u(x + 0.7f, 0.7f, -5.0f));
+                const EntityID receiver = this.createBox(bounds, true, tileMesh, mode, opaqueMaterial, world);
+                const Name groupName = CsgShadowOpenGroupName(tile);
+                AddStaticCsgMeshReceiver(receiver, groupName, false, true, world);
+
+                f32 planeW = 8.0f;
+                if(clipped)
+                    planeW = 6.75f;
+                b8 cutterCreated = false;
+                native(in groupName, in planeW, mut world, mut cutterCreated){
+                    auto entity = world.createEntity();
+                    if(entity.id().valid()){
+                        auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
+                        cutter.receiverGroup = groupName;
+                        cutter.shapeType = Name(s_ShadowSmokePlaneShapePath);
+                        Impl::CsgPlaneShapeParameters plane;
+                        plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, planeW);
+                        AssignCsgCutterParameters(plane, cutter);
+                        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+                        cutterCreated = true;
+                    }
+                }
+                if(!cutterCreated)
+                    return false;
+            }
+        }
+
+        u32 firstCount = 5u;
+        if(mode.openCase == CsgShadowOpenCase::Boundary64)
+            firstCount = 64u;
+        else if(mode.openCase == CsgShadowOpenCase::Terminal65)
+            firstCount = 65u;
+        else if(clipped)
+            firstCount = 4u;
+        u32 secondCount = 6u;
+        if(clipped)
+            secondCount = 5u;
+        [essential] info(
+            "CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1"
+            , mode.openCaseName()
+            , firstCount
+            , secondCount
         );
-    }
-    return entity;
-}
-
-void CsgShadowAtlas::createReferencePieces(const Box& box, const Box& cutter, const b8 transparent){
-    // Six disjoint ordinary boxes represent the subtraction without CSG components or generated caps.
-    Array<Box, 6> pieces{};
-    if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces)){
-        createBox(box, transparent);
-        return;
-    }
-    for(const auto& piece : pieces){
-        if(SmokeBoxBoundsValid(piece))
-            createBox(piece, transparent);
-    }
-}
-
-void CsgShadowAtlas::addCaster(const Box& box, const Box& cutterBox, const u32 groupIndex, const b8 transparent, const b8 moving){
-    if(m_mode.arm == Arm::Reference){
-        createReferencePieces(box, cutterBox, transparent);
-        return;
-    }
-    const auto entity = createBox(box, transparent);
-    AddStaticCsgMeshReceiver(entity, s_Groups[groupIndex], !transparent, transparent, m_world);
-    auto cutterEntity = m_world.createEntity();
-    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
-    cutter.receiverGroup = s_Groups[groupIndex];
-    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
-    cutter.active = m_mode.arm != Arm::Uncut;
-    NWB::Impl::CsgBoxShapeParameters parameters;
-    const SIMDVectorSingle minimum = LoadFloat(cutterBox.minimum);
-    const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
-    StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
-    AssignCsgCutterParameters(parameters, cutter);
-    const SIMDVectorSingle finalCenter = VectorScale(VectorAdd(minimum, maximum), 0.5f);
-    SIMDVectorSingle initialCenter = finalCenter;
-    if(moving && m_mode.arm == Arm::Moved)
-        initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_mode.pointLight ? 0.5f : 1.0f));
-    AssignCsgCutterTransform(initialCenter, QuaternionIdentity(), cutter);
-    if(moving){
-        NWB_ASSERT(m_movingCount < m_movingCutters.size());
-        m_movingCutters[m_movingCount] = cutterEntity.id();
-        StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
-        ++m_movingCount;
-    }
-}
-
-void CsgShadowAtlas::createAtlas(){
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-    const Box split{ Float3U(-2.0f, -0.7f, -7.0f), Float3U(-0.6f, 0.7f, -5.0f) };
-    const Box cavity{ Float3U(-2.2f, -0.9f, -6.5f), Float3U(-0.4f, 0.9f, -5.5f) };
-    if(m_mode.arm == Arm::Reference)
-        createBox(split, true, SmokeMeshRef{"project/meshes/csg_caustic_split"});
-    else
-        addCaster(split, cavity, 2u, true, false);
-    const Box control{ Float3U(0.6f, -0.7f, -7.0f), Float3U(2.0f, 0.7f, -5.0f) };
-    createBox(control, true);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two"));
-#else
-    const f32 xyScale = m_mode.pointLight ? 0.5f : 1.0f;
-    for(u32 slot = 0u; slot < 6u; ++slot){
-        const f32 centerX = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f * xyScale;
-        const f32 centerY = (slot < 3u ? 1.0f : -1.0f) * xyScale;
-        const f32 halfExtent = 0.7f * xyScale;
-        const Box box{ Float3U(centerX - halfExtent, centerY - halfExtent, -7.0f), Float3U(centerX + halfExtent, centerY + halfExtent, -5.0f) };
-        const b8 hole = slot == 0u || slot == 3u;
-        const f32 holeHalfWidth = m_mode.pointLight ? 0.36f : 0.24f;
-        const f32 holeCenterX = centerX + 0.3f * xyScale;
-        const f32 holeHalfHeight = 0.4f * xyScale;
-        Box cutter = hole
-            ? Box{ Float3U(holeCenterX - holeHalfWidth, centerY - holeHalfHeight, -7.2f), Float3U(holeCenterX + holeHalfWidth, centerY + holeHalfHeight, -4.8f) }
-            : Box{ Float3U(centerX - 1.0f, centerY - 1.0f, -6.0f), Float3U(centerX + 1.0f, centerY + 1.0f, -4.8f) };
-        if(slot == 5u){
-            cutter.minimum.x += 20.0f;
-            cutter.maximum.x += 20.0f;
-        }
-        const u32 groupIndex = slot == 5u ? 6u : slot;
-        addCaster(box, cutter, groupIndex, slot >= 2u, hole);
-        if(slot == 4u){
-            const Box shiftedBox{ Float3U(box.minimum.x, box.minimum.y, box.minimum.z - 0.5f), Float3U(box.maximum.x, box.maximum.y, box.maximum.z - 0.5f) };
-            const Box shiftedCutter{ Float3U(cutter.minimum.x, cutter.minimum.y, cutter.minimum.z - 0.5f), Float3U(cutter.maximum.x, cutter.maximum.y, cutter.maximum.z - 0.5f) };
-            addCaster(shiftedBox, shiftedCutter, 5u, true, false);
-        }
-    }
-#endif
-}
-
-template<typename ParameterT>
-void CsgShadowAtlas::addAnalyticCutter(const u32 groupIndex, const Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld){
-    auto cutterEntity = m_world.createEntity();
-    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
-    cutter.receiverGroup = s_AnalyticGroups[groupIndex];
-    cutter.shapeType = shapeType;
-    cutter.active = m_mode.arm == Arm::Cut;
-    AssignCsgCutterParameters(parameters, cutter);
-    SIMDVectorSingle determinant;
-    StoreFloat(MatrixInverse(&determinant, shapeToWorld), cutter.worldToShape);
-    StoreFloat(shapeToWorld, cutter.shapeToWorld);
-}
-
-void CsgShadowAtlas::createAnalyticAtlas(){
-    for(u32 slot = 0u; slot < 6u; ++slot){
-        const f32 centerX = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f;
-        const f32 centerY = slot < 3u ? 1.0f : -1.0f;
-        const Box box{ Float3U(centerX - 0.7f, centerY - 0.7f, -7.0f), Float3U(centerX + 0.7f, centerY + 0.7f, -5.0f) };
-        const auto entity = createBox(box, true);
-        AddStaticCsgMeshReceiver(entity, s_AnalyticGroups[slot], false, true, m_world);
+        return true;
     }
 
-    NWB::Impl::CsgPlaneShapeParameters plane;
-    plane.normalDistance = Float4(0.5f, 0.0f, 1.0f, 0.0f);
-    addAnalyticCutter(0u, Name(s_PlaneShapePath), plane, MatrixTranslation(-2.0f, 1.0f, -6.0f));
-
-    NWB::Impl::CsgSphereShapeParameters sphere;
-    sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
-    addAnalyticCutter(1u, Name(s_EngineCsgSphere), sphere, ellipsoid);
-
-    NWB::Impl::CsgCapsuleShapeParameters capsule;
-    capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
-    addAnalyticCutter(2u, Name(s_CapsuleShapePath), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
-    capsule.radiusHalfHeight = Float4(0.3f, 0.4f, 0.0f, 0.0f);
-    // An exact axis permutation exercises the capsule's zero radial-speed branch.
-    const SIMDMatrix alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-    addAnalyticCutter(3u, Name(s_CapsuleShapePath), capsule, alongLight);
-
-    sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
-    addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
-    addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
-    // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
-    plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
-    addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
-}
-
-b8 CsgShadowAtlas::createOpenAtlas(){
-    const b8 clipped = m_mode.openCase == OpenCase::Clipped || m_mode.openCase == OpenCase::ClippedReference;
-    if(m_mode.openCase == OpenCase::Reference){
-        if(!createBox({ Float3U(-1.9f, -0.7f, -7.0f), Float3U(-0.5f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
-            return false;
-        // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
-        for(u32 pair = 0u; pair < 3u; ++pair){
-            const f32 lower = -7.0f + static_cast<f32>(pair) * 0.8f;
-            if(!createBox({ Float3U(0.5f, -0.7f, lower), Float3U(1.9f, 0.7f, lower + 0.4f) }, true, s_OpenPairMesh).valid())
-                return false;
-        }
-    }
-    else if(m_mode.openCase == OpenCase::ClippedReference){
-        for(u32 pair = 0u; pair < 2u; ++pair){
-            const f32 lower = -6.5f + static_cast<f32>(pair);
-            if(!createBox({ Float3U(-1.9f, -0.7f, lower), Float3U(-0.5f, 0.7f, lower + 0.5f) }, true, s_OpenPairMesh).valid())
-                return false;
-        }
-        if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
-            return false;
-    }
-    else{
-        const SmokeMeshRef firstMesh = m_mode.openCase == OpenCase::Boundary64 ? s_OpenBoundaryMesh : m_mode.openCase == OpenCase::Terminal65 ? s_OpenOverflowMesh : s_OpenFiveMesh;
-        const Array<SmokeMeshRef, 2> meshes = { firstMesh, s_OpenSixMesh };
-        for(u32 tile = 0u; tile < 2u; ++tile){
-            const f32 x = tile == 0u ? -1.2f : 1.2f;
-            const Box bounds{ Float3U(x - 0.7f, -0.7f, -7.0f), Float3U(x + 0.7f, 0.7f, -5.0f) };
-            const auto receiver = createBox(bounds, true, meshes[tile]);
-            AddStaticCsgMeshReceiver(receiver, s_OpenGroups[tile], false, true, m_world);
-            auto entity = m_world.createEntity();
-            if(!entity.id().valid())
-                return false;
-            auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
-            cutter.receiverGroup = s_OpenGroups[tile];
-            cutter.shapeType = Name(s_PlaneShapePath);
-            NWB::Impl::CsgPlaneShapeParameters plane;
-            plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, clipped ? 6.75f : 8.0f);
-            AssignCsgCutterParameters(plane, cutter);
-            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-        }
-    }
-    const u32 firstCount = m_mode.openCase == OpenCase::Boundary64 ? 64u : m_mode.openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
-        , ConvertString(m_mode.openCaseName())
-        , firstCount
-        , clipped ? 5u : 6u
-    );
-    return true;
+    private Array<f32x4, 2u> m_finalCutterCenters = Array<f32x4, 2u>();
+    private Array<EntityID, 2u> m_movingCutters = Array<EntityID, 2u>();
+    private u32 m_movingCount = 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

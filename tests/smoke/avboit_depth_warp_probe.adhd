@@ -67,10 +67,6 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
         [essential] info("AvboitDepthWarpProbe: shutdown completed={}", completedVal);
     }
 
-    private b8 compareBatch(in ProbeBatchTaskPayload payload){
-        return CompareDepthWarpProbeBatch(this.m_context, this.m_readback, payload);
-    }
-
     private ActiveSceneSubsystems m_sceneSubsystems;
     private DescriptorHandleArray4 m_descriptors = DescriptorHandleArray4();
     private GlobalProbeCaseVector m_cases;
@@ -104,3 +100,4 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -4,6 +4,141 @@
 
 #include "ui_gallery_layout.adhd"
 
+native{
+#include <global/text_utils.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+interface IUiLabelResolver{
+    StringView label(in u64 index)const;
+}
+
+class UiNestedPopupLabelResolver : IUiLabelResolver{
+    public StringView label(in u64 index)const override{
+        return ResolveNestedPopupLabel(index);
+    }
+}
+
+class UiSearchComboLabelResolver : IUiLabelResolver{
+    public StringView label(in u64 index)const override{
+        return ResolveSearchComboLabel(index);
+    }
+}
+
+class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, const u64 DisabledKey>{
+    private String m_query = "";
+    private Array<u64, LabelCount> m_indices;
+    private u64 m_count = cast<u64>(LabelCount);
+    private u64 m_viewRevision = 1u;
+
+    public UiFilteredListState(){
+        for(usize index = 0u; index < LabelCount; ++index)
+            this.m_indices[index] = cast<u64>(index);
+    }
+
+    public u64 rowCount()const{
+        return cast<u64>(LabelCount);
+    }
+
+    public u64 filteredRowCount()const{
+        return this.m_count;
+    }
+
+    public u64 filteredRevision()const{
+        return this.m_viewRevision;
+    }
+
+    public u64 key(in u64 index)const{
+        return ResolveImmutableListSourceKey(index, LabelCount);
+    }
+
+    public u64 filteredKey(in u64 index)const{
+        if(index < this.m_count)
+            return this.key(this.m_indices[cast<usize>(index)]);
+        return 0u;
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        return TryResolveImmutableListSourceIndex(keyValue, LabelCount);
+    }
+
+    public Expected<u64> filteredIndexOf(in u64 keyValue)const{
+        for(u64 candidate = 0u; candidate < this.m_count && cast<usize>(candidate) < LabelCount; ++candidate){
+            if(ResolveImmutableListSourceKey(this.m_indices[cast<usize>(candidate)], LabelCount) == keyValue)
+                return candidate;
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public b8 enabled(in u64 index)const{
+        return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey);
+    }
+
+    public b8 filteredEnabled(in u64 index)const{
+        return index < this.m_count && this.enabled(this.m_indices[cast<usize>(index)]);
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const{
+        return FindEnabledImmutableListSourceRow(start, reverse, LabelCount, DisabledKey);
+    }
+
+    public Expected<u64> filteredFindEnabled(in u64 start, in b8 reverse)const{
+        if(start >= this.m_count)
+            return MakeUnexpected(Failure());
+        u64 candidate = start;
+        while(candidate < this.m_count){
+            if(this.filteredEnabled(candidate))
+                return candidate;
+            if(reverse){
+                if(candidate == 0u)
+                    break;
+                --candidate;
+            }
+            else{
+                ++candidate;
+            }
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public StringView text(in u64 index)const{
+        return ResolverT().label(index);
+    }
+
+    public StringView filteredText(in u64 index)const{
+        if(index < this.m_count)
+            return ResolverT().label(this.m_indices[cast<usize>(index)]);
+        return "";
+    }
+
+    public b8 applyFilter(in StringView query){
+        if(this.m_viewRevision != 0u && query == StringView(this.m_query))
+            return true;
+        if(query.empty())
+            this.m_query.clear();
+        else
+            this.m_query = String(query);
+        this.m_count = 0u;
+        const ResolverT resolver = ResolverT();
+        for(u64 index = 0u; index < cast<u64>(LabelCount); ++index){
+            const StringView label = resolver.label(index);
+            b8 matched = false;
+            native(in label, in query, mut matched){
+                matched = ContainsAsciiIgnoreCase<char>(label, query);
+            }
+            if(!matched)
+                continue;
+            this.m_indices[cast<usize>(this.m_count)] = index;
+            ++this.m_count;
+        }
+        ++this.m_viewRevision;
+        return true;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

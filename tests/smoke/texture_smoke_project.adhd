@@ -253,15 +253,15 @@ class TextureSmokeProject : IProjectEntryCallbacks{
             const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(*this->m_world, s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity);
 
             // Use an untextured white floor to isolate indirect color bounce from the sphere.
-            this->m_whiteGround = CreateTintedStaticMeshEntity(s_TextureGroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f), *this->m_world);
+            this->m_whiteGround = CreateTintedStaticMeshEntity(s_TextureGroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, VectorSet(1.0f, 1.0f, 1.0f, 1.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), VectorSet(3.25f, 1.0f, 3.25f, 0.0f), *this->m_world);
             // Place the UV-mapped sphere just above the white floor.
             this->m_texturedSphere = CreateTintedStaticMeshEntity(
                 s_TexturedSphereMesh,
                 s_TextureMaterial,
                 s_TextureMaterialInterface,
-                Float4(1.0f, 1.0f, 1.0f, 1.0f),
-                Float4(0.0f, 1.16f, 0.15f, 0.0f),
-                Float4(1.1f, 1.1f, 1.1f, 0.0f),
+                VectorSet(1.0f, 1.0f, 1.0f, 1.0f),
+                VectorSet(0.0f, 1.16f, 0.15f, 0.0f),
+                VectorSet(1.1f, 1.1f, 1.1f, 0.0f),
                 s_TextureRuntimeTintParameter,
                 *this->m_world
             );

@@ -7,6 +7,9 @@ native{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_ShadowSmokeAnalyticAtlas = "analytic";
 const f32 s_ShadowSmokeCameraDepth = -4.0f;
 const StringView s_ShadowSmokeCapsuleShapePath = "engine/csg/capsule";
@@ -195,56 +198,34 @@ StringView ResolveCsgShadowOpenCaseName(in CsgShadowOpenCase openCase){
     return s_ShadowSmokeOpenCaseRetained;
 }
 
-b8 TryParseCsgShadowArm(in StringView text, mut CsgShadowArm outArm){
-    if(text == "reference"){
-        outArm = CsgShadowArm::Reference;
-        return true;
-    }
-    if(text == "cut"){
-        outArm = CsgShadowArm::Cut;
-        return true;
-    }
-    if(text == "uncut"){
-        outArm = CsgShadowArm::Uncut;
-        return true;
-    }
-    if(text == "moved"){
-        outArm = CsgShadowArm::Moved;
-        return true;
-    }
-    if(text == "camera_shift"){
-        outArm = CsgShadowArm::CameraShift;
-        return true;
-    }
-    return false;
+Expected<CsgShadowArm> ParseCsgShadowArm(in StringView text){
+    if(text == "reference")
+        return CsgShadowArm::Reference;
+    if(text == "cut")
+        return CsgShadowArm::Cut;
+    if(text == "uncut")
+        return CsgShadowArm::Uncut;
+    if(text == "moved")
+        return CsgShadowArm::Moved;
+    if(text == "camera_shift")
+        return CsgShadowArm::CameraShift;
+    return MakeUnexpected(Failure());
 }
 
-b8 TryParseCsgShadowOpenCase(in StringView text, mut CsgShadowOpenCase outOpenCase){
-    if(text == s_ShadowSmokeOpenCaseReference){
-        outOpenCase = CsgShadowOpenCase::Reference;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseRetained){
-        outOpenCase = CsgShadowOpenCase::Retained;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseClippedReference){
-        outOpenCase = CsgShadowOpenCase::ClippedReference;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseClipped){
-        outOpenCase = CsgShadowOpenCase::Clipped;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseBoundary64){
-        outOpenCase = CsgShadowOpenCase::Boundary64;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseTerminal65){
-        outOpenCase = CsgShadowOpenCase::Terminal65;
-        return true;
-    }
-    return false;
+Expected<CsgShadowOpenCase> ParseCsgShadowOpenCase(in StringView text){
+    if(text == s_ShadowSmokeOpenCaseReference)
+        return CsgShadowOpenCase::Reference;
+    if(text == s_ShadowSmokeOpenCaseRetained)
+        return CsgShadowOpenCase::Retained;
+    if(text == s_ShadowSmokeOpenCaseClippedReference)
+        return CsgShadowOpenCase::ClippedReference;
+    if(text == s_ShadowSmokeOpenCaseClipped)
+        return CsgShadowOpenCase::Clipped;
+    if(text == s_ShadowSmokeOpenCaseBoundary64)
+        return CsgShadowOpenCase::Boundary64;
+    if(text == s_ShadowSmokeOpenCaseTerminal65)
+        return CsgShadowOpenCase::Terminal65;
+    return MakeUnexpected(Failure());
 }
 
 u32 ComputeSkinningBenchmarkJointSeed(in u32 jointIndex, in u32 characterIndex){
@@ -727,8 +708,10 @@ class CsgShadowMode{
         in b8 caustic
     ){
         if(hasArm){
-            if(!TryParseCsgShadowArm(armText, this.arm))
+            const Expected<CsgShadowArm> parsedArm = ParseCsgShadowArm(armText);
+            if(!parsedArm.has_value())
                 return false;
+            this.arm = parsedArm.value();
         }
         if(hasLight){
             if(lightText != s_ShadowSmokeDirectional && lightText != s_ShadowSmokePoint)
@@ -749,8 +732,10 @@ class CsgShadowMode{
         if(this.openAtlas){
             if(!hasOpenCase || this.pointLight || this.finiteLightSource || this.arm != CsgShadowArm::Cut || caustic)
                 return false;
-            if(!TryParseCsgShadowOpenCase(openCaseText, this.openCase))
+            const Expected<CsgShadowOpenCase> parsedOpenCase = ParseCsgShadowOpenCase(openCaseText);
+            if(!parsedOpenCase.has_value())
                 return false;
+            this.openCase = parsedOpenCase.value();
         }
         return !this.analyticAtlas || (!this.pointLight && (this.arm == CsgShadowArm::Cut || this.arm == CsgShadowArm::Uncut));
     }

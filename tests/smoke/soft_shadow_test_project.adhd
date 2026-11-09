@@ -93,10 +93,10 @@ class SoftShadowScene{
             // Timing materials omit stochastic surfel GI while keeping direct shadows.
             const auto& opaqueMaterial = timingEnabled ? s_SoftShadowTimingOpaqueMaterial : s_SoftShadowOpaqueMaterial;
             const auto& transparentMaterial = timingEnabled ? s_SoftShadowTimingTransparentMaterial : s_SoftShadowTransparentMaterial;
-            this->m_groundEntity = CreateTintedStaticMeshEntity(s_SoftShadowGroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f), world);
+            this->m_groundEntity = CreateTintedStaticMeshEntity(s_SoftShadowGroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.82f, 0.82f, 0.85f, 1.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), VectorSet(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f), world);
 
             // The opaque caster provides the contact-hardening reference.
-            const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), world);
+            const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.86f, 0.80f, 0.74f, 1.0f), VectorSet(0.7f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), world);
             this->m_characterOwner = characterModel.entity;
             if(!characterModel.tintApplied)
                 NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
@@ -107,7 +107,7 @@ class SoftShadowScene{
                 transparentMaterial,
                 s_SmokeSurfaceMaterialInterface,
                 // Glass caster tint and density for Beer-Lambert shadow absorption.
-                Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f),
+                VectorSet(0.20f, 0.55f, 0.12f, 0.6f), VectorSet(-0.6f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
                 world
             );
             this->m_glassOwner = glassModel.entity;

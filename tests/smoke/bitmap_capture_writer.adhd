@@ -6,10 +6,6 @@
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <loader/project_entry.h>
 #include <core/alloc/scratch.h>
@@ -26,139 +22,169 @@ native{
 #include <global/filesystem/path.h>
 #include <global/refcount_ptr.h>
 
-NWB_BEGIN
-
-namespace __hidden_bitmap_capture{
-inline constexpr usize s_BitmapFileHeaderSize = Tests::Smoke::s_BitmapFileHeaderSize;
-inline constexpr usize s_BitmapInfoHeaderSize = Tests::Smoke::s_BitmapInfoHeaderSize;
-inline constexpr usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
-inline constexpr usize s_BitmapBytesPerPixel = Tests::Smoke::s_BitmapBytesPerPixel;
-inline constexpr usize s_SourceBytesPerPixel = Tests::Smoke::s_BitmapSourceBytesPerPixel;
-inline constexpr u32 s_ByteMask = Tests::Smoke::s_BitmapByteMask;
-inline constexpr u32 s_Byte1Shift = Tests::Smoke::s_BitmapByte1Shift;
-inline constexpr u32 s_Byte2Shift = Tests::Smoke::s_BitmapByte2Shift;
-inline constexpr u32 s_Byte3Shift = Tests::Smoke::s_BitmapByte3Shift;
-
-inline void WriteU16LE(const u16 value, const NotNull<u8*> destination)noexcept{
-    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
-    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
-}
-
-inline void WriteU32LE(const u32 value, const NotNull<u8*> destination)noexcept{
-    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
-    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
-    destination.get()[2] = static_cast<u8>((value >> s_Byte2Shift) & s_ByteMask);
-    destination.get()[3] = static_cast<u8>((value >> s_Byte3Shift) & s_ByteMask);
-}
-
-inline b8 IsBgraFormat(const Core::Format::Enum format)noexcept{
-    return format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
-}
+namespace NWB::Tests::Smoke{
+using FormatEnum = Core::Format::Enum;
+using Core::TextureDesc;
+using GlobalPath = ::Path<Core::Alloc::GlobalArena>;
 };
-
-namespace __hidden_framebuffer_capture{
-inline constexpr Name s_BitmapScratchArena = NWB::Tests::Smoke::s_SmokeNameSmokeFramebufferCaptureBitmap;
-inline b8 IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
-    return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
-}
-};
-
-namespace Tests::Smoke{
-
-class BitmapCaptureWriter{
-public:
-    BitmapCaptureWriter(const ::Path<Core::Alloc::GlobalArena>& outputPath, const Core::TextureDesc& captureDescription)noexcept
-        : m_outputPath(outputPath)
-        , m_captureDescription(captureDescription)
-    {}
-
-public:
-    [[nodiscard]] b8 write(const NotNull<const u8*> sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
-        const u32 width = m_captureDescription.width;
-        const u32 height = m_captureDescription.height;
-        if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
-            return false;
-
-        const auto sourceRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_bitmap_capture::s_SourceBytesPerPixel);
-        if(!sourceRowBytes)
-            return false;
-        const auto bitmapRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_bitmap_capture::s_BitmapBytesPerPixel);
-        if(!bitmapRowBytes || sourceRowPitch < *sourceRowBytes || AddOverflows<usize>(*bitmapRowBytes, 3u))
-            return false;
-
-        const usize bitmapRowPitch = (*bitmapRowBytes + 3u) & ~usize(3u);
-        const auto bitmapPixelBytes = TryMultiply<usize>(bitmapRowPitch, static_cast<usize>(height));
-        if(!bitmapPixelBytes)
-            return false;
-        if(AddOverflows<usize>(__hidden_bitmap_capture::s_BitmapPixelOffset, *bitmapPixelBytes))
-            return false;
-
-        const usize bitmapFileBytes = __hidden_bitmap_capture::s_BitmapPixelOffset + *bitmapPixelBytes;
-        if(*bitmapPixelBytes > static_cast<usize>(Limit<u32>::s_Max) || bitmapFileBytes > static_cast<usize>(Limit<u32>::s_Max))
-            return false;
-
-        Vector<u8, Core::Alloc::ScratchArena> bitmapBytes(bitmapFileBytes, 0u, scratchArena);
-        bitmapBytes[0] = static_cast<u8>('B');
-        bitmapBytes[1] = static_cast<u8>('M');
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(bitmapFileBytes), MakeNotNull(bitmapBytes.data() + 2u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(__hidden_bitmap_capture::s_BitmapPixelOffset), MakeNotNull(bitmapBytes.data() + 10u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(__hidden_bitmap_capture::s_BitmapInfoHeaderSize), MakeNotNull(bitmapBytes.data() + __hidden_bitmap_capture::s_BitmapFileHeaderSize));
-        __hidden_bitmap_capture::WriteU32LE(width, MakeNotNull(bitmapBytes.data() + 18u));
-        __hidden_bitmap_capture::WriteU32LE(height, MakeNotNull(bitmapBytes.data() + 22u));
-        __hidden_bitmap_capture::WriteU16LE(1u, MakeNotNull(bitmapBytes.data() + 26u));
-        __hidden_bitmap_capture::WriteU16LE(24u, MakeNotNull(bitmapBytes.data() + 28u));
-        __hidden_bitmap_capture::WriteU32LE(static_cast<u32>(*bitmapPixelBytes), MakeNotNull(bitmapBytes.data() + 34u));
-
-        const b8 sourceIsBgra = __hidden_bitmap_capture::IsBgraFormat(m_captureDescription.format);
-        for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
-            const usize sourceY = static_cast<usize>(height - 1u - bitmapY);
-            const auto sourceRowOffset = TryMultiply<usize>(sourceY, sourceRowPitch);
-            if(!sourceRowOffset)
-                return false;
-            const auto sourceRow = MakeNotNull(sourceBytes.get() + *sourceRowOffset);
-            const auto bitmapRow = MakeNotNull(bitmapBytes.data() + __hidden_bitmap_capture::s_BitmapPixelOffset + static_cast<usize>(bitmapY) * bitmapRowPitch);
-            for(u32 x = 0u; x < width; ++x){
-                const auto sourcePixel = MakeNotNull(sourceRow.get() + static_cast<usize>(x) * __hidden_bitmap_capture::s_SourceBytesPerPixel);
-                const auto bitmapPixel = MakeNotNull(bitmapRow.get() + static_cast<usize>(x) * __hidden_bitmap_capture::s_BitmapBytesPerPixel);
-                bitmapPixel.get()[0] = sourceIsBgra ? sourcePixel.get()[0] : sourcePixel.get()[2];
-                bitmapPixel.get()[1] = sourcePixel.get()[1];
-                bitmapPixel.get()[2] = sourceIsBgra ? sourcePixel.get()[2] : sourcePixel.get()[0];
-            }
-        }
-
-        const ::Path<Core::Alloc::ScratchArena> outputPath(scratchArena, m_outputPath);
-        {
-            const auto outputDirectory = outputPath.parentPath();
-            if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory))
-                return false;
-        }
-
-        ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, outputPath);
-        partialPath += NWB_TEXT(".partial");
-        if(!WriteBinaryFile(partialPath, bitmapBytes)){
-            const auto removed = RemoveFile(partialPath);
-            if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
-            return false;
-        }
-        if(!RenamePath(partialPath, outputPath)){
-            const auto removed = RemoveFile(partialPath);
-            if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
-            return false;
-        }
-        return true;
-    }
-
-private:
-    const ::Path<Core::Alloc::GlobalArena>& m_outputPath;
-    const Core::TextureDesc& m_captureDescription;
-};
-
-};
-
-NWB_END
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
+const u32 s_BitmapMaxSignedDimension = 2147483647u;
+const u64 s_BitmapMaxU32Bytes = 4294967295u;
+const u8 s_BitmapMagicB = 66u;
+const u8 s_BitmapMagicM = 77u;
+const u16 s_BitmapPlanes = 1u;
+const u16 s_BitmapBitsPerPixel = 24u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void WriteBitmapU16LE(in u16 value, in usize offset, mut Vector<u8> destination){
+    const u32 wide = cast<u32>(value);
+    destination[offset] = cast<u8>(wide & s_BitmapByteMask);
+    destination[offset + 1u] = cast<u8>((wide >> s_BitmapByte1Shift) & s_BitmapByteMask);
+}
+
+void WriteBitmapU32LE(in u32 value, in usize offset, mut Vector<u8> destination){
+    destination[offset] = cast<u8>(value & s_BitmapByteMask);
+    destination[offset + 1u] = cast<u8>((value >> s_BitmapByte1Shift) & s_BitmapByteMask);
+    destination[offset + 2u] = cast<u8>((value >> s_BitmapByte2Shift) & s_BitmapByteMask);
+    destination[offset + 3u] = cast<u8>((value >> s_BitmapByte3Shift) & s_BitmapByteMask);
+}
+
+b8 IsBitmapBgraFormat(in FormatEnum format){
+    b8 isBgra = false;
+    native(in format, mut isBgra){
+        isBgra = format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
+    }
+    return isBgra;
+}
+
+b8 IsSupportedFramebufferSdrFormat(in FormatEnum format){
+    b8 supported = false;
+    native(in format, mut supported){
+        supported = format == Core::Format::RGBA8_UNORM
+            || format == Core::Format::RGBA8_UNORM_SRGB
+            || format == Core::Format::BGRA8_UNORM
+            || format == Core::Format::BGRA8_UNORM_SRGB
+        ;
+    }
+    return supported;
+}
+
+class BitmapCaptureWriter{
+    public BitmapCaptureWriter(in TextureDesc captureDescription){
+        this.m_width = captureDescription.width;
+        this.m_height = captureDescription.height;
+        this.m_format = captureDescription.format;
+    }
+
+    public b8 write(in GlobalPath outputPath, in Span<u8> sourceBytes, in usize sourceRowPitch)const{
+        const u32 width = this.m_width;
+        const u32 height = this.m_height;
+        if(width > s_BitmapMaxSignedDimension || height > s_BitmapMaxSignedDimension)
+            return false;
+
+        const u64 sourceRowBytes64 = cast<u64>(width) * cast<u64>(s_BitmapSourceBytesPerPixel);
+        const u64 bitmapRowBytes64 = cast<u64>(width) * cast<u64>(s_BitmapBytesPerPixel);
+        if(sourceRowBytes64 > s_BitmapMaxU32Bytes || bitmapRowBytes64 > s_BitmapMaxU32Bytes - 3u)
+            return false;
+        if(cast<u64>(sourceRowPitch) < sourceRowBytes64)
+            return false;
+
+        const u64 bitmapRowPitch64 = (bitmapRowBytes64 + 3u) & ~cast<u64>(3u);
+        const u64 bitmapPixelBytes64 = bitmapRowPitch64 * cast<u64>(height);
+        if(bitmapPixelBytes64 > s_BitmapMaxU32Bytes - cast<u64>(s_BitmapPixelOffset))
+            return false;
+
+        if(height > 0u){
+            const u64 lastRowIndex = cast<u64>(height - 1u);
+            const u64 availableBytes = cast<u64>(sourceBytes.size());
+            if(availableBytes < sourceRowBytes64)
+                return false;
+            if(sourceRowPitch > 0u && lastRowIndex > (availableBytes - sourceRowBytes64) / cast<u64>(sourceRowPitch))
+                return false;
+        }
+
+        const usize bitmapRowPitch = cast<usize>(bitmapRowPitch64);
+        const usize bitmapPixelBytes = cast<usize>(bitmapPixelBytes64);
+        const usize bitmapFileBytes = s_BitmapPixelOffset + bitmapPixelBytes;
+
+        Vector<u8> bitmapBytes;
+        bitmapBytes.resize(bitmapFileBytes);
+        bitmapBytes[0u] = s_BitmapMagicB;
+        bitmapBytes[1u] = s_BitmapMagicM;
+        WriteBitmapU32LE(cast<u32>(bitmapFileBytes), 2u, bitmapBytes);
+        WriteBitmapU32LE(cast<u32>(s_BitmapPixelOffset), 10u, bitmapBytes);
+        WriteBitmapU32LE(cast<u32>(s_BitmapInfoHeaderSize), s_BitmapFileHeaderSize, bitmapBytes);
+        WriteBitmapU32LE(width, 18u, bitmapBytes);
+        WriteBitmapU32LE(height, 22u, bitmapBytes);
+        WriteBitmapU16LE(s_BitmapPlanes, 26u, bitmapBytes);
+        WriteBitmapU16LE(s_BitmapBitsPerPixel, 28u, bitmapBytes);
+        WriteBitmapU32LE(cast<u32>(bitmapPixelBytes), 34u, bitmapBytes);
+
+        const b8 sourceIsBgra = IsBitmapBgraFormat(this.m_format);
+        for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
+            const usize sourceY = cast<usize>(height - 1u - bitmapY);
+            const usize sourceRowOffset = sourceY * sourceRowPitch;
+            const usize bitmapRowOffset = s_BitmapPixelOffset + cast<usize>(bitmapY) * bitmapRowPitch;
+            for(u32 x = 0u; x < width; ++x){
+                const usize sourcePixel = sourceRowOffset + cast<usize>(x) * s_BitmapSourceBytesPerPixel;
+                const usize bitmapPixel = bitmapRowOffset + cast<usize>(x) * s_BitmapBytesPerPixel;
+                if(sourceIsBgra){
+                    bitmapBytes[bitmapPixel] = sourceBytes[sourcePixel];
+                    bitmapBytes[bitmapPixel + 1u] = sourceBytes[sourcePixel + 1u];
+                    bitmapBytes[bitmapPixel + 2u] = sourceBytes[sourcePixel + 2u];
+                }
+                else{
+                    bitmapBytes[bitmapPixel] = sourceBytes[sourcePixel + 2u];
+                    bitmapBytes[bitmapPixel + 1u] = sourceBytes[sourcePixel + 1u];
+                    bitmapBytes[bitmapPixel + 2u] = sourceBytes[sourcePixel];
+                }
+            }
+        }
+
+        b8 wroteAtomically = false;
+        b8 warnIncompleteRemove = false;
+        b8 warnUncommittedRemove = false;
+        native(in outputPath, in bitmapBytes, mut wroteAtomically, mut warnIncompleteRemove, mut warnUncommittedRemove){
+            Core::Alloc::ScratchArena scratchArena(s_SmokeNameSmokeFramebufferCaptureBitmap);
+            const ::Path<Core::Alloc::ScratchArena> targetPath(scratchArena, outputPath);
+            const auto outputDirectory = targetPath.parentPath();
+            if(outputDirectory.empty() || EnsureDirectories(outputDirectory)){
+                ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, targetPath);
+                partialPath += NWB_TEXT(".partial");
+                if(!WriteBinaryFile(partialPath, bitmapBytes)){
+                    if(!RemoveFile(partialPath))
+                        warnIncompleteRemove = true;
+                }
+                else if(!RenamePath(partialPath, targetPath)){
+                    if(!RemoveFile(partialPath))
+                        warnUncommittedRemove = true;
+                }
+                else{
+                    wroteAtomically = true;
+                }
+            }
+        }
+        if(warnIncompleteRemove)
+            warning("FramebufferCapture: failed to remove an incomplete partial capture");
+        if(warnUncommittedRemove)
+            warning("FramebufferCapture: failed to remove an uncommitted partial capture");
+        return wroteAtomically;
+    }
+
+    private u32 m_width;
+    private u32 m_height;
+    private FormatEnum m_format;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

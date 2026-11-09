@@ -404,16 +404,7 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
 void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
     if(statementsNeedSimdFloatingPointEnv(method.body))
         out.append("#pragma STDC FENV_ACCESS ON\r\n");
-    if(method.isOverride){
-        for(const ParamDecl& param : method.params){
-            if(!param.name.empty() && !__hidden_adhd_source_emitter::StmtsReferenceIdentifier(method.body, param.name)){
-                emitIndent(out, indent);
-                out.append("(void)");
-                out.append(param.name.data(), param.name.size());
-                out.append(";\r\n");
-            }
-        }
-    }
+    emitUnusedParamSuppressions(out, method.params, method.body, indent);
     if(method.usesScratchArena)
         emitScratchArenaPrologue(out, indent, method.name);
     if(method.usesTaskScope)
@@ -432,6 +423,17 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
 
 b8 SourceEmitter::statementsNeedSimdFloatingPointEnv(const Span<const Stmt* const> statements)const noexcept{
     return __hidden_adhd_source_emitter::StatementsNeedSimdFloatingPointEnv(statements, m_symbols);
+}
+
+void SourceEmitter::emitUnusedParamSuppressions(MString& out, const Span<const ParamDecl> params, const Span<const Stmt* const> statements, const u32 indent)const{
+    for(const ParamDecl& param : params){
+        if(!param.name.empty() && !__hidden_adhd_source_emitter::StmtsReferenceIdentifier(statements, param.name)){
+            emitIndent(out, indent);
+            out.append("(void)");
+            out.append(param.name.data(), param.name.size());
+            out.append(";\r\n");
+        }
+    }
 }
 
 void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<const FieldDecl* const> orderedFields, const MethodDecl& ctor)const{

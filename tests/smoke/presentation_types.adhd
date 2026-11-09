@@ -13,6 +13,9 @@ native{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_SmokeScratchNameTestsSmokeReflectionFrameGraph = "tests/smoke/reflection_frame_graph";
 const Name s_SmokeNameDepthWarpProbeCoverage = "DepthWarpProbeCoverage";
 const Name s_SmokeNameDepthWarpProbeWarp = "DepthWarpProbeWarp";
@@ -72,6 +75,9 @@ const Name s_PresentationTimingNamePrepareResourcesFailed = "graphics.prepare_re
 const Name s_PresentationTimingNameFramePreamble = "graphics.frame_preamble";
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Track frame intervals and count idle stalls of 50ms or more once per gap.
 class PresentationPacingSample{
     public f64 wallMsPerPresentation;
@@ -115,7 +121,6 @@ class PresentationFpsSample{
         return 0.0;
     }
 }
-
 
 
 class GpuPassTimingScopeAccum{

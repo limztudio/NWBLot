@@ -3,12 +3,6 @@
 
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
 #include <tests/common/floating_point_environment_guard.adhd.h>
 
 #include <global/array.h>
@@ -20,101 +14,23 @@ native{
 #include <global/text_utils.h>
 #include <global/timer.h>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SimdOptimizationBenchmark{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_DataCount = 64u;
-inline constexpr u64 s_InitialSeed = 0x8923409102431291ull;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Dataset{
-    Array<Double4, s_DataCount> left = {};
-    Array<Double4, s_DataCount> right = {};
-    Array<f64, s_DataCount> angles = {};
-};
-
-struct alignas(SIMDVectorDouble) Observation{
-    SIMDVectorDouble value;
-    i32 flags = 0;
-    i32 error = 0;
-};
-static_assert(alignof(Expected<Observation>) >= alignof(Observation));
-
-struct NoAdditionalReductionCheck{
-    b8 operator()(const SIMDVectorDouble, const SIMDVectorDouble, const Observation&, const Observation&, const usize, u32&)const noexcept{ return true; }
-};
-
-struct VerificationSweep{
-    u32 failures = 0u;
-    b8 environmentAvailable = false;
-};
-
-struct MeasureOptions{
-    b8 candidate = false;
-    b8 latency = false;
-    usize iterations = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline u64 NextSeed(u64& seed)noexcept{
-    seed ^= seed << 13u;
-    seed ^= seed >> 7u;
-    seed ^= seed << 17u;
-    return seed;
-}
-
-NWB_NOINLINE inline void InitializeDataset(u64 seed, Dataset& dataset)noexcept{
-    const SIMDVectorDouble step = VectorDoubleReplicate(0x1p-10);
-    for(usize index = 0u; index < s_DataCount; ++index){
-        // Keep the seed draw order: left and right per lane, then the angle.
-        Array<f64, 4> leftSteps = {};
-        Array<f64, 4> rightSteps = {};
-        for(usize lane = 0u; lane < 4u; ++lane){
-            leftSteps[lane] = static_cast<f64>(NextSeed(seed) % 8192u);
-            rightSteps[lane] = static_cast<f64>(NextSeed(seed) % 64u + 1u);
-        }
-        StoreDouble(VectorDoubleMultiplyAddExpression(VectorDoubleSet(leftSteps[0], leftSteps[1], leftSteps[2], leftSteps[3]), step, VectorDoubleReplicate(-4.0)), dataset.left[index]);
-        StoreDouble(VectorDoubleMultiply(VectorDoubleSet(rightSteps[0], rightSteps[1], rightSteps[2], rightSteps[3]), step), dataset.right[index]);
-        dataset.angles[index] = static_cast<f64>(NextSeed(seed) % 2048u + 1u) * 0x1p-10;
-    }
-}
-
-[[nodiscard]] inline b8 EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    for(usize lane = 0u; lane < 4u; ++lane){
-        if(VectorDoubleGetIntByIndex(lhs, lane) != VectorDoubleGetIntByIndex(rhs, lane))
-            return false;
-    }
-    return true;
-}
-
+namespace SimdBaselineKernels{
 // The references use the same floating-point environment as the candidates.
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY), VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY));
     return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
 }
 
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMask3), VectorDoubleAndInt(rhs, s_DoubleSIMDMask3));
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
 }
 
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(lhs, rhs);
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
@@ -122,99 +38,23 @@ NWB_NOINLINE inline void InitializeDataset(u64 seed, Dataset& dataset)noexcept{
     return VectorDoubleAdd(xyz, VectorDoubleSplatW(product));
 }
 
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BaselineSum(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Sum(const SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
     const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
     return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));
 }
-
-template<typename Evaluate>
-[[nodiscard]] Expected<Observation> Observe(Evaluate&& evaluate)noexcept(
-    noexcept(Observation{})
-    && noexcept(DeclVal<Observation&>().value = DeclVal<Evaluate&>()())
-    && noexcept(Expected<Observation>(DeclVal<Observation&&>()))
-    && noexcept(Expected<Observation>(MakeUnexpected(Failure{})))
-){
-#pragma STDC FENV_ACCESS ON
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-        return MakeUnexpected(Failure{});
-    errno = E2BIG;
-    Observation observation;
-    observation.value = evaluate();
-    observation.flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    observation.error = errno;
-    return observation;
 }
 
-[[nodiscard]] inline b8 EqualObservation(const Observation& lhs, const Observation& rhs)noexcept{
-    return EqualBits(lhs.value, rhs.value) && lhs.flags == rhs.flags && lhs.error == rhs.error;
-}
-
-template<typename Baseline, typename Candidate, typename Additional = NoAdditionalReductionCheck>
-u32 VerifyReductionCases(const StringView operation, Baseline&& baseline, Candidate&& candidate, Additional&& additional, u64& seed){
-#pragma STDC FENV_ACCESS ON
-    constexpr Array<u64, 14> s_Exceptional = {
-        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
-        0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull,
-    };
-    u32 failures = 0u;
-    for(usize index = 0u; index < 16384u; ++index){
-        Array<u64, 8> bits = {};
-        for(auto& value : bits){
-            const u64 random = NextSeed(seed);
-            value = index < 8192u ? s_Exceptional[random % s_Exceptional.size()] : random;
-        }
-        const SIMDVectorDouble lhs = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]), rhs = VectorDoubleSetInt(bits[4], bits[5], bits[6], bits[7]);
-        const auto expected = Observe([&]()noexcept(noexcept(DeclVal<void(*)(Decay_T<decltype(baseline(lhs, rhs))>)noexcept>()(baseline(lhs, rhs)))){ return baseline(lhs, rhs); });
-        if(!expected)
-            return failures + 1u;
-        const auto actual = Observe([&]()noexcept(noexcept(DeclVal<void(*)(Decay_T<decltype(candidate(lhs, rhs))>)noexcept>()(candidate(lhs, rhs)))){ return candidate(lhs, rhs); });
-        if(!actual)
-            return failures + 1u;
-        if(!additional(lhs, rhs, *expected, *actual, index, failures))
-            return failures + 1u;
-        if(!EqualObservation(*expected, *actual)){
-            if(++failures <= 3u)
-                NWB_COUT << "reduction mismatch operation=" << operation << " case=" << index << " flags=" << expected->flags << '/' << actual->flags << " errno=" << expected->error << '/' << actual->error << '\n';
-        }
-    }
-    return failures;
-}
-
-template<typename Verify>
-VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept(noexcept(DeclVal<u32&>() += DeclVal<Verify&>()(DeclVal<u64&>()))){
-#pragma STDC FENV_ACCESS ON
-    const auto environment = HoldFloatingPointExceptions();
-    if(!environment)
-        return { 1u, false };
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*environment);
-
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    u64 seed = s_InitialSeed;
-    u32 failures = 0u;
-    for(const i32 mode : s_Modes){
-        if(!SetFloatingPointRoundingMode(mode)){
-            ++failures;
-            break;
-        }
-        failures += verify(seed);
-    }
-    if(!SetFloatingPointEnvironment(*environment))
-        ++failures;
-    restoreEnvironment.release();
-    return { failures, true };
-}
-
-template<usize LanesPerIteration, typename ReduceFn>
-NWB_NOINLINE SIMDVectorDouble ThroughputWorkload(const Dataset& data, const usize iterations, ReduceFn&& reduce)noexcept{
+template<usize LanesPerIteration, typename DatasetT, typename ReduceFn>
+NWB_NOINLINE SIMDVectorDouble ThroughputWorkload(const DatasetT& data, const usize dataCount, const usize iterations, ReduceFn&& reduce)noexcept{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
     for(usize lane = 0u; lane < 8u; ++lane)
         accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
 #pragma clang loop unroll(full)
         for(usize lane = 0u; lane < LanesPerIteration; ++lane){
-            const usize index = (iteration * LanesPerIteration + lane) % s_DataCount;
+            const usize index = (iteration * LanesPerIteration + lane) % dataCount;
             accumulators[lane] = VectorDoubleAdd(accumulators[lane], reduce(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
         }
     }
@@ -223,62 +63,374 @@ NWB_NOINLINE SIMDVectorDouble ThroughputWorkload(const Dataset& data, const usiz
         result = VectorDoubleAdd(result, accumulators[lane]);
     return result;
 }
-
-template<typename Workload>
-void Measure(const StringView operation, const b8 candidate, const b8 latency, const usize operations, Workload&& workload){
-    const Timer start = TimerNow();
-    const SIMDVectorDouble result = workload();
-    const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
-    u64 checksum = 0u;
-    for(usize lane = 0u; lane < 4u; ++lane)
-        checksum ^= VectorDoubleGetIntByIndex(result, lane) + static_cast<u64>(lane);
-    NWB_COUT
-        << "{\"operation\":\"" << operation << "\",\"variant\":\"" << (candidate ? "candidate" : "baseline")
-        << "\",\"workload\":\"" << (latency ? "latency" : "throughput") << "\",\"operations\":" << operations
-        << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << (nanoseconds / static_cast<f64>(operations))
-        << ",\"checksum\":\"" << checksum << "\"}\n"
-    ;
-}
-
-template<typename CandidateWorkload, typename BaselineWorkload>
-void SelectVariant(const StringView operation, const b8 candidate, const b8 latency, const usize operations, CandidateWorkload&& candidateWorkload, BaselineWorkload&& baselineWorkload){
-    if(candidate)
-        Measure(operation, true, latency, operations, Forward<CandidateWorkload>(candidateWorkload));
-    else
-        Measure(operation, false, latency, operations, Forward<BaselineWorkload>(baselineWorkload));
-}
-
-[[nodiscard]] inline Expected<MeasureOptions> ParseMeasureOptions(const char* const* argv, const usize maximumIterations, const b8 allowLatency)noexcept{
-    const b8 candidate = StringView(argv[3]) == "candidate";
-    if(!candidate && StringView(argv[3]) != "baseline")
-        return MakeUnexpected(Failure{});
-    const b8 latency = StringView(argv[5]) == "latency";
-    if((latency && !allowLatency) || (!latency && StringView(argv[5]) != "throughput"))
-        return MakeUnexpected(Failure{});
-    const auto parsedIterations = ParseU64(AStringView(argv[4]));
-    if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > maximumIterations)
-        return MakeUnexpected(Failure{});
-    return MeasureOptions{ candidate, latency, static_cast<usize>(*parsedIterations) };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_DataCount = 64u;
+const u64 s_InitialSeed = 0x8923409102431291ull;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+interface IDoubleBinaryEvaluator{
+    VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const;
 }
 
-u64 AdvanceBenchmarkSeed(mut u64 seed){
+interface IAdditionalReductionCheck{
+    b8 check(
+        in VectorDouble lhs,
+        in VectorDouble rhs,
+        in Observation expected,
+        in Observation actual,
+        in usize index,
+        mut u32 failures
+    )const;
+}
+
+interface IRoundingModeVerifier{
+    u32 verify(mut u64 seed)const;
+}
+
+interface IDoubleWorkloadRunner{
+    VectorDouble run()const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Dataset{
+    public Array<f64x4, s_DataCount> left;
+    public Array<f64x4, s_DataCount> right;
+    public Array<f64, s_DataCount> angles;
+}
+
+class Observation{
+    public Array<u64, 4> bits;
+    public i32 flags = 0;
+    public i32 error = 0;
+}
+
+class NoAdditionalReductionCheck : IAdditionalReductionCheck{
+    public b8 check(
+        in VectorDouble lhs,
+        in VectorDouble rhs,
+        in Observation expected,
+        in Observation actual,
+        in usize index,
+        mut u32 failures
+    )const override{
+        return true;
+    }
+}
+
+class VerificationSweep{
+    public u32 failures = 0u;
+    public b8 environmentAvailable = false;
+}
+
+class MeasureOptions{
+    public b8 candidate = false;
+    public b8 latency = false;
+    public usize iterations = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 NextSeed(mut u64 seed){
     seed ^= seed << 13u;
     seed ^= seed >> 7u;
     seed ^= seed << 17u;
     return seed;
 }
 
+void InitializeDataset(in u64 initialSeed, mut Dataset dataset){
+    u64 seed = initialSeed;
+    for(usize index = 0u; index < s_DataCount; ++index){
+        // Keep the seed draw order: left and right per lane, then the angle.
+        Array<f64, 4> leftSteps;
+        Array<f64, 4> rightSteps;
+        for(usize lane = 0u; lane < 4u; ++lane){
+            leftSteps[lane] = cast<f64>(NextSeed(seed) % 8192u);
+            rightSteps[lane] = cast<f64>(NextSeed(seed) % 64u + 1u);
+        }
+        mut f64x4 leftSlot = dataset.left[index];
+        mut f64x4 rightSlot = dataset.right[index];
+        native(in leftSteps, in rightSteps, mut leftSlot, mut rightSlot){
+            const SIMDVectorDouble step = VectorDoubleReplicate(0x1p-10);
+            StoreDouble(VectorDoubleMultiplyAddExpression(VectorDoubleSet(leftSteps[0], leftSteps[1], leftSteps[2], leftSteps[3]), step, VectorDoubleReplicate(-4.0)), leftSlot);
+            StoreDouble(VectorDoubleMultiply(VectorDoubleSet(rightSteps[0], rightSteps[1], rightSteps[2], rightSteps[3]), step), rightSlot);
+        }
+        dataset.angles[index] = cast<f64>(NextSeed(seed) % 2048u + 1u) * 0x1p-10;
+    }
+}
+
+b8 EqualBits(in VectorDouble lhs, in VectorDouble rhs){
+    b8 equal = true;
+    native(in lhs, in rhs, mut equal){
+        for(usize lane = 0u; lane < 4u; ++lane){
+            if(VectorDoubleGetIntByIndex(lhs, lane) != VectorDoubleGetIntByIndex(rhs, lane)){
+                equal = false;
+                break;
+            }
+        }
+    }
+    return equal;
+}
+
+b8 EqualObservation(in Observation lhs, in Observation rhs){
+    for(usize lane = 0u; lane < 4u; ++lane){
+        if(lhs.bits[lane] != rhs.bits[lane])
+            return false;
+    }
+    return lhs.flags == rhs.flags && lhs.error == rhs.error;
+}
+
+// The references use the same floating-point environment as the candidates.
+VectorDouble BaselineDot2(in VectorDouble lhs, in VectorDouble rhs){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in lhs, in rhs, mut result){
+        result = SimdBaselineKernels::Dot2(lhs, rhs);
+    }
+    return result;
+}
+
+VectorDouble BaselineDot3(in VectorDouble lhs, in VectorDouble rhs){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in lhs, in rhs, mut result){
+        result = SimdBaselineKernels::Dot3(lhs, rhs);
+    }
+    return result;
+}
+
+VectorDouble BaselineDot4(in VectorDouble lhs, in VectorDouble rhs){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in lhs, in rhs, mut result){
+        result = SimdBaselineKernels::Dot4(lhs, rhs);
+    }
+    return result;
+}
+
+VectorDouble BaselineSum(in VectorDouble value){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in value, mut result){
+        result = SimdBaselineKernels::Sum(value);
+    }
+    return result;
+}
+
+Expected<Observation> ObserveBinary<EvalT : IDoubleBinaryEvaluator>(
+    in EvalT evaluator,
+    in VectorDouble lhs,
+    in VectorDouble rhs
+){
+    Observation observation = Observation();
+    b8 cleared = false;
+    native(in evaluator, in lhs, in rhs, mut observation, mut cleared){
+#pragma STDC FENV_ACCESS ON
+        if(ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+            errno = E2BIG;
+            const SIMDVectorDouble value = evaluator.evaluate(lhs, rhs);
+            observation.flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+            observation.error = errno;
+            for(usize lane = 0u; lane < 4u; ++lane)
+                observation.bits[lane] = VectorDoubleGetIntByIndex(value, lane);
+            cleared = true;
+        }
+    }
+    if(!cleared)
+        return MakeUnexpected(Failure());
+    return observation;
+}
+
+u32 VerifyReductionCases<
+    BaselineT : IDoubleBinaryEvaluator,
+    CandidateT : IDoubleBinaryEvaluator,
+    AdditionalT : IAdditionalReductionCheck
+>(
+    in StringView operation,
+    in BaselineT baseline,
+    in CandidateT candidate,
+    in AdditionalT additional,
+    mut u64 seed
+){
+    Array<u64, 14> exceptional;
+    exceptional[0] = 0u;
+    exceptional[1] = 0x8000000000000000ull;
+    exceptional[2] = 1u;
+    exceptional[3] = 0x8000000000000001ull;
+    exceptional[4] = 0x0010000000000000ull;
+    exceptional[5] = 0x3ff0000000000000ull;
+    exceptional[6] = 0xbff0000000000000ull;
+    exceptional[7] = 0x7fefffffffffffffull;
+    exceptional[8] = 0x7ff0000000000000ull;
+    exceptional[9] = 0xfff0000000000000ull;
+    exceptional[10] = 0x7ff8000000000123ull;
+    exceptional[11] = 0xfff8000000000124ull;
+    exceptional[12] = 0x7ff0000000000125ull;
+    exceptional[13] = 0xfff0000000000126ull;
+
+    u32 failures = 0u;
+    for(usize index = 0u; index < 16384u; ++index){
+        Array<u64, 8> bits;
+        for(usize word = 0u; word < bits.size(); ++word){
+            const u64 random = NextSeed(seed);
+            if(index < 8192u)
+                bits[word] = exceptional[cast<usize>(random % cast<u64>(exceptional.size()))];
+            else
+                bits[word] = random;
+        }
+        VectorDouble lhs = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        VectorDouble rhs = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in bits, mut lhs, mut rhs){
+            lhs = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]);
+            rhs = VectorDoubleSetInt(bits[4], bits[5], bits[6], bits[7]);
+        }
+        const Expected<Observation> expected = ObserveBinary(baseline, lhs, rhs);
+        if(!expected.has_value())
+            return failures + 1u;
+        const Expected<Observation> actual = ObserveBinary(candidate, lhs, rhs);
+        if(!actual.has_value())
+            return failures + 1u;
+        if(!additional.check(lhs, rhs, expected.value(), actual.value(), index, failures))
+            return failures + 1u;
+        if(!EqualObservation(expected.value(), actual.value())){
+            ++failures;
+            if(failures <= 3u){
+                const i32 expectedFlags = expected.value().flags;
+                const i32 actualFlags = actual.value().flags;
+                const i32 expectedError = expected.value().error;
+                const i32 actualError = actual.value().error;
+                native(in operation, in index, in expectedFlags, in actualFlags, in expectedError, in actualError){
+                    NWB_COUT << "reduction mismatch operation=" << operation << " case=" << index << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedError << '/' << actualError << '\n';
+                }
+            }
+        }
+    }
+    return failures;
+}
+
+VerificationSweep VerifyRoundingModes<VerifyT : IRoundingModeVerifier>(in VerifyT verifier){
+    VerificationSweep sweep = VerificationSweep();
+    u64 seed = s_InitialSeed;
+    native(in verifier, mut sweep, mut seed){
+#pragma STDC FENV_ACCESS ON
+        const auto environment = HoldFloatingPointExceptions();
+        if(!environment){
+            sweep.failures = 1u;
+            sweep.environmentAvailable = false;
+        }
+        else{
+            NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*environment);
+            constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+            u32 failures = 0u;
+            for(const i32 mode : s_Modes){
+                if(!SetFloatingPointRoundingMode(mode)){
+                    ++failures;
+                    break;
+                }
+                failures += verifier.verify(seed);
+            }
+            if(!SetFloatingPointEnvironment(*environment))
+                ++failures;
+            restoreEnvironment.release();
+            sweep.failures = failures;
+            sweep.environmentAvailable = true;
+        }
+    }
+    return sweep;
+}
+
+void MeasureWorkload<WorkloadT : IDoubleWorkloadRunner>(
+    in StringView operation,
+    in b8 candidate,
+    in b8 latency,
+    in usize operations,
+    in WorkloadT workload
+){
+    const Timer start = TimerNow();
+    const VectorDouble result = workload.run();
+    f64 nanoseconds = 0.0;
+    u64 checksum = 0u;
+    native(in start, in result, mut nanoseconds, mut checksum){
+        nanoseconds = DurationInNS<f64>(TimerNow(), start);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            checksum ^= VectorDoubleGetIntByIndex(result, lane) + static_cast<u64>(lane);
+    }
+    StringView variantLabel = "baseline";
+    if(candidate)
+        variantLabel = "candidate";
+    StringView workloadLabel = "throughput";
+    if(latency)
+        workloadLabel = "latency";
+    const f64 nsPerOp = nanoseconds / cast<f64>(operations);
+    native(in operation, in variantLabel, in workloadLabel, in operations, in nanoseconds, in nsPerOp, in checksum){
+        NWB_COUT
+            << "{\"operation\":\"" << operation << "\",\"variant\":\"" << variantLabel
+            << "\",\"workload\":\"" << workloadLabel << "\",\"operations\":" << operations
+            << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nsPerOp
+            << ",\"checksum\":\"" << checksum << "\"}\n"
+        ;
+    }
+}
+
+void SelectVariant<
+    CandidateWorkloadT : IDoubleWorkloadRunner,
+    BaselineWorkloadT : IDoubleWorkloadRunner
+>(
+    in StringView operation,
+    in b8 candidate,
+    in b8 latency,
+    in usize operations,
+    in CandidateWorkloadT candidateWorkload,
+    in BaselineWorkloadT baselineWorkload
+){
+    if(candidate)
+        MeasureWorkload(operation, true, latency, operations, candidateWorkload);
+    else
+        MeasureWorkload(operation, false, latency, operations, baselineWorkload);
+}
+
+Expected<MeasureOptions> ParseMeasureOptions(
+    in StringView variantArg,
+    in StringView iterationsArg,
+    in StringView workloadArg,
+    in usize maximumIterations,
+    in b8 allowLatency
+){
+    const b8 candidate = variantArg == "candidate";
+    if(!candidate && variantArg != "baseline")
+        return MakeUnexpected(Failure());
+    const b8 latency = workloadArg == "latency";
+    if((latency && !allowLatency) || (!latency && workloadArg != "throughput"))
+        return MakeUnexpected(Failure());
+
+    usize parsedValue = 0u;
+    b8 parsedOk = false;
+    native(in iterationsArg, in maximumIterations, mut parsedValue, mut parsedOk){
+        const auto parsedIterations = ParseU64(iterationsArg);
+        if(parsedIterations && *parsedIterations != 0u && *parsedIterations <= maximumIterations){
+            parsedValue = static_cast<usize>(*parsedIterations);
+            parsedOk = true;
+        }
+    }
+    if(!parsedOk)
+        return MakeUnexpected(Failure());
+
+    MeasureOptions options = MeasureOptions();
+    options.candidate = candidate;
+    options.latency = latency;
+    options.iterations = parsedValue;
+    return options;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

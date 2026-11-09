@@ -3,6 +3,7 @@ nwb_target_adhd_sources(nwb_assets_graphics_tests NAMESPACE "NWB::Tests::AssetsG
     "${CMAKE_CURRENT_LIST_DIR}/case_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/suite.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_bunch_and_cache_cases.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_paths_and_publication_cases.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_reload_and_csg_cases.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_material_and_mesh_cases.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_metadata_and_model_cases.adhd"

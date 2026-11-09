@@ -29,8 +29,7 @@ native{
 #include <global/timer.h>
 
 namespace NWB::Tests::Smoke{
-using GlobalPath = ::Path<Core::Alloc::GlobalArena>;
-using GlobalPathVector = Vector<GlobalPath, Core::Alloc::GlobalArena>;
+using CsgVisibleMaterialRef = SmokeMaterialRef;
 
 inline constexpr AStringView s_GiTemporalEnvironment = "NWB_CSG_GI_TEMPORAL";
 inline constexpr f32 s_CameraStartDepth = 6.5f;
@@ -89,7 +88,6 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     public CsgVisibleSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = CreateCsgVisibleWorldOrDie(context);
-        this.m_capturePaths = GlobalPathVector(context.objectArena);
         this.m_fpsProbe = FpsProbe(CsgVisibleFpsLabel());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(CsgVisibleFpsLabel());
     }
@@ -292,7 +290,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                 return;
             }
             this->m_nextCaptureFrame += this->m_temporalFrameInterval;
-            if(!this->m_capture->rearm(Move(this->m_capturePaths[this->m_temporalSample])))
+            if(!this->m_capture->rearm(AStringView(this->m_capturePaths[this->m_temporalSample])))
                 this->m_context->requestQuit();
         }
     }
@@ -302,7 +300,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     private NotNullUniquePtr<World> m_world;
     private FpsProbe m_fpsProbe;
     private GpuPassTimingProbe m_gpuPassTimingProbe;
-    private GlobalPathVector m_capturePaths;
+    private Vector<String> m_capturePaths;
     private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
     private Timer m_temporalWarmupStart = Timer();
     private u64 m_nextCaptureFrame = ~cast<u64>(0u);

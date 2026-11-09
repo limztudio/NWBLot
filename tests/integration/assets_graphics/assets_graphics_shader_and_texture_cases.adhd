@@ -1,806 +1,68 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 AssetsGraphicsShaderAndTextureCasesReady(in u64 value){
-    return value != 0u;
-}
+#include "suite.adhd"
+#include <tests/common/gtest_macros.adhd>
 
 native{
-#include <tests/integration/assets_graphics/suite.adhd.h>
-
-
-
 #include <impl/assets_shader/source_dependencies.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_shader_dependency_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_MaterialBindIncludes = "material_bind_includes";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_directives");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    const Path sourcePath = root / "source.slang";
-    const Path trackedInclude = root / "tracked.slangi";
-    static constexpr AStringView s_Source = "/*\n#include \"missing_block.slangi\"\n*/\n" "// #include \"missing_line.slangi\"\n" "#include \\\r\n\"tracked.slangi\"\n";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, s_Source));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(trackedInclude, "static const uint trackedValue = 1u;\n"));
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
-    ASSERT_EQ(dependencies.size(), 2u);
-    ASSERT_NE(FindIf(dependencies.begin(), dependencies.end(), [&trackedInclude](const Path& path)noexcept{
-        return path == trackedInclude;
-    }), dependencies.end()
-    );
-    u64 beforeChecksum = 0u;
-    u64 afterChecksum = 0u;
-    const auto dependencyResult4 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(dependencyResult4);
-    beforeChecksum = dependencyResult4->checksum;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
-    const auto dependencyResult3 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(dependencyResult3);
-    afterChecksum = dependencyResult3->checksum;
-    EXPECT_NE(beforeChecksum, afterChecksum);
-    EXPECT_EQ(logger.errorCount(), 0u);
-
-    static constexpr Array<AStringView, 3u> s_UnplannedIncludes = { "#define GENERATED_INCLUDE \"tracked.slangi\"\n#include GENERATED_INCLUDE\n", "#include_next \"tracked.slangi\"\n", "#import \"tracked.slangi\"\n", };
-    for(const AStringView source : s_UnplannedIncludes){
-        SCOPED_TRACE(source);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, source));
-        EXPECT_FALSE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
-    }
-    const usize failureErrors = logger.errorCount();
-    EXPECT_GT(failureErrors, 0u);
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, s_Source));
-    EXPECT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
-    EXPECT_EQ(logger.errorCount(), failureErrors);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
-    TestArena testArena;
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_checksum_alias");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-
-    const Path relativeIncludePath = Path(testArena.arena, "project") / "material_interfaces" / "test_surface.bind";
-    const Path firstGeneratedRoot = root / "first" / s_MaterialBindIncludes;
-    const Path secondGeneratedRoot = root / "second" / s_MaterialBindIncludes;
-    const Path firstGeneratedInclude = firstGeneratedRoot / relativeIncludePath;
-    const Path secondGeneratedInclude = secondGeneratedRoot / relativeIncludePath;
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(firstGeneratedInclude, "generated include\n"));
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(secondGeneratedInclude, "generated include\n"));
-
-    NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-
-    NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
-    NWB::Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
-    NWB::Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);
-    firstDependencies.push_back(firstGeneratedInclude);
-    secondDependencies.push_back(secondGeneratedInclude);
-
-    u64 firstChecksum = 0u;
-    u64 secondChecksum = 0u;
-    const auto dependencyResult2 = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
-    ASSERT_TRUE(dependencyResult2);
-    firstChecksum = dependencyResult2->checksum;
-    const auto dependencyResult1 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
-    ASSERT_TRUE(dependencyResult1);
-    secondChecksum = dependencyResult1->checksum;
-    EXPECT_EQ(firstChecksum, secondChecksum);
-
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
-    u64 changedChecksum = 0u;
-    const auto dependencyResult0 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
-    ASSERT_TRUE(dependencyResult0);
-    changedChecksum = dependencyResult0->checksum;
-    EXPECT_NE(firstChecksum, changedChecksum);
-
-#if defined(NWB_FINAL)
-    const Path unaliasedDependency = root / "outside" / "unaliased.slangi";
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(unaliasedDependency, "outside alias root\n"));
-    NWB::Impl::ShaderCook::CookVector<Path> unaliasedDependencies(testArena.arena);
-    unaliasedDependencies.push_back(unaliasedDependency);
-
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-    EXPECT_FALSE(Impl::ShaderCook::ComputeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the declared dependency root aliases")));
-#endif
-
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion){
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_search_order");
-    ASSERT_TRUE(rootResult);
-    const Path root = Move(*rootResult);
-    const Path firstRoot = root / "first";
-    const Path secondRoot = root / "second";
-    const Path sourcePath = root / "source.slang";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, "#include <choice.slangi>\nstatic const uint selectedValue = NWB_TEST_SELECTED;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(firstRoot / "choice.slangi", "#ifndef NWB_TEST_FIRST\n#define NWB_TEST_FIRST\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 1\n#endif\n#include \"../second/choice.slangi\"\n#endif\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(secondRoot / "choice.slangi", "#ifndef NWB_TEST_SECOND\n#define NWB_TEST_SECOND\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 2\n#endif\n#include \"../first/choice.slangi\"\n#endif\n"));
-
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> firstDirectories(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> secondDirectories(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
-    firstDirectories.push_back(firstRoot);
-    firstDirectories.push_back(secondRoot);
-    secondDirectories.push_back(secondRoot);
-    secondDirectories.push_back(firstRoot);
-    Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, firstDirectories, {}, scratchArena, firstDependencies));
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, secondDirectories, {}, scratchArena, secondDependencies));
-    ASSERT_EQ(firstDependencies.size(), 3u);
-    ASSERT_EQ(secondDependencies.size(), firstDependencies.size());
-    for(const Path& dependency : firstDependencies)
-        EXPECT_NE(FindIf(secondDependencies.begin(), secondDependencies.end(), [&dependency](const Path& path)noexcept{ return path == dependency; }), secondDependencies.end());
-
-    const auto firstFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, noDirectories, { { root, "source" } }, scratchArena);
-    const auto secondFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, noDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(firstFileUnion);
-    ASSERT_TRUE(secondFileUnion);
-    EXPECT_EQ(firstFileUnion->checksum, secondFileUnion->checksum);
-    const auto firstSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
-    const auto secondSearch = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, secondDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(firstSearch);
-    ASSERT_TRUE(secondSearch);
-    EXPECT_NE(firstSearch->checksum, secondSearch->checksum);
-    firstDirectories.push_back(root.parentPath());
-    const auto externalSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(externalSearch);
-    EXPECT_NE(externalSearch->checksum, firstSearch->checksum);
-    // Unused case-only search roots keep their exact spelling even on case-insensitive hosts.
-    firstDirectories.clear();
-    firstDirectories.push_back(root / "CaseOnly");
-    const auto upperCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
-    firstDirectories.clear();
-    firstDirectories.push_back(root / "caseonly");
-    const auto lowerCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(upperCaseSearch);
-    ASSERT_TRUE(lowerCaseSearch);
-    EXPECT_NE(upperCaseSearch->checksum, lowerCaseSearch->checksum);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots){
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_case_identity");
-    ASSERT_TRUE(rootResult);
-    const Path root = Move(*rootResult);
-    const Path firstRoot = root / "first";
-    const Path secondRoot = root / "second";
-    const Path upperPath = firstRoot / "Case.slangi";
-    const Path lowerPath = secondRoot / "case.slangi";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(upperPath, "same dependency bytes\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(lowerPath, "same dependency bytes\n"));
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> upperDependencies(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> lowerDependencies(testArena.arena);
-    upperDependencies.push_back(upperPath);
-    lowerDependencies.push_back(lowerPath);
-    const auto upperKey = Impl::ShaderCook::ComputeDependencyChecksum(upperDependencies, noDirectories, { { firstRoot, "source" } }, scratchArena);
-    const auto lowerKey = Impl::ShaderCook::ComputeDependencyChecksum(lowerDependencies, noDirectories, { { secondRoot, "source" } }, scratchArena);
-    ASSERT_TRUE(upperKey);
-    ASSERT_TRUE(lowerKey);
-    EXPECT_NE(upperKey->checksum, lowerKey->checksum);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs){
-#if defined(NWB_PLATFORM_WINDOWS)
-    GTEST_SKIP() << "Windows shader path duplicate policy is case insensitive";
-#endif
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_case_collection");
-    ASSERT_TRUE(rootResult);
-    const Path root = Move(*rootResult);
-    const Path sourcePath = root / "source.slang";
-    const Path upperPath = root / "Case.slangi";
-    const Path lowerPath = root / "case.slangi";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(upperPath, "static const uint upperValue = 1;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(lowerPath, "static const uint lowerValue = 2;\n"));
-    AString<Core::Alloc::ScratchArena> upperText(scratchArena);
-    ASSERT_TRUE(ReadTextFile(upperPath, upperText));
-    if(upperText != "static const uint upperValue = 1;\n"){
-        EXPECT_TRUE(RemoveAllIfExists(root));
-        GTEST_SKIP() << "Filesystem provider cannot store case-distinct shader inputs";
-    }
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, "#include \"Case.slangi\"\n#include \"case.slangi\"\n"));
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
-    Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, noDirectories, {}, scratchArena, dependencies));
-    ASSERT_EQ(dependencies.size(), 3u);
-    EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&upperPath](const Path& path)noexcept{ return path == upperPath; }), dependencies.end());
-    EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&lowerPath](const Path& path)noexcept{ return path == lowerPath; }), dependencies.end());
-    const auto firstKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(firstKey);
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(lowerPath, "static const uint lowerValue = 3;\n"));
-    const auto changedKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
-    ASSERT_TRUE(changedKey);
-    EXPECT_NE(firstKey->checksum, changedKey->checksum);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_shader_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
-#if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_default_variant_alias");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-
-    const Path assetRoot = root / "assets";
-    const Path includeMetaPath = assetRoot / "shaders" / "default_variant_include.nwb";
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(includeMetaPath, "include asset;\n\n" "asset.default_variant = \"NWB_FEATURE=0\";\n" "asset.defines = {\n" "    \"NWB_FEATURE\": [\"0\", \"1\"],\n" "};\n"));
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "default_variant_include.slangi", ""));
-
-    NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includeMetaPath, testArena, scratchArena, shaderCook));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'default_variant'")));
-
-    EXPECT_TRUE(RemoveAllIfExists(root));
-#endif
-}
-
-
-TEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_retired_type_and_stage");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    const Path metadataPath = root / "shader.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
-    Impl::ShaderCook shaderCook(testArena.arena);
-    constexpr AStringView s_ValidMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
-    constexpr Array<AStringView, 4u> s_RetiredMetadata = {
-        "shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
-        "shader asset;\nasset.entry_point = \"main\";\n",
-        "compute_shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
-        "compute_shader asset;\nasset.stage = \"ps\";\nasset.entry_point = \"main\";\n",
-    };
-    for(const AStringView metadata : s_RetiredMetadata){
-        SCOPED_TRACE(metadata);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        EXPECT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-    }
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-
-TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_ray_query_metadata");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    const Path metadataPath = root / "shader.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
-    struct MetadataCase{
-        AStringView fields;
-        b8 accepted;
-    };
-    constexpr Array<MetadataCase, 13u> s_Cases = {{
-        { "", true },
-        { "asset.ray_query = 0;\n", true },
-        { "asset.ray_query = 1;\n", true },
-        { "asset.ray_query = -1;\n", false },
-        { "asset.ray_query = 2;\n", false },
-        { "asset.ray_query = 1.0;\n", false },
-        { "asset.ray_query = \"1\";\n", false },
-        { "asset.ray_query = [];\n", false },
-        { "asset.ray_query = {};\n", false },
-        { "asset.target_profile = \"spirv_1_5\";\n", false },
-        { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false },
-        { "asset.emit_mesh_compute_shadow = 0;\n", false },
-        { "asset.emit_mesh_compute_shadow = 1;\n", false },
-    }};
-    Impl::ShaderCook shaderCook(testArena.arena);
-    for(const MetadataCase& testCase : s_Cases){
-        SCOPED_TRACE(testCase.fields);
-        Impl::ShaderCook::CookString metadata("compute_shader asset;\nasset.entry_point = \"main\";\n", testArena.arena);
-        metadata.append(testCase.fields);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
-    }
-    constexpr Array<AStringView, 3u> s_ShaderAssetTypes = { "vertex_shader", "pixel_shader", "ray_generation_shader" };
-    for(const AStringView shaderAssetType : s_ShaderAssetTypes){
-        const auto metadata = StringFormat(testArena.arena, "{} asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n", shaderAssetType);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-    }
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_transport_defines");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    const Path shaderPath = root / "shader.nwb";
-    const Path includePath = root / "include.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
-    static constexpr AStringView s_ShaderDeclaration = "compute_shader asset;\nasset.entry_point = \"main\";\n";
-    static constexpr AStringView s_RealDefines = "asset.defines = { \"PROJECT_QUALITY\": [\"0\", \"1\"] };\n";
-    const auto validShaderMetadata = StringFormat(testArena.arena, "{}{}", s_ShaderDeclaration, s_RealDefines);
-    const auto validIncludeMetadata = StringFormat(testArena.arena, "include asset;\n{}", s_RealDefines);
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
-    Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
-
-    for(const AStringView transportName : { AStringView("NWB_BINDLESS_TLAS"), AStringView("NWB_CAUSTIC_PHOTON_TRANSPORT") }){
-        SCOPED_TRACE(transportName);
-        for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
-            SCOPED_TRACE(retiredValue);
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-            auto metadataResult5 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);
-            ASSERT_TRUE(metadataResult5);
-            if(metadataResult5)
-                shaderEntry = Move(*metadataResult5);
-            ASSERT_FALSE(shaderEntry.defineValues.empty());
-            const auto obsoleteShaderMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"{}\": [\"{}\"] }};\n", s_ShaderDeclaration, transportName, retiredValue);
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
-            EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook));
-            EXPECT_FALSE(shaderEntry.defineValues.empty());
-            const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), ConvertString(transportName));
-            EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-            auto metadataResult4 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);
-            ASSERT_TRUE(metadataResult4);
-            if(metadataResult4)
-                shaderEntry = Move(*metadataResult4);
-            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
-            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
-            const auto invalidSignature = StringFormat(testArena.arena, "{}=1;PROJECT_QUALITY=1", transportName);
-            EXPECT_FALSE(Impl::ShaderCook::ValidateVariantSignature("project/shader", invalidSignature, shaderEntry.defineValues, scratchArena));
-
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-            auto metadataResult3 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook);
-            ASSERT_TRUE(metadataResult3);
-            if(metadataResult3)
-                includeEntry = Move(*metadataResult3);
-            ASSERT_FALSE(includeEntry.defineValues.empty());
-            const auto obsoleteIncludeMetadata = StringFormat(testArena.arena, "include asset;\nasset.defines = {{ \"{}\": [\"{}\"] }};\n", transportName, retiredValue);
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, obsoleteIncludeMetadata));
-            EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook));
-            EXPECT_FALSE(includeEntry.defineValues.empty());
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-            auto metadataResult2 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook);
-            ASSERT_TRUE(metadataResult2);
-            if(metadataResult2)
-                includeEntry = Move(*metadataResult2);
-            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
-        }
-    }
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, InvalidShaderDefineNamePrecedesInvalidValueShape){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_name_and_value");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-    const Path metadataPath = root / "shader.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
-    Impl::ShaderCook shaderCook(testArena.arena);
-    EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be an ASCII shader identifier")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("values must be a list of strings")));
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_tokens");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
-    static constexpr Array<AStringView, 6u> s_InvalidDefines = { "\"\": [\"1\"]", "\"9QUALITY\": [\"1\"]", "\"PROJECT-QUALITY\": [\"1\"]", "\"PROJECT_QUALITY\": [\"1;OTHER=0\"]", "\"PROJECT_QUALITY\": [\" 1\"]", "\"PROJECT_QUALITY\": [\"1 \"]", };
-    Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
-    Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
-    for(const b8 include : { false, true }){
-        SCOPED_TRACE(include ? "include" : "shader");
-        const Path metadataPath = root / (include ? "include.nwb" : "shader.nwb");
-        const AStringView declaration = include ? "include asset;\n" : "compute_shader asset;\nasset.entry_point = \"main\";\n";
-        const auto validMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"PROJECT_QUALITY\": [\"1\"] }};\n", declaration);
-        const auto parse = [&](){
-            if(include){
-                auto metadataResult1 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(metadataPath, testArena, scratchArena, shaderCook);
-                if(metadataResult1)
-                    includeEntry = Move(*metadataResult1);
-                return metadataResult1.has_value();
-            }
-            auto metadataResult0 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
-            if(metadataResult0)
-                shaderEntry = Move(*metadataResult0);
-            return metadataResult0.has_value();
-        };
-        for(const AStringView invalidDefines : s_InvalidDefines){
-            SCOPED_TRACE(invalidDefines);
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, validMetadata));
-            ASSERT_TRUE(parse());
-            ASSERT_FALSE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
-            const auto invalidMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ {} }};\n", declaration, invalidDefines);
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, invalidMetadata));
-            EXPECT_FALSE(parse());
-            EXPECT_FALSE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, validMetadata));
-            ASSERT_TRUE(parse());
-            const auto& defineValues = include ? includeEntry.defineValues : shaderEntry.defineValues;
-            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/define_probe", "PROJECT_QUALITY=1", defineValues, scratchArena));
-        }
-    }
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
 #include <impl/assets_skeleton/cook.adhd.h>
+#include <impl/assets_texture/texture_mip_decoder.adhd.h>
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
 
-#include <gtest/gtest.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::AssetsGraphicsFixture{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_skeleton_payload_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_Left = "left";
-static constexpr AStringView s_Root = "root";
-static constexpr AStringView s_Right = "right";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
+inline constexpr AStringView s_SkeletonJointLeft = "left";
+inline constexpr AStringView s_SkeletonJointRoot = "root";
+inline constexpr AStringView s_SkeletonJointRight = "right";
 
 struct SkeletonInputs{
-    Core::Assets::AssetArena arena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadInputs) };
-    Core::Alloc::ScratchArena scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadValidationScratch) };
-    SkeletonCookEntry entry{ arena };
-    Skeleton skeleton{ arena, Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadSkeleton) };
+    Core::Assets::AssetArena arena{ Name(s_AssetCaseTestsSkeletonPayloadInputs) };
+    Core::Alloc::ScratchArena scratchArena{ Name(s_AssetCaseTestsSkeletonPayloadValidationScratch) };
+    Impl::SkeletonCookEntry entry{ arena };
+    Impl::Skeleton skeleton{ arena, Name(s_AssetCaseTestsSkeletonPayloadSkeleton) };
 
 
 public:
     SkeletonInputs(){
         entry.virtualPath = skeleton.virtualPath();
         entry.joints.reserve(4u);
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Root) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Left), .parent = Name(s_Root) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Right), .parent = Name(s_Root) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseHand), .parent = Name(s_Left) });
+        entry.joints.push_back(Impl::SkeletonCookJoint{ .name = Name(s_SkeletonJointRoot) });
+        entry.joints.push_back(Impl::SkeletonCookJoint{ .name = Name(s_SkeletonJointLeft), .parent = Name(s_SkeletonJointRoot) });
+        entry.joints.push_back(Impl::SkeletonCookJoint{ .name = Name(s_SkeletonJointRight), .parent = Name(s_SkeletonJointRoot) });
+        entry.joints.push_back(Impl::SkeletonCookJoint{ .name = Name(s_AssetCaseHand), .parent = Name(s_SkeletonJointLeft) });
         entry.joints[1u].localBindPose._14 = 2.0f;
         entry.joints[3u].localBindPose._24 = 3.0f;
     }
 };
 
-
-TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents){
-    Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
-        SkeletonInputs inputs;
-        switch(invalidCase){
-        case 0u: inputs.entry.joints[0u].parent = Name(s_Left); break;
-        case 1u: inputs.entry.joints[1u].parent = Name(s_Left); break;
-        case 2u: inputs.entry.joints[3u].parent = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseMissing); break;
-        case 3u: inputs.entry.joints[1u].parent = Name(s_Right); break;
-        }
-        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena)) << invalidCase;
-        inputs.entry.joints[0u].parent = s_NameNone;
-        inputs.entry.joints[1u].parent = Name(s_Root);
-        inputs.entry.joints[3u].parent = Name(s_Left);
-        EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
-    }
-    EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("references missing or later parent")));
-}
-
-TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
-    Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(const Name& duplicate : { Name(s_Left), Name("ROOT") }){
-        SkeletonInputs inputs;
-        inputs.entry.joints[3u].name = duplicate;
-        inputs.entry.joints[3u].parent = duplicate;
-        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
-    }
-    EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
-}
-
-
-TEST(SkeletonPayload, CodecRejectsEveryTruncatedTablePrefixWithoutReplacingPriorJoints){
-    Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    SkeletonInputs inputs;
-    auto buildResult = BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena);
-    ASSERT_TRUE(buildResult);
-    inputs.skeleton = Move(*buildResult);
-    SkeletonAssetCodec codec;
-    Core::Assets::AssetBytes binary(inputs.arena);
-    ASSERT_TRUE(codec.serialize(inputs.skeleton, binary));
-    ASSERT_TRUE(inputs.skeleton.loadBinary(binary));
-    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
-        Core::Assets::AssetBytes malformed(binary);
-        malformed.resize(prefix);
-        EXPECT_FALSE(inputs.skeleton.loadBinary(malformed)) << prefix;
-        Core::Assets::AssetBytes retained(inputs.arena);
-        ASSERT_TRUE(codec.serialize(inputs.skeleton, retained));
-        EXPECT_EQ(retained, binary) << prefix;
-    }
-    EXPECT_EQ(logger.errorCount(), binary.size());
-}
-
-TEST(SkeletonPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndInvalidLookup){
-    Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    SkeletonInputs inputs;
-    auto buildResult = BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena);
-    ASSERT_TRUE(buildResult);
-    inputs.skeleton = Move(*buildResult);
-    ASSERT_TRUE(inputs.skeleton.validatePayload(inputs.scratchArena));
-    const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
-    for(usize iteration = 0u; iteration < 16u; ++iteration){
-        Skeleton::JointIndexMap jointIndices(inputs.skeleton.jointIndices());
-        const b8 valid = iteration % 2u == 0u;
-        jointIndices.at(Name(s_Left)) = valid ? 1u : 0u;
-        inputs.skeleton.setJoints(Skeleton::JointVector(inputs.skeleton.joints()), Move(jointIndices));
-        EXPECT_EQ(inputs.skeleton.validatePayload(inputs.scratchArena), valid);
-        const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
-        EXPECT_EQ(current.usedBytes, warm.usedBytes);
-        EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
-    }
-    EXPECT_EQ(logger.errorCount(), 8u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_texture_mip_admission_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-static constexpr usize s_MipCount = 3u;
-static constexpr usize s_PrimaryPayloadBytes = 96u;
-static constexpr usize s_MipTableBytes = sizeof(::TextureBinaryPayload::MipLevelBinary) * s_MipCount;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+static constexpr usize s_TextureMipCount = 3u;
+static constexpr usize s_TexturePrimaryPayloadBytes = 96u;
+static constexpr usize s_TextureMipTableBytes = sizeof(::TextureBinaryPayload::MipLevelBinary) * s_TextureMipCount;
 
 static Core::Assets::AssetBytes BuildPartialBlockTextureBinary(TestArena& testArena){
     Core::Assets::AssetBytes binary(testArena.arena);
-    binary.reserve(sizeof(::TextureBinaryPayload::HeaderBinary) + s_MipTableBytes + s_PrimaryPayloadBytes);
+    binary.reserve(sizeof(::TextureBinaryPayload::HeaderBinary) + s_TextureMipTableBytes + s_TexturePrimaryPayloadBytes);
     ::TextureBinaryPayload::HeaderBinary header;
     header.dimension = TextureDimension::Texture2D;
     header.width = 7u;
     header.height = 5u;
     header.depth = 1u;
-    header.mipCount = s_MipCount;
+    header.mipCount = s_TextureMipCount;
     header.alphaInfo = static_cast<u32>(TextureAlphaMode::Opaque) | (static_cast<u32>(TextureFormat::s_OpaqueAlphaUnorm8) << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
     header.payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    header.payloadByteCount = s_PrimaryPayloadBytes;
+    header.payloadByteCount = s_TexturePrimaryPayloadBytes;
     AppendPOD(binary, header);
     const Array<::TextureBinaryPayload::MipLevelBinary, 3u> mips = {{
         { 7u, 5u, 1u, 2u, 2u, 0u, 0u, 64u },
@@ -809,210 +71,13 @@ static Core::Assets::AssetBytes BuildPartialBlockTextureBinary(TestArena& testAr
     }};
     for(const auto& mip : mips)
         AppendPOD(binary, mip);
-    for(usize byteIndex = 0u; byteIndex < s_PrimaryPayloadBytes; ++byteIndex)
+    for(usize byteIndex = 0u; byteIndex < s_TexturePrimaryPayloadBytes; ++byteIndex)
         binary.push_back(static_cast<u8>(byteIndex));
     return binary;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace __hidden_texture_mip_admission_tests;
-
-
-TEST(AssetsGraphics, Rgba8FallbackMipSizeRejectsAddressOverflow){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    const auto zeroBytes = Impl::TryComputeRgba8FallbackMipBytes(0u, Limit<u32>::s_Max);
-    ASSERT_TRUE(zeroBytes);
-    EXPECT_EQ(*zeroBytes, 0u);
-    EXPECT_FALSE(Impl::TryComputeRgba8FallbackMipBytes(Limit<u32>::s_Max, Limit<u32>::s_Max));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("RGBA8 fallback mip size exceeds addressable memory")));
-}
-
-TEST(AssetsGraphics, TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AssetsGraphicsFixture::TestArena testArena;
-    const auto validBinary = BuildPartialBlockTextureBinary(testArena);
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesMipTableAdmission));
-    ASSERT_TRUE(texture.loadBinary(validBinary));
-    Impl::TextureAssetCodec codec;
-
-    for(usize availableBytes = 0u; availableBytes < validBinary.size(); ++availableBytes){
-        Core::Assets::AssetBytes truncated(validBinary.begin(), validBinary.begin() + availableBytes, testArena.arena);
-        EXPECT_FALSE(texture.loadBinary(truncated)) << availableBytes;
-        Core::Assets::AssetBytes retained(testArena.arena);
-        ASSERT_TRUE(codec.serialize(texture, retained));
-        EXPECT_EQ(retained, validBinary) << availableBytes;
-    }
-    Core::Assets::AssetBytes oversized(validBinary.begin(), validBinary.begin() + sizeof(::TextureBinaryPayload::HeaderBinary), testArena.arena);
-    const u32 oversizedCount = Limit<u32>::s_Max;
-    NWB_MEMCPY(oversized.data() + offsetof(::TextureBinaryPayload::HeaderBinary, mipCount), sizeof(oversizedCount), &oversizedCount, sizeof(oversizedCount));
-    EXPECT_FALSE(texture.loadBinary(oversized));
-    Core::Assets::AssetBytes retained(testArena.arena);
-    ASSERT_TRUE(codec.serialize(texture, retained));
-    EXPECT_EQ(retained, validBinary);
-    EXPECT_TRUE(texture.loadBinary(validBinary));
-}
-
-TEST(AssetsGraphics, TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AssetsGraphicsFixture::TestArena testArena;
-    const auto original = BuildPartialBlockTextureBinary(testArena);
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesPayloadFormatAdmission));
-    ASSERT_TRUE(texture.loadBinary(original));
-    Impl::TextureAssetCodec codec;
-    for(const u32 payloadFormat : { 2u, 255u, 256u, 257u, 0xffffff00u, 0xffffff01u, Limit<u32>::s_Max }){
-        SCOPED_TRACE(payloadFormat);
-        Core::Assets::AssetBytes malformed(original);
-        NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(payloadFormat), &payloadFormat, sizeof(payloadFormat));
-        EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
-        EXPECT_FALSE(texture.loadBinary(malformed));
-        Core::Assets::AssetBytes retained(testArena.arena);
-        ASSERT_TRUE(codec.serialize(texture, retained));
-        EXPECT_EQ(retained, original);
-    }
-    EXPECT_TRUE(texture.loadBinary(original));
-}
-
-TEST(AssetsGraphics, TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AssetsGraphicsFixture::TestArena testArena;
-    Core::Assets::AssetBytes original = BuildPartialBlockTextureBinary(testArena);
-    const u32 hdrFormat = TexturePayloadFormat::UastcHdr4x4;
-    const u32 alphaInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_MaxConstantAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
-    NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(hdrFormat), &hdrFormat, sizeof(hdrFormat));
-    NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(alphaInfo), &alphaInfo, sizeof(alphaInfo));
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesConstantAlphaAdmission));
-    ASSERT_TRUE(texture.loadBinary(original));
-    Impl::TextureAssetCodec codec;
-    Core::Assets::AssetBytes malformed(original);
-    const u32 opaqueConstantInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_OpaqueAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
-    NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(opaqueConstantInfo), &opaqueConstantInfo, sizeof(opaqueConstantInfo));
-    EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
-    EXPECT_FALSE(texture.loadBinary(malformed));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("constant alpha must be below opaque alpha")));
-    Core::Assets::AssetBytes retained(testArena.arena);
-    ASSERT_TRUE(codec.serialize(texture, retained));
-    EXPECT_EQ(retained, original);
-    EXPECT_TRUE(texture.loadBinary(original));
-}
-
-TEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AssetsGraphicsFixture::TestArena testArena;
-    const auto validBinary = BuildPartialBlockTextureBinary(testArena);
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesMipRecordAdmission));
-    ASSERT_TRUE(texture.loadBinary(validBinary));
-    Impl::TextureAssetCodec codec;
-    using Corruption = AssetsGraphicsFixture::TextureMipCorruptionCase;
-    const Array<Corruption, 6u> corruptions = {{
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, reserved), .value = 1u },
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, width), .value = 8u },
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, blockCountX), .value = 3u },
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, sliceCount), .value = 2u },
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, offsetBytes), .value = 1u },
-        { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, sizeBytes), .value = 48u },
-    }};
-    for(const Corruption& corruption : corruptions){
-        Core::Assets::AssetBytes malformed(validBinary.begin(), validBinary.end(), testArena.arena);
-        NWB_MEMCPY(malformed.data() + sizeof(::TextureBinaryPayload::HeaderBinary) + corruption.fieldOffset, sizeof(corruption.value), &corruption.value, sizeof(corruption.value));
-        EXPECT_FALSE(texture.loadBinary(malformed)) << corruption.fieldOffset;
-        Core::Assets::AssetBytes retained(testArena.arena);
-        ASSERT_TRUE(codec.serialize(texture, retained));
-        EXPECT_EQ(retained, validBinary) << corruption.fieldOffset;
-    }
-    Core::Assets::AssetBytes trailing(validBinary.begin(), validBinary.end(), testArena.arena);
-    trailing.push_back(0u);
-    EXPECT_FALSE(texture.loadBinary(trailing));
-    Core::Assets::AssetBytes encoded(testArena.arena);
-    ASSERT_TRUE(codec.serialize(texture, encoded));
-    ASSERT_EQ(encoded.size(), validBinary.size());
-    EXPECT_EQ(NWB_MEMCMP(encoded.data(), validBinary.data(), validBinary.size()), 0);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <impl/assets_texture/texture_mip_decoder.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_texture_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_TexturesDirectory = "textures";
-constexpr AStringView s_CheckerMetadataFilename = "checker.nwb";
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_TextureTestMetadata =
-    "texture asset;\n\n"
-    "asset.format = \"uastc_ldr_4x4\";\n"
-    "asset.dimension = \"2d\";\n"
-    "asset.resolution = [7, 5];\n"
-    "asset.alpha_mode = \"embedded_ldr\";\n"
-;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& testArena){
-    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes bytes = MakeAssetBytes(testArena);
     bytes.resize(96u);
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(index);
@@ -1029,7 +94,7 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
 }
 
 [[nodiscard]] static Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesPrepared));
+    Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesPrepared));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     Impl::TextureAssetCodec codec;
     Core::Assets::AssetBytes bytes(testArena.arena);
@@ -1038,300 +103,1035 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
     return bytes;
 }
 
-TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
-    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, 7u, 5u, 1u);
-    ASSERT_TRUE(mipCount);
-    EXPECT_EQ(*mipCount, 3u);
 
-    const auto ldrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u);
-    ASSERT_TRUE(ldrPlane);
-    EXPECT_EQ(ldrPlane->blocksX, 2u);
-    EXPECT_EQ(ldrPlane->blocksY, 2u);
-    EXPECT_EQ(ldrPlane->planeByteCount, 64u);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    const auto hdrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, 2u);
-    ASSERT_TRUE(hdrPlane);
-    EXPECT_EQ(hdrPlane->blocksX, 1u);
-    EXPECT_EQ(hdrPlane->blocksY, 1u);
-    EXPECT_EQ(hdrPlane->planeByteCount, 16u);
+
+};
 }
 
-TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
-    TestArena testArena;
-    NWB::Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesVersionAdmission));
-    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
-    NWB::Impl::TextureAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    ASSERT_TRUE(codec.serialize(texture, binary));
-    for(const u32 version : { 0u, 1u, 2u, 3u, ::TextureBinaryPayload::s_TextureVersion + 1u }){
-        NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
-        EXPECT_FALSE(codec.deserialize(texture.virtualPath(), binary, testArena.arena)) << version;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TexturesDirectory = "textures";
+const StringView s_CheckerMetadataFilename = "checker.nwb";
+const StringView s_TextureTestMetadata = "texture asset;\n\nasset.format = \"uastc_ldr_4x4\";\nasset.dimension = \"2d\";\nasset.resolution = [7, 5];\nasset.alpha_mode = \"embedded_ldr\";\n";
+
+
+void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(in logger, mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_directives");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        const Path sourcePath = root / "source.slang";
+        const Path trackedInclude = root / "tracked.slangi";
+        static constexpr AStringView s_Source = "/*\n#include \"missing_block.slangi\"\n*/\n" "// #include \"missing_line.slangi\"\n" "#include \\\r\n\"tracked.slangi\"\n";
+        ASSERT_TRUE(WriteTextFile(sourcePath, s_Source));
+        ASSERT_TRUE(WriteTextFile(trackedInclude, "static const uint trackedValue = 1u;\n"));
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
+        ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
+        ASSERT_EQ(dependencies.size(), 2u);
+        ASSERT_NE(FindIf(dependencies.begin(), dependencies.end(), [&trackedInclude](const Path& path)noexcept{
+            return path == trackedInclude;
+        }), dependencies.end());
+        u64 beforeChecksum = 0u;
+        u64 afterChecksum = 0u;
+        const auto dependencyResult4 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(dependencyResult4);
+        beforeChecksum = dependencyResult4->checksum;
+        ASSERT_TRUE(WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
+        const auto dependencyResult3 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(dependencyResult3);
+        afterChecksum = dependencyResult3->checksum;
+        EXPECT_NE(beforeChecksum, afterChecksum);
+        EXPECT_EQ(logger.errorCount(), 0u);
+
+        static constexpr Array<AStringView, 3u> s_UnplannedIncludes = { "#define GENERATED_INCLUDE \"tracked.slangi\"\n#include GENERATED_INCLUDE\n", "#include_next \"tracked.slangi\"\n", "#import \"tracked.slangi\"\n", };
+        for(const AStringView source : s_UnplannedIncludes){
+            SCOPED_TRACE(source);
+            ASSERT_TRUE(WriteTextFile(sourcePath, source));
+            EXPECT_FALSE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
+        }
+        const usize failureErrors = logger.errorCount();
+        EXPECT_GT(failureErrors, 0u);
+        ASSERT_TRUE(WriteTextFile(sourcePath, s_Source));
+        EXPECT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
+        EXPECT_EQ(logger.errorCount(), failureErrors);
+        EXPECT_TRUE(RemoveAllIfExists(root));
     }
-    EXPECT_EQ(logger.errorCount(), 5u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
-
-    const u32 currentVersion = ::TextureBinaryPayload::s_TextureVersion;
-    NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
-    const auto loadedAssetResult = codec.deserialize(texture.virtualPath(), binary, testArena.arena);
-    ASSERT_TRUE(loadedAssetResult);
 }
 
-TEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_checksum_alias");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
 
-    TestArena testArena;
-    NWB::Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesInvalidAlphaMode));
-    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
-    EXPECT_FALSE(texture.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
-}
+        const Path relativeIncludePath = Path(testArena.arena, "project") / "material_interfaces" / "test_surface.bind";
+        const Path firstGeneratedRoot = root / "first" / s_MaterialBindIncludesDirectory;
+        const Path secondGeneratedRoot = root / "second" / s_MaterialBindIncludesDirectory;
+        const Path firstGeneratedInclude = firstGeneratedRoot / relativeIncludePath;
+        const Path secondGeneratedInclude = secondGeneratedRoot / relativeIncludePath;
+        EXPECT_TRUE(WriteTextFile(firstGeneratedInclude, "generated include\n"));
+        EXPECT_TRUE(WriteTextFile(secondGeneratedInclude, "generated include\n"));
 
-TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain){
-    TestArena testArena;
-    const auto original = MakeTextureTestUastcPayload(testArena);
-    const auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_raw_pair_identity");
-    ASSERT_TRUE(rootResult);
-    const Path root = *rootResult;
-    const Path assetRoot = root / s_AssetsDirectory;
-    const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "checker.tex", original));
-    Core::Metascript::Document document(testArena.arena);
-    ASSERT_TRUE(document.parse(s_TextureTestMetadata));
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    const auto entry = Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
-    ASSERT_TRUE(entry);
-    EXPECT_EQ(entry->payloadBytes, original);
-    const auto texture = Impl::BuildTextureAsset(*entry, testArena.arena);
-    ASSERT_TRUE(texture);
-    EXPECT_EQ(texture->virtualPath(), Name("project/textures/checker"));
-    EXPECT_EQ(texture->payloadBytes(), original);
-    EXPECT_EQ(entry->payloadBytes, original);
-    Impl::TextureAssetCodec codec;
-    Core::Assets::AssetBytes packaged(testArena.arena);
-    ASSERT_TRUE(codec.serialize(*texture, packaged));
-    const usize rawOffset = sizeof(::TextureBinaryPayload::HeaderBinary) + texture->mipLevels().size() * sizeof(::TextureBinaryPayload::MipLevelBinary);
-    ASSERT_EQ(packaged.size(), rawOffset + original.size());
-    EXPECT_EQ(NWB_MEMCMP(packaged.data() + rawOffset, original.data(), original.size()), 0);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
+        NWB::Impl::ShaderCook shaderCook(testArena.arena);
+        NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
+        NWB::Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
+        NWB::Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);
+        firstDependencies.push_back(firstGeneratedInclude);
+        secondDependencies.push_back(secondGeneratedInclude);
 
-TEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    const auto original = MakeTextureTestUastcPayload(testArena);
-    Impl::TextureCookEntry entry(testArena.arena);
-    entry.virtualPath = Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesTruncatedRaw);
-    entry.width = 7u;
-    entry.height = 5u;
-    entry.alphaMode = TextureAlphaMode::EmbeddedLdr;
-    for(usize prefix = 0u; prefix < original.size(); ++prefix){
-        entry.payloadBytes.assign(original.begin(), original.begin() + prefix);
-        EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << prefix;
-    }
-    entry.payloadBytes = original;
-    entry.payloadBytes.push_back(0u);
-    EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
-    entry.payloadBytes = original;
-    entry.payloadBytes.insert(entry.payloadBytes.end(), original.begin(), original.end());
-    EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
-    const auto framedRuntimeBinary = MakeTextureTestRuntimeBinary(testArena);
-    ASSERT_TRUE(framedRuntimeBinary);
-    entry.payloadBytes = *framedRuntimeBinary;
-    EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match the declared mip and alpha layout")));
-    entry.payloadBytes = original;
-    EXPECT_TRUE(Impl::BuildTextureAsset(entry, testArena.arena));
-}
+        u64 firstChecksum = 0u;
+        u64 secondChecksum = 0u;
+        const auto dependencyResult2 = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludesDirectory } }, scratchArena);
+        ASSERT_TRUE(dependencyResult2);
+        firstChecksum = dependencyResult2->checksum;
+        const auto dependencyResult1 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludesDirectory } }, scratchArena);
+        ASSERT_TRUE(dependencyResult1);
+        secondChecksum = dependencyResult1->checksum;
+        EXPECT_EQ(firstChecksum, secondChecksum);
 
-TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations){
-    TestArena testArena;
-    struct OverflowLayout{
-        TextureDimension::Enum dimension;
-        u32 width;
-        u32 height;
-        u32 depth;
-        TStringView diagnostic;
-    };
-    const Array<OverflowLayout, 4u> layouts = {{
-        { TextureDimension::Texture2D, Limit<u32>::s_Max, Limit<u32>::s_Max, 1u, NWB_TEXT("block layout exceeds supported limits") },
-        { TextureDimension::TextureCube, 2147483648u, 2147483648u, 1u, NWB_TEXT("block layout exceeds supported limits") },
-        { TextureDimension::Texture3D, 65536u, 65536u, Limit<u32>::s_Max, NWB_TEXT("mip byte offsets overflow") },
-        { TextureDimension::Texture3D, 131072u, 131072u, Limit<u32>::s_Max, NWB_TEXT("block layout exceeds supported limits") },
-    }};
-    for(const OverflowLayout& layout : layouts){
+        EXPECT_TRUE(WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
+        u64 changedChecksum = 0u;
+        const auto dependencyResult0 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludesDirectory } }, scratchArena);
+        ASSERT_TRUE(dependencyResult0);
+        changedChecksum = dependencyResult0->checksum;
+        EXPECT_NE(firstChecksum, changedChecksum);
+
+#if defined(NWB_FINAL)
+        const Path unaliasedDependency = root / "outside" / "unaliased.slangi";
+        EXPECT_TRUE(WriteTextFile(unaliasedDependency, "outside alias root\n"));
+        NWB::Impl::ShaderCook::CookVector<Path> unaliasedDependencies(testArena.arena);
+        unaliasedDependencies.push_back(unaliasedDependency);
+
         CapturingLogger logger;
-        Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+        EXPECT_FALSE(Impl::ShaderCook::ComputeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludesDirectory } }, scratchArena));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the declared dependency root aliases")));
+#endif
+
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion(){
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_search_order");
+        ASSERT_TRUE(rootResult);
+        const Path root = Move(*rootResult);
+        const Path firstRoot = root / "first";
+        const Path secondRoot = root / "second";
+        const Path sourcePath = root / "source.slang";
+        ASSERT_TRUE(WriteTextFile(sourcePath, "#include <choice.slangi>\nstatic const uint selectedValue = NWB_TEST_SELECTED;\n"));
+        ASSERT_TRUE(WriteTextFile(firstRoot / "choice.slangi", "#ifndef NWB_TEST_FIRST\n#define NWB_TEST_FIRST\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 1\n#endif\n#include \"../second/choice.slangi\"\n#endif\n"));
+        ASSERT_TRUE(WriteTextFile(secondRoot / "choice.slangi", "#ifndef NWB_TEST_SECOND\n#define NWB_TEST_SECOND\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 2\n#endif\n#include \"../first/choice.slangi\"\n#endif\n"));
+
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> firstDirectories(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> secondDirectories(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
+        firstDirectories.push_back(firstRoot);
+        firstDirectories.push_back(secondRoot);
+        secondDirectories.push_back(secondRoot);
+        secondDirectories.push_back(firstRoot);
+        Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);
+        ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, firstDirectories, {}, scratchArena, firstDependencies));
+        ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, secondDirectories, {}, scratchArena, secondDependencies));
+        ASSERT_EQ(firstDependencies.size(), 3u);
+        ASSERT_EQ(secondDependencies.size(), firstDependencies.size());
+        for(const Path& dependency : firstDependencies)
+            EXPECT_NE(FindIf(secondDependencies.begin(), secondDependencies.end(), [&dependency](const Path& path)noexcept{ return path == dependency; }), secondDependencies.end());
+
+        const auto firstFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, noDirectories, { { root, "source" } }, scratchArena);
+        const auto secondFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, noDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(firstFileUnion);
+        ASSERT_TRUE(secondFileUnion);
+        EXPECT_EQ(firstFileUnion->checksum, secondFileUnion->checksum);
+        const auto firstSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+        const auto secondSearch = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, secondDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(firstSearch);
+        ASSERT_TRUE(secondSearch);
+        EXPECT_NE(firstSearch->checksum, secondSearch->checksum);
+        firstDirectories.push_back(root.parentPath());
+        const auto externalSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(externalSearch);
+        EXPECT_NE(externalSearch->checksum, firstSearch->checksum);
+        // Unused case-only search roots keep their exact spelling even on case-insensitive hosts.
+        firstDirectories.clear();
+        firstDirectories.push_back(root / "CaseOnly");
+        const auto upperCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+        firstDirectories.clear();
+        firstDirectories.push_back(root / "caseonly");
+        const auto lowerCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(upperCaseSearch);
+        ASSERT_TRUE(lowerCaseSearch);
+        EXPECT_NE(upperCaseSearch->checksum, lowerCaseSearch->checksum);
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots(){
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_case_identity");
+        ASSERT_TRUE(rootResult);
+        const Path root = Move(*rootResult);
+        const Path firstRoot = root / "first";
+        const Path secondRoot = root / "second";
+        const Path upperPath = firstRoot / "Case.slangi";
+        const Path lowerPath = secondRoot / "case.slangi";
+        ASSERT_TRUE(WriteTextFile(upperPath, "same dependency bytes\n"));
+        ASSERT_TRUE(WriteTextFile(lowerPath, "same dependency bytes\n"));
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> upperDependencies(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> lowerDependencies(testArena.arena);
+        upperDependencies.push_back(upperPath);
+        lowerDependencies.push_back(lowerPath);
+        const auto upperKey = Impl::ShaderCook::ComputeDependencyChecksum(upperDependencies, noDirectories, { { firstRoot, "source" } }, scratchArena);
+        const auto lowerKey = Impl::ShaderCook::ComputeDependencyChecksum(lowerDependencies, noDirectories, { { secondRoot, "source" } }, scratchArena);
+        ASSERT_TRUE(upperKey);
+        ASSERT_TRUE(lowerKey);
+        EXPECT_NE(upperKey->checksum, lowerKey->checksum);
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs(){
+    native{
+#if defined(NWB_PLATFORM_WINDOWS)
+        GTEST_SKIP() << "Windows shader path duplicate policy is case insensitive";
+#endif
+        TestArena testArena;
+        Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_case_collection");
+        ASSERT_TRUE(rootResult);
+        const Path root = Move(*rootResult);
+        const Path sourcePath = root / "source.slang";
+        const Path upperPath = root / "Case.slangi";
+        const Path lowerPath = root / "case.slangi";
+        ASSERT_TRUE(WriteTextFile(upperPath, "static const uint upperValue = 1;\n"));
+        ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 2;\n"));
+        AString<Core::Alloc::ScratchArena> upperText(scratchArena);
+        ASSERT_TRUE(ReadTextFile(upperPath, upperText));
+        if(upperText != "static const uint upperValue = 1;\n"){
+            EXPECT_TRUE(RemoveAllIfExists(root));
+            GTEST_SKIP() << "Filesystem provider cannot store case-distinct shader inputs";
+        }
+        ASSERT_TRUE(WriteTextFile(sourcePath, "#include \"Case.slangi\"\n#include \"case.slangi\"\n"));
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
+        Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
+        ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, noDirectories, {}, scratchArena, dependencies));
+        ASSERT_EQ(dependencies.size(), 3u);
+        EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&upperPath](const Path& path)noexcept{ return path == upperPath; }), dependencies.end());
+        EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&lowerPath](const Path& path)noexcept{ return path == lowerPath; }), dependencies.end());
+        const auto firstKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(firstKey);
+        ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 3;\n"));
+        const auto changedKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
+        ASSERT_TRUE(changedKey);
+        EXPECT_NE(firstKey->checksum, changedKey->checksum);
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
+    native{
+#if defined(NWB_FINAL)
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+        TestArena testArena;
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_default_variant_alias");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        const Path assetRoot = root / "assets";
+        const Path includeMetaPath = assetRoot / "shaders" / "default_variant_include.nwb";
+        EXPECT_TRUE(WriteTextFile(includeMetaPath, "include asset;\n\nasset.default_variant = \"NWB_FEATURE=0\";\nasset.defines = {\n    \"NWB_FEATURE\": [\"0\", \"1\"],\n};\n"));
+        EXPECT_TRUE(WriteTextFile(assetRoot / "shaders" / "default_variant_include.slangi", ""));
+
+        NWB::Impl::ShaderCook shaderCook(testArena.arena);
+        NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
+        EXPECT_FALSE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includeMetaPath, testArena, scratchArena, shaderCook));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'default_variant'")));
+
+        EXPECT_TRUE(RemoveAllIfExists(root));
+#endif
+    }
+}
+
+void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_retired_type_and_stage");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        const Path metadataPath = root / "shader.nwb";
+        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
+        Impl::ShaderCook shaderCook(testArena.arena);
+        constexpr AStringView s_ValidMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
+        constexpr Array<AStringView, 4u> s_RetiredMetadata = {
+            "shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
+            "shader asset;\nasset.entry_point = \"main\";\n",
+            "compute_shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
+            "compute_shader asset;\nasset.stage = \"ps\";\nasset.entry_point = \"main\";\n",
+        };
+        for(const AStringView metadata : s_RetiredMetadata){
+            SCOPED_TRACE(metadata);
+            ASSERT_TRUE(WriteTextFile(metadataPath, s_ValidMetadata));
+            ASSERT_TRUE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+            ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
+            EXPECT_FALSE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+            ASSERT_TRUE(WriteTextFile(metadataPath, s_ValidMetadata));
+            EXPECT_TRUE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+        }
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_ray_query_metadata");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        const Path metadataPath = root / "shader.nwb";
+        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "void main(){}\n"));
+        struct ShaderRayQueryMetadataCase{
+            AStringView fields;
+            b8 accepted;
+        };
+        constexpr Array<ShaderRayQueryMetadataCase, 13u> s_Cases = {{
+            { "", true },
+            { "asset.ray_query = 0;\n", true },
+            { "asset.ray_query = 1;\n", true },
+            { "asset.ray_query = -1;\n", false },
+            { "asset.ray_query = 2;\n", false },
+            { "asset.ray_query = 1.0;\n", false },
+            { "asset.ray_query = \"1\";\n", false },
+            { "asset.ray_query = [];\n", false },
+            { "asset.ray_query = {};\n", false },
+            { "asset.target_profile = \"spirv_1_5\";\n", false },
+            { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false },
+            { "asset.emit_mesh_compute_shadow = 0;\n", false },
+            { "asset.emit_mesh_compute_shadow = 1;\n", false },
+        }};
+        Impl::ShaderCook shaderCook(testArena.arena);
+        for(const ShaderRayQueryMetadataCase& testCase : s_Cases){
+            SCOPED_TRACE(testCase.fields);
+            Impl::ShaderCook::CookString metadata("compute_shader asset;\nasset.entry_point = \"main\";\n", testArena.arena);
+            metadata.append(testCase.fields);
+            ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
+            EXPECT_EQ(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
+        }
+        constexpr Array<AStringView, 3u> s_ShaderAssetTypes = { "vertex_shader", "pixel_shader", "ray_generation_shader" };
+        for(const AStringView shaderAssetType : s_ShaderAssetTypes){
+            const auto metadata = StringFormat(testArena.arena, "{} asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n", shaderAssetType);
+            ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
+            EXPECT_FALSE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+        }
+        ASSERT_TRUE(WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
+        ASSERT_TRUE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(in logger, mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_transport_defines");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        const Path shaderPath = root / "shader.nwb";
+        const Path includePath = root / "include.nwb";
+        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "void main(){}\n"));
+        ASSERT_TRUE(WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
+        static constexpr AStringView s_ShaderDeclaration = "compute_shader asset;\nasset.entry_point = \"main\";\n";
+        static constexpr AStringView s_RealDefines = "asset.defines = { \"PROJECT_QUALITY\": [\"0\", \"1\"] };\n";
+        const auto validShaderMetadata = StringFormat(testArena.arena, "{}{}", s_ShaderDeclaration, s_RealDefines);
+        const auto validIncludeMetadata = StringFormat(testArena.arena, "include asset;\n{}", s_RealDefines);
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
+        Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
+
+        for(const AStringView transportName : { AStringView("NWB_BINDLESS_TLAS"), AStringView("NWB_CAUSTIC_PHOTON_TRANSPORT") }){
+            SCOPED_TRACE(transportName);
+            for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
+                SCOPED_TRACE(retiredValue);
+                ASSERT_TRUE(WriteTextFile(shaderPath, validShaderMetadata));
+                auto metadataResult5 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);
+                ASSERT_TRUE(metadataResult5);
+                if(metadataResult5)
+                    shaderEntry = Move(*metadataResult5);
+                ASSERT_FALSE(shaderEntry.defineValues.empty());
+                const auto obsoleteShaderMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"{}\": [\"{}\"] }};\n", s_ShaderDeclaration, transportName, retiredValue);
+                ASSERT_TRUE(WriteTextFile(shaderPath, obsoleteShaderMetadata));
+                EXPECT_FALSE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook));
+                EXPECT_FALSE(shaderEntry.defineValues.empty());
+                const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), ConvertString(transportName));
+                EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
+                ASSERT_TRUE(WriteTextFile(shaderPath, validShaderMetadata));
+                auto metadataResult4 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);
+                ASSERT_TRUE(metadataResult4);
+                if(metadataResult4)
+                    shaderEntry = Move(*metadataResult4);
+                EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
+                EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
+                const auto invalidSignature = StringFormat(testArena.arena, "{}=1;PROJECT_QUALITY=1", transportName);
+                EXPECT_FALSE(Impl::ShaderCook::ValidateVariantSignature("project/shader", invalidSignature, shaderEntry.defineValues, scratchArena));
+
+                ASSERT_TRUE(WriteTextFile(includePath, validIncludeMetadata));
+                auto metadataResult3 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook);
+                ASSERT_TRUE(metadataResult3);
+                if(metadataResult3)
+                    includeEntry = Move(*metadataResult3);
+                ASSERT_FALSE(includeEntry.defineValues.empty());
+                const auto obsoleteIncludeMetadata = StringFormat(testArena.arena, "include asset;\nasset.defines = {{ \"{}\": [\"{}\"] }};\n", transportName, retiredValue);
+                ASSERT_TRUE(WriteTextFile(includePath, obsoleteIncludeMetadata));
+                EXPECT_FALSE(ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook));
+                EXPECT_FALSE(includeEntry.defineValues.empty());
+                ASSERT_TRUE(WriteTextFile(includePath, validIncludeMetadata));
+                auto metadataResult2 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook);
+                ASSERT_TRUE(metadataResult2);
+                if(metadataResult2)
+                    includeEntry = Move(*metadataResult2);
+                EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
+            }
+        }
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(in logger, mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_name_and_value");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+        const Path metadataPath = root / "shader.nwb";
+        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "void main(){}\n"));
+        ASSERT_TRUE(WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
+        Impl::ShaderCook shaderCook(testArena.arena);
+        EXPECT_FALSE(ParseShaderMetadataFile<Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be an ASCII shader identifier")));
+        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("values must be a list of strings")));
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    native(mut testArena, mut scratchArena){
+        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_tokens");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
+        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "void main(){}\n"));
+        ASSERT_TRUE(WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
+        static constexpr Array<AStringView, 6u> s_InvalidDefines = { "\"\": [\"1\"]", "\"9QUALITY\": [\"1\"]", "\"PROJECT-QUALITY\": [\"1\"]", "\"PROJECT_QUALITY\": [\"1;OTHER=0\"]", "\"PROJECT_QUALITY\": [\" 1\"]", "\"PROJECT_QUALITY\": [\"1 \"]", };
+        Impl::ShaderCook shaderCook(testArena.arena);
+        Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
+        Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
+        for(const b8 include : { false, true }){
+            SCOPED_TRACE(include ? "include" : "shader");
+            const Path metadataPath = root / (include ? "include.nwb" : "shader.nwb");
+            const AStringView declaration = include ? "include asset;\n" : "compute_shader asset;\nasset.entry_point = \"main\";\n";
+            const auto validMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"PROJECT_QUALITY\": [\"1\"] }};\n", declaration);
+            const auto parse = [&](){
+                if(include){
+                    auto metadataResult1 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(metadataPath, testArena, scratchArena, shaderCook);
+                    if(metadataResult1)
+                        includeEntry = Move(*metadataResult1);
+                    return metadataResult1.has_value();
+                }
+                auto metadataResult0 = ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
+                if(metadataResult0)
+                    shaderEntry = Move(*metadataResult0);
+                return metadataResult0.has_value();
+            };
+            for(const AStringView invalidDefines : s_InvalidDefines){
+                SCOPED_TRACE(invalidDefines);
+                ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
+                ASSERT_TRUE(parse());
+                ASSERT_FALSE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
+                const auto invalidMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ {} }};\n", declaration, invalidDefines);
+                ASSERT_TRUE(WriteTextFile(metadataPath, invalidMetadata));
+                EXPECT_FALSE(parse());
+                EXPECT_FALSE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
+                ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
+                ASSERT_TRUE(parse());
+                const auto& defineValues = include ? includeEntry.defineValues : shaderEntry.defineValues;
+                EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/define_probe", "PROJECT_QUALITY=1", defineValues, scratchArena));
+            }
+        }
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifySkeletonPayload_RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    native(in logger){
+        using namespace NWB::Impl;
+        for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
+            SkeletonInputs inputs;
+            switch(invalidCase){
+            case 0u: inputs.entry.joints[0u].parent = Name(s_SkeletonJointLeft); break;
+            case 1u: inputs.entry.joints[1u].parent = Name(s_SkeletonJointLeft); break;
+            case 2u: inputs.entry.joints[3u].parent = Name(s_AssetCaseMissing); break;
+            case 3u: inputs.entry.joints[1u].parent = Name(s_SkeletonJointRight); break;
+            }
+            EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena)) << invalidCase;
+            inputs.entry.joints[0u].parent = s_NameNone;
+            inputs.entry.joints[1u].parent = Name(s_SkeletonJointRoot);
+            inputs.entry.joints[3u].parent = Name(s_SkeletonJointLeft);
+            EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
+        }
+        EXPECT_EQ(logger.errorCount(), 4u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("references missing or later parent")));
+    }
+}
+
+void VerifySkeletonPayload_RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    native(in logger){
+        using namespace NWB::Impl;
+        for(const Name& duplicate : { Name(s_SkeletonJointLeft), Name("ROOT") }){
+            SkeletonInputs inputs;
+            inputs.entry.joints[3u].name = duplicate;
+            inputs.entry.joints[3u].parent = duplicate;
+            EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
+        }
+        EXPECT_EQ(logger.errorCount(), 2u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
+    }
+}
+
+void VerifySkeletonPayload_CodecRejectsEveryTruncatedTablePrefixWithoutReplacingPriorJoints(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    SkeletonInputs inputs = SkeletonInputs();
+    native(in logger, mut inputs){
+        using namespace NWB::Impl;
+        auto buildResult = BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena);
+        ASSERT_TRUE(buildResult);
+        inputs.skeleton = Move(*buildResult);
+        SkeletonAssetCodec codec;
+        Core::Assets::AssetBytes binary(inputs.arena);
+        ASSERT_TRUE(codec.serialize(inputs.skeleton, binary));
+        ASSERT_TRUE(inputs.skeleton.loadBinary(binary));
+        for(usize prefix = 0u; prefix < binary.size(); ++prefix){
+            Core::Assets::AssetBytes malformed(binary);
+            malformed.resize(prefix);
+            EXPECT_FALSE(inputs.skeleton.loadBinary(malformed)) << prefix;
+            Core::Assets::AssetBytes retained(inputs.arena);
+            ASSERT_TRUE(codec.serialize(inputs.skeleton, retained));
+            EXPECT_EQ(retained, binary) << prefix;
+        }
+        EXPECT_EQ(logger.errorCount(), binary.size());
+    }
+}
+
+void VerifySkeletonPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndInvalidLookup(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    SkeletonInputs inputs = SkeletonInputs();
+    native(in logger, mut inputs){
+        using namespace NWB::Impl;
+        auto buildResult = BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena);
+        ASSERT_TRUE(buildResult);
+        inputs.skeleton = Move(*buildResult);
+        ASSERT_TRUE(inputs.skeleton.validatePayload(inputs.scratchArena));
+        const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
+        for(usize iteration = 0u; iteration < 16u; ++iteration){
+            Skeleton::JointIndexMap jointIndices(inputs.skeleton.jointIndices());
+            const b8 valid = iteration % 2u == 0u;
+            jointIndices.at(Name(s_SkeletonJointLeft)) = valid ? 1u : 0u;
+            inputs.skeleton.setJoints(Skeleton::JointVector(inputs.skeleton.joints()), Move(jointIndices));
+            EXPECT_EQ(inputs.skeleton.validatePayload(inputs.scratchArena), valid);
+            const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
+            EXPECT_EQ(current.usedBytes, warm.usedBytes);
+            EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
+        }
+        EXPECT_EQ(logger.errorCount(), 8u);
+    }
+}
+
+void VerifyAssetsGraphics_Rgba8FallbackMipSizeRejectsAddressOverflow(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    native(in logger){
+        const auto zeroBytes = Impl::TryComputeRgba8FallbackMipBytes(0u, Limit<u32>::s_Max);
+        ASSERT_TRUE(zeroBytes);
+        EXPECT_EQ(*zeroBytes, 0u);
+        EXPECT_FALSE(Impl::TryComputeRgba8FallbackMipBytes(Limit<u32>::s_Max, Limit<u32>::s_Max));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("RGBA8 fallback mip size exceeds addressable memory")));
+    }
+}
+
+void VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(mut testArena){
+        const auto validBinary = BuildPartialBlockTextureBinary(testArena);
+        Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesMipTableAdmission));
+        ASSERT_TRUE(texture.loadBinary(validBinary));
+        Impl::TextureAssetCodec codec;
+
+        for(usize availableBytes = 0u; availableBytes < validBinary.size(); ++availableBytes){
+            Core::Assets::AssetBytes truncated(validBinary.begin(), validBinary.begin() + availableBytes, testArena.arena);
+            EXPECT_FALSE(texture.loadBinary(truncated)) << availableBytes;
+            Core::Assets::AssetBytes retained(testArena.arena);
+            ASSERT_TRUE(codec.serialize(texture, retained));
+            EXPECT_EQ(retained, validBinary) << availableBytes;
+        }
+        Core::Assets::AssetBytes oversized(validBinary.begin(), validBinary.begin() + sizeof(::TextureBinaryPayload::HeaderBinary), testArena.arena);
+        const u32 oversizedCount = Limit<u32>::s_Max;
+        NWB_MEMCPY(oversized.data() + offsetof(::TextureBinaryPayload::HeaderBinary, mipCount), sizeof(oversizedCount), &oversizedCount, sizeof(oversizedCount));
+        EXPECT_FALSE(texture.loadBinary(oversized));
+        Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(texture, retained));
+        EXPECT_EQ(retained, validBinary);
+        EXPECT_TRUE(texture.loadBinary(validBinary));
+    }
+}
+
+void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(mut testArena){
+        const auto original = BuildPartialBlockTextureBinary(testArena);
+        Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesPayloadFormatAdmission));
+        ASSERT_TRUE(texture.loadBinary(original));
+        Impl::TextureAssetCodec codec;
+        for(const u32 payloadFormat : { 2u, 255u, 256u, 257u, 0xffffff00u, 0xffffff01u, Limit<u32>::s_Max }){
+            SCOPED_TRACE(payloadFormat);
+            Core::Assets::AssetBytes malformed(original);
+            NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(payloadFormat), &payloadFormat, sizeof(payloadFormat));
+            EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
+            EXPECT_FALSE(texture.loadBinary(malformed));
+            Core::Assets::AssetBytes retained(testArena.arena);
+            ASSERT_TRUE(codec.serialize(texture, retained));
+            EXPECT_EQ(retained, original);
+        }
+        EXPECT_TRUE(texture.loadBinary(original));
+    }
+}
+
+void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        Core::Assets::AssetBytes original = BuildPartialBlockTextureBinary(testArena);
+        const u32 hdrFormat = TexturePayloadFormat::UastcHdr4x4;
+        const u32 alphaInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_MaxConstantAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
+        NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(hdrFormat), &hdrFormat, sizeof(hdrFormat));
+        NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(alphaInfo), &alphaInfo, sizeof(alphaInfo));
+        Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesConstantAlphaAdmission));
+        ASSERT_TRUE(texture.loadBinary(original));
+        Impl::TextureAssetCodec codec;
+        Core::Assets::AssetBytes malformed(original);
+        const u32 opaqueConstantInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_OpaqueAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
+        NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(opaqueConstantInfo), &opaqueConstantInfo, sizeof(opaqueConstantInfo));
+        EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
+        EXPECT_FALSE(texture.loadBinary(malformed));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("constant alpha must be below opaque alpha")));
+        Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(texture, retained));
+        EXPECT_EQ(retained, original);
+        EXPECT_TRUE(texture.loadBinary(original));
+    }
+}
+
+void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(mut testArena){
+        const auto validBinary = BuildPartialBlockTextureBinary(testArena);
+        Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesMipRecordAdmission));
+        ASSERT_TRUE(texture.loadBinary(validBinary));
+        Impl::TextureAssetCodec codec;
+        using Corruption = TextureMipCorruptionCase;
+        const Array<Corruption, 6u> corruptions = {{
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, reserved), .value = 1u },
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, width), .value = 8u },
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, blockCountX), .value = 3u },
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, sliceCount), .value = 2u },
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, offsetBytes), .value = 1u },
+            { .fieldOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, sizeBytes), .value = 48u },
+        }};
+        for(const Corruption& corruption : corruptions){
+            Core::Assets::AssetBytes malformed(validBinary.begin(), validBinary.end(), testArena.arena);
+            NWB_MEMCPY(malformed.data() + sizeof(::TextureBinaryPayload::HeaderBinary) + corruption.fieldOffset, sizeof(corruption.value), &corruption.value, sizeof(corruption.value));
+            EXPECT_FALSE(texture.loadBinary(malformed)) << corruption.fieldOffset;
+            Core::Assets::AssetBytes retained(testArena.arena);
+            ASSERT_TRUE(codec.serialize(texture, retained));
+            EXPECT_EQ(retained, validBinary) << corruption.fieldOffset;
+        }
+        Core::Assets::AssetBytes trailing(validBinary.begin(), validBinary.end(), testArena.arena);
+        trailing.push_back(0u);
+        EXPECT_FALSE(texture.loadBinary(trailing));
+        Core::Assets::AssetBytes encoded(testArena.arena);
+        ASSERT_TRUE(codec.serialize(texture, encoded));
+        ASSERT_EQ(encoded.size(), validBinary.size());
+        EXPECT_EQ(NWB_MEMCMP(encoded.data(), validBinary.data(), validBinary.size()), 0);
+    }
+}
+
+void VerifyAssetsGraphics_TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips(){
+    native{
+        const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, 7u, 5u, 1u);
+        ASSERT_TRUE(mipCount);
+        EXPECT_EQ(*mipCount, 3u);
+
+        const auto ldrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u);
+        ASSERT_TRUE(ldrPlane);
+        EXPECT_EQ(ldrPlane->blocksX, 2u);
+        EXPECT_EQ(ldrPlane->blocksY, 2u);
+        EXPECT_EQ(ldrPlane->planeByteCount, 64u);
+
+        const auto hdrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, 2u);
+        ASSERT_TRUE(hdrPlane);
+        EXPECT_EQ(hdrPlane->blocksX, 1u);
+        EXPECT_EQ(hdrPlane->blocksY, 1u);
+        EXPECT_EQ(hdrPlane->planeByteCount, 16u);
+    }
+}
+
+void VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        NWB::Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesVersionAdmission));
+        texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
+        NWB::Impl::TextureAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        ASSERT_TRUE(codec.serialize(texture, binary));
+        for(const u32 version : { 0u, 1u, 2u, 3u, ::TextureBinaryPayload::s_TextureVersion + 1u }){
+            NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
+            EXPECT_FALSE(codec.deserialize(texture.virtualPath(), binary, testArena.arena)) << version;
+        }
+        EXPECT_EQ(logger.errorCount(), 5u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
+
+        const u32 currentVersion = ::TextureBinaryPayload::s_TextureVersion;
+        NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
+        const auto loadedAssetResult = codec.deserialize(texture.virtualPath(), binary, testArena.arena);
+        ASSERT_TRUE(loadedAssetResult);
+    }
+}
+
+void VerifyAssetsGraphics_TexturePayloadRejectsAlphaTransportIncompatibleWithFormat(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        NWB::Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesInvalidAlphaMode));
+        texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
+        EXPECT_FALSE(texture.validatePayload());
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
+    }
+}
+
+void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain(){
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_CodecScratchArena);
+    native(mut testArena, mut scratchArena){
+        const auto original = MakeTextureTestUastcPayload(testArena);
+        const auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "texture_raw_pair_identity");
+        ASSERT_TRUE(rootResult);
+        const Path root = *rootResult;
+        const Path assetRoot = root / s_AssetsDirectory;
+        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
+        ASSERT_TRUE(WriteTextFile(metadataPath, s_TextureTestMetadata));
+        ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "checker.tex", original));
+        Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(s_TextureTestMetadata));
+        const auto entry = Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
+        ASSERT_TRUE(entry);
+        EXPECT_EQ(entry->payloadBytes, original);
+        const auto texture = Impl::BuildTextureAsset(*entry, testArena.arena);
+        ASSERT_TRUE(texture);
+        EXPECT_EQ(texture->virtualPath(), Name("project/textures/checker"));
+        EXPECT_EQ(texture->payloadBytes(), original);
+        EXPECT_EQ(entry->payloadBytes, original);
+        Impl::TextureAssetCodec codec;
+        Core::Assets::AssetBytes packaged(testArena.arena);
+        ASSERT_TRUE(codec.serialize(*texture, packaged));
+        const usize rawOffset = sizeof(::TextureBinaryPayload::HeaderBinary) + texture->mipLevels().size() * sizeof(::TextureBinaryPayload::MipLevelBinary);
+        ASSERT_EQ(packaged.size(), rawOffset + original.size());
+        EXPECT_EQ(NWB_MEMCMP(packaged.data() + rawOffset, original.data(), original.size()), 0);
+        EXPECT_TRUE(RemoveAllIfExists(root));
+    }
+}
+
+void VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        const auto original = MakeTextureTestUastcPayload(testArena);
         Impl::TextureCookEntry entry(testArena.arena);
-        entry.virtualPath = Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesOverflowingRawLayout);
-        entry.dimension = layout.dimension;
-        entry.width = layout.width;
-        entry.height = layout.height;
-        entry.depth = layout.depth;
-        const usize allocatedBytes = testArena.arena.memoryStats().usedBytes;
-        EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
-        EXPECT_EQ(testArena.arena.memoryStats().usedBytes, allocatedBytes);
-        EXPECT_TRUE(logger.sawErrorContaining(layout.diagnostic)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
-        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match")));
+        entry.virtualPath = Name(s_AssetCaseProjectTexturesTruncatedRaw);
+        entry.width = 7u;
+        entry.height = 5u;
+        entry.alphaMode = TextureAlphaMode::EmbeddedLdr;
+        for(usize prefix = 0u; prefix < original.size(); ++prefix){
+            entry.payloadBytes.assign(original.begin(), original.begin() + prefix);
+            EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << prefix;
+        }
+        entry.payloadBytes = original;
+        entry.payloadBytes.push_back(0u);
+        EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
+        entry.payloadBytes = original;
+        entry.payloadBytes.insert(entry.payloadBytes.end(), original.begin(), original.end());
+        EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
+        const auto framedRuntimeBinary = MakeTextureTestRuntimeBinary(testArena);
+        ASSERT_TRUE(framedRuntimeBinary);
+        entry.payloadBytes = *framedRuntimeBinary;
+        EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match the declared mip and alpha layout")));
+        entry.payloadBytes = original;
+        EXPECT_TRUE(Impl::BuildTextureAsset(entry, testArena.arena));
     }
 }
 
-TEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    const auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_missing_raw_pair");
-    ASSERT_TRUE(rootResult);
-    const Path root = *rootResult;
-    const Path assetRoot = root / s_AssetsDirectory;
-    const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "another.tex", MakeTextureTestUastcPayload(testArena)));
-    Core::Metascript::Document document(testArena.arena);
-    ASSERT_TRUE(document.parse(s_TextureTestMetadata));
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("checker.tex")));
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    const auto prepared = MakeTextureTestRuntimeBinary(testArena);
-    ASSERT_TRUE(prepared);
-    Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesLinearDecode));
-    ASSERT_TRUE(texture.loadBinary(*prepared));
-    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    Impl::TextureMipDecoder decoder;
-    for(const auto format : { Core::Format::ASTC_4x4_UNORM_SRGB, Core::Format::BC7_UNORM_SRGB, Core::Format::RGBA8_UNORM_SRGB, Core::Format::UNKNOWN, Core::Format::R8_UNORM, Core::Format::RGBA16_FLOAT })
-        EXPECT_FALSE(decoder.decode(texture, texture.mipLevels().front(), 0u, format, scratchArena)) << format;
-    EXPECT_EQ(logger.errorCount(), 6u);
-}
-
-TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
-    struct ObsoleteField{
-        AStringView assignment;
-        TStringView diagnostic;
-    };
-    constexpr Array<ObsoleteField, 24u> s_ObsoleteFields = {{
-        { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
-        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.data = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'data'") },
-        { "asset.file = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'file'") },
-        { "asset.mip_filter = \"linear\";\n", NWB_TEXT("unsupported asset field 'mip_filter'") },
-        { "asset.uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
-        { "asset.uastc_hdr_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
-        { "asset.alpha_uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
-        { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
-        { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
-        { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
-        { "asset.block_height = 4;\n", NWB_TEXT("unsupported asset field 'block_height'") },
-        { "asset.bytes_per_block = 16;\n", NWB_TEXT("unsupported asset field 'bytes_per_block'") },
-        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
-        { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
-        { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
-        { "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
-        { "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
-        { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
-        { "asset.alpha_payload_byte_count = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
-        { "asset.color_space = \"srgb\";\n", NWB_TEXT("unsupported asset field 'color_space'") },
-        { "asset.width = 7;\n", NWB_TEXT("unsupported asset field 'width'") },
-        { "asset.height = 5;\n", NWB_TEXT("unsupported asset field 'height'") },
-        { "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
-    }};
-    for(const ObsoleteField& field : s_ObsoleteFields){
-        CapturingLogger logger;
-        Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-        TestArena testArena;
-        Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
-        metadata.append(field.assignment);
-        Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / s_AssetsDirectory;
-        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
-        EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << field.assignment;
-        EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations(){
+    TestArena testArena = TestArena();
+    native(mut testArena){
+        struct OverflowLayout{
+            TextureDimension::Enum dimension;
+            u32 width;
+            u32 height;
+            u32 depth;
+            TStringView diagnostic;
+        };
+        const Array<OverflowLayout, 4u> layouts = {{
+            { TextureDimension::Texture2D, Limit<u32>::s_Max, Limit<u32>::s_Max, 1u, NWB_TEXT("block layout exceeds supported limits") },
+            { TextureDimension::TextureCube, 2147483648u, 2147483648u, 1u, NWB_TEXT("block layout exceeds supported limits") },
+            { TextureDimension::Texture3D, 65536u, 65536u, Limit<u32>::s_Max, NWB_TEXT("mip byte offsets overflow") },
+            { TextureDimension::Texture3D, 131072u, 131072u, Limit<u32>::s_Max, NWB_TEXT("block layout exceeds supported limits") },
+        }};
+        for(const OverflowLayout& layout : layouts){
+            CapturingLogger logger;
+            Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+            Impl::TextureCookEntry entry(testArena.arena);
+            entry.virtualPath = Name(s_AssetCaseProjectTexturesOverflowingRawLayout);
+            entry.dimension = layout.dimension;
+            entry.width = layout.width;
+            entry.height = layout.height;
+            entry.depth = layout.depth;
+            const usize allocatedBytes = testArena.arena.memoryStats().usedBytes;
+            EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
+            EXPECT_EQ(testArena.arena.memoryStats().usedBytes, allocatedBytes);
+            EXPECT_TRUE(logger.sawErrorContaining(layout.diagnostic)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
+            EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match"))) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
+        }
     }
 }
 
-TEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors){
-    struct RequiredField{
-        AStringView assignment;
-        TStringView diagnostic;
-    };
-    constexpr Array<RequiredField, 4u> s_RequiredFields = {{
-        { "asset.format = \"uastc_ldr_4x4\";\n", NWB_TEXT("field 'format' is required") },
-        { "asset.dimension = \"2d\";\n", NWB_TEXT("field 'dimension' is required") },
-        { "asset.resolution = [7, 5];\n", NWB_TEXT("resolution must contain exactly") },
-        { "asset.alpha_mode = \"embedded_ldr\";\n", NWB_TEXT("field 'alpha_mode' is required") },
-    }};
-    for(const RequiredField& field : s_RequiredFields){
-        CapturingLogger logger;
-        Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-        TestArena testArena;
-        Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
-        const usize fieldOffset = metadata.find(field.assignment);
-        ASSERT_NE(fieldOffset, AStringView::npos);
-        metadata.erase(fieldOffset, field.assignment.size());
-        Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_missing_layout") / s_AssetsDirectory;
+void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_CodecScratchArena);
+    native(in logger, mut testArena, mut scratchArena){
+        const auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "texture_missing_raw_pair");
+        ASSERT_TRUE(rootResult);
+        const Path root = *rootResult;
+        const Path assetRoot = root / s_AssetsDirectory;
         const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
+        ASSERT_TRUE(WriteTextFile(metadataPath, s_TextureTestMetadata));
+        ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "another.tex", MakeTextureTestUastcPayload(testArena)));
+        Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(s_TextureTestMetadata));
         EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar")));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("checker.tex")));
+        EXPECT_TRUE(RemoveAllIfExists(root));
     }
 }
 
-TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar){
-    struct InvalidLayout{
-        AStringView assignment;
-        TStringView diagnostic;
-    };
-    constexpr Array<InvalidLayout, 19u> s_InvalidLayouts = {{
-        { "asset.format = 17;", NWB_TEXT("field 'format' must be a string") },
-        { "asset.format = \"rgba8\";", NWB_TEXT("unsupported texture format") },
-        { "asset.dimension = \"3d\";", NWB_TEXT("unsupported texture dimension") },
-        { "asset.dimension = \"cube\";", NWB_TEXT("cube resolution must be square") },
-        { "asset.dimension = \"volume\";", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [7];", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [7, 5, 1];", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [0, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [-1, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [7.5, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [4294967296, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.mip_count = 0;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.mip_count = 2;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.mip_count = 4;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.alpha_mode = \"straight\";", NWB_TEXT("unsupported alpha_mode") },
-        { "asset.alpha_mode = \"constant_unorm8\";", NWB_TEXT("field 'alpha_constant_unorm8' is required") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = -1;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0.5;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
-    }};
-    for(const InvalidLayout& invalid : s_InvalidLayouts){
-        CapturingLogger logger;
-        Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-        TestArena testArena;
-        Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
-        metadata.append(invalid.assignment);
-        Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_layout") / s_AssetsDirectory;
-        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
-        EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(invalid.diagnostic)) << invalid.assignment;
-        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar"))) << invalid.assignment;
+void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_CodecScratchArena);
+    native(in logger, mut testArena, mut scratchArena){
+        const auto prepared = MakeTextureTestRuntimeBinary(testArena);
+        ASSERT_TRUE(prepared);
+        Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesLinearDecode));
+        ASSERT_TRUE(texture.loadBinary(*prepared));
+        Impl::TextureMipDecoder decoder;
+        for(const auto format : { Core::Format::ASTC_4x4_UNORM_SRGB, Core::Format::BC7_UNORM_SRGB, Core::Format::RGBA8_UNORM_SRGB, Core::Format::UNKNOWN, Core::Format::R8_UNORM, Core::Format::RGBA16_FLOAT })
+            EXPECT_FALSE(decoder.decode(texture, texture.mipLevels().front(), 0u, format, scratchArena)) << format;
+        EXPECT_EQ(logger.errorCount(), 6u);
+    }
+}
+
+void VerifyAssetsGraphics_TextureCookerRejectsObsoleteAndDerivedMetadata(){
+    native{
+        struct ObsoleteField{
+            AStringView assignment;
+            TStringView diagnostic;
+        };
+        constexpr Array<ObsoleteField, 24u> s_ObsoleteFields = {{
+            { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
+            { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
+            { "asset.data = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'data'") },
+            { "asset.file = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'file'") },
+            { "asset.mip_filter = \"linear\";\n", NWB_TEXT("unsupported asset field 'mip_filter'") },
+            { "asset.uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
+            { "asset.uastc_hdr_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
+            { "asset.alpha_uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
+            { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
+            { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
+            { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
+            { "asset.block_height = 4;\n", NWB_TEXT("unsupported asset field 'block_height'") },
+            { "asset.bytes_per_block = 16;\n", NWB_TEXT("unsupported asset field 'bytes_per_block'") },
+            { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
+            { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
+            { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
+            { "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
+            { "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+            { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
+            { "asset.alpha_payload_byte_count = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
+            { "asset.color_space = \"srgb\";\n", NWB_TEXT("unsupported asset field 'color_space'") },
+            { "asset.width = 7;\n", NWB_TEXT("unsupported asset field 'width'") },
+            { "asset.height = 5;\n", NWB_TEXT("unsupported asset field 'height'") },
+            { "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
+        }};
+        for(const ObsoleteField& field : s_ObsoleteFields){
+            CapturingLogger logger;
+            Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+            TestArena testArena;
+            Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+            ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
+            metadata.append(field.assignment);
+            Core::Metascript::Document document(testArena.arena);
+            ASSERT_TRUE(document.parse(metadata));
+            const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / s_AssetsDirectory;
+            const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
+            EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << field.assignment;
+            EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+        }
+    }
+}
+
+void VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptors(){
+    native{
+        struct RequiredField{
+            AStringView assignment;
+            TStringView diagnostic;
+        };
+        constexpr Array<RequiredField, 4u> s_RequiredFields = {{
+            { "asset.format = \"uastc_ldr_4x4\";\n", NWB_TEXT("field 'format' is required") },
+            { "asset.dimension = \"2d\";\n", NWB_TEXT("field 'dimension' is required") },
+            { "asset.resolution = [7, 5];\n", NWB_TEXT("resolution must contain exactly") },
+            { "asset.alpha_mode = \"embedded_ldr\";\n", NWB_TEXT("field 'alpha_mode' is required") },
+        }};
+        for(const RequiredField& field : s_RequiredFields){
+            CapturingLogger logger;
+            Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+            TestArena testArena;
+            Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+            ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
+            const usize fieldOffset = metadata.find(field.assignment);
+            ASSERT_NE(fieldOffset, AStringView::npos);
+            metadata.erase(fieldOffset, field.assignment.size());
+            Core::Metascript::Document document(testArena.arena);
+            ASSERT_TRUE(document.parse(metadata));
+            const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_missing_layout") / s_AssetsDirectory;
+            const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
+            EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
+            EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+        }
+    }
+}
+
+void VerifyAssetsGraphics_TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar(){
+    native{
+        struct InvalidLayout{
+            AStringView assignment;
+            TStringView diagnostic;
+        };
+        constexpr Array<InvalidLayout, 19u> s_InvalidLayouts = {{
+            { "asset.format = 17;", NWB_TEXT("field 'format' must be a string") },
+            { "asset.format = \"rgba8\";", NWB_TEXT("unsupported texture format") },
+            { "asset.dimension = \"3d\";", NWB_TEXT("unsupported texture dimension") },
+            { "asset.dimension = \"cube\";", NWB_TEXT("cube resolution must be square") },
+            { "asset.dimension = \"volume\";", NWB_TEXT("resolution must contain exactly") },
+            { "asset.resolution = [7];", NWB_TEXT("resolution must contain exactly") },
+            { "asset.resolution = [7, 5, 1];", NWB_TEXT("resolution must contain exactly") },
+            { "asset.resolution = [0, 5];", NWB_TEXT("positive u32 integer") },
+            { "asset.resolution = [-1, 5];", NWB_TEXT("positive u32 integer") },
+            { "asset.resolution = [7.5, 5];", NWB_TEXT("positive u32 integer") },
+            { "asset.resolution = [4294967296, 5];", NWB_TEXT("positive u32 integer") },
+            { "asset.mip_count = 0;", NWB_TEXT("unsupported asset field 'mip_count'") },
+            { "asset.mip_count = 2;", NWB_TEXT("unsupported asset field 'mip_count'") },
+            { "asset.mip_count = 4;", NWB_TEXT("unsupported asset field 'mip_count'") },
+            { "asset.alpha_mode = \"straight\";", NWB_TEXT("unsupported alpha_mode") },
+            { "asset.alpha_mode = \"constant_unorm8\";", NWB_TEXT("field 'alpha_constant_unorm8' is required") },
+            { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+            { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = -1;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+            { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0.5;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+        }};
+        for(const InvalidLayout& invalid : s_InvalidLayouts){
+            CapturingLogger logger;
+            Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+            TestArena testArena;
+            Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+            ::AString<Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
+            metadata.append(invalid.assignment);
+            Core::Metascript::Document document(testArena.arena);
+            ASSERT_TRUE(document.parse(metadata));
+            const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_layout") / s_AssetsDirectory;
+            const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
+            EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
+            EXPECT_TRUE(logger.sawErrorContaining(invalid.diagnostic)) << invalid.assignment;
+            EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar"))) << invalid.assignment;
+        }
     }
 }
 
@@ -1339,23 +1139,38 @@ TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes, VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot, VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion, VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots, VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs, VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias, VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField, VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags, VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants, VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants)
+NWB_ADHD_GTEST(AssetsGraphics, InvalidShaderDefineNamePrecedesInvalidValueShape, VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures, VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures)
+NWB_ADHD_GTEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents, VerifySkeletonPayload_RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents)
+NWB_ADHD_GTEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent, VerifySkeletonPayload_RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent)
+NWB_ADHD_GTEST(SkeletonPayload, CodecRejectsEveryTruncatedTablePrefixWithoutReplacingPriorJoints, VerifySkeletonPayload_CodecRejectsEveryTruncatedTablePrefixWithoutReplacingPriorJoints)
+NWB_ADHD_GTEST(SkeletonPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndInvalidLookup, VerifySkeletonPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndInvalidLookup)
+NWB_ADHD_GTEST(AssetsGraphics, Rgba8FallbackMipSizeRejectsAddressOverflow, VerifyAssetsGraphics_Rgba8FallbackMipSizeRejectsAddressOverflow)
+NWB_ADHD_GTEST(AssetsGraphics, TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount, VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload, VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload, VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload)
+NWB_ADHD_GTEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads, VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads)
+NWB_ADHD_GTEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips, VerifyAssetsGraphics_TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions, VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions)
+NWB_ADHD_GTEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat, VerifyAssetsGraphics_TexturePayloadRejectsAlphaTransportIncompatibleWithFormat)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain, VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes, VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations, VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile, VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile)
+NWB_ADHD_GTEST(AssetsGraphics, TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding, VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata, VerifyAssetsGraphics_TextureCookerRejectsObsoleteAndDerivedMetadata)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors, VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptors)
+NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar, VerifyAssetsGraphics_TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

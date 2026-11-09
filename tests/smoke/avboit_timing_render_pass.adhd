@@ -18,33 +18,41 @@ public:
     explicit TimingProbeUnfocusedPass(Core::GraphicsRuntime& graphics)noexcept : Core::IRenderPass(graphics){}
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
-
-namespace __hidden_timing_render_pass{
-inline constexpr u32 s_InFlightRanges = 32u;
-
-[[nodiscard]] inline b8 PrepareTimingProbeScopes(Core::GraphicsRuntime& graphics, const Span<const Name> scopes, const TStringView probeName){
-    auto& device = graphics.getDevice();
-    for(const Name& scope : scopes){
-        if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to prepare scope '{}'"), probeName, ConvertString(scope.resolvedText()));
-            return false;
-        }
-    }
-    return true;
-}
-
-inline void RegisterTimingProbeRenderPass(Core::GraphicsRuntime& graphics, Core::IRenderPass& pass, const TStringView probeName){
-    graphics.addRenderPassToBack(pass);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: in-flight ranges {}"), probeName, s_InFlightRanges);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: render unfocused 1"), probeName);
-}
-};
 };
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const u32 s_TimingProbeInFlightRanges = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PrepareTimingProbeScopes(mut GraphicsRuntime graphics, in Span<Name> scopes, in TStringView probeName){
+    for(usize i = 0u; i < scopes.size(); ++i){
+        const Name scope = scopes[i];
+        b8 prepared = false;
+        native(mut graphics, in scope, mut prepared){
+            prepared = graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), s_TimingProbeInFlightRanges);
+        }
+        if(!prepared){
+            error("{}: failed to prepare scope '{}'", probeName, scope.resolvedText());
+            return false;
+        }
+    }
+    return true;
+}
+
+void RegisterTimingProbeRenderPass(mut GraphicsRuntime graphics, mut TimingProbeUnfocusedPass pass, in TStringView probeName){
+    native(mut graphics, mut pass){
+        graphics.addRenderPassToBack(pass);
+    }
+    [essential] info("{}: in-flight ranges {}", probeName, s_TimingProbeInFlightRanges);
+    [essential] info("{}: render unfocused 1", probeName);
+}
 
 class AvboitTimingRenderPass{
     public AvboitTimingRenderPass(mut GraphicsRuntime graphics){
@@ -63,9 +71,13 @@ class AvboitTimingRenderPass{
     public b8 start(in b8 includeCaustics){
         if(this.m_registered)
             return this.m_includeCaustics == includeCaustics;
-        native(in includeCaustics){
-            constexpr TStringView s_ProbeName = NWB_TEXT("AvboitTimingProbe");
-            const Array<Name, 24> scopes = {
+
+        TStringView probeName = TStringView();
+        Array<Name, 24u> scopes;
+        Array<Name, 2u> causticScopes;
+        native(mut probeName, mut scopes, mut causticScopes){
+            probeName = NWB_TEXT("AvboitTimingProbe");
+            scopes = {
                 Impl::RendererGpuTimingScope::s_Frame.identity,
                 Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
                 Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
@@ -91,21 +103,21 @@ class AvboitTimingRenderPass{
                 Impl::RendererGpuTimingScope::s_RefractionClearTileArguments.identity,
                 Impl::RendererGpuTimingScope::s_OpticalBoundsFinalize.identity,
             };
-            auto& graphics = *this->m_graphics;
-            if(!__hidden_timing_render_pass::PrepareTimingProbeScopes(graphics, scopes, s_ProbeName))
-                return false;
-            if(includeCaustics){
-                const Array<Name, 2> causticScopes = { Impl::RendererGpuTimingScope::s_CausticPhotons.identity, Impl::RendererGpuTimingScope::s_CausticResolve.identity, };
-                if(!__hidden_timing_render_pass::PrepareTimingProbeScopes(graphics, causticScopes, s_ProbeName))
-                    return false;
-            }
-            __hidden_timing_render_pass::RegisterTimingProbeRenderPass(graphics, this->m_pass, s_ProbeName);
-            this->m_registered = true;
-            this->m_includeCaustics = includeCaustics;
-            if(includeCaustics)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitTimingProbe: caustic in-flight ranges {}"), __hidden_timing_render_pass::s_InFlightRanges);
-            return true;
+            causticScopes = {
+                Impl::RendererGpuTimingScope::s_CausticPhotons.identity,
+                Impl::RendererGpuTimingScope::s_CausticResolve.identity,
+            };
         }
+        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, probeName))
+            return false;
+        if(includeCaustics && !PrepareTimingProbeScopes(this.m_graphics, causticScopes, probeName))
+            return false;
+        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, probeName);
+        this.m_registered = true;
+        this.m_includeCaustics = includeCaustics;
+        if(includeCaustics)
+            [essential] info("AvboitTimingProbe: caustic in-flight ranges {}", s_TimingProbeInFlightRanges);
+        return true;
     }
 
     public void stop(){
@@ -135,9 +147,12 @@ class ShadowTimingRenderPass{
     public b8 start(){
         if(this.m_registered)
             return true;
-        native{
-            constexpr TStringView s_ProbeName = NWB_TEXT("ShadowTimingProbe");
-            const Array<Name, 13> scopes = {
+
+        TStringView probeName = TStringView();
+        Array<Name, 13u> scopes;
+        native(mut probeName, mut scopes){
+            probeName = NWB_TEXT("ShadowTimingProbe");
+            scopes = {
                 Impl::RendererGpuTimingScope::s_Frame.identity,
                 Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
                 Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
@@ -152,13 +167,12 @@ class ShadowTimingRenderPass{
                 Impl::RendererGpuTimingScope::s_ShadowTransparentTemporal.identity,
                 Impl::RendererGpuTimingScope::s_ShadowTransparentResolve.identity,
             };
-            auto& graphics = *this->m_graphics;
-            if(!__hidden_timing_render_pass::PrepareTimingProbeScopes(graphics, scopes, s_ProbeName))
-                return false;
-            __hidden_timing_render_pass::RegisterTimingProbeRenderPass(graphics, this->m_pass, s_ProbeName);
-            this->m_registered = true;
-            return true;
         }
+        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, probeName))
+            return false;
+        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, probeName);
+        this.m_registered = true;
+        return true;
     }
 
     public void stop(){
@@ -175,3 +189,4 @@ class ShadowTimingRenderPass{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

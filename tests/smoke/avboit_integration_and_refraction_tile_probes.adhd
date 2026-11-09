@@ -8,63 +8,35 @@
 native{
 #include <tests/smoke/assets/shaders/refraction_tile_probe_layout.h>
 
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_graphics/refractive_subsystem.adhd.h>
-#include <impl/assets/graphics/refraction/push_constants.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <global/simd/convert_half.h>
-#include <global/simd/vector.h>
-
 #include <loader/project_entry.h>
 
-#include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets_scene/asset.adhd.h>
 #include <impl/assets_shader/loader.adhd.h>
 #include <impl/ecs_render/avboit/avboit.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 #include <core/task/gpu/task_graph.h>
-}
 
+#include <global/simd/convert_half.h>
+#include <global/simd/vector.h>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace NWB::Tests::Smoke{
+inline constexpr u32 s_AvboitIntWidth = 7u;
+inline constexpr u32 s_AvboitIntHeight = 3u;
+inline constexpr u32 s_AvboitIntPixelCount = s_AvboitIntWidth * s_AvboitIntHeight;
+inline constexpr u32 s_AvboitIntSliceCount = 17u;
+inline constexpr u32 s_AvboitIntWordCount = DivideUp(s_AvboitIntSliceCount, NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_AvboitIntPixelCount;
 
-
-const u32 s_AvboitIntegrationProbeWidth = 7u;
-const u32 s_AvboitIntegrationProbeHeight = 3u;
-const u32 s_AvboitIntegrationProbeSliceCount = 17u;
-const u32 s_AvboitIntegrationProbePhaseCount = 5u;
-const u32 s_AvboitIntegrationProbeFixedScale = 16u;
-
-const u32 s_RefractionTileProbeSentinel = 0xa573d91bu;
-const u32 s_RefractionTileProbePhaseCount = 6u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-native{
-namespace __hidden_avboit_integration_probe{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-
-inline constexpr u32 s_Width = Tests::Smoke::s_AvboitIntegrationProbeWidth;
-inline constexpr u32 s_Height = Tests::Smoke::s_AvboitIntegrationProbeHeight;
-inline constexpr u32 s_PixelCount = s_Width * s_Height;
-inline constexpr u32 s_SliceCount = Tests::Smoke::s_AvboitIntegrationProbeSliceCount;
-inline constexpr u32 s_WordCount = DivideUp(s_SliceCount, NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_PixelCount;
-inline constexpr u32 s_PhaseCount = Tests::Smoke::s_AvboitIntegrationProbePhaseCount;
-inline constexpr u32 s_FixedScale = Tests::Smoke::s_AvboitIntegrationProbeFixedScale;
-inline constexpr Name s_ProbeName = NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationProbe;
-
-struct ProbeTask{
+struct AvboitIntegrationProbeTask{
     struct Payload{
         Core::BufferHandle extinction;
         Core::BufferHandle overflow;
@@ -76,15 +48,15 @@ struct ProbeTask{
         Core::GpuDescriptorHeap& heap;
         TStringView& stage;
         Core::ResourceStates::Mask volumeInitialState = Core::ResourceStates::Unknown;
-        Array<u32, s_WordCount> words{};
-        Array<u32, s_PixelCount> overflowSlices{};
+        Array<u32, s_AvboitIntWordCount> words{};
+        Array<u32, s_AvboitIntPixelCount> overflowSlices{};
         Array<u32, NWB_AVBOIT_CONTROL_WORD_COUNT> controlWords{};
         Impl::RendererAvboitPushConstants push{};
     };
 
 
 public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true, };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
 
 
 public:
@@ -112,7 +84,7 @@ public:
         commands.setComputeState(state);
         payload.heap.bindCompute(commands, *payload.pipeline);
         commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatch(DivideUp(s_PixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), 1u, 1u);
+        commands.dispatch(DivideUp(s_AvboitIntPixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), 1u, 1u);
         payload.stage = NWB_TEXT("volume copy and state restoration");
         commands.setTextureState(payload.volume.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopySource);
         commands.commitBarriers();
@@ -129,17 +101,18 @@ public:
     }
 };
 
-[[nodiscard]] static Expected<Core::GpuTaskId> DeclareProbe(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *MakeNotNull(static_cast<const ProbeTask::Payload*>(userData));
+[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareAvboitIntegrationProbe(void* userData, Core::GpuTaskGraph& graph){
+    const auto& payload = *MakeNotNull(static_cast<const AvboitIntegrationProbeTask::Payload*>(userData));
+    const Name probeName = Name(s_SmokeNameAvboitIntegrationProbe);
     payload.stage = NWB_TEXT("buffer imports");
-    const auto import = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
+    const auto importBuf = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));
     };
     const Array<Expected<Core::GpuGraphResourceId>, 4u> buffers{
-        import(payload.extinction, "Integration probe extinction", Core::ResourceStates::CopyDest),
-        import(payload.overflow, "Integration probe overflow", Core::ResourceStates::CopyDest),
-        import(payload.control, "Integration probe control", Core::ResourceStates::CopyDest),
-        import(payload.slots, "Integration probe heap slots", Core::ResourceStates::ConstantBuffer),
+        importBuf(payload.extinction, "Integration probe extinction", Core::ResourceStates::CopyDest),
+        importBuf(payload.overflow, "Integration probe overflow", Core::ResourceStates::CopyDest),
+        importBuf(payload.control, "Integration probe control", Core::ResourceStates::CopyDest),
+        importBuf(payload.slots, "Integration probe heap slots", Core::ResourceStates::ConstantBuffer),
     };
     for(const auto& buffer : buffers){
         if(!buffer)
@@ -149,13 +122,13 @@ public:
     const auto volume = graph.importTexture(
         payload.volume,
         Core::GpuGraphResourceDesc{}
-            .setIdentity(s_ProbeName)
+            .setIdentity(probeName)
             .setMarkerLabel("Integration probe transmittance volume")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(payload.volumeInitialState)
             .setExternalFinalState(Core::ResourceStates::CopyDest)
     );
-    const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationReadback)).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
+    const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(s_SmokeNameAvboitIntegrationReadback)).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
     if(!volume || !readback)
         return MakeUnexpected(Failure{});
     const Array<Core::GpuTaskResourceUse, 6> uses = {{
@@ -167,240 +140,31 @@ public:
         { .resource = *readback, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write },
     }};
     payload.stage = NWB_TEXT("task declaration");
-    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses), ProbeTask::Payload(payload));
+    const auto task = graph.addTask<AvboitIntegrationProbeTask>(Core::GpuTaskDesc{}.setIdentity(probeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses), AvboitIntegrationProbeTask::Payload(payload));
     if(task)
         payload.stage = NWB_TEXT("scheduling or initial-state recording admission");
     return task;
 }
 
-static void SetExtinction(const u32 pixel, const u32 slice, const u32 value, ProbeTask::Payload& payload)noexcept{
-    payload.words[(slice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_PixelCount + pixel] |= value << ((slice % NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * NWB_AVBOIT_EXTINCTION_BYTE_BITS);
-}
+inline constexpr u32 s_RefTileTilesX = DivideUp(s_RefractionTileProbeWidth, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
+inline constexpr u32 s_RefTileTilesY = DivideUp(s_RefractionTileProbeHeight, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
+inline constexpr u32 s_RefTileCount = s_RefTileTilesX * s_RefTileTilesY;
+inline constexpr u32 s_RefTilePixelCount = s_RefractionTileProbeWidth * s_RefractionTileProbeHeight;
+inline constexpr u32 s_RefTileArgumentWords = NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32) + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
+inline constexpr u32 s_RefTileQueueWords = s_RefTileCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
+inline constexpr u32 s_RefTileVisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_RefTileCount + s_RefTilePixelCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
+inline constexpr u32 s_RefTileReadbackWords = s_RefTileArgumentWords + s_RefTileQueueWords + s_RefTileVisitWords;
+inline constexpr u32 s_RefTileSentinel = 0xa573d91bu;
+inline constexpr u32 s_RefTileMissingTile = (s_RefTileTilesY / 2u) * s_RefTileTilesX + s_RefTileTilesX / 2u;
+inline constexpr Array<u32, 6u> s_RefTileSparseTiles{ 0u, s_RefTileTilesX - 1u, (s_RefTileTilesY - 1u) * s_RefTileTilesX, s_RefTileCount - 1u, 65534u, 65535u };
 
-static void PreparePhase(const u32 phase, ProbeTask::Payload& payload)noexcept{
-    // Completed phases restore CopyDest before reusing the image.
-    payload.volumeInitialState = phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
-    payload.words.fill(0u);
-    payload.overflowSlices.fill(NWB_AVBOIT_OVERFLOW_INVALID);
-    const u32 active = phase == 3u ? 5u : phase == 4u ? 1u : s_SliceCount;
-    payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES] = active;
-    for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
-        if(phase == 0u){
-            SetExtinction(pixel, 0u, 255u, payload);
-            SetExtinction(pixel, 1u, 255u, payload);
-            continue;
-        }
-        if(phase == 1u)
-            continue;
-        switch(pixel % 7u){
-        case 0u: break;
-        case 1u: SetExtinction(pixel, active > 12u ? 12u : active - 1u, 16u, payload); break;
-        case 2u: SetExtinction(pixel, 0u, 255u, payload); SetExtinction(pixel, 1u, 255u, payload); break;
-        case 3u: payload.overflowSlices[pixel] = 0u; break;
-        case 4u: payload.overflowSlices[pixel] = active - 1u; break;
-        case 5u: SetExtinction(pixel, Min(DivideUp(active, 4u) * 4u - 1u, s_SliceCount - 1u), 255u, payload); break;
-        case 6u: SetExtinction(pixel, active - 1u, 16u, payload); break;
-        }
-    }
-}
+using RefractionTileProbePushConstants = Impl::RefractionPushConstants;
 
-[[nodiscard]] static b8 CompareVolume(const ProbeTask::Payload& payload, const u32 phase, Core::Device& device){
-    Array<u32, s_PixelCount> extinctionFixed{};
-    for(u32 slice = 0u; slice < s_SliceCount; ++slice){
-        const auto mapping = device.mapStagingTexture(*payload.readback, Core::TextureSlice{}.setOrigin(0u, 0u, slice).setSize(s_Width, s_Height, 1u), Core::CpuAccessMode::Read);
-        if(!mapping)
-            return false;
-        ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(*payload.readback); });
-        if(!mapping->data || mapping->rowPitch < s_Width * sizeof(Half))
-            return false;
-        for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
-            Half observed;
-            NWB_MEMCPY(&observed, sizeof(observed), static_cast<const u8*>(mapping->data) + (pixel / s_Width) * mapping->rowPitch + (pixel % s_Width) * sizeof(Half), sizeof(observed));
-            const f32 exponent = -static_cast<f32>(extinctionFixed[pixel]) / static_cast<f32>(s_FixedScale);
-            const f32 expected = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
-            const f32 actual = ConvertHalfToFloat(observed);
-            if(!IsFinite(actual) || (extinctionFixed[pixel] == 0u ? actual != 1.f : Abs(actual - expected) > Max(0.0000002f, expected * 0.002f))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"), phase, pixel, slice, expected, actual);
-                return false;
-            }
-            if(slice < payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES]){
-                if(slice >= payload.overflowSlices[pixel])
-                    extinctionFixed[pixel] = 16u * s_FixedScale;
-                else{
-                    const u32 packed = payload.words[(slice / 4u) * s_PixelCount + pixel];
-                    extinctionFixed[pixel] = Min(extinctionFixed[pixel] + ((packed >> ((slice % 4u) * 8u)) & 255u), 16u * s_FixedScale);
-                }
-            }
-        }
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems, NWB::ProjectRuntimeContext& context){
-    using namespace NWB;
-    using namespace __hidden_avboit_integration_probe;
-    auto& graphics = context.graphics;
-    auto& device = graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    Core::ShaderHandle shader;
-    const Impl::TransparentSubsystem* const transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
-    const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-    if(
-        !integrateShaderRef.valid()
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader)
-    )
-        return false;
-    Core::BindingLayoutDesc layoutDesc(context.objectArena);
-    layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
-    const auto layout = device.createBindingLayout(layoutDesc);
-    if(!layout)
-        return false;
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    const auto pipeline = device.createComputePipeline(pipelineDesc);
-    if(!pipeline)
-        return false;
-    const auto createBuffer = [&graphics](const Name name, const u32 byteSize, const b8 constant){
-        Core::BufferDesc desc;
-        desc.setDebugName(name).setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(!constant).setIsConstantBuffer(constant).enableAutomaticStateTracking(constant ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::CopyDest);
-        return graphics.createBuffer(desc);
-    };
-    const auto extinction = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationExtinction), s_WordCount * sizeof(u32), false);
-    const auto overflow = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationOverflow), s_PixelCount * sizeof(u32), false);
-    const auto control = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationControl), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
-    Core::TextureDesc textureDesc;
-    textureDesc.setWidth(s_Width)
-        .setHeight(s_Height)
-        .setDepth(s_SliceCount)
-        .setDimension(Core::TextureDimension::Texture3D)
-        .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
-        .setIsUAV(true)
-        .setName(s_ProbeName)
-        .setInitialState(Core::ResourceStates::CopyDest)
-        .setKeepInitialState(true)
-    ;
-    const auto volume = graphics.createTexture(textureDesc);
-    const auto readback = device.createStagingTexture(textureDesc, Core::CpuAccessMode::Read);
-    if(!extinction || !overflow || !control || !volume || !readback)
-        return false;
-    Core::BufferHandle slotBuffer;
-    Array<Core::GpuDescriptorHandle, 5u> descriptors{};
-    Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
-    const Array<Core::BufferHandle, 3u> buffers{ *extinction, *overflow, *control };
-    for(u32 index = 0u; index < buffers.size(); ++index){
-        const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptor)
-            return false;
-        descriptors[index] = *descriptor;
-        if(!heap.write(*descriptor, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get())))
-            return false;
-    }
-    const auto storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-    if(!storage)
-        return false;
-    descriptors[3] = *storage;
-    if(!heap.write(*storage, Core::DescriptorWriteItem::TextureUav(0u, volume->get(), textureDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture3D)))
-        return false;
-    Impl::DeferredBindlessResourceSlots slots;
-    slots.avboitExtinction = descriptors[0].slot();
-    slots.avboitExtinctionOverflow = descriptors[1].slot();
-    slots.avboitControl = descriptors[2].slot();
-    slots.avboitTransmittanceStorage = descriptors[3].slot();
-    Core::GraphicsStandaloneService::BufferSetupDesc setup;
-    setup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameAvboitIntegrationSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-    setup.data = &slots;
-    setup.dataSize = sizeof(slots);
-    setup.queue = Core::CommandQueue::Graphics;
-    const auto slotBufferResult = graphics.standaloneGraph().setupBuffer(setup);
-    if(!slotBufferResult)
-        return false;
-    slotBuffer = *slotBufferResult;
-    const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!uniform)
-        return false;
-    descriptors[4] = *uniform;
-    if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotBuffer.get())))
-        return false;
-    TStringView stage = NWB_TEXT("phase preparation");
-    ProbeTask::Payload payload{ *extinction, *overflow, *control, slotBuffer, *volume, *readback, *pipeline, heap, stage };
-    payload.push.frame[0] = s_Width * 4u;
-    payload.push.frame[1] = s_Height * 4u;
-    payload.push.frame[2] = s_Width;
-    payload.push.frame[3] = s_Height;
-    payload.push.volume[1] = s_SliceCount;
-    payload.push.volume[2] = s_WordCount;
-    payload.push.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = static_cast<f32>(s_FixedScale);
-    payload.push.heapSlots[0] = uniform->slot();
-    for(u32 phase = 0u; phase < s_PhaseCount; ++phase){
-        PreparePhase(phase, payload);
-        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareProbe);
-        if(!token){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} standalone graph rejected at {}"), phase, stage);
-            return false;
-        }
-        if(!device.waitForSubmissionToken(*token)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} submission completion wait failed"), phase);
-            return false;
-        }
-        if(!CompareVolume(payload, phase, device)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
-            return false;
-        }
-    }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks"));
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_refraction_tile_probe{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-
-inline constexpr u32 s_Width = Tests::Smoke::s_RefractionTileProbeWidth;
-inline constexpr u32 s_Height = Tests::Smoke::s_RefractionTileProbeHeight;
-inline constexpr u32 s_TilesX = DivideUp(s_Width, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
-inline constexpr u32 s_TilesY = DivideUp(s_Height, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
-inline constexpr u32 s_TileCount = s_TilesX * s_TilesY;
-inline constexpr u32 s_PixelCount = s_Width * s_Height;
-inline constexpr u32 s_ArgumentWords = NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32) + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_QueueWords = s_TileCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_VisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_TileCount + s_PixelCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_ReadbackWords = s_ArgumentWords + s_QueueWords + s_VisitWords;
-inline constexpr u32 s_Sentinel = Tests::Smoke::s_RefractionTileProbeSentinel;
-inline constexpr u32 s_PhaseCount = Tests::Smoke::s_RefractionTileProbePhaseCount;
-inline constexpr u32 s_MissingTile = (s_TilesY / 2u) * s_TilesX + s_TilesX / 2u;
-inline constexpr Array<u32, 6u> s_SparseTiles{ 0u, s_TilesX - 1u, (s_TilesY - 1u) * s_TilesX, s_TileCount - 1u, 65534u, 65535u };
-inline constexpr Name s_ProbeName = NWB::Tests::Smoke::s_SmokeNameRefractionTileProbe;
-inline constexpr Name s_VerifyShaderName = NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeCs;
-
-using ProbePushConstants = Impl::RefractionPushConstants;
-
-static_assert(sizeof(ProbePushConstants) == 11u * sizeof(u32));
-static_assert(s_TileCount == 66049u && s_TileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
+static_assert(sizeof(RefractionTileProbePushConstants) == 11u * sizeof(u32));
+static_assert(s_RefTileCount == 66049u && s_RefTileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
 static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 32u && NWB_REFRACTION_TILE_COUNTER_OFFSET == 12u && NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 16u);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ProbeTask{
+struct RefractionTileProbeTask{
     struct Payload{
         Core::TextureHandle depth;
         Core::BufferHandle queue;
@@ -415,14 +179,14 @@ struct ProbeTask{
         Core::ComputePipelineHandle verifyDense;
         Core::GpuDescriptorHeap& heap;
         TStringView& stage;
-        ProbePushConstants push;
+        RefractionTileProbePushConstants push;
         u32 denseTileListSlot = 0u;
         u32 phase = 0u;
     };
 
 
 public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true, };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
 
 
 public:
@@ -434,38 +198,38 @@ public:
         commands.setTextureState(payload.depth.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopyDest, true);
         commands.commitBarriers();
         if(payload.phase == 2u){
-            for(const u32 tile : s_SparseTiles){
-                const i32 x = static_cast<i32>((tile % s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
-                const i32 y = static_cast<i32>((tile / s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
+            for(const u32 tile : s_RefTileSparseTiles){
+                const i32 x = static_cast<i32>((tile % s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
+                const i32 y = static_cast<i32>((tile / s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
                 commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + 1, y, y + 1), Core::Color(0.5f));
             }
         }
         else if(payload.phase == 3u || payload.phase == 4u){
-            const u32 count = Tests::Smoke::ExpectedRefractionProbeTileCount(payload.phase);
-            const u32 fullRows = count / s_TilesX;
-            commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(s_Width), 0, static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE)), Core::Color(0.5f));
-            const u32 remainder = count % s_TilesX;
+            const u32 count = ExpectedRefractionProbeTileCount(payload.phase);
+            const u32 fullRows = count / s_RefTileTilesX;
+            commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(s_RefractionTileProbeWidth), 0, static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE)), Core::Color(0.5f));
+            const u32 remainder = count % s_RefTileTilesX;
             if(remainder != 0u){
                 const i32 y = static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE);
                 commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(remainder * NWB_REFRACTION_GROUP_SIZE), y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(0.5f));
             }
         }
         else if(payload.phase == 5u){
-            const i32 x = static_cast<i32>((s_MissingTile % s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
-            const i32 y = static_cast<i32>((s_MissingTile / s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
+            const i32 x = static_cast<i32>((s_RefTileMissingTile % s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
+            const i32 y = static_cast<i32>((s_RefTileMissingTile / s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
             commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + NWB_REFRACTION_GROUP_SIZE, y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(1.f));
         }
-        Array<u32, s_ArgumentWords> arguments;
-        arguments.fill(s_Sentinel);
+        Array<u32, s_RefTileArgumentWords> arguments;
+        arguments.fill(s_RefTileSentinel);
         for(u32 word = 0u; word < NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32); ++word)
             arguments[word] = 0u;
         Array<u32, NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS> guards;
-        guards.fill(s_Sentinel);
-        commands.clearBufferUInt(*payload.queue, s_Sentinel);
+        guards.fill(s_RefTileSentinel);
+        commands.clearBufferUInt(*payload.queue, s_RefTileSentinel);
         commands.clearBufferUInt(*payload.visits, 0u);
         commands.setBufferState(payload.visits.get(), Core::ResourceStates::CopyDest, true);
         commands.commitBarriers();
-        if(!commands.tryWriteBuffer(*payload.arguments, arguments.data(), sizeof(arguments)) || !commands.tryWriteBuffer(*payload.visits, guards.data(), sizeof(guards), static_cast<u64>(s_VisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS) * sizeof(u32)))
+        if(!commands.tryWriteBuffer(*payload.arguments, arguments.data(), sizeof(arguments)) || !commands.tryWriteBuffer(*payload.visits, guards.data(), sizeof(guards), static_cast<u64>(s_RefTileVisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS) * sizeof(u32)))
             return false;
 
         payload.stage = NWB_TEXT("production tile classification");
@@ -479,7 +243,7 @@ public:
         commands.setComputeState(classify);
         payload.heap.bindCompute(commands, *payload.classify);
         commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatch(s_TilesX, s_TilesY, 1u);
+        commands.dispatch(s_RefTileTilesX, s_RefTileTilesY, 1u);
 
         payload.stage = NWB_TEXT("production indirect route finalization");
         commands.setBufferState(payload.arguments.get(), Core::ResourceStates::UnorderedAccess, true);
@@ -510,7 +274,7 @@ public:
         commands.setComputeState(verifyDense);
         payload.heap.bindCompute(commands, *payload.verifyDense);
         // A valid reversed list distinguishes direct dense mapping from queue traversal without changing classifier output.
-        ProbePushConstants verifyPush = payload.push;
+        RefractionTileProbePushConstants verifyPush = payload.push;
         verifyPush.tileListSlot = payload.denseTileListSlot;
         commands.setPushConstants(&verifyPush, sizeof(verifyPush));
         commands.dispatchIndirect(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET);
@@ -536,8 +300,9 @@ public:
     }
 };
 
-[[nodiscard]] static Expected<Core::GpuTaskId> DeclareProbe(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *MakeNotNull(static_cast<const ProbeTask::Payload*>(userData));
+[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareRefractionTileProbe(void* userData, Core::GpuTaskGraph& graph){
+    const auto& payload = *MakeNotNull(static_cast<const RefractionTileProbeTask::Payload*>(userData));
+    const Name probeName = Name(s_SmokeNameRefractionTileProbe);
     payload.stage = NWB_TEXT("graph imports");
     const auto importBuffer = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));
@@ -555,7 +320,7 @@ public:
             return MakeUnexpected(Failure{});
     }
     const auto initial = payload.phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
-    const auto depthDesc = Core::GpuGraphResourceDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction probe capture depth").setType(Core::GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(Core::ResourceStates::CopyDest);
+    const auto depthDesc = Core::GpuGraphResourceDesc{}.setIdentity(probeName).setMarkerLabel("Refraction probe capture depth").setType(Core::GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(Core::ResourceStates::CopyDest);
     const auto depth = graph.importTexture(payload.depth, depthDesc);
     if(!depth)
         return MakeUnexpected(Failure{});
@@ -569,245 +334,637 @@ public:
         { .resource = *depth, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
     }};
     payload.stage = NWB_TEXT("task declaration");
-    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses), ProbeTask::Payload(payload));
+    const auto task = graph.addTask<RefractionTileProbeTask>(Core::GpuTaskDesc{}.setIdentity(probeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses), RefractionTileProbeTask::Payload(payload));
     if(task)
         payload.stage = NWB_TEXT("scheduling or initial-state recording admission");
     return task;
 }
 
-[[nodiscard]] static b8 CompareReadback(const ProbeTask::Payload& payload, Core::Device& device, Core::Alloc::ScratchArena& scratch){
-    const auto mapping = device.mapBuffer(*payload.readback, Core::CpuAccessMode::Read);
-    if(!mapping || !*mapping)
-        return false;
-    ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*payload.readback); });
-    const auto words = MakeNotNull(static_cast<const u32*>(*mapping));
-    const u32 count = Tests::Smoke::ExpectedRefractionProbeTileCount(payload.phase);
-    const b8 dense = count == s_TileCount;
-    const u32 compactX = dense ? 0u : Min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X);
-    const u32 compactY = dense ? 1u : Max(1u, DivideUp(count, NWB_REFRACTION_MAX_GROUP_COUNT_X));
-    const u32 denseX = dense ? s_TilesX : 0u;
-    const u32 denseY = dense ? s_TilesY : 1u;
-    const Array<u32, 8u> expectedArguments{ compactX, compactY, 1u, count, denseX, denseY, 1u, 0u };
-    for(u32 word = 0u; word < s_ArgumentWords; ++word){
-        const u32 expected = word < expectedArguments.size() ? expectedArguments[word] : s_Sentinel;
-        if(words.get()[word] != expected){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} argument word {} expected {} observed {}"), payload.phase, word, expected, words.get()[word]);
+using Impl::ActiveSceneSubsystems;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_AvboitIntegrationProbeWidth = 7u;
+const u32 s_AvboitIntegrationProbeHeight = 3u;
+const u32 s_AvboitIntegrationProbePixelCount = s_AvboitIntegrationProbeWidth * s_AvboitIntegrationProbeHeight;
+const u32 s_AvboitIntegrationProbeSliceCount = 17u;
+const u32 s_AvboitIntegrationSlicesPerWord = 4u;
+const u32 s_AvboitIntegrationByteBits = 8u;
+const u32 s_AvboitIntegrationProbeWordCount = 5u * s_AvboitIntegrationProbePixelCount;
+const u32 s_AvboitIntegrationProbePhaseCount = 5u;
+const u32 s_AvboitIntegrationProbeFixedScale = 16u;
+const u32 s_AvboitOverflowInvalid = 0xffffffffu;
+
+const u32 s_RefractionTileProbeSentinel = 0xa573d91bu;
+const u32 s_RefractionTileProbePhaseCount = 6u;
+const u32 s_RefractionTileProbeGuardWords = 8u;
+const u32 s_RefractionTileProbeHeaderWords = 6u;
+const u32 s_RefractionTileProbeArgumentBytes = 32u;
+const u32 s_RefractionTileProbeArgumentWords = 8u + s_RefractionTileProbeGuardWords;
+const u32 s_RefractionTileProbePixelCount = s_RefractionTileProbeWidth * s_RefractionTileProbeHeight;
+const u32 s_RefractionTileProbeQueueWords = s_RefractionTileProbeTileCount + s_RefractionTileProbeGuardWords;
+const u32 s_RefractionTileProbeVisitWords = s_RefractionTileProbeHeaderWords + s_RefractionTileProbeTileCount + s_RefractionTileProbePixelCount + s_RefractionTileProbeGuardWords;
+const u32 s_RefractionTileProbeReadbackWords = s_RefractionTileProbeArgumentWords + s_RefractionTileProbeQueueWords + s_RefractionTileProbeVisitWords;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitIntegrationPhaseState{
+    public Array<u32, s_AvboitIntegrationProbeWordCount> words;
+    public Array<u32, s_AvboitIntegrationProbePixelCount> overflowSlices;
+    public u32 activeSlices = s_AvboitIntegrationProbeSliceCount;
+
+    public void setExtinction(in u32 pixel, in u32 slice, in u32 value){
+        const u32 wordIndex = (slice / s_AvboitIntegrationSlicesPerWord) * s_AvboitIntegrationProbePixelCount + pixel;
+        const u32 shift = (slice % s_AvboitIntegrationSlicesPerWord) * s_AvboitIntegrationByteBits;
+        this.words[wordIndex] |= value << shift;
+    }
+
+    public void prepare(in u32 phase){
+        for(u32 i = 0u; i < s_AvboitIntegrationProbeWordCount; ++i)
+            this.words[i] = 0u;
+        for(u32 i = 0u; i < s_AvboitIntegrationProbePixelCount; ++i)
+            this.overflowSlices[i] = s_AvboitOverflowInvalid;
+
+        u32 active = s_AvboitIntegrationProbeSliceCount;
+        if(phase == 3u)
+            active = 5u;
+        else if(phase == 4u)
+            active = 1u;
+        this.activeSlices = active;
+
+        for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
+            if(phase == 0u){
+                this.setExtinction(pixel, 0u, 255u);
+                this.setExtinction(pixel, 1u, 255u);
+                continue;
+            }
+            if(phase == 1u)
+                continue;
+
+            const u32 bucket = pixel % 7u;
+            if(bucket == 1u){
+                u32 targetSlice = active - 1u;
+                if(active > 12u)
+                    targetSlice = 12u;
+                this.setExtinction(pixel, targetSlice, 16u);
+            }
+            else if(bucket == 2u){
+                this.setExtinction(pixel, 0u, 255u);
+                this.setExtinction(pixel, 1u, 255u);
+            }
+            else if(bucket == 3u){
+                this.overflowSlices[pixel] = 0u;
+            }
+            else if(bucket == 4u){
+                this.overflowSlices[pixel] = active - 1u;
+            }
+            else if(bucket == 5u){
+                const u32 rounded = ((active + 3u) / 4u) * 4u - 1u;
+                this.setExtinction(pixel, Min(rounded, s_AvboitIntegrationProbeSliceCount - 1u), 255u);
+            }
+            else if(bucket == 6u){
+                this.setExtinction(pixel, active - 1u, 16u);
+            }
+        }
+    }
+}
+
+b8 VerifyAvboitIntegrationSliceValues(
+    in AvboitIntegrationPhaseState state,
+    in u32 phase,
+    in u32 slice,
+    in Span<f32> observedPixels,
+    in Span<f32> expectedPixels,
+    mut Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed
+){
+    for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
+        const f32 expected = expectedPixels[pixel];
+        const f32 actual = observedPixels[pixel];
+        b8 mismatch = !IsFinite(actual);
+        if(!mismatch){
+            if(extinctionFixed[pixel] == 0u)
+                mismatch = actual != 1.0f;
+            else
+                mismatch = Abs(actual - expected) > Max(0.0000002f, expected * 0.002f);
+        }
+        if(mismatch){
+            error(
+                "AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"
+                , phase
+                , pixel
+                , slice
+                , expected
+                , actual
+            );
+            return false;
+        }
+        if(slice < state.activeSlices){
+            if(slice >= state.overflowSlices[pixel]){
+                extinctionFixed[pixel] = 16u * s_AvboitIntegrationProbeFixedScale;
+            }
+            else{
+                const u32 packed = state.words[(slice / 4u) * s_AvboitIntegrationProbePixelCount + pixel];
+                const u32 byteVal = (packed >> ((slice % 4u) * 8u)) & 255u;
+                extinctionFixed[pixel] = Min(extinctionFixed[pixel] + byteVal, 16u * s_AvboitIntegrationProbeFixedScale);
+            }
+        }
+    }
+    return true;
+}
+
+b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
+    AvboitIntegrationPhaseState phaseState = AvboitIntegrationPhaseState();
+    b8 ok = false;
+    native(in sceneSubsystems, mut context, mut phaseState, mut ok){
+        const Name probeName = Name(s_SmokeNameAvboitIntegrationProbe);
+        auto& graphics = context.graphics;
+        auto& device = graphics.getDevice();
+        auto& heap = device.getDescriptorHeap();
+        Core::ShaderHandle shader;
+        const Impl::TransparentSubsystem* const transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
+        const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        if(
+            !integrateShaderRef.valid()
+            || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, probeName, NWB_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader)
+        )
+            return false;
+        Core::BindingLayoutDesc layoutDesc(context.objectArena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
+        const auto layout = device.createBindingLayout(layoutDesc);
+        if(!layout)
+            return false;
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc.setComputeShader(shader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        const auto pipeline = device.createComputePipeline(pipelineDesc);
+        if(!pipeline)
+            return false;
+        const auto createBuffer = [&graphics](const Name name, const u32 byteSize, const b8 constant){
+            Core::BufferDesc desc;
+            desc.setDebugName(name).setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(!constant).setIsConstantBuffer(constant).enableAutomaticStateTracking(constant ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::CopyDest);
+            return graphics.createBuffer(desc);
+        };
+        const auto extinction = createBuffer(Name(s_SmokeNameAvboitIntegrationExtinction), s_AvboitIntWordCount * sizeof(u32), false);
+        const auto overflow = createBuffer(Name(s_SmokeNameAvboitIntegrationOverflow), s_AvboitIntPixelCount * sizeof(u32), false);
+        const auto control = createBuffer(Name(s_SmokeNameAvboitIntegrationControl), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
+        Core::TextureDesc textureDesc;
+        textureDesc.setWidth(s_AvboitIntWidth)
+            .setHeight(s_AvboitIntHeight)
+            .setDepth(s_AvboitIntSliceCount)
+            .setDimension(Core::TextureDimension::Texture3D)
+            .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
+            .setIsUAV(true)
+            .setName(probeName)
+            .setInitialState(Core::ResourceStates::CopyDest)
+            .setKeepInitialState(true)
+        ;
+        const auto volume = graphics.createTexture(textureDesc);
+        const auto readback = device.createStagingTexture(textureDesc, Core::CpuAccessMode::Read);
+        if(!extinction || !overflow || !control || !volume || !readback)
+            return false;
+        Core::BufferHandle slotBuffer;
+        Array<Core::GpuDescriptorHandle, 5u> descriptors{};
+        Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
+        const Array<Core::BufferHandle, 3u> buffers{ *extinction, *overflow, *control };
+        for(u32 index = 0u; index < buffers.size(); ++index){
+            const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(!descriptor)
+                return false;
+            descriptors[index] = *descriptor;
+            if(!heap.write(*descriptor, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get())))
+                return false;
+        }
+        const auto storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
+        if(!storage)
+            return false;
+        descriptors[3] = *storage;
+        if(!heap.write(*storage, Core::DescriptorWriteItem::TextureUav(0u, volume->get(), textureDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture3D)))
+            return false;
+        Impl::DeferredBindlessResourceSlots slots;
+        slots.avboitExtinction = descriptors[0].slot();
+        slots.avboitExtinctionOverflow = descriptors[1].slot();
+        slots.avboitControl = descriptors[2].slot();
+        slots.avboitTransmittanceStorage = descriptors[3].slot();
+        Core::GraphicsStandaloneService::BufferSetupDesc setup;
+        setup.bufferDesc.setDebugName(Name(s_SmokeNameAvboitIntegrationSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
+        setup.data = &slots;
+        setup.dataSize = sizeof(slots);
+        setup.queue = Core::CommandQueue::Graphics;
+        const auto slotBufferResult = graphics.standaloneGraph().setupBuffer(setup);
+        if(!slotBufferResult)
+            return false;
+        slotBuffer = *slotBufferResult;
+        const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+        if(!uniform)
+            return false;
+        descriptors[4] = *uniform;
+        if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotBuffer.get())))
+            return false;
+        TStringView stage = NWB_TEXT("phase preparation");
+        AvboitIntegrationProbeTask::Payload payload{ *extinction, *overflow, *control, slotBuffer, *volume, *readback, *pipeline, heap, stage };
+        payload.push.frame[0] = s_AvboitIntWidth * 4u;
+        payload.push.frame[1] = s_AvboitIntHeight * 4u;
+        payload.push.frame[2] = s_AvboitIntWidth;
+        payload.push.frame[3] = s_AvboitIntHeight;
+        payload.push.volume[1] = s_AvboitIntSliceCount;
+        payload.push.volume[2] = s_AvboitIntWordCount;
+        payload.push.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = static_cast<f32>(s_AvboitIntegrationProbeFixedScale);
+        payload.push.heapSlots[0] = uniform->slot();
+        for(u32 phase = 0u; phase < s_AvboitIntegrationProbePhaseCount; ++phase){
+            phaseState.prepare(phase);
+            payload.volumeInitialState = phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
+            payload.words = phaseState.words;
+            payload.overflowSlices = phaseState.overflowSlices;
+            payload.controlWords.fill(0u);
+            payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES] = phaseState.activeSlices;
+            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareAvboitIntegrationProbe);
+            if(!token){
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} standalone graph rejected at {}"), phase, stage);
+                return false;
+            }
+            if(!device.waitForSubmissionToken(*token)){
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} submission completion wait failed"), phase);
+                return false;
+            }
+            Array<u32, s_AvboitIntPixelCount> extinctionFixed{};
+            for(u32 slice = 0u; slice < s_AvboitIntSliceCount; ++slice){
+                const auto mapping = device.mapStagingTexture(*payload.readback, Core::TextureSlice{}.setOrigin(0u, 0u, slice).setSize(s_AvboitIntWidth, s_AvboitIntHeight, 1u), Core::CpuAccessMode::Read);
+                if(!mapping){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
+                    return false;
+                }
+                ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(*payload.readback); });
+                if(!mapping->data || mapping->rowPitch < s_AvboitIntWidth * sizeof(Half)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
+                    return false;
+                }
+                Array<f32, s_AvboitIntPixelCount> observedPixels{};
+                Array<f32, s_AvboitIntPixelCount> expectedPixels{};
+                for(u32 pixel = 0u; pixel < s_AvboitIntPixelCount; ++pixel){
+                    Half observed;
+                    NWB_MEMCPY(&observed, sizeof(observed), static_cast<const u8*>(mapping->data) + (pixel / s_AvboitIntWidth) * mapping->rowPitch + (pixel % s_AvboitIntWidth) * sizeof(Half), sizeof(observed));
+                    const f32 exponent = -static_cast<f32>(extinctionFixed[pixel]) / static_cast<f32>(s_AvboitIntegrationProbeFixedScale);
+                    expectedPixels[pixel] = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
+                    observedPixels[pixel] = ConvertHalfToFloat(observed);
+                }
+                if(!VerifyAvboitIntegrationSliceValues(phaseState, phase, slice, Span<const f32>(observedPixels.data(), observedPixels.size()), Span<const f32>(expectedPixels.data(), expectedPixels.size()), extinctionFixed)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
+                    return false;
+                }
+            }
+        }
+        ok = true;
+    }
+    if(ok)
+        [essential] info("AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks");
+    return ok;
+}
+
+void BuildRefractionProbeReversedTiles(mut Vector<u32> outTiles){
+    outTiles.resize(s_RefractionTileProbeQueueWords, s_RefractionTileProbeSentinel);
+    for(u32 tile = 0u; tile < s_RefractionTileProbeTileCount; ++tile)
+        outTiles[tile] = s_RefractionTileProbeTileCount - 1u - tile;
+}
+
+b8 VerifyRefractionTileProbeReadback(
+    in u32 phase,
+    in Span<u32> words,
+    in u64 argBytes,
+    in u64 queueBytes,
+    in u64 visitBytes,
+    in u64 readbackBytes
+){
+    const u32 count = ExpectedRefractionProbeTileCount(phase);
+    const b8 dense = count == s_RefractionTileProbeTileCount;
+    u32 compactX = Min(count, s_RefractionTileProbeMaxGroupCountX);
+    u32 compactY = Max(1u, (count + s_RefractionTileProbeMaxGroupCountX - 1u) / s_RefractionTileProbeMaxGroupCountX);
+    u32 denseX = 0u;
+    u32 denseY = 1u;
+    if(dense){
+        compactX = 0u;
+        compactY = 1u;
+        denseX = s_RefractionTileProbeTilesX;
+        denseY = s_RefractionTileProbeTilesY;
+    }
+
+    Array<u32, 8u> expectedArguments;
+    expectedArguments[0u] = compactX;
+    expectedArguments[1u] = compactY;
+    expectedArguments[2u] = 1u;
+    expectedArguments[3u] = count;
+    expectedArguments[4u] = denseX;
+    expectedArguments[5u] = denseY;
+    expectedArguments[6u] = 1u;
+    expectedArguments[7u] = 0u;
+
+    for(u32 word = 0u; word < s_RefractionTileProbeArgumentWords; ++word){
+        u32 expected = s_RefractionTileProbeSentinel;
+        if(word < 8u)
+            expected = expectedArguments[word];
+        if(words[word] != expected){
+            error(
+                "RefractionTileProbe: phase {} argument word {} expected {} observed {}"
+                , phase
+                , word
+                , expected
+                , words[word]
+            );
             return false;
         }
     }
-    Vector<u8, Core::Alloc::ScratchArena> seen{ scratch };
-    seen.resize(s_TileCount, 0u);
-    const auto queue = MakeNotNull(words.get() + s_ArgumentWords);
+
+    Vector<u8> seen;
+    seen.resize(s_RefractionTileProbeTileCount, 0u);
+    const u32 queueBase = s_RefractionTileProbeArgumentWords;
     for(u32 index = 0u; index < count; ++index){
-        const u32 tile = queue.get()[index];
-        if(tile >= s_TileCount || !Tests::Smoke::IsRefractionProbeTileActive(payload.phase, tile) || seen[tile] != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} invalid or duplicate queue tile {} at {}"), payload.phase, tile, index);
+        const u32 tile = words[queueBase + index];
+        if(tile >= s_RefractionTileProbeTileCount || !IsRefractionProbeTileActive(phase, tile) || seen[tile] != 0u){
+            error(
+                "RefractionTileProbe: phase {} invalid or duplicate queue tile {} at {}"
+                , phase
+                , tile
+                , index
+            );
             return false;
         }
         seen[tile] = 1u;
     }
-    for(u32 index = count; index < s_QueueWords; ++index){
-        const u32 tile = queue.get()[index];
-        if(tile != s_Sentinel){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: readback layout argument_bytes={} queue_bytes={} visit_bytes={} readback_bytes={} expected_queue_words={} queue_offset={} visit_offset={}")
-                , payload.arguments->getCreationDescription().byteSize, payload.queue->getCreationDescription().byteSize, payload.visits->getCreationDescription().byteSize, payload.readback->getCreationDescription().byteSize
-                , s_QueueWords, s_ArgumentWords * sizeof(u32), (s_ArgumentWords + s_QueueWords) * sizeof(u32)
+
+    const u32 visitBase = queueBase + s_RefractionTileProbeQueueWords;
+    for(u32 index = count; index < s_RefractionTileProbeQueueWords; ++index){
+        const u32 tile = words[queueBase + index];
+        if(tile != s_RefractionTileProbeSentinel){
+            [essential] info(
+                "RefractionTileProbe: readback layout argument_bytes={} queue_bytes={} visit_bytes={} readback_bytes={} expected_queue_words={} queue_offset={} visit_offset={}"
+                , argBytes
+                , queueBytes
+                , visitBytes
+                , readbackBytes
+                , s_RefractionTileProbeQueueWords
+                , cast<u64>(s_RefractionTileProbeArgumentWords) * 4u
+                , cast<u64>(visitBase) * 4u
             );
-            for(u32 neighbor = count > 4u ? count - 4u : 0u; neighbor < Min(count + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS, s_QueueWords); ++neighbor)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: queue[{}]=0x{:08x}"), neighbor, queue.get()[neighbor]);
-            const auto counters = MakeNotNull(queue.get() + s_QueueWords);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: counters groups={} tails={} errors={} edge_lanes={}"), counters.get()[0], counters.get()[1], counters.get()[2], counters.get()[3]);
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} queue tail overwritten at {} expected 0x{:08x} observed 0x{:08x}"), payload.phase, index, s_Sentinel, tile);
+            u32 neighborStart = 0u;
+            if(count > 4u)
+                neighborStart = count - 4u;
+            const u32 neighborEnd = Min(count + s_RefractionTileProbeGuardWords, s_RefractionTileProbeQueueWords);
+            for(u32 neighbor = neighborStart; neighbor < neighborEnd; ++neighbor)
+                [essential] info("RefractionTileProbe: queue[{}]=0x{:08x}", neighbor, words[queueBase + neighbor]);
+            [essential] info(
+                "RefractionTileProbe: counters groups={} tails={} errors={} edge_lanes={}"
+                , words[visitBase + 0u]
+                , words[visitBase + 1u]
+                , words[visitBase + 2u]
+                , words[visitBase + 3u]
+            );
+            error(
+                "RefractionTileProbe: phase {} queue tail overwritten at {} expected 0x{:08x} observed 0x{:08x}"
+                , phase
+                , index
+                , s_RefractionTileProbeSentinel
+                , tile
+            );
             return false;
         }
     }
-    const auto visits = MakeNotNull(queue.get() + s_QueueWords);
+
     u32 pixelCount = 0u;
-    for(u32 tile = 0u; tile < s_TileCount; ++tile){
-        const u32 expected = Tests::Smoke::IsRefractionProbeTileActive(payload.phase, tile) ? 1u : 0u;
-        if(seen[tile] != expected || visits.get()[NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + tile] != expected){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} queue/resolve tile {} expected {} queue {} visits {}"), payload.phase, tile, expected, seen[tile], visits.get()[NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + tile]);
+    for(u32 tile = 0u; tile < s_RefractionTileProbeTileCount; ++tile){
+        u32 expected = 0u;
+        if(IsRefractionProbeTileActive(phase, tile))
+            expected = 1u;
+        const u32 visitVal = words[visitBase + s_RefractionTileProbeHeaderWords + tile];
+        if(cast<u32>(seen[tile]) != expected || visitVal != expected){
+            error(
+                "RefractionTileProbe: phase {} queue/resolve tile {} expected {} queue {} visits {}"
+                , phase
+                , tile
+                , expected
+                , seen[tile]
+                , visitVal
+            );
             return false;
         }
-        const u32 width = Min(static_cast<u32>(NWB_REFRACTION_GROUP_SIZE), s_Width - (tile % s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
-        const u32 height = Min(static_cast<u32>(NWB_REFRACTION_GROUP_SIZE), s_Height - (tile / s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
+        const u32 width = Min(s_RefractionTileProbeGroupSize, s_RefractionTileProbeWidth - (tile % s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
+        const u32 height = Min(s_RefractionTileProbeGroupSize, s_RefractionTileProbeHeight - (tile / s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
         pixelCount += width * height * expected;
     }
+
     const u32 compactGroups = compactX * compactY;
     const u32 denseGroups = denseX * denseY;
     const u32 groups = compactGroups + denseGroups;
-    const Array<u32, NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS> expectedHeader{ groups, groups - count, 0u, count * NWB_REFRACTION_GROUP_SIZE * NWB_REFRACTION_GROUP_SIZE - pixelCount, compactGroups, denseGroups };
-    for(u32 word = 0u; word < expectedHeader.size(); ++word){
-        if(visits.get()[word] != expectedHeader[word]){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} counter {} expected {} observed {}"), payload.phase, word, expectedHeader[word], visits.get()[word]);
+    Array<u32, s_RefractionTileProbeHeaderWords> expectedHeader;
+    expectedHeader[0u] = groups;
+    expectedHeader[1u] = groups - count;
+    expectedHeader[2u] = 0u;
+    expectedHeader[3u] = count * s_RefractionTileProbeGroupSize * s_RefractionTileProbeGroupSize - pixelCount;
+    expectedHeader[4u] = compactGroups;
+    expectedHeader[5u] = denseGroups;
+
+    for(u32 word = 0u; word < s_RefractionTileProbeHeaderWords; ++word){
+        if(words[visitBase + word] != expectedHeader[word]){
+            error(
+                "RefractionTileProbe: phase {} counter {} expected {} observed {}"
+                , phase
+                , word
+                , expectedHeader[word]
+                , words[visitBase + word]
+            );
             return false;
         }
     }
-    for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
-        const u32 tile = ((pixel / s_Width) / NWB_REFRACTION_GROUP_SIZE) * s_TilesX + (pixel % s_Width) / NWB_REFRACTION_GROUP_SIZE;
-        const u32 actual = visits.get()[NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_TileCount + pixel];
-        if(actual != seen[tile]){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} pixel {} expected {} observed {}"), payload.phase, pixel, seen[tile], actual);
+
+    const u32 pixelVisitBase = visitBase + s_RefractionTileProbeHeaderWords + s_RefractionTileProbeTileCount;
+    for(u32 pixel = 0u; pixel < s_RefractionTileProbePixelCount; ++pixel){
+        const u32 tile = ((pixel / s_RefractionTileProbeWidth) / s_RefractionTileProbeGroupSize) * s_RefractionTileProbeTilesX + (pixel % s_RefractionTileProbeWidth) / s_RefractionTileProbeGroupSize;
+        const u32 actual = words[pixelVisitBase + pixel];
+        if(actual != cast<u32>(seen[tile])){
+            error(
+                "RefractionTileProbe: phase {} pixel {} expected {} observed {}"
+                , phase
+                , pixel
+                , seen[tile]
+                , actual
+            );
             return false;
         }
     }
-    for(u32 word = s_VisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS; word < s_VisitWords; ++word){
-        if(visits.get()[word] != s_Sentinel){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} visit guard overwritten at {}"), payload.phase, word);
+
+    for(u32 word = s_RefractionTileProbeVisitWords - s_RefractionTileProbeGuardWords; word < s_RefractionTileProbeVisitWords; ++word){
+        if(words[visitBase + word] != s_RefractionTileProbeSentinel){
+            error("RefractionTileProbe: phase {} visit guard overwritten at {}", phase, word);
             return false;
         }
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: phase {} active_tiles={} compact={}x{} dense={}x{} pixels={} tail_groups={} edge_lanes={} argument_bytes={}")
-        , payload.phase, count, compactX, compactY, denseX, denseY, pixelCount, expectedHeader[1], expectedHeader[3], NWB_REFRACTION_TILE_ARGUMENT_BYTES
+
+    [essential] info(
+        "RefractionTileProbe: phase {} active_tiles={} compact={}x{} dense={}x{} pixels={} tail_groups={} edge_lanes={} argument_bytes={}"
+        , phase
+        , count
+        , compactX
+        , compactY
+        , denseX
+        , denseY
+        , pixelCount
+        , expectedHeader[1u]
+        , expectedHeader[3u]
+        , s_RefractionTileProbeArgumentBytes
     );
     return true;
 }
 
+b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
+    Vector<u32> reversedTiles;
+    BuildRefractionProbeReversedTiles(reversedTiles);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems, NWB::ProjectRuntimeContext& context){
-    using namespace NWB;
-    using namespace __hidden_refraction_tile_probe;
-    auto& graphics = context.graphics;
-    auto& device = graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    Core::Alloc::ScratchArena scratch("tests/smoke/refraction_tile_probe");
-    Core::ShaderHandle classifyShader;
-    Core::ShaderHandle finalizeShader;
-    Core::ShaderHandle verifyCompactShader;
-    Core::ShaderHandle verifyDenseShader;
-    const Impl::RefractiveSubsystem* const refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
-    const auto classifyShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-    const auto finalizeShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-    const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(s_VerifyShaderName);
-    if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
-        return false;
-    const auto loadProbeShader = [&](const Name& shaderName, const AStringView variantName, Core::ShaderHandle& outShader){
-        return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, outShader);
-    };
-    if(
-        !loadProbeShader(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, classifyShader)
-        || !loadProbeShader(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, finalizeShader)
-        || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), verifyCompactShader)
-        || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), verifyDenseShader)
-    )
-        return false;
-    Core::BindingLayoutDesc layoutDesc(context.objectArena);
-    layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ProbePushConstants)));
-    const auto layout = device.createBindingLayout(layoutDesc);
-    if(!layout)
-        return false;
-    Core::ComputePipelineDesc classifyDesc;
-    classifyDesc.setComputeShader(classifyShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    Core::ComputePipelineDesc finalizeDesc;
-    finalizeDesc.setComputeShader(finalizeShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    Core::ComputePipelineDesc verifyCompactDesc;
-    verifyCompactDesc.setComputeShader(verifyCompactShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    Core::ComputePipelineDesc verifyDenseDesc;
-    verifyDenseDesc.setComputeShader(verifyDenseShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    const auto classify = device.createComputePipeline(classifyDesc);
-    const auto finalize = device.createComputePipeline(finalizeDesc);
-    const auto verifyCompact = device.createComputePipeline(verifyCompactDesc);
-    const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
-    const auto createBuffer = [&graphics](const Name name, const u32 words, const b8 indirect, const b8 readback){
-        Core::BufferDesc desc;
-        desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect);
-        desc.setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
-        return graphics.createBuffer(desc);
-    };
-    Vector<u32, Core::Alloc::ScratchArena> reversedTiles{ scratch };
-    reversedTiles.resize(s_QueueWords, s_Sentinel);
-    for(u32 tile = 0u; tile < s_TileCount; ++tile)
-        reversedTiles[tile] = s_TileCount - 1u - tile;
-    Core::GraphicsStandaloneService::BufferSetupDesc reversedSetup;
-    reversedSetup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
-    reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
-    reversedSetup.data = reversedTiles.data();
-    reversedSetup.dataSize = static_cast<u64>(s_QueueWords) * sizeof(u32);
-    reversedSetup.queue = Core::CommandQueue::Graphics;
-    const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
-    const auto queue = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeQueue), s_QueueWords, false, false);
-    const auto arguments = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeArguments), s_ArgumentWords, true, false);
-    const auto visits = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeVisits), s_VisitWords, false, false);
-    const auto readback = createBuffer(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeReadback), s_ReadbackWords, false, true);
-    Core::TextureDesc depthDesc;
-    depthDesc.setWidth(s_Width).setHeight(s_Height).setFormat(Core::Format::R32_FLOAT).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
-    const auto depth = graphics.createTexture(depthDesc);
-    if(!classify || !finalize || !verifyCompact || !verifyDense || !queue || !reversedQueue || !arguments || !visits || !readback || !depth)
-        return false;
-    Core::BufferHandle slotsBuffer;
-    Array<Core::GpuDescriptorHandle, 6u> descriptors{};
-    Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
-    const Array<Core::BufferHandle, 4u> storageBuffers{ *queue, *arguments, *visits, *reversedQueue };
-    for(u32 index = 0u; index < storageBuffers.size(); ++index){
-        const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptor)
+    b8 ok = false;
+    native(in sceneSubsystems, in reversedTiles, mut context, mut ok){
+        const Name probeName = Name(s_SmokeNameRefractionTileProbe);
+        const Name verifyShaderName = Name(s_SmokeNameRefractionTileProbeCs);
+        auto& graphics = context.graphics;
+        auto& device = graphics.getDevice();
+        auto& heap = device.getDescriptorHeap();
+        Core::ShaderHandle classifyShader;
+        Core::ShaderHandle finalizeShader;
+        Core::ShaderHandle verifyCompactShader;
+        Core::ShaderHandle verifyDenseShader;
+        const Impl::RefractiveSubsystem* const refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
+        const auto classifyShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto finalizeShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(verifyShaderName);
+        if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
             return false;
-        descriptors[index] = *descriptor;
-        if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, storageBuffers[index].get())))
+        const auto loadProbeShader = [&](const Name& shaderName, const AStringView variantName, Core::ShaderHandle& outShader){
+            return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, probeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, outShader);
+        };
+        if(
+            !loadProbeShader(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, classifyShader)
+            || !loadProbeShader(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, finalizeShader)
+            || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), verifyCompactShader)
+            || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), verifyDenseShader)
+        )
             return false;
-    }
-    const auto sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!sampled)
-        return false;
-    descriptors[4] = *sampled;
-    if(!heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, depth->get(), depthDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture2D)))
-        return false;
-    Impl::DeferredBindlessResourceSlots slots;
-    slots.refractionDepth = sampled->slot();
-    Core::GraphicsStandaloneService::BufferSetupDesc setup;
-    setup.bufferDesc.setDebugName(Name(NWB::Tests::Smoke::s_SmokeNameRefractionTileProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-    setup.data = &slots;
-    setup.dataSize = sizeof(slots);
-    setup.queue = Core::CommandQueue::Graphics;
-    const auto uploadedSlots = graphics.standaloneGraph().setupBuffer(setup);
-    if(!uploadedSlots)
-        return false;
-    slotsBuffer = *uploadedSlots;
-    const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!uniform)
-        return false;
-    descriptors[5] = *uniform;
-    if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotsBuffer.get())))
-        return false;
-    TStringView stage = NWB_TEXT("probe initialization");
-    ProbeTask::Payload payload{ *depth, *queue, *reversedQueue, *arguments, *visits, slotsBuffer, *readback, *classify, *finalize, *verifyCompact, *verifyDense, heap, stage, {} };
-    payload.denseTileListSlot = descriptors[3].slot();
-    payload.push.width = s_Width;
-    payload.push.height = s_Height;
-    payload.push.deferredResourcesHeapSlot = uniform->slot();
-    payload.push.tileListSlot = descriptors[0].slot();
-    payload.push.tileArgumentsSlot = descriptors[1].slot();
-    payload.push.materialContextSlotsHeapSlot = descriptors[2].slot();
-    for(u32 phase = 0u; phase < s_PhaseCount; ++phase){
-        payload.phase = phase;
-        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareProbe);
-        if(!token){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} standalone graph rejected at {}"), phase, stage);
+        Core::BindingLayoutDesc layoutDesc(context.objectArena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(RefractionTileProbePushConstants)));
+        const auto layout = device.createBindingLayout(layoutDesc);
+        if(!layout)
             return false;
+        Core::ComputePipelineDesc classifyDesc;
+        classifyDesc.setComputeShader(classifyShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        Core::ComputePipelineDesc finalizeDesc;
+        finalizeDesc.setComputeShader(finalizeShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        Core::ComputePipelineDesc verifyCompactDesc;
+        verifyCompactDesc.setComputeShader(verifyCompactShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        Core::ComputePipelineDesc verifyDenseDesc;
+        verifyDenseDesc.setComputeShader(verifyDenseShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        const auto classify = device.createComputePipeline(classifyDesc);
+        const auto finalize = device.createComputePipeline(finalizeDesc);
+        const auto verifyCompact = device.createComputePipeline(verifyCompactDesc);
+        const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
+        const auto createBuffer = [&graphics](const Name name, const u32 words, const b8 indirect, const b8 readback){
+            Core::BufferDesc desc;
+            desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect);
+            desc.setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
+            return graphics.createBuffer(desc);
+        };
+        Core::GraphicsStandaloneService::BufferSetupDesc reversedSetup;
+        reversedSetup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(static_cast<u64>(s_RefTileQueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
+        reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
+        reversedSetup.data = reversedTiles.data();
+        reversedSetup.dataSize = static_cast<u64>(s_RefTileQueueWords) * sizeof(u32);
+        reversedSetup.queue = Core::CommandQueue::Graphics;
+        const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
+        const auto queue = createBuffer(Name(s_SmokeNameRefractionTileProbeQueue), s_RefTileQueueWords, false, false);
+        const auto arguments = createBuffer(Name(s_SmokeNameRefractionTileProbeArguments), s_RefTileArgumentWords, true, false);
+        const auto visits = createBuffer(Name(s_SmokeNameRefractionTileProbeVisits), s_RefTileVisitWords, false, false);
+        const auto readback = createBuffer(Name(s_SmokeNameRefractionTileProbeReadback), s_RefTileReadbackWords, false, true);
+        Core::TextureDesc depthDesc;
+        depthDesc.setWidth(s_RefractionTileProbeWidth).setHeight(s_RefractionTileProbeHeight).setFormat(Core::Format::R32_FLOAT).setName(probeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
+        const auto depth = graphics.createTexture(depthDesc);
+        if(!classify || !finalize || !verifyCompact || !verifyDense || !queue || !reversedQueue || !arguments || !visits || !readback || !depth)
+            return false;
+        Core::BufferHandle slotsBuffer;
+        Array<Core::GpuDescriptorHandle, 6u> descriptors{};
+        Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
+        const Array<Core::BufferHandle, 4u> storageBuffers{ *queue, *arguments, *visits, *reversedQueue };
+        for(u32 index = 0u; index < storageBuffers.size(); ++index){
+            const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(!descriptor)
+                return false;
+            descriptors[index] = *descriptor;
+            if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, storageBuffers[index].get())))
+                return false;
         }
-        if(!device.waitForSubmissionToken(*token)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} completion wait failed"), phase);
+        const auto sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+        if(!sampled)
             return false;
+        descriptors[4] = *sampled;
+        if(!heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, depth->get(), depthDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture2D)))
+            return false;
+        Impl::DeferredBindlessResourceSlots slots;
+        slots.refractionDepth = sampled->slot();
+        Core::GraphicsStandaloneService::BufferSetupDesc setup;
+        setup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
+        setup.data = &slots;
+        setup.dataSize = sizeof(slots);
+        setup.queue = Core::CommandQueue::Graphics;
+        const auto uploadedSlots = graphics.standaloneGraph().setupBuffer(setup);
+        if(!uploadedSlots)
+            return false;
+        slotsBuffer = *uploadedSlots;
+        const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+        if(!uniform)
+            return false;
+        descriptors[5] = *uniform;
+        if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotsBuffer.get())))
+            return false;
+        TStringView stage = NWB_TEXT("probe initialization");
+        RefractionTileProbeTask::Payload payload{ *depth, *queue, *reversedQueue, *arguments, *visits, slotsBuffer, *readback, *classify, *finalize, *verifyCompact, *verifyDense, heap, stage, {} };
+        payload.denseTileListSlot = descriptors[3].slot();
+        payload.push.width = s_RefractionTileProbeWidth;
+        payload.push.height = s_RefractionTileProbeHeight;
+        payload.push.deferredResourcesHeapSlot = uniform->slot();
+        payload.push.tileListSlot = descriptors[0].slot();
+        payload.push.tileArgumentsSlot = descriptors[1].slot();
+        payload.push.materialContextSlotsHeapSlot = descriptors[2].slot();
+        const u64 argBytes = payload.arguments->getCreationDescription().byteSize;
+        const u64 queueBytes = payload.queue->getCreationDescription().byteSize;
+        const u64 visitBytes = payload.visits->getCreationDescription().byteSize;
+        const u64 readbackBytes = payload.readback->getCreationDescription().byteSize;
+        for(u32 phase = 0u; phase < s_RefractionTileProbePhaseCount; ++phase){
+            payload.phase = phase;
+            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareRefractionTileProbe);
+            if(!token){
+                NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} standalone graph rejected at {}"), phase, stage);
+                return false;
+            }
+            if(!device.waitForSubmissionToken(*token)){
+                NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} completion wait failed"), phase);
+                return false;
+            }
+            const auto mapping = device.mapBuffer(*payload.readback, Core::CpuAccessMode::Read);
+            if(!mapping || !*mapping)
+                return false;
+            ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*payload.readback); });
+            const Span<const u32> mappedWords(static_cast<const u32*>(*mapping), s_RefTileReadbackWords);
+            if(!VerifyRefractionTileProbeReadback(phase, mappedWords, argBytes, queueBytes, visitBytes, readbackBytes))
+                return false;
         }
-        if(!CompareReadback(payload, device, scratch))
-            return false;
+        ok = true;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, "
-            "all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards")
-    );
-    return true;
-}
+    if(ok){
+        [essential] info(
+            "RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards"
+        );
+    }
+    return ok;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

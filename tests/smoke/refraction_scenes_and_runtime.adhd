@@ -21,108 +21,21 @@ native{
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::Smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RefractionQueryDiagnostics final{
-public:
-    RefractionQueryDiagnostics(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
-        : m_context(context)
-        , m_world(world)
-    {}
-
-
-public:
-    [[nodiscard]] b8 configure(Core::Alloc::ScratchArena& arena, b8 densityEnabled, b8 lifecycleEnabled, b8 timingEnabled);
-    void update();
-    [[nodiscard]] b8 enabled()const noexcept{ return m_enabled; }
-    [[nodiscard]] b8 shouldCapture(u64 graphicsFrame)const noexcept{ return ShouldCaptureRefractionQueryDiagnostics(m_reported, graphicsFrame, m_sourceFrame); }
-
-
-private:
-    ProjectRuntimeContext& m_context;
-    Core::ECS::World& m_world;
-    Optional<u64> m_targetStart;
-    u64 m_sourceFrame = 0u;
-    b8 m_enabled = false;
-    b8 m_reported = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionQueryDiagnostics::configure(Core::Alloc::ScratchArena& arena, const b8 densityEnabled, const b8 lifecycleEnabled, const b8 timingEnabled){
-    const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
-    if(!configured || (*configured && **configured != "0" && **configured != "1")){
-        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProjectImpl: diagnostics must be absent, 0, or 1"));
-        return false;
-    }
-    m_enabled = *configured && **configured == "1";
-    if(!m_enabled)
-        return true;
-    const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-    const auto readback = ReadSmokeEnvironmentText(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-    const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
-    if(!freeze || !hardware || *freeze || !readback || !densityEnabled || lifecycleEnabled || timingEnabled || (*hardware && **hardware != "1")){
-        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProjectImpl: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
-        return false;
-    }
-    auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());
-    renderer.setRefractionDiagnosticsEnabled(true);
-    return true;
+namespace NWB::Tests::Smoke{
+[[nodiscard]] inline TStringView RefractionSmokeProjectName()noexcept{
+    return NWB_TEXT("RefractionSmokeProject");
 }
 
-
-void RefractionQueryDiagnostics::update(){
-    if(!m_enabled || m_reported)
-        return;
-    i32 width = 0;
-    i32 height = 0;
-    m_context.graphics.getWindowDimensions(width, height);
-    const auto target = NWB::QueryProjectFrameClientSize();
-    const u64 currentFrame = m_context.graphics.getFrameIndex();
-    if(width != target.width || height != target.height || (m_targetStart && currentFrame < *m_targetStart)){
-        m_targetStart.reset();
-        return;
-    }
-    if(!m_targetStart){
-        m_targetStart = currentFrame;
-        return;
-    }
-    constexpr u64 s_RequiredTargetFrames = s_RefractionDiagnosticsRequiredTargetFrames;
-    if(currentFrame - *m_targetStart < s_RequiredTargetFrames)
-        return;
-    const auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());
-    const auto result = renderer.tryGetLatestRefractionStatistics();
-    if(!result)
-        return;
-    const auto& statistics = *result;
-    if(
-        statistics.width != target.width
-        || statistics.height != target.height
-        || statistics.graphicsFrameIndex < *m_targetStart
-        || statistics.graphicsFrameIndex - *m_targetStart < s_RequiredTargetFrames
-        || statistics.graphicsFrameIndex > currentFrame
-    )
-        return;
+template<typename StatisticsT>
+inline void LogRefractionQueryDiagnosticsCounters(const StatisticsT& statistics, const u64 currentFrame, const u64 targetStart){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
         NWB_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
         , statistics.sequence
         , statistics.generation
         , statistics.graphicsFrameIndex
         , currentFrame
-        , *m_targetStart
-        , statistics.graphicsFrameIndex - *m_targetStart
+        , targetStart
+        , statistics.graphicsFrameIndex - targetStart
         , statistics.frameIndex
         , statistics.width
         , statistics.height
@@ -145,462 +58,830 @@ void RefractionQueryDiagnostics::update(){
     constexpr u32 s_CounterCount = 0u NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_COUNT_COUNTER);
 #undef NWB_SMOKE_REFRACTION_COUNT_COUNTER
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
-    m_sourceFrame = statistics.graphicsFrameIndex;
-    m_reported = true;
+}
+
+[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateRefractionSmokeWorldOrDie(ProjectRuntimeContext& context){
+    auto world = CreateSmokeWorldOrDie(RefractionSmokeProjectName(), context);
+    auto& renderer = AddSmokeRenderSystems(*world, context);
+    // Isolate transmission by disabling reflection.
+    Impl::ReflectionSettings reflection;
+    reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
+    NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
+    const auto enabled = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
+    const b8 refractionEnabled = !enabled || *enabled != 0.0f;
+    renderer.setRefractionEnabled(refractionEnabled);
+    const auto hardware = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
+    const b8 hardwareEnabled = !hardware || *hardware != 0.0f;
+    renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+    return world;
+}
+};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RefractionScene final{
-public:
-    static constexpr SmokeMaterialRef s_ClearMaterial{"project/smoke/refraction/materials/clear"};
-    static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/refraction/materials/opaque"};
-    static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
+const SmokeMaterialRef s_RefractionSceneClearMaterial = "project/smoke/refraction/materials/clear";
+const SmokeMaterialRef s_RefractionSceneOpaqueMaterial = "project/smoke/refraction/materials/opaque";
+const SmokeMaterialRef s_RefractionSceneTransparentMaterial = "project/smoke/refraction/materials/transparent";
+const SmokeMeshRef s_RefractionScenePlaneMesh = "project/meshes/shadow_plane";
+const SmokeMeshRef s_RefractionSceneCubeMesh = "project/meshes/cube_hard_edges";
+const SmokeMeshRef s_RefractionSceneSphereMesh = "project/meshes/caustic_sphere";
+const usize s_RefractionLifecyclePhaseCount = 7u;
+const u32 s_RefractionDefaultCaptureFrameCount = 16u;
+const u64 s_RefractionFrameGraphRequiredFrames = 360u;
+const u64 s_RefractionMaxU32Value = 4294967295u;
 
-
-public:
-    static Core::ECS::EntityID CreatePanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale, Core::ECS::World& world);
-    [[nodiscard]] static b8 CreateDensity(u32 percent, Core::Alloc::ScratchArena& arena, Core::ECS::World& world, ProjectRuntimeContext& context, Core::ECS::EntityID& glass);
-};
+RefractionLifecyclePhase RefractionLifecyclePhaseAt(in usize phase){
+    switch(phase){
+    case 0u: return RefractionLifecyclePhase("baseline", 0.0f, false);
+    case 1u: return RefractionLifecyclePhase("active", 0.0f, true);
+    case 2u: return RefractionLifecyclePhase("moved", 1.9f, true);
+    case 3u: return RefractionLifecyclePhase("edge", 4.2f, true);
+    case 4u: return RefractionLifecyclePhase("empty", 100.0f, true);
+    case 5u: return RefractionLifecyclePhase("disabled", 0.0f, false);
+    }
+    return RefractionLifecyclePhase("reenabled", 0.0f, true);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_refraction_scene{
+class RefractionQueryDiagnostics{
+    public RefractionQueryDiagnostics(mut ProjectRuntimeContext context){
+        this.m_context = context;
+    }
 
-static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
-static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
+    public b8 configure(in b8 densityEnabled, in b8 lifecycleEnabled, in b8 timingEnabled, mut World world){
+        b8 invalidDiagEnv = false;
+        b8 diagEnabled = false;
+        b8 invalidPrereqs = false;
+        native(
+            in densityEnabled,
+            in lifecycleEnabled,
+            in timingEnabled,
+            mut world,
+            mut invalidDiagEnv,
+            mut diagEnabled,
+            mut invalidPrereqs
+        ){
+            Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
+            const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
+            if(!configured || (*configured && **configured != "0" && **configured != "1")){
+                invalidDiagEnv = true;
+            }
+            else{
+                diagEnabled = *configured && **configured == "1";
+                if(diagEnabled){
+                    const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
+                    const auto readback = ReadSmokeEnvironmentText(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+                    const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
+                    if(!freeze || !hardware || *freeze || !readback || !densityEnabled || lifecycleEnabled || timingEnabled || (*hardware && **hardware != "1")){
+                        invalidPrereqs = true;
+                    }
+                    else{
+                        auto& renderer = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
+                        renderer.setRefractionDiagnosticsEnabled(true);
+                    }
+                }
+            }
+        }
+        if(invalidDiagEnv){
+            error("RefractionSmokeProjectImpl: diagnostics must be absent, 0, or 1");
+            return false;
+        }
+        this.m_enabled = diagEnabled;
+        if(!this.m_enabled)
+            return true;
+        if(invalidPrereqs){
+            error("RefractionSmokeProjectImpl: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled");
+            return false;
+        }
+        return true;
+    }
 
-};
+    public void update(mut World world){
+        if(!this.m_enabled || this.m_reported)
+            return;
+        i32 width = 0;
+        i32 height = 0;
+        u32 targetWidth = 0u;
+        u32 targetHeight = 0u;
+        u64 currentFrame = 0u;
+        native(in ctx = this.m_context, mut width, mut height, mut targetWidth, mut targetHeight, mut currentFrame){
+            ctx.graphics.getWindowDimensions(width, height);
+            const auto target = NWB::QueryProjectFrameClientSize();
+            targetWidth = target.width;
+            targetHeight = target.height;
+            currentFrame = ctx.graphics.getFrameIndex();
+        }
+        if(
+            width != cast<i32>(targetWidth)
+            || height != cast<i32>(targetHeight)
+            || (this.m_targetStart.has_value() && currentFrame < this.m_targetStart.value())
+        ){
+            this.m_targetStart.reset();
+            return;
+        }
+        if(!this.m_targetStart.has_value()){
+            this.m_targetStart = currentFrame;
+            return;
+        }
+        const u64 targetStart = this.m_targetStart.value();
+        if(currentFrame - targetStart < s_RefractionDiagnosticsRequiredTargetFrames)
+            return;
+
+        b8 reported = false;
+        u64 sourceFrame = 0u;
+        native(in targetWidth, in targetHeight, in currentFrame, in targetStart, mut world, mut reported, mut sourceFrame){
+            const auto& renderer = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
+            const auto result = renderer.tryGetLatestRefractionStatistics();
+            if(result){
+                const auto& statistics = *result;
+                if(
+                    statistics.width == targetWidth
+                    && statistics.height == targetHeight
+                    && statistics.graphicsFrameIndex >= targetStart
+                    && statistics.graphicsFrameIndex - targetStart >= s_RefractionDiagnosticsRequiredTargetFrames
+                    && statistics.graphicsFrameIndex <= currentFrame
+                ){
+                    LogRefractionQueryDiagnosticsCounters(statistics, currentFrame, targetStart);
+                    sourceFrame = statistics.graphicsFrameIndex;
+                    reported = true;
+                }
+            }
+        }
+        if(reported){
+            this.m_sourceFrame = sourceFrame;
+            this.m_reported = true;
+        }
+    }
+
+    public b8 enabled()const{
+        return this.m_enabled;
+    }
+
+    public b8 shouldCapture(in u64 graphicsFrame)const{
+        return ShouldCaptureRefractionQueryDiagnostics(this.m_reported, graphicsFrame, this.m_sourceFrame);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private Optional<u64> m_targetStart;
+    private u64 m_sourceFrame = 0u;
+    private b8 m_enabled = false;
+    private b8 m_reported = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::ECS::EntityID RefractionScene::CreatePanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale, Core::ECS::World& world){
-    using namespace __hidden_refraction_scene;
-    const auto entity = CreateTintedStaticMeshEntity(s_PlaneMesh, material, s_MaterialInterface, tint, position, scale, world);
-    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
-    auto& transform = *MakeNotNull(world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity));
+EntityID CreateRefractionScenePanel(
+    in SmokeMaterialRef material,
+    in VectorSingle tint,
+    in VectorSingle position,
+    in VectorSingle scale,
+    mut World world
+){
+    const EntityID entity = CreateTintedStaticMeshEntity(
+        s_RefractionScenePlaneMesh,
+        material,
+        NameTextAscii(s_SmokeSurfaceMaterialInterface),
+        tint,
+        position,
+        scale,
+        world
+    );
+    [essential] assert(entity.valid(), "RefractionSmokeProject: panel creation failed");
     // Rotate the XZ plane to face the camera along -Z.
-    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+    const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f)));
+    native(in entity, in rotation, mut world){
+        auto& transform = *MakeNotNull(world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
+        transform.rotation = rotation;
+    }
     return entity;
 }
 
+Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world, mut ProjectRuntimeContext context){
+    const Expected<String> configuredExtent = ReadSmokeEnvironmentString("NWB_REFRACTION_SMOKE_EXTENT");
+    if(!configuredExtent.has_value()){
+        error("RefractionSmokeProject: density requires explicit extent 960x720, 1600x900, or 1920x1080");
+        return MakeUnexpected(Failure());
+    }
+    const StringView extentText = StringView(configuredExtent.value());
+    if(extentText != "960x720" && extentText != "1600x900" && extentText != "1920x1080"){
+        error("RefractionSmokeProject: density requires explicit extent 960x720, 1600x900, or 1920x1080");
+        return MakeUnexpected(Failure());
+    }
 
-b8 RefractionScene::CreateDensity(const u32 percent, Core::Alloc::ScratchArena& arena, Core::ECS::World& world, ProjectRuntimeContext& context, Core::ECS::EntityID& glass){
-    using namespace __hidden_refraction_scene;
-    const auto configuredExtent = ReadSmokeEnvironmentText(arena, "NWB_REFRACTION_SMOKE_EXTENT");
-    if(!configuredExtent || (*configuredExtent != "960x720" && *configuredExtent != "1600x900" && *configuredExtent != "1920x1080")){
-        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires explicit extent 960x720, 1600x900, or 1920x1080"));
-        return false;
+    b8 validHardwareEnv = true;
+    b8 hardwareRequested = true;
+    u32 frameWidth = 0u;
+    u32 frameHeight = 0u;
+    native(mut validHardwareEnv, mut hardwareRequested, mut frameWidth, mut frameHeight){
+        Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
+        const auto enabled = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_ENABLED");
+        const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
+        if(!enabled || !hardware || (*enabled && **enabled != "1") || (*hardware && **hardware != "0" && **hardware != "1")){
+            validHardwareEnv = false;
+        }
+        else{
+            hardwareRequested = !*hardware || **hardware == "1";
+            const auto extent = NWB::QueryProjectFrameClientSize();
+            frameWidth = extent.width;
+            frameHeight = extent.height;
+        }
     }
-    const auto enabled = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_ENABLED");
-    const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
-    if(!enabled || !hardware || (*enabled && **enabled != "1") || (*hardware && **hardware != "0" && **hardware != "1")){
-        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires refraction enabled and hardware selection absent, 0, or 1"));
-        return false;
+    if(!validHardwareEnv){
+        error("RefractionSmokeProject: density requires refraction enabled and hardware selection absent, 0, or 1");
+        return MakeUnexpected(Failure());
     }
-    const b8 hardwareRequested = !*hardware || **hardware == "1";
-    const auto extent = NWB::QueryProjectFrameClientSize();
-    const u32 frameWidth = extent.width;
-    const u32 frameHeight = extent.height;
-    const f32 frameWidthFloat = static_cast<f32>(frameWidth);
-    const f32 frameHeightFloat = static_cast<f32>(frameHeight);
+
+    const f32 frameWidthFloat = cast<f32>(frameWidth);
+    const f32 frameHeightFloat = cast<f32>(frameHeight);
     const f32 aspect = frameWidthFloat / frameHeightFloat;
-    const f32 tangent = Tan(s_PI / 6.f);
-    const f32 fractionEdge = Sqrt(static_cast<f32>(percent) * 0.01f);
-    const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(frameWidthFloat * fractionEdge * 0.5f + 0.5f));
-    const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(frameHeightFloat * fractionEdge * 0.5f + 0.5f));
-    const u32 left = percent == 0u ? 0u : (frameWidth - coveredWidth) / 2u;
-    const u32 top = percent == 0u ? 0u : (frameHeight - coveredHeight) / 2u;
+    const f32 tangent = Tan(s_RefractionPi / 6.0f);
+    const f32 fractionEdge = Sqrt(cast<f32>(percent) * 0.01f);
+    const u32 coveredWidth = Min(frameWidth, 2u * cast<u32>(frameWidthFloat * fractionEdge * 0.5f + 0.5f));
+    const u32 coveredHeight = Min(frameHeight, 2u * cast<u32>(frameHeightFloat * fractionEdge * 0.5f + 0.5f));
+    u32 left = 0u;
+    u32 top = 0u;
+    if(percent != 0u){
+        left = (frameWidth - coveredWidth) / 2u;
+        top = (frameHeight - coveredHeight) / 2u;
+    }
     const u32 right = left + coveredWidth;
     const u32 bottom = top + coveredHeight;
-    const u64 admittedPixels = static_cast<u64>(coveredWidth) * coveredHeight;
-    const u64 totalPixels = static_cast<u64>(extent.width) * extent.height;
-    constexpr u32 s_TileEdge = s_RefractionDensityTileEdge;
-    const u32 activeTiles = percent == 0u ? 0u : (DivideUp(right, s_TileEdge) - left / s_TileEdge) * (DivideUp(bottom, s_TileEdge) - top / s_TileEdge);
-    const u32 totalTiles = DivideUp(frameWidth, s_TileEdge) * DivideUp(frameHeight, s_TileEdge);
+    const u64 admittedPixels = cast<u64>(coveredWidth) * cast<u64>(coveredHeight);
+    const u64 totalPixels = cast<u64>(frameWidth) * cast<u64>(frameHeight);
+    const u32 tileEdge = s_RefractionDensityTileEdge;
+    u32 activeTiles = 0u;
+    if(percent != 0u){
+        const u32 tilesRight = (right + tileEdge - 1u) / tileEdge;
+        const u32 tilesBottom = (bottom + tileEdge - 1u) / tileEdge;
+        activeTiles = (tilesRight - left / tileEdge) * (tilesBottom - top / tileEdge);
+    }
+    const u32 totalTiles = ((frameWidth + tileEdge - 1u) / tileEdge) * ((frameHeight + tileEdge - 1u) / tileEdge);
 
-    const auto camera = CreateSmokeCamera(1.4f, 6.f, 0.f, world);
+    const EntityID camera = CreateSmokeCamera(1.4f, 6.0f, 0.0f, world);
     if(!camera.valid())
-        return false;
-    auto& cameraComponent = world.entity(camera).getComponent<NWB::Impl::Scene::CameraComponent>();
-    cameraComponent.setVerticalFovRadians(s_PI / 3.f);
-    cameraComponent.setAspectRatio(aspect);
-    const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(world, 0.f, 0.f, 0.f, Float4(1.f, 1.f, 1.f, 1.f), 1.f);
+        return MakeUnexpected(Failure());
+    const f32 verticalFov = s_RefractionPi / 3.0f;
+    EntityID light = s_InvalidEntityId;
+    native(in camera, in verticalFov, in aspect, mut world, mut light){
+        auto& cameraComponent = world.entity(camera).getComponent<Impl::Scene::CameraComponent>();
+        cameraComponent.setVerticalFovRadians(verticalFov);
+        cameraComponent.setAspectRatio(aspect);
+        light = Impl::Scene::CreateDirectionalLightEntity(world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        if(light.valid())
+            world.entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
+    }
     if(!light.valid())
-        return false;
-    world.entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
+        return MakeUnexpected(Failure());
 
     // Shared opaque backdrop that occludes the behind-wall slab.
-    constexpr f32 s_BackdropDepth = s_RefractionDensityBackdropDepth;
-    const f32 backdropHalfHeight = tangent * (6.f + s_BackdropDepth);
+    const f32 backdropDepth = s_RefractionDensityBackdropDepth;
+    const f32 backdropHalfHeight = tangent * (6.0f + backdropDepth);
     const f32 backdropHalfWidth = backdropHalfHeight * aspect;
     const f32 backdropPanelHalfWidth = backdropHalfWidth * 1.05f;
     const f32 backdropPanelHalfHeight = backdropHalfHeight * 1.05f;
-    CreatePanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(backdropPanelHalfWidth, 1.f, backdropPanelHalfHeight, 0.f), world);
-    constexpr u32 s_StripeCount = s_RefractionDensityStripeCount;
-    const f32 stripeHalfWidth = backdropHalfWidth / static_cast<f32>(s_StripeCount);
+    CreateRefractionScenePanel(
+        s_RefractionSceneOpaqueMaterial,
+        VectorSingle(0.04f, 0.04f, 0.04f, 1.0f),
+        VectorSingle(0.0f, 1.4f, backdropDepth, 0.0f),
+        VectorSingle(backdropPanelHalfWidth, 1.0f, backdropPanelHalfHeight, 0.0f),
+        world
+    );
+    const u32 stripeCount = s_RefractionDensityStripeCount;
+    const f32 stripeHalfWidth = backdropHalfWidth / cast<f32>(stripeCount);
     const f32 stripeStart = -backdropHalfWidth;
-    for(u32 stripe = 1u; stripe < s_StripeCount; stripe += 2u){
-        const f32 stripeSlot = 2.f * static_cast<f32>(stripe) + 1.f;
+    for(u32 stripe = 1u; stripe < stripeCount; stripe += 2u){
+        const f32 stripeSlot = 2.0f * cast<f32>(stripe) + 1.0f;
         const f32 x = stripeSlot * stripeHalfWidth + stripeStart;
-        CreatePanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(stripeHalfWidth, 1.f, backdropPanelHalfHeight, 0.f), world);
+        CreateRefractionScenePanel(
+            s_RefractionSceneOpaqueMaterial,
+            VectorSingle(0.92f, 0.92f, 0.92f, 1.0f),
+            VectorSingle(x, 1.4f, backdropDepth - 0.01f, 0.0f),
+            VectorSingle(stripeHalfWidth, 1.0f, backdropPanelHalfHeight, 0.0f),
+            world
+        );
     }
 
     // Full coverage extends past the viewport while empty coverage hides the refractor behind the wall.
-    const f32 frontDepthValue = percent == 0u ? 4.f : 0.f;
-    const f32 projectedWidth = percent == 0u || percent == 100u ? frameWidthFloat + 2.f : static_cast<f32>(coveredWidth);
-    const f32 projectedHeight = percent == 0u || percent == 100u ? frameHeightFloat + 2.f : static_cast<f32>(coveredHeight);
-    const f32 halfHeight = (6.f + frontDepthValue) * tangent;
-    const Float4 scale((halfHeight * 2.f * aspect * projectedWidth) / frameWidthFloat, (halfHeight * 2.f * projectedHeight) / frameHeightFloat, 0.2f, 0.f);
-    glass = CreateTintedStaticMeshEntity(s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, frontDepthValue + 0.1f, 0.f), scale, world);
+    f32 frontDepthValue = 0.0f;
+    if(percent == 0u)
+        frontDepthValue = 4.0f;
+    f32 projectedWidth = cast<f32>(coveredWidth);
+    f32 projectedHeight = cast<f32>(coveredHeight);
+    if(percent == 0u || percent == 100u){
+        projectedWidth = frameWidthFloat + 2.0f;
+        projectedHeight = frameHeightFloat + 2.0f;
+    }
+    const f32 halfHeight = (6.0f + frontDepthValue) * tangent;
+    const VectorSingle scale = VectorSingle(
+        (halfHeight * 2.0f * aspect * projectedWidth) / frameWidthFloat,
+        (halfHeight * 2.0f * projectedHeight) / frameHeightFloat,
+        0.2f,
+        0.0f
+    );
+    const EntityID glass = CreateTintedStaticMeshEntity(
+        s_RefractionSceneCubeMesh,
+        s_RefractionSceneClearMaterial,
+        NameTextAscii(s_SmokeSurfaceMaterialInterface),
+        VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+        VectorSingle(0.0f, 1.4f, frontDepthValue + 0.1f, 0.0f),
+        scale,
+        world
+    );
     if(!glass.valid())
-        return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: extent {}x{} requested_percent {} admitted_pixels {} total_pixels {} active_tiles {} total_tiles {} glass_instances 1 capture_mode {}")
-        , extent.width
-        , extent.height
+        return MakeUnexpected(Failure());
+
+    StringView captureMode = "visible";
+    if(percent == 0u)
+        captureMode = "occluded";
+    StringView tracingMode = "screen-space";
+    if(hardwareRequested)
+        tracingMode = "hardware";
+    u32 rayQuerySupported = 0u;
+    native(in ctx = context, mut rayQuerySupported){
+        rayQuerySupported = ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery) ? 1u : 0u;
+    }
+    [essential] info(
+        "RefractionDensity: extent {}x{} requested_percent {} admitted_pixels {} total_pixels {} active_tiles {} total_tiles {} glass_instances 1 capture_mode {}"
+        , frameWidth
+        , frameHeight
         , percent
         , admittedPixels
         , totalPixels
         , activeTiles
         , totalTiles
-        , percent == 0u ? NWB_TEXT("occluded") : NWB_TEXT("visible")
+        , captureMode
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: pixel_bounds {} {} {} {}"), left, top, right, bottom);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: tracing requested {} ray_query_supported {} refraction_enabled 1")
-        , hardwareRequested ? NWB_TEXT("hardware") : NWB_TEXT("screen-space")
-        , context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 1u : 0u
+    [essential] info("RefractionDensity: pixel_bounds {} {} {} {}", left, top, right, bottom);
+    [essential] info(
+        "RefractionDensity: tracing requested {} ray_query_supported {} refraction_enabled 1"
+        , tracingMode
+        , rayQuerySupported
     );
-    return true;
+    return glass;
+}
+
+Expected<Optional<u32>> ReadRefractionDensityPercent(){
+    b8 readFailed = false;
+    b8 hasValue = false;
+    String text;
+    native(mut readFailed, mut hasValue, mut text){
+        Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
+        const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DENSITY");
+        if(!configured){
+            readFailed = true;
+        }
+        else if(*configured){
+            hasValue = true;
+            text.assign((*configured)->data(), (*configured)->size());
+        }
+    }
+    if(readFailed){
+        error("RefractionSmokeProject: failed to read density fixture selection");
+        return MakeUnexpected(Failure());
+    }
+    if(!hasValue)
+        return Optional<u32>();
+    const StringView view = StringView(text);
+    if(view == "0")
+        return Optional<u32>(0u);
+    if(view == "1")
+        return Optional<u32>(1u);
+    if(view == "10")
+        return Optional<u32>(10u);
+    if(view == "50")
+        return Optional<u32>(50u);
+    if(view == "100")
+        return Optional<u32>(100u);
+    error("RefractionSmokeProject: density must be exactly 0, 1, 10, 50, or 100");
+    return MakeUnexpected(Failure());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_refraction_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Tests::Smoke;
-
-constexpr TStringView s_ProjectName = NWB_TEXT("RefractionSmokeProject");
-
-static constexpr SmokeMeshRef s_SphereMesh{"project/meshes/caustic_sphere"};
-static constexpr SmokeMaterialRef s_TransparentMaterial{"project/smoke/refraction/materials/transparent"};
-
-static const Array<RefractionLifecyclePhase, 7> s_LifecyclePhases = {{
-    RefractionLifecyclePhase("baseline", 0.0f, false),
-    RefractionLifecyclePhase("active", 0.0f, true),
-    RefractionLifecyclePhase("moved", 1.9f, true),
-    RefractionLifecyclePhase("edge", 4.2f, true),
-    RefractionLifecyclePhase("empty", 100.0f, true),
-    RefractionLifecyclePhase("disabled", 0.0f, false),
-    RefractionLifecyclePhase("reenabled", 0.0f, true),
-}};
-
-[[nodiscard]] static Expected<Optional<u32>> ReadDensityPercent(NWB::Core::Alloc::ScratchArena& arena){
-    const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DENSITY");
-    if(!configured){
-        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: failed to read density fixture selection"));
-        return MakeUnexpected(Failure{});
-    }
-    if(!*configured)
-        return Optional<u32>{};
-    const AStringView text(**configured);
-    if(text == "0")
-        return Optional<u32>{0u};
-    if(text == "1")
-        return Optional<u32>{1u};
-    if(text == "10")
-        return Optional<u32>{10u};
-    if(text == "50")
-        return Optional<u32>{50u};
-    if(text == "100")
-        return Optional<u32>{100u};
-    NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density must be exactly 0, 1, 10, 50, or 100"));
-    return MakeUnexpected(Failure{});
-}
-
-class RefractionSmokeProjectImpl final : public NWB::IProjectEntryCallbacks{
-private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(s_ProjectName, context);
-        auto& renderer = AddSmokeRenderSystems(*world, context);
-        // Isolate transmission by disabling reflection.
-        NWB::Impl::ReflectionSettings reflection;
-        reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
-        const auto enabled = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
-        const b8 refractionEnabled = !enabled || *enabled != 0.0f;
-        renderer.setRefractionEnabled(refractionEnabled);
-        const auto hardware = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
-        const b8 hardwareEnabled = !hardware || *hardware != 0.0f;
-        renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
-        return world;
+class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
+    public RefractionSmokeProjectImpl(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateRefractionSmokeWorldOrDie(context);
+        this.m_queryDiagnostics = RefractionQueryDiagnostics(context);
+        this.m_timingRenderPass = AvboitTimingRenderPass(context.graphics);
+        this.m_fpsProbe = FpsProbe(RefractionSmokeProjectName());
+        this.m_gpuPassTimingProbe = GpuPassTimingProbe(RefractionSmokeProjectName());
     }
 
-
-public:
-    explicit RefractionSmokeProjectImpl(NWB::ProjectRuntimeContext& context)
-        : m_context(context), m_world(CreateWorldOrDie(context)), m_lifecyclePaths(context.objectArena){}
-    virtual ~RefractionSmokeProjectImpl()noexcept override{
-        m_timingRenderPass.stop();
-        DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
+    public ~RefractionSmokeProjectImpl(){
+        this.m_timingRenderPass.stop();
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
     }
 
+    public b8 onStartup()override{
+        this.m_lifecycleEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_LIFECYCLE");
+        this.m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_TIMING");
+        const Expected<Optional<u32>> density = ReadRefractionDensityPercent();
+        if(!density.has_value())
+            return false;
+        const Optional<u32> densityValue = density.value();
+        this.m_densityEnabled = densityValue.has_value();
 
-public:
-    virtual b8 onStartup()override{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-        m_lifecycleEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_LIFECYCLE");
-        m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_TIMING");
-        const auto density = ReadDensityPercent(scratchArena);
-        if(!density)
+        b8 diagOk = false;
+        native(
+            in densityEnabled = this.m_densityEnabled,
+            in lifecycleEnabled = this.m_lifecycleEnabled,
+            in timingEnabled = this.m_timingEnabled,
+            mut diag = this.m_queryDiagnostics,
+            mut world = this.m_world,
+            mut diagOk
+        ){
+            diagOk = diag.configure(densityEnabled, lifecycleEnabled, timingEnabled, *world);
+        }
+        if(!diagOk)
             return false;
-        m_densityEnabled = density->has_value();
-        if(!m_queryDiagnostics.configure(scratchArena, m_densityEnabled, m_lifecycleEnabled, m_timingEnabled))
+        if(!this.configureFrameGraphSnapshot())
             return false;
-        if(!configureFrameGraphSnapshot(scratchArena))
-            return false;
-        if(m_timingEnabled){
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
-            if(!m_timingRenderPass.start())
+        if(this.m_timingEnabled){
+            native(mut ctx = this.m_context){
+                ctx.setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
+            }
+            if(!this.m_timingRenderPass.start())
                 return false;
         }
-        if(!configureFramebufferCapture(scratchArena))
+        if(!this.configureFramebufferCapture())
             return false;
 
-        const auto galleryCase = ReadSmokeEnvironmentText(scratchArena, "NWB_REFRACTION_SMOKE_CASE");
-        if((galleryCase && m_lifecycleEnabled) || (m_densityEnabled && (galleryCase || m_lifecycleEnabled))){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: lifecycle, gallery, and density cases are mutually exclusive"));
+        const Expected<String> galleryCase = ReadSmokeEnvironmentString("NWB_REFRACTION_SMOKE_CASE");
+        const b8 hasGalleryCase = galleryCase.has_value();
+        if((hasGalleryCase && this.m_lifecycleEnabled) || (this.m_densityEnabled && (hasGalleryCase || this.m_lifecycleEnabled))){
+            error("RefractionSmokeProject: lifecycle, gallery, and density cases are mutually exclusive");
             return false;
         }
-        if(m_densityEnabled)
-            return RefractionScene::CreateDensity(**density, scratchArena, *m_world, m_context, m_glass);
-        if(galleryCase)
-            return CreateRefractionGalleryScene(AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"), *m_world);
-
-        const auto camera = CreateSmokeCamera(1.4f, 6.0f, 0.0f, *m_world);
-        // Include a light so shared shadow and TLAS preparation runs.
-        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        m_glass = CreateTintedStaticMeshEntity(s_SphereMesh, RefractionScene::s_ClearMaterial, RefractionScene::s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), *m_world);
-        NWB_FATAL_ASSERT_MSG(camera.valid() && m_glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
-        m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
-
-        // Unlit opaque stripes provide a static background for measuring refraction displacement.
-        const u32 stripeCount = m_lifecycleEnabled ? 48u : 20u;
-        const f32 stripeStart = m_lifecycleEnabled ? -7.05f : -2.85f;
-        for(u32 stripe = 0u; stripe < stripeCount; ++stripe){
-            const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
-            const f32 x = static_cast<f32>(stripe) * 0.3f + stripeStart;
-            RefractionScene::CreatePanel(RefractionScene::s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(x, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 2.0f, 0.0f), *m_world);
+        if(this.m_densityEnabled){
+            const u32 percent = densityValue.value();
+            b8 createdDensity = false;
+            EntityID densityGlass = s_InvalidEntityId;
+            native(in percent, mut world = this.m_world, mut ctx = this.m_context, mut createdDensity, mut densityGlass){
+                const Expected<EntityID> glassResult = CreateRefractionDensityScene(percent, *world, ctx);
+                if(glassResult.has_value()){
+                    densityGlass = glassResult.value();
+                    createdDensity = true;
+                }
+            }
+            if(!createdDensity)
+                return false;
+            this.m_glass = densityGlass;
+            return true;
         }
-        // Place the red strip in front of the glass and the blue strip behind it.
-        RefractionScene::CreatePanel(s_TransparentMaterial, Float4(1.0f, 0.025f, 0.025f, 0.75f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(1.6f, 1.0f, 0.08f, 0.0f), *m_world);
-        RefractionScene::CreatePanel(s_TransparentMaterial, Float4(0.025f, 0.1f, 1.0f, 0.70f), Float4(0.0f, 1.9f, 1.6f, 0.0f), Float4(2.0f, 1.0f, 0.12f, 0.0f), *m_world);
+        if(hasGalleryCase){
+            const StringView caseView = StringView(galleryCase.value());
+            const b8 geometryPreview = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY");
+            b8 galleryOk = false;
+            native(in caseView, in geometryPreview, mut world = this.m_world, mut galleryOk){
+                galleryOk = CreateRefractionGalleryScene(caseView, geometryPreview, *world);
+            }
+            return galleryOk;
+        }
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created"));
-        if(m_lifecycleEnabled)
-            applyLifecyclePhase();
+        b8 defaultSceneOk = false;
+        EntityID glassEntity = s_InvalidEntityId;
+        const b8 lifecycleEnabled = this.m_lifecycleEnabled;
+        native(in lifecycleEnabled, mut world = this.m_world, mut defaultSceneOk, mut glassEntity){
+            const auto camera = CreateSmokeCamera(1.4f, 6.0f, 0.0f, *world);
+            // Include a light so shared shadow and TLAS preparation runs.
+            const auto light = Impl::Scene::CreateDirectionalLightEntity(*world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+            glassEntity = CreateTintedStaticMeshEntity(
+                s_RefractionSceneSphereMesh,
+                s_RefractionSceneClearMaterial,
+                NameTextAscii(s_SmokeSurfaceMaterialInterface),
+                VectorSet(1.0f, 1.0f, 1.0f, 1.0f),
+                VectorSet(0.0f, 1.4f, 0.0f, 0.0f),
+                VectorSet(1.15f, 1.15f, 1.15f, 0.0f),
+                *world
+            );
+            defaultSceneOk = camera.valid() && glassEntity.valid() && light.valid();
+            if(defaultSceneOk){
+                world->entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
+                // Unlit opaque stripes provide a static background for measuring refraction displacement.
+                const u32 stripeCount = lifecycleEnabled ? 48u : 20u;
+                const f32 stripeStart = lifecycleEnabled ? -7.05f : -2.85f;
+                for(u32 stripe = 0u; stripe < stripeCount; ++stripe){
+                    const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
+                    const f32 x = static_cast<f32>(stripe) * 0.3f + stripeStart;
+                    CreateRefractionScenePanel(
+                        s_RefractionSceneOpaqueMaterial,
+                        VectorSet(value, value, value, 1.0f),
+                        VectorSet(x, 1.4f, 2.8f, 0.0f),
+                        VectorSet(0.15f, 1.0f, 2.0f, 0.0f),
+                        *world
+                    );
+                }
+                // Place the red strip in front of the glass and the blue strip behind it.
+                CreateRefractionScenePanel(
+                    s_RefractionSceneTransparentMaterial,
+                    VectorSet(1.0f, 0.025f, 0.025f, 0.75f),
+                    VectorSet(0.0f, 0.85f, -1.7f, 0.0f),
+                    VectorSet(1.6f, 1.0f, 0.08f, 0.0f),
+                    *world
+                );
+                CreateRefractionScenePanel(
+                    s_RefractionSceneTransparentMaterial,
+                    VectorSet(0.025f, 0.1f, 1.0f, 0.70f),
+                    VectorSet(0.0f, 1.9f, 1.6f, 0.0f),
+                    VectorSet(2.0f, 1.0f, 0.12f, 0.0f),
+                    *world
+                );
+            }
+        }
+        [essential] assert(defaultSceneOk, "RefractionSmokeProject: camera/glass/light creation failed");
+        this.m_glass = glassEntity;
+        [essential] info("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created");
+        if(this.m_lifecycleEnabled)
+            this.applyLifecyclePhase();
         return true;
     }
 
-    virtual void onShutdown()override{
-        m_timingRenderPass.stop();
-        DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: shutdown"));
+    public void onShutdown()override{
+        this.m_timingRenderPass.stop();
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
+        [essential] info("RefractionSmokeProject: shutdown");
     }
 
-    virtual b8 onUpdate(const f32 delta)override{
-        m_queryDiagnostics.update();
-        if(m_framebufferCapture)
-            m_framebufferCapture->update();
-        if(!advanceLifecycleCapture())
-            return false;
-        if(!updateFrameGraphSnapshot())
-            return false;
-        if(m_frameGraphSnapshotCompleted)
-            return true;
-        if(m_timingEnabled){
-            m_fpsProbe.recordFrame(delta);
-            m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
+    public b8 onUpdate(in f32 delta)override{
+        native(mut diag = this.m_queryDiagnostics, mut world = this.m_world, mut capture = this.m_framebufferCapture){
+            diag.update(*world);
+            if(capture)
+                capture->update();
         }
-        const f32 fixedDelta = m_densityEnabled ? 1.f / 60.f : RendererBaselineFixedDelta();
-        return TickSmokeWorld(fixedDelta > 0.0f ? fixedDelta : delta, *m_world);
+        if(!this.advanceLifecycleCapture())
+            return false;
+        if(!this.updateFrameGraphSnapshot())
+            return false;
+        if(this.m_frameGraphSnapshotCompleted)
+            return true;
+        if(this.m_timingEnabled){
+            this.m_fpsProbe.recordFrame(delta);
+            this.m_gpuPassTimingProbe.recordFrame(delta, this.m_context.gpuTimingView());
+        }
+        f32 fixedDelta = RendererBaselineFixedDelta();
+        if(this.m_densityEnabled)
+            fixedDelta = 1.0f / 60.0f;
+        f32 tickDelta = delta;
+        if(fixedDelta > 0.0f)
+            tickDelta = fixedDelta;
+        b8 ticked = false;
+        native(in tickDelta, mut world = this.m_world, mut ticked){
+            ticked = TickSmokeWorld(tickDelta, *world);
+        }
+        return ticked;
     }
 
-
-private:
-    b8 configureFrameGraphSnapshot(NWB::Core::Alloc::ScratchArena& arena){
-        const auto path = ReadEnvironmentVariable(arena, "NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH");
-        if(!path){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: failed to read frame-graph snapshot path"));
+    private b8 configureFrameGraphSnapshot(){
+        const b8 diagEnabled = this.m_queryDiagnostics.enabled();
+        b8 readFailed = false;
+        b8 hasPath = false;
+        b8 invalidPrereqs = false;
+        String snapshotPath;
+        native(
+            in timingEnabled = this.m_timingEnabled,
+            in lifecycleEnabled = this.m_lifecycleEnabled,
+            in diagEnabled,
+            mut readFailed,
+            mut hasPath,
+            mut invalidPrereqs,
+            mut snapshotPath
+        ){
+            Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
+            const auto path = ReadEnvironmentVariable(arena, "NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH");
+            if(!path){
+                readFailed = true;
+            }
+            else if(*path){
+                hasPath = true;
+                const auto readback = ReadEnvironmentVariable(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+                const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
+                if(!readback || !freeze || (**path).empty() || timingEnabled || lifecycleEnabled || diagEnabled || *readback || *freeze){
+                    invalidPrereqs = true;
+                }
+                else{
+                    snapshotPath.assign((**path).data(), (**path).size());
+                }
+            }
+        }
+        if(readFailed){
+            error("RefractionSmokeProject: failed to read frame-graph snapshot path");
             return false;
         }
-        if(!*path)
+        if(!hasPath)
             return true;
-        const auto readback = ReadEnvironmentVariable(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-        const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-        if(!readback || !freeze || (**path).empty() || m_timingEnabled || m_lifecycleEnabled || m_queryDiagnostics.enabled() || *readback || *freeze){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: a nonempty frame-graph snapshot path requires timing, lifecycle, framebuffer readback, and frame freeze disabled"));
+        if(invalidPrereqs){
+            error("RefractionSmokeProject: a nonempty frame-graph snapshot path requires timing, lifecycle, framebuffer readback, and frame freeze disabled");
             return false;
         }
-        m_frameGraphSnapshotPath = SmokeEnvironmentString(**path, m_context.objectArena);
+        this.m_frameGraphSnapshotPath = snapshotPath;
         return true;
     }
 
-    b8 updateFrameGraphSnapshot(){
-        if(m_frameGraphSnapshotPath.empty() || m_frameGraphSnapshotCompleted)
+    private b8 updateFrameGraphSnapshot(){
+        if(this.m_frameGraphSnapshotPath.empty() || this.m_frameGraphSnapshotCompleted)
             return true;
         i32 width = 0;
         i32 height = 0;
-        m_context.graphics.getWindowDimensions(width, height);
-        const auto target = NWB::QueryProjectFrameClientSize();
-        const u64 currentFrame = m_context.graphics.getFrameIndex();
-        if(width != target.width || height != target.height || (m_frameGraphTargetStart && currentFrame < *m_frameGraphTargetStart)){
-            m_frameGraphTargetStart.reset();
+        u32 targetWidth = 0u;
+        u32 targetHeight = 0u;
+        u64 currentFrame = 0u;
+        native(in ctx = this.m_context, mut width, mut height, mut targetWidth, mut targetHeight, mut currentFrame){
+            ctx.graphics.getWindowDimensions(width, height);
+            const auto target = NWB::QueryProjectFrameClientSize();
+            targetWidth = target.width;
+            targetHeight = target.height;
+            currentFrame = ctx.graphics.getFrameIndex();
+        }
+        if(
+            width != cast<i32>(targetWidth)
+            || height != cast<i32>(targetHeight)
+            || (this.m_frameGraphTargetStart.has_value() && currentFrame < this.m_frameGraphTargetStart.value())
+        ){
+            this.m_frameGraphTargetStart.reset();
             return true;
         }
-        if(!m_frameGraphTargetStart){
-            m_frameGraphTargetStart = currentFrame;
+        if(!this.m_frameGraphTargetStart.has_value()){
+            this.m_frameGraphTargetStart = currentFrame;
             return true;
         }
-        const u64 completedFrames = currentFrame - *m_frameGraphTargetStart;
-        if(completedFrames < 360u || currentFrame == 0u)
+        const u64 completedFrames = currentFrame - this.m_frameGraphTargetStart.value();
+        if(completedFrames < s_RefractionFrameGraphRequiredFrames || currentFrame == 0u)
             return true;
-        if(!CaptureStressFrameGraphSnapshot(AStringView(m_frameGraphSnapshotPath), completedFrames, m_context))
+        if(!CaptureStressFrameGraphSnapshot(StringView(this.m_frameGraphSnapshotPath), completedFrames, this.m_context))
             return false;
-        m_frameGraphSnapshotCompleted = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionFrameGraphSnapshot: target_extent {}x{} completed_target_frames {}"), target.width, target.height, completedFrames);
-        m_context.requestQuit();
+        this.m_frameGraphSnapshotCompleted = true;
+        [essential] info("RefractionFrameGraphSnapshot: target_extent {}x{} completed_target_frames {}", targetWidth, targetHeight, completedFrames);
+        native(mut ctx = this.m_context){
+            ctx.requestQuit();
+        }
         return true;
     }
 
-    b8 configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
-        constexpr u32 s_DefaultCaptureFrameCount = 16u;
-        if(m_lifecycleEnabled){
-            const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-            if(!output){
-                NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: lifecycle requires application framebuffer capture"));
+    private b8 configureFramebufferCapture(){
+        if(this.m_lifecycleEnabled){
+            const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+            if(!output.has_value()){
+                error("RefractionSmokeProject: lifecycle requires application framebuffer capture");
                 return false;
             }
-            u32 captureFrames = s_DefaultCaptureFrameCount;
-            const auto frames = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-            if(frames){
-                const auto parsed = ParseU64(AStringView(*frames));
-                if(!parsed || *parsed == 0u || *parsed > Limit<u32>::s_Max){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: lifecycle frame count must be a positive u32"));
+            const StringView outputView = StringView(output.value());
+            u32 captureFrames = s_RefractionDefaultCaptureFrameCount;
+            const Expected<String> framesText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+            if(framesText.has_value()){
+                const Expected<u64> parsed = ParseU64(StringView(framesText.value()));
+                if(!parsed.has_value() || parsed.value() == 0u || parsed.value() > s_RefractionMaxU32Value){
+                    error("RefractionSmokeProject: lifecycle frame count must be a positive u32");
                     return false;
                 }
-                captureFrames = static_cast<u32>(*parsed);
+                captureFrames = cast<u32>(parsed.value());
             }
-            for(usize phase = 0u; phase < s_LifecyclePhases.size(); ++phase){
-                const auto path = phase + 1u == s_LifecyclePhases.size() ? SmokeEnvironmentString(*output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", *output, s_LifecyclePhases[phase].name);
-                m_lifecyclePaths.emplace_back(m_context.objectArena, AStringView(path));
+            this.m_lifecyclePaths.reserve(s_RefractionLifecyclePhaseCount);
+            for(usize phase = 0u; phase < s_RefractionLifecyclePhaseCount; ++phase){
+                String phasePath;
+                if(phase + 1u == s_RefractionLifecyclePhaseCount){
+                    phasePath = String(outputView);
+                }
+                else{
+                    const StringView phaseName = RefractionLifecyclePhaseAt(phase).name;
+                    native(in outputView, in phaseName, mut phasePath){
+                        Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
+                        const auto formatted = StringFormat(scratchArena, "{}.{}.bmp", outputView, phaseName);
+                        phasePath.assign(formatted.data(), formatted.size());
+                    }
+                }
+                this.m_lifecyclePaths.push_back(phasePath);
             }
-            const auto extent = NWB::QueryProjectFrameClientSize();
-            const FramebufferCaptureOptions options{ .requiredWidth = extent.width, .requiredHeight = extent.height, .quitWhenReady = false, };
-            m_framebufferCapture = MakeUnique<FramebufferCapture>(Move(m_lifecyclePaths.front()), captureFrames, m_context, options);
-            return m_framebufferCapture && m_framebufferCapture->start();
+            const StringView firstPath = StringView(this.m_lifecyclePaths[0u]);
+            b8 started = false;
+            native(in firstPath, in captureFrames, mut ctx = this.m_context, mut capture = this.m_framebufferCapture, mut started){
+                const auto extent = NWB::QueryProjectFrameClientSize();
+                const FramebufferCaptureOptions options{
+                    .requiredWidth = extent.width,
+                    .requiredHeight = extent.height,
+                    .quitWhenReady = false,
+                };
+                capture = MakeUnique<FramebufferCapture>(firstPath, captureFrames, ctx, options);
+                started = capture && capture->start();
+            }
+            return started;
         }
-        FramebufferCaptureOptions options;
-        if(m_densityEnabled){
-            const auto extent = NWB::QueryProjectFrameClientSize();
-            options.requiredWidth = extent.width;
-            options.requiredHeight = extent.height;
-            // The density harness confirms the exact client/framebuffer extent and readback, then closes normally.
-            options.quitWhenReady = false;
+
+        FramebufferCaptureOptions options = FramebufferCaptureOptions();
+        if(this.m_densityEnabled){
+            native(mut options){
+                const auto extent = NWB::QueryProjectFrameClientSize();
+                options.requiredWidth = extent.width;
+                options.requiredHeight = extent.height;
+                // The density harness confirms the exact client/framebuffer extent and readback, then closes normally.
+                options.quitWhenReady = false;
+            }
         }
-        if(m_queryDiagnostics.enabled()){
-            options.predicateContext = &m_queryDiagnostics;
-            options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
-                const auto& diagnostics = *MakeNotNull(static_cast<RefractionQueryDiagnostics*>(owner));
-                return diagnostics.shouldCapture(graphicsFrame);
-            };
+        if(this.m_queryDiagnostics.enabled()){
+            native(mut options, mut diag = this.m_queryDiagnostics){
+                options.predicateContext = &diag;
+                options.shouldCapture = +[](void* const owner, const u64 graphicsFrame)noexcept -> b8{
+                    const auto& diagnostics = *MakeNotNull(static_cast<RefractionQueryDiagnostics*>(owner));
+                    return diagnostics.shouldCapture(graphicsFrame);
+                };
+            }
         }
-        auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(s_ProjectName, s_DefaultCaptureFrameCount, options, scratchArena);
-        if(!capture)
+        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
+        Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(
+            RefractionSmokeProjectName(),
+            s_RefractionDefaultCaptureFrameCount,
+            options
+        );
+        if(!capture.has_value())
             return false;
-        m_framebufferCapture = Move(*capture);
+        native(mut dst = this.m_framebufferCapture, mut capture){
+            dst = Move(*capture);
+        }
         return true;
     }
 
-    void applyLifecyclePhase(){
-        const auto& phase = s_LifecyclePhases[m_lifecyclePhase];
-        auto& transform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_glass));
-        auto& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
-        transform.position = Float4(phase.glassX, 1.4f, 0.0f, 0.0f);
-        renderer.setRefractionEnabled(phase.enabled);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: phase {} applied"), ConvertString(phase.name));
+    private void applyLifecyclePhase(){
+        const RefractionLifecyclePhase phase = RefractionLifecyclePhaseAt(this.m_lifecyclePhase);
+        const f32 glassX = phase.glassX;
+        const b8 phaseEnabled = phase.enabled;
+        native(in glass = this.m_glass, in glassX, in phaseEnabled, mut world = this.m_world){
+            auto& transform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(glass));
+            auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
+            transform.position = Float4(glassX, 1.4f, 0.0f, 0.0f);
+            renderer.setRefractionEnabled(phaseEnabled);
+        }
+        [essential] info("RefractionLifecycle: phase {} applied", phase.name);
     }
 
-    b8 advanceLifecycleCapture(){
-        if(!m_lifecycleEnabled || !m_framebufferCapture->captureReady() || m_lifecyclePhase == s_LifecyclePhases.size())
+    private b8 advanceLifecycleCapture(){
+        if(!this.m_lifecycleEnabled || this.m_lifecyclePhase == s_RefractionLifecyclePhaseCount)
             return true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: captured {} graphics frame {}"), ConvertString(s_LifecyclePhases[m_lifecyclePhase].name), m_framebufferCapture->capturedGraphicsFrameIndex());
-        ++m_lifecyclePhase;
-        if(m_lifecyclePhase == s_LifecyclePhases.size()){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: complete samples=7"));
-            m_framebufferCapture->finish();
+        b8 ready = false;
+        u64 capturedFrame = 0u;
+        native(in capture = this.m_framebufferCapture, mut ready, mut capturedFrame){
+            if(capture && capture->captureReady()){
+                ready = true;
+                capturedFrame = capture->capturedGraphicsFrameIndex();
+            }
+        }
+        if(!ready)
+            return true;
+        [essential] info("RefractionLifecycle: captured {} graphics frame {}", RefractionLifecyclePhaseAt(this.m_lifecyclePhase).name, capturedFrame);
+        ++this.m_lifecyclePhase;
+        if(this.m_lifecyclePhase == s_RefractionLifecyclePhaseCount){
+            [essential] info("RefractionLifecycle: complete samples=7");
+            native(mut capture = this.m_framebufferCapture){
+                capture->finish();
+            }
             return true;
         }
-        applyLifecyclePhase();
-        if(!m_framebufferCapture->rearm(Move(m_lifecyclePaths[m_lifecyclePhase]))){
-            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: failed to advance lifecycle capture"));
+        this.applyLifecyclePhase();
+        const StringView nextPath = StringView(this.m_lifecyclePaths[this.m_lifecyclePhase]);
+        b8 rearmed = false;
+        native(in nextPath, mut capture = this.m_framebufferCapture, mut rearmed){
+            rearmed = capture->rearm(nextPath);
+        }
+        if(!rearmed){
+            error("RefractionSmokeProject: failed to advance lifecycle capture");
             return false;
         }
         return true;
     }
 
-
-private:
-    NWB::ProjectRuntimeContext& m_context;
-    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    RefractionQueryDiagnostics m_queryDiagnostics{ m_context, *m_world };
-    UniquePtr<FramebufferCapture> m_framebufferCapture;
-    AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
-    FpsProbe m_fpsProbe{ s_ProjectName };
-    GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
-    Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_lifecyclePaths;
-    SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
-    Optional<u64> m_frameGraphTargetStart;
-    usize m_lifecyclePhase = 0u;
-    NWB::Core::ECS::EntityID m_glass = {};
-    b8 m_lifecycleEnabled = false;
-    b8 m_timingEnabled = false;
-    b8 m_densityEnabled = false;
-    b8 m_frameGraphSnapshotCompleted = false;
-};
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private RefractionQueryDiagnostics m_queryDiagnostics;
+    private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
+    private AvboitTimingRenderPass m_timingRenderPass;
+    private FpsProbe m_fpsProbe;
+    private GpuPassTimingProbe m_gpuPassTimingProbe;
+    private Vector<String> m_lifecyclePaths;
+    private String m_frameGraphSnapshotPath;
+    private Optional<u64> m_frameGraphTargetStart;
+    private usize m_lifecyclePhase = 0u;
+    private EntityID m_glass = s_InvalidEntityId;
+    private b8 m_lifecycleEnabled = false;
+    private b8 m_timingEnabled = false;
+    private b8 m_densityEnabled = false;
+    private b8 m_frameGraphSnapshotCompleted = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-namespace NWB::Tests::Smoke{ using RefractionSmokeProjectImpl = __hidden_refraction_smoke::RefractionSmokeProjectImpl; }
-
+native{
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB::Core::Alloc::ScratchArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
     const auto extent = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_EXTENT");
@@ -624,3 +905,4 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

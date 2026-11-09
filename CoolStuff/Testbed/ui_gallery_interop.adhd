@@ -27,9 +27,6 @@ native{
 #include <core/common/log.h>
 
 #include <global/numeric_text.h>
-#include <global/range_algorithms.h>
-#include <global/scope_exit.h>
-#include <global/text_utils.h>
 
 namespace Testbed{
 using NWB::Core::Alloc::GlobalArena;
@@ -41,53 +38,9 @@ using NWB::Impl::UiSkin;
 using NWB::Impl::UiSubsystem;
 using namespace NWB::Impl::Ui;
 
-template<typename... Args>
-[[nodiscard]] inline b8 DeclareFormattedLabel(Builder& ui, ScratchArena& scratchArena, const StringView key, AFormatString<Args...> formatStr, Args&&... args){
-    const auto text = StringFormat(scratchArena, formatStr, Forward<Args>(args)...);
-    return ui.label(key, { text.data(), text.size() });
-}
-
-[[nodiscard]] inline b8 DeclareSelectedKeyLabel(Builder& ui, ScratchArena& scratchArena, const u64 selectedKey){
-    const auto text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
-    return ui.label(s_SelectedKey, { text.data(), text.size() });
-}
-
-[[nodiscard]] inline StringView FormatVirtualListRowLabel(const u64 rowKey, const Array<u8, s_VirtualListLabelCapacity>& labelStorage)noexcept{
-    if(rowKey == 0u)
-        return {};
-    char* const label = reinterpret_cast<char*>(const_cast<u8*>(labelStorage.data()));
-    label[0] = 'R';
-    label[1] = 'o';
-    label[2] = 'w';
-    label[3] = ' ';
-    Array<char, s_VirtualListMaxDecimalDigits> digits{};
-    const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
-    for(usize offset = 0u; offset < formatted.size(); ++offset)
-        label[s_VirtualListRowPrefixLength + offset] = formatted[offset];
-    return { label, s_VirtualListRowPrefixLength + formatted.size() };
-}
-
-[[nodiscard]] inline b8 LoadUiGallerySkinImageSource(GlobalArena& arena, const AssetManager& assets, const ActiveSceneSubsystems& sceneSubsystems, SharedImageSource& outSource){
-    const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
-    if(!uiSubsystem || !uiSubsystem->basicSkin.valid())
-        return false;
-    auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
-    if(!skin)
-        return false;
-    auto source = LoadImageSource(arena, assets, (*skin)->texture());
-    if(!source)
-        return false;
-    outSource = Move(*source);
-    return true;
-}
-
-template<typename Source>
-[[nodiscard]] inline Expected<u64> FindEnabledListSourceRow(const Source& source, const u64 start, const b8 reverse)noexcept{
-    return FindDirectionalIndex(start, reverse, [&source]()noexcept{ return source.rowCount(); }, [&source](const u64 candidate)noexcept{ return source.enabled(candidate); });
-}
-
-template<typename Source, usize LabelCount, u64 DisabledKey>
-class UiFilteredListSource : public ISearchableListDataSource, NoCopy{
+// C++ interface adapter required because ISearchableListDataSource::filtered() returns const IListDataSource&.
+template<typename ResolverT, usize LabelCount, u64 DisabledKey>
+class UiFilteredListSource final : public ISearchableListDataSource, NoCopy{
 private:
     class View final : public IListDataSource, NoCopy{
     public:
@@ -97,90 +50,140 @@ private:
 
     public:
         virtual u64 instanceGeneration()const noexcept override{ return s_FilteredInstanceGeneration; }
-        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
-        virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
-        virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
-        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
-            return TryFindFilteredListSourceIndex(m_source.m_indices, rowCount(), LabelCount, keyValue);
-        }
-        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-            return FindEnabledListSourceRow(*this, start, reverse);
-        }
-        virtual StringView text(const u64 index)const noexcept override{
-            return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
-        }
-        virtual b8 enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
+        virtual u64 revision()const noexcept override{ return m_source.m_state.filteredRevision(); }
+        virtual u64 rowCount()const noexcept override{ return m_source.m_state.filteredRowCount(); }
+        virtual u64 key(const u64 index)const noexcept override{ return m_source.m_state.filteredKey(index); }
+        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_source.m_state.filteredIndexOf(keyValue); }
+        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_source.m_state.filteredFindEnabled(start, reverse); }
+        virtual StringView text(const u64 index)const noexcept override{ return m_source.m_state.filteredText(index); }
+        virtual b8 enabled(const u64 index)const noexcept override{ return m_source.m_state.filteredEnabled(index); }
 
     private:
         const UiFilteredListSource& m_source;
     };
 
 public:
-    explicit UiFilteredListSource(GlobalArena& arena)noexcept
-        : m_query(arena)
-        , m_view(*this)
-        , m_count(LabelCount)
-        , m_viewRevision(1u)
-    {
-        for(u64 index = 0u; index < LabelCount; ++index)
-            m_indices[index] = index;
-    }
+    explicit UiFilteredListSource(GlobalArena&)noexcept
+        : m_view(*this)
+    {}
 
 public:
-    virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
-    virtual u64 revision()const noexcept override final{ return 1u; }
-    virtual u64 rowCount()const noexcept override final{ return LabelCount; }
-    virtual u64 key(const u64 index)const noexcept override final{ return ResolveImmutableListSourceKey(index, LabelCount); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override final{ return TryResolveImmutableListSourceIndex(keyValue, LabelCount); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override final{ return FindEnabledListSourceRow(*this, start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return Source::ResolveLabel(index); }
-    virtual b8 enabled(const u64 index)const noexcept override final{ return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey); }
-
-    [[nodiscard]] virtual b8 filter(const AStringView query)override final{
-        if(m_viewRevision != 0u && query == AStringView(m_query.data(), m_query.size()))
-            return true;
-        if(query.empty())
-            m_query.clear();
-        else
-            m_query.assign(query.data(), query.size());
-        m_count = 0u;
-        for(u64 index = 0u; index < LabelCount; ++index){
-            if(!ContainsAsciiIgnoreCase<char>(this->text(index), query))
-                continue;
-            m_indices[m_count] = index;
-            ++m_count;
-        }
-        ++m_viewRevision;
-        return true;
-    }
-
-    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override final{ return m_view; }
+    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
+    virtual u64 revision()const noexcept override{ return 1u; }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return m_state.text(index); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
+    [[nodiscard]] virtual b8 filter(const AStringView query)override{ return m_state.applyFilter(query); }
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
 
 private:
-    AString<GlobalArena> m_query;
+    UiFilteredListState<ResolverT, LabelCount, DisabledKey> m_state;
     View m_view;
-    Array<u64, LabelCount> m_indices{};
-    u64 m_count = 0u;
-    u64 m_viewRevision = 0u;
 };
 
-class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>{
-    friend class UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
-public:
-    using UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>::UiFilteredListSource;
-private:
-    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveNestedPopupLabel(index); }
-};
-
-class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>{
-    friend class UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
-public:
-    using UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>::UiFilteredListSource;
-private:
-    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveSearchComboLabel(index); }
-};
+using UiNestedPopupSource = UiFilteredListSource<UiNestedPopupLabelResolver, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
+using UiSearchComboSource = UiFilteredListSource<UiSearchComboLabelResolver, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
 };
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeclareSelectedKeyLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 selectedKey){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in selectedKey, mut declared){
+        const auto text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
+        declared = ui.label(s_SelectedKey, { text.data(), text.size() });
+    }
+    return declared;
+}
+
+b8 DeclareCommittedNumericLabel(mut Builder ui, mut ScratchArena scratchArena, in i64 integerValue, in f64 floatValue){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in integerValue, in floatValue, mut declared){
+        const auto text = StringFormat(scratchArena, "Committed: {} / {}", integerValue, floatValue);
+        declared = ui.label("committed", { text.data(), text.size() });
+    }
+    return declared;
+}
+
+b8 DeclarePopupToolsStatusLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 commandKey, in u32 anchorClicks){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in commandKey, in anchorClicks, mut declared){
+        const auto text = StringFormat(scratchArena, "Command: {} / Clicks: {}", commandKey, anchorClicks);
+        declared = ui.label(s_SelectedKey, { text.data(), text.size() });
+    }
+    return declared;
+}
+
+b8 DeclareProgressPercentLabel(mut Builder ui, mut ScratchArena scratchArena, in f64 percent){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in percent, mut declared){
+        const auto text = StringFormat(scratchArena, "Completed: {:.0f}%", percent);
+        declared = ui.label("value", { text.data(), text.size() });
+    }
+    return declared;
+}
+
+b8 DeclareGallerySectionLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in sectionNumber, in sectionCount, in sectionName, mut declared){
+        const auto text = StringFormat(scratchArena, "UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
+        declared = ui.label("section", { text.data(), text.size() });
+    }
+    return declared;
+}
+
+b8 DeclareCounterLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 count){
+    b8 declared = false;
+    native(mut ui, mut scratchArena, in count, mut declared){
+        const auto text = StringFormat(scratchArena, "Count: {}", count);
+        declared = ui.label("count", { text.data(), text.size() });
+    }
+    return declared;
+}
+
+StringView FormatVirtualListRowLabel(in u64 rowKey, in Array<u8, s_VirtualListLabelCapacity> labelStorage){
+    if(rowKey == 0u)
+        return "";
+    StringView result = "";
+    native(in rowKey, in labelStorage, mut result){
+        char* const label = reinterpret_cast<char*>(const_cast<u8*>(labelStorage.data()));
+        label[0] = 'R';
+        label[1] = 'o';
+        label[2] = 'w';
+        label[3] = ' ';
+        Array<char, s_VirtualListMaxDecimalDigits> digits{};
+        const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
+        for(usize offset = 0u; offset < formatted.size(); ++offset)
+            label[s_VirtualListRowPrefixLength + offset] = formatted[offset];
+        result = StringView(label, s_VirtualListRowPrefixLength + formatted.size());
+    }
+    return result;
+}
+
+b8 LoadUiGallerySkinImageSource(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems, mut SharedImageSource outSource){
+    b8 loaded = false;
+    native(mut arena, in assets, in sceneSubsystems, mut outSource, mut loaded){
+        const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
+        if(uiSubsystem && uiSubsystem->basicSkin.valid()){
+            auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
+            if(skin){
+                auto source = LoadImageSource(arena, assets, (*skin)->texture());
+                if(source){
+                    outSource = Move(*source);
+                    loaded = true;
+                }
+            }
+        }
+    }
+    return loaded;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

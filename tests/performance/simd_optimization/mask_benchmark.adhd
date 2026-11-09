@@ -5,35 +5,8 @@
 #include "benchmark_support.adhd"
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_mask_benchmark{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using SimdOptimizationBenchmark::NextSeed;
-
-namespace Operation{
-enum Enum : u32{ Move, EqualFloat, EqualDouble, EqualDoubleXYZ };
-};
-
-struct MaskDataset{
-    Array<UInt64x4, 64> left = {};
-    Array<UInt64x4, 64> right = {};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+namespace SimdOptimizationBenchmark{
+namespace MaskKernels{
 
 NWB_INLINE u32 NWB_SIMD_CALL BaselineMoveDouble(SIMDVectorDouble value)noexcept{
 #if defined(NWB_HAS_NEON64)
@@ -78,96 +51,38 @@ NWB_INLINE b8 EqualDouble3(const SIMDVectorDouble a, const SIMDVectorDouble b)no
     return (BaselineMoveDouble(VectorDoubleEqual(a, b)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
 }
 
-template<Operation::Enum Kind, b8 Candidate>
+template<u32 KindIndex, b8 Candidate>
 NWB_NOINLINE u32 Observe(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Operation::Move)
+    if constexpr(KindIndex == 0u)
         return MoveDouble<Candidate>(a);
-    else if constexpr(Kind == Operation::EqualFloat)
+    else if constexpr(KindIndex == 1u)
         return EqualFloat4<Candidate>(BitCast<SIMDVectorSingle>(__builtin_shufflevector(a, a, 0, 1)), BitCast<SIMDVectorSingle>(__builtin_shufflevector(b, b, 0, 1)));
-    else if constexpr(Kind == Operation::EqualDouble)
+    else if constexpr(KindIndex == 2u)
         return EqualDouble4<Candidate>(a, b);
     else
         return EqualDouble3<Candidate>(a, b);
 }
 
-NWB_NOINLINE u32 Qualify()noexcept{
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    if(!originalEnvironment)
-        return 2u;
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    constexpr u64 s_QualifyInitialState = 0x7462825482129431ull;
-    constexpr usize s_RandomQualificationSampleCount = 1000000u;
-    u64 state = s_QualifyInitialState;
-    for(usize sample = 0u; sample < s_RandomQualificationSampleCount; ++sample){
-        const SIMDVectorDouble value = VectorDoubleSetInt(NextSeed(state), NextSeed(state), NextSeed(state), NextSeed(state));
-        if(MoveDouble<false>(value) != MoveDouble<true>(value))
-            return 1u;
-    }
-    constexpr Array<u64, 14> s_Edges = {
-        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
-        0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8123412341234ull, 0x7FF0234523452345ull, 0x7FC012347FC01234ull, 0x7F8012347F801234ull,
-    };
-    constexpr Array<int, 4> s_Modes = { FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
-    for(const int mode : s_Modes){
-        if(!SetFloatingPointRoundingMode(mode))
-            return 2u;
-        for(usize sample = 0u; sample < 2048u; ++sample){
-            const SIMDVectorDouble a = VectorDoubleSetInt(s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()]);
-            const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()]);
-#define NWB_AUDIT_COMPARE(kind) \
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) \
-                return 3u; \
-            errno = 0; \
-            const u32 baseline##kind = Observe<Operation::kind, false>(a, b); \
-            const int baselineFlags##kind = TestFloatingPointExceptions(FE_ALL_EXCEPT), baselineErrno##kind = errno; \
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) \
-                return 3u; \
-            errno = 0; \
-            const u32 candidate##kind = Observe<Operation::kind, true>(a, b); \
-            if(candidate##kind != baseline##kind || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags##kind || errno != baselineErrno##kind) \
-                return 4u;
-            NWB_AUDIT_COMPARE(EqualFloat)
-            NWB_AUDIT_COMPARE(EqualDouble)
-            NWB_AUDIT_COMPARE(EqualDoubleXYZ)
-#undef NWB_AUDIT_COMPARE
-        }
-    }
-    if(!SetFloatingPointRoundingMode(FE_TONEAREST))
-        return 2u;
-    return 0u;
-}
-
-NWB_NOINLINE void InitializeDataset(MaskDataset& dataset)noexcept{
-    u64 state = 0x5629842965734193ull;
-    for(usize i = 0u; i < 64u; ++i){
-        const SIMDVectorDouble left = VectorDoubleSetInt(NextSeed(state), NextSeed(state), NextSeed(state), NextSeed(state));
-        const u64 differing = i % 3u == 0u ? 1u : 0u;
-        StoreDoubleInt(left, dataset.left[i]);
-        StoreDoubleInt(VectorDoubleSetInt(VectorDoubleGetIntX(left) ^ differing, VectorDoubleGetIntY(left), VectorDoubleGetIntZ(left), VectorDoubleGetIntW(left)), dataset.right[i]);
-    }
-}
-
-template<Operation::Enum Kind, b8 Candidate>
+template<u32 KindIndex, b8 Candidate>
 NWB_INLINE u32 Apply(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
-    if constexpr(Kind == Operation::Move)
+    if constexpr(KindIndex == 0u)
         return MoveDouble<Candidate>(a);
-    else if constexpr(Kind == Operation::EqualFloat)
+    else if constexpr(KindIndex == 1u)
         return EqualFloat4<Candidate>(BitCast<SIMDVectorSingle>(__builtin_shufflevector(a, a, 0, 1)), BitCast<SIMDVectorSingle>(__builtin_shufflevector(b, b, 0, 1)));
-    else if constexpr(Kind == Operation::EqualDouble)
+    else if constexpr(KindIndex == 2u)
         return EqualDouble4<Candidate>(a, b);
     else
         return EqualDouble3<Candidate>(a, b);
 }
 
-template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE u64 Workload(const MaskDataset& data, const usize iterations, const b8 latency)noexcept{
+template<u32 KindIndex, b8 Candidate, typename DatasetT>
+NWB_NOINLINE u64 RunWorkload(const DatasetT& data, const usize iterations, const b8 latency)noexcept{
     Array<u64, 8> results = {};
     if(latency){
         usize index = 1u;
         for(usize i = 0u; i < iterations; ++i){
-            const u32 result = Apply<Kind, Candidate>(LoadDoubleInt(data.left[index]), LoadDoubleInt(data.right[index]));
+            const u32 result = Apply<KindIndex, Candidate>(LoadDoubleInt(data.left[index]), LoadDoubleInt(data.right[index]));
             results[0] += result;
             index = (index + result + 1u) & 63u;
         }
@@ -176,7 +91,7 @@ NWB_NOINLINE u64 Workload(const MaskDataset& data, const usize iterations, const
         for(usize i = 0u; i < iterations; ++i){
             const usize index = i & 63u;
             for(usize lane = 0u; lane < 8u; ++lane)
-                results[lane] += Apply<Kind, Candidate>(LoadDoubleInt(data.left[(index + lane * 7u) & 63u]), LoadDoubleInt(data.right[(index + lane * 7u) & 63u]));
+                results[lane] += Apply<KindIndex, Candidate>(LoadDoubleInt(data.left[(index + lane * 7u) & 63u]), LoadDoubleInt(data.right[(index + lane * 7u) & 63u]));
         }
     }
     u64 checksum = 0u;
@@ -185,80 +100,231 @@ NWB_NOINLINE u64 Workload(const MaskDataset& data, const usize iterations, const
     return checksum;
 }
 
-template<Operation::Enum Kind, b8 Candidate>
-void Measure(const MaskDataset& data, const usize iterations, const b8 latency){
-    const Timer start = TimerNow();
-    const u64 checksum = Workload<Kind, Candidate>(data, iterations, latency);
-    const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
-    const usize operations = latency ? iterations : iterations * 8u;
-    const f64 nanosecondsPerOperation = nanoseconds / static_cast<f64>(operations);
-    NWB_COUT
-        << "{\"operation\":" << Kind << ",\"variant\":\"" << (Candidate ? "candidate" : "baseline") << "\",\"workload\":\"" << (latency ? "latency" : "throughput")
-        << "\",\"operations\":" << operations << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanosecondsPerOperation << ",\"checksum\":" << checksum << "}\n"
-    ;
 }
-
-template<Operation::Enum Kind>
-void SelectVariant(const MaskDataset& data, const b8 candidate, const usize iterations, const b8 latency){
-    if(candidate)
-        Measure<Kind, true>(data, iterations, latency);
-    else
-        Measure<Kind, false>(data, iterations, latency);
+};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u32> MaskOperation{
+    Move = 0u,
+    EqualFloat = 1u,
+    EqualDouble = 2u,
+    EqualDoubleXYZ = 3u
 };
 
+class MaskDataset{
+    public Array<u64x4, 64> left;
+    public Array<u64x4, 64> right;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-b8 MaskBenchmarkSupported(){
-    return true;
-}
-
-native{
-int main(const int argc, const char* const* argv){
-    using namespace __hidden_mask_benchmark;
-    NWB_COUT.precision(17);
-    if(argc == 2 && StringView(argv[1]) == "--verify"){
-        const u32 status = Qualify();
-        NWB_COUT << "qualification_status=" << status << '\n';
-        return static_cast<int>(status);
+u32 AuditCompareMaskOperation<const u32 KindIndex>(in VectorDouble a, in VectorDouble b){
+    u32 status = 0u;
+    native(in a, in b, mut status){
+#pragma STDC FENV_ACCESS ON
+        if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+            status = 3u;
+        }
+        else{
+            errno = 0;
+            const u32 baselineValue = MaskKernels::Observe<KindIndex, false>(a, b);
+            const int baselineFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT), baselineErrno = errno;
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+                status = 3u;
+            }
+            else{
+                errno = 0;
+                const u32 candidateValue = MaskKernels::Observe<KindIndex, true>(a, b);
+                if(candidateValue != baselineValue || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags || errno != baselineErrno)
+                    status = 4u;
+            }
+        }
     }
-    if(argc != 6 || StringView(argv[1]) != "--measure")
+    return status;
+}
+
+u32 QualifyMaskBenchmark(){
+    u64 state = 0x7462825482129431ull;
+    Array<u64, 14> edges;
+    edges[0] = 0u;
+    edges[1] = 0x8000000000000000ull;
+    edges[2] = 1u;
+    edges[3] = 0x8000000000000001ull;
+    edges[4] = 0x0010000000000000ull;
+    edges[5] = 0x3FF0000000000000ull;
+    edges[6] = 0xBFF0000000000000ull;
+    edges[7] = 0x7FEFFFFFFFFFFFFFull;
+    edges[8] = 0x7FF0000000000000ull;
+    edges[9] = 0xFFF0000000000000ull;
+    edges[10] = 0x7FF8123412341234ull;
+    edges[11] = 0x7FF0234523452345ull;
+    edges[12] = 0x7FC012347FC01234ull;
+    edges[13] = 0x7F8012347F801234ull;
+
+    u32 status = 0u;
+    native(mut state, in edges, mut status){
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        if(!originalEnvironment){
+            status = 2u;
+        }
+        else{
+            NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+            for(usize sample = 0u; sample < 1000000u && status == 0u; ++sample){
+                const u64 w0 = NextSeed(state);
+                const u64 w1 = NextSeed(state);
+                const u64 w2 = NextSeed(state);
+                const u64 w3 = NextSeed(state);
+                const SIMDVectorDouble value = VectorDoubleSetInt(w0, w1, w2, w3);
+                if(MaskKernels::MoveDouble<false>(value) != MaskKernels::MoveDouble<true>(value))
+                    status = 1u;
+            }
+            constexpr Array<int, 4> s_Modes = { FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
+            for(const int mode : s_Modes){
+                if(status != 0u)
+                    break;
+                if(!SetFloatingPointRoundingMode(mode)){
+                    status = 2u;
+                    break;
+                }
+                for(usize sample = 0u; sample < 2048u && status == 0u; ++sample){
+                    const u64 a0 = edges[NextSeed(state) % edges.size()];
+                    const u64 a1 = edges[NextSeed(state) % edges.size()];
+                    const u64 a2 = edges[NextSeed(state) % edges.size()];
+                    const u64 a3 = edges[NextSeed(state) % edges.size()];
+                    const SIMDVectorDouble a = VectorDoubleSetInt(a0, a1, a2, a3);
+                    SIMDVectorDouble b = a;
+                    if(sample % 2u == 0u){
+                        const u64 b0 = edges[NextSeed(state) % edges.size()];
+                        const u64 b1 = edges[NextSeed(state) % edges.size()];
+                        const u64 b2 = edges[NextSeed(state) % edges.size()];
+                        const u64 b3 = edges[NextSeed(state) % edges.size()];
+                        b = VectorDoubleSetInt(b0, b1, b2, b3);
+                    }
+                    status = AuditCompareMaskOperation<1u>(a, b);
+                    if(status == 0u)
+                        status = AuditCompareMaskOperation<2u>(a, b);
+                    if(status == 0u)
+                        status = AuditCompareMaskOperation<3u>(a, b);
+                }
+            }
+            if(status == 0u && !SetFloatingPointRoundingMode(FE_TONEAREST))
+                status = 2u;
+        }
+    }
+    return status;
+}
+
+void InitializeMaskDataset(mut MaskDataset dataset){
+    u64 state = 0x5629842965734193ull;
+    for(usize i = 0u; i < 64u; ++i){
+        const u64 w0 = NextSeed(state);
+        const u64 w1 = NextSeed(state);
+        const u64 w2 = NextSeed(state);
+        const u64 w3 = NextSeed(state);
+        u64 differing = 0u;
+        if(i % 3u == 0u)
+            differing = 1u;
+        mut u64x4 leftSlot = dataset.left[i];
+        mut u64x4 rightSlot = dataset.right[i];
+        native(in w0, in w1, in w2, in w3, in differing, mut leftSlot, mut rightSlot){
+            StoreDoubleInt(VectorDoubleSetInt(w0, w1, w2, w3), leftSlot);
+            StoreDoubleInt(VectorDoubleSetInt(w0 ^ differing, w1, w2, w3), rightSlot);
+        }
+    }
+}
+
+void MeasureMaskVariant<const u32 KindIndex, const b8 Candidate>(in MaskDataset data, in usize iterations, in b8 latency){
+    const Timer start = TimerNow();
+    u64 checksum = 0u;
+    f64 nanoseconds = 0.0;
+    native(in data, in iterations, in latency, in start, mut checksum, mut nanoseconds){
+        checksum = MaskKernels::RunWorkload<KindIndex, Candidate>(data, iterations, latency);
+        nanoseconds = DurationInNS<f64>(TimerNow(), start);
+    }
+    usize operations = iterations * 8u;
+    if(latency)
+        operations = iterations;
+    const f64 nanosecondsPerOperation = nanoseconds / cast<f64>(operations);
+    StringView variantLabel = "baseline";
+    if(Candidate)
+        variantLabel = "candidate";
+    StringView workloadLabel = "throughput";
+    if(latency)
+        workloadLabel = "latency";
+    const u32 kindCode = KindIndex;
+    native(in kindCode, in variantLabel, in workloadLabel, in operations, in nanoseconds, in nanosecondsPerOperation, in checksum){
+        NWB_COUT
+            << "{\"operation\":" << kindCode << ",\"variant\":\"" << variantLabel << "\",\"workload\":\"" << workloadLabel
+            << "\",\"operations\":" << operations << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanosecondsPerOperation << ",\"checksum\":" << checksum << "}\n"
+        ;
+    }
+}
+
+void SelectMaskVariant<const u32 KindIndex>(in MaskDataset data, in b8 candidate, in usize iterations, in b8 latency){
+    if(candidate)
+        MeasureMaskVariant<KindIndex, true>(data, iterations, latency);
+    else
+        MeasureMaskVariant<KindIndex, false>(data, iterations, latency);
+}
+
+i32 RunMaskBenchmarkCli(in Span<StringView> args){
+    native(){
+        NWB_COUT.precision(17);
+    }
+    if(args.size() == 2u && args[1] == "--verify"){
+        const u32 status = QualifyMaskBenchmark();
+        native(in status){
+            NWB_COUT << "qualification_status=" << status << '\n';
+        }
+        return cast<i32>(status);
+    }
+    if(args.size() != 6u || args[1] != "--measure")
         return 2;
-    const b8 latency = StringView(argv[5]) == "latency";
-    const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max / (latency ? 1u : 8u), true);
-    if(!options)
+
+    const b8 latency = args[5] == "latency";
+    usize divisor = 8u;
+    if(latency)
+        divisor = 1u;
+    const Expected<MeasureOptions> options = ParseMeasureOptions(args[3], args[4], args[5], usize.max / divisor, true);
+    if(!options.has_value())
         return 2;
-    const b8 candidate = options->candidate;
-    const usize iterations = options->iterations;
-    MaskDataset data{};
-    InitializeDataset(data);
-    if(StringView(argv[2]) == "move")
-        SelectVariant<Operation::Move>(data, candidate, iterations, latency);
-    else if(StringView(argv[2]) == "equal_float")
-        SelectVariant<Operation::EqualFloat>(data, candidate, iterations, latency);
-    else if(StringView(argv[2]) == "equal_double")
-        SelectVariant<Operation::EqualDouble>(data, candidate, iterations, latency);
-    else if(StringView(argv[2]) == "equal_double3")
-        SelectVariant<Operation::EqualDoubleXYZ>(data, candidate, iterations, latency);
+    const b8 candidate = options.value().candidate;
+    const usize iterations = options.value().iterations;
+
+    MaskDataset data = MaskDataset();
+    InitializeMaskDataset(data);
+    if(args[2] == "move")
+        SelectMaskVariant<0u>(data, candidate, iterations, latency);
+    else if(args[2] == "equal_float")
+        SelectMaskVariant<1u>(data, candidate, iterations, latency);
+    else if(args[2] == "equal_double")
+        SelectMaskVariant<2u>(data, candidate, iterations, latency);
+    else if(args[2] == "equal_double3")
+        SelectMaskVariant<3u>(data, candidate, iterations, latency);
     else
         return 2;
     return 0;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+native{
+int main(const int argc, const char* const* argv){
+    if(argc <= 0)
+        return 2;
+    Array<StringView, 8> args{};
+    const usize count = Min(static_cast<usize>(argc), args.size());
+    for(usize index = 0u; index < count; ++index)
+        args[index] = StringView(argv[index]);
+    return SimdOptimizationBenchmark::RunMaskBenchmarkCli(Span<const StringView>(args.data(), count));
+}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

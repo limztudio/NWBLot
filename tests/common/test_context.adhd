@@ -9,6 +9,7 @@ native{
 #include <core/alloc/core.h>
 #include <core/alloc/general.h>
 
+#include <global/filesystem/operations.h>
 #include <global/global.h>
 
 #include <gtest/gtest.h>
@@ -58,6 +59,16 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
 template<typename ArenaT>
 [[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){
+    ::Path<ArenaT> current = ::Path<ArenaT>(arena, sourceFile).lexicallyNormal().parentPath();
+    for(usize depth = 0u; depth < 16u && !current.empty(); ++depth){
+        const auto marker = IsRegularFile(current / "engine_namespace.h");
+        if(marker && *marker)
+            return current;
+        ::Path<ArenaT> parent = current.parentPath();
+        if(parent == current)
+            break;
+        current = Move(parent);
+    }
     return ::Path<ArenaT>(arena, sourceFile).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
 }
 

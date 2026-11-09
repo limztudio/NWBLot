@@ -2,245 +2,248 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/common/gtest_macros.adhd>
 #include "skin_name_cases.adhd"
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/fbx_to_nwb/skin_name_cases.adhd.h>
-
 #include <utilities/fbx_to_nwb/skin.h>
 #include <utilities/fbx_to_nwb/asset_writer_skeleton.h>
 #include <utilities/fbx_to_nwb/mesh_stream_types.adhd.h>
 
 #include <global/simdmath.h>
 
-#include <gtest/gtest.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::FbxSkinCases{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-}
-
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void VerifyFbxTriangleAreas(){
-    native{
-        using NWB::FbxToNwb::HasUsableSourceTriangleArea;
-        EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_QuietNaN, 1.0));
-        EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_Infinity, 1.0));
-        EXPECT_FALSE(HasUsableSourceTriangleArea(-Limit<f64>::s_Infinity, 1.0));
-        EXPECT_FALSE(HasUsableSourceTriangleArea(1.0, 1.0));
-        EXPECT_TRUE(HasUsableSourceTriangleArea(1.0, Limit<f64>::s_QuietNaN));
-        EXPECT_TRUE(HasUsableSourceTriangleArea(1.0 + 0x1p-52, 1.0));
-    }
-}
-
-void VerifyFbxOptionsScaleAndEpsilon(){
-    native{
-        using namespace NWB::FbxToNwb;
-        EXPECT_FALSE(IsValidFbxImportScale(0.0));
-        EXPECT_FALSE(IsValidFbxImportScale(-0.0));
-        EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_QuietNaN));
-        EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_Infinity));
-        EXPECT_TRUE(IsValidFbxImportScale(0x1p-1022));
-        EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(0.0));
-        EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(-0.0));
-        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(-0x1p-1022));
-        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_QuietNaN));
-        EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_Infinity));
-    }
-}
-
-native{
-namespace __hidden_fbx_skin_tests{
+using DefaultTestArena = Tests::TestArena<>;
+using ScratchArena = Core::Alloc::ScratchArena;
+using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
+using FbxToNwb::FbxMeshSkinningSummary;
+using FbxToNwb::ImportOptions;
+using FbxToNwb::MeshInstance;
+using FbxToNwb::HasUsableSourceTriangleArea;
+using FbxToNwb::HasSourceMeshStreamValueCapacity;
+using FbxToNwb::TryComputeMeshRefreshReplacementCapacity;
+using FbxToNwb::TryComputeTriangleIndexScratchCapacity;
+using FbxToNwb::ValidateFbxSkinPositionCount;
+using FbxToNwb::TryAccumulateFbxSelectedTriangleCorners;
+using FbxToNwb::ValidateFbxMeshAttributes;
+using FbxToNwb::ValidateFbxSkinDeformerCount;
+using FbxToNwb::ValidateFbxOutputMode;
+using FbxToNwb::ValidateFbxNewSkeletonJointCapacity;
+using FbxToNwb::AccumulateFbxJointCapacity;
+using FbxToNwb::ValidateFbxSkinLogicalVertex;
+using FbxToNwb::IsValidFbxImportScale;
+using FbxToNwb::IsValidFbxTriangleAreaEpsilon;
+using FbxToNwb::s_MaxMeshReplacementCount;
+using FbxToNwb::s_MaxSkeletonJointCount;
+using ExportContext = FbxToNwb::FbxSkinDetail::ExportContext;
+using Impl::s_MeshMissingStreamIndex;
+using Impl::s_MeshletTriangleIndexCount;
+inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
+inline constexpr auto s_OutputAssetSkeleton = FbxToNwb::OutputAssetType::Skeleton;
+inline constexpr auto s_OutputAssetMesh = FbxToNwb::OutputAssetType::Mesh;
+inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
+inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
+inline constexpr f64 s_UnitPlusUlpF64 = 1.0 + 0x1p-52;
+inline constexpr f64 s_MinNormalF64 = 0x1p-1022;
+inline constexpr TStringView s_ErrMissingPositions = NWB_TEXT("mesh is missing positions");
+inline constexpr TStringView s_ErrImportedNormalMode = NWB_TEXT("imported normal mode");
+inline constexpr TStringView s_ErrSeparateAssetsOnlyValid = NWB_TEXT("--separate-assets is only valid");
+inline constexpr TStringView s_ErrSplitSkeletonSkinPayload = NWB_TEXT("mesh output cannot write split skeleton/skin payload");
+inline constexpr TStringView s_ErrRequiresSkinnedSourceMesh = NWB_TEXT("requires a skinned source mesh");
+inline constexpr TStringView s_WarnMixedSkinning = NWB_TEXT("mixed static and skinned source meshes");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(FbxMesh, RejectsNonFiniteAndThresholdTriangleAreas){
-    using NWB::FbxToNwb::HasUsableSourceTriangleArea;
-    EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_QuietNaN, 1.0));
-    EXPECT_FALSE(HasUsableSourceTriangleArea(Limit<f64>::s_Infinity, 1.0));
-    EXPECT_FALSE(HasUsableSourceTriangleArea(-Limit<f64>::s_Infinity, 1.0));
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyFbxMesh_RejectsNonFiniteAndThresholdTriangleAreas(){
+    EXPECT_FALSE(HasUsableSourceTriangleArea(s_QuietNaNF64, 1.0));
+    EXPECT_FALSE(HasUsableSourceTriangleArea(s_InfinityF64, 1.0));
+    EXPECT_FALSE(HasUsableSourceTriangleArea(-s_InfinityF64, 1.0));
     EXPECT_FALSE(HasUsableSourceTriangleArea(1.0, 1.0));
-    EXPECT_TRUE(HasUsableSourceTriangleArea(1.0, Limit<f64>::s_QuietNaN));
-    EXPECT_TRUE(HasUsableSourceTriangleArea(1.0 + 0x1p-52, 1.0));
+    EXPECT_TRUE(HasUsableSourceTriangleArea(1.0, s_QuietNaNF64));
+    EXPECT_TRUE(HasUsableSourceTriangleArea(s_UnitPlusUlpF64, 1.0));
 }
 
-TEST(FbxMesh, RejectsSourceStreamAndReplacementCapacityOverflow){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    constexpr usize s_MissingIndex = static_cast<usize>(NWB::Impl::s_MeshMissingStreamIndex);
-    constexpr usize s_Max = Limit<usize>::s_Max;
-    constexpr usize s_Factor = NWB::FbxToNwb::s_MaxMeshReplacementCount;
-    EXPECT_TRUE(NWB::FbxToNwb::HasSourceMeshStreamValueCapacity(s_MissingIndex - 1u));
-    EXPECT_FALSE(NWB::FbxToNwb::HasSourceMeshStreamValueCapacity(s_MissingIndex));
-    const auto capacity = NWB::FbxToNwb::TryComputeMeshRefreshReplacementCapacity(s_Max / s_Factor);
-    ASSERT_TRUE(capacity);
-    EXPECT_EQ(*capacity, (s_Max / s_Factor) * s_Factor);
-    EXPECT_FALSE(NWB::FbxToNwb::TryComputeMeshRefreshReplacementCapacity(s_Max / s_Factor + 1u));
-    constexpr usize s_TriangleFactor = NWB::Impl::s_MeshletTriangleIndexCount;
-    const auto triangleCapacity = NWB::FbxToNwb::TryComputeTriangleIndexScratchCapacity(s_Max / s_TriangleFactor);
-    ASSERT_TRUE(triangleCapacity);
-    EXPECT_EQ(*triangleCapacity, (s_Max / s_TriangleFactor) * s_TriangleFactor);
-    EXPECT_FALSE(NWB::FbxToNwb::TryComputeTriangleIndexScratchCapacity(s_Max / s_TriangleFactor + 1u));
+void VerifyFbxMesh_RejectsSourceStreamAndReplacementCapacityOverflow(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    const usize missingIndex = cast<usize>(s_MeshMissingStreamIndex);
+    const usize maxValue = usize.max;
+    const usize factor = s_MaxMeshReplacementCount;
+    EXPECT_TRUE(HasSourceMeshStreamValueCapacity(missingIndex - 1u));
+    EXPECT_FALSE(HasSourceMeshStreamValueCapacity(missingIndex));
+    const Expected<usize> capacity = TryComputeMeshRefreshReplacementCapacity(maxValue / factor);
+    ASSERT_TRUE(capacity.has_value());
+    EXPECT_EQ(capacity.value(), (maxValue / factor) * factor);
+    EXPECT_FALSE(TryComputeMeshRefreshReplacementCapacity(maxValue / factor + 1u).has_value());
+    const usize triangleFactor = s_MeshletTriangleIndexCount;
+    const Expected<usize> triangleCapacity = TryComputeTriangleIndexScratchCapacity(maxValue / triangleFactor);
+    ASSERT_TRUE(triangleCapacity.has_value());
+    EXPECT_EQ(triangleCapacity.value(), (maxValue / triangleFactor) * triangleFactor);
+    EXPECT_FALSE(TryComputeTriangleIndexScratchCapacity(maxValue / triangleFactor + 1u).has_value());
     EXPECT_EQ(logger.errorCount(), 2u);
 }
 
-TEST(FbxMesh, RejectsMismatchedSkinPositionCounts){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    EXPECT_FALSE(NWB::FbxToNwb::ValidateFbxSkinPositionCount(1u, 0u));
-    EXPECT_FALSE(NWB::FbxToNwb::ValidateFbxSkinPositionCount(0u, 1u));
-    EXPECT_TRUE(NWB::FbxToNwb::ValidateFbxSkinPositionCount(0u, 0u));
+void VerifyFbxMesh_RejectsMismatchedSkinPositionCounts(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    EXPECT_FALSE(ValidateFbxSkinPositionCount(1u, 0u));
+    EXPECT_FALSE(ValidateFbxSkinPositionCount(0u, 1u));
+    EXPECT_TRUE(ValidateFbxSkinPositionCount(0u, 0u));
     EXPECT_EQ(logger.errorCount(), 2u);
 }
 
-TEST(FbxMesh, TriangleCornerAccumulationPreservesCountOnOverflow){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    usize corners = Limit<usize>::s_Max - 2u;
-    EXPECT_FALSE(NWB::FbxToNwb::TryAccumulateFbxSelectedTriangleCorners(1u, corners));
-    EXPECT_EQ(corners, Limit<usize>::s_Max - 2u);
-    corners = Limit<usize>::s_Max - 3u;
-    EXPECT_TRUE(NWB::FbxToNwb::TryAccumulateFbxSelectedTriangleCorners(1u, corners));
-    EXPECT_EQ(corners, Limit<usize>::s_Max);
+void VerifyFbxMesh_TriangleCornerAccumulationPreservesCountOnOverflow(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    usize corners = usize.max - 2u;
+    EXPECT_FALSE(TryAccumulateFbxSelectedTriangleCorners(1u, corners));
+    EXPECT_EQ(corners, usize.max - 2u);
+    corners = usize.max - 3u;
+    EXPECT_TRUE(TryAccumulateFbxSelectedTriangleCorners(1u, corners));
+    EXPECT_EQ(corners, usize.max);
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
-TEST(FbxMesh, MissingAttributesAndDeformerCountsPreserveFailureOrder){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    using namespace NWB::FbxToNwb;
+void VerifyFbxMesh_MissingAttributesAndDeformerCountsPreserveFailureOrder(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     EXPECT_FALSE(ValidateFbxMeshAttributes(false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh is missing positions")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("imported normal mode")));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ErrMissingPositions));
+    EXPECT_FALSE(logger.sawErrorContaining(s_ErrImportedNormalMode));
     EXPECT_FALSE(ValidateFbxMeshAttributes(true, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("imported normal mode")));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ErrImportedNormalMode));
     EXPECT_TRUE(ValidateFbxMeshAttributes(true, false, false));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(0u));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(2u));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
 
-TEST(FbxMesh, OutputModeValidationPreservesFailureOrder){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    using namespace NWB::FbxToNwb;
-    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, true, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("--separate-assets is only valid")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("requires a skinned source mesh")));
-    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Mesh, false, false, false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh output cannot write split skeleton/skin payload")));
-    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, false, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("requires a skinned source mesh")));
+void VerifyFbxMesh_OutputModeValidationPreservesFailureOrder(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, true, false, false, false, false));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ErrSeparateAssetsOnlyValid));
+    EXPECT_FALSE(logger.sawErrorContaining(s_ErrRequiresSkinnedSourceMesh));
+    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetMesh, false, false, false, true, false));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ErrSplitSkeletonSkinPayload));
+    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, false, false, false, false, false));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ErrRequiresSkinnedSourceMesh));
     EXPECT_EQ(logger.errorCount(), 3u);
 }
 
-TEST(FbxSkin, JointCapacityRejectsOverflowAndSaturatesReservations){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    using namespace NWB::FbxToNwb;
+void VerifyFbxSkin_JointCapacityRejectsOverflowAndSaturatesReservations(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     EXPECT_TRUE(ValidateFbxNewSkeletonJointCapacity(s_MaxSkeletonJointCount - 1u));
     EXPECT_FALSE(ValidateFbxNewSkeletonJointCapacity(s_MaxSkeletonJointCount));
     EXPECT_EQ(AccumulateFbxJointCapacity(s_MaxSkeletonJointCount - 1u, 0u), s_MaxSkeletonJointCount - 1u);
-    EXPECT_EQ(AccumulateFbxJointCapacity(s_MaxSkeletonJointCount - 1u, Limit<usize>::s_Max), s_MaxSkeletonJointCount);
+    EXPECT_EQ(AccumulateFbxJointCapacity(s_MaxSkeletonJointCount - 1u, usize.max), s_MaxSkeletonJointCount);
     EXPECT_EQ(AccumulateFbxJointCapacity(s_MaxSkeletonJointCount, 1u), s_MaxSkeletonJointCount);
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
-TEST(FbxSkin, RejectsLogicalVertexAtAndBeyondWeightList){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    using NWB::FbxToNwb::ValidateFbxSkinLogicalVertex;
+void VerifyFbxSkin_RejectsLogicalVertexAtAndBeyondWeightList(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     EXPECT_FALSE(ValidateFbxSkinLogicalVertex(0u, 0u));
     EXPECT_TRUE(ValidateFbxSkinLogicalVertex(4u, 5u));
     EXPECT_FALSE(ValidateFbxSkinLogicalVertex(5u, 5u));
     EXPECT_EQ(logger.errorCount(), 2u);
 }
 
-TEST(FbxOptions, RejectsNonFiniteAndBoundaryScaleOrEpsilon){
-    using namespace NWB::FbxToNwb;
+void VerifyFbxOptions_RejectsNonFiniteAndBoundaryScaleOrEpsilon(){
     EXPECT_FALSE(IsValidFbxImportScale(0.0));
     EXPECT_FALSE(IsValidFbxImportScale(-0.0));
-    EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_QuietNaN));
-    EXPECT_FALSE(IsValidFbxImportScale(Limit<f64>::s_Infinity));
-    EXPECT_TRUE(IsValidFbxImportScale(0x1p-1022));
+    EXPECT_FALSE(IsValidFbxImportScale(s_QuietNaNF64));
+    EXPECT_FALSE(IsValidFbxImportScale(s_InfinityF64));
+    EXPECT_TRUE(IsValidFbxImportScale(s_MinNormalF64));
     EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(0.0));
     EXPECT_TRUE(IsValidFbxTriangleAreaEpsilon(-0.0));
-    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(-0x1p-1022));
-    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_QuietNaN));
-    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(Limit<f64>::s_Infinity));
+    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(-s_MinNormalF64));
+    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(s_QuietNaNF64));
+    EXPECT_FALSE(IsValidFbxTriangleAreaEpsilon(s_InfinityF64));
 }
 
-TEST(FbxOptions, MixedSkinningSelectionIsRejected){
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    NWB::FbxToNwb::FbxMeshSkinningSummary summary;
-    const auto empty = summary.resolve();
-    ASSERT_TRUE(empty);
-    EXPECT_FALSE(*empty);
+void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    FbxMeshSkinningSummary summary = FbxMeshSkinningSummary();
+    const Expected<b8> empty = summary.resolve();
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_FALSE(empty.value());
     summary.observe(false);
-    const auto staticOnly = summary.resolve();
-    ASSERT_TRUE(staticOnly);
-    EXPECT_FALSE(*staticOnly);
+    const Expected<b8> staticOnly = summary.resolve();
+    ASSERT_TRUE(staticOnly.has_value());
+    EXPECT_FALSE(staticOnly.value());
     summary.observe(true);
-    EXPECT_FALSE(summary.resolve());
+    EXPECT_FALSE(summary.resolve().has_value());
+    native(in logger){
 #if NWB_OCCUR_WARNING
-    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("mixed static and skinned source meshes")));
+        EXPECT_TRUE(logger.sawMessageContaining(s_WarnMixedSkinning));
 #endif
+    }
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(FbxSkin, RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats){
-    static_assert(sizeof(ufbx_real) == sizeof(f64));
-    NWB::Tests::TestArena<> arena;
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::FbxSkinCases::s_FbxSkinFixtureNameTestsFbxSkin)};
-    NWB::FbxToNwb::ImportOptions options;
+void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
+    DefaultTestArena arena = DefaultTestArena();
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkin));
+    ImportOptions options = ImportOptions();
     options.bakeTransforms = false;
     options.scale = 1.0;
-    NWB::FbxToNwb::MeshInstance instance;
+    MeshInstance instance = MeshInstance();
     for(u32 testCase = 0u; testCase < 3u; ++testCase){
-        ufbx_node bone{};
-        ufbx_skin_cluster cluster{};
-        cluster.bone_node = &bone;
-        cluster.geometry_to_bone.m00 = 1.0;
-        cluster.geometry_to_bone.m11 = 1.0;
-        cluster.geometry_to_bone.m22 = 1.0;
-        if(testCase == 0u)
-            cluster.geometry_to_bone.m03 = 1e40;
-        else if(testCase == 1u){
-            cluster.geometry_to_bone.m00 = 1e-40;
-            cluster.geometry_to_bone.m11 = 1e20;
-            cluster.geometry_to_bone.m22 = 1e20;
+        ExportContext context(scratchArena);
+        b8 built = true;
+        native(in instance, in options, in testCase, mut scratchArena, mut context, mut built){
+            static_assert(sizeof(ufbx_real) == sizeof(f64));
+            ufbx_node bone{};
+            ufbx_skin_cluster cluster{};
+            cluster.bone_node = &bone;
+            cluster.geometry_to_bone.m00 = 1.0;
+            cluster.geometry_to_bone.m11 = 1.0;
+            cluster.geometry_to_bone.m22 = 1.0;
+            if(testCase == 0u)
+                cluster.geometry_to_bone.m03 = 1e40;
+            else if(testCase == 1u){
+                cluster.geometry_to_bone.m00 = 1e-40;
+                cluster.geometry_to_bone.m11 = 1e20;
+                cluster.geometry_to_bone.m22 = 1e20;
+            }
+            else{
+                cluster.geometry_to_bone.m00 = 1e200;
+                cluster.geometry_to_bone.m11 = 1e200;
+                cluster.geometry_to_bone.m22 = 1e200;
+            }
+            ufbx_skin_cluster* clusters[] = { &cluster };
+            ufbx_skin_deformer skin{};
+            skin.clusters.data = clusters;
+            skin.clusters.count = 1u;
+            built = NWB::FbxToNwb::FbxSkinDetail::BuildClusterJointMap(instance, options, skin, scratchArena, context).has_value();
         }
-        else{
-            cluster.geometry_to_bone.m00 = 1e200;
-            cluster.geometry_to_bone.m11 = 1e200;
-            cluster.geometry_to_bone.m22 = 1e200;
-        }
-        ufbx_skin_cluster* clusters[] = { &cluster };
-        ufbx_skin_deformer skin{};
-        skin.clusters.data = clusters;
-        skin.clusters.count = 1u;
-        NWB::FbxToNwb::FbxSkinDetail::ExportContext context(scratchArena);
-        EXPECT_FALSE(NWB::FbxToNwb::FbxSkinDetail::BuildClusterJointMap(instance, options, skin, scratchArena, context));
+        EXPECT_FALSE(built);
         EXPECT_TRUE(context.joints.empty());
         EXPECT_TRUE(context.bindPoseMatrices.empty());
         EXPECT_TRUE(context.inverseBindMatrices.empty());
@@ -249,38 +252,42 @@ TEST(FbxSkin, RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats){
     EXPECT_GE(logger.errorCount(), 3u);
 }
 
-TEST(FbxSkin, RejectsMismatchedOrNonFiniteSkeletonMatrices){
-    NWB::Tests::TestArena<> arena;
-    NWB::Tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::FbxSkinCases::s_FbxSkinFixtureNameTestsFbxSkeleton)};
-    ufbx_node root{};
-    ufbx_node* joints[] = { &root };
-    NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
-    NWB::FbxToNwb::JointMatrix inverse = bind;
-    using NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData;
+void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
+    DefaultTestArena arena = DefaultTestArena();
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
+    native(mut scratchArena){
+        ufbx_node root{};
+        ufbx_node* joints[] = { &root };
+        NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
+        NWB::FbxToNwb::JointMatrix inverse = bind;
+        using NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData;
 
-    EXPECT_FALSE(BuildSkeletonOutputData(joints, {}, { &inverse, 1u }, scratchArena));
-    EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, {}, scratchArena));
-    bind._11 = Limit<f32>::s_Infinity;
-    EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
-    bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
-    inverse._11 = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
+        EXPECT_FALSE(BuildSkeletonOutputData(joints, {}, { &inverse, 1u }, scratchArena));
+        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, {}, scratchArena));
+        bind._11 = Limit<f32>::s_Infinity;
+        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
+        bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
+        inverse._11 = Limit<f32>::s_QuietNaN;
+        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
+    }
     EXPECT_GE(logger.errorCount(), 4u);
 }
 
+NWB_ADHD_GTEST(FbxMesh, RejectsNonFiniteAndThresholdTriangleAreas, VerifyFbxMesh_RejectsNonFiniteAndThresholdTriangleAreas)
+NWB_ADHD_GTEST(FbxMesh, RejectsSourceStreamAndReplacementCapacityOverflow, VerifyFbxMesh_RejectsSourceStreamAndReplacementCapacityOverflow)
+NWB_ADHD_GTEST(FbxMesh, RejectsMismatchedSkinPositionCounts, VerifyFbxMesh_RejectsMismatchedSkinPositionCounts)
+NWB_ADHD_GTEST(FbxMesh, TriangleCornerAccumulationPreservesCountOnOverflow, VerifyFbxMesh_TriangleCornerAccumulationPreservesCountOnOverflow)
+NWB_ADHD_GTEST(FbxMesh, MissingAttributesAndDeformerCountsPreserveFailureOrder, VerifyFbxMesh_MissingAttributesAndDeformerCountsPreserveFailureOrder)
+NWB_ADHD_GTEST(FbxMesh, OutputModeValidationPreservesFailureOrder, VerifyFbxMesh_OutputModeValidationPreservesFailureOrder)
+NWB_ADHD_GTEST(FbxSkin, JointCapacityRejectsOverflowAndSaturatesReservations, VerifyFbxSkin_JointCapacityRejectsOverflowAndSaturatesReservations)
+NWB_ADHD_GTEST(FbxSkin, RejectsLogicalVertexAtAndBeyondWeightList, VerifyFbxSkin_RejectsLogicalVertexAtAndBeyondWeightList)
+NWB_ADHD_GTEST(FbxOptions, RejectsNonFiniteAndBoundaryScaleOrEpsilon, VerifyFbxOptions_RejectsNonFiniteAndBoundaryScaleOrEpsilon)
+NWB_ADHD_GTEST(FbxOptions, MixedSkinningSelectionIsRejected, VerifyFbxOptions_MixedSkinningSelectionIsRejected)
+NWB_ADHD_GTEST(FbxSkin, RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats, VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats)
+NWB_ADHD_GTEST(FbxSkin, RejectsMismatchedOrNonFiniteSkeletonMatrices, VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

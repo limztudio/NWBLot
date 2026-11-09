@@ -19,11 +19,23 @@ native{
 
 #include <basisu_transcoder.h>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::TextureDecodeCases{
-inline constexpr Name s_DecodeArena = s_OneOffNameTestsIntegrationTexConvPreparedDecode;
-inline constexpr usize s_MaxFixtureBytes = 64u * 1024u * 1024u;
-inline constexpr u32 s_ChannelCount = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ScratchBytes = Vector<u8, Core::Alloc::ScratchArena>;
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decode");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 }
 
@@ -31,18 +43,40 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Decode(in StringView source, in StringView destination, in StringView mipText){
-    u32 mipIndex = 0u;
+const Name s_DecodeArena = s_OneOffNameTestsIntegrationTexConvPreparedDecode;
+const usize s_MaxFixtureBytes = 64u * 1024u * 1024u;
+const u32 s_ChannelCount = 4u;
+
+b8 TryParseMipIndex(in StringView mipText, mut u32 mipIndex){
+    mipIndex = 0u;
     if(mipText.empty())
         return false;
-    b8 ok = false;
-    native(in source, in destination, in mipText, mut mipIndex, mut ok){
-        for(const char digit : mipText){
-            if(digit < '0' || digit > '9' || mipIndex > (Limit<u32>::s_Max - static_cast<u32>(digit - '0')) / 10u)
-                return false;
-            mipIndex = mipIndex * 10u + static_cast<u32>(digit - '0');
-        }
+    for(usize i = 0u; i < mipText.size(); ++i){
+        const u8 ch = cast<u8>(mipText[i]);
+        if(ch < 48u || ch > 57u)
+            return false;
+        const u32 digit = cast<u32>(ch - 48u);
+        if(mipIndex > (u32.max - digit) / 10u)
+            return false;
+        mipIndex = mipIndex * 10u + digit;
+    }
+    return true;
+}
 
+void WriteLittleEndianU32(mut ScratchBytes output, mut usize offset, in u32 value){
+    for(u32 byte = 0u; byte < 4u; ++byte){
+        output[offset] = cast<u8>(value >> (byte * 8u));
+        offset += 1u;
+    }
+}
+
+b8 Decode(in StringView source, in StringView destination, in StringView mipText){
+    u32 mipIndex = 0u;
+    if(!TryParseMipIndex(mipText, mipIndex))
+        return false;
+
+    b8 ok = false;
+    native(in source, in destination, in mipIndex, mut ok){
         NWB::Core::Assets::AssetArena assetArena(s_DecodeArena);
         NWB::Core::Alloc::ScratchArena scratchArena(s_DecodeArena);
         const NWB::Path sourcePath(assetArena, source);
@@ -74,14 +108,13 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
             return false;
 
         // Export the selected mip extent followed by interleaved linear RGBA binary32 values in little-endian order.
-        Vector<u8, NWB::Core::Alloc::ScratchArena> output(scratchArena);
+        ScratchBytes output(scratchArena);
         output.resize(s_ChannelCount * sizeof(u32) + componentCount * sizeof(f32));
         usize offset = 0u;
-        const Array<u32, 4u> dimensions = { mip.width, mip.height, mip.sliceCount, s_ChannelCount };
-        for(const u32 value : dimensions){
-            for(u32 byte = 0u; byte < sizeof(u32); ++byte)
-                output[offset++] = static_cast<u8>(value >> (byte * s_BitsPerByte));
-        }
+        WriteLittleEndianU32(output, offset, mip.width);
+        WriteLittleEndianU32(output, offset, mip.height);
+        WriteLittleEndianU32(output, offset, mip.sliceCount);
+        WriteLittleEndianU32(output, offset, s_ChannelCount);
         for(usize index = 0u; index < componentCount; ++index){
             f32 value;
             if(hdr){
@@ -93,9 +126,7 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
                 constexpr f32 s_Unorm8MaxF32 = 255.0f;
                 value = static_cast<f32>(decoded->bytes[index]) / s_Unorm8MaxF32;
             }
-            const u32 bits = BitCast<u32>(value);
-            for(u32 byte = 0u; byte < sizeof(u32); ++byte)
-                output[offset++] = static_cast<u8>(bits >> (byte * s_BitsPerByte));
+            WriteLittleEndianU32(output, offset, BitCast<u32>(value));
         }
         ok = WriteBinaryFile(destinationPath, output);
     }
@@ -126,3 +157,4 @@ NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(__hidden_tex_conv_prepared_decode::Run)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

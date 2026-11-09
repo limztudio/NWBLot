@@ -5,17 +5,7 @@
 #include "benchmark_support.adhd"
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-#include <global/floating_point_environment.h>
-#include <global/not_null.h>
 #include <global/numeric_text.h>
-#include <global/scope_exit.h>
-#include <global/simdmath.h>
-#include <global/text_utils.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <excpt.h>
@@ -25,21 +15,8 @@ native{
 #pragma pop_macro("interface")
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_pow_qualification{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using SimdOptimizationBenchmark::NextSeed;
-
-constexpr AStringView s_ExceptionalLabel = "exceptional";
-constexpr AStringView s_RandomLabel = "random";
-constexpr AStringView s_PositiveFiniteLabel = "positive_finite";
+namespace SimdOptimizationBenchmark{
+namespace PowKernels{
 
 using UInt4 = u32 __attribute__((ext_vector_type(4)));
 using Int4 = i32 __attribute__((ext_vector_type(4)));
@@ -47,55 +24,19 @@ using UInt64x4 = u64 __attribute__((ext_vector_type(4)));
 using Int64x4 = i64 __attribute__((ext_vector_type(4)));
 using Evaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
 
-inline constexpr f32 s_EncodeExponent = 1.0f / 2.4f;
-inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
-
-struct FlagsSnapshot{
-    i32 standard = 0;
-    u32 mapped = 0u;
-    u64 native = 0u;
-
-
-    friend b8 operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
-
-    template<typename Stream>
-    friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))){
-        return stream << value.standard << '/' << value.mapped << '/' << value.native;
-    }
-};
-
-struct alignas(SIMDVectorSingle) Observation{
-    SIMDVectorSingle value;
-    FlagsSnapshot flags;
-    i32 error = 0;
-};
-static_assert(alignof(Expected<Observation>) >= alignof(Observation));
-
-struct Counts{
-    u64 vectors = 0u;
-    u64 bits = 0u;
-    u64 flags = 0u;
-    u64 errors = 0u;
-    u64 quantized = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_NOINLINE SIMDVectorSingle Reference(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+NWB_NOINLINE inline SIMDVectorSingle Reference(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
 }
 
-NWB_NOINLINE SIMDVectorSingle Production(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+NWB_NOINLINE inline SIMDVectorSingle Production(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorPow(x, y);
 }
 
-NWB_NOINLINE SIMDVectorSingle PackedSingle(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+NWB_NOINLINE inline SIMDVectorSingle PackedSingle(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorExp2(VectorMultiply(VectorLog2(x), y));
 }
 
-NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+NWB_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
 #pragma STDC FENV_ACCESS ON
     const UInt4 xBits = BitCast<UInt4>(x), yBits = BitCast<UInt4>(y);
     const UInt4 magnitude = xBits & 0x7fffffffu, yMagnitude = yBits & 0x7fffffffu;
@@ -184,191 +125,18 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return BitCast<SIMDVectorSingle>(result);
 }
 
-[[nodiscard]] Expected<Observation> Observe(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-#pragma STDC FENV_ACCESS ON
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    const u64 clearNativeStatus = 0u;
-    __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
-#endif
-#if defined(NWB_PLATFORM_WINDOWS)
-    _clearfp();
-#endif
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-        return MakeUnexpected(Failure{});
-    errno = E2BIG;
-    const SIMDVectorSingle result = evaluate.get()(x, y);
-    const i32 error = errno;
-    const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    u32 mappedStatus{};
-#if defined(NWB_PLATFORM_WINDOWS)
-    mappedStatus = _statusfp();
-#endif
-    u64 nativeStatus{};
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
-#endif
-    return Observation{ result, { flags, mappedStatus, nativeStatus }, error };
-}
-
-[[nodiscard]] SIMDVectorSingle Encode(const SIMDVectorSingle linear, const NotNull<Evaluate> evaluate)noexcept{
-    const SIMDVectorSingle clamped = VectorSaturate(linear);
-    const SIMDVectorSingle nonlinear = VectorSubtract(VectorScale(evaluate.get()(clamped, VectorReplicate(s_EncodeExponent)), 1.055f), VectorReplicate(0.055f));
-    const SIMDVectorSingle encoded = VectorSelect(nonlinear, VectorScale(clamped, 12.92f), VectorLessOrEqual(clamped, VectorReplicate(0.0031308f)));
-    return VectorMin(VectorFloor(VectorAdd(VectorScale(VectorSaturate(encoded), 255.0f), VectorReplicate(0.5f))), VectorReplicate(255.0f));
-}
-
-[[nodiscard]] b8 Compare(const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const b8 quantize, Counts& counts){
-    const auto expected = Observe(MakeNotNull<Evaluate>(Reference), x, y), actual = Observe(evaluate, x, y);
-    if(!expected || !actual)
-        return false;
-    ++counts.vectors;
-    const b8 flagsDiffer = expected->flags != actual->flags, errorDiffers = expected->error != actual->error;
-    counts.flags += flagsDiffer;
-    counts.errors += errorDiffers;
-    for(usize lane = 0u; lane < 4u; ++lane){
-        const u32 expectedBits = VectorGetIntByIndex(expected->value, lane), actualBits = VectorGetIntByIndex(actual->value, lane);
-        if(expectedBits != actualBits){
-            if(counts.bits < 4u){
-                NWB_COUT
-                    << "bits category=" << category << " lane=" << lane << " x=0x" << StreamHex << VectorGetIntByIndex(x, lane)
-                    << " y=0x" << VectorGetIntByIndex(y, lane) << " expected=0x" << expectedBits << " actual=0x" << actualBits << StreamDec << '\n'
-                ;
-            }
-            ++counts.bits;
-        }
-    }
-    if(flagsDiffer && counts.flags <= 2u)
-        NWB_COUT << "flags category=" << category << " x0=0x" << StreamHex << VectorGetIntX(x) << " y0=0x" << VectorGetIntX(y) << StreamDec << " expected=" << expected->flags << " actual=" << actual->flags << '\n';
-    if(errorDiffers && counts.errors <= 2u)
-        NWB_COUT << "errno category=" << category << " x0=0x" << StreamHex << VectorGetIntX(x) << " y0=0x" << VectorGetIntX(y) << StreamDec << " expected=" << expected->error << " actual=" << actual->error << '\n';
-    if(quantize){
-        const SIMDVectorSingle expectedQuantized = Encode(x, MakeNotNull<Evaluate>(Reference)), actualQuantized = Encode(x, evaluate);
-        for(usize lane = 0u; lane < 4u; ++lane){
-            if(VectorGetIntByIndex(expectedQuantized, lane) != VectorGetIntByIndex(actualQuantized, lane)){
-                if(counts.quantized < 4u){
-                    NWB_COUT
-                        << "quantized category=" << category << " lane=" << lane << " x=0x" << StreamHex << VectorGetIntByIndex(x, lane) << StreamDec
-                        << " expected=" << VectorGetByIndex(expectedQuantized, lane) << " actual=" << VectorGetByIndex(actualQuantized, lane) << '\n'
-                    ;
-                }
-                ++counts.quantized;
-            }
-        }
-    }
-    return true;
-}
-
-void PrintCounts(const StringView category, const Counts& counts){
-    NWB_COUT << "summary category=" << category << " vectors=" << counts.vectors << " lanes=" << counts.vectors * 4u << " bits=" << counts.bits << " flags=" << counts.flags << " errno=" << counts.errors << " quantized=" << counts.quantized << '\n';
-}
-
-[[nodiscard]] u64 Verify(const NotNull<Evaluate> evaluate){
-#pragma STDC FENV_ACCESS ON
-    constexpr Array<u32, 29> s_Exceptional = {
-        0u,
-        0x80000000u,
-        1u,
-        0x80000001u,
-        0x007fffffu,
-        0x00800000u,
-        0x80800000u,
-        0x7f7fffffu,
-        0xff7fffffu,
-        0x7f800000u,
-        0xff800000u,
-        0x7fc00123u,
-        0xffc00124u,
-        0x7f800125u,
-        0xff800126u,
-        0x3f800000u,
-        0xbf800000u,
-        0x40000000u,
-        0xc0000000u,
-        0x3f000000u,
-        0xbf000000u,
-        0x40400000u,
-        0xc0400000u,
-        0x4b7fffffu,
-        0x4b800000u,
-        0x4b800001u,
-        0x3eaaaaabu,
-        0x42fe0000u,
-        0xc3160000u,
-    };
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    u64 failures = 0u;
-    for(const i32 mode : s_Modes){
-        if(!SetFloatingPointRoundingMode(mode))
-            return failures + 1u;
-        NWB_COUT << "rounding=" << mode << '\n';
-        Counts exceptional{}, random{}, positive{}, srgb{};
-        for(const u32 x : s_Exceptional){
-            for(const u32 y : s_Exceptional){
-                for(usize lane = 0u; lane < 4u; ++lane){
-                    const SIMDVectorSingle left = VectorSetIntByIndex(s_SIMDOne, x, lane), right = VectorSetIntByIndex(s_SIMDOne, y, lane);
-                    if(!Compare(s_ExceptionalLabel, evaluate, left, right, false, exceptional))
-                        return failures + 1u;
-                }
-            }
-        }
-        u64 seed = 0x8923409102431291ull;
-        for(usize index = 0u; index < 32768u; ++index){
-            UInt4 x{}, y{};
-            for(usize lane = 0u; lane < 4u; ++lane){
-                x[lane] = static_cast<u32>(NextSeed(seed));
-                y[lane] = static_cast<u32>(NextSeed(seed));
-            }
-            if(!Compare(s_RandomLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), false, random))
-                return failures + 1u;
-        }
-        for(usize index = 0u; index < 65536u; ++index){
-            UInt4 x{}, y{};
-            for(usize lane = 0u; lane < 4u; ++lane){
-                x[lane] = 0x00800000u + static_cast<u32>(NextSeed(seed) % 0x7f000000u);
-                y[lane] = (0x3c000000u + static_cast<u32>(NextSeed(seed) % 0x06000000u)) | (static_cast<u32>(NextSeed(seed)) & 0x80000000u);
-            }
-            if(!Compare(s_PositiveFiniteLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), false, positive))
-                return failures + 1u;
-        }
-        for(u32 first = 0u; first < 65536u; first += 4u){
-            const SIMDVectorSingle linear = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 65535.0f);
-            if(!Compare("srgb_uniform16", evaluate, linear, VectorReplicate(s_EncodeExponent), true, srgb))
-                return failures + 1u;
-        }
-        for(u32 first = 0u; first < 256u; first += 4u){
-            const SIMDVectorSingle encoded = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 255.0f);
-            const SIMDVectorSingle base = VectorScale(VectorAdd(encoded, VectorReplicate(0.055f)), s_DecodeScale);
-            if(!Compare("srgb_decode8", evaluate, base, VectorReplicate(2.4f), false, srgb))
-                return failures + 1u;
-        }
-        // Search every 8-bit transition in the actual rounded reference expression.
-        for(u32 transition = 1u; transition < 256u; ++transition){
-            u32 lower = 0u, upper = 0x3f800000u;
-            while(lower < upper){
-                const u32 midpoint = lower + (upper - lower) / 2u;
-                if(VectorGetX(Encode(VectorReplicate(BitCast<f32>(midpoint)), MakeNotNull<Evaluate>(Reference))) < static_cast<f32>(transition))
-                    lower = midpoint + 1u;
-                else
-                    upper = midpoint;
-            }
-            for(i32 offset = -16; offset <= 16; ++offset){
-                const SIMDVectorSingle linear = VectorReplicate(BitCast<f32>(lower + offset));
-                if(!Compare("srgb_transition", evaluate, linear, VectorReplicate(s_EncodeExponent), true, srgb))
-                    return failures + 1u;
-            }
-        }
-        PrintCounts(s_ExceptionalLabel, exceptional);
-        PrintCounts(s_RandomLabel, random);
-        PrintCounts(s_PositiveFiniteLabel, positive);
-        PrintCounts("srgb", srgb);
-        for(const auto& counts : { exceptional, random, positive, srgb })
-            failures += counts.bits + counts.flags + counts.errors + counts.quantized;
-    }
-    return failures;
+[[nodiscard]] inline NotNull<Evaluate> SelectEvaluator(const u8 variantCode, const b8 useReference)noexcept{
+    if(useReference)
+        return MakeNotNull<Evaluate>(Reference);
+    if(variantCode == 0u)
+        return MakeNotNull<Evaluate>(Production);
+    if(variantCode == 1u)
+        return MakeNotNull<Evaluate>(PackedSingle);
+    return MakeNotNull<Evaluate>(PackedDouble);
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
+[[nodiscard]] inline u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
     u32 initial{}, control{}, exception{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return 1u;
@@ -390,44 +158,7 @@ void PrintCounts(const StringView category, const Counts& counts){
     NWB_COUT << "trap exception=0x" << StreamHex << exception << " flags=0x" << raisedFlags << " mask=0x" << (control & _MCW_EM) << StreamDec << '\n';
     return exception;
 }
-#endif
 
-[[nodiscard]] i32 VerifyTraps([[maybe_unused]] const NotNull<Evaluate> evaluate){
-#if defined(NWB_PLATFORM_WINDOWS)
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> x = {
-        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f),
-        VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f),
-    };
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> y = {
-        VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
-        VectorSet(2.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(2.0f, 0.5f, 1.0f, 1.0f),
-        VectorSet(0.5f, 2.0f, 1.0f, 1.0f),
-    };
-    u32 failures = 0u;
-    constexpr Array<u32, 3> s_ReferenceCategories = { EXCEPTION_FLT_INVALID_OPERATION, EXCEPTION_FLT_OVERFLOW, EXCEPTION_FLT_DIVIDE_BY_ZERO };
-    b8 delivered = true;
-    for(usize index = 0u; index < x.size(); ++index){
-        NWB_COUT << "trap case=" << index << " reference\n";
-        const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
-        NWB_COUT << "trap case=" << index << " candidate\n";
-        const u32 actual = ObserveTrap(evaluate, x[index], y[index]);
-        delivered = delivered && (index < s_ReferenceCategories.size() ? expected == s_ReferenceCategories[index] : (expected == EXCEPTION_FLT_INVALID_OPERATION || expected == EXCEPTION_FLT_OVERFLOW));
-        failures += expected != actual;
-    }
-    NWB_COUT << "trap differences=" << failures << " distinguishable=" << delivered << '\n';
-    return delivered ? (failures == 0u ? 0 : 1) : 2;
-#else
-    NWB_COUT << "trap qualification unavailable on this platform\n";
-    return 2;
-#endif
-}
-
-#if defined(NWB_PLATFORM_WINDOWS)
 struct TrapEdgeObservation{
     u32 code = 0u;
     u32 flags = 0u;
@@ -437,11 +168,10 @@ struct TrapEdgeObservation{
     u64 nativeStatus = 0u;
     u64 nativeControl = 0u;
 
-
     friend b8 operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
 };
 
-[[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
+[[nodiscard]] inline Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
     u32 initial{}, control{}, exception{}, valueBits{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return MakeUnexpected(Failure{});
@@ -483,7 +213,42 @@ struct TrapEdgeObservation{
 }
 #endif
 
-[[nodiscard]] i32 VerifyTrapEdges([[maybe_unused]] const NotNull<Evaluate> evaluate){
+[[nodiscard]] inline i32 VerifyTrapsImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
+#if defined(NWB_PLATFORM_WINDOWS)
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> x = {
+        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
+        VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f),
+        VectorSet(0.0f, 1.0f, 1.0f, 1.0f),
+        VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f),
+        VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f),
+    };
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> y = {
+        VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
+        VectorSet(2.0f, 1.0f, 1.0f, 1.0f),
+        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
+        VectorSet(2.0f, 0.5f, 1.0f, 1.0f),
+        VectorSet(0.5f, 2.0f, 1.0f, 1.0f),
+    };
+    u32 failures = 0u;
+    constexpr Array<u32, 3> s_ReferenceCategories = { EXCEPTION_FLT_INVALID_OPERATION, EXCEPTION_FLT_OVERFLOW, EXCEPTION_FLT_DIVIDE_BY_ZERO };
+    b8 delivered = true;
+    for(usize index = 0u; index < x.size(); ++index){
+        NWB_COUT << "trap case=" << index << " reference\n";
+        const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
+        NWB_COUT << "trap case=" << index << " candidate\n";
+        const u32 actual = ObserveTrap(evaluate, x[index], y[index]);
+        delivered = delivered && (index < s_ReferenceCategories.size() ? expected == s_ReferenceCategories[index] : (expected == EXCEPTION_FLT_INVALID_OPERATION || expected == EXCEPTION_FLT_OVERFLOW));
+        failures += expected != actual;
+    }
+    NWB_COUT << "trap differences=" << failures << " distinguishable=" << delivered << '\n';
+    return delivered ? (failures == 0u ? 0 : 1) : 2;
+#else
+    NWB_COUT << "trap qualification unavailable on this platform\n";
+    return 2;
+#endif
+}
+
+[[nodiscard]] inline i32 VerifyTrapEdgesImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
 #if defined(NWB_PLATFORM_WINDOWS)
     const i32 savedError = errno;
 #if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
@@ -553,67 +318,440 @@ struct TrapEdgeObservation{
 #endif
 }
 
+}
+};
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_ExceptionalLabel = "exceptional";
+const StringView s_RandomLabel = "random";
+const StringView s_PositiveFiniteLabel = "positive_finite";
+const f32 s_EncodeExponent = 1.0f / 2.4f;
+const f32 s_DecodeScale = 1.0f / 1.055f;
+const usize s_PowExceptionalCount = 29u;
+
+enum<u8> PowVariant{
+    Production = 0u,
+    PackedSingle = 1u,
+    PackedDouble = 2u,
+    kCount = 3u
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class PowFlagsSnapshot{
+    public i32 standard = 0;
+    public u32 mapped = 0u;
+    public u64 nativeBits = 0u;
 }
 
-b8 PowQualificationSupported(){
+class PowObservation{
+    public Array<u32, 4> bits;
+    public PowFlagsSnapshot flags = PowFlagsSnapshot();
+    public i32 error = 0;
+}
+
+class PowCounts{
+    public u64 vectors = 0u;
+    public u64 bits = 0u;
+    public u64 flags = 0u;
+    public u64 errors = 0u;
+    public u64 quantized = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<PowVariant> ParsePowVariant(in StringView text){
+    if(text == "production")
+        return PowVariant::Production;
+    if(text == "packed_single")
+        return PowVariant::PackedSingle;
+    if(text == "packed_double")
+        return PowVariant::PackedDouble;
+    return MakeUnexpected(Failure());
+}
+
+b8 EqualPowFlags(in PowFlagsSnapshot lhs, in PowFlagsSnapshot rhs){
+    return lhs.standard == rhs.standard && lhs.mapped == rhs.mapped && lhs.nativeBits == rhs.nativeBits;
+}
+
+u32 ExceptionalPowBitAt(in usize index){
+    switch(index){
+    case 0u: return 0u;
+    case 1u: return 0x80000000u;
+    case 2u: return 1u;
+    case 3u: return 0x80000001u;
+    case 4u: return 0x007fffffu;
+    case 5u: return 0x00800000u;
+    case 6u: return 0x80800000u;
+    case 7u: return 0x7f7fffffu;
+    case 8u: return 0xff7fffffu;
+    case 9u: return 0x7f800000u;
+    case 10u: return 0xff800000u;
+    case 11u: return 0x7fc00123u;
+    case 12u: return 0xffc00124u;
+    case 13u: return 0x7f800125u;
+    case 14u: return 0xff800126u;
+    case 15u: return 0x3f800000u;
+    case 16u: return 0xbf800000u;
+    case 17u: return 0x40000000u;
+    case 18u: return 0xc0000000u;
+    case 19u: return 0x3f000000u;
+    case 20u: return 0xbf000000u;
+    case 21u: return 0x40400000u;
+    case 22u: return 0xc0400000u;
+    case 23u: return 0x4b7fffffu;
+    case 24u: return 0x4b800000u;
+    case 25u: return 0x4b800001u;
+    case 26u: return 0x3eaaaaabu;
+    case 27u: return 0x42fe0000u;
+    default: return 0xc3160000u;
+    }
+}
+
+Expected<PowObservation> ObservePow(in u8 variantCode, in b8 useReference, in VectorSingle x, in VectorSingle y){
+    PowObservation observation = PowObservation();
+    b8 cleared = false;
+    native(in variantCode, in useReference, in x, in y, mut observation, mut cleared){
+#pragma STDC FENV_ACCESS ON
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        const u64 clearNativeStatus = 0u;
+        __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
+#endif
+#if defined(NWB_PLATFORM_WINDOWS)
+        _clearfp();
+#endif
+        if(ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+            const auto evaluate = PowKernels::SelectEvaluator(variantCode, useReference);
+            errno = E2BIG;
+            const SIMDVectorSingle result = evaluate.get()(x, y);
+            observation.error = errno;
+            observation.flags.standard = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+            u32 mappedStatus = 0u;
+#if defined(NWB_PLATFORM_WINDOWS)
+            mappedStatus = _statusfp();
+#endif
+            u64 nativeStatus = 0u;
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+            __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
+#endif
+            observation.flags.mapped = mappedStatus;
+            observation.flags.nativeBits = nativeStatus;
+            for(usize lane = 0u; lane < 4u; ++lane)
+                observation.bits[lane] = VectorGetIntByIndex(result, lane);
+            cleared = true;
+        }
+    }
+    if(!cleared)
+        return MakeUnexpected(Failure());
+    return observation;
+}
+
+VectorSingle EncodePowSrgb(in VectorSingle linear, in u8 variantCode, in b8 useReference){
+    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in linear, in variantCode, in useReference, mut result){
+        const auto evaluate = PowKernels::SelectEvaluator(variantCode, useReference);
+        const SIMDVectorSingle clamped = VectorSaturate(linear);
+        const SIMDVectorSingle nonlinear = VectorSubtract(VectorScale(evaluate.get()(clamped, VectorReplicate(s_EncodeExponent)), 1.055f), VectorReplicate(0.055f));
+        const SIMDVectorSingle encoded = VectorSelect(nonlinear, VectorScale(clamped, 12.92f), VectorLessOrEqual(clamped, VectorReplicate(0.0031308f)));
+        result = VectorMin(VectorFloor(VectorAdd(VectorScale(VectorSaturate(encoded), 255.0f), VectorReplicate(0.5f))), VectorReplicate(255.0f));
+    }
+    return result;
+}
+
+b8 ComparePowCase(
+    in StringView category,
+    in PowVariant variant,
+    in VectorSingle x,
+    in VectorSingle y,
+    in b8 quantize,
+    mut PowCounts counts
+){
+    const u8 variantCode = cast<u8>(variant);
+    const Expected<PowObservation> expected = ObservePow(variantCode, true, x, y);
+    const Expected<PowObservation> actual = ObservePow(variantCode, false, x, y);
+    if(!expected.has_value() || !actual.has_value())
+        return false;
+    ++counts.vectors;
+
+    const b8 flagsDiffer = !EqualPowFlags(expected.value().flags, actual.value().flags);
+    const b8 errorDiffers = expected.value().error != actual.value().error;
+    if(flagsDiffer)
+        ++counts.flags;
+    if(errorDiffers)
+        ++counts.errors;
+
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const u32 expectedBits = expected.value().bits[lane];
+        const u32 actualBits = actual.value().bits[lane];
+        if(expectedBits != actualBits){
+            if(counts.bits < 4u){
+                native(in category, in lane, in x, in y, in expectedBits, in actualBits){
+                    NWB_COUT
+                        << "bits category=" << category << " lane=" << lane << " x=0x" << StreamHex << VectorGetIntByIndex(x, lane)
+                        << " y=0x" << VectorGetIntByIndex(y, lane) << " expected=0x" << expectedBits << " actual=0x" << actualBits << StreamDec << '\n'
+                    ;
+                }
+            }
+            ++counts.bits;
+        }
+    }
+    if(flagsDiffer && counts.flags <= 2u){
+        const PowFlagsSnapshot expFlags = expected.value().flags;
+        const PowFlagsSnapshot actFlags = actual.value().flags;
+        native(in category, in x, in y, in expFlags, in actFlags){
+            NWB_COUT << "flags category=" << category << " x0=0x" << StreamHex << VectorGetIntX(x) << " y0=0x" << VectorGetIntX(y) << StreamDec
+                << " expected=" << expFlags.standard << '/' << expFlags.mapped << '/' << expFlags.nativeBits
+                << " actual=" << actFlags.standard << '/' << actFlags.mapped << '/' << actFlags.nativeBits << '\n';
+        }
+    }
+    if(errorDiffers && counts.errors <= 2u){
+        const i32 expError = expected.value().error;
+        const i32 actError = actual.value().error;
+        native(in category, in x, in y, in expError, in actError){
+            NWB_COUT << "errno category=" << category << " x0=0x" << StreamHex << VectorGetIntX(x) << " y0=0x" << VectorGetIntX(y) << StreamDec << " expected=" << expError << " actual=" << actError << '\n';
+        }
+    }
+    if(quantize){
+        const VectorSingle expectedQuantized = EncodePowSrgb(x, variantCode, true);
+        const VectorSingle actualQuantized = EncodePowSrgb(x, variantCode, false);
+        for(usize lane = 0u; lane < 4u; ++lane){
+            b8 mismatch = false;
+            native(in expectedQuantized, in actualQuantized, in lane, mut mismatch){
+                mismatch = VectorGetIntByIndex(expectedQuantized, lane) != VectorGetIntByIndex(actualQuantized, lane);
+            }
+            if(mismatch){
+                if(counts.quantized < 4u){
+                    native(in category, in lane, in x, in expectedQuantized, in actualQuantized){
+                        NWB_COUT
+                            << "quantized category=" << category << " lane=" << lane << " x=0x" << StreamHex << VectorGetIntByIndex(x, lane) << StreamDec
+                            << " expected=" << VectorGetByIndex(expectedQuantized, lane) << " actual=" << VectorGetByIndex(actualQuantized, lane) << '\n'
+                        ;
+                    }
+                }
+                ++counts.quantized;
+            }
+        }
+    }
     return true;
+}
+
+void PrintPowCounts(in StringView category, in PowCounts counts){
+    const u64 vectors = counts.vectors;
+    const u64 lanes = counts.vectors * 4u;
+    const u64 bits = counts.bits;
+    const u64 flags = counts.flags;
+    const u64 errors = counts.errors;
+    const u64 quantized = counts.quantized;
+    native(in category, in vectors, in lanes, in bits, in flags, in errors, in quantized){
+        NWB_COUT << "summary category=" << category << " vectors=" << vectors << " lanes=" << lanes << " bits=" << bits << " flags=" << flags << " errno=" << errors << " quantized=" << quantized << '\n';
+    }
+}
+
+u64 TotalPowFailures(in PowCounts counts){
+    return counts.bits + counts.flags + counts.errors + counts.quantized;
+}
+
+u64 VerifyPowVariant(in PowVariant variant){
+    u64 failures = 0u;
+    const u8 variantCode = cast<u8>(variant);
+    native(in variant, in variantCode, mut failures){
+#pragma STDC FENV_ACCESS ON
+        constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+        for(const i32 mode : s_Modes){
+            if(!SetFloatingPointRoundingMode(mode)){
+                ++failures;
+                break;
+            }
+            NWB_COUT << "rounding=" << mode << '\n';
+            PowCounts exceptional{}, random{}, positive{}, srgb{};
+            b8 ok = true;
+            for(usize xi = 0u; xi < s_PowExceptionalCount && ok; ++xi){
+                const u32 xBits = ExceptionalPowBitAt(xi);
+                for(usize yi = 0u; yi < s_PowExceptionalCount && ok; ++yi){
+                    const u32 yBits = ExceptionalPowBitAt(yi);
+                    for(usize lane = 0u; lane < 4u && ok; ++lane){
+                        const SIMDVectorSingle left = VectorSetIntByIndex(s_SIMDOne, xBits, lane);
+                        const SIMDVectorSingle right = VectorSetIntByIndex(s_SIMDOne, yBits, lane);
+                        if(!ComparePowCase(s_ExceptionalLabel, variant, left, right, false, exceptional)){
+                            ++failures;
+                            ok = false;
+                        }
+                    }
+                }
+            }
+            if(!ok)
+                break;
+
+            u64 seed = 0x8923409102431291ull;
+            for(usize index = 0u; index < 32768u && ok; ++index){
+                PowKernels::UInt4 x{}, y{};
+                for(usize lane = 0u; lane < 4u; ++lane){
+                    x[lane] = static_cast<u32>(NextSeed(seed));
+                    y[lane] = static_cast<u32>(NextSeed(seed));
+                }
+                if(!ComparePowCase(s_RandomLabel, variant, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), false, random)){
+                    ++failures;
+                    ok = false;
+                }
+            }
+            if(!ok)
+                break;
+
+            for(usize index = 0u; index < 65536u && ok; ++index){
+                PowKernels::UInt4 x{}, y{};
+                for(usize lane = 0u; lane < 4u; ++lane){
+                    x[lane] = 0x00800000u + static_cast<u32>(NextSeed(seed) % 0x7f000000u);
+                    y[lane] = (0x3c000000u + static_cast<u32>(NextSeed(seed) % 0x06000000u)) | (static_cast<u32>(NextSeed(seed)) & 0x80000000u);
+                }
+                if(!ComparePowCase(s_PositiveFiniteLabel, variant, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), false, positive)){
+                    ++failures;
+                    ok = false;
+                }
+            }
+            if(!ok)
+                break;
+
+            for(u32 first = 0u; first < 65536u && ok; first += 4u){
+                const SIMDVectorSingle linear = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 65535.0f);
+                if(!ComparePowCase("srgb_uniform16", variant, linear, VectorReplicate(s_EncodeExponent), true, srgb)){
+                    ++failures;
+                    ok = false;
+                }
+            }
+            if(!ok)
+                break;
+
+            for(u32 first = 0u; first < 256u && ok; first += 4u){
+                const SIMDVectorSingle encoded = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 255.0f);
+                const SIMDVectorSingle base = VectorScale(VectorAdd(encoded, VectorReplicate(0.055f)), s_DecodeScale);
+                if(!ComparePowCase("srgb_decode8", variant, base, VectorReplicate(2.4f), false, srgb)){
+                    ++failures;
+                    ok = false;
+                }
+            }
+            if(!ok)
+                break;
+
+            // Search every 8-bit transition in the actual rounded reference expression.
+            for(u32 transition = 1u; transition < 256u && ok; ++transition){
+                u32 lower = 0u, upper = 0x3f800000u;
+                while(lower < upper){
+                    const u32 midpoint = lower + (upper - lower) / 2u;
+                    if(VectorGetX(EncodePowSrgb(VectorReplicate(BitCast<f32>(midpoint)), variantCode, true)) < static_cast<f32>(transition))
+                        lower = midpoint + 1u;
+                    else
+                        upper = midpoint;
+                }
+                for(i32 offset = -16; offset <= 16 && ok; ++offset){
+                    const SIMDVectorSingle linear = VectorReplicate(BitCast<f32>(lower + offset));
+                    if(!ComparePowCase("srgb_transition", variant, linear, VectorReplicate(s_EncodeExponent), true, srgb)){
+                        ++failures;
+                        ok = false;
+                    }
+                }
+            }
+            if(!ok)
+                break;
+
+            PrintPowCounts(s_ExceptionalLabel, exceptional);
+            PrintPowCounts(s_RandomLabel, random);
+            PrintPowCounts(s_PositiveFiniteLabel, positive);
+            PrintPowCounts("srgb", srgb);
+            failures += TotalPowFailures(exceptional);
+            failures += TotalPowFailures(random);
+            failures += TotalPowFailures(positive);
+            failures += TotalPowFailures(srgb);
+        }
+    }
+    return failures;
+}
+
+i32 VerifyPowTraps(in PowVariant variant){
+    i32 result = 2;
+    const u8 variantCode = cast<u8>(variant);
+    native(in variantCode, mut result){
+        result = PowKernels::VerifyTrapsImpl(PowKernels::SelectEvaluator(variantCode, false));
+    }
+    return result;
+}
+
+i32 VerifyPowTrapEdges(in PowVariant variant){
+    i32 result = 2;
+    const u8 variantCode = cast<u8>(variant);
+    native(in variantCode, mut result){
+        result = PowKernels::VerifyTrapEdgesImpl(PowKernels::SelectEvaluator(variantCode, false));
+    }
+    return result;
+}
+
+i32 RunPowQualificationCli(in Span<StringView> args){
+    if(args.size() != 2u && args.size() != 3u){
+        native(){
+            NWB_CERR << "usage: simd_pow_qualification production|packed_single|packed_double [traps]\n";
+        }
+        return 2;
+    }
+    const StringView variantText = args[1];
+    const Expected<PowVariant> parsedVariant = ParsePowVariant(variantText);
+    if(!parsedVariant.has_value())
+        return 2;
+    const PowVariant variant = parsedVariant.value();
+
+    if(args.size() == 3u){
+        if(args[2] != "traps")
+            return 2;
+        const i32 originalTraps = VerifyPowTraps(variant);
+        if(originalTraps == 0)
+            return VerifyPowTrapEdges(variant);
+        return originalTraps;
+    }
+
+    i32 exitCode = 2;
+    native(in variantText, in variant, mut exitCode){
+        const i32 originalError = errno;
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        u64 originalNativeStatus{};
+        __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
+#endif
+        const auto environment = HoldFloatingPointExceptions();
+        if(environment){
+            ScopeExit restore([&]()noexcept{
+                if(!SetFloatingPointEnvironment(*environment))
+                    __builtin_trap();
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+                __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
+#endif
+                errno = originalError;
+            });
+            NWB_COUT << "variant=" << variantText << '\n';
+            const u64 failures = VerifyPowVariant(variant);
+            NWB_COUT << "qualification differences=" << failures << " admitted=" << (failures == 0u) << '\n';
+            exitCode = failures == 0u ? 0 : 1;
+        }
+    }
+    return exitCode;
 }
 
 native{
 int main(const int argc, const char* const* argv){
-    using namespace __hidden_pow_qualification;
-    if(argc != 2 && argc != 3){
-        NWB_CERR << "usage: simd_pow_qualification production|packed_single|packed_double [traps]\n";
+    if(argc <= 0)
         return 2;
-    }
-    const StringView variant(argv[1]);
-    const Evaluate evaluate = variant == "production" ? Production : (variant == "packed_single" ? PackedSingle : (variant == "packed_double" ? PackedDouble : nullptr));
-    if(!evaluate)
-        return 2;
-    const auto admittedEvaluate = MakeNotNull(evaluate);
-    if(argc == 3){
-        if(StringView(argv[2]) != "traps")
-            return 2;
-        const i32 originalTraps = VerifyTraps(admittedEvaluate);
-        return originalTraps == 0 ? VerifyTrapEdges(admittedEvaluate) : originalTraps;
-    }
-    const i32 originalError = errno;
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 originalNativeStatus{};
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
-#endif
-    const auto environment = HoldFloatingPointExceptions();
-    if(!environment)
-        return 2;
-    ScopeExit restore([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*environment))
-            __builtin_trap();
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
-#endif
-        errno = originalError;
-    });
-    NWB_COUT << "variant=" << variant << '\n';
-    const u64 failures = Verify(admittedEvaluate);
-    NWB_COUT << "qualification differences=" << failures << " admitted=" << (failures == 0u) << '\n';
-    return failures == 0u ? 0 : 1;
+    Array<StringView, 4> args{};
+    const usize count = Min(static_cast<usize>(argc), args.size());
+    for(usize index = 0u; index < count; ++index)
+        args[index] = StringView(argv[index]);
+    return SimdOptimizationBenchmark::RunPowQualificationCli(Span<const StringView>(args.data(), count));
+}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,59 +5,12 @@
 #include "benchmark_support.adhd"
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace SimdOptimizationBenchmark{
+namespace ReplicatedKernels{
 
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_replicated_benchmark{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Operation{
-enum Enum : u32{
-    Ln,
-    Exp,
-    Normals2,
-    Normals3,
-    Normals4,
-    Vectors2,
-    Vectors3,
-    Vectors4,
-    Slerp,
-    Length2,
-    Length3,
-    Length4,
-    Reciprocal2,
-    Reciprocal3,
-    Reciprocal4,
-    Normalize2,
-    Normalize3,
-    Normalize4,
-    Clamp2,
-    Clamp3,
-    Clamp4,
-    Count
+inline constexpr Array<b8, 21> s_ProductionCandidate = {
+    true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false,
 };
-};
-
-inline constexpr Array<StringView, Operation::Count> s_OperationNames = {
-    "ln", "exp", "normals2", "normals3", "normals4", "vectors2", "vectors3", "vectors4", "slerp",
-    "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4",
-};
-using SimdOptimizationBenchmark::Dataset;
-using SimdOptimizationBenchmark::InitializeDataset;
-using SimdOptimizationBenchmark::s_DataCount;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
@@ -209,291 +162,430 @@ NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const
     }
 }
 
-// Switch only accepted candidates to production after their implementations are applied.
-inline constexpr Array<b8, Operation::Count> s_ProductionCandidate = {
-    true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false,
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<Operation::Enum Kind, b8 Estimate = false>
+template<u32 KindIndex, b8 Estimate = false>
 NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Kind == Operation::Ln)
+    if constexpr(KindIndex == 0u)
         return QuaternionDoubleLn(lhs);
-    else if constexpr(Kind == Operation::Exp)
+    else if constexpr(KindIndex == 1u)
         return QuaternionDoubleExp(lhs);
-    else if constexpr(Kind == Operation::Normals2){
+    else if constexpr(KindIndex == 2u){
         if constexpr(Estimate)
             return VectorDouble2AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble2AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(Kind == Operation::Normals3){
+    else if constexpr(KindIndex == 3u){
         if constexpr(Estimate)
             return VectorDouble3AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble3AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(Kind == Operation::Normals4){
+    else if constexpr(KindIndex == 4u){
         if constexpr(Estimate)
             return VectorDouble4AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble4AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(Kind == Operation::Vectors2)
+    else if constexpr(KindIndex == 5u)
         return VectorDouble2AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors3)
+    else if constexpr(KindIndex == 6u)
         return VectorDouble3AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors4)
+    else if constexpr(KindIndex == 7u)
         return VectorDouble4AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Slerp)
+    else if constexpr(KindIndex == 8u)
         return QuaternionDoubleSlerp(lhs, rhs, 0.375);
-    else if constexpr(Kind == Operation::Length2)
+    else if constexpr(KindIndex == 9u)
         return VectorDouble2Length(lhs);
-    else if constexpr(Kind == Operation::Length3)
+    else if constexpr(KindIndex == 10u)
         return VectorDouble3Length(lhs);
-    else if constexpr(Kind == Operation::Length4)
+    else if constexpr(KindIndex == 11u)
         return VectorDouble4Length(lhs);
-    else if constexpr(Kind == Operation::Reciprocal2)
+    else if constexpr(KindIndex == 12u)
         return VectorDouble2ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Reciprocal3)
+    else if constexpr(KindIndex == 13u)
         return VectorDouble3ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Reciprocal4)
+    else if constexpr(KindIndex == 14u)
         return VectorDouble4ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Normalize2)
+    else if constexpr(KindIndex == 15u)
         return VectorDouble2NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Normalize3)
+    else if constexpr(KindIndex == 16u)
         return VectorDouble3NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Normalize4)
+    else if constexpr(KindIndex == 17u)
         return VectorDouble4NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Clamp2)
+    else if constexpr(KindIndex == 18u)
         return VectorDouble2ClampLength(lhs, 0.5, 2.0);
-    else if constexpr(Kind == Operation::Clamp3)
+    else if constexpr(KindIndex == 19u)
         return VectorDouble3ClampLength(lhs, 0.5, 2.0);
     else
         return VectorDouble4ClampLength(lhs, 0.5, 2.0);
 }
 
-template<Operation::Enum Kind, b8 Estimate = false>
+template<u32 KindIndex, b8 Estimate = false>
 NWB_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-    return ProductionValue<Kind, Estimate>(lhs, rhs);
+    return ProductionValue<KindIndex, Estimate>(lhs, rhs);
 }
 
-template<Operation::Enum Kind, b8 Candidate>
+template<u32 KindIndex, b8 Candidate>
 NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Candidate && s_ProductionCandidate[Kind])
-        return ProductionValue<Kind>(lhs, rhs);
-    else if constexpr(Kind == Operation::Ln)
+    if constexpr(Candidate && s_ProductionCandidate[KindIndex])
+        return ProductionValue<KindIndex>(lhs, rhs);
+    else if constexpr(KindIndex == 0u)
         return QuaternionLn<Candidate>(lhs);
-    else if constexpr(Kind == Operation::Exp)
+    else if constexpr(KindIndex == 1u)
         return QuaternionExp<Candidate>(lhs);
-    else if constexpr(Kind == Operation::Normals2)
+    else if constexpr(KindIndex == 2u)
         return Angle<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normals3)
+    else if constexpr(KindIndex == 3u)
         return Angle<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normals4)
+    else if constexpr(KindIndex == 4u)
         return Angle<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors2)
+    else if constexpr(KindIndex == 5u)
         return Angle<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors3)
+    else if constexpr(KindIndex == 6u)
         return Angle<3u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors4)
+    else if constexpr(KindIndex == 7u)
         return Angle<4u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Slerp)
+    else if constexpr(KindIndex == 8u)
         return QuaternionSlerp<Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Length2)
+    else if constexpr(KindIndex == 9u)
         return Length<2u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Length3)
+    else if constexpr(KindIndex == 10u)
         return Length<3u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Length4)
+    else if constexpr(KindIndex == 11u)
         return Length<4u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal2)
+    else if constexpr(KindIndex == 12u)
         return Length<2u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal3)
+    else if constexpr(KindIndex == 13u)
         return Length<3u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal4)
+    else if constexpr(KindIndex == 14u)
         return Length<4u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Normalize2)
+    else if constexpr(KindIndex == 15u)
         return ControlledLength<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normalize3)
+    else if constexpr(KindIndex == 16u)
         return ControlledLength<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normalize4)
+    else if constexpr(KindIndex == 17u)
         return ControlledLength<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Clamp2)
+    else if constexpr(KindIndex == 18u)
         return ControlledLength<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Clamp3)
+    else if constexpr(KindIndex == 19u)
         return ControlledLength<3u, true, Candidate>(lhs, rhs);
     else
         return ControlledLength<4u, true, Candidate>(lhs, rhs);
 }
 
-template<Operation::Enum Kind, b8 Candidate>
+template<u32 KindIndex, b8 Candidate>
 NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if constexpr(Candidate && s_ProductionCandidate[Kind])
-        return Production<Kind>(lhs, rhs);
+    if constexpr(Candidate && s_ProductionCandidate[KindIndex])
+        return Production<KindIndex>(lhs, rhs);
     else
-        return Reduce<Kind, Candidate>(lhs, rhs);
+        return Reduce<KindIndex, Candidate>(lhs, rhs);
 }
 
-template<Operation::Enum Kind>
-u32 VerifyReduction(u64& seed){
-#pragma STDC FENV_ACCESS ON
-    return SimdOptimizationBenchmark::VerifyReductionCases(
-        s_OperationNames[Kind],
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures){
-            const auto production = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind>(lhs, rhs); });
-            if(!production)
-                return false;
-            const auto& productionExpected = s_ProductionCandidate[Kind] ? actual : expected;
-            if(!SimdOptimizationBenchmark::EqualObservation(productionExpected, *production)){
-                if(++failures <= 3u)
-                    NWB_COUT << "production mismatch operation=" << s_OperationNames[Kind] << " case=" << index << '\n';
-            }
-            if constexpr(Kind == Operation::Normals2 || Kind == Operation::Normals3 || Kind == Operation::Normals4){
-                const auto estimate = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind, true>(lhs, rhs); });
-                if(!estimate)
-                    return false;
-                if(!SimdOptimizationBenchmark::EqualObservation(productionExpected, *estimate))
-                    ++failures;
-            }
-            return true;
-        },
-        seed
-    );
+template<u32 KindIndex, b8 Candidate, typename DatasetT>
+NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
+    return ThroughputWorkload<4u>(
+        data, dataCount, iterations,
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<KindIndex, Candidate>(lhs, rhs); });
 }
 
-u32 Verify(){
-#pragma STDC FENV_ACCESS ON
-    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed){
-        u32 failures = 0u;
-        failures += VerifyReduction<Operation::Ln>(seed);
-        failures += VerifyReduction<Operation::Exp>(seed);
-        failures += VerifyReduction<Operation::Normals2>(seed);
-        failures += VerifyReduction<Operation::Normals3>(seed);
-        failures += VerifyReduction<Operation::Normals4>(seed);
-        failures += VerifyReduction<Operation::Vectors2>(seed);
-        failures += VerifyReduction<Operation::Vectors3>(seed);
-        failures += VerifyReduction<Operation::Vectors4>(seed);
-        failures += VerifyReduction<Operation::Slerp>(seed);
-        failures += VerifyReduction<Operation::Length2>(seed);
-        failures += VerifyReduction<Operation::Length3>(seed);
-        failures += VerifyReduction<Operation::Length4>(seed);
-        failures += VerifyReduction<Operation::Reciprocal2>(seed);
-        failures += VerifyReduction<Operation::Reciprocal3>(seed);
-        failures += VerifyReduction<Operation::Reciprocal4>(seed);
-        failures += VerifyReduction<Operation::Normalize2>(seed);
-        failures += VerifyReduction<Operation::Normalize3>(seed);
-        failures += VerifyReduction<Operation::Normalize4>(seed);
-        failures += VerifyReduction<Operation::Clamp2>(seed);
-        failures += VerifyReduction<Operation::Clamp3>(seed);
-        failures += VerifyReduction<Operation::Clamp4>(seed);
-        return failures;
-    });
-    if(!verification.environmentAvailable)
-        return verification.failures;
-    const u32 failures = verification.failures;
-    NWB_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
-    return failures;
+}
+};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations)noexcept{
-    return SimdOptimizationBenchmark::ThroughputWorkload<4u>(
-        data, iterations,
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); });
-}
-
-template<Operation::Enum Kind>
-void RunVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
-    const usize operations = iterations * 4u;
-    SimdOptimizationBenchmark::SelectVariant(
-        s_OperationNames[Kind], candidate, latency, operations,
-        [&]()noexcept{ return Workload<Kind, true>(data, iterations); },
-        [&]()noexcept{ return Workload<Kind, false>(data, iterations); });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+enum<u32> ReplicatedOperation{
+    Ln = 0u,
+    Exp = 1u,
+    Normals2 = 2u,
+    Normals3 = 3u,
+    Normals4 = 4u,
+    Vectors2 = 5u,
+    Vectors3 = 6u,
+    Vectors4 = 7u,
+    Slerp = 8u,
+    Length2 = 9u,
+    Length3 = 10u,
+    Length4 = 11u,
+    Reciprocal2 = 12u,
+    Reciprocal3 = 13u,
+    Reciprocal4 = 14u,
+    Normalize2 = 15u,
+    Normalize3 = 16u,
+    Normalize4 = 17u,
+    Clamp2 = 18u,
+    Clamp3 = 19u,
+    Clamp4 = 20u,
+    kCount = 21u
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-b8 ReplicatedBenchmarkSupported(){
-    return true;
-}
-
-native{
-int main(const int argc, const char* const* argv){
-    using namespace __hidden_replicated_benchmark;
-    NWB_COUT.precision(17);
-    if(argc == 2 && StringView(argv[1]) == "--verify")
-        return Verify() == 0u ? 0 : 1;
-    if(argc != 6 || StringView(argv[1]) != "--measure"){
-        NWB_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
-        return 2;
+StringView ReplicatedOperationName(in u32 kindIndex){
+    switch(kindIndex){
+    case 0u: return "ln";
+    case 1u: return "exp";
+    case 2u: return "normals2";
+    case 3u: return "normals3";
+    case 4u: return "normals4";
+    case 5u: return "vectors2";
+    case 6u: return "vectors3";
+    case 7u: return "vectors4";
+    case 8u: return "slerp";
+    case 9u: return "length2";
+    case 10u: return "length3";
+    case 11u: return "length4";
+    case 12u: return "reciprocal2";
+    case 13u: return "reciprocal3";
+    case 14u: return "reciprocal4";
+    case 15u: return "normalize2";
+    case 16u: return "normalize3";
+    case 17u: return "normalize4";
+    case 18u: return "clamp2";
+    case 19u: return "clamp3";
+    case 20u: return "clamp4";
+    default: return "";
     }
-    const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max / 4u, false);
-    if(!options)
-        return 2;
-    const b8 candidate = options->candidate, latency = options->latency;
-    const usize iterations = options->iterations;
-    Dataset data{};
-    InitializeDataset(SimdOptimizationBenchmark::s_InitialSeed, data);
+}
+
+// Switch only accepted candidates to production after their implementations are applied.
+b8 IsReplicatedProductionCandidate(in u32 kindIndex){
+    return kindIndex <= 8u || (kindIndex >= 12u && kindIndex <= 14u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReplicatedEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
+        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in lhs, in rhs, mut result){
+            result = ReplicatedKernels::Evaluate<KindIndex, Candidate>(lhs, rhs);
+        }
+        return result;
+    }
+}
+
+class ReplicatedProductionEvaluator<const u32 KindIndex, const b8 Estimate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
+        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in lhs, in rhs, mut result){
+            result = ReplicatedKernels::Production<KindIndex, Estimate>(lhs, rhs);
+        }
+        return result;
+    }
+}
+
+class ReplicatedAdditionalCheck<const u32 KindIndex> : IAdditionalReductionCheck{
+    public b8 check(
+        in VectorDouble lhs,
+        in VectorDouble rhs,
+        in Observation expected,
+        in Observation actual,
+        in usize index,
+        mut u32 failures
+    )const override{
+        const Expected<Observation> production = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, false>(), lhs, rhs);
+        if(!production.has_value())
+            return false;
+
+        b8 matches = false;
+        if(IsReplicatedProductionCandidate(KindIndex))
+            matches = EqualObservation(actual, production.value());
+        else
+            matches = EqualObservation(expected, production.value());
+
+        if(!matches){
+            ++failures;
+            if(failures <= 3u){
+                const StringView opName = ReplicatedOperationName(KindIndex);
+                native(in opName, in index){
+                    NWB_COUT << "production mismatch operation=" << opName << " case=" << index << '\n';
+                }
+            }
+        }
+
+        if(KindIndex >= 2u && KindIndex <= 4u){
+            const Expected<Observation> estimate = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, true>(), lhs, rhs);
+            if(!estimate.has_value())
+                return false;
+            b8 estimateMatches = false;
+            if(IsReplicatedProductionCandidate(KindIndex))
+                estimateMatches = EqualObservation(actual, estimate.value());
+            else
+                estimateMatches = EqualObservation(expected, estimate.value());
+            if(!estimateMatches)
+                ++failures;
+        }
+        return true;
+    }
+}
+
+class ReplicatedWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWorkloadRunner{
+    private in Dataset m_data;
+    private usize m_iterations;
+
+    public ReplicatedWorkloadRunner(in Dataset data, in usize iterations){
+        this.m_data = data;
+        this.m_iterations = iterations;
+    }
+
+    public VectorDouble run()const override{
+        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        in Dataset data = this.m_data;
+        const usize iterations = this.m_iterations;
+        native(in data, in iterations, mut result){
+            result = ReplicatedKernels::RunWorkload<KindIndex, Candidate>(data, s_DataCount, iterations);
+        }
+        return result;
+    }
+}
+
+u32 VerifyReplicatedReduction<const u32 KindIndex>(mut u64 seed){
+    return VerifyReductionCases(
+        ReplicatedOperationName(KindIndex),
+        ReplicatedEvaluator<KindIndex, false>(),
+        ReplicatedEvaluator<KindIndex, true>(),
+        ReplicatedAdditionalCheck<KindIndex>(),
+        seed
+    );
+}
+
+class ReplicatedRoundingVerifier : IRoundingModeVerifier{
+    public u32 verify(mut u64 seed)const override{
+        u32 failures = 0u;
+        failures += VerifyReplicatedReduction<0u>(seed);
+        failures += VerifyReplicatedReduction<1u>(seed);
+        failures += VerifyReplicatedReduction<2u>(seed);
+        failures += VerifyReplicatedReduction<3u>(seed);
+        failures += VerifyReplicatedReduction<4u>(seed);
+        failures += VerifyReplicatedReduction<5u>(seed);
+        failures += VerifyReplicatedReduction<6u>(seed);
+        failures += VerifyReplicatedReduction<7u>(seed);
+        failures += VerifyReplicatedReduction<8u>(seed);
+        failures += VerifyReplicatedReduction<9u>(seed);
+        failures += VerifyReplicatedReduction<10u>(seed);
+        failures += VerifyReplicatedReduction<11u>(seed);
+        failures += VerifyReplicatedReduction<12u>(seed);
+        failures += VerifyReplicatedReduction<13u>(seed);
+        failures += VerifyReplicatedReduction<14u>(seed);
+        failures += VerifyReplicatedReduction<15u>(seed);
+        failures += VerifyReplicatedReduction<16u>(seed);
+        failures += VerifyReplicatedReduction<17u>(seed);
+        failures += VerifyReplicatedReduction<18u>(seed);
+        failures += VerifyReplicatedReduction<19u>(seed);
+        failures += VerifyReplicatedReduction<20u>(seed);
+        return failures;
+    }
+}
+
+u32 VerifyReplicatedBenchmark(){
+    const VerificationSweep verification = VerifyRoundingModes(ReplicatedRoundingVerifier());
+    if(!verification.environmentAvailable)
+        return verification.failures;
+    const u32 failures = verification.failures;
+    native(in failures){
+        NWB_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
+    }
+    return failures;
+}
+
+void NormalizeReplicatedDataset(in StringView opName, mut Dataset data){
     for(usize index = 0u; index < s_DataCount; ++index){
-        if(StringView(argv[2]) == "normals2"){
-            StoreDouble(VectorDouble2Normalize(LoadDouble(data.left[index])), data.left[index]);
-            StoreDouble(VectorDouble2Normalize(LoadDouble(data.right[index])), data.right[index]);
+        mut f64x4 leftSlot = data.left[index];
+        mut f64x4 rightSlot = data.right[index];
+        if(opName == "normals2"){
+            native(mut leftSlot, mut rightSlot){
+                StoreDouble(VectorDouble2Normalize(LoadDouble(leftSlot)), leftSlot);
+                StoreDouble(VectorDouble2Normalize(LoadDouble(rightSlot)), rightSlot);
+            }
         }
-        else if(StringView(argv[2]) == "normals3"){
-            StoreDouble(VectorDouble3Normalize(LoadDouble(data.left[index])), data.left[index]);
-            StoreDouble(VectorDouble3Normalize(LoadDouble(data.right[index])), data.right[index]);
+        else if(opName == "normals3"){
+            native(mut leftSlot, mut rightSlot){
+                StoreDouble(VectorDouble3Normalize(LoadDouble(leftSlot)), leftSlot);
+                StoreDouble(VectorDouble3Normalize(LoadDouble(rightSlot)), rightSlot);
+            }
         }
-        else if(StringView(argv[2]) == "normals4" || StringView(argv[2]) == "ln" || StringView(argv[2]) == "slerp"){
-            StoreDouble(VectorDouble4Normalize(LoadDouble(data.left[index])), data.left[index]);
-            StoreDouble(VectorDouble4Normalize(LoadDouble(data.right[index])), data.right[index]);
+        else if(opName == "normals4" || opName == "ln" || opName == "slerp"){
+            native(mut leftSlot, mut rightSlot){
+                StoreDouble(VectorDouble4Normalize(LoadDouble(leftSlot)), leftSlot);
+                StoreDouble(VectorDouble4Normalize(LoadDouble(rightSlot)), rightSlot);
+            }
         }
     }
-    for(u32 index = 0u; index < Operation::Count; ++index){
-        if(StringView(argv[2]) != s_OperationNames[index])
+}
+
+void RunReplicatedVariant<const u32 KindIndex>(in Dataset data, in b8 candidate, in usize iterations, in b8 latency){
+    const usize operations = iterations * 4u;
+    SelectVariant(
+        ReplicatedOperationName(KindIndex),
+        candidate,
+        latency,
+        operations,
+        ReplicatedWorkloadRunner<KindIndex, true>(data, iterations),
+        ReplicatedWorkloadRunner<KindIndex, false>(data, iterations)
+    );
+}
+
+i32 RunReplicatedBenchmarkCli(in Span<StringView> args){
+    native(){
+        NWB_COUT.precision(17);
+    }
+    if(args.size() == 2u && args[1] == "--verify"){
+        if(VerifyReplicatedBenchmark() == 0u)
+            return 0;
+        return 1;
+    }
+    if(args.size() != 6u || args[1] != "--measure"){
+        native(){
+            NWB_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
+        }
+        return 2;
+    }
+    const Expected<MeasureOptions> options = ParseMeasureOptions(args[3], args[4], args[5], usize.max / 4u, false);
+    if(!options.has_value())
+        return 2;
+    const b8 candidate = options.value().candidate;
+    const b8 latency = options.value().latency;
+    const usize iterations = options.value().iterations;
+
+    Dataset data = Dataset();
+    InitializeDataset(s_InitialSeed, data);
+    NormalizeReplicatedDataset(args[2], data);
+
+    const u32 count = cast<u32>(ReplicatedOperation::kCount);
+    for(u32 index = 0u; index < count; ++index){
+        if(args[2] != ReplicatedOperationName(index))
             continue;
         switch(index){
-        case Operation::Ln: RunVariant<Operation::Ln>(data, candidate, iterations, latency); break;
-        case Operation::Exp: RunVariant<Operation::Exp>(data, candidate, iterations, latency); break;
-        case Operation::Normals2: RunVariant<Operation::Normals2>(data, candidate, iterations, latency); break;
-        case Operation::Normals3: RunVariant<Operation::Normals3>(data, candidate, iterations, latency); break;
-        case Operation::Normals4: RunVariant<Operation::Normals4>(data, candidate, iterations, latency); break;
-        case Operation::Vectors2: RunVariant<Operation::Vectors2>(data, candidate, iterations, latency); break;
-        case Operation::Vectors3: RunVariant<Operation::Vectors3>(data, candidate, iterations, latency); break;
-        case Operation::Vectors4: RunVariant<Operation::Vectors4>(data, candidate, iterations, latency); break;
-        case Operation::Slerp: RunVariant<Operation::Slerp>(data, candidate, iterations, latency); break;
-        case Operation::Length2: RunVariant<Operation::Length2>(data, candidate, iterations, latency); break;
-        case Operation::Length3: RunVariant<Operation::Length3>(data, candidate, iterations, latency); break;
-        case Operation::Length4: RunVariant<Operation::Length4>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal2: RunVariant<Operation::Reciprocal2>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal3: RunVariant<Operation::Reciprocal3>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal4: RunVariant<Operation::Reciprocal4>(data, candidate, iterations, latency); break;
-        case Operation::Normalize2: RunVariant<Operation::Normalize2>(data, candidate, iterations, latency); break;
-        case Operation::Normalize3: RunVariant<Operation::Normalize3>(data, candidate, iterations, latency); break;
-        case Operation::Normalize4: RunVariant<Operation::Normalize4>(data, candidate, iterations, latency); break;
-        case Operation::Clamp2: RunVariant<Operation::Clamp2>(data, candidate, iterations, latency); break;
-        case Operation::Clamp3: RunVariant<Operation::Clamp3>(data, candidate, iterations, latency); break;
-        case Operation::Clamp4: RunVariant<Operation::Clamp4>(data, candidate, iterations, latency); break;
+        case 0u: RunReplicatedVariant<0u>(data, candidate, iterations, latency); break;
+        case 1u: RunReplicatedVariant<1u>(data, candidate, iterations, latency); break;
+        case 2u: RunReplicatedVariant<2u>(data, candidate, iterations, latency); break;
+        case 3u: RunReplicatedVariant<3u>(data, candidate, iterations, latency); break;
+        case 4u: RunReplicatedVariant<4u>(data, candidate, iterations, latency); break;
+        case 5u: RunReplicatedVariant<5u>(data, candidate, iterations, latency); break;
+        case 6u: RunReplicatedVariant<6u>(data, candidate, iterations, latency); break;
+        case 7u: RunReplicatedVariant<7u>(data, candidate, iterations, latency); break;
+        case 8u: RunReplicatedVariant<8u>(data, candidate, iterations, latency); break;
+        case 9u: RunReplicatedVariant<9u>(data, candidate, iterations, latency); break;
+        case 10u: RunReplicatedVariant<10u>(data, candidate, iterations, latency); break;
+        case 11u: RunReplicatedVariant<11u>(data, candidate, iterations, latency); break;
+        case 12u: RunReplicatedVariant<12u>(data, candidate, iterations, latency); break;
+        case 13u: RunReplicatedVariant<13u>(data, candidate, iterations, latency); break;
+        case 14u: RunReplicatedVariant<14u>(data, candidate, iterations, latency); break;
+        case 15u: RunReplicatedVariant<15u>(data, candidate, iterations, latency); break;
+        case 16u: RunReplicatedVariant<16u>(data, candidate, iterations, latency); break;
+        case 17u: RunReplicatedVariant<17u>(data, candidate, iterations, latency); break;
+        case 18u: RunReplicatedVariant<18u>(data, candidate, iterations, latency); break;
+        case 19u: RunReplicatedVariant<19u>(data, candidate, iterations, latency); break;
+        case 20u: RunReplicatedVariant<20u>(data, candidate, iterations, latency); break;
         default: return 2;
         }
         return 0;
@@ -501,11 +593,18 @@ int main(const int argc, const char* const* argv){
     return 2;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+native{
+int main(const int argc, const char* const* argv){
+    if(argc <= 0)
+        return 2;
+    Array<StringView, 8> args{};
+    const usize count = Min(static_cast<usize>(argc), args.size());
+    for(usize index = 0u; index < count; ++index)
+        args[index] = StringView(argv[index]);
+    return SimdOptimizationBenchmark::RunReplicatedBenchmarkCli(Span<const StringView>(args.data(), count));
+}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

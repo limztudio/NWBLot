@@ -14,12 +14,13 @@
 #include "smoke_skinned_scene_helpers.adhd"
 
 native{
-#include <impl/ecs_csg/shape_registry.adhd.h>
-#include <impl/ecs_render/reflection/types.adhd.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
 #include <impl/ecs_csg/components.adhd.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/reflection/statistics_types.adhd.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
+#include <impl/ecs_render/reflection/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -30,12 +31,18 @@ native{
 #include <global/simd/frame.h>
 #include <global/simd/vector.h>
 
-NWB_BEGIN
-namespace Tests::Smoke{
+namespace NWB::Tests::Smoke{
 using Core::ECS::EntityID;
 using Core::ECS::s_InvalidEntityId;
-}
-NWB_END
+using OpticalBoundaryModeEnum = Impl::OpticalBoundaryMode::Enum;
+using Impl::ReflectionStatistics;
+inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryClosedNested = Impl::OpticalBoundaryMode::ClosedNested;
+inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryClosedPriority = Impl::OpticalBoundaryMode::ClosedPriority;
+inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryUnspecified = Impl::OpticalBoundaryMode::Unspecified;
+inline constexpr u32 s_ReflectionTraceSliceRays = NWB_REFLECTION_TRACE_SLICE_RAYS;
+inline constexpr f32 s_ReflectionHalfPi = s_PIDIV2;
+inline constexpr f32 s_ReflectionPi = s_PI;
+};
 }
 
 
@@ -84,682 +91,1083 @@ class OpticalReceiverEntities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-NWB_BEGIN
+const StringView s_ReflectionSpecularParameterPath = "runtime.specular_f0";
+const StringView s_ReflectionRoughnessParameterPath = "runtime.perceptual_roughness";
+const StringView s_OpticalCsgDenseCase = "optical_csg_dense";
+const StringView s_OpticalReferenceCase = "optical_reference";
+const StringView s_OpticalGroupEntryCase = "optical_group_entry";
+const StringView s_OpticalGroupGapSubUlpCase = "optical_group_gap_sub_ulp";
+const StringView s_OpticalGroupGapCase = "optical_group_gap";
+const StringView s_OpticalSubUlpCase = "optical_sub_ulp";
+const StringView s_OpticalSliverCase = "optical_sliver";
+const StringView s_OpticalCsgCavityCase = "optical_csg_cavity";
+const StringView s_OpticalCsgOpenTailCase = "optical_csg_open_tail";
+const StringView s_OpticalTirCase = "optical_tir";
+const StringView s_OpticalInsideCase = "optical_inside";
+const StringView s_OpticalPriorityTieBCase = "optical_priority_tie_b";
+const StringView s_OpticalPriorityACase = "optical_priority_a";
+const StringView s_OpticalMixedCase = "optical_mixed";
+const StringView s_OpticalNested3Case = "optical_nested3";
+const StringView s_OpticalOverflowCase = "optical_overflow";
+const StringView s_OpticalAlphaBeforeCase = "optical_alpha_before";
+const StringView s_OpticalDuplicateIdenticalCase = "optical_duplicate_identical";
+const StringView s_OpticalDuplicateReverseCase = "optical_duplicate_reverse";
+const StringView s_OpticalClearCase = "optical_clear";
+const StringView s_OpticalTiltedCase = "optical_tilted";
+const StringView s_OpticalMirroredCase = "optical_mirrored";
+const StringView s_OpticalUnspecifiedCase = "optical_unspecified";
+const StringView s_ReflectionOpticalInterface = "project/shaders/reflection_optical";
+
+const Name s_ReflectionNameCsgGroupGapSubUlp = "smoke/reflection/csg_group_gap_sub_ulp";
+const Name s_ReflectionNameCsgGroupGap = "smoke/reflection/csg_group_gap";
+const Name s_ReflectionNameCsgSubUlp = "smoke/reflection/csg_sub_ulp";
+const Name s_ReflectionNameCsgSliver = "smoke/reflection/csg_sliver";
+
+const SmokeMeshRef s_ReflectionOpticalPlaneMesh = "project/meshes/shadow_plane";
+const SmokeMeshRef s_ReflectionOpticalBoxMesh = "project/meshes/cube_hard_edges";
+const SmokeMeshRef s_ReflectionOpticalCsgOpenTailMesh = "project/meshes/reflection_csg_open_tail";
+const SmokeMeshRef s_ReflectionOpticalDisconnectedMesh = "project/meshes/reflection_disconnected_boxes";
+const SmokeMeshRef s_ReflectionOpticalOverlappingMesh = "project/meshes/reflection_overlapping_boxes";
+const SmokeMeshRef s_ReflectionOpticalDenseMesh = "project/meshes/reflection_dense_boxes";
+const SmokeMeshRef s_ReflectionOpticalGroupGapMesh = "project/meshes/reflection_group_gap";
+const SmokeMeshRef s_ReflectionOpticalGroupGapSubUlpMesh = "project/meshes/reflection_group_gap_sub_ulp";
+const SmokeMeshRef s_ReflectionOpticalGroupEntryMesh = "project/meshes/reflection_group_entry";
+const SmokeMeshRef s_ReflectionOpticalCsgGroupEntryMesh = "project/meshes/reflection_csg_group_entry";
+const SmokeMeshRef s_ReflectionOpticalTorusMesh = "project/meshes/refraction_torus";
+const SmokeMeshRef s_ReflectionOpticalPrismMesh = "project/meshes/reflection_tir_prism";
+const SmokeMaterialRef s_ReflectionOpticalOpaqueMaterial = "project/smoke/reflection/materials/opaque";
+const SmokeMaterialRef s_ReflectionOpticalVolumeMaterial = "project/smoke/reflection/materials/optical_volume";
+const SmokeMaterialRef s_ReflectionOpticalPaneMaterial = "project/smoke/reflection/materials/optical_pane";
+const f32x4 s_ReflectionOpticalClearTransmission = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+const f32x4 s_ReflectionOpticalTintedTransmission = f32x4(0.55f, 0.8f, 1.0f, 0.0f);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Tests::Smoke{
+class ReflectionOpticalCsgBuilder{
+    public ReflectionOpticalCsgBuilder(mut World world){
+        this.m_world = world;
+    }
 
+    public EntityID addPlane(
+        in EntityID receiver,
+        in Name group,
+        in b8 affectOpaque,
+        in b8 affectTransparent,
+        in VectorSingle normalDistance
+    ){
+        AddStaticCsgMeshReceiver(receiver, group, affectOpaque, affectTransparent, this.m_world);
+        const f32x4 storedNormalDistance = f32x4(normalDistance);
+        EntityID cutterId = s_InvalidEntityId;
+        native(in group, in storedNormalDistance, mut world = this.m_world, mut cutterId){
+            auto cutterEntity = world.createEntity();
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+            cutter.receiverGroup = group;
+            cutter.shapeType = Name(Impl::s_CsgPlaneShapeName);
+            Impl::CsgPlaneShapeParameters parameters;
+            parameters.normalDistance = storedNormalDistance;
+            AssignCsgCutterParameters(parameters, cutter);
+            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+            cutterId = cutterEntity.id();
+        }
+        return cutterId;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void addBox(
+        in EntityID receiver,
+        in Name group,
+        in VectorSingle halfExtents,
+        in VectorSingle center
+    ){
+        AddStaticCsgMeshReceiver(receiver, group, false, true, this.m_world);
+        const f32x4 storedHalfExtents = f32x4(halfExtents);
+        native(in group, in storedHalfExtents, in center, mut world = this.m_world){
+            auto cutterEntity = world.createEntity();
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+            cutter.receiverGroup = group;
+            cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
+            Impl::CsgBoxShapeParameters parameters;
+            parameters.halfExtents = storedHalfExtents;
+            AssignCsgCutterParameters(parameters, cutter);
+            AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
+        }
+    }
 
-
-class ReflectionOpticalCsgBuilder final : NoCopy{
-public:
-    explicit ReflectionOpticalCsgBuilder(Core::ECS::World& world)noexcept : m_world(world){}
-
-
-public:
-    Core::ECS::EntityID addPlane(Core::ECS::EntityID receiver, Name group, b8 affectOpaque, b8 affectTransparent, const Float4& normalDistance);
-    void addBox(Core::ECS::EntityID receiver, Name group, const Float4& halfExtents, SIMDVectorSingle center);
-
-
-private:
-    Core::ECS::World& m_world;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Core::ECS::EntityID ReflectionOpticalCsgBuilder::addPlane(const Core::ECS::EntityID receiver, const Name group, const b8 affectOpaque, const b8 affectTransparent, const Float4& normalDistance){
-    AddStaticCsgMeshReceiver(receiver, group, affectOpaque, affectTransparent, m_world);
-    auto cutterEntity = m_world.createEntity();
-    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-    cutter.receiverGroup = group;
-    cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
-    Impl::CsgPlaneShapeParameters parameters;
-    parameters.normalDistance = normalDistance;
-    AssignCsgCutterParameters(parameters, cutter);
-    AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-    return cutterEntity.id();
+    private mut World m_world;
 }
 
-void ReflectionOpticalCsgBuilder::addBox(const Core::ECS::EntityID receiver, const Name group, const Float4& halfExtents, const SIMDVectorSingle center){
-    AddStaticCsgMeshReceiver(receiver, group, false, true, m_world);
-    auto cutterEntity = m_world.createEntity();
-    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-    cutter.receiverGroup = group;
-    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
-    Impl::CsgBoxShapeParameters parameters;
-    parameters.halfExtents = halfExtents;
-    AssignCsgCutterParameters(parameters, cutter);
-    AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
+b8 ApplyReflectionSurfaceParameters(in EntityID entity, in f32 f0, in f32 roughness, mut World world){
+    b8 applied = false;
+    native(in entity, in f0, in roughness, mut world, mut applied){
+        const Name surfaceInterface(s_SmokeSurfaceMaterialInterface);
+        const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.0f);
+        const Half packedRoughness = ConvertFloatToHalf(roughness);
+        applied = Impl::SetMaterialMutableParameter(
+            world,
+            entity,
+            surfaceInterface,
+            s_ReflectionSpecularParameterPath,
+            Impl::MaterialLayoutFieldType::f16x3,
+            Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))
+        ) && Impl::SetMaterialMutableParameter(
+            world,
+            entity,
+            surfaceInterface,
+            s_ReflectionRoughnessParameterPath,
+            Impl::MaterialLayoutFieldType::f16,
+            Impl::PackMaterialInstanceValue(packedRoughness)
+        );
+    }
+    return applied;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world);
-
-[[nodiscard]] b8 CreateReflectionOpticalScene(AStringView caseName, Core::ECS::World& world);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_reflection_optical_scene{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_SpecularParameterPath = "runtime.specular_f0";
-constexpr AStringView s_RoughnessParameterPath = "runtime.perceptual_roughness";
-constexpr AStringView s_OpticalCsgDenseCase = "optical_csg_dense";
-constexpr AStringView s_OpticalReferenceCase = "optical_reference";
-constexpr AStringView s_OpticalGroupEntryCase = "optical_group_entry";
-constexpr AStringView s_OpticalGroupGapSubUlpCase = "optical_group_gap_sub_ulp";
-constexpr AStringView s_OpticalGroupGapCase = "optical_group_gap";
-constexpr AStringView s_OpticalSubUlpCase = "optical_sub_ulp";
-constexpr AStringView s_OpticalSliverCase = "optical_sliver";
-constexpr AStringView s_OpticalCsgCavityCase = "optical_csg_cavity";
-constexpr AStringView s_OpticalCsgOpenTailCase = "optical_csg_open_tail";
-constexpr AStringView s_OpticalTirCase = "optical_tir";
-constexpr AStringView s_OpticalInsideCase = "optical_inside";
-constexpr AStringView s_OpticalPriorityTieBCase = "optical_priority_tie_b";
-constexpr AStringView s_OpticalPriorityACase = "optical_priority_a";
-constexpr AStringView s_OpticalMixedCase = "optical_mixed";
-constexpr AStringView s_OpticalNested3Case = "optical_nested3";
-constexpr AStringView s_OpticalOverflowCase = "optical_overflow";
-constexpr AStringView s_OpticalAlphaBeforeCase = "optical_alpha_before";
-constexpr AStringView s_OpticalDuplicateIdenticalCase = "optical_duplicate_identical";
-constexpr AStringView s_OpticalDuplicateReverseCase = "optical_duplicate_reverse";
-constexpr AStringView s_OpticalClearCase = "optical_clear";
-constexpr AStringView s_OpticalTiltedCase = "optical_tilted";
-constexpr AStringView s_OpticalMirroredCase = "optical_mirrored";
-constexpr AStringView s_OpticalUnspecifiedCase = "optical_unspecified";
-
-using namespace Tests::Smoke;
-
-static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
-static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
-static constexpr SmokeMeshRef s_CsgOpenTail("project/meshes/reflection_csg_open_tail");
-static constexpr SmokeMeshRef s_Disconnected("project/meshes/reflection_disconnected_boxes");
-static constexpr SmokeMeshRef s_Overlapping("project/meshes/reflection_overlapping_boxes");
-static constexpr SmokeMeshRef s_Dense("project/meshes/reflection_dense_boxes");
-static constexpr SmokeMeshRef s_GroupGap("project/meshes/reflection_group_gap");
-static constexpr SmokeMeshRef s_GroupGapSubUlp("project/meshes/reflection_group_gap_sub_ulp");
-static constexpr SmokeMeshRef s_GroupEntry("project/meshes/reflection_group_entry");
-static constexpr SmokeMeshRef s_CsgGroupEntry("project/meshes/reflection_csg_group_entry");
-static constexpr SmokeMeshRef s_Torus("project/meshes/refraction_torus");
-static constexpr SmokeMeshRef s_Prism("project/meshes/reflection_tir_prism");
-static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
-static constexpr SmokeMaterialRef s_Volume("project/smoke/reflection/materials/optical_volume");
-static constexpr SmokeMaterialRef s_Pane("project/smoke/reflection/materials/optical_pane");
-static constexpr AStringView s_SurfaceInterface = "project/shaders/smoke_surface";
-static constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
-static constexpr Float4 s_Clear(1.f, 1.f, 1.f, 0.f);
-static constexpr Float4 s_Tinted(0.55f, 0.8f, 1.f, 0.f);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Core::ECS::EntityID CreatePanel(const Float4& color, const Float4& position, const Float4& scale, Core::ECS::World& world, const f32 f0 = 0.f){
-    const auto entity = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_SurfaceInterface, color, position, scale, world);
+EntityID CreateReflectionOpticalPanel(
+    in VectorSingle color,
+    in VectorSingle position,
+    in VectorSingle scale,
+    mut World world,
+    in f32 f0
+){
+    const EntityID entity = CreateTintedStaticMeshEntity(
+        s_ReflectionOpticalPlaneMesh,
+        s_ReflectionOpticalOpaqueMaterial,
+        s_SmokeSurfaceMaterialInterface,
+        color,
+        position,
+        scale,
+        world
+    );
     if(!entity.valid())
         return entity;
-    auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
-    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
-    const Half packedRoughness = ConvertFloatToHalf(0.f);
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
-        return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
-        return Core::ECS::s_InvalidEntityId;
+    const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+    native(in entity, in verticalRot, mut world){
+        world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = verticalRot;
+    }
+    if(!ApplyReflectionSurfaceParameters(entity, f0, 0.0f, world))
+        return s_InvalidEntityId;
     return entity;
 }
 
-static Core::ECS::EntityID CreateBoundary(
-    const SmokeMeshRef& mesh, const Float4& position, const Float4& scale, const f32 ior, const Float4& transmission,
-    Core::ECS::World& world,
-    const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested,
-    const i32 priority = 0, const f32 coverage = 0.f, const b8 pane = false
+EntityID CreateReflectionOpticalPanel(
+    in VectorSingle color,
+    in VectorSingle position,
+    in VectorSingle scale,
+    mut World world
 ){
-    const auto entity = CreateTintedStaticMeshEntity(mesh, pane ? s_Pane : s_Volume, s_OpticalInterface, Float4(0.9f, 0.6f, 0.f, coverage), position, scale, world);
+    return CreateReflectionOpticalPanel(color, position, scale, world, 0.0f);
+}
+
+EntityID CreateReflectionOpticalBoundary(
+    in SmokeMeshRef mesh,
+    in VectorSingle position,
+    in VectorSingle scale,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world,
+    in OpticalBoundaryModeEnum mode,
+    in i32 priority,
+    in f32 coverage,
+    in b8 pane
+){
+    SmokeMaterialRef material = s_ReflectionOpticalVolumeMaterial;
+    if(pane)
+        material = s_ReflectionOpticalPaneMaterial;
+    const EntityID entity = CreateTintedStaticMeshEntity(
+        mesh,
+        material,
+        s_ReflectionOpticalInterface,
+        VectorSingle(0.9f, 0.6f, 0.0f, coverage),
+        position,
+        scale,
+        world
+    );
     if(!entity.valid())
         return entity;
-    auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
-    renderer.opticalBoundaryMode = mode;
-    renderer.opticalMediumPriority = priority;
-    const Half packedIor = ConvertFloatToHalf(ior);
-    const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedIor)))
-        return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))))
-        return Core::ECS::s_InvalidEntityId;
+    const f32x4 storedTransmission = f32x4(transmission);
+    b8 configured = false;
+    native(in entity, in mode, in priority, in ior, in storedTransmission, mut world, mut configured){
+        auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
+        renderer.opticalBoundaryMode = mode;
+        renderer.opticalMediumPriority = priority;
+        const Name opticalInterface(s_ReflectionOpticalInterface);
+        const Half packedIor = ConvertFloatToHalf(ior);
+        const Half4U packedTransmission = MakeHalf4U(storedTransmission.x, storedTransmission.y, storedTransmission.z, 0.0f);
+        configured = Impl::SetMaterialMutableParameter(
+            world,
+            entity,
+            opticalInterface,
+            "runtime.ior",
+            Impl::MaterialLayoutFieldType::f16,
+            Impl::PackMaterialInstanceValue(packedIor)
+        ) && Impl::SetMaterialMutableParameter(
+            world,
+            entity,
+            opticalInterface,
+            "runtime.unit_transmission",
+            Impl::MaterialLayoutFieldType::f16x3,
+            Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
+        );
+    }
+    if(!configured)
+        return s_InvalidEntityId;
     return entity;
 }
 
-static Core::ECS::EntityID CreateBox(
-    const f32 centerZ, const f32 thickness, const f32 ior, const Float4& transmission,
-    Core::ECS::World& world,
-    const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
-    const f32 xyScale = 1.f
+EntityID CreateReflectionOpticalBoundary(
+    in SmokeMeshRef mesh,
+    in VectorSingle position,
+    in VectorSingle scale,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world,
+    in OpticalBoundaryModeEnum mode
 ){
-    return CreateBoundary(s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f), ior, transmission, world, mode, priority);
+    return CreateReflectionOpticalBoundary(mesh, position, scale, ior, transmission, world, mode, 0, 0.0f, false);
 }
 
-static Expected<OpticalReceiverEntities> CreateDenseReceiver(const b8 csg, Core::ECS::World& world){
+EntityID CreateReflectionOpticalBoundary(
+    in SmokeMeshRef mesh,
+    in VectorSingle position,
+    in VectorSingle scale,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world
+){
+    return CreateReflectionOpticalBoundary(mesh, position, scale, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, 0.0f, false);
+}
+
+EntityID CreateReflectionOpticalBox(
+    in f32 centerZ,
+    in f32 thickness,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world,
+    in OpticalBoundaryModeEnum mode,
+    in i32 priority,
+    in f32 xyScale
+){
+    return CreateReflectionOpticalBoundary(
+        s_ReflectionOpticalBoxMesh,
+        VectorSingle(0.0f, 1.4f, centerZ, 0.0f),
+        VectorSingle(24.0f * xyScale, 18.0f * xyScale, thickness, 0.0f),
+        ior,
+        transmission,
+        world,
+        mode,
+        priority,
+        0.0f,
+        false
+    );
+}
+
+EntityID CreateReflectionOpticalBox(
+    in f32 centerZ,
+    in f32 thickness,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world,
+    in OpticalBoundaryModeEnum mode,
+    in i32 priority
+){
+    return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, mode, priority, 1.0f);
+}
+
+EntityID CreateReflectionOpticalBox(
+    in f32 centerZ,
+    in f32 thickness,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world,
+    in OpticalBoundaryModeEnum mode
+){
+    return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, mode, 0, 1.0f);
+}
+
+EntityID CreateReflectionOpticalBox(
+    in f32 centerZ,
+    in f32 thickness,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world
+){
+    return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, 1.0f);
+}
+
+Expected<OpticalReceiverEntities> CreateReflectionDenseReceiver(in b8 csg, mut World world){
     // An admitted cutter leaves the nearest surface of the 18-crossing receiver intact.
-    const auto receiver = CreateTintedStaticMeshEntity(s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f), Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), world);
+    const EntityID receiver = CreateTintedStaticMeshEntity(
+        s_ReflectionOpticalDenseMesh,
+        s_ReflectionOpticalOpaqueMaterial,
+        s_SmokeSurfaceMaterialInterface,
+        VectorSingle(0.9f, 0.2f, 0.05f, 1.0f),
+        VectorSingle(0.0f, 1.4f, -8.5f, 0.0f),
+        VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+        world
+    );
     if(!receiver.valid())
-        return MakeUnexpected(Failure{});
-    const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
-    const Half packedRoughness = ConvertFloatToHalf(1.f);
-    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
-        return MakeUnexpected(Failure{});
-    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
-        return MakeUnexpected(Failure{});
-    OpticalReceiverEntities result;
+        return MakeUnexpected(Failure());
+    if(!ApplyReflectionSurfaceParameters(receiver, 0.0f, 1.0f, world))
+        return MakeUnexpected(Failure());
+
+    OpticalReceiverEntities result = OpticalReceiverEntities();
     result.receiver = receiver;
     if(!csg)
         return result;
-    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgDense;
-    result.cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, true, false, Float4(-1.f, 0.f, 0.f, 11.f));
+
+    ReflectionOpticalCsgBuilder builder = ReflectionOpticalCsgBuilder(world);
+    result.cutter = builder.addPlane(receiver, s_SmokeNameSmokeReflectionCsgDense, true, false, VectorSingle(-1.0f, 0.0f, 0.0f, 11.0f));
     return result;
 }
 
-static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(const SmokeMeshRef& mesh, const b8 cavity, const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world){
+Expected<OpticalReceiverEntities> CreateReflectionCsgBoundaryReceiver(
+    in SmokeMeshRef mesh,
+    in b8 cavity,
+    in f32 ior,
+    in VectorSingle transmission,
+    in OpticalBoundaryModeEnum mode,
+    mut World world
+){
     // The cavity case starts the reflected ray inside the removed receiver volume.
-    const auto receiver = CreateBoundary(mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f), Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, world, mode);
+    f32 posZ = -9.0f;
+    f32 scaleZ = 2.0f;
+    if(cavity){
+        posZ = -3.0f;
+        scaleZ = 14.0f;
+    }
+    const EntityID receiver = CreateReflectionOpticalBoundary(
+        mesh,
+        VectorSingle(0.0f, 1.4f, posZ, 0.0f),
+        VectorSingle(24.0f, 18.0f, scaleZ, 0.0f),
+        ior,
+        transmission,
+        world,
+        mode
+    );
     if(!receiver.valid())
-        return MakeUnexpected(Failure{});
-    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgOptics;
-    OpticalReceiverEntities result;
+        return MakeUnexpected(Failure());
+
+    OpticalReceiverEntities result = OpticalReceiverEntities();
     result.receiver = receiver;
-    result.cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(0.f, 0.f, -1.f, -9.f));
+    ReflectionOpticalCsgBuilder builder = ReflectionOpticalCsgBuilder(world);
+    result.cutter = builder.addPlane(receiver, s_SmokeNameSmokeReflectionCsgOptics, false, true, VectorSingle(0.0f, 0.0f, -1.0f, -9.0f));
     return result;
 }
 
-static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& world){
+b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
+    const VectorSingle clearTrans = VectorSingle(s_ReflectionOpticalClearTransmission);
+    const VectorSingle tintedTrans = VectorSingle(s_ReflectionOpticalTintedTransmission);
     if(caseName == "optical_dense" || caseName == s_OpticalCsgDenseCase)
-        return CreateDenseReceiver(caseName == s_OpticalCsgDenseCase, world).has_value();
+        return CreateReflectionDenseReceiver(caseName == s_OpticalCsgDenseCase, world).has_value();
     if(caseName == s_OpticalReferenceCase)
         return true;
     if(caseName == "optical_csg_reference")
-        return CreateBox(-9.5f, 1.f, 1.5f, s_Tinted, world).valid();
+        return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.5f, tintedTrans, world).valid();
     if(caseName == "optical_unspecified_reference")
-        return CreateBox(-9.5f, 1.f, 1.f, s_Clear, world, Impl::OpticalBoundaryMode::Unspecified).valid();
+        return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.0f, clearTrans, world, s_OpticalBoundaryUnspecified).valid();
+
     if(caseName == s_OpticalGroupEntryCase || caseName == "optical_csg_group_entry"){
         // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
         const b8 ordinary = caseName == s_OpticalGroupEntryCase;
-        const auto receiver = CreateBoundary(ordinary ? s_GroupEntry : s_CsgGroupEntry, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world);
+        SmokeMeshRef mesh = s_ReflectionOpticalCsgGroupEntryMesh;
+        if(ordinary)
+            mesh = s_ReflectionOpticalGroupEntryMesh;
+        const EntityID receiver = CreateReflectionOpticalBoundary(
+            mesh,
+            VectorSingle(0.0f, 1.4f, -9.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            1.5f,
+            tintedTrans,
+            world
+        );
         if(!receiver.valid())
             return false;
         if(ordinary)
             return true;
-        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgGroupEntry;
-        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addBox(receiver, group, Float4(13.f, 10.f, 3.5e-6f, 0.f), VectorSet(0.f, 1.4f, -9.0000085f, 0.f));
+        ReflectionOpticalCsgBuilder builder = ReflectionOpticalCsgBuilder(world);
+        builder.addBox(receiver, s_SmokeNameSmokeReflectionCsgGroupEntry, VectorSingle(13.0f, 10.0f, 0.0000035f, 0.0f), VectorSingle(0.0f, 1.4f, -9.0000085f, 0.0f));
         return true;
     }
+
     const b8 groupGapSubUlp = caseName == s_OpticalGroupGapSubUlpCase || caseName == "optical_csg_group_gap_sub_ulp";
     if(groupGapSubUlp || caseName == s_OpticalGroupGapCase || caseName == "optical_csg_group_gap"){
         // Three closed components hide a positive gap inside a grouped 1 -> 0 -> 1 -> 2 winding sequence.
-        const auto receiver = CreateBoundary(groupGapSubUlp ? s_GroupGapSubUlp : s_GroupGap, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world);
+        SmokeMeshRef mesh = s_ReflectionOpticalGroupGapMesh;
+        if(groupGapSubUlp)
+            mesh = s_ReflectionOpticalGroupGapSubUlpMesh;
+        const EntityID receiver = CreateReflectionOpticalBoundary(
+            mesh,
+            VectorSingle(0.0f, 1.4f, -9.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            1.5f,
+            tintedTrans,
+            world
+        );
         if(!receiver.valid())
             return false;
         if(caseName == s_OpticalGroupGapCase || caseName == s_OpticalGroupGapSubUlpCase)
             return true;
-        const Name group(groupGapSubUlp ? "smoke/reflection/csg_group_gap_sub_ulp" : "smoke/reflection/csg_group_gap");
-        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
+        Name group = s_ReflectionNameCsgGroupGap;
+        if(groupGapSubUlp)
+            group = s_ReflectionNameCsgGroupGapSubUlp;
+        ReflectionOpticalCsgBuilder builder = ReflectionOpticalCsgBuilder(world);
+        builder.addPlane(receiver, group, false, true, VectorSingle(-1.0f, 0.0f, 0.0f, 10.0f));
         return true;
     }
+
     const b8 subUlp = caseName == s_OpticalSubUlpCase || caseName == "optical_csg_sub_ulp";
     if(subUlp || caseName == s_OpticalSliverCase || caseName == "optical_csg_sliver"){
         // Preserve Fresnel loss when sub-ULP thickness rounds interfaces to equal ray distances.
-        const auto receiver = CreateBox(-9.f, subUlp ? 4e-7f : 8e-6f, 1.5f, s_Tinted, world);
+        f32 thickness = 0.000008f;
+        if(subUlp)
+            thickness = 0.0000004f;
+        const EntityID receiver = CreateReflectionOpticalBox(-9.0f, thickness, 1.5f, tintedTrans, world);
         if(!receiver.valid())
             return false;
         if(caseName == s_OpticalSliverCase || caseName == s_OpticalSubUlpCase)
             return true;
-        const Name group(subUlp ? "smoke/reflection/csg_sub_ulp" : "smoke/reflection/csg_sliver");
-        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
+        Name group = s_ReflectionNameCsgSliver;
+        if(subUlp)
+            group = s_ReflectionNameCsgSubUlp;
+        ReflectionOpticalCsgBuilder builder = ReflectionOpticalCsgBuilder(world);
+        builder.addPlane(receiver, group, false, true, VectorSingle(-1.0f, 0.0f, 0.0f, 10.0f));
         return true;
     }
+
     const b8 unspecifiedCap = caseName == "optical_csg_unspecified_cap";
-    if(caseName == "optical_csg_cap" || caseName == s_OpticalCsgCavityCase || caseName == s_OpticalCsgOpenTailCase || unspecifiedCap)
-        return CreateCsgBoundaryReceiver(
-            caseName == s_OpticalCsgOpenTailCase ? s_CsgOpenTail : s_Box, caseName == s_OpticalCsgCavityCase,
-            unspecifiedCap ? 1.f : 1.5f, unspecifiedCap ? s_Clear : s_Tinted,
-            unspecifiedCap ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested, world
-        ).has_value();
+    if(caseName == "optical_csg_cap" || caseName == s_OpticalCsgCavityCase || caseName == s_OpticalCsgOpenTailCase || unspecifiedCap){
+        SmokeMeshRef mesh = s_ReflectionOpticalBoxMesh;
+        if(caseName == s_OpticalCsgOpenTailCase)
+            mesh = s_ReflectionOpticalCsgOpenTailMesh;
+        f32 ior = 1.5f;
+        VectorSingle transmission = tintedTrans;
+        OpticalBoundaryModeEnum mode = s_OpticalBoundaryClosedNested;
+        if(unspecifiedCap){
+            ior = 1.0f;
+            transmission = clearTrans;
+            mode = s_OpticalBoundaryUnspecified;
+        }
+        return CreateReflectionCsgBoundaryReceiver(mesh, caseName == s_OpticalCsgCavityCase, ior, transmission, mode, world).has_value();
+    }
+
     if(caseName == s_OpticalTirCase)
-        return CreateBoundary(s_Prism, Float4(0.f, 1.4f, 0.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Clear, world).valid();
+        return CreateReflectionOpticalBoundary(
+            s_ReflectionOpticalPrismMesh,
+            VectorSingle(0.0f, 1.4f, 0.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            1.5f,
+            clearTrans,
+            world
+        ).valid();
+
     if(caseName == s_OpticalInsideCase || caseName == "optical_inside_nested"){
-        if(!CreateBox(-3.f, 14.f, 1.5f, s_Clear, world).valid())
+        if(!CreateReflectionOpticalBox(-3.0f, 14.0f, 1.5f, clearTrans, world).valid())
             return false;
         if(caseName == s_OpticalInsideCase)
             return true;
-        return CreateBox(-3.f, 10.f, 1.33f, s_Clear, world, Impl::OpticalBoundaryMode::ClosedNested, 0, 0.7f).valid();
+        return CreateReflectionOpticalBox(-3.0f, 10.0f, 1.33f, clearTrans, world, s_OpticalBoundaryClosedNested, 0, 0.7f).valid();
     }
+
     if(caseName == "optical_same_mesh")
-        return CreateBoundary(s_Disconnected, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world).valid();
+        return CreateReflectionOpticalBoundary(
+            s_ReflectionOpticalDisconnectedMesh,
+            VectorSingle(0.0f, 1.4f, -9.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            1.5f,
+            tintedTrans,
+            world
+        ).valid();
     if(caseName == "optical_union_same_mesh")
-        return CreateBoundary(s_Overlapping, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world).valid();
+        return CreateReflectionOpticalBoundary(
+            s_ReflectionOpticalOverlappingMesh,
+            VectorSingle(0.0f, 1.4f, -9.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            1.5f,
+            tintedTrans,
+            world
+        ).valid();
     if(caseName == "optical_union_single")
-        return CreateBox(-9.f, 0.8f, 1.5f, s_Tinted, world).valid();
+        return CreateReflectionOpticalBox(-9.0f, 0.8f, 1.5f, tintedTrans, world).valid();
     if(caseName == "optical_disconnected"){
-        return CreateBox(-8.f, 0.5f, 1.5f, s_Tinted, world).valid() && CreateBox(-10.f, 0.5f, 1.5f, s_Tinted, world).valid();
+        return CreateReflectionOpticalBox(-8.0f, 0.5f, 1.5f, tintedTrans, world).valid()
+            && CreateReflectionOpticalBox(-10.0f, 0.5f, 1.5f, tintedTrans, world).valid();
     }
     if(caseName == "optical_torus"){
-        const auto entity = CreateBoundary(s_Torus, Float4(0.f, 1.4f, -9.5f, 0.f), Float4(2.f, 2.f, 2.f, 0.f), 1.5f, s_Tinted, world);
+        const EntityID entity = CreateReflectionOpticalBoundary(
+            s_ReflectionOpticalTorusMesh,
+            VectorSingle(0.0f, 1.4f, -9.5f, 0.0f),
+            VectorSingle(2.0f, 2.0f, 2.0f, 0.0f),
+            1.5f,
+            tintedTrans,
+            world
+        );
         if(!entity.valid())
             return false;
-        auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+        const f32x4 torusRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        native(in entity, in torusRot, mut world){
+            world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = torusRot;
+        }
         return true;
     }
+
     if(caseName == "optical_priority_tie_a" || caseName == s_OpticalPriorityTieBCase){
         const b8 reverse = caseName == s_OpticalPriorityTieBCase;
         for(u32 index = 0u; index < 2u; ++index){
-            const b8 firstMedium = reverse ? index == 1u : index == 0u;
-            if(!CreateBox(firstMedium ? -8.5f : -9.5f, 2.f, firstMedium ? 1.5f : 1.33f, firstMedium ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f), world, Impl::OpticalBoundaryMode::ClosedPriority, 10).valid())
+            b8 firstMedium = index == 0u;
+            if(reverse)
+                firstMedium = index == 1u;
+            f32 centerZ = -9.5f;
+            f32 ior = 1.33f;
+            VectorSingle transmission = VectorSingle(1.0f, 0.7f, 0.45f, 0.0f);
+            if(firstMedium){
+                centerZ = -8.5f;
+                ior = 1.5f;
+                transmission = tintedTrans;
+            }
+            if(!CreateReflectionOpticalBox(centerZ, 2.0f, ior, transmission, world, s_OpticalBoundaryClosedPriority, 10).valid())
                 return false;
         }
         return true;
     }
+
     if(caseName == s_OpticalPriorityACase || caseName == "optical_priority_b" || caseName == s_OpticalMixedCase){
         const b8 firstWins = caseName == s_OpticalPriorityACase;
-        return
-            CreateBox(-8.5f, 2.f, 1.5f, s_Tinted, world, Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 20 : 10).valid()
-            && CreateBox(-9.5f, 2.f, 1.33f, Float4(1.f, 0.7f, 0.45f, 0.f), world, caseName == s_OpticalMixedCase ? Impl::OpticalBoundaryMode::ClosedNested : Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 10 : 20).valid()
-        ;
+        i32 firstPriority = 10;
+        i32 secondPriority = 20;
+        if(firstWins){
+            firstPriority = 20;
+            secondPriority = 10;
+        }
+        OpticalBoundaryModeEnum secondMode = s_OpticalBoundaryClosedPriority;
+        if(caseName == s_OpticalMixedCase)
+            secondMode = s_OpticalBoundaryClosedNested;
+        return CreateReflectionOpticalBox(-8.5f, 2.0f, 1.5f, tintedTrans, world, s_OpticalBoundaryClosedPriority, firstPriority).valid()
+            && CreateReflectionOpticalBox(-9.5f, 2.0f, 1.33f, VectorSingle(1.0f, 0.7f, 0.45f, 0.0f), world, secondMode, secondPriority).valid();
     }
+
     if(caseName == "optical_nested2" || caseName == s_OpticalNested3Case || caseName == s_OpticalOverflowCase){
-        const u32 count = caseName == s_OpticalOverflowCase ? 5u : caseName == s_OpticalNested3Case ? 3u : 2u;
+        u32 count = 2u;
+        if(caseName == s_OpticalOverflowCase)
+            count = 5u;
+        else if(caseName == s_OpticalNested3Case)
+            count = 3u;
         for(u32 index = 0u; index < count; ++index){
-            const f32 indexFloat = static_cast<f32>(index);
-            const f32 thickness = count == 5u ? 4.f - 0.6f * indexFloat : 3.f / static_cast<f32>(1u << index);
-            const f32 opacity = 1.f - 0.1f * indexFloat;
-            const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : 0.02f * static_cast<f32>(index - 2u) + 1.1f;
-            const Float4 transmission = index == 0u ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f);
-            if(!CreateBox(-9.f, thickness, ior, transmission, world, Impl::OpticalBoundaryMode::ClosedNested, 0, opacity).valid())
+            const f32 indexFloat = cast<f32>(index);
+            f32 thickness = 3.0f / cast<f32>(1u << index);
+            if(count == 5u)
+                thickness = 4.0f - 0.6f * indexFloat;
+            const f32 opacity = 1.0f - 0.1f * indexFloat;
+            f32 ior = 1.5f;
+            if(index == 1u)
+                ior = 1.33f;
+            else if(index >= 2u)
+                ior = 0.02f * cast<f32>(index - 2u) + 1.1f;
+            VectorSingle transmission = VectorSingle(1.0f, 0.7f, 0.45f, 0.0f);
+            if(index == 0u)
+                transmission = tintedTrans;
+            if(!CreateReflectionOpticalBox(-9.0f, thickness, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, opacity).valid())
                 return false;
         }
         return true;
     }
+
     if(caseName == s_OpticalAlphaBeforeCase || caseName == "optical_alpha_after"){
-        if(!CreateBox(-9.f, 2.f, 1.5f, s_Tinted, world).valid())
+        if(!CreateReflectionOpticalBox(-9.0f, 2.0f, 1.5f, tintedTrans, world).valid())
             return false;
+        const f32x4 paneRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        f32 paneZ = -11.0f;
+        if(caseName == s_OpticalAlphaBeforeCase)
+            paneZ = -7.0f;
         for(u32 index = 0u; index < 3u; ++index){
-            const f32 x = index == 0u ? -7.f : index == 1u ? 0.f : 7.f;
-            const f32 halfWidth = index == 1u ? 2.f : 5.f;
-            const auto entity = CreateBoundary(
-                s_Plane, Float4(x, 1.4f, caseName == s_OpticalAlphaBeforeCase ? -7.f : -11.f, 0.f),
-                Float4(halfWidth, 1.f, 9.f, 0.f), 1.f, s_Clear, world, Impl::OpticalBoundaryMode::Unspecified,
-                0, static_cast<f32>(index) * 0.5f, true
+            f32 x = 7.0f;
+            if(index == 0u)
+                x = -7.0f;
+            else if(index == 1u)
+                x = 0.0f;
+            f32 halfWidth = 5.0f;
+            if(index == 1u)
+                halfWidth = 2.0f;
+            const EntityID entity = CreateReflectionOpticalBoundary(
+                s_ReflectionOpticalPlaneMesh,
+                VectorSingle(x, 1.4f, paneZ, 0.0f),
+                VectorSingle(halfWidth, 1.0f, 9.0f, 0.0f),
+                1.0f,
+                clearTrans,
+                world,
+                s_OpticalBoundaryUnspecified,
+                0,
+                cast<f32>(index) * 0.5f,
+                true
             );
             if(!entity.valid())
                 return false;
-            auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-            StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+            native(in entity, in paneRot, mut world){
+                world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = paneRot;
+            }
         }
         return true;
     }
+
     const b8 duplicate = caseName == s_OpticalDuplicateIdenticalCase || caseName == "optical_duplicate_group" || caseName == s_OpticalDuplicateReverseCase;
     const b8 independent = caseName == "optical_coincident_independent";
-    if(!duplicate && !independent && caseName != s_OpticalClearCase && caseName != "optical_tinted" && caseName != s_OpticalTiltedCase && caseName != s_OpticalMirroredCase && caseName != s_OpticalUnspecifiedCase)
+    if(
+        !duplicate
+        && !independent
+        && caseName != s_OpticalClearCase
+        && caseName != "optical_tinted"
+        && caseName != s_OpticalTiltedCase
+        && caseName != s_OpticalMirroredCase
+        && caseName != s_OpticalUnspecifiedCase
+    )
         return false;
-    const u32 count = duplicate || independent ? 2u : 1u;
+
+    u32 count = 1u;
+    if(duplicate || independent)
+        count = 2u;
+    const b8 mirrored = caseName == s_OpticalMirroredCase;
+    const b8 tilted = caseName == s_OpticalTiltedCase;
+    const f32x4 tiltedRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.2f, 0.0f, 0.0f)));
+    OpticalBoundaryModeEnum boxMode = s_OpticalBoundaryClosedNested;
+    if(caseName == s_OpticalUnspecifiedCase)
+        boxMode = s_OpticalBoundaryUnspecified;
+
     for(u32 index = 0u; index < count; ++index){
         const b8 sameInputs = caseName == s_OpticalDuplicateIdenticalCase;
-        const b8 selected = caseName == s_OpticalDuplicateReverseCase ? index == 1u : index == 0u;
-        const Float4 transmission = caseName == s_OpticalClearCase ? s_Clear : !duplicate || sameInputs || selected ? s_Tinted : Float4(1.f, 0.5f, 0.2f, 0.f);
-        const auto entity = CreateBox(-9.f, 2.f, 1.5f, transmission, world, caseName == s_OpticalUnspecifiedCase ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested);
+        b8 selected = index == 0u;
+        if(caseName == s_OpticalDuplicateReverseCase)
+            selected = index == 1u;
+        VectorSingle transmission = VectorSingle(1.0f, 0.5f, 0.2f, 0.0f);
+        if(caseName == s_OpticalClearCase)
+            transmission = clearTrans;
+        else if(!duplicate || sameInputs || selected)
+            transmission = tintedTrans;
+
+        const EntityID entity = CreateReflectionOpticalBox(-9.0f, 2.0f, 1.5f, transmission, world, boxMode);
         if(!entity.valid())
             return false;
-        auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-        if(caseName == s_OpticalMirroredCase)
-            transform.scale.x = -24.f;
-        if(caseName == s_OpticalTiltedCase)
-            StoreFloat(QuaternionRotationRollPitchYaw(0.f, 0.2f, 0.f), transform.rotation);
-        if(duplicate){
-            auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
-            renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
-            renderer.opticalVolumeGroup = Name(NWB::Tests::Smoke::s_SmokeNameSmokeReflectionOpticalDuplicate);
-            renderer.opticalVolumePriority = selected ? 20 : 10;
+        native(in entity, in mirrored, in tilted, in tiltedRot, in duplicate, in sameInputs, in selected, mut world){
+            auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+            if(mirrored)
+                transform.scale.x = -24.0f;
+            if(tilted)
+                transform.rotation = tiltedRot;
+            if(duplicate){
+                auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
+                renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
+                renderer.opticalVolumeGroup = s_SmokeNameSmokeReflectionOpticalDuplicate;
+                renderer.opticalVolumePriority = selected ? 20 : 10;
+            }
         }
     }
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::Smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world){
-    using namespace __hidden_reflection_optical_scene;
+Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(mut World world){
     if(!CreateReflectionOpticalScene(s_OpticalReferenceCase, world))
-        return MakeUnexpected(Failure{});
-    const auto small = CreateCsgBoundaryReceiver(s_Box, false, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedNested, world);
-    if(!small)
+        return MakeUnexpected(Failure());
+    const Expected<OpticalReceiverEntities> small = CreateReflectionCsgBoundaryReceiver(
+        s_ReflectionOpticalBoxMesh,
+        false,
+        1.5f,
+        VectorSingle(s_ReflectionOpticalTintedTransmission),
+        s_OpticalBoundaryClosedNested,
+        world
+    );
+    if(!small.has_value())
         return MakeUnexpected(small.error());
-    const auto dense = CreateDenseReceiver(true, world);
-    if(!dense)
+    const Expected<OpticalReceiverEntities> dense = CreateReflectionDenseReceiver(true, world);
+    if(!dense.has_value())
         return MakeUnexpected(dense.error());
-    ReflectionCsgContextEntities entities;
-    entities.smallReceiver = small->receiver;
-    entities.denseReceiver = dense->receiver;
-    entities.smallCutter = small->cutter;
-    entities.denseCutter = dense->cutter;
+    ReflectionCsgContextEntities entities = ReflectionCsgContextEntities();
+    entities.smallReceiver = small.value().receiver;
+    entities.denseReceiver = dense.value().receiver;
+    entities.smallCutter = small.value().cutter;
+    entities.denseCutter = dense.value().cutter;
     return entities;
 }
 
-b8 CreateReflectionOpticalScene(const AStringView caseName, Core::ECS::World& world){
-    using namespace __hidden_reflection_optical_scene;
-    if(!CreatePanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f), world).valid())
+b8 CreateReflectionOpticalScene(in StringView caseName, mut World world){
+    if(!CreateReflectionOpticalPanel(VectorSingle(0.12f, 0.12f, 0.12f, 1.0f), VectorSingle(0.0f, 1.4f, 2.0f, 0.0f), VectorSingle(6.0f, 1.0f, 4.5f, 0.0f), world).valid())
         return false;
-    if(!CreatePanel(Float4(0.f, 0.f, 0.f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), world, 0.95f).valid())
+    if(!CreateReflectionOpticalPanel(VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), VectorSingle(0.0f, 1.4f, 0.0f, 0.0f), VectorSingle(2.8f, 1.0f, 1.8f, 0.0f), world, 0.95f).valid())
         return false;
     if(caseName != s_OpticalTirCase){
         for(u32 stripe = 0u; stripe < 31u; ++stripe){
-            const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f) : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
-            const f32 x = (static_cast<f32>(stripe) - 15.f) * 0.8f;
-            if(!CreatePanel(color, Float4(x, 1.4f, -14.f, 0.f), Float4(0.4f, 1.f, 8.f, 0.f), world).valid())
+            VectorSingle color = VectorSingle(0.9f, 0.9f, 0.9f, 1.0f);
+            if(stripe != 15u){
+                f32 r = 0.0f;
+                f32 g = 0.0f;
+                f32 b = 0.0f;
+                if(stripe % 3u == 0u)
+                    r = 0.9f;
+                else if(stripe % 3u == 1u)
+                    g = 0.9f;
+                else
+                    b = 0.9f;
+                color = VectorSingle(r, g, b, 1.0f);
+            }
+            const f32 x = (cast<f32>(stripe) - 15.0f) * 0.8f;
+            if(!CreateReflectionOpticalPanel(color, VectorSingle(x, 1.4f, -14.0f, 0.0f), VectorSingle(0.4f, 1.0f, 8.0f, 0.0f), world).valid())
                 return false;
         }
     }
-    return CreateOpticalObjects(caseName, world);
+    return CreateReflectionOpticalObjects(caseName, world);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(u32 rayCapacity, u64 sourceFrame, b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer);
+void ReportReflectionSlicePackets(
+    in u32 rayCapacity,
+    in u64 sourceFrame,
+    in b8 csg,
+    mut ProjectRuntimeContext context,
+    mut RendererSystem renderer
+){
+    u32 expectedSlices = 1u;
+    if(csg)
+        expectedSlices = (rayCapacity + s_ReflectionTraceSliceRays - 1u) / s_ReflectionTraceSliceRays;
 
-// Synchronized probe for reflection CSG captures and packet receipts.
-class ReflectionCsgContextProbe final{
-private:
-    [[nodiscard]] static b8 ShouldCapture(void* owner, u64 sourceFrame)noexcept;
-
-
-public:
-    ReflectionCsgContextProbe(u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept;
-    ~ReflectionCsgContextProbe()noexcept = default;
-
-
-public:
-    [[nodiscard]] b8 create(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
-
-
-private:
-    [[nodiscard]] b8 beginPhase();
-
-
-private:
-    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
-    ReflectionCsgContextEntities m_entities;
-    UniquePtr<FramebufferCapture> m_capture;
-    ProjectRuntimeContext& m_context;
-    Core::ECS::World& m_world;
-    Impl::RendererSystem& m_renderer;
-    u64 m_phaseSource = 0u;
-    u64 m_targetSource = Limit<u64>::s_Max;
-    u64 m_packetSource = Limit<u64>::s_Max;
-    u64 m_lastSequence = 0u;
-    u64 m_lastGeneration = 0u;
-    const u32 m_rayCapacity;
-    u32 m_phase = 0u;
-    u32 m_completed = 0u;
-    b8 m_done = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, const b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer){
-    NWB::Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
-    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeScratchNameTestsSmokeReflectionFrameGraph)};
-    NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
-    const b8 graphAvailable = renderer.appendFrameGraph(builder);
-    const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     u64 planGeneration = 0u;
-    b8 runtimePresent = false;
-    for(const auto& node : nodes){
-        if(node.name == Name(NWB::Tests::Smoke::s_SmokeTimingNameEcsRenderFrame) && node.runtimeStatistics.present){
-            // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
-            runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
-            planGeneration = node.runtimeStatistics.planGeneration;
-            break;
-        }
-    }
-    const u32 expectedSlices = csg ? (rayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
-    uniquePackets.reserve(expectedSlices);
-    Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
-    sliceIdentities.reserve(expectedSlices);
-    for(u32 slice = 0u; slice < expectedSlices; ++slice){
-        if(!csg){
-            sliceIdentities.push_back(Name(NWB::Tests::Smoke::s_SmokeTimingNameRenderReflectionHardware));
-            continue;
-        }
-        const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
-        if(!sliceIdentity){
-            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
-            return;
-        }
-        sliceIdentities.push_back(*sliceIdentity);
-    }
-    Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
-    observedSlices.resize(expectedSlices, 0u);
+    u64 deviceGeneration = 0u;
+    u32 graphicsQueueIndex = 0u;
+    u32 runtimePresentVal = 0u;
     u32 hardwareNodes = 0u;
     u32 indexedSlices = 0u;
     u32 compiledNodes = 0u;
+    usize uniquePacketCount = 0u;
     u32 acceptedPackets = 0u;
     u32 singleTaskPackets = 0u;
     u32 graphicsPackets = 0u;
-    for(const auto& node : nodes){
-        if(node.label != "Reflection Hardware Resolve")
-            continue;
-        ++hardwareNodes;
-        u32 sliceIndex = expectedSlices;
-        for(u32 index = 0u; index < expectedSlices; ++index){
-            if(node.name == sliceIdentities[index]){
-                sliceIndex = index;
+    b8 sliceIdentityFailed = false;
+    String sliceIdentityError;
+
+    native(
+        in sourceFrame,
+        in csg,
+        in expectedSlices,
+        mut context,
+        mut renderer,
+        mut planGeneration,
+        mut deviceGeneration,
+        mut graphicsQueueIndex,
+        mut runtimePresentVal,
+        mut hardwareNodes,
+        mut indexedSlices,
+        mut compiledNodes,
+        mut uniquePacketCount,
+        mut acceptedPackets,
+        mut singleTaskPackets,
+        mut graphicsPackets,
+        mut sliceIdentityFailed,
+        mut sliceIdentityError
+    ){
+        Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
+        Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
+        Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
+        Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
+        Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
+        Core::Alloc::ScratchArena scratchArena{s_SmokeScratchNameTestsSmokeReflectionFrameGraph};
+        Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
+        const b8 graphAvailable = renderer.appendFrameGraph(builder);
+        const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
+        deviceGeneration = primaryGraphics.deviceGeneration;
+        graphicsQueueIndex = primaryGraphics.index;
+        b8 runtimePresent = false;
+        for(const auto& node : nodes){
+            if(node.name == s_SmokeTimingNameEcsRenderFrame && node.runtimeStatistics.present){
+                // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
+                runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
+                planGeneration = node.runtimeStatistics.planGeneration;
                 break;
             }
         }
-        if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
-            continue;
-        observedSlices[sliceIndex] = 1u;
-        ++indexedSlices;
-        if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
-            continue;
-        ++compiledNodes;
-        b8 unique = true;
-        for(const u32 packetIndex : uniquePackets){
-            if(packetIndex == node.compiledTask.packetIndex){
-                unique = false;
-                break;
-            }
-        }
-        if(unique)
-            uniquePackets.push_back(node.compiledTask.packetIndex);
-        if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
-            continue;
-        for(const auto& packet : packetStatistics){
-            if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
+        runtimePresentVal = runtimePresent ? 1u : 0u;
+
+        Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
+        uniquePackets.reserve(expectedSlices);
+        Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
+        sliceIdentities.reserve(expectedSlices);
+        for(u32 slice = 0u; slice < expectedSlices; ++slice){
+            if(!csg){
+                sliceIdentities.push_back(s_SmokeTimingNameRenderReflectionHardware);
                 continue;
-            ++acceptedPackets;
-            if(packet.taskCount == 1u)
-                ++singleTaskPackets;
-            if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
-                ++graphicsPackets;
-            break;
+            }
+            const auto sliceIdentity = Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
+            if(!sliceIdentity){
+                sliceIdentityFailed = true;
+                const auto msg = sliceIdentity.error().message();
+                sliceIdentityError.assign(msg.data(), msg.size());
+                break;
+            }
+            sliceIdentities.push_back(*sliceIdentity);
+        }
+
+        if(!sliceIdentityFailed){
+            Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
+            observedSlices.resize(expectedSlices, 0u);
+            for(const auto& node : nodes){
+                if(node.label != "Reflection Hardware Resolve")
+                    continue;
+                ++hardwareNodes;
+                u32 sliceIndex = expectedSlices;
+                for(u32 index = 0u; index < expectedSlices; ++index){
+                    if(node.name == sliceIdentities[index]){
+                        sliceIndex = index;
+                        break;
+                    }
+                }
+                if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
+                    continue;
+                observedSlices[sliceIndex] = 1u;
+                ++indexedSlices;
+                if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
+                    continue;
+                ++compiledNodes;
+                b8 unique = true;
+                for(const u32 packetIndex : uniquePackets){
+                    if(packetIndex == node.compiledTask.packetIndex){
+                        unique = false;
+                        break;
+                    }
+                }
+                if(unique)
+                    uniquePackets.push_back(node.compiledTask.packetIndex);
+                if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+                    continue;
+                for(const auto& packet : packetStatistics){
+                    if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
+                        continue;
+                    ++acceptedPackets;
+                    if(packet.taskCount == 1u)
+                        ++singleTaskPackets;
+                    if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
+                        ++graphicsPackets;
+                    break;
+                }
+            }
+            uniquePacketCount = uniquePackets.size();
         }
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
-        NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
-        NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
+
+    if(sliceIdentityFailed){
+        error("Reflection CSG context probe: failed to format hardware slice identity: {}", StringView(sliceIdentityError));
+        return;
+    }
+
+    [essential] info(
+        "ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={} graphics_queue={} runtime_present={} ray_capacity={} expected_slices={} hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}"
         , sourceFrame
         , planGeneration
-        , primaryGraphics.deviceGeneration
-        , primaryGraphics.index
-        , runtimePresent ? 1u : 0u
+        , deviceGeneration
+        , graphicsQueueIndex
+        , runtimePresentVal
         , rayCapacity
         , expectedSlices
         , hardwareNodes
         , indexedSlices
         , compiledNodes
-        , uniquePackets.size()
+        , uniquePacketCount
         , acceptedPackets
         , singleTaskPackets
         , graphicsPackets
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame)noexcept{
-    return sourceFrame == MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->m_targetSource;
-}
-
-ReflectionCsgContextProbe::ReflectionCsgContextProbe(const u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept
-    : m_capturePaths(context.objectArena)
-    , m_context(context)
-    , m_world(world)
-    , m_renderer(renderer)
-    , m_rayCapacity(rayCapacity)
-{}
-
-b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
-    const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-    if(!output){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
-        return false;
+// Synchronized probe for reflection CSG captures and packet receipts.
+class ReflectionCsgContextProbe{
+    public ReflectionCsgContextProbe(
+        in u32 rayCapacity,
+        mut ProjectRuntimeContext context,
+        mut World world,
+        mut RendererSystem renderer
+    ){
+        this.m_context = context;
+        this.m_world = world;
+        this.m_renderer = renderer;
+        this.m_rayCapacity = rayCapacity;
     }
-    const auto scene = CreateReflectionCsgContextScene(m_world);
-    if(!scene)
-        return false;
-    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
-    auto series = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).prepareSeries(*output, 5u, options);
-    if(!series)
-        return false;
-    m_capturePaths = Move(series->paths);
-    m_capture = Move(series->capture);
-    m_entities = *scene;
-    return beginPhase();
-}
 
-b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
-    // Wait before advancing the world so latest-only diagnostic rows are not skipped.
-    if(!m_context.graphics.waitForIdle()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
-        return false;
+    public b8 shouldCapture(in u64 sourceFrame)const{
+        return sourceFrame == this.m_targetSource;
     }
-    if(m_done)
+
+    public b8 create(){
+        const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+        if(!output.has_value()){
+            error("ReflectionCsgContext: application framebuffer capture is required");
+            return false;
+        }
+        const Expected<ReflectionCsgContextEntities> scene = CreateReflectionCsgContextScene(this.m_world);
+        if(!scene.has_value())
+            return false;
+
+        FramebufferCaptureOptions options = FramebufferCaptureOptions();
+        native(mut options){
+            options.shouldCapture = +[](void* const owner, const u64 sourceFrame)noexcept -> b8{
+                return MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->shouldCapture(sourceFrame);
+            };
+            options.predicateContext = this;
+            options.requiredWidth = 960u;
+            options.requiredHeight = 720u;
+            options.quitWhenReady = false;
+        }
+        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
+        Expected<SmokeCaptureSeries> series = captureFactory.prepareSeries(StringView(output.value()), 5u, options);
+        if(!series.has_value())
+            return false;
+        native(mut dstPaths = this.m_capturePaths, mut dstCapture = this.m_capture, mut series){
+            dstPaths = Move(series->paths);
+            dstCapture = Move(series->capture);
+        }
+        this.m_entities = scene.value();
+        return this.beginPhase();
+    }
+
+    public b8 create(mut ScratchArena scratchArena){
+        return this.create();
+    }
+
+    public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics){
+        // Wait before advancing the world so latest-only diagnostic rows are not skipped.
+        if(!this.m_context.graphics.waitForIdle()){
+            error("ReflectionCsgContext: diagnostic frame synchronization failed");
+            return false;
+        }
+        if(this.m_done)
+            return true;
+
+        const u64 frame = this.m_context.graphics.getFrameIndex();
+        if(frame > 0u && frame - 1u != this.m_packetSource){
+            this.m_packetSource = frame - 1u;
+            ReportReflectionSlicePackets(this.m_rayCapacity, this.m_packetSource, this.m_phase != 2u, this.m_context, this.m_renderer);
+        }
+
+        b8 tokenValid = false;
+        native(in statistics, mut tokenValid){
+            tokenValid = statistics.acceptedToken.valid();
+        }
+        if(statistics.sequence != this.m_lastSequence || statistics.generation != this.m_lastGeneration){
+            this.m_lastSequence = statistics.sequence;
+            this.m_lastGeneration = statistics.generation;
+            if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= this.m_phaseSource && tokenValid)
+                ++this.m_completed;
+        }
+
+        b8 captureReady = false;
+        u64 capturedSource = 0u;
+        native(mut capture = this.m_capture, mut captureReady, mut capturedSource){
+            capture->update();
+            captureReady = capture->captureReady();
+            if(captureReady)
+                capturedSource = capture->capturedGraphicsFrameIndex();
+        }
+        if(captureReady){
+            if(capturedSource != this.m_targetSource || capturedSource < this.m_phaseSource || this.m_completed < 16u){
+                error("ReflectionCsgContext: capture missed the qualified phase source frame");
+                return false;
+            }
+            if(statistics.graphicsFrameIndex < capturedSource)
+                return true;
+            if(statistics.graphicsFrameIndex != capturedSource){
+                error(
+                    "ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"
+                    , capturedSource
+                    , statistics.graphicsFrameIndex
+                    , statistics.sequence
+                    , statistics.generation
+                );
+                return false;
+            }
+            [essential] info(
+                "ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"
+                , this.m_phase
+                , capturedSource
+                , this.m_completed
+            );
+            if(this.m_phase == 4u){
+                this.m_done = true;
+                [essential] info("ReflectionCsgContext: complete captures=5");
+                native(mut capture = this.m_capture){
+                    capture->finish();
+                }
+                return true;
+            }
+            ++this.m_phase;
+            const StringView nextPath = StringView(this.m_capturePaths[this.m_phase]);
+            b8 rearmed = false;
+            native(in nextPath, mut capture = this.m_capture, mut rearmed){
+                rearmed = capture->rearm(nextPath);
+            }
+            if(!rearmed)
+                return false;
+            return this.beginPhase();
+        }
+
+        if(this.m_targetSource == ~cast<u64>(0u) && this.m_completed >= 16u)
+            this.m_targetSource = frame;
         return true;
-    const u64 frame = m_context.graphics.getFrameIndex();
-    if(frame > 0u && frame - 1u != m_packetSource){
-        m_packetSource = frame - 1u;
-        ReportReflectionSlicePackets(m_rayCapacity, m_packetSource, m_phase != 2u, m_context, m_renderer);
     }
-    if(statistics.sequence != m_lastSequence || statistics.generation != m_lastGeneration){
-        m_lastSequence = statistics.sequence;
-        m_lastGeneration = statistics.generation;
-        if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= m_phaseSource && statistics.acceptedToken.valid())
-            ++m_completed;
+
+    private b8 beginPhase(){
+        const b8 small = this.m_phase == 0u || this.m_phase == 3u;
+        const b8 csg = this.m_phase != 2u;
+        f32 denseX = 0.0f;
+        if(small)
+            denseX = 40.0f;
+        const b8 denseCutterActive = !small && csg;
+        native(
+            in entities = this.m_entities,
+            in small,
+            in denseX,
+            in denseCutterActive,
+            mut world = this.m_world
+        ){
+            world.entity(entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
+            // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
+            world.entity(entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = denseX;
+            world.entity(entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
+            world.entity(entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = denseCutterActive;
+        }
+        this.m_phaseSource = this.m_context.graphics.getFrameIndex();
+        this.m_completed = 0u;
+        this.m_targetSource = ~cast<u64>(0u);
+        u32 cutPrimitives = 0u;
+        if(small)
+            cutPrimitives = 12u;
+        else if(csg)
+            cutPrimitives = 108u;
+        u32 csgVal = 0u;
+        if(csg)
+            csgVal = 1u;
+        [essential] info(
+            "ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"
+            , this.m_phase
+            , this.m_phaseSource
+            , cutPrimitives
+            , csgVal
+        );
+        return true;
     }
-    m_capture->update();
-    if(m_capture->captureReady()){
-        const u64 source = m_capture->capturedGraphicsFrameIndex();
-        if(source != m_targetSource || source < m_phaseSource || m_completed < 16u){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: capture missed the qualified phase source frame"));
-            return false;
-        }
-        if(statistics.graphicsFrameIndex < source)
-            return true;
-        if(statistics.graphicsFrameIndex != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"), source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation);
-            return false;
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"), m_phase, source, m_completed);
-        if(m_phase == 4u){
-            m_done = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: complete captures=5"));
-            m_capture->finish();
-            return true;
-        }
-        ++m_phase;
-        if(!m_capture->rearm(Move(m_capturePaths[m_phase])))
-            return false;
-        return beginPhase();
-    }
-    if(m_targetSource == Limit<u64>::s_Max && m_completed >= 16u)
-        m_targetSource = frame;
-    return true;
-}
 
-b8 ReflectionCsgContextProbe::beginPhase(){
-    const b8 small = m_phase == 0u || m_phase == 3u;
-    const b8 csg = m_phase != 2u;
-    m_world.entity(m_entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
-    // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
-    m_world.entity(m_entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = small ? 40.f : 0.f;
-    m_world.entity(m_entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
-    m_world.entity(m_entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = !small && csg;
-    m_phaseSource = m_context.graphics.getFrameIndex();
-    m_completed = 0u;
-    m_targetSource = Limit<u64>::s_Max;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
+    private Vector<String> m_capturePaths;
+    private ReflectionCsgContextEntities m_entities = ReflectionCsgContextEntities();
+    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
+    private mut ProjectRuntimeContext m_context;
+    private mut World m_world;
+    private mut RendererSystem m_renderer;
+    private u64 m_phaseSource = 0u;
+    private u64 m_targetSource = ~cast<u64>(0u);
+    private u64 m_packetSource = ~cast<u64>(0u);
+    private u64 m_lastSequence = 0u;
+    private u64 m_lastGeneration = 0u;
+    private u32 m_rayCapacity;
+    private u32 m_phase = 0u;
+    private u32 m_completed = 0u;
+    private b8 m_done = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

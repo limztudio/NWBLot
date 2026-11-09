@@ -350,7 +350,7 @@ class UiNumericEditGallery{
         FloatEditOptions floating = FloatEditOptions();
         floating.bounds = FloatBounds(-s_NumericEditDecimalLimit, s_NumericEditDecimalLimit, NumericBoundsPolicy::Clamp);
         const NumericEditBoxResult second = context.ui.floatEdit("float", this.m_float, this.m_floatState, floating);
-        declared = DeclareFormattedLabel(context.ui, scratchArena, "committed", "Committed: {} / {}", this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
+        declared = DeclareCommittedNumericLabel(context.ui, scratchArena, this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
         declared = context.ui.label(s_HintKey, "Enter: commit, Escape: restore") && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
@@ -422,7 +422,7 @@ class UiPopupToolsGallery{
             this.m_command = result.key;
             [essential] info("Testbed: custom context command key={}", this.m_command);
         }
-        declared = DeclareFormattedLabel(context.ui, scratchArena, s_SelectedKey, "Command: {} / Clicks: {}", this.m_command, this.m_anchorClicks) && result.valid && declared;
+        declared = DeclarePopupToolsStatusLabel(context.ui, scratchArena, this.m_command, this.m_anchorClicks) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -444,7 +444,7 @@ class UiProgressGallery{
         if(context.ui.button("advance", "Advance by 25%"))
             this.m_fraction = AdvanceProgressGalleryFraction(this.m_fraction);
         valid = context.ui.progress(s_AmountKey, this.m_fraction) && valid;
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "value", "Completed: {:.0f}%", this.m_fraction * s_ProgressPercentScale) && valid;
+        valid = DeclareProgressPercentLabel(context.ui, scratchArena, this.m_fraction * s_ProgressPercentScale) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
             error("Testbed: custom progress declaration failed");
@@ -584,7 +584,7 @@ class UiWidgetGallery{
         valid = context.ui.endContainer() && valid;
         const u32 selected = this.m_selectedGallery;
         ScratchArena scratchArena(s_SelectorArena);
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "section", "UI samples {}/{}: {}", selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
+        valid = DeclareGallerySectionLabel(context.ui, scratchArena, selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid){
             error("Testbed: UI gallery selector declaration failed");
@@ -635,7 +635,7 @@ class UiWidgetGallery{
             this.m_count = 0u;
         this.m_popups.trigger(context.ui);
         valid = context.ui.endContainer() && valid;
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "count", "Count: {}", this.m_count) && valid;
+        valid = DeclareCounterLabel(context.ui, scratchArena, this.m_count) && valid;
         valid = context.ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
@@ -752,3 +752,4 @@ class UiSkinPreview{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

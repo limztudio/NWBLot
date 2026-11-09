@@ -219,10 +219,10 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
         }
     }
 
-    private EntityID createSkinnedReceiverInstance(in Float4 position, in Float4 colorTint){
+    private EntityID createSkinnedReceiverInstance(in VectorSingle position, in VectorSingle colorTint){
         EntityID entity = s_InvalidEntityId;
         native(in position, in colorTint, mut entity){
-            const auto modelResult = CreateTintedModelEntity(s_CsgSkinnedModel, s_CsgSkinnedReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f), *this->m_world);
+            const auto modelResult = CreateTintedModelEntity(s_CsgSkinnedModel, s_CsgSkinnedReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, VectorSet(1.0f, 1.0f, 1.0f, 0.0f), *this->m_world);
             entity = modelResult.entity;
             if(!modelResult.tintApplied)
                 NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
@@ -251,8 +251,8 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
 
     private void createReceiver(){
         const f32 alpha = CsgSkinnedReceiverAlpha();
-        this.m_plainReceiver = this.createSkinnedReceiverInstance(Float4(-s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgSkinnedPlainReceiverTint.x, s_CsgSkinnedPlainReceiverTint.y, s_CsgSkinnedPlainReceiverTint.z, alpha));
-        this.m_receiver = this.createSkinnedReceiverInstance(Float4(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgSkinnedCsgReceiverTint.x, s_CsgSkinnedCsgReceiverTint.y, s_CsgSkinnedCsgReceiverTint.z, alpha));
+        this.m_plainReceiver = this.createSkinnedReceiverInstance(VectorSingle(-s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f), VectorSingle(s_CsgSkinnedPlainReceiverTint.x, s_CsgSkinnedPlainReceiverTint.y, s_CsgSkinnedPlainReceiverTint.z, alpha));
+        this.m_receiver = this.createSkinnedReceiverInstance(VectorSingle(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f), VectorSingle(s_CsgSkinnedCsgReceiverTint.x, s_CsgSkinnedCsgReceiverTint.y, s_CsgSkinnedCsgReceiverTint.z, alpha));
     }
 
     private VectorSingle loadCutterAnchorLocalCenter()const{

@@ -13,53 +13,55 @@ native{
 #include <global/filesystem.h>
 
 namespace NWB::Tests::Smoke{
-using Core::Alloc::GlobalArena;
 using Core::Perf::CaptureOptions;
 using Core::Perf::Session;
 using Core::Perf::TimingScopeId;
 using Core::Perf::TimingStats;
 using Core::Perf::TimingView;
-struct SmokeCpuGpuTimingScope{
-    Name name = s_NameNone;
-    u64 lastPublication = 0u;
-    u64 eligibleSamples = 0u;
-    u32 generation = 0u;
-    b8 recorded = false;
-};
-
-struct SmokeCpuGpuTimingRecord{
-    TimingStats stats = {};
-    u64 observationFrame = 0u;
-    u64 presentations = 0u;
-    u32 scope = 0u;
-    u32 generation = 0u;
-    b8 gpu = false;
-};
-
-inline constexpr usize s_MaxScopesPerDomain = 512u;
-inline constexpr usize s_MaxRecords = s_SmokeTimingMaxRecords;
-
-using SmokeCpuGpuTimingScopeTable = Array<Array<SmokeCpuGpuTimingScope, s_MaxScopesPerDomain>, 2u>;
-using SmokeCpuGpuTimingRecordVector = Vector<SmokeCpuGpuTimingRecord, GlobalArena>;
 };
 }
 
-class SmokeCpuGpuTimingProbe{
 
-    public SmokeCpuGpuTimingProbe(in TStringView owner, mut GlobalArena arena){
-        this.m_scopes = SmokeCpuGpuTimingScopeTable();
-        this.m_records = SmokeCpuGpuTimingRecordVector(arena);
-        this.m_outputPath = SmokeEnvironmentString(arena);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaxScopesPerDomain = 512u;
+const usize s_MaxRecords = s_SmokeTimingMaxRecords;
+const i32 s_SmokeCpuGpuTimingPrecision = 17;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SmokeCpuGpuTimingScope{
+    public Name name = s_NameNone;
+    public u64 lastPublication = 0u;
+    public u64 eligibleSamples = 0u;
+    public u32 generation = 0u;
+    public b8 recorded = false;
+}
+
+class SmokeCpuGpuTimingRecord{
+    public TimingStats stats = TimingStats();
+    public u64 observationFrame = 0u;
+    public u64 presentations = 0u;
+    public u32 scope = 0u;
+    public u32 generation = 0u;
+    public b8 gpu = false;
+}
+
+class SmokeCpuGpuTimingProbe{
+    public SmokeCpuGpuTimingProbe(in TStringView owner){
         this.m_owner = owner;
     }
 
-    public b8 initialize(in b8 requested, in b8 presentationTimingEnabled, in AStringView outputPath){
+    public b8 initialize(in b8 requested, in b8 presentationTimingEnabled, in StringView outputPath){
         const b8 hasOutput = !outputPath.empty();
         if(hasOutput != requested || (requested && !presentationTimingEnabled) || this.m_owner.empty()){
             error("SmokeCpuGpuTimingProbe: diagnostics require an owner, presentation timing and an explicit output path");
             return false;
         }
-        this.m_outputPath.assign(outputPath.data(), outputPath.size());
+        this.m_outputPath = String(outputPath);
         this.m_enabled = requested;
         if(!this.m_enabled)
             return true;
@@ -104,7 +106,7 @@ class SmokeCpuGpuTimingProbe{
         return true;
     }
 
-    public b8 hasCompletedGpuSamples(in Name name, in u64 minimumSamples){
+    public b8 hasCompletedGpuSamples(in Name name, in u64 minimumSamples)const{
         for(usize i = 0u; i < s_MaxScopesPerDomain; ++i){
             if(this.m_scopes[1u][i].recorded && this.m_scopes[1u][i].name == name)
                 return this.m_scopes[1u][i].eligibleSamples >= minimumSamples;
@@ -164,47 +166,64 @@ class SmokeCpuGpuTimingProbe{
             error("SmokeCpuGpuTimingProbe: presentation and source-frame boundaries disagree");
             return false;
         }
-        native{
-            OutputFileStream output(this->m_outputPath.c_str(), s_FileOpenTruncate);
+        b8 openFailed = false;
+        b8 writeFailed = false;
+        native(
+            in outputPath = this.m_outputPath,
+            in presentation,
+            in firstSourceFrame = this.m_firstSourceFrame,
+            in endFrame,
+            in scopes = this.m_scopes,
+            in records = this.m_records,
+            mut openFailed,
+            mut writeFailed
+        ){
+            OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
             if(!output.is_open()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: failed to open diagnostic output"));
-                return false;
+                openFailed = true;
             }
-            output.precision(17);
-            output << "NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1\n";
-            output << "capture cpu=1 gpu=1 memory=0 diagnostic_only=1\n";
-            output << "window " << presentation.firstPresentationCount << ' ' << presentation.lastPresentationCount << ' ' << this->m_firstSourceFrame << ' ' << endFrame << ' ' << presentation.wallSeconds << '\n';
-            usize scopeCount = 0u;
-            for(usize domain = 0u; domain < 2u; ++domain){
-                for(usize index = 0u; index < s_MaxScopesPerDomain; ++index){
-                    const SmokeCpuGpuTimingScope& scope = this->m_scopes[domain][index];
-                    if(!scope.recorded)
-                        continue;
-                    output << "scope " << domain << ' ' << index << ' ' << scope.generation << ' ' << scope.name.resolvedText() << '\n';
-                    ++scopeCount;
+            else{
+                output.precision(s_SmokeCpuGpuTimingPrecision);
+                output << "NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1\n";
+                output << "capture cpu=1 gpu=1 memory=0 diagnostic_only=1\n";
+                output << "window " << presentation.firstPresentationCount << ' ' << presentation.lastPresentationCount << ' ' << firstSourceFrame << ' ' << endFrame << ' ' << presentation.wallSeconds << '\n';
+                usize scopeCount = 0u;
+                for(usize domain = 0u; domain < 2u; ++domain){
+                    for(usize index = 0u; index < s_MaxScopesPerDomain; ++index){
+                        const SmokeCpuGpuTimingScope& scope = scopes[domain][index];
+                        if(!scope.recorded)
+                            continue;
+                        output << "scope " << domain << ' ' << index << ' ' << scope.generation << ' ' << scope.name.resolvedText() << '\n';
+                        ++scopeCount;
+                    }
                 }
+                for(const SmokeCpuGpuTimingRecord& record : records){
+                    const TimingStats& stats = record.stats;
+                    output << "sample " << (record.gpu ? 1u : 0u) << ' ' << record.scope << ' ' << record.generation << ' ' << record.observationFrame
+                        << ' ' << record.presentations << ' ' << stats.publishFrameIndex
+                        << ' ' << stats.firstSampleFrameIndex << ' ' << stats.lastSampleFrameIndex << ' ' << stats.sampleCount
+                        << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
+                    ;
+                }
+                output << "complete " << records.size() << ' ' << scopeCount << '\n';
+                output.close();
+                writeFailed = !output.good();
             }
-            for(const SmokeCpuGpuTimingRecord& record : this->m_records){
-                const TimingStats& stats = record.stats;
-                output << "sample " << (record.gpu ? 1u : 0u) << ' ' << record.scope << ' ' << record.generation << ' ' << record.observationFrame
-                    << ' ' << record.presentations << ' ' << stats.publishFrameIndex
-                    << ' ' << stats.firstSampleFrameIndex << ' ' << stats.lastSampleFrameIndex << ' ' << stats.sampleCount
-                    << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
-                ;
-            }
-            output << "complete " << this->m_records.size() << ' ' << scopeCount << '\n';
-            output.close();
-            if(!output.good()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: diagnostic output write failed"));
-                return false;
-            }
-            return true;
         }
+        if(openFailed){
+            error("SmokeCpuGpuTimingProbe: failed to open diagnostic output");
+            return false;
+        }
+        if(writeFailed){
+            error("SmokeCpuGpuTimingProbe: diagnostic output write failed");
+            return false;
+        }
+        return true;
     }
 
-    private SmokeCpuGpuTimingScopeTable m_scopes;
-    private SmokeCpuGpuTimingRecordVector m_records;
-    private SmokeEnvironmentString m_outputPath;
+    private Array<Array<SmokeCpuGpuTimingScope, s_MaxScopesPerDomain>, 2u> m_scopes;
+    private Vector<SmokeCpuGpuTimingRecord> m_records;
+    private String m_outputPath;
     private TStringView m_owner;
     private u64 m_firstSourceFrame = 0u;
     private u64 m_firstPresentation = 0u;
@@ -215,3 +234,4 @@ class SmokeCpuGpuTimingProbe{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

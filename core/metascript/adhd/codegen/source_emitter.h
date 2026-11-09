@@ -62,6 +62,7 @@ private:
     void emitIndent(MString& out, u32 indent)const;
     void emitScratchArenaPrologue(MString& out, u32 indent, MStringView arenaName)const;
     [[nodiscard]] b8 statementsNeedSimdFloatingPointEnv(Span<const Stmt* const> statements)const noexcept;
+    void emitUnusedParamSuppressions(MString& out, Span<const ParamDecl> params, Span<const Stmt* const> statements, u32 indent)const;
     void emitStatementList(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitLoopBodyStatements(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitStmt(MString& out, const Stmt& stmt, u32 indent)const;

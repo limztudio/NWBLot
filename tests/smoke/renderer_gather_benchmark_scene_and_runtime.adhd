@@ -8,17 +8,6 @@
 #include "smoke_scene_helpers.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const f32 s_GatherBenchmarkFixedDelta = 0.016666667f;
-const u32 s_GatherBenchmarkInFlightRanges = 32u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <loader/project_entry.h>
 #include <impl/ecs_render/module.adhd.h>
@@ -26,195 +15,38 @@ native{
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
 #include <global/simd/vector.h>
 
+namespace NWB::Tests::Smoke{
+[[nodiscard]] inline TStringView GatherBenchmarkProjectName()noexcept{
+    return NWB_TEXT("RendererGatherBenchmark");
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+inline constexpr f32 s_GatherBenchmarkHalfPi = s_PIDIV2;
 
-
-NWB_BEGIN
-
-
-namespace Tests::Smoke{
-
-
-class RendererGatherBenchmarkScene final : NoCopy{
-public:
-    using Counts = RendererGatherBenchmarkSceneCounts;
-
-
-public:
-    explicit RendererGatherBenchmarkScene(Core::ECS::World& world)noexcept : m_world(world){}
-    [[nodiscard]] b8 build(AStringView workload, b8 runtime, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Counts& counts()noexcept{ return m_counts; }
-
-
+class GatherBenchmarkTimingPass final : public Core::IRenderPass{
 private:
-    [[nodiscard]] b8 createBackdrop();
-    [[nodiscard]] b8 createRuntime(u32 index, const Float4& position);
+    static constexpr u32 s_InFlightRanges = 32u;
+    static constexpr Array<StringView, 18> s_GpuNames = {
+        "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
+        "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
+        "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
+        "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
+        "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
+    };
 
-
-private:
-    Core::ECS::World& m_world;
-    Counts m_counts;
-    b8 m_runtime = false;
-};
-
-
-namespace __hidden_renderer_gather_scene{
-constexpr AStringView s_OpaqueWorkload = s_GatherBenchmarkOpaqueWorkload;
-constexpr AStringView s_HybridWorkload = s_GatherBenchmarkHybridWorkload;
-constexpr AStringView s_UniqueWorkload = s_GatherBenchmarkUniqueWorkload;
-constexpr AStringView s_OverridesWorkload = s_GatherBenchmarkOverridesWorkload;
-static constexpr SmokeMeshRef s_Mesh("project/meshes/octahedron");
-static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
-static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
-static constexpr SmokeMaterialRef s_Glass("project/smoke/gather_benchmark/materials/glass_00");
-static constexpr SmokeModelRef s_Model("project/characters/body/model");
-static constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
-static constexpr u32 s_ObjectCount = s_GatherBenchmarkObjectCount;
-};
-
-using namespace __hidden_renderer_gather_scene;
-
-
-b8 RendererGatherBenchmarkScene::build(const AStringView workload, const b8 runtime, Core::Alloc::ScratchArena& scratchArena){
-    m_runtime = runtime;
-    const auto cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, m_world);
-    if(!cameraEntity.valid())
-        return false;
-    const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(m_world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
-    m_world.entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
-    if(!createBackdrop())
-        return false;
-    for(u32 index = 0u; index < s_ObjectCount; ++index){
-        const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.0f, 0.0f), VectorSet(3.5f, 0.0f, 0.0f, 0.0f));
-        const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.0f, 0.0f));
-        Float4 position;
-        StoreFloat(VectorAdd(VectorSet(0.0f, 0.7f, 0.0f, 0.0f), spacing), position);
-        if(m_runtime && index % 8u == 0u){
-            if(!createRuntime(index, position))
-                return false;
-            continue;
-        }
-        const b8 opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
-        SmokeMeshRef mesh = s_Mesh;
-        SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
-        if(workload == s_UniqueWorkload){
-            const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
-            const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
-            const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
-            if(!meshReference)
-                return false;
-            mesh = *meshReference;
-            const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
-            if(!materialReference)
-                return false;
-            material = *materialReference;
-        }
-        auto entity = m_world.createEntity();
-        auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-        transform.position = position;
-        transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
-        entity.addComponent<NWB::Impl::MeshComponent>().mesh = mesh;
-        auto& component = entity.addComponent<NWB::Impl::RendererComponent>();
-        component.material = material;
-        if(!opaque){
-            component.opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
-            ++m_counts.transparentRenderers;
-        }
-        ++m_counts.renderers;
-        if(workload == s_OverridesWorkload){
-            entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
-            const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
-            if(!NWB::Impl::SetMaterialMutableHalf4(m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
-                return false;
-        }
-    }
-    if(m_runtime)
-        SyncSmokeModelRuntimes(m_world);
-    return true;
-}
-
-
-b8 RendererGatherBenchmarkScene::createBackdrop(){
-    const auto backdrop = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f), m_world);
-    if(!backdrop.valid())
-        return false;
-    auto& transform = m_world.entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
-    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
-    const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
-    const Half roughness = ConvertFloatToHalf(0.0f);
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))))
-        return false;
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(roughness)))
-        return false;
-    ++m_counts.renderers;
-    return true;
-}
-
-b8 RendererGatherBenchmarkScene::createRuntime(const u32 index, const Float4& position){
-    const auto modelResult = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f), m_world);
-    const auto owner = modelResult.entity;
-    if(!owner.valid() || !modelResult.tintApplied)
-        return false;
-    SyncSmokeModelRuntimes(m_world);
-    const auto skeleton = FindSpawnedModelObject(owner, Name(NWB::Tests::Smoke::s_SmokeNameSkeleton), NWB::Impl::ModelObjectKind::Skeleton, m_world);
-    if(!skeleton.valid())
-        return false;
-    auto& pose = m_world.entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
-    if(pose.localJoints.size() < 2u)
-        return false;
-    const f32 yaw = (index & 8u) != 0u ? 0.08f : -0.08f;
-    StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
-    ++m_counts.runtimeOwners;
-    return true;
-}
-
-
-};
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_renderer_gather_benchmark{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_OpaqueWorkload = "opaque";
-constexpr AStringView s_HybridWorkload = "hybrid";
-constexpr AStringView s_UniqueWorkload = "unique";
-constexpr AStringView s_OverridesWorkload = "overrides";
-constexpr AStringView s_RuntimeWorkload = "runtime";
-constexpr AStringView s_MemoryMode = "memory";
-
-using namespace NWB;
-using namespace NWB::Tests::Smoke;
-
-static constexpr f32 s_FixedDelta = s_GatherBenchmarkFixedDelta;
-static constexpr u32 s_InFlightRanges = s_GatherBenchmarkInFlightRanges;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TimingPass final : public NWB::Core::IRenderPass{
 public:
-    explicit TimingPass(NWB::Core::GraphicsRuntime& graphics)noexcept
+    explicit GatherBenchmarkTimingPass(Core::GraphicsRuntime& graphics)noexcept
         : IRenderPass(graphics)
     {}
-
 
 public:
     [[nodiscard]] b8 prepareQueries(){
         auto& graphics = getGraphics();
-        for(const StringView scope : RendererGatherBenchmarkProbe::s_GpuNames){
+        for(const StringView scope : s_GpuNames){
             if(scope == "render.reflection_depth_pyramid")
                 continue;
             const auto scopeName = Name::FromText(scope);
@@ -228,185 +60,440 @@ public:
 
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
+};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererGatherBenchmarkProjectImpl final : public IProjectEntryCallbacks{
-public:
-    explicit RendererGatherBenchmarkProjectImpl(ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateSmokeWorldOrDie(NWB_TEXT("RendererGatherBenchmark"), context))
-        , m_scene(*m_world)
-        , m_timingPass(context.graphics)
-        , m_probe(context.objectArena)
-        , m_compilerProbe(context.graphics, context.objectArena)
-        , m_workload(context.objectArena)
-        , m_output(context.objectArena)
-    {}
-    virtual ~RendererGatherBenchmarkProjectImpl()noexcept override{ destroyWorld(); }
+const f32 s_GatherBenchmarkFixedDelta = 0.016666667f;
+const u32 s_GatherBenchmarkInFlightRanges = 32u;
+const StringView s_GatherBenchmarkSharedWorkload = "shared";
+const StringView s_GatherBenchmarkRuntimeWorkload = "runtime";
+const StringView s_GatherBenchmarkMemoryMode = "memory";
+const StringView s_GatherBenchmarkTimingMode = "timing";
+const SmokeMeshRef s_GatherBenchmarkOctahedronMesh = "project/meshes/octahedron";
+const SmokeMeshRef s_GatherBenchmarkPlaneMesh = "project/meshes/shadow_plane";
+const SmokeMaterialRef s_GatherBenchmarkOpaqueMaterial = "project/smoke/reflection/materials/opaque";
+const SmokeMaterialRef s_GatherBenchmarkGlassMaterial = "project/smoke/gather_benchmark/materials/glass_00";
+const SmokeModelRef s_GatherBenchmarkCharacterModel = "project/characters/body/model";
 
 
-public:
-    virtual b8 onStartup()override{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-        auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
-        if(!requestedWorkload)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererGatherBenchmarkScene{
+    public b8 build(in StringView workload, in b8 runtime, mut World world){
+        this.m_runtime = runtime;
+        const EntityID cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, world);
+        if(!cameraEntity.valid())
             return false;
-        auto requestedOutput = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_OUTPUT");
-        if(!requestedOutput)
-            return false;
-        m_workload = Move(*requestedWorkload);
-        m_output = Move(*requestedOutput);
-        const AStringView workload(m_workload.data(), m_workload.size());
-        if(workload != s_OpaqueWorkload && workload != s_HybridWorkload && workload != "shared" && workload != s_UniqueWorkload && workload != s_OverridesWorkload && workload != s_RuntimeWorkload)
-            return false;
-        const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_BENCHMARK_MODE");
-        if(!mode || (*mode != "timing" && *mode != s_MemoryMode))
-            return false;
-        m_memoryEnabled = *mode == s_MemoryMode;
-        m_runtime = workload == s_RuntimeWorkload;
-        if(!m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
-            return false;
+        native(mut world){
+            const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
+            world.entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
         }
-        if(m_runtime)
-            AddSmokeSkinnedRenderSystems(*m_world, m_context);
-        else
-            AddSmokeRenderSystems(*m_world, m_context);
-        NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
-        m_worldReady = true;
-        NWB::Impl::ReflectionSettings settings;
-        settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
-        settings.maxHardwareRaysPerFrame = 4096u;
-        settings.maxOpticalQueries = 16u;
-        settings.temporalEnabled = false;
-        settings.spatialFilterEnabled = false;
-        settings.screenFeedbackEnabled = false;
-        settings.diagnosticsEnabled = false;
-        settings.samplingSeed = 0u;
-        if(!renderer.setReflectionSettings(settings))
+        if(!this.createBackdrop(world))
             return false;
-        renderer.setRefractionEnabled(true);
-        renderer.setRefractionHardwareTracingEnabled(true);
-        if(!m_scene.build(workload, m_runtime, scratchArena))
-            return false;
-        if(!m_timingPass.prepareQueries())
-            return false;
-        m_context.graphics.addRenderPassToBack(m_timingPass);
-        m_timingRegistered = true;
-        const auto compilerOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
-        if(compilerOutput){
-            if(!m_compilerProbe.start(AStringView(*compilerOutput), renderer))
+
+        for(u32 index = 0u; index < s_GatherBenchmarkObjectCount; ++index){
+            const VectorSingle grid = VectorSingle(cast<f32>(index % 8u), cast<f32>(index / 8u), 0.0f, 0.0f) - VectorSingle(3.5f, 0.0f, 0.0f, 0.0f);
+            const VectorSingle spacing = grid * VectorSingle(0.75f, 0.58f, 0.0f, 0.0f);
+            const VectorSingle position = VectorSingle(0.0f, 0.7f, 0.0f, 0.0f) + spacing;
+            if(this.m_runtime && index % 8u == 0u){
+                if(!this.createRuntime(index, position, world))
+                    return false;
+                continue;
+            }
+            const b8 opaque = workload == s_GatherBenchmarkOpaqueWorkload || (workload == s_GatherBenchmarkHybridWorkload && index % 2u == 0u);
+            SmokeMeshRef mesh = s_GatherBenchmarkOctahedronMesh;
+            SmokeMaterialRef material = s_GatherBenchmarkGlassMaterial;
+            if(opaque)
+                material = s_GatherBenchmarkOpaqueMaterial;
+            if(workload == s_GatherBenchmarkUniqueWorkload){
+                b8 refsOk = false;
+                native(in index, mut mesh, mut material, mut refsOk){
+                    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
+                    const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
+                    const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
+                    const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
+                    const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
+                    if(meshReference && materialReference){
+                        mesh = *meshReference;
+                        material = *materialReference;
+                        refsOk = true;
+                    }
+                }
+                if(!refsOk)
+                    return false;
+            }
+
+            const f32x4 storedPosition = f32x4(position);
+            const b8 applyOverride = workload == s_GatherBenchmarkOverridesWorkload;
+            b8 entityOk = true;
+            native(in storedPosition, in mesh, in material, in opaque, in applyOverride, in index, mut world, mut entityOk){
+                auto entity = world.createEntity();
+                auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+                transform.position = storedPosition;
+                transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
+                entity.addComponent<Impl::MeshComponent>().mesh = mesh;
+                auto& component = entity.addComponent<Impl::RendererComponent>();
+                component.material = material;
+                if(!opaque)
+                    component.opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
+                if(applyOverride){
+                    entity.addComponent<Impl::MaterialInstanceComponent>(Name(s_SmokeSurfaceMaterialInterface));
+                    const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
+                    if(!Impl::SetMaterialMutableHalf4(world, entity.id(), Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", tint))
+                        entityOk = false;
+                }
+            }
+            if(!entityOk)
                 return false;
+            if(!opaque)
+                ++this.m_counts.transparentRenderers;
+            ++this.m_counts.renderers;
         }
-        NWB::Core::Perf::CaptureOptions capture;
-        capture.enabled = true;
-        capture.cpuTiming = true;
-        capture.gpuTiming = true;
-        capture.memory = m_memoryEnabled;
-        m_context.setPerfCapture(capture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), ConvertString(workload), ConvertString(*mode));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVSyncEnabled() ? 1u : 0u);
+        if(this.m_runtime)
+            SyncSmokeModelRuntimes(world);
         return true;
     }
 
-    virtual void onShutdown()override{
-        m_compilerProbe.stop();
-        if(!m_compilerProbe.write())
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
-        if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers, m_scene.counts().runtimeOwners))
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
+    public RendererGatherBenchmarkSceneCounts counts()const{
+        return this.m_counts;
     }
 
-    virtual b8 onUpdate(const f32)override{
-        if(!m_probe.poll(m_context.perfSession.report(), m_memoryEnabled)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: incomplete or mismatched successful CPU frame"));
+    public void setResolvedCounts(in u32 renderers, in u32 runtimeRenderers){
+        this.m_counts.renderers = renderers;
+        this.m_counts.runtimeRenderers = runtimeRenderers;
+    }
+
+    private b8 createBackdrop(mut World world){
+        const EntityID backdrop = CreateTintedStaticMeshEntity(
+            s_GatherBenchmarkPlaneMesh,
+            s_GatherBenchmarkOpaqueMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            VectorSingle(0.1f, 0.1f, 0.1f, 1.0f),
+            VectorSingle(0.0f, 2.6f, 2.0f, 0.0f),
+            VectorSingle(5.0f, 1.0f, 3.5f, 0.0f),
+            world
+        );
+        if(!backdrop.valid())
+            return false;
+        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_GatherBenchmarkHalfPi, 0.0f, 0.0f, 0.0f)));
+        b8 paramsOk = false;
+        native(in backdrop, in rotation, mut world, mut paramsOk){
+            auto& transform = world.entity(backdrop).getComponent<Impl::Scene::TransformComponent>();
+            transform.rotation = rotation;
+            const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
+            const Half roughness = ConvertFloatToHalf(0.0f);
+            paramsOk = Impl::SetMaterialMutableParameter(
+                world,
+                backdrop,
+                Name(s_SmokeSurfaceMaterialInterface),
+                "runtime.specular_f0",
+                Impl::MaterialLayoutFieldType::f16x3,
+                Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
+            ) && Impl::SetMaterialMutableParameter(
+                world,
+                backdrop,
+                Name(s_SmokeSurfaceMaterialInterface),
+                "runtime.perceptual_roughness",
+                Impl::MaterialLayoutFieldType::f16,
+                Impl::PackMaterialInstanceValue(roughness)
+            );
+        }
+        if(!paramsOk)
+            return false;
+        ++this.m_counts.renderers;
+        return true;
+    }
+
+    private b8 createRuntime(in u32 index, in VectorSingle position, mut World world){
+        const SmokeTintedModelEntityResult modelResult = CreateTintedModelEntity(
+            s_GatherBenchmarkCharacterModel,
+            s_GatherBenchmarkOpaqueMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            VectorSingle(0.9f, 0.45f, 0.2f, 1.0f),
+            position,
+            VectorSingle(0.22f, 0.22f, 0.22f, 0.0f),
+            world
+        );
+        const EntityID owner = modelResult.entity;
+        if(!owner.valid() || !modelResult.tintApplied)
+            return false;
+        SyncSmokeModelRuntimes(world);
+        EntityID skeleton = s_InvalidEntityId;
+        b8 posedOk = false;
+        f32 yaw = -0.08f;
+        if((index & 8u) != 0u)
+            yaw = 0.08f;
+        native(in owner, in yaw, mut world, mut skeleton, mut posedOk){
+            skeleton = FindSpawnedModelObject(owner, Name(s_SmokeNameSkeleton), Impl::ModelObjectKind::Skeleton, world);
+            if(skeleton.valid()){
+                auto& pose = world.entity(skeleton).getComponent<Impl::SkeletonPoseComponent>();
+                if(pose.localJoints.size() >= 2u){
+                    StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
+                    posedOk = true;
+                }
+            }
+        }
+        if(!posedOk)
+            return false;
+        ++this.m_counts.runtimeOwners;
+        return true;
+    }
+
+    private RendererGatherBenchmarkSceneCounts m_counts;
+    private b8 m_runtime = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
+    public RendererGatherBenchmarkProjectImpl(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateSmokeWorldOrDie(GatherBenchmarkProjectName(), context);
+        this.m_scene = RendererGatherBenchmarkScene();
+        this.m_timingPass = GatherBenchmarkTimingPass(context.graphics);
+        this.m_probe = RendererGatherBenchmarkProbe(context.objectArena);
+        this.m_compilerProbe = RendererCompilerStatisticsProbe(context.graphics, context.objectArena);
+    }
+
+    public ~RendererGatherBenchmarkProjectImpl(){
+        this.destroyWorld();
+    }
+
+    public b8 onStartup()override{
+        const Expected<String> requestedWorkload = ReadSmokeEnvironmentString("NWB_GATHER_BENCHMARK_WORKLOAD");
+        if(!requestedWorkload.has_value())
+            return false;
+        const Expected<String> requestedOutput = ReadSmokeEnvironmentString("NWB_GATHER_BENCHMARK_OUTPUT");
+        if(!requestedOutput.has_value())
+            return false;
+        this.m_workload = requestedWorkload.value();
+        this.m_output = requestedOutput.value();
+        const StringView workload = StringView(this.m_workload);
+        if(
+            workload != s_GatherBenchmarkOpaqueWorkload
+            && workload != s_GatherBenchmarkHybridWorkload
+            && workload != s_GatherBenchmarkSharedWorkload
+            && workload != s_GatherBenchmarkUniqueWorkload
+            && workload != s_GatherBenchmarkOverridesWorkload
+            && workload != s_GatherBenchmarkRuntimeWorkload
+        )
+            return false;
+
+        const Expected<String> mode = ReadSmokeEnvironmentString("NWB_GATHER_BENCHMARK_MODE");
+        if(!mode.has_value())
+            return false;
+        const StringView modeView = StringView(mode.value());
+        if(modeView != s_GatherBenchmarkTimingMode && modeView != s_GatherBenchmarkMemoryMode)
+            return false;
+        this.m_memoryEnabled = modeView == s_GatherBenchmarkMemoryMode;
+        this.m_runtime = workload == s_GatherBenchmarkRuntimeWorkload;
+
+        b8 hasRayQuery = false;
+        native(in ctx = this.m_context, mut hasRayQuery){
+            hasRayQuery = ctx.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+                && ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery);
+        }
+        if(!hasRayQuery){
+            error("RendererGatherBenchmark: hardware ray queries are required");
             return false;
         }
-        if(m_probe.finished()){
-            m_context.requestQuit();
+
+        b8 rendererConfigured = false;
+        native(in runtime = this.m_runtime, mut world = this.m_world, mut ctx = this.m_context, mut worldReady = this.m_worldReady, mut rendererConfigured){
+            if(runtime)
+                AddSmokeSkinnedRenderSystems(*world, ctx);
+            else
+                AddSmokeRenderSystems(*world, ctx);
+            Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
+            worldReady = true;
+            Impl::ReflectionSettings settings;
+            settings.traceMode = Impl::ReflectionTraceMode::Hardware;
+            settings.maxHardwareRaysPerFrame = 4096u;
+            settings.maxOpticalQueries = 16u;
+            settings.temporalEnabled = false;
+            settings.spatialFilterEnabled = false;
+            settings.screenFeedbackEnabled = false;
+            settings.diagnosticsEnabled = false;
+            settings.samplingSeed = 0u;
+            if(renderer.setReflectionSettings(settings)){
+                renderer.setRefractionEnabled(true);
+                renderer.setRefractionHardwareTracingEnabled(true);
+                rendererConfigured = true;
+            }
+        }
+        if(!rendererConfigured)
+            return false;
+
+        b8 sceneBuilt = false;
+        native(in workload, in runtime = this.m_runtime, mut scene = this.m_scene, mut world = this.m_world, mut sceneBuilt){
+            sceneBuilt = scene.build(workload, runtime, *world);
+        }
+        if(!sceneBuilt)
+            return false;
+        if(!this.m_timingPass.prepareQueries())
+            return false;
+        native(mut ctx = this.m_context, mut timingPass = this.m_timingPass){
+            ctx.graphics.addRenderPassToBack(timingPass);
+        }
+        this.m_timingRegistered = true;
+
+        const Expected<String> compilerOutput = ReadSmokeEnvironmentString("NWB_GATHER_COMPILER_STATISTICS_FILE");
+        if(compilerOutput.has_value()){
+            const StringView compilerOutputView = StringView(compilerOutput.value());
+            b8 compilerStarted = false;
+            native(in compilerOutputView, mut compilerProbe = this.m_compilerProbe, mut world = this.m_world, mut compilerStarted){
+                Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
+                compilerStarted = compilerProbe.start(compilerOutputView, renderer);
+            }
+            if(!compilerStarted)
+                return false;
+        }
+
+        u32 vsyncEnabled = 0u;
+        native(in memoryEnabled = this.m_memoryEnabled, mut ctx = this.m_context, mut vsyncEnabled){
+            Core::Perf::CaptureOptions capture;
+            capture.enabled = true;
+            capture.cpuTiming = true;
+            capture.gpuTiming = true;
+            capture.memory = memoryEnabled;
+            ctx.setPerfCapture(capture);
+            vsyncEnabled = ctx.graphics.isVSyncEnabled() ? 1u : 0u;
+        }
+        [essential] info("RendererGatherBenchmark: workload {} mode {} fixed objects 64", workload, modeView);
+        [essential] info("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0");
+        [essential] info("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1");
+        [essential] info("RendererGatherBenchmark: vsync {}", vsyncEnabled);
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.m_compilerProbe.stop();
+        if(!this.m_compilerProbe.write())
+            error("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written");
+        const RendererGatherBenchmarkSceneCounts sceneCounts = this.m_scene.counts();
+        if(!this.m_probe.write(
+            StringView(this.m_output),
+            StringView(this.m_workload),
+            this.m_memoryEnabled,
+            sceneCounts.renderers,
+            sceneCounts.runtimeRenderers,
+            sceneCounts.transparentRenderers,
+            sceneCounts.runtimeOwners
+        )){
+            error("RendererGatherBenchmark: complete result could not be written; successful frames {}", this.m_probe.successfulFrames());
+        }
+        this.destroyWorld();
+        [essential] info("RendererGatherBenchmark: shutdown successful frames {}", this.m_probe.successfulFrames());
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        b8 polled = false;
+        native(in memoryEnabled = this.m_memoryEnabled, mut probe = this.m_probe, in ctx = this.m_context, mut polled){
+            polled = probe.poll(ctx.perfSession.report(), memoryEnabled);
+        }
+        if(!polled){
+            error("RendererGatherBenchmark: incomplete or mismatched successful CPU frame");
+            return false;
+        }
+        if(this.m_probe.finished()){
+            native(mut ctx = this.m_context){
+                ctx.requestQuit();
+            }
             return true;
         }
-        if(m_probe.successfulFrames() == 64u && !m_actualCountsRead){
-            if(!readActualCounts())
+        if(this.m_probe.successfulFrames() == 64u && !this.m_actualCountsRead){
+            if(!this.readActualCounts())
                 return false;
-            m_actualCountsRead = true;
+            this.m_actualCountsRead = true;
         }
-        return TickSmokeWorld(s_FixedDelta, *m_world);
+        b8 ticked = false;
+        native(mut world = this.m_world, mut ticked){
+            ticked = TickSmokeWorld(s_GatherBenchmarkFixedDelta, *world);
+        }
+        return ticked;
     }
 
-
-private:
-    [[nodiscard]] b8 readActualCounts(){
-        NWB::Impl::MeshSystem& meshes = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
-        m_scene.counts().renderers = 0u;
-        m_scene.counts().runtimeRenderers = 0u;
-        auto view = m_world->view<NWB::Impl::RendererComponent>();
-        for(auto&& [entity, renderer] : view){
-            if(!renderer.visible)
-                continue;
-            const auto meshResult = meshes.resolveRenderableMeshStatus(entity);
-            if(!meshResult)
-                continue;
-            const auto& mesh = *meshResult;
-            ++m_scene.counts().renderers;
-            if(mesh.runtime)
-                ++m_scene.counts().runtimeRenderers;
+    private b8 readActualCounts(){
+        u32 readyRenderers = 0u;
+        u32 readyRuntimeRenderers = 0u;
+        native(mut world = this.m_world, mut readyRenderers, mut readyRuntimeRenderers){
+            Impl::MeshSystem& meshes = *MakeNotNull(world->getSystem<Impl::MeshSystem>());
+            auto view = world->view<Impl::RendererComponent>();
+            for(auto&& [entity, renderer] : view){
+                if(!renderer.visible)
+                    continue;
+                const auto meshResult = meshes.resolveRenderableMeshStatus(entity);
+                if(!meshResult)
+                    continue;
+                const auto& mesh = *meshResult;
+                ++readyRenderers;
+                if(mesh.runtime)
+                    ++readyRuntimeRenderers;
+            }
         }
-        if(m_scene.counts().renderers != 65u || (m_runtime && (m_scene.counts().runtimeRenderers != 8u || m_scene.counts().runtimeOwners != 8u)) || (!m_runtime && m_scene.counts().runtimeRenderers != 0u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
+        this.m_scene.setResolvedCounts(readyRenderers, readyRuntimeRenderers);
+        const RendererGatherBenchmarkSceneCounts sceneCounts = this.m_scene.counts();
+        if(
+            sceneCounts.renderers != 65u
+            || (this.m_runtime && (sceneCounts.runtimeRenderers != 8u || sceneCounts.runtimeOwners != 8u))
+            || (!this.m_runtime && sceneCounts.runtimeRenderers != 0u)
+        ){
+            error("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload");
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers);
+        [essential] info(
+            "RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"
+            , sceneCounts.renderers
+            , sceneCounts.runtimeRenderers
+            , sceneCounts.transparentRenderers
+        );
         return true;
     }
 
-    void destroyWorld(){
-        m_compilerProbe.stop();
-        if(m_timingRegistered){
-            m_context.graphics.removeRenderPass(m_timingPass);
-            m_timingRegistered = false;
+    private void destroyWorld(){
+        this.m_compilerProbe.stop();
+        if(this.m_timingRegistered){
+            native(mut ctx = this.m_context, mut timingPass = this.m_timingPass){
+                ctx.graphics.removeRenderPass(timingPass);
+            }
+            this.m_timingRegistered = false;
         }
-        if(!m_worldReady)
+        if(!this.m_worldReady)
             return;
-        if(m_runtime)
-            DestroySmokeSkinnedRenderWorld(m_context, m_world);
+        if(this.m_runtime)
+            DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
         else
-            DestroySmokeRenderWorld(m_context, m_world);
-        m_worldReady = false;
+            DestroySmokeRenderWorld(this.m_context, this.m_world);
+        this.m_worldReady = false;
     }
 
-
-private:
-    ProjectRuntimeContext& m_context;
-    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    RendererGatherBenchmarkScene m_scene;
-    TimingPass m_timingPass;
-    RendererGatherBenchmarkProbe m_probe;
-    RendererCompilerStatisticsProbe m_compilerProbe;
-    SmokeEnvironmentString m_workload;
-    SmokeEnvironmentString m_output;
-    b8 m_runtime = false;
-    b8 m_memoryEnabled = false;
-    b8 m_worldReady = false;
-    b8 m_timingRegistered = false;
-    b8 m_actualCountsRead = false;
-};
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private RendererGatherBenchmarkScene m_scene;
+    private GatherBenchmarkTimingPass m_timingPass;
+    private RendererGatherBenchmarkProbe m_probe;
+    private RendererCompilerStatisticsProbe m_compilerProbe;
+    private String m_workload;
+    private String m_output;
+    private b8 m_runtime = false;
+    private b8 m_memoryEnabled = false;
+    private b8 m_worldReady = false;
+    private b8 m_timingRegistered = false;
+    private b8 m_actualCountsRead = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-namespace NWB::Tests::Smoke{ using RendererGatherBenchmarkProjectImpl = __hidden_renderer_gather_benchmark::RendererGatherBenchmarkProjectImpl; }
-
+native{
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
@@ -418,3 +505,4 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

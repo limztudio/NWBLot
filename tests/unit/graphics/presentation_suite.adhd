@@ -1,0 +1,506 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 GraphicsPresentationSuiteReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <core/graphics/rhi/coopvec.h>
+#include <core/graphics/vulkan/coopvec_feature_query.h>
+#include <core/graphics/vulkan/coopvec_matrix_policy.h>
+#include <tests/common/test_context.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_cooperative_vector_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Core;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static u32 s_EmptyPropertyQueryCalls = 0u;
+
+static VkResult VKAPI_CALL QueryNoCooperativeVectorProperties(VkPhysicalDevice, uint32_t* count, VkCooperativeVectorPropertiesNV* properties){
+    ++s_EmptyPropertyQueryCalls;
+    EXPECT_EQ(properties, nullptr);
+    *count = 0u;
+    return VK_SUCCESS;
+}
+
+TEST(CooperativeVectorFeatureQuery, EmptyDriverPropertyListDoesNotReadOrPublishFormats){
+    NWB::Tests::TestArena<> arena;
+    GraphicsAllocator allocator(arena.arena);
+    CpuTaskScheduler scheduler(1u);
+    GraphicsBackend::VulkanContext context(allocator, scheduler);
+    context.extensions.nvCooperativeVector = true;
+    context.coopVecFeatures.cooperativeVector = VK_TRUE;
+    context.coopVecFeatures.cooperativeVectorTraining = VK_TRUE;
+    context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation = VK_TRUE;
+    context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV = &QueryNoCooperativeVectorProperties;
+    s_EmptyPropertyQueryCalls = 0u;
+    const auto result = GraphicsBackend::CooperativeVectorFeatureQuery::Query(context, scheduler);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(s_EmptyPropertyQueryCalls, 1u);
+    EXPECT_TRUE(result->matMulFormats.empty());
+    EXPECT_FALSE(result->trainingFloat16);
+    EXPECT_FALSE(result->trainingFloat32);
+}
+
+TEST(CooperativeVectorMatrixPolicy, RejectsTightMisalignedAndOverflowingStrides){
+    using Policy = GraphicsBackend::CooperativeVectorMatrixPolicy;
+    const auto layout = Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u);
+    ASSERT_TRUE(layout);
+    EXPECT_EQ(layout->stride, 16u);
+    EXPECT_EQ(layout->byteSize, 28u);
+    EXPECT_FALSE(Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 12u));
+    EXPECT_FALSE(Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 14u));
+    EXPECT_FALSE(Policy::StandardLayoutSize(Limit<usize>::s_Max, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u));
+    EXPECT_TRUE(Policy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT32_KHR, VK_COMPONENT_TYPE_FLOAT16_KHR));
+    EXPECT_FALSE(Policy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT_E4M3_NV, VK_COMPONENT_TYPE_BFLOAT16_KHR));
+}
+
+TEST(CooperativeVectorMatrixStride, FailsClosedForInvalidOrDriverOptimalInputs){
+    const auto inferencingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::InferencingOptimal, 2u, 2u);
+    ASSERT_TRUE(inferencingStride);
+    EXPECT_EQ(*inferencingStride, 0u);
+    const auto trainingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::TrainingOptimal, 2u, 2u);
+    ASSERT_TRUE(trainingStride);
+    EXPECT_EQ(*trainingStride, 0u);
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::RowMajor, 0u, 2u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::ColumnMajor, 2u, 0u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(static_cast<CooperativeVectorDataType::Enum>(Limit<u8>::s_Max), CooperativeVectorMatrixLayout::RowMajor, 2u, 2u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, static_cast<CooperativeVectorMatrixLayout::Enum>(Limit<u8>::s_Max), 2u, 2u));
+}
+
+TEST(CooperativeVectorMatrixStride, DoesNotWrapLargestPublicDimension){
+    const auto stride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float64, CooperativeVectorMatrixLayout::RowMajor, 1u, Limit<u32>::s_Max);
+    if constexpr(sizeof(usize) > sizeof(u32)){
+        ASSERT_TRUE(stride);
+        EXPECT_EQ(*stride, (static_cast<usize>(Limit<u32>::s_Max) + 1u) * 8u);
+    }
+    else
+        EXPECT_FALSE(stride);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <core/graphics/rhi/hardware_ray_tracing_policy.h>
+#include <core/graphics/vulkan/vulkan_queue_request_plan.h>
+#include <core/graphics/vulkan/physical_queue_registration_policy.h>
+#include <core/graphics/vulkan/physical_queue_sharing_policy.h>
+#include <core/graphics/vulkan/swap_chain_surface_policy.h>
+#include <tests/common/test_context.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_device_creation_policy_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(DeviceCreationPolicy, SurfacePolicyKeepsFallbackOrderAndRejectsMissingAlpha){
+    using Policy = Core::GraphicsBackend::SwapChainSurfacePolicy;
+    const Array<VkPresentModeKHR, 2> modes = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR };
+    const auto mode = Policy::SelectPresentMode(modes, false);
+    ASSERT_TRUE(mode);
+    EXPECT_EQ(*mode, VK_PRESENT_MODE_FIFO_KHR);
+    EXPECT_FALSE(Policy::SelectPresentMode({}, false));
+
+    const Array<VkSurfaceFormatKHR, 1> formats = {{ { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR } }};
+    const auto format = Policy::SelectFormat(formats, Core::Format::RGBA8_UNORM_SRGB, true);
+    ASSERT_TRUE(format);
+    EXPECT_EQ(format->surfaceFormat.format, VK_FORMAT_R8G8B8A8_SRGB);
+    EXPECT_EQ(format->outputMode, Core::SwapChainOutputMode::SDR);
+
+    VkSurfaceCapabilitiesKHR caps{};
+    caps.currentExtent = { UINT32_MAX, UINT32_MAX };
+    caps.minImageExtent = { 100u, 200u };
+    caps.maxImageExtent = { 500u, 600u };
+    caps.minImageCount = 2u;
+    caps.maxImageCount = 3u;
+    const VkExtent2D extent = Policy::ResolveExtent(caps, 1u, 900u);
+    EXPECT_EQ(extent.width, 100u);
+    EXPECT_EQ(extent.height, 600u);
+    EXPECT_EQ(Policy::ImageCount(caps, 5u), 3u);
+    EXPECT_FALSE(Policy::SelectCompositeAlpha(caps));
+    caps.supportedCompositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    const auto alpha = Policy::SelectCompositeAlpha(caps);
+    ASSERT_TRUE(alpha);
+    EXPECT_EQ(*alpha, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR);
+}
+
+TEST(DeviceCreationPolicy, QueueRegistrationRejectsBoundaryAndDuplicateIdentity){
+    using Policy = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy;
+    const Core::GraphicsBackend::NativeQueueState native(reinterpret_cast<VkQueue>(1u), 4u, 2u);
+    Core::GraphicsBackend::VulkanPhysicalQueueDesc desc{};
+    desc.queueClass = Core::CommandQueue::Graphics;
+    desc.capabilities = Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Transfer;
+    desc.timestampValidBits = 35u;
+    Array<b8, static_cast<u32>(Core::CommandQueue::kCount)> primaries{};
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::Invalid);
+    desc.timestampValidBits = 36u;
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::Valid);
+    Array<Core::GpuPhysicalQueueInfo, 1> existing{};
+    existing[0].familyIndex = 4u;
+    existing[0].queueIndex = 2u;
+    EXPECT_EQ(Policy::Validate(desc, native, existing, primaries), Policy::Result::DuplicateQueue);
+    desc.primaryForClass = true;
+    primaries[static_cast<u32>(Core::CommandQueue::Graphics)] = true;
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::DuplicatePrimary);
+}
+
+TEST(DeviceCreationPolicy, QueueSharingUsesFirstDistinctFamilyAndHandlesMissingPrimary){
+    using Policy = Core::GraphicsBackend::PhysicalQueueSharingPolicy;
+    constexpr u32 missing = Limit<u32>::s_Max;
+    Array<Core::GpuPhysicalQueueInfo, 5> queues{};
+    queues[0].queueClass = Core::CommandQueue::Graphics;
+    queues[0].familyIndex = 4u;
+    queues[1].queueClass = Core::CommandQueue::Graphics;
+    queues[1].familyIndex = 7u;
+    queues[2].queueClass = Core::CommandQueue::Graphics;
+    queues[2].familyIndex = 8u;
+    queues[3].queueClass = Core::CommandQueue::Compute;
+    queues[3].familyIndex = 4u;
+    queues[4].queueClass = Core::CommandQueue::Transfer;
+    queues[4].familyIndex = 9u;
+    const auto shared = Policy::Resolve(queues, 4u, 4u, 9u);
+    EXPECT_EQ(shared.graphics, 4);
+    EXPECT_EQ(shared.auxiliaryGraphics, 7);
+    EXPECT_EQ(shared.auxiliaryCompute, -1);
+    EXPECT_FALSE(shared.asyncComputeLaneEnabled);
+    EXPECT_TRUE(shared.transferQueueEnabled);
+    const auto missingGraphics = Policy::Resolve(queues, missing, 4u, 4u);
+    EXPECT_EQ(missingGraphics.graphics, -1);
+    EXPECT_EQ(missingGraphics.auxiliaryGraphics, -1);
+    EXPECT_FALSE(missingGraphics.asyncComputeLaneEnabled);
+    EXPECT_FALSE(missingGraphics.transferQueueEnabled);
+}
+
+TEST(DeviceCreationPolicy, CanonicalQueuesRejectAliasedHandlesAndOutOfRangeIndices){
+    using Policy = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy;
+    Array<VkQueueFamilyProperties, 1> families{};
+    families[0].queueCount = 2u;
+    Array<Core::GraphicsBackend::VulkanNativeQueueDesc, 2> queues{};
+    queues[0].queue = reinterpret_cast<VkQueue>(1u);
+    queues[0].familyIndex = 0u;
+    queues[0].queueIndex = 0u;
+    queues[1].queue = reinterpret_cast<VkQueue>(2u);
+    queues[1].familyIndex = 0u;
+    queues[1].queueIndex = 1u;
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::Valid);
+    queues[1].queue = queues[0].queue;
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::DuplicateQueue);
+    queues[1].queue = reinterpret_cast<VkQueue>(2u);
+    queues[1].queueIndex = 2u;
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::Invalid);
+}
+
+TEST(DeviceCreationPolicy, QueuePlanKeepsCrossFamilyOrderAndStablePriorities){
+    using Plan = Core::GraphicsBackend::VulkanQueueRequestPlan;
+    Core::Alloc::ScratchArena scratch(NWB::Tests::s_TestArena);
+    Vector<VkQueueFamilyProperties, Core::Alloc::ScratchArena> families(scratch);
+    families.resize(4u);
+    families[0].queueCount = 3u;
+    families[1].queueCount = 1u;
+    families[2].queueCount = 2u;
+    families[3].queueCount = 1u;
+    NWB::Tests::TestArena<> arena;
+    Core::DeviceCreationParameters params(arena.arena);
+    params.enableSameClassMultiQueue = true;
+    params.headlessDevice = false;
+    const Plan::Input input{
+        .deviceParams = params,
+        .physicalQueueFamilies = families,
+        .graphicsQueueFamily = 0,
+        .secondaryGraphicsQueueFamily = 1,
+        .presentQueueFamily = 1,
+        .schedulerComputeQueueFamily = 2,
+        .secondaryComputeQueueFamily = -1,
+        .transferQueueFamily = 3,
+        .secondaryTransferQueueFamily = -1,
+        .createCrossFamilySecondaryGraphicsQueue = true,
+        .createComputeQueue = true,
+        .createCrossFamilySecondaryComputeQueue = false,
+        .createDedicatedTransferQueue = true,
+        .createCrossFamilySecondaryTransferQueue = false,
+    };
+    const Plan plan(scratch, input);
+    const auto& requests = plan.sameClassQueueRequests();
+    ASSERT_EQ(requests.size(), 4u);
+    EXPECT_EQ(requests[0].family, 1);
+    EXPECT_EQ(requests[0].queueIndex, 0u);
+    EXPECT_EQ(requests[1].family, 0);
+    EXPECT_EQ(requests[1].queueIndex, 1u);
+    EXPECT_EQ(requests[2].family, 0);
+    EXPECT_EQ(requests[2].queueIndex, 2u);
+    EXPECT_EQ(requests[3].family, 2);
+    EXPECT_EQ(requests[3].queueIndex, 1u);
+    const auto& queues = plan.queueDescriptions();
+    ASSERT_EQ(queues.size(), 4u);
+    const u32 expectedCounts[] = { 3u, 1u, 2u, 1u };
+    for(u32 i = 0u; i < 4u; ++i){
+        EXPECT_EQ(queues[i].queueFamilyIndex, i);
+        EXPECT_EQ(queues[i].queueCount, expectedCounts[i]);
+        EXPECT_EQ(queues[i].pQueuePriorities, queues[0].pQueuePriorities);
+        for(u32 j = 0u; j < queues[i].queueCount; ++j)
+            EXPECT_EQ(queues[i].pQueuePriorities[j], 1.0f);
+    }
+}
+
+TEST(DeviceCreationPolicy, RejectsUnknownHardwareRayTracingPolicy){
+    EXPECT_FALSE(Core::IsValidHardwareRayTracingPolicy(static_cast<Core::HardwareRayTracingPolicy::Enum>(255u)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/graphics/rhi/presentation.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_presentation_receipt_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Core::AcquiredBackBuffer;
+using Core::PresentationReceipt;
+namespace PresentationReceiptStatus = Core::PresentationReceiptStatus;
+
+static_assert(IsTriviallyCopyable_V<PresentationReceipt>);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static AcquiredBackBuffer Acquisition(const u64 value = 17u, const u32 imageIndex = 2u)noexcept{
+    AcquiredBackBuffer acquired;
+    acquired.availabilityCompletion = { value, 3u, 5u, Core::CommandQueue::Graphics };
+    acquired.nativeInitialState = Core::ResourceStates::Present;
+    acquired.index = imageIndex;
+    return acquired;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(PresentationReceipt, RejectedAttemptCannotBeQualifiedByALaterDifferentSuccessfulFrame){
+    const AcquiredBackBuffer rejected = Acquisition(17u, 2u);
+    const AcquiredBackBuffer accepted = Acquisition(18u, 3u);
+    PresentationReceipt receipt;
+    receipt.record(rejected, false);
+    EXPECT_EQ(receipt.status(rejected), PresentationReceiptStatus::Rejected);
+    EXPECT_EQ(receipt.status(accepted), PresentationReceiptStatus::Pending);
+    receipt.record(accepted, true);
+    EXPECT_EQ(receipt.status(accepted), PresentationReceiptStatus::Accepted);
+    EXPECT_EQ(receipt.status(rejected), PresentationReceiptStatus::Pending);
+}
+
+TEST(PresentationReceipt, ImageReuseRequiresItsNewAcquisitionTimelineIdentity){
+    const AcquiredBackBuffer first = Acquisition(17u, 2u);
+    const AcquiredBackBuffer reused = Acquisition(18u, 2u);
+    PresentationReceipt receipt;
+    receipt.record(first, true);
+    EXPECT_EQ(receipt.status(first), PresentationReceiptStatus::Accepted);
+    EXPECT_EQ(receipt.status(reused), PresentationReceiptStatus::Pending);
+    receipt.record(reused, false);
+    EXPECT_EQ(receipt.status(reused), PresentationReceiptStatus::Rejected);
+    EXPECT_EQ(receipt.status(first), PresentationReceiptStatus::Pending);
+}
+
+TEST(PresentationReceipt, EqualTimelineValuesOnDifferentQueuesDevicesOrImagesDoNotMatch){
+    const AcquiredBackBuffer acquired = Acquisition();
+    PresentationReceipt receipt;
+    receipt.record(acquired, true);
+    Array<AcquiredBackBuffer, 5u> variants;
+    for(auto& variant : variants)
+        variant = acquired;
+    ++variants[0u].availabilityCompletion.physicalQueueIndex;
+    ++variants[1u].availabilityCompletion.deviceGeneration;
+    variants[2u].availabilityCompletion.queue = Core::CommandQueue::Compute;
+    ++variants[3u].index;
+    variants[4u].nativeInitialState = Core::ResourceStates::Unknown;
+    for(const auto& variant : variants)
+        EXPECT_EQ(receipt.status(variant), PresentationReceiptStatus::Pending);
+    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Accepted);
+}
+
+TEST(PresentationReceipt, InvalidTokensAndImageStatesNeverPublishEvidence){
+    const AcquiredBackBuffer acquired = Acquisition();
+    Array<AcquiredBackBuffer, 7u> variants;
+    for(auto& variant : variants)
+        variant = acquired;
+    variants[0u].availabilityCompletion.value = 0u;
+    variants[1u].availabilityCompletion.physicalQueueIndex = Limit<u16>::s_Max;
+    variants[2u].availabilityCompletion.deviceGeneration = 0u;
+    variants[3u].availabilityCompletion.queue = Core::CommandQueue::kCount;
+    variants[4u].index = Limit<u32>::s_Max;
+    variants[5u].nativeInitialState = Core::ResourceStates::ShaderResource;
+    variants[6u] = {};
+    PresentationReceipt receipt;
+    for(const auto& variant : variants){
+        receipt.record(acquired, true);
+        EXPECT_EQ(receipt.status(variant), PresentationReceiptStatus::Pending);
+        receipt.record(variant, true);
+        EXPECT_FALSE(receipt.valid());
+        EXPECT_EQ(receipt.status(variant), PresentationReceiptStatus::Pending);
+        EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
+    }
+}
+
+TEST(PresentationReceipt, UnknownInitialStateIsAValidDistinctAcquisitionState){
+    AcquiredBackBuffer acquired = Acquisition();
+    acquired.nativeInitialState = Core::ResourceStates::Unknown;
+    PresentationReceipt receipt;
+    receipt.record(acquired, true);
+    ASSERT_TRUE(receipt.valid());
+    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Accepted);
+    acquired.nativeInitialState = Core::ResourceStates::Present;
+    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
+}
+
+TEST(PresentationReceipt, ResetAtLifetimeBoundaryRemovesEarlierAcquisitionEvidence){
+    const AcquiredBackBuffer acquired = Acquisition();
+    PresentationReceipt receipt;
+    receipt.record(acquired, true);
+    ASSERT_EQ(receipt.status(acquired), PresentationReceiptStatus::Accepted);
+    receipt.reset();
+    EXPECT_FALSE(receipt.valid());
+    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
+    receipt.record(acquired, false);
+    ASSERT_EQ(receipt.status(acquired), PresentationReceiptStatus::Rejected);
+    receipt.reset();
+    EXPECT_FALSE(receipt.valid());
+    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

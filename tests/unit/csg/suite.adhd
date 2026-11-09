@@ -1,0 +1,732 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 CsgSuiteReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/ecs_test_world.adhd.h>
+#include <tests/unit/csg/name_cases.adhd.h>
+
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_csg/deform_edit.h>
+
+#include <core/common/module.h>
+#include <core/ecs/module.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_csg_deform_cut_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_EngineCsgPlane = NWB::Tests::CsgCases::s_CsgEnginePlanePath;
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
+
+
+TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    auto makeVertex = [](const f32 x, const f32 y, const f32 z)noexcept{
+        NWB::Impl::CsgDeformVertex vertex;
+        vertex.position = Float3U(x, y, z);
+        vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+        vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+        vertex.uv0 = Float2U(0.5f, 0.5f);
+        vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+        return vertex;
+    };
+
+    // Closed unit cube so each planar cut leaves a closable boundary loop for caps.
+    const Array<NWB::Impl::CsgDeformVertex, 8u> inputVertices = {
+        makeVertex(-1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, 1.0f, 1.0f),
+        makeVertex(-1.0f, 1.0f, 1.0f),
+    };
+    const Array<NWB::Impl::CsgDeformTriangle, 12u> inputTriangles = {
+        NWB::Impl::CsgDeformTriangle{ { 0u, 1u, 2u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 2u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 4u, 6u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 4u, 7u, 6u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 4u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 5u, 1u } },
+        NWB::Impl::CsgDeformTriangle{ { 2u, 6u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 2u, 7u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 3u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 7u, 4u } },
+        NWB::Impl::CsgDeformTriangle{ { 1u, 5u, 6u } }, NWB::Impl::CsgDeformTriangle{ { 1u, 6u, 2u } },
+    };
+
+    // Cut x >= -0.5 then y >= -0.5 using plane normal and distance.
+    Array<NWB::Impl::CsgDeformCutDesc, 2u> cuts;
+    cuts[0u].active = true;
+    cuts[0u].shape.shapeType = Name(s_EngineCsgPlane);
+    cuts[0u].shape.worldToShape = ::MatrixIdentity<Float34>();
+    cuts[0u].shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.5f);
+    cuts[1u].active = true;
+    cuts[1u].shape.shapeType = Name(s_EngineCsgPlane);
+    cuts[1u].shape.worldToShape = ::MatrixIdentity<Float34>();
+    cuts[1u].shape.parameter0 = Float4(0.0f, 1.0f, 0.0f, 0.5f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, commitVertices, commitTriangles);
+    ASSERT_TRUE(commit);
+    EXPECT_EQ(commit->appliedCutCount, 2u);
+    ASSERT_FALSE(commitTriangles.empty());
+    ASSERT_GE(commitVertices.size(), 8u);
+
+    // Referenced vertices must satisfy both cuts while unreferenced source vertices stay unchanged.
+    for(const NWB::Impl::CsgDeformTriangle& triangle : commitTriangles){
+        for(const u32 index : triangle.indices){
+            ASSERT_LT(index, commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
+            EXPECT_GE(commitVertices[index].position.y, -0.5001f);
+        }
+    }
+    // Seam-safe rebuild never welds or drops source verts: originals survive verbatim.
+    EXPECT_EQ(commitVertices[0u].position.x, -1.0f);
+    EXPECT_EQ(commitVertices[0u].position.y, -1.0f);
+    EXPECT_EQ(commitVertices[2u].position.x, 1.0f);
+    EXPECT_EQ(commitVertices[2u].position.y, 1.0f);
+    // The second cut refines the first cut's output: at least one split vertex sits on x == -0.5.
+    b8 foundCutWall = false;
+    for(const NWB::Impl::CsgDeformVertex& vertex : commitVertices){
+        if(vertex.position.x > -0.5001f && vertex.position.x < -0.4999f)
+            foundCutWall = true;
+    }
+    EXPECT_TRUE(foundCutWall);
+}
+
+TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    NWB::Impl::CsgDeformVertex vertex;
+    vertex.position = Float3U(-5.0f, 0.0f, 0.0f);
+    vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+    vertex.uv0 = Float2U(0.0f, 0.0f);
+    vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const Array<NWB::Impl::CsgDeformVertex, 3u> inputVertices = { vertex, vertex, vertex };
+    const Array<NWB::Impl::CsgDeformTriangle, 1u> inputTriangles = { NWB::Impl::CsgDeformTriangle{ { 0u, 1u, 2u } } };
+
+    // Triangle at x == -5 lies outside x >= 0 and fails with NoKeptGeometry.
+    NWB::Impl::CsgDeformCutDesc cut;
+    cut.active = true;
+    cut.shape.shapeType = Name(s_EngineCsgPlane);
+    cut.shape.worldToShape = ::MatrixIdentity<Float34>();
+    cut.shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+    const Span<const NWB::Impl::CsgDeformCutDesc> cuts(&cut, 1u);
+    const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options);
+    EXPECT_FALSE(viability.viable);
+
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    const auto preview = NWB::Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, nullptr, previewVertices, previewTriangles);
+    ASSERT_FALSE(preview);
+    EXPECT_EQ(preview.error().reason, NWB::Impl::CsgDeformViabilityReason::NoKeptGeometry);
+    EXPECT_EQ(preview.error().stats.inputVertexCount, 3u);
+    EXPECT_EQ(preview.error().stats.inputTriangleCount, 1u);
+    EXPECT_EQ(preview.error().stats.outputVertexCount, 0u);
+    EXPECT_EQ(preview.error().stats.outputTriangleCount, 0u);
+
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, commitVertices, commitTriangles);
+    ASSERT_FALSE(commit);
+    EXPECT_EQ(commit.error().reason, NWB::Impl::CsgDeformViabilityReason::NoKeptGeometry);
+    EXPECT_EQ(commit.error().stats.inputVertexCount, 3u);
+    EXPECT_EQ(commit.error().stats.inputTriangleCount, 1u);
+    EXPECT_EQ(commit.error().stats.outputVertexCount, 0u);
+    EXPECT_EQ(commit.error().stats.outputTriangleCount, 0u);
+    EXPECT_TRUE(commitVertices.empty());
+    EXPECT_TRUE(commitTriangles.empty());
+
+    NWB::Core::Alloc::GlobalArena otherArena(s_ScratchArena);
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> wrongVertices(otherArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> wrongTriangles(otherArena);
+    wrongVertices.push_back(vertex);
+    wrongTriangles.push_back(inputTriangles[0u]);
+    const auto wrongArena = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, wrongVertices, wrongTriangles);
+    ASSERT_FALSE(wrongArena);
+    EXPECT_EQ(wrongArena.error().reason, NWB::Impl::CsgDeformViabilityReason::InvalidOutputArena);
+    EXPECT_EQ(wrongArena.error().stats.inputVertexCount, 0u);
+    EXPECT_EQ(wrongArena.error().stats.inputTriangleCount, 0u);
+    ASSERT_EQ(wrongVertices.size(), 1u);
+    ASSERT_EQ(wrongTriangles.size(), 1u);
+    EXPECT_EQ(wrongVertices.front().position.x, vertex.position.x);
+    EXPECT_EQ(wrongTriangles.front().indices[0u], inputTriangles[0u].indices[0u]);
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/ecs_test_world.adhd.h>
+#include <tests/unit/csg/name_cases.adhd.h>
+
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_csg/deform_edit.h>
+
+#include <core/common/module.h>
+#include <core/ecs/module.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_csg_shape_registry_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_EngineCsgBox = NWB::Tests::CsgCases::s_CsgEngineBoxPath;
+static constexpr AStringView s_EngineCsgPlane = NWB::Tests::CsgCases::s_CsgEnginePlanePath;
+using TestWorld = NWB::Tests::EcsTestWorld;
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
+
+
+TEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName){
+    using namespace NWB::Impl;
+    const Expected<CsgShapeTypeId> invalid = TryResolveCsgShapeTypeIdFromName(Name{});
+    const Expected<CsgShapeTypeId> plane = TryResolveCsgShapeTypeIdFromName(s_CsgPlaneShapeName);
+    const Expected<CsgShapeTypeId> box = TryResolveCsgShapeTypeIdFromName(s_CsgBoxShapeName);
+    const Expected<CsgShapeTypeId> sphere = TryResolveCsgShapeTypeIdFromName(s_CsgSphereShapeName);
+    const Expected<CsgShapeTypeId> capsule = TryResolveCsgShapeTypeIdFromName(s_CsgCapsuleShapeName);
+    EXPECT_FALSE(invalid.has_value());
+    ASSERT_TRUE(plane.has_value());
+    ASSERT_TRUE(box.has_value());
+    ASSERT_TRUE(sphere.has_value());
+    ASSERT_TRUE(capsule.has_value());
+    ASSERT_TRUE(*plane);
+    ASSERT_TRUE(*box);
+    ASSERT_TRUE(*sphere);
+    ASSERT_TRUE(*capsule);
+    EXPECT_EQ(*plane, 0x92f0021au);
+    EXPECT_EQ(*box, 0xb957a584u);
+    EXPECT_EQ(*sphere, 0x56176cbfu);
+    EXPECT_EQ(*capsule, 0xe0e38c7bu);
+}
+
+TEST(Csg, RepeatedBuiltInRegistrationPreservesTypeIdentityAndCount){
+    TestWorld testWorld;
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_EngineCsgBox));
+    ASSERT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
+
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    EXPECT_EQ(registry.shapeTypeCount(), 4u);
+    EXPECT_EQ(registry.findShapeTypeId(Name(s_EngineCsgBox)), boxId);
+}
+
+TEST(Csg, ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded){
+    TestWorld testWorld;
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const SIMDMatrix shapeToWorldMatrix = MatrixTranslation(10.0f, -5.0f, 1.0f);
+    NWB::Impl::CsgPlaneShapeParameters planeParameters;
+    const auto planeBounds = registry.buildShapeBounds(Name(s_EngineCsgPlane), shapeToWorldMatrix, Span<const u8>(reinterpret_cast<const u8*>(&planeParameters), sizeof(planeParameters)));
+    ASSERT_TRUE(planeBounds);
+    EXPECT_FALSE(planeBounds->finiteBounds);
+
+    NWB::Impl::CsgBoxShapeParameters boxParameters;
+    EXPECT_FALSE(registry.buildShapeBounds(Name(s_EngineCsgBox), shapeToWorldMatrix, Span<const u8>(reinterpret_cast<const u8*>(&boxParameters), sizeof(boxParameters) - 1u)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TestProjectSlabShape final : public NWB::Impl::ICsgShape{
+public:
+    virtual Name shapeTypeName()const noexcept override{
+        return Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgSlab);
+    }
+
+    virtual u32 parameterByteSize()const noexcept override{
+        return NWB::Impl::s_CsgShapeParameterRegisterBytes;
+    }
+
+    virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{
+        return NWB::Impl::MakeCsgShapeInlineParameters(VectorSet(0.5f, 1.0f, 1.0f, 0.0f), LoadFloat(NWB::Impl::s_CsgZeroShapeParameter));
+    }
+
+    virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
+        return NWB::Impl::MakeCsgSymmetricLocalBounds(LoadFloat(parameters.parameter0));
+    }
+
+    virtual f32 evaluateSignedDistance(const SIMDVectorSingle shapePosition, const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
+        return VectorGetX(shapePosition) + parameters.parameter0.x;
+    }
+};
+
+class OversizedProjectShape final : public NWB::Impl::ICsgShape{
+public:
+    virtual Name shapeTypeName()const noexcept override{ return Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgOversized); }
+    virtual u32 parameterByteSize()const noexcept override{ return static_cast<u32>(NWB::Impl::s_CsgShapeInlineParameterMaxBytes) + 1u; }
+    virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{ return {}; }
+    virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return MakeUnexpected(Failure{}); }
+    virtual f32 evaluateSignedDistance(const SIMDVectorSingle, const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return 0.0f; }
+};
+
+TEST(Csg, OversizedProjectShapeDoesNotChangeRegistry){
+    NWB::Tests::CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestWorld testWorld;
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const usize count = registry.shapeTypeCount();
+    const u64 revision = registry.revision();
+    EXPECT_FALSE(registry.registerShape<OversizedProjectShape>());
+    EXPECT_EQ(registry.shapeTypeCount(), count);
+    EXPECT_EQ(registry.revision(), revision);
+    EXPECT_FALSE(registry.findShapeType(Name(NWB::Tests::CsgCases::s_CsgLookupNameProjectCsgOversized)));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parameter size larger than the inline shader ABI")));
+}
+
+TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
+    TestWorld testWorld;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const auto slabId = registry.registerShape<TestProjectSlabShape>(false, Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgCustom), "project/csg/generated/custom.slangi");
+    ASSERT_TRUE(slabId);
+    EXPECT_EQ(registry.shapeTypeCount(), 5u);
+
+    const auto defaultBounds = registry.buildShapeBounds(*slabId, MatrixIdentity(), Span<const u8>{});
+    ASSERT_TRUE(defaultBounds);
+    EXPECT_TRUE(defaultBounds->finiteBounds);
+    EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->minBounds), -0.5f);
+    EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->maxBounds), 0.5f);
+
+    const auto defaultDistance = registry.evaluateSignedDistance(*slabId, VectorSet(-0.25f, 0.0f, 0.0f, 1.0f), Span<const u8>{});
+    ASSERT_TRUE(defaultDistance);
+    EXPECT_FLOAT_EQ(*defaultDistance, 0.25f);
+
+    auto makeVertex = [](const f32 x, const f32 y, const f32 z)noexcept{
+        NWB::Impl::CsgDeformVertex vertex;
+        vertex.position = Float3U(x, y, z);
+        vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+        vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+        vertex.uv0 = Float2U(0.5f, 0.5f);
+        vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+        return vertex;
+    };
+
+    const Array<NWB::Impl::CsgDeformVertex, 8u> inputVertices = {
+        makeVertex(-1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, 1.0f, 1.0f),
+        makeVertex(-1.0f, 1.0f, 1.0f),
+    };
+    const Array<NWB::Impl::CsgDeformTriangle, 12u> inputTriangles = {
+        NWB::Impl::CsgDeformTriangle{ { 0u, 1u, 2u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 2u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 4u, 6u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 4u, 7u, 6u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 4u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 5u, 1u } },
+        NWB::Impl::CsgDeformTriangle{ { 2u, 6u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 2u, 7u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 3u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 7u, 4u } },
+        NWB::Impl::CsgDeformTriangle{ { 1u, 5u, 6u } }, NWB::Impl::CsgDeformTriangle{ { 1u, 6u, 2u } },
+    };
+
+    NWB::Impl::CsgDeformCutDesc cut;
+    cut.active = true;
+    cut.shape.shapeType = Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgSlab);
+    cut.shape.worldToShape = ::MatrixIdentity<Float34>();
+    cut.shape.parameter0 = Float4(0.5f, 1.0f, 1.0f, 0.0f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+    const Span<const NWB::Impl::CsgDeformCutDesc> cuts(&cut, 1u);
+    EXPECT_FALSE(NWB::Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options).viable);
+    EXPECT_TRUE(NWB::Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options, &registry).viable);
+
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, &registry, commitVertices, commitTriangles);
+    ASSERT_TRUE(commit);
+    EXPECT_EQ(commit->appliedCutCount, 1u);
+    ASSERT_FALSE(commitTriangles.empty());
+    for(const NWB::Impl::CsgDeformTriangle& triangle : commitTriangles){
+        for(const u32 index : triangle.indices){
+            ASSERT_LT(index, commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/ecs_test_world.adhd.h>
+#include <tests/unit/csg/name_cases.adhd.h>
+
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_csg/deform_edit.h>
+
+#include <core/common/module.h>
+#include <core/ecs/module.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_csg_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_ProjectCsgGroupA = "project/csg/group_a";
+static constexpr AStringView s_EngineCsgBox = "engine/csg/box";
+static constexpr AStringView s_EngineCsgPlane = "engine/csg/plane";
+static constexpr AStringView s_ProjectCsgGroupB = "project/csg/group_b";
+static constexpr AStringView s_EngineCsgCapsule = "engine/csg/capsule";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using TestWorld = NWB::Tests::EcsTestWorld;
+
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Expected<NWB::Impl::CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverPass::Enum receiverPass, NWB::Core::Alloc::ScratchArena& scratchArena, TestWorld& testWorld){
+    const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
+    return receiverLookup.resolveReceiverDrawState(entity, receiverPass);
+}
+
+struct TestCsgVisibilityFilter{
+    NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::s_InvalidEntityId;
+};
+
+static b8 TestCsgReceiverVisible(
+    [[maybe_unused]] NWB::Core::ECS::World& world,
+    const NWB::Core::ECS::EntityID entity,
+    [[maybe_unused]] const NWB::Impl::CsgReceiverKind::Enum receiverKind,
+    [[maybe_unused]] const NWB::Impl::CsgReceiverComponent& receiver,
+    void* userData
+)noexcept{
+    const auto* filter = static_cast<const TestCsgVisibilityFilter*>(userData);
+    return !filter || entity != filter->hiddenEntity;
+}
+
+TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    {
+        TestWorld testWorld;
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
+
+        EXPECT_TRUE(state.empty());
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgBox);
+
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
+
+        EXPECT_TRUE(state.empty());
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
+
+        EXPECT_TRUE(state.empty());
+        EXPECT_FALSE(state.hasAnyWork);
+    }
+
+
+    {
+        TestWorld testWorld;
+
+        auto disabledReceiverEntity = testWorld.world.createEntity();
+        auto& disabledReceiver = disabledReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        disabledReceiver.receiverGroup = Name(s_ProjectCsgGroupA);
+        disabledReceiver.enabled = false;
+
+        auto nonMatchingReceiverEntity = testWorld.world.createEntity();
+        auto& nonMatchingReceiver = nonMatchingReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        nonMatchingReceiver.receiverGroup = Name(s_ProjectCsgGroupB);
+
+        auto inactiveCutterEntity = testWorld.world.createEntity();
+        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        inactiveCutter.receiverGroup = Name(s_ProjectCsgGroupB);
+        inactiveCutter.shapeType = Name(s_EngineCsgBox);
+        inactiveCutter.active = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgBox);
+
+        EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
+
+        EXPECT_TRUE(state.empty());
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
+    }
+
+
+    {
+        TestWorld testWorld;
+
+        auto hiddenReceiverEntity = testWorld.world.createEntity();
+        auto& hiddenReceiver = hiddenReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        hiddenReceiver.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        auto visibleReceiverEntity = testWorld.world.createEntity();
+        auto& visibleReceiver = visibleReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        visibleReceiver.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgCapsule);
+
+        TestCsgVisibilityFilter filter;
+        filter.hiddenEntity = hiddenReceiverEntity.id();
+
+        NWB::Impl::CsgFrameBuildDesc desc;
+        desc.receiverVisible = &TestCsgReceiverVisible;
+        desc.receiverVisibleUserData = &filter;
+
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
+
+        EXPECT_FALSE(state.empty());
+        EXPECT_EQ(state.receiverCount, 1u);
+        EXPECT_EQ(state.cutterCount, 1u);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+        receiver.affectTransparentPass = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgBox);
+
+        NWB::Impl::CsgFrameBuildDesc desc;
+        desc.includeOpaquePass = false;
+
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
+
+        EXPECT_TRUE(state.empty());
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
+    }
+}
+
+TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        const auto drawStateResult1 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque, scratchArena, testWorld);
+        EXPECT_FALSE(drawStateResult1);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        auto boxCutterEntity = testWorld.world.createEntity();
+        auto& boxCutter = boxCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        boxCutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        boxCutter.shapeType = Name(s_EngineCsgBox);
+
+        auto sphereCutterEntity = testWorld.world.createEntity();
+        auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        sphereCutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        sphereCutter.shapeType = Name(NWB::Tests::CsgCases::s_CsgInputNameEngineCsgSphere);
+
+        auto inactiveCutterEntity = testWorld.world.createEntity();
+        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        inactiveCutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        inactiveCutter.shapeType = Name(s_EngineCsgCapsule);
+        inactiveCutter.active = false;
+
+        auto untypedCutterEntity = testWorld.world.createEntity();
+        auto& untypedCutter = untypedCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        untypedCutter.receiverGroup = Name(s_ProjectCsgGroupA);
+
+        auto otherGroupCutterEntity = testWorld.world.createEntity();
+        auto& otherGroupCutter = otherGroupCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        otherGroupCutter.receiverGroup = Name(s_ProjectCsgGroupB);
+        otherGroupCutter.shapeType = Name(s_EngineCsgBox);
+
+        const auto opaqueDrawStateResult2 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque, scratchArena, testWorld);
+        ASSERT_TRUE(opaqueDrawStateResult2);
+        const auto& opaqueDrawState = *opaqueDrawStateResult2;
+        EXPECT_EQ(opaqueDrawState.cutterCount, 2u);
+
+        usize resolvedCutterCount = 0u;
+        {
+            const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
+            const auto resolvedDrawStateResult1 = receiverLookup.resolveReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
+            ASSERT_TRUE(resolvedDrawStateResult1);
+            const auto& resolvedDrawState = *resolvedDrawStateResult1;
+            receiverLookup.forEachReceiverCutter(resolvedDrawState, [&](const NWB::Core::ECS::EntityID, const NWB::Impl::CsgCutterComponent& resolvedCutter){
+                EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
+                ++resolvedCutterCount;
+            });
+        }
+        EXPECT_EQ(resolvedCutterCount, 2u);
+
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+        receiver.affectTransparentPass = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgBox);
+
+        const auto opaqueDrawStateResult3 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque, scratchArena, testWorld);
+        ASSERT_TRUE(opaqueDrawStateResult3);
+
+        const auto transparentDrawStateResult4 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent, scratchArena, testWorld);
+        EXPECT_FALSE(transparentDrawStateResult4);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
+        receiver.receiverGroup = Name(s_ProjectCsgGroupA);
+        receiver.affectOpaquePass = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+        cutter.receiverGroup = Name(s_ProjectCsgGroupA);
+        cutter.shapeType = Name(s_EngineCsgCapsule);
+
+        const auto opaqueDrawStateResult5 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque, scratchArena, testWorld);
+        EXPECT_FALSE(opaqueDrawStateResult5);
+
+        const auto transparentDrawStateResult6 = ResolveTestCsgReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent, scratchArena, testWorld);
+        ASSERT_TRUE(transparentDrawStateResult6);
+        const auto& transparentDrawState = *transparentDrawStateResult6;
+        EXPECT_EQ(transparentDrawState.cutterCount, 1u);
+    }
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

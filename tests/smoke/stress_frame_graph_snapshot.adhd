@@ -6,7 +6,7 @@
 #include "scene_types.adhd"
 
 native{
-#include <tests/common/frame_graph_snapshot_validation.h>
+#include <tests/common/frame_graph_snapshot_validation.adhd.h>
 
 #include <loader/project_entry.h>
 

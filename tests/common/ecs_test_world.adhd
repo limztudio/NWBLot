@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "name_cases.adhd"
+
+native{
+#include <core/alloc/general.h>
+#include <core/task/cpu/scheduler.h>
+#include <core/ecs/world.h>
+
+#include <global/global.h>
+
+NWB_BEGIN
+
+namespace Tests{
+
+inline constexpr Name s_EcsTestWorldArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonEcsTestWorld;
+
+struct EcsTestWorld{
+    Core::Alloc::GlobalArena arena;
+    Core::CpuTaskScheduler taskScheduler;
+    Core::ECS::World world;
+
+
+public:
+    EcsTestWorld()
+        : arena(s_EcsTestWorldArena)
+        , taskScheduler(0u)
+        , world(arena, taskScheduler)
+    {}
+};
+
+};
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

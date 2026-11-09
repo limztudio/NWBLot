@@ -1,7 +1,5 @@
 nwb_declare_gtest_executable(nwb_os_tests)
-target_sources(nwb_os_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/suite.cpp"
-)
+nwb_target_adhd_sources(nwb_os_tests NAMESPACE "NWB::Tests::OS" SOURCES "${CMAKE_CURRENT_LIST_DIR}/suite.adhd")
 target_link_libraries(nwb_os_tests PRIVATE nwb_os)
 if(WIN32)
     target_link_libraries(nwb_os_tests PRIVATE user32 imm32)
@@ -19,4 +17,3 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         unset(_nwb_os_x11_clipboard_timeout_seconds)
     endif()
 endif()
-

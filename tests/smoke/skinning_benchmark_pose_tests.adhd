@@ -6,7 +6,7 @@
 #include "scene_types.adhd"
 
 native{
-#include <tests/common/ecs_test_world.h>
+#include <tests/common/ecs_test_world.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 #include <core/ecs/entity.h>
 #include <gtest/gtest.h>

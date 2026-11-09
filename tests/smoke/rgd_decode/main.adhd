@@ -3,7 +3,7 @@
 
 
 native{
-#include <tests/common/test_context.h>
+#include <tests/common/test_context.adhd.h>
 
 #include <logger/rgd/decode.h>
 

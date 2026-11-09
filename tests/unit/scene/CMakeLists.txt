@@ -1,17 +1,7 @@
 nwb_declare_gtest_executable(nwb_ecs_scene_tests)
-nwb_target_adhd_sources(nwb_ecs_scene_tests NAMESPACE "NWB::Tests::SceneAssetCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd")
-target_sources(nwb_ecs_scene_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/*.c"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.h"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
+nwb_target_adhd_sources(nwb_ecs_scene_tests NAMESPACE "NWB::Tests::SceneAssetCases" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/suite.adhd"
 )
 nwb_target_adhd_sources(nwb_ecs_scene_tests NAMESPACE "Testbed" SOURCES "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/fly_camera_motion.adhd")
 nwb_target_link_libraries_whole_archive(nwb_ecs_scene_tests

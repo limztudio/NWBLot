@@ -9,8 +9,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/test_context.adhd.h>
 #include <tests/integration/fbx_to_nwb/skin_name_cases.adhd.h>
 
 #include <utilities/fbx_to_nwb/skin.h>

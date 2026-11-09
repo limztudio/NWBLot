@@ -1,0 +1,136 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "name_cases.adhd"
+
+native{
+#include <core/alloc/general.h>
+#include <core/common/log.h>
+
+#include <global/global.h>
+
+NWB_BEGIN
+
+namespace Tests{
+
+inline constexpr Name s_CapturingLoggerArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonCapturingLogger;
+
+class CapturingLogger final : public Core::Common::ILogger{
+    using LogArena = Core::Common::LogArena;
+    using LogString = Core::Common::LogString;
+
+
+public:
+    CapturingLogger()
+        : m_arena(s_CapturingLoggerArena)
+        , m_messages(m_arena)
+        , m_errors(m_arena)
+    {}
+
+
+public:
+    virtual LogArena& arena()noexcept override{ return m_arena; }
+
+    virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
+        record(str, type);
+    }
+
+    virtual void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
+        record(str, type);
+    }
+
+    [[nodiscard]] u32 messageCount()const noexcept;
+    [[nodiscard]] u32 errorCount()const noexcept;
+    [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept;
+    [[nodiscard]] b8 sawMessageContaining(TStringView text)const noexcept;
+    [[nodiscard]] b8 sawErrorContaining(TStringView text)const noexcept;
+
+
+private:
+    void record(TStringView str, Core::Common::LogType::Enum type);
+
+
+private:
+    mutable Futex m_mutex;
+    LogArena m_arena;
+    Vector<LogString, LogArena> m_messages;
+    Vector<LogString, LogArena> m_errors;
+    u32 m_messageCount = 0;
+    u32 m_errorCount = 0;
+    Core::Common::LogType::Enum m_lastType = Core::Common::LogType::Info;
+};
+
+};
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasCapturedMessages(in u32 count){
+    return count > 0u;
+}
+
+native{
+NWB_BEGIN
+
+namespace Tests{
+
+u32 CapturingLogger::messageCount()const noexcept{
+    ScopedLock lock(m_mutex);
+    return m_messageCount;
+}
+
+u32 CapturingLogger::errorCount()const noexcept{
+    ScopedLock lock(m_mutex);
+    return m_errorCount;
+}
+
+Core::Common::LogType::Enum CapturingLogger::lastType()const noexcept{
+    ScopedLock lock(m_mutex);
+    return m_lastType;
+}
+
+b8 CapturingLogger::sawMessageContaining(const TStringView text)const noexcept{
+    ScopedLock lock(m_mutex);
+
+    for(const LogString& message : m_messages){
+        if(message.find(text) != LogString::npos)
+            return true;
+    }
+    return false;
+}
+
+b8 CapturingLogger::sawErrorContaining(const TStringView text)const noexcept{
+    ScopedLock lock(m_mutex);
+
+    for(const LogString& error : m_errors){
+        if(error.find(text) != LogString::npos)
+            return true;
+    }
+    return false;
+}
+
+void CapturingLogger::record(const TStringView str, const Core::Common::LogType::Enum type){
+    ScopedLock lock(m_mutex);
+
+    ++m_messageCount;
+    m_lastType = type;
+    m_messages.emplace_back(str, m_arena);
+
+    if(type == Core::Common::LogType::Error){
+        ++m_errorCount;
+        m_errors.emplace_back(str, m_arena);
+    }
+}
+
+};
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <engine_namespace.h>
+
+#include <global/arena_memory.h>
+#include <global/global.h>
+
+#include <gtest/gtest.h>
+
+NWB_BEGIN
+
+namespace Tests{
+
+[[nodiscard]] ArenaMemoryStats OwnerStats(const Name& name, ArenaMemorySource::Enum source = ArenaMemorySource::Arena)noexcept;
+
+};
+
+NWB_END
+}
+
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectMemoryStatsEqual(in ArenaMemoryStats expected, in ArenaMemoryStats actual){
+    EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
+    EXPECT_EQ(actual.usedBytes, expected.usedBytes);
+    EXPECT_EQ(actual.peakUsedBytes, expected.peakUsedBytes);
+    EXPECT_EQ(actual.allocationCount, expected.allocationCount);
+    EXPECT_EQ(actual.reallocationCount, expected.reallocationCount);
+    EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
+}
+
+native{
+NWB_BEGIN
+
+namespace Tests{
+
+ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source)noexcept{
+    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+    while(record){
+        ArenaMemoryOwnerSnapshot snapshot;
+        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
+        if(snapshot.ownerName == name && snapshot.source == source)
+            return snapshot.stats;
+    }
+    return {};
+}
+
+};
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

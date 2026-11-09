@@ -3,19 +3,7 @@ nwb_target_adhd_sources(nwb_cpu_task_cleanup_case_types NAMESPACE "__hidden_cpu_
 
 nwb_declare_gtest_executable(nwb_cpu_task_tests)
 nwb_target_adhd_sources(nwb_cpu_task_tests NAMESPACE "CpuTaskSchedulerTestSupport" SOURCES "${CMAKE_CURRENT_LIST_DIR}/scheduler_test_config.adhd")
-target_sources(nwb_cpu_task_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/*.c"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.h"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
-)
+nwb_target_adhd_sources(nwb_cpu_task_tests NAMESPACE "NWB::Tests::CpuTaskSuite" SOURCES "${CMAKE_CURRENT_LIST_DIR}/suite.adhd")
 target_link_libraries(nwb_cpu_task_tests PRIVATE nwb_cpu_task nwb_common nwb_cpu_task_cleanup_case_types nwb_perf nwb_loader_runtime_constants)
 
 set(_nwb_cpu_task_tests_timeout_seconds 120)

@@ -9,7 +9,7 @@
 #define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
 b8 WriteBigEndianU32(in u64 value){
-    return (value | 1u) != 0u;
+    return value != 0u;
 }
 
 native{
@@ -21,9 +21,9 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/capturing_logger.h>
-#include <tests/common/font_fixture.h>
-#include <tests/common/test_context.h>
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_font/name_cases.adhd.h>
 
 #include <impl/assets_font/asset.h>
@@ -443,9 +443,9 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/capturing_logger.h>
-#include <tests/common/font_fixture.h>
-#include <tests/common/test_context.h>
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/common/test_context.adhd.h>
 #include <tests/integration/assets_font/name_cases.adhd.h>
 
 #include <gtest/gtest.h>

@@ -9,7 +9,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/capturing_logger.h>
+#include <tests/common/capturing_logger.adhd.h>
 #include <tests/integration/font_builder/bake_name_cases.adhd.h>
 
 #include <utilities/font_builder/bake.h>

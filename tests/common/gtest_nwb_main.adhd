@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <gtest/gtest.h>
+
+#include <core/common/application_entry.h>
+
+#include <global/global.h>
+
+namespace NWB::Tests{
+inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+i32 GoogleTestInitFailureExitCode(){
+    return -1;
+}
+
+native{
+NWB_BEGIN
+
+namespace Tests{
+
+static int GoogleTestEntryPoint(const isize argc, tchar** argv, [[maybe_unused]] void* userData){
+    Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize()){
+        NWB_CERR << "test common initialization failed\n";
+        return GoogleTestInitFailureExitCode();
+    }
+
+    int googleTestArgc = static_cast<int>(argc);
+    ::testing::InitGoogleTest(&googleTestArgc, argv);
+    // Re-exec death tests because common initialization starts workers before suites run.
+    GTEST_FLAG_SET(death_test_style, s_ThreadsafeDeathTestStyle.data());
+    return RUN_ALL_TESTS();
+}
+
+};
+
+NWB_END
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(::NWB::Tests::GoogleTestEntryPoint)
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

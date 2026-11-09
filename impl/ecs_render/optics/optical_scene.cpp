@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_graph_optical_scene_upload.h"
 #include "optical_scene.h"
 #include <impl/ecs_render/optics/optical_bounds_evaluator.adhd.h>
 #include <impl/ecs_render/optics/optical_scene_identity_builder.adhd.h>
@@ -24,7 +25,6 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/shader_archive.h>
-#include "optical_bounds_finalize_graph.h"
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <core/alloc/scratch.h>
@@ -32,7 +32,6 @@
 #include "optical_scene_resources.h"
 #include <impl/ecs_render/optics/optical_scene_binary_codec.adhd.h>
 #include "optical_scene_upload.h"
-#include "task_graph_optical_scene_upload.h"
 #include <impl/ecs_render/optics/types.adhd.h>
 #include <core/common/log.h>
 
@@ -41,6 +40,24 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OpticalBoundsFinalizeGraph final{
+public:
+    [[nodiscard]] static Expected<RayTracingOpticalSceneGraphBuffer> Declare(
+        const RayTracingOpticalSceneSnapshot& resources,
+        Core::GpuGraphResourceId source,
+        Core::GpuTaskId priorReadersDrained,
+        Core::GpuTaskGraph& graph,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+
+private:
+    struct Task;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

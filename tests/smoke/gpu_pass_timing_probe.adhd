@@ -57,9 +57,7 @@ class GpuPassTimingProbe{
 
     public GpuPassTimingProbe(in TStringView label){
         this.m_arena = GlobalArena(Name(s_SmokeNameSmokeGpuPassTimingProbe));
-        this.m_scopes = GpuPassTimingScopeStateVector(this.m_arena);
         this.m_label = label;
-        this.m_logScopes = true;
     }
 
     public void setLogScopes(in b8 value){
@@ -184,7 +182,7 @@ class GpuPassTimingProbe{
     }
 
     private GlobalArena m_arena;
-    private GpuPassTimingScopeStateVector m_scopes;
+    private GpuPassTimingScopeStateVector m_scopes(this.m_arena);
     private TStringView m_label;
     private f64 m_elapsedSeconds = 0.0;
     private f64 m_intervalSeconds = 0.0;

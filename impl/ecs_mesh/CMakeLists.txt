@@ -28,10 +28,15 @@ nwb_target_adhd_sources(nwb_ecs_mesh_components
     NAMESPACE "NWB::Impl"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/runtime/*.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/runtime/buffer_names.adhd"
 )
 target_link_libraries(nwb_ecs_mesh_components PUBLIC nwb_ecs nwb_assets nwb_assets_skeleton_types nwb_assets_mesh_types)
 
+nwb_target_adhd_sources(nwb_ecs_mesh
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/runtime/types.adhd"
+)
 target_link_libraries(nwb_ecs_mesh PUBLIC nwb_ecs_mesh_components nwb_ecs nwb_assets nwb_graphics nwb_assets_skeleton_types nwb_assets_mesh_types)
 
 add_subdirectory(skinning)

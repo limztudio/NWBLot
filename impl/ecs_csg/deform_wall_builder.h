@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 
+#include <impl/ecs_csg/deform_cutter_field.h>
 #include <impl/ecs_csg/deform_wall_clip.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/general.h>
@@ -41,16 +42,26 @@ namespace CsgDeformWallBuilder{
 
 
 // Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
-[[nodiscard]] Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
+[[nodiscard]] inline Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
     Core::Alloc::ScratchArena& scratchArena,
     const CsgDeformShape& shape,
-    f32 boundaryEpsilon,
+    const f32 boundaryEpsilon,
     const CsgShapeRegistry* shapeRegistry,
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
     Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
-);
+){
+    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, boundaryEpsilon, shapeRegistry, scratchDistances);
+    if(!shapeDistances)
+        return MakeUnexpected(shapeDistances.error());
+
+    CsgDeformEdgeSplitMap edgeSplits(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
+    const auto clipped = ClipCsgDeformShellWithDistances(scratchDistances, edgeSplits, scratchKept, inOutVertices, inOutTriangles);
+    if(!clipped)
+        return MakeUnexpected(clipped.error());
+    return {};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

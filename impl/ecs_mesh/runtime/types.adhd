@@ -228,6 +228,12 @@ b8 ValidateMeshRawBufferLogicalByteCount(
     return true;
 }
 
+RenderableMeshResolution ClassifyRenderableMeshFailure(in b8 hasMeshComponent, in b8 hasRuntimeBinding){
+    if(hasMeshComponent || hasRuntimeBinding)
+        return RenderableMeshResolution::Unavailable;
+    return RenderableMeshResolution::Absent;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

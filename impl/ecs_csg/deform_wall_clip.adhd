@@ -175,6 +175,25 @@ Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
     return true;
 }
 
+void PrepareCsgDeformPreviewBuffers(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in usize cutCount,
+    mut ScratchCsgDeformVertexVector outVertices,
+    mut ScratchCsgDeformTriangleVector outTriangles
+){
+    const usize inputVertexCount = inputVertices.size();
+    const usize inputTriangleCount = inputTriangles.size();
+    outVertices.clear();
+    outTriangles.clear();
+    outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
+    outTriangles.reserve(inputTriangleCount * cast<usize>(s_KeptReserveMultiplier) + cutCount * s_RebuildReservePerCut);
+    for(usize i = 0u; i < inputVertexCount; ++i)
+        outVertices.push_back(inputVertices[i]);
+    for(usize i = 0u; i < inputTriangleCount; ++i)
+        outTriangles.push_back(inputTriangles[i]);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

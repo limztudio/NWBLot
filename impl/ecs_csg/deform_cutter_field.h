@@ -8,6 +8,7 @@
 #include <impl/global.h>
 
 #include <impl/ecs_csg/deform_types.adhd.h>
+#include <impl/ecs_csg/deform_wall_clip.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/scratch.h>
 
@@ -30,13 +31,27 @@ namespace CsgDeformCutterField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
+[[nodiscard]] inline Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
     const CsgDeformShape& shape,
-    Span<const CsgDeformVertex> vertices,
-    f32 boundaryEpsilon,
+    const Span<const CsgDeformVertex> vertices,
+    const f32 boundaryEpsilon,
     const CsgShapeRegistry* shapeRegistry,
     Vector<f32, Core::Alloc::ScratchArena>& outDistances
-);
+){
+    u32 registryParameterByteSize = 0u;
+    Optional<InplaceFunction<0u, Expected<f32>(const SIMDVectorSingle, const CsgShapeInlineParameters&)>> registryDistanceCallback;
+    if(shapeRegistry){
+        const auto shapeType = shapeRegistry->findShapeType(shape.shapeType);
+        if(shapeType && shapeType->desc.signedDistanceCallback){
+            registryParameterByteSize = shapeType->desc.parameterByteSize;
+            registryDistanceCallback = shapeType->desc.signedDistanceCallback;
+        }
+    }
+    const auto computed = ComputeCsgDeformShapeDistances(shape, vertices, boundaryEpsilon, registryParameterByteSize, registryDistanceCallback, outDistances);
+    if(!computed)
+        return MakeUnexpected(computed.error());
+    return {};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

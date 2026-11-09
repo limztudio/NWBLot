@@ -150,5 +150,26 @@ Expected<CsgShapeLocalBounds> TryTransformCsgShapeLocalBounds(
     return MakeCsgLocalBounds(worldMin, worldMax);
 }
 
+b8 CanSelectCsgShaderModuleInclude(
+    in Name targetModule,
+    in Name candidateModule,
+    in StringView currentInclude,
+    in StringView candidateInclude,
+    mut b8 inOutFound,
+    mut b8 outAdoptCandidate
+){
+    outAdoptCandidate = false;
+    if(candidateModule != targetModule)
+        return true;
+    inOutFound = true;
+    if(candidateInclude.empty())
+        return true;
+    if(currentInclude.empty()){
+        outAdoptCandidate = true;
+        return true;
+    }
+    return currentInclude == candidateInclude;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

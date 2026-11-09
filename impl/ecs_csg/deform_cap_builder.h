@@ -24,14 +24,20 @@ namespace CsgDeformCapBuilder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
-[[nodiscard]] b8 OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
-[[nodiscard]] Expected<u32> FillCutCaps(
-    Core::Alloc::ScratchArena& scratchArena,
+inline void CollectBoundaryEdges(Core::Alloc::ScratchArena&, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges){
+    CollectCsgDeformBoundaryEdges(triangles, outEdges);
+}
+[[nodiscard]] inline b8 OrderBoundaryLoop(Core::Alloc::ScratchArena&, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop){
+    return OrderCsgDeformBoundaryLoop(edges, outLoop);
+}
+[[nodiscard]] inline Expected<u32> FillCutCaps(
+    Core::Alloc::ScratchArena&,
     Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
-);
+){
+    return FillCsgDeformCutCaps(scratchEdges, inOutVertices, inOutTriangles);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

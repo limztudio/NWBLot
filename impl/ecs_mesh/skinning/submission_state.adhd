@@ -181,6 +181,67 @@ RuntimeMeshDirtyFlag ResolveHandledSkinningDirtyFlags(in b8 skinningInputDirty, 
     return flags;
 }
 
+b8 CanPrepareSkinningStateHandoff(in b8 hasFinalState, in b8 buffersEmpty, in b8 hasBufferData){
+    return hasFinalState && (buffersEmpty || hasBufferData);
+}
+
+b8 ValidateMeshSkinningGraphResourceImports(
+    in b8 hasBindlessResourceSlots,
+    in b8 hasSkinnedPosition,
+    in b8 hasMeshletDesc,
+    in b8 hasMeshletPositionRefDelta,
+    in b8 hasMeshletLocalVertexRef,
+    in b8 hasMeshletPrimitiveIndex,
+    in b8 hasMeshletBounds,
+    in b8 hasBoundsPipeline,
+    in b8 hasMeshletLocalBounds,
+    in b8 hasLocalBounds,
+    in b8 hasLocalBoundsPipeline,
+    in b8 hasActiveSkin,
+    in b8 copiesRestStreams,
+    in b8 repacksNormals,
+    in b8 hasRestPosition,
+    in b8 hasRestNormal,
+    in b8 hasRestTangent,
+    in b8 hasSkinnedNormal,
+    in b8 hasSkinnedTangent,
+    in b8 hasMeshletAttributeRefDelta,
+    in b8 hasAttributeSkin,
+    in b8 hasSkin,
+    in b8 hasJointPalette,
+    in b8 hasSkinningPipeline,
+    in b8 hasAttribute,
+    in b8 hasRepackPipeline
+){
+    return
+        hasBindlessResourceSlots
+        && hasSkinnedPosition
+        && hasMeshletDesc
+        && hasMeshletPositionRefDelta
+        && hasMeshletLocalVertexRef
+        && hasMeshletPrimitiveIndex
+        && hasMeshletBounds
+        && hasBoundsPipeline
+        && hasMeshletLocalBounds
+        && hasLocalBounds
+        && hasLocalBoundsPipeline
+        && (!hasActiveSkin || (
+            hasRestPosition
+            && hasRestNormal
+            && hasRestTangent
+            && hasSkinnedNormal
+            && hasSkinnedTangent
+            && hasMeshletAttributeRefDelta
+            && hasAttributeSkin
+            && hasSkin
+            && hasJointPalette
+            && hasSkinningPipeline
+        ))
+        && (!copiesRestStreams || (hasRestPosition && hasRestNormal && hasRestTangent && hasSkinnedNormal && hasSkinnedTangent))
+        && (!repacksNormals || (hasSkinnedNormal && hasMeshletAttributeRefDelta && hasAttribute && hasRepackPipeline))
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

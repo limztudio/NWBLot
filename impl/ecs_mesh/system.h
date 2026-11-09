@@ -8,6 +8,7 @@
 #include <impl/ecs_mesh/components.adhd.h>
 
 #include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/runtime/mesh_requests.h>
 
 #include <core/ecs/system.h>
 #include <core/ecs/world.h>
@@ -33,7 +34,14 @@ static_assert(IsTriviallyCopyable_V<SkinnedMeshBindingComponent>, "SkinnedMeshBi
 
 class MeshSystem final : public Core::ECS::ISystem, public IRuntimeMeshRegistry{
 public:
-    MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world);
+    MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
+        : Core::ECS::ISystem(arena)
+        , m_world(world)
+        , m_runtimeMeshProviders(arena)
+    {
+        readAccess<MeshComponent>();
+        readAccess<SkinnedMeshBindingComponent>();
+    }
     virtual ~MeshSystem()noexcept override = default;
 
 
@@ -43,16 +51,66 @@ public:
 
 public:
     [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
-    [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const noexcept;
+    [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(const Core::ECS::EntityID entity)const noexcept{
+        const MeshComponent* mesh = findMesh(entity);
+        if(!mesh || !mesh->mesh.valid())
+            return MakeUnexpected(Failure{});
+
+        return mesh->mesh;
+    }
     // Distinguish non-rendering owners from temporarily unavailable meshes.
-    [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(Core::ECS::EntityID entity)const;
-    [[nodiscard]] b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;
-    void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
+    [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(const Core::ECS::EntityID entity)const{
+        RenderableMeshDesc mesh;
+
+        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
+            const auto runtimeMesh = provider->resolveRuntimeMesh(entity);
+            if(runtimeMesh && runtimeMesh->valid()){
+                mesh.runtimeMesh = *runtimeMesh;
+                mesh.runtime = true;
+                return mesh;
+            }
+        }
+
+        const auto meshAsset = resolveMesh(entity);
+        if(!meshAsset)
+            return MakeUnexpected(ClassifyRenderableMeshFailure(findMesh(entity) != nullptr, hasRuntimeMeshBinding(entity)));
+
+        mesh.mesh = *meshAsset;
+        return mesh;
+    }
+    [[nodiscard]] b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
+        if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+            return true;
+        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
+            if(provider->hasRuntimeMeshBinding(entity))
+                return true;
+        }
+        return false;
+    }
+    void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
+        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
+            if(requests.complete())
+                return;
+
+            provider->markLiveRuntimeMeshes(requests);
+        }
+    }
 
 
 public:
-    virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override;
-    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)noexcept override;
+    virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override{
+        if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; }) != m_runtimeMeshProviders.end())
+            return;
+
+        m_runtimeMeshProviders.push_back(MakeNotNull(&provider));
+    }
+    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)noexcept override{
+        const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; });
+        if(found == m_runtimeMeshProviders.end())
+            return;
+
+        m_runtimeMeshProviders.erase(found);
+    }
 
 
 private:

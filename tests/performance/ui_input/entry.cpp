@@ -2,7 +2,386 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "benchmark.h"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/input/router.h>
+
+#include <global/expected.h>
+#include <global/simd/vector_arithmetic.h>
+#include <global/timer.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define UI_INPUT_BENCHMARK_BEGIN namespace UiInputBenchmark{
+#define UI_INPUT_BENCHMARK_END };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_SkinPath = "tests/performance/ui_input/skin";
+
+[[nodiscard]] inline u64 MixChecksum(const u64 hash, const u64 value)noexcept{
+    return (hash ^ value) * 1099511628211u;
+}
+
+template<typename Operation, typename Checksum>
+[[nodiscard]] b8 Measure(const AStringView name, const u64 setupChecksum, Operation&& operation, Checksum&& checksum){
+    constexpr usize s_Samples = 11u;
+    constexpr usize s_MaxIterations = 1u << 24u;
+    constexpr f64 s_MinSampleNS = 20000000.0;
+    constexpr u32 s_WarmupIterations = 32u;
+    for(usize warmup = 0u; warmup < s_WarmupIterations; ++warmup){
+        if(!operation())
+            return false;
+    }
+    const Expected<u64> behaviorChecksum = checksum();
+    if(!behaviorChecksum)
+        return false;
+    const auto batch = [&](const usize iterations)noexcept(
+        noexcept(static_cast<b8>(!operation()))
+        && noexcept(DeclVal<void(*)(Expected<u64>)noexcept>()(checksum()))
+    ) -> Expected<f64>{
+        const Timer begin = TimerNow();
+        for(usize iteration = 0u; iteration < iterations; ++iteration){
+            if(!operation())
+                return MakeUnexpected(Failure{});
+        }
+        const f64 elapsed = DurationInNS<f64>(TimerNow(), begin);
+        const Expected<u64> batchChecksum = checksum();
+        if(!batchChecksum || *batchChecksum != *behaviorChecksum)
+            return MakeUnexpected(Failure{});
+        return elapsed;
+    };
+    usize iterations = 1u;
+    while(true){
+        const auto elapsed = batch(iterations);
+        if(!elapsed)
+            return false;
+        if(*elapsed >= s_MinSampleNS)
+            break;
+        if(iterations == s_MaxIterations)
+            return false;
+        iterations *= 2u;
+    }
+    Array<f64, s_Samples> samples{};
+    for(f64& sample : samples){
+        const auto elapsed = batch(iterations);
+        if(!elapsed)
+            return false;
+        sample = *elapsed / static_cast<f64>(iterations);
+    }
+    auto sorted = samples;
+    Sort(sorted.begin(), sorted.end());
+    const auto oldPrecision = NWB_COUT.precision(17);
+    NWB_COUT << "{\"type\":\"ui_input_benchmark\",\"name\":\"" << name << "\",\"iterationsPerSample\":" << iterations
+        << ",\"setupChecksum\":" << setupChecksum << ",\"behaviorChecksum\":" << *behaviorChecksum << ",\"medianNsPerOperation\":" << sorted[s_Samples / 2u] << ",\"samplesNsPerOperation\":[";
+    for(usize index = 0u; index < samples.size(); ++index){
+        if(index != 0u)
+            NWB_COUT << ',';
+        NWB_COUT << samples[index];
+    }
+    NWB_COUT << "]}\n";
+    NWB_COUT.precision(oldPrecision);
+    return true;
+}
+
+[[nodiscard]] b8 RunPointerBenchmarks();
+[[nodiscard]] b8 RunPaintBenchmarks();
+[[nodiscard]] b8 RunEditBenchmarks();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/edit_box_host.h>
+
+#include <core/os/clipboard_service.h>
+#include <core/os/text_input_service.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_BEGIN
+namespace __hidden_ui_editor_benchmark{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+class BenchmarkShaper final : public ITextShaper{
+public:
+    explicit BenchmarkShaper(Alloc::GlobalArena& arena)noexcept : m_arena(arena){}
+
+
+public:
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
+        ShapedRun run(m_arena);
+        run.metrics = { 8.0f, 2.0f, 2.0f };
+        run.glyphs.reserve(request.text.size());
+        for(usize byte = 0u; byte < request.text.size(); ++byte)
+            run.glyphs.push_back({ {}, 1u, static_cast<u32>(byte), static_cast<u32>(byte + 1u), {}, { 10.0f, 0.0f }, {} });
+        return run;
+    }
+
+
+private:
+    Alloc::GlobalArena& m_arena;
+};
+
+class BenchmarkTextInput final : public QueuedTextInputService{
+public:
+    explicit BenchmarkTextInput(Alloc::GlobalArena& arena) : QueuedTextInputService(arena){}
+
+
+public:
+    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
+};
+
+class BenchmarkClipboard final : public QueuedClipboardService{
+public:
+    explicit BenchmarkClipboard(Alloc::GlobalArena& arena) : QueuedClipboardService(arena){}
+
+
+public:
+    [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum)const noexcept override{ return {}; }
+
+
+protected:
+    virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
+        const b8 completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
+        NWB_FATAL_ASSERT(completed);
+    }
+};
+
+class PublicationCase final{
+public:
+    explicit PublicationCase(const usize stops)
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPublication))
+        , m_context(m_arena)
+        , m_textInput(m_arena)
+        , m_clipboard(m_arena)
+        , m_host(m_arena, m_context, m_textInput, m_clipboard)
+        , m_model(m_arena, { stops, 0u, 0u })
+        , m_shaper(m_arena)
+        , m_layoutBuilder(m_arena, m_shaper)
+        , m_view(m_arena)
+        , m_stops(stops)
+    {}
+
+
+public:
+    [[nodiscard]] b8 setup(){
+        AString<Alloc::GlobalArena> text(m_arena);
+        text.assign(m_stops - 1u, 'a');
+        if(!m_model.setText(text) || !m_model.setSelection(0u, 0u) || !m_view.snapshot(m_model))
+            return false;
+        auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+        if(!layout || !m_view.adoptLayout(Move(*layout)))
+            return false;
+        const auto placement = m_view.arrange({ 10.0f, 20.0f, 320.0f, 30.0f }, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, 1.0f, false);
+        if(!placement || m_view.caretStops().size() != m_stops)
+            return false;
+        m_placement = *placement;
+        return true;
+    }
+
+    [[nodiscard]] b8 operation(){
+        ++m_generation;
+        if(!m_context.beginFrame(m_generation))
+            return false;
+        m_host.beginFrame(m_generation, { 500.0f, 200.0f });
+        if(!m_context.beginRoot({ 17u, 1u }))
+            return false;
+        const auto widget = m_context.declare("edit", WidgetKind::EditBox);
+        if(!widget)
+            return false;
+        m_widget = **widget;
+        EditBoxOptions options;
+        options.readOnly = true;
+        if(!m_host.edit(m_widget, options, m_model).valid || !m_host.publish(m_widget, m_view, m_placement, options))
+            return false;
+        HitTarget target;
+        target.rectangle = m_placement.bounds;
+        target.clip = m_placement.frameClip;
+        target.focusable = true;
+        target.textEditable = true;
+        if(!m_context.addTarget(m_widget, target) || !m_context.endRoot() || !m_context.finishFrame())
+            return false;
+        m_host.finishFrame();
+        if(!m_context.commitFrame(m_generation))
+            return false;
+        m_host.commitFrame(m_generation);
+        return true;
+    }
+
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
+        const HitTarget* target = m_context.input().findTarget(m_widget.id, m_widget.declarationGeneration);
+        if(m_context.input().layoutGeneration() != m_generation || !target || target->rectangle.width != 320.0f || m_host.hasTextFocus() || !m_view.ready())
+            return MakeUnexpected(Failure{});
+        u64 hash = MixChecksum(1469598103934665603u, m_view.committedBytes());
+        for(const EditBoxCaretStop& stop : m_view.caretStops()){
+            hash = MixChecksum(hash, stop.committedByte);
+            hash = MixChecksum(hash, static_cast<u64>(stop.x));
+        }
+        return hash;
+    }
+
+
+private:
+    Alloc::GlobalArena m_arena;
+    Context m_context;
+    BenchmarkTextInput m_textInput;
+    BenchmarkClipboard m_clipboard;
+    UiEditBoxHost m_host;
+    EditModel m_model;
+    BenchmarkShaper m_shaper;
+    TextLayoutBuilder m_layoutBuilder;
+    EditBoxView m_view;
+    EditBoxPlacement m_placement;
+    WidgetState m_widget;
+    const usize m_stops;
+    u64 m_generation = 0u;
+};
+
+class EmptySelectionCase final{
+public:
+    explicit EmptySelectionCase(const usize lines)
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection))
+        , m_skin(m_arena, Name(s_SkinPath))
+        , m_model(m_arena, { lines, 0u, 0u }, EditTextMode::Multiline)
+        , m_shaper(m_arena)
+        , m_layoutBuilder(m_arena, m_shaper)
+        , m_view(m_arena)
+        , m_text(m_arena)
+        , m_paint(m_arena)
+        , m_snapshot(m_arena)
+        , m_lines(lines)
+    {}
+
+
+public:
+    [[nodiscard]] b8 setup(){
+        UiSkin::RegionVector regions(m_arena);
+        m_skin.setAtlas(Assets::AssetRef<Texture>("tests/performance/ui_input/texture"), 8u, 8u, 1.0f, Move(regions));
+        AString<Alloc::GlobalArena> text(m_arena);
+        text.assign(m_lines - 1u, '\n');
+        if(!m_model.setText(text) || !m_model.setSelection(0u, 0u) || !m_view.snapshot(m_model))
+            return false;
+        auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+        if(!layout || !m_view.adoptLayout(Move(*layout)))
+            return false;
+        const auto placement = m_view.arrange({ 10.0f, 10.0f, 300.0f, 100.0f }, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, 1.0f, false);
+        if(!placement || m_view.layout().lines().size() != m_lines || !m_view.layout().glyphs().empty())
+            return false;
+        m_placement = *placement;
+        return true;
+    }
+
+    [[nodiscard]] b8 operation(){
+        m_paint.begin({ 500.0f, 200.0f }, 1u, 1u, Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        if(!m_view.paint(m_text, m_paint, m_skin, m_placement))
+            return false;
+        m_snapshot = m_paint.freeze();
+        return m_snapshot.commands().size() == 1u && m_snapshot.indices().size() == 6u;
+    }
+
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
+        if(m_view.selectionRange().begin != m_view.selectionRange().end || m_snapshot.vertices().size() != 4u || m_snapshot.commands().size() != 1u)
+            return MakeUnexpected(Failure{});
+        u64 hash = MixChecksum(1469598103934665603u, m_lines);
+        for(const Vertex& vertex : m_snapshot.vertices()){
+            hash = MixChecksum(hash, static_cast<u64>(vertex.position.x));
+            hash = MixChecksum(hash, static_cast<u64>(vertex.position.y));
+        }
+        return hash;
+    }
+
+
+private:
+    Alloc::GlobalArena m_arena;
+    UiSkin m_skin;
+    EditModel m_model;
+    BenchmarkShaper m_shaper;
+    TextLayoutBuilder m_layoutBuilder;
+    EditBoxView m_view;
+    EditBoxPlacement m_placement;
+    TextService m_text;
+    PaintBuilder m_paint;
+    DrawSnapshot m_snapshot;
+    const usize m_lines;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RunEditBenchmarks(){
+    constexpr Array<usize, 3> s_StopCounts{ 256u, 4096u, 16384u };
+    constexpr Array<AStringView, 3> s_PublicationNames{ "editor.publish.256", "editor.publish.4096", "editor.publish.16384" };
+    constexpr Array<usize, 3> s_LineCounts{ 100u, 1000u, 10000u };
+    constexpr Array<AStringView, 3> s_SelectionNames{ "editor.empty_selection.100", "editor.empty_selection.1000", "editor.empty_selection.10000" };
+    for(usize index = 0u; index < s_StopCounts.size(); ++index){
+        __hidden_ui_editor_benchmark::PublicationCase publication(s_StopCounts[index]);
+        if(!publication.setup() || !publication.operation() || !publication.checksum())
+            return false;
+        if(!Measure(s_PublicationNames[index], s_StopCounts[index], [&publication](){ return publication.operation(); }, [&publication]()noexcept{ return publication.checksum(); }))
+            return false;
+        __hidden_ui_editor_benchmark::EmptySelectionCase selection(s_LineCounts[index]);
+        if(!selection.setup() || !selection.operation() || !selection.checksum())
+            return false;
+        if(!Measure(s_SelectionNames[index], s_LineCounts[index], [&selection](){ return selection.operation(); }, [&selection]()noexcept{ return selection.checksum(); }))
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <core/common/application_entry.h>
 
@@ -44,3 +423,335 @@ NWB_DEFINE_APPLICATION_ENTRY_POINT(::UiInputBenchmark::EntryPoint)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/paint.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_BEGIN
+namespace __hidden_ui_paint_benchmark{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+class PaintCase final{
+public:
+    PaintCase(const u32 commands, const b8 descending)
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPaint))
+        , m_skin(m_arena, Name(s_SkinPath))
+        , m_builder(m_arena)
+        , m_snapshot(m_arena)
+        , m_commands(commands)
+        , m_descending(descending)
+    {
+        UiSkin::RegionVector regions(m_arena);
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/performance/ui_input/texture"), 8u, 8u, 1.0f, Move(regions));
+    }
+
+
+public:
+    [[nodiscard]] b8 operation(){
+        m_builder.begin({ 128.0f, 128.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        m_builder.reserve(m_commands);
+        for(u32 command = 0u; command < m_commands; ++command){
+            if(m_descending && !m_builder.beginOverlay(m_commands - command))
+                return false;
+            m_builder.pushClip({ static_cast<f32>(command & 1u), 0.0f, 64.0f, 64.0f });
+            m_builder.fillRect({ 0.0f, 0.0f, 100.0f, 100.0f });
+            if(!m_builder.popClip() || (m_descending && !m_builder.endOverlay()))
+                return false;
+        }
+        m_snapshot = m_builder.freeze();
+        return m_snapshot.commands().size() == m_commands && m_snapshot.indices().size() == static_cast<usize>(m_commands) * 6u && m_snapshot.vertices().size() == static_cast<usize>(m_commands) * 4u;
+    }
+
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
+        if(m_snapshot.commands().size() != m_commands || m_snapshot.indices().size() != static_cast<usize>(m_commands) * 6u || m_snapshot.vertices().size() != static_cast<usize>(m_commands) * 4u)
+            return MakeUnexpected(Failure{});
+        u64 hash = MixChecksum(1469598103934665603u, m_commands);
+        for(u32 index = 0u; index < m_commands; ++index){
+            const DrawCommand& command = m_snapshot.commands()[index];
+            const u32 expectedLayer = m_descending ? index + 1u : 0u;
+            const u32 expectedFirst = (m_descending ? m_commands - index - 1u : index) * 6u;
+            if(command.layer != expectedLayer || command.firstIndex != expectedFirst || command.indexCount != 6u || command.material != PaintMaterial::Solid)
+                return MakeUnexpected(Failure{});
+            hash = MixChecksum(hash, command.layer);
+            hash = MixChecksum(hash, command.firstIndex);
+            hash = MixChecksum(hash, command.indexCount);
+            hash = MixChecksum(hash, static_cast<u64>(command.clip.x));
+        }
+        for(const Vertex& vertex : m_snapshot.vertices()){
+            hash = MixChecksum(hash, static_cast<u64>(vertex.position.x));
+            hash = MixChecksum(hash, static_cast<u64>(vertex.position.y));
+        }
+        for(const u32 index : m_snapshot.indices())
+            hash = MixChecksum(hash, index);
+        return hash;
+    }
+
+
+private:
+    Core::Alloc::GlobalArena m_arena;
+    UiSkin m_skin;
+    PaintBuilder m_builder;
+    DrawSnapshot m_snapshot;
+    const u32 m_commands;
+    const b8 m_descending;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RunPaintBenchmarks(){
+    constexpr Array<u32, 3> s_Counts{ 64u, 256u, 1024u };
+    constexpr Array<AStringView, 3> s_MonotonicNames{ "paint.monotonic.64", "paint.monotonic.256", "paint.monotonic.1024" };
+    constexpr Array<AStringView, 3> s_DescendingNames{ "paint.descending.64", "paint.descending.256", "paint.descending.1024" };
+    constexpr Array<b8, 2> s_DescendingFlags{ false, true };
+    for(usize index = 0u; index < s_Counts.size(); ++index){
+        for(const b8 descending : s_DescendingFlags){
+            __hidden_ui_paint_benchmark::PaintCase benchmark(s_Counts[index], descending);
+            if(!benchmark.operation() || !benchmark.checksum())
+                return false;
+            const u64 setup = MixChecksum(MixChecksum(1469598103934665603u, s_Counts[index]), descending ? 1u : 0u);
+            if(!Measure(descending ? s_DescendingNames[index] : s_MonotonicNames[index], setup, [&benchmark](){ return benchmark.operation(); }, [&benchmark]()noexcept{ return benchmark.checksum(); }))
+                return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_BEGIN
+namespace __hidden_ui_pointer_benchmark{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+namespace WorkloadKind{
+    enum Enum : u8{ CursorHover, TouchGesture, CursorGesture, PressedSweep, CompetingContacts, CommitTargets };
+};
+
+static constexpr Array<AStringView, 6> s_Names{ "cursor_hover", "touch_gesture", "cursor_gesture", "pressed_sweep", "competing_contacts", "commit_targets" };
+static constexpr Point s_FirstPosition{ 8.0f, 8.0f };
+static constexpr Point s_LastPosition{ 9.0f, 8.0f };
+static constexpr InputSource s_FirstSource{ 97u, 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Workload final{
+public:
+    Workload(const usize targetCount, const WorkloadKind::Enum kind, const usize contactCount = 1u)
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPointer))
+        , m_router(m_arena)
+        , m_targets(m_arena)
+        , m_contactCount(contactCount)
+        , m_kind(kind)
+        , m_hoverCapable(kind == WorkloadKind::CursorHover || kind == WorkloadKind::CursorGesture || kind == WorkloadKind::PressedSweep)
+    {
+        m_targets.reserve(targetCount);
+        m_setupChecksum = MixChecksum(14695981039346656037u, targetCount);
+        m_setupChecksum = MixChecksum(m_setupChecksum, kind);
+        m_setupChecksum = MixChecksum(m_setupChecksum, contactCount);
+        for(usize index = 0u; index < targetCount; ++index){
+            HitTarget target;
+            target.id = { static_cast<u64>(index + 1u) };
+            target.declarationGeneration = 1u;
+            target.rectangle = { static_cast<f32>((index % 64u) * 24u), static_cast<f32>((index / 64u) * 24u), 20.0f, 20.0f };
+            target.clip = { 0.0f, 0.0f, 1536.0f, 1536.0f };
+            target.paintOrder = static_cast<u32>(index);
+            target.focusable = true;
+            target.activatable = true;
+            target.pointerGesture = true;
+            m_targets.push_back(target);
+            m_setupChecksum = MixChecksum(m_setupChecksum, target.id.value);
+            m_setupChecksum = MixChecksum(m_setupChecksum, static_cast<u64>(target.rectangle.x));
+            m_setupChecksum = MixChecksum(m_setupChecksum, static_cast<u64>(target.rectangle.y));
+            m_setupChecksum = MixChecksum(m_setupChecksum, target.paintOrder);
+        }
+    }
+
+
+public:
+    [[nodiscard]] b8 initialize(){
+        if(!m_router.commitTargets(m_targets, ++m_generation))
+            return false;
+        if(m_kind == WorkloadKind::CursorHover || m_kind == WorkloadKind::CommitTargets)
+            return true;
+        for(usize contact = 1u; contact <= m_contactCount; ++contact){
+            PointerInput input;
+            input.phase = PointerPhase::Press;
+            input.source = { s_FirstSource.device, static_cast<u64>(contact) };
+            input.position = s_FirstPosition;
+            input.hoverCapable = m_hoverCapable;
+            if(!m_router.queuePointer(input))
+                return false;
+            const InputRoutingResult result = m_router.process();
+            if(!result.pointerConsumed || result.pointerRouted != (contact == 1u) || result.capture != WidgetId{ 1u })
+                return false;
+        }
+        const auto gesture = m_router.consumePointerGesture({ 1u }, 1u);
+        return gesture && gesture->inputSource == s_FirstSource && move(s_LastPosition);
+    }
+
+    [[nodiscard]] b8 operation(){
+        if(m_kind == WorkloadKind::CommitTargets)
+            return m_router.commitTargets(m_targets, ++m_generation);
+        if(m_kind == WorkloadKind::PressedSweep){
+            usize pressed = 0u;
+            for(const HitTarget& target : m_targets)
+                pressed += m_router.pressed(target.id) ? 1u : 0u;
+            m_pressedCount = pressed;
+            return pressed == 1u;
+        }
+        if(!move(s_FirstPosition) || !move(s_LastPosition))
+            return false;
+        if(m_kind == WorkloadKind::CompetingContacts){
+            PointerInput input;
+            input.source = { s_FirstSource.device, static_cast<u64>(m_contactCount) };
+            input.position = { 32.0f, 8.0f };
+            if(!m_router.queuePointer(input))
+                return false;
+            const InputRoutingResult result = m_router.process();
+            if(!result.pointerConsumed || result.pointerRouted || result.capture != WidgetId{ 1u } || result.hover.valid())
+                return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] u64 checksum()const noexcept{
+        u64 checksum = MixChecksum(m_setupChecksum, m_router.targets().size());
+        checksum = MixChecksum(checksum, m_router.hover().value);
+        checksum = MixChecksum(checksum, m_router.focus().value);
+        checksum = MixChecksum(checksum, m_router.capture().value);
+        checksum = MixChecksum(checksum, m_router.primaryDown());
+        checksum = MixChecksum(checksum, m_router.actions().size());
+        checksum = MixChecksum(checksum, m_pressedCount);
+        if(m_kind != WorkloadKind::CommitTargets && m_kind != WorkloadKind::CursorHover){
+            for(usize contact = 1u; contact <= m_contactCount; ++contact)
+                checksum = MixChecksum(checksum, m_router.ownsPointerSource({ s_FirstSource.device, static_cast<u64>(contact) }));
+        }
+        return checksum;
+    }
+
+    [[nodiscard]] b8 measure(){
+        if(!initialize())
+            return false;
+        const auto name = StringFormat(m_arena, "{}_targets_{}_sources_{}", s_Names[m_kind], m_targets.size(), m_contactCount);
+        return Measure(name, m_setupChecksum, [&](){ return operation(); }, [&]()noexcept{ return checksum(); });
+    }
+
+
+private:
+    [[nodiscard]] b8 move(const Point& position){
+        PointerInput input;
+        input.source = s_FirstSource;
+        input.position = position;
+        input.hoverCapable = m_hoverCapable;
+        if(!m_router.queuePointer(input))
+            return false;
+        const InputRoutingResult result = m_router.process();
+        const b8 active = m_kind != WorkloadKind::CursorHover;
+        if(!result.pointerConsumed || !result.pointerRouted || result.capture != (active ? WidgetId{ 1u } : WidgetId{}) || result.hover != (m_hoverCapable ? WidgetId{ 1u } : WidgetId{}))
+            return false;
+        if(active){
+            const auto gesture = m_router.consumePointerGesture({ 1u }, 1u);
+            if(!gesture || gesture->state != PointerGestureState::Active || gesture->inputSource != s_FirstSource || gesture->position.x != position.x || gesture->position.y != position.y)
+                return false;
+        }
+        return !result.activationOverflow && !result.gestureOverflow;
+    }
+
+
+private:
+    Core::Alloc::GlobalArena m_arena;
+    InputRouter m_router;
+    InputVector<HitTarget> m_targets;
+    usize m_contactCount;
+    u64 m_setupChecksum = 0u;
+    u64 m_generation = 0u;
+    usize m_pressedCount = 0u;
+    WorkloadKind::Enum m_kind;
+    b8 m_hoverCapable;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RunPointerBenchmarks(){
+    using namespace __hidden_ui_pointer_benchmark;
+    constexpr Array<usize, 3> s_Counts{ 128u, 1024u, 4096u };
+    constexpr Array<usize, 2> s_ContactCounts{ 16u, 256u };
+    for(const usize count : s_Counts){
+        for(u8 kind = WorkloadKind::CursorHover; kind <= WorkloadKind::PressedSweep; ++kind){
+            Workload workload(count, static_cast<WorkloadKind::Enum>(kind));
+            if(!workload.measure())
+                return false;
+        }
+    }
+    for(const usize contacts : s_ContactCounts){
+        Workload workload(1024u, WorkloadKind::CompetingContacts, contacts);
+        if(!workload.measure())
+            return false;
+    }
+    Workload publication(1024u, WorkloadKind::CommitTargets);
+    return publication.measure();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UI_INPUT_BENCHMARK_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

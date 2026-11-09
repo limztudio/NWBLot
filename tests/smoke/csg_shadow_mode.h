@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <engine_namespace.h>
 
 #include <global/basic_string.h>
@@ -22,13 +24,10 @@ NWB_BEGIN
 
 namespace Tests::Smoke{
 
-namespace CsgShadowArm{ enum Enum : u8{ Reference, Cut, Uncut, Moved, CameraShift }; };
-namespace CsgShadowOpenCase{ enum Enum : u8{ Reference, Retained, ClippedReference, Clipped, Boundary64, Terminal65 }; };
-
 class CsgShadowMode final{
 public:
     [[nodiscard]] b8 read(b8 caustic);
-    [[nodiscard]] AStringView openCaseName()const noexcept;
+    [[nodiscard]] AStringView openCaseName()const noexcept{ return ResolveCsgShadowOpenCaseName(openCase); }
 
 public:
     CsgShadowArm::Enum arm = CsgShadowArm::Cut;
@@ -50,4 +49,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

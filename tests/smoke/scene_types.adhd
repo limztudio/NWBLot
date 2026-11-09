@@ -161,6 +161,195 @@ const u64 s_SmokeProbeMinimumPresentations = 100u;
 const usize s_SmokeTimingMaxRecords = 262144u;
 
 
+enum<u8> CsgShadowArm{
+    Reference,
+    Cut,
+    Uncut,
+    Moved,
+    CameraShift
+}
+
+enum<u8> CsgShadowOpenCase{
+    Reference,
+    Retained,
+    ClippedReference,
+    Clipped,
+    Boundary64,
+    Terminal65
+}
+
+StringView ResolveCsgShadowOpenCaseName(in CsgShadowOpenCase openCase){
+    switch(openCase){
+    case CsgShadowOpenCase::Reference: return s_ShadowSmokeOpenCaseReference;
+    case CsgShadowOpenCase::Retained: return s_ShadowSmokeOpenCaseRetained;
+    case CsgShadowOpenCase::ClippedReference: return s_ShadowSmokeOpenCaseClippedReference;
+    case CsgShadowOpenCase::Clipped: return s_ShadowSmokeOpenCaseClipped;
+    case CsgShadowOpenCase::Boundary64: return s_ShadowSmokeOpenCaseBoundary64;
+    case CsgShadowOpenCase::Terminal65: return s_ShadowSmokeOpenCaseTerminal65;
+    }
+    return s_ShadowSmokeOpenCaseRetained;
+}
+
+b8 TryParseCsgShadowArm(in StringView text, mut CsgShadowArm outArm){
+    if(text == "reference"){
+        outArm = CsgShadowArm::Reference;
+        return true;
+    }
+    if(text == "cut"){
+        outArm = CsgShadowArm::Cut;
+        return true;
+    }
+    if(text == "uncut"){
+        outArm = CsgShadowArm::Uncut;
+        return true;
+    }
+    if(text == "moved"){
+        outArm = CsgShadowArm::Moved;
+        return true;
+    }
+    if(text == "camera_shift"){
+        outArm = CsgShadowArm::CameraShift;
+        return true;
+    }
+    return false;
+}
+
+b8 TryParseCsgShadowOpenCase(in StringView text, mut CsgShadowOpenCase outOpenCase){
+    if(text == s_ShadowSmokeOpenCaseReference){
+        outOpenCase = CsgShadowOpenCase::Reference;
+        return true;
+    }
+    if(text == s_ShadowSmokeOpenCaseRetained){
+        outOpenCase = CsgShadowOpenCase::Retained;
+        return true;
+    }
+    if(text == s_ShadowSmokeOpenCaseClippedReference){
+        outOpenCase = CsgShadowOpenCase::ClippedReference;
+        return true;
+    }
+    if(text == s_ShadowSmokeOpenCaseClipped){
+        outOpenCase = CsgShadowOpenCase::Clipped;
+        return true;
+    }
+    if(text == s_ShadowSmokeOpenCaseBoundary64){
+        outOpenCase = CsgShadowOpenCase::Boundary64;
+        return true;
+    }
+    if(text == s_ShadowSmokeOpenCaseTerminal65){
+        outOpenCase = CsgShadowOpenCase::Terminal65;
+        return true;
+    }
+    return false;
+}
+
+u32 ComputeSkinningBenchmarkJointSeed(in u32 jointIndex, in u32 characterIndex){
+    u32 seed = jointIndex * 747796405u + characterIndex * 2891336453u + 277803737u;
+    seed = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
+    return (seed >> 22u) ^ seed;
+}
+
+b8 ShouldAnimateSkinningBenchmarkJoint(in u32 jointIndex, in u32 characterIndex, in b8 staticPreview){
+    u32 modulo = s_SkinningBenchmarkAnimatedJointModulo;
+    if(staticPreview)
+        modulo = s_SkinningBenchmarkStaticPreviewAnimatedJointModulo;
+    return jointIndex != 0u && (ComputeSkinningBenchmarkJointSeed(jointIndex, characterIndex) % modulo) == 0u;
+}
+
+MatrixSingle BuildSkinningBenchmarkAnimatedJointMatrix(
+    in MatrixSingle bindJoint,
+    in u32 jointIndex,
+    in u32 characterIndex,
+    in f32 timeSeconds,
+    in b8 staticPreview
+){
+    if(!ShouldAnimateSkinningBenchmarkJoint(jointIndex, characterIndex, staticPreview))
+        return bindJoint;
+
+    const u32 seed = ComputeSkinningBenchmarkJointSeed(jointIndex, characterIndex);
+    const VectorSingle phaseCandidates = VectorSingle(cast<f32>(seed & 255u), cast<f32>(characterIndex), 0.0f, 0.0f)
+        * VectorSingle(0.0245436926f, 1.04719758f, 0.0f, 0.0f);
+    f32 phaseLane = phaseCandidates.y;
+    f32 primarySpeed = 0.34f;
+    f32 secondarySpeed = 0.21f;
+    f32 baseAngle = 0.024f;
+    f32 angleJitter = 0.0025f;
+    f32 rollBase = 0.006f;
+    f32 rollJitter = 0.0015f;
+    if(staticPreview){
+        phaseLane = phaseCandidates.x;
+        primarySpeed = 1.15f;
+        secondarySpeed = 0.83f;
+        baseAngle = 0.20f;
+        angleJitter = 0.025f;
+        rollBase = 0.045f;
+        rollJitter = 0.008f;
+    }
+    const VectorSingle phase = VectorSingle(phaseLane, phaseLane, 0.0f, 0.0f);
+    VectorSingle wavePhases = VectorSingle(timeSeconds, timeSeconds, 0.0f, 0.0f)
+        * VectorSingle(primarySpeed, secondarySpeed, 0.0f, 0.0f)
+        + phase;
+    wavePhases = wavePhases + VectorSingle(0.0f, 0.5f, 0.0f, 0.0f);
+    const VectorSingle waves = sin(wavePhases);
+    const VectorSingle coefficientIndices = VectorSingle(
+        cast<f32>((seed >> 16u) % 5u),
+        cast<f32>((seed >> 3u) & 3u),
+        cast<f32>((seed >> 6u) & 3u),
+        cast<f32>((seed >> 9u) & 3u)
+    );
+    const VectorSingle coefficients = coefficientIndices
+        * VectorSingle(angleJitter, 0.035f, 0.04f, rollJitter)
+        + VectorSingle(baseAngle, 0.18f, 0.58f, rollBase);
+    const f32 angle = waves.x * coefficients.x;
+    const VectorSingle rotationAngles = VectorSingle(
+        angle * coefficients.y,
+        angle * coefficients.z,
+        waves.y * coefficients.w,
+        0.0f
+    );
+
+    const MatrixSingle rotation = matrixRotationRollPitchYawFromVector(rotationAngles);
+    const MatrixSingle matrix = mul(bindJoint, rotation);
+    if(!matrixIsInvertibleAffine(matrix, 0.000001f, 0.000000000001f))
+        return bindJoint;
+
+    return matrix;
+}
+
+VectorSingle BuildTransparentSceneRotation(in f32 yaw){
+    return quaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
+}
+
+VectorSingle BuildTransparentCsgRotation(in f32 yaw){
+    return quaternionRotationRollPitchYawFromVector(VectorSingle(yaw * 0.32f, yaw, yaw * 0.16f, 0.0f));
+}
+
+void ComputeTransparentSceneTransform(
+    in VectorSingle basePosition,
+    in VectorSingle sceneRotation,
+    in VectorSingle localRotation,
+    mut VectorSingle outPosition,
+    mut VectorSingle outRotation
+){
+    outPosition = vector3Rotate(basePosition, sceneRotation);
+    outRotation = normalize(quaternionMultiply(sceneRotation, localRotation));
+}
+
+void ComputeCsgCutterTransforms(
+    in VectorSingle center,
+    in VectorSingle rotation,
+    mut MatrixSingle outWorldToShape,
+    mut MatrixSingle outShapeToWorld
+){
+    const MatrixSingle shapeToWorld = matrixAffineTransformation(
+        VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+        VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+        rotation,
+        center
+    );
+    outWorldToShape = inverse(shapeToWorld);
+    outShapeToWorld = shapeToWorld;
+}
+
 class ReflectionCsgContextEntities{
     public EntityID smallReceiver = s_InvalidEntityId;
     public EntityID denseReceiver = s_InvalidEntityId;

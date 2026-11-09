@@ -82,6 +82,13 @@ class PresentationPacingSummary{
     public u64 stallsOver50Ms = 0u;
 }
 
+enum<u8> PresentationFpsStatus{
+    Waiting,
+    Interval,
+    Complete,
+    Invalid
+}
+
 class PresentationFpsSample{
     public u64 firstPresentationCount = 0u;
     public u64 lastPresentationCount = 0u;

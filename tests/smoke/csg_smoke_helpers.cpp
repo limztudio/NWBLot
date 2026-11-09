@@ -4,6 +4,8 @@
 
 #include "csg_smoke_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,9 +23,9 @@ namespace Tests::Smoke{
 
 
 void AssignCsgCutterTransform(const SIMDVectorSingle center, const SIMDVectorSingle rotation, Impl::CsgCutterComponent& cutter)noexcept{
-    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
-    SIMDVectorSingle determinant;
-    const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
+    SIMDMatrix worldToShape;
+    SIMDMatrix shapeToWorld;
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
     StoreFloat(worldToShape, cutter.worldToShape);
     StoreFloat(shapeToWorld, cutter.shapeToWorld);
 }
@@ -50,4 +52,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

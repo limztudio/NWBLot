@@ -38,7 +38,7 @@
 #include <global/simd/vector.h>
 #include <impl/ecs_ui/toolkit/builder.h>
 #include <global/simplemath.h>
-#include <tests/unit/ui/arithmetic_fixture_rows.h>
+#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
 #include <global/text_utils.h>
 #include <global/assert.h>
 #include <global/bit.h>

@@ -1,0 +1,1281 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
+#include <core/alloc/general.h>
+#include <core/alloc/persistent.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_aligned_reallocation_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_VerifyAlignedReallocationAlignment = NWB::Tests::AllocCases::s_AllocCaseVerifyAlignedReallocationAlignment;
+inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedReallocationAlignment * 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Arena>
+static void VerifyAlignedReallocation(Arena& arena){
+    EXPECT_EQ(arena.reallocate(nullptr, s_VerifyAlignedReallocationAlignment, 0u), nullptr);
+    auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_VerifyAlignedReallocationAlignment, s_VerifyAlignedReallocationAlignment));
+    ASSERT_NE(initial, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(initial) % s_VerifyAlignedReallocationAlignment, 0u);
+    for(usize i = 0u; i < s_VerifyAlignedReallocationAlignment; ++i)
+        initial[i] = static_cast<u8>(i);
+
+    void* blocker = arena.allocate(1u, s_VerifyAlignedReallocationAlignment);
+    ASSERT_NE(blocker, nullptr);
+
+    auto* resized = static_cast<u8*>(arena.reallocate(initial, s_VerifyAlignedReallocationAlignment, s_VerifyAlignedReallocationGrownBytes));
+    ASSERT_NE(resized, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(resized) % s_VerifyAlignedReallocationAlignment, 0u);
+    for(usize i = 0u; i < s_VerifyAlignedReallocationAlignment; ++i)
+        EXPECT_EQ(resized[i], static_cast<u8>(i));
+
+    arena.deallocate(blocker, 1u, s_VerifyAlignedReallocationAlignment);
+    EXPECT_EQ(arena.reallocate(resized, s_VerifyAlignedReallocationAlignment, 0u), nullptr);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(ArenaAlignedReallocation, GlobalArenaReallocationPreservesAlignment){
+    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
+    VerifyAlignedReallocation(arena);
+}
+
+TEST(ArenaAlignedReallocation, PersistentArenaReallocationPreservesAlignment){
+    NWB::Core::Alloc::PersistentArena arena(NWB::Tests::s_TestArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u));
+    VerifyAlignedReallocation(arena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
+#include <core/alloc/general.h>
+#include <core/alloc/persistent.h>
+
+#include <global/thread.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_allocator_contention_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using WorkerResult = NWB::Tests::AllocCases::AllocatorWorkerResult;
+
+using PersistentArenaWorkerResult = NWB::Tests::AllocCases::PersistentArenaWorkerResult;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
+    constexpr usize s_ThreadCount = 4u;
+    constexpr usize s_IterationsPerThread = 32768u;
+    constexpr usize s_AllocationBytes = 128u;
+    static constexpr Name s_OwnerName = NWB::Tests::AllocCases::s_GlobalSharedOwnerAllocationChurn;
+    Array<WorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
+    Latch workersReady(s_ThreadCount);
+    Latch start(1u);
+
+    for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
+        workers[threadIndex] = Thread([&results, &workersReady, &start, threadIndex](){
+            NWB::Core::Alloc::GlobalArena arena(s_OwnerName);
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
+            workersReady.count_down();
+            start.wait();
+
+            for(usize iteration = 0u; iteration < s_IterationsPerThread; ++iteration){
+                auto* const allocation = static_cast<u8*>(arena.allocate(1u, s_AllocationBytes));
+                if(!allocation){
+                    allocationFailed = true;
+                    break;
+                }
+                // Volatile payload accesses retain the cross-thread allocator correctness check in opt/fin builds.
+                volatile u8* const payload = allocation;
+                const u8 firstByte = static_cast<u8>(threadIndex);
+                const u8 lastByte = static_cast<u8>(iteration);
+                payload[0u] = firstByte;
+                payload[s_AllocationBytes - 1u] = lastByte;
+                contentsPreserved &= payload[0u] == firstByte;
+                contentsPreserved &= payload[s_AllocationBytes - 1u] == lastByte;
+                arena.deallocate(allocation, 1u, s_AllocationBytes);
+            }
+
+            results[threadIndex] = WorkerResult{ .stats = arena.memoryStats(), .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, };
+        });
+    }
+
+    workersReady.wait();
+    start.count_down();
+    for(Thread& worker : workers)
+        worker.join();
+
+    for(const WorkerResult& result : results){
+        EXPECT_FALSE(result.allocationFailed);
+        EXPECT_TRUE(result.contentsPreserved);
+        EXPECT_EQ(result.stats.allocationCount, s_IterationsPerThread);
+        EXPECT_EQ(result.stats.deallocationCount, s_IterationsPerThread);
+        EXPECT_EQ(result.stats.reallocationCount, 0u);
+        EXPECT_EQ(result.stats.usedBytes, 0u);
+        EXPECT_EQ(result.stats.reservedBytes, 0u);
+        EXPECT_GE(result.stats.peakUsedBytes, s_AllocationBytes);
+    }
+}
+
+
+TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAccounting){
+    constexpr usize s_ThreadCount = 4u;
+    constexpr usize s_IterationsPerThread = 4096u;
+    constexpr usize s_HandoffAlignment = 256u;
+    constexpr usize s_HandoffBytes = 256u;
+    constexpr usize s_PoolPayloadBytes = 512u * 1024u;
+    const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
+    static constexpr Name s_OwnerName = NWB::Tests::AllocCases::s_PersistentArenaSharedCrossThreadChurn;
+    NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
+    Array<u8*, s_ThreadCount> handoffs = {};
+    Array<PersistentArenaWorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
+    Latch workersReady(s_ThreadCount);
+    Latch start(1u);
+    Latch handoffsReady(s_ThreadCount);
+    Latch releaseHandoffs(1u);
+
+    for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
+        workers[threadIndex] = Thread([&arena, &handoffs, &results, &workersReady, &start, &handoffsReady, &releaseHandoffs, threadIndex]()noexcept{
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
+            b8 alignmentPreserved = true;
+            workersReady.count_down();
+            start.wait();
+
+            auto* const handoff = static_cast<u8*>(arena.allocate(s_HandoffAlignment, s_HandoffBytes));
+            if(!handoff)
+                allocationFailed = true;
+            else{
+                volatile u8* const payload = handoff;
+                payload[0u] = static_cast<u8>(threadIndex);
+                payload[s_HandoffBytes - 1u] = static_cast<u8>(threadIndex + 1u);
+                alignmentPreserved &= reinterpret_cast<usize>(handoff) % s_HandoffAlignment == 0u;
+            }
+            handoffs[threadIndex] = handoff;
+            handoffsReady.count_down();
+            releaseHandoffs.wait();
+
+            auto* const handedOff = handoffs[(threadIndex + 1u) % s_ThreadCount];
+            if(!handedOff)
+                allocationFailed = true;
+            else{
+                volatile u8* const payload = handedOff;
+                contentsPreserved &= payload[0u] == static_cast<u8>((threadIndex + 1u) % s_ThreadCount);
+                contentsPreserved &= payload[s_HandoffBytes - 1u] == static_cast<u8>((threadIndex + 1u) % s_ThreadCount + 1u);
+                arena.deallocate(handedOff, s_HandoffAlignment, s_HandoffBytes);
+            }
+
+            for(usize iteration = 0u; iteration < s_IterationsPerThread; ++iteration){
+                const usize alignment = (iteration + threadIndex) % 2u == 0u ? 1u : s_HandoffAlignment;
+                auto* const allocation = static_cast<u8*>(arena.allocate(alignment, 113u));
+                if(!allocation){
+                    allocationFailed = true;
+                    break;
+                }
+                volatile u8* const payload = allocation;
+                const u8 firstByte = static_cast<u8>(threadIndex + iteration);
+                const u8 lastByte = static_cast<u8>(threadIndex + iteration + 1u);
+                payload[0u] = firstByte;
+                payload[112u] = lastByte;
+                alignmentPreserved &= reinterpret_cast<usize>(allocation) % alignment == 0u;
+                YieldThread();
+                contentsPreserved &= payload[0u] == firstByte;
+                contentsPreserved &= payload[112u] == lastByte;
+                arena.deallocate(allocation, alignment, 113u);
+            }
+
+            results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
+        });
+    }
+
+    workersReady.wait();
+    start.count_down();
+    handoffsReady.wait();
+    const ArenaMemoryStats live = arena.memoryStats();
+    releaseHandoffs.count_down();
+    for(Thread& worker : workers)
+        worker.join();
+
+    const ArenaMemoryStats settled = arena.memoryStats();
+    constexpr u64 s_ExpectedOperations = s_ThreadCount * (s_IterationsPerThread + 1u);
+    for(const PersistentArenaWorkerResult& result : results){
+        EXPECT_FALSE(result.allocationFailed);
+        EXPECT_TRUE(result.contentsPreserved);
+        EXPECT_TRUE(result.alignmentPreserved);
+    }
+    EXPECT_EQ(live.reservedBytes, poolBytes);
+    EXPECT_EQ(live.allocationCount, s_ThreadCount);
+    EXPECT_EQ(live.reallocationCount, 0u);
+    EXPECT_EQ(live.deallocationCount, 0u);
+    EXPECT_GT(live.usedBytes, 0u);
+    EXPECT_EQ(live.peakUsedBytes, live.usedBytes);
+    EXPECT_EQ(settled.reservedBytes, poolBytes);
+    EXPECT_EQ(settled.usedBytes, 0u);
+    EXPECT_EQ(settled.allocationCount, s_ExpectedOperations);
+    EXPECT_EQ(settled.reallocationCount, 0u);
+    EXPECT_EQ(settled.deallocationCount, s_ExpectedOperations);
+    EXPECT_GE(settled.peakUsedBytes, live.usedBytes);
+    EXPECT_LE(settled.peakUsedBytes, poolBytes);
+}
+
+
+TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndAccounting){
+    constexpr usize s_ThreadCount = 4u;
+    constexpr usize s_IterationsPerThread = 4096u;
+    constexpr usize s_InitialBytes = 113u;
+    constexpr usize s_ReplacementBytes = 389u;
+    constexpr usize s_ReplacementAlignment = 256u;
+    constexpr usize s_PoolPayloadBytes = 512u * 1024u;
+    const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
+    static constexpr Name s_OwnerName = NWB::Tests::AllocCases::s_PersistentArenaSharedReallocationChurn;
+    NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
+    Array<PersistentArenaWorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
+    Latch workersReady(s_ThreadCount);
+    Latch start(1u);
+
+    for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
+        workers[threadIndex] = Thread([&arena, &results, &workersReady, &start, threadIndex]()noexcept{
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
+            b8 alignmentPreserved = true;
+            workersReady.count_down();
+            start.wait();
+
+            for(usize iteration = 0u; iteration < s_IterationsPerThread; ++iteration){
+                auto* allocation = static_cast<u8*>(arena.allocate(1u, s_InitialBytes));
+                if(!allocation){
+                    allocationFailed = true;
+                    break;
+                }
+                volatile u8* const initialPayload = allocation;
+                const u8 firstByte = static_cast<u8>(threadIndex + iteration);
+                const u8 lastByte = static_cast<u8>(threadIndex + iteration + 1u);
+                initialPayload[0u] = firstByte;
+                initialPayload[s_InitialBytes - 1u] = lastByte;
+                YieldThread();
+
+                auto* const replacement = static_cast<u8*>(arena.reallocate(allocation, s_ReplacementAlignment, s_ReplacementBytes));
+                if(!replacement){
+                    allocationFailed = true;
+                    arena.deallocate(allocation, 1u, s_InitialBytes);
+                    break;
+                }
+                allocation = replacement;
+                volatile u8* const replacementPayload = allocation;
+                contentsPreserved &= replacementPayload[0u] == firstByte;
+                contentsPreserved &= replacementPayload[s_InitialBytes - 1u] == lastByte;
+                alignmentPreserved &= reinterpret_cast<usize>(allocation) % s_ReplacementAlignment == 0u;
+                arena.deallocate(allocation, s_ReplacementAlignment, s_ReplacementBytes);
+            }
+
+            results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
+        });
+    }
+
+    workersReady.wait();
+    start.count_down();
+    for(Thread& worker : workers)
+        worker.join();
+
+    const ArenaMemoryStats settled = arena.memoryStats();
+    constexpr u64 s_ExpectedOperations = s_ThreadCount * s_IterationsPerThread;
+    for(const PersistentArenaWorkerResult& result : results){
+        EXPECT_FALSE(result.allocationFailed);
+        EXPECT_TRUE(result.contentsPreserved);
+        EXPECT_TRUE(result.alignmentPreserved);
+    }
+    EXPECT_EQ(settled.reservedBytes, poolBytes);
+    EXPECT_EQ(settled.usedBytes, 0u);
+    EXPECT_EQ(settled.allocationCount, s_ExpectedOperations);
+    EXPECT_EQ(settled.reallocationCount, s_ExpectedOperations);
+    EXPECT_EQ(settled.deallocationCount, s_ExpectedOperations);
+    EXPECT_LE(settled.peakUsedBytes, poolBytes);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/arena_owner_fixture.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
+#include <core/alloc/general.h>
+#include <core/alloc/persistent.h>
+
+#include <global/arena_c_allocator.h>
+#include <global/span.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_persistent_arena_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NWB::Core::Alloc::PersistentArena;
+using NWB::Tests::ExpectMemoryStatsEqual;
+
+
+inline constexpr usize s_PersistentArenaHighAlignment = NWB::Tests::AllocCases::s_AllocCasePersistentArenaHighAlignment;
+inline constexpr usize s_SmallArenaPayloadBytes = NWB::Tests::AllocCases::s_AllocCaseSmallArenaPayloadBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FillPattern(const Span<u8> bytes)noexcept{
+    for(usize index = 0u; index < bytes.size(); ++index)
+        bytes[index] = static_cast<u8>(index * 17u + 3u);
+}
+
+void ExpectPattern(const Span<const u8> bytes){
+    for(usize index = 0u; index < bytes.size(); ++index)
+        EXPECT_EQ(bytes[index], static_cast<u8>(index * 17u + 3u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(PersistentArenaTests, StructureAlignedSizeFitsExactPayloadAndReusesTheFixedPool){
+    const auto structureAlignedSize = static_cast<usize(*)(usize)>(&PersistentArena::StructureAlignedSize);
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaExactPayload}, structureAlignedSize(s_PersistentArenaHighAlignment));
+
+    const ArenaMemoryStats initial = arena.memoryStats();
+    auto* const first = static_cast<u8*>(arena.allocate(1u, s_PersistentArenaHighAlignment));
+    ASSERT_NE(first, nullptr);
+    FillPattern(Span<u8>(first, s_PersistentArenaHighAlignment));
+    const ArenaMemoryStats allocated = arena.memoryStats();
+    EXPECT_EQ(allocated.reservedBytes, initial.reservedBytes);
+    EXPECT_GT(allocated.usedBytes, 0u);
+    EXPECT_EQ(allocated.allocationCount, initial.allocationCount + 1u);
+
+    EXPECT_EQ(arena.allocate(1u, 1u), nullptr);
+    ExpectMemoryStatsEqual(allocated, arena.memoryStats());
+
+    arena.deallocate(first, 1u, s_PersistentArenaHighAlignment);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    auto* const reused = static_cast<u8*>(arena.allocate(1u, s_PersistentArenaHighAlignment));
+    ASSERT_NE(reused, nullptr);
+    FillPattern(Span<u8>(reused, s_PersistentArenaHighAlignment));
+    ExpectPattern(Span<const u8>(reused, s_PersistentArenaHighAlignment));
+    arena.deallocate(reused, 1u, s_PersistentArenaHighAlignment);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, StructureAlignedSizeFitsAnExactOverAlignedPayload){
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaExactOveralignedPayload}, PersistentArena::StructureAlignedSize(1u, s_PersistentArenaHighAlignment));
+
+    auto* const allocation = static_cast<u8*>(arena.allocate(s_PersistentArenaHighAlignment, 1u));
+    ASSERT_NE(allocation, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(allocation) % s_PersistentArenaHighAlignment, 0u);
+    arena.deallocate(allocation, s_PersistentArenaHighAlignment, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, StructureAlignedSizeFitsMultipleExactTypedArrayBackings){
+    using SlotRecord = NWB::Tests::AllocCases::PersistentArenaSlotRecord;
+
+    constexpr usize s_QueueCount = 9u;
+    constexpr usize s_SlotsPerQueue = 256u;
+    constexpr usize s_SlotCount = s_QueueCount * s_SlotsPerQueue;
+    const usize slotRecordBytes = s_SlotCount * sizeof(SlotRecord);
+    const usize nextSerialBytes = s_QueueCount * sizeof(u64);
+    const usize poolBytes = PersistentArena::StructureAlignedSize(slotRecordBytes, alignof(SlotRecord)) + PersistentArena::StructureAlignedSize(nextSerialBytes, alignof(u64));
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaFixedArrayBackings}, poolBytes);
+
+    {
+        auto slotRecords = NWB::Core::MakePersistentUnique<SlotRecord[]>(arena, s_SlotCount);
+        auto nextSerials = NWB::Core::MakePersistentUnique<u64[]>(arena, s_QueueCount);
+
+        ASSERT_TRUE(slotRecords);
+        ASSERT_TRUE(nextSerials);
+    }
+
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, ReusesAdjacentFreeBlocksForGrowthAndCoalescing){
+    constexpr usize s_GrowthBytes = 512u;
+    constexpr usize s_BlockBytes = 1024u;
+    constexpr usize s_GrownBytes = 1024u;
+    constexpr usize s_CombinedBytes = 1536u;
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaCoalescing}, PersistentArena::StructureAlignedSize(s_PersistentArenaHighAlignment));
+
+    auto* const growth = static_cast<u8*>(arena.allocate(1u, s_GrowthBytes));
+    auto* const neighbor = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    ASSERT_NE(growth, nullptr);
+    ASSERT_NE(neighbor, nullptr);
+    FillPattern(Span<u8>(growth, s_GrowthBytes));
+    arena.deallocate(neighbor, 1u, s_BlockBytes);
+
+    auto* const grown = static_cast<u8*>(arena.reallocate(growth, 1u, s_GrownBytes));
+    ASSERT_EQ(grown, growth);
+    ExpectPattern(Span<const u8>(grown, s_GrowthBytes));
+    arena.deallocate(grown, 1u, s_GrownBytes);
+
+    auto* const first = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const second = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const blocker = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_NE(blocker, nullptr);
+    EXPECT_EQ(arena.allocate(1u, s_CombinedBytes), nullptr);
+
+    arena.deallocate(first, 1u, s_BlockBytes);
+    arena.deallocate(second, 1u, s_BlockBytes);
+    auto* const combined = static_cast<u8*>(arena.allocate(1u, s_CombinedBytes));
+    ASSERT_NE(combined, nullptr);
+    arena.deallocate(combined, 1u, s_CombinedBytes);
+    arena.deallocate(blocker, 1u, s_BlockBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, ReallocationGrowsAcrossMultipleDeferredAdjacentBlocks){
+    constexpr usize s_BlockBytes = 512u;
+    constexpr usize s_GrownBytes = 1600u;
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaDeferredReallocationGrowth}, 3u * PersistentArena::StructureAlignedSize(s_BlockBytes));
+
+    auto* const first = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const second = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const third = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_NE(third, nullptr);
+    FillPattern(Span<u8>(first, s_BlockBytes));
+
+    arena.deallocate(second, 1u, s_BlockBytes);
+    const ArenaMemoryStats beforeFailedGrowth = arena.memoryStats();
+    EXPECT_EQ(arena.reallocate(first, 1u, s_GrownBytes), nullptr);
+    ExpectPattern(Span<const u8>(first, s_BlockBytes));
+    ExpectMemoryStatsEqual(beforeFailedGrowth, arena.memoryStats());
+
+    arena.deallocate(third, 1u, s_BlockBytes);
+
+    auto* const grown = static_cast<u8*>(arena.reallocate(first, 1u, s_GrownBytes));
+    ASSERT_EQ(grown, first);
+    ExpectPattern(Span<const u8>(grown, s_BlockBytes));
+    arena.deallocate(grown, 1u, s_GrownBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, FailedAlignedReallocationRetainsPayloadAndStats){
+    constexpr usize s_InitialBytes = 1024u;
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaFailedReallocation}, PersistentArena::StructureAlignedSize(2048u));
+
+    auto* const initial = static_cast<u8*>(arena.allocate(1u, s_InitialBytes));
+    auto* const blocker = static_cast<u8*>(arena.allocate(1u, 800u));
+    ASSERT_NE(initial, nullptr);
+    ASSERT_NE(blocker, nullptr);
+    FillPattern(Span<u8>(initial, s_InitialBytes));
+    const ArenaMemoryStats beforeFailure = arena.memoryStats();
+
+    EXPECT_EQ(arena.reallocate(initial, 256u, 1536u), nullptr);
+    ExpectPattern(Span<const u8>(initial, s_InitialBytes));
+    ExpectMemoryStatsEqual(beforeFailure, arena.memoryStats());
+
+    arena.deallocate(initial, 1u, s_InitialBytes);
+    arena.deallocate(blocker, 1u, 800u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, ReallocationMaintainsRequestedAlignmentAcrossShrinkAndGrowth){
+    constexpr usize s_InitialBytes = 512u;
+    constexpr usize s_GrownBytes = 1024u;
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaReallocationAlignment}, PersistentArena::StructureAlignedSize(4096u, s_PersistentArenaHighAlignment));
+
+    auto* const initial = static_cast<u8*>(arena.allocate(1u, s_InitialBytes));
+    ASSERT_NE(initial, nullptr);
+    FillPattern(Span<u8>(initial, s_InitialBytes));
+
+    auto* const shrunk = static_cast<u8*>(arena.reallocate(initial, 256u, 256u));
+    ASSERT_NE(shrunk, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(shrunk) % 256u, 0u);
+    ExpectPattern(Span<const u8>(shrunk, 256u));
+
+    auto* const grown = static_cast<u8*>(arena.reallocate(shrunk, s_PersistentArenaHighAlignment, s_GrownBytes));
+    ASSERT_NE(grown, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(grown) % s_PersistentArenaHighAlignment, 0u);
+    ExpectPattern(Span<const u8>(grown, 256u));
+    arena.deallocate(grown, s_PersistentArenaHighAlignment, s_GrownBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, ReallocationRetainsAHighAlignedBlockForLowerAlignment){
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaReallocationLowerAlignment}, PersistentArena::StructureAlignedSize(1u, s_PersistentArenaHighAlignment));
+
+    auto* const allocation = static_cast<u8*>(arena.allocate(s_PersistentArenaHighAlignment, 1u));
+    ASSERT_NE(allocation, nullptr);
+    allocation[0u] = 93u;
+
+    auto* const shrunk = static_cast<u8*>(arena.reallocate(allocation, 1u, 1u));
+    ASSERT_EQ(shrunk, allocation);
+    EXPECT_EQ(shrunk[0u], 93u);
+    arena.deallocate(shrunk, 1u, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+TEST(PersistentArenaTests, NullAndZeroReallocationFollowAllocationAccounting){
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaNullZeroReallocation}, PersistentArena::StructureAlignedSize(s_SmallArenaPayloadBytes));
+
+    const ArenaMemoryStats before = arena.memoryStats();
+    EXPECT_EQ(arena.reallocate(nullptr, 64u, 0u), nullptr);
+    ExpectMemoryStatsEqual(before, arena.memoryStats());
+
+    auto* const allocation = static_cast<u8*>(arena.reallocate(nullptr, 64u, 33u));
+    ASSERT_NE(allocation, nullptr);
+    const ArenaMemoryStats allocated = arena.memoryStats();
+    EXPECT_EQ(allocated.allocationCount, before.allocationCount + 1u);
+    EXPECT_EQ(allocated.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(allocated.deallocationCount, before.deallocationCount);
+
+    EXPECT_EQ(arena.reallocate(allocation, 64u, 0u), nullptr);
+    const ArenaMemoryStats released = arena.memoryStats();
+    EXPECT_EQ(released.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(released.usedBytes, 0u);
+    EXPECT_EQ(released.allocationCount, allocated.allocationCount);
+    EXPECT_EQ(released.reallocationCount, allocated.reallocationCount);
+    EXPECT_EQ(released.deallocationCount, allocated.deallocationCount + 1u);
+}
+
+
+TEST(PersistentArenaTests, CAllocatorAdapterRetainsMaxAlignmentAndPrefix){
+    PersistentArena arena(Name{NWB::Tests::AllocCases::s_AllocCasePersistentArenaCAllocator}, PersistentArena::StructureAlignedSize(s_SmallArenaPayloadBytes));
+
+    auto* const zeroAllocation = static_cast<u8*>(AllocateArenaCMemory(arena, 0u));
+    ASSERT_NE(zeroAllocation, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(zeroAllocation) % alignof(MaxAlign), 0u);
+    zeroAllocation[0u] = 47u;
+
+    auto* const grown = static_cast<u8*>(ReallocateArenaCMemory(arena, zeroAllocation, 37u));
+    ASSERT_NE(grown, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(grown) % alignof(MaxAlign), 0u);
+    EXPECT_EQ(grown[0u], 47u);
+    DeallocateArenaCMemory(arena, grown);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+#include <global/containers.h>
+#include <global/exception.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scratch_reuse_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr u32 s_TailTagOffset = NWB::Tests::AllocCases::s_AllocCaseScratchReuseTailTagOffset;
+constexpr u32 s_PathReserveBytes = NWB::Tests::AllocCases::s_AllocCaseScratchReusePathReserveBytes;
+constexpr u32 s_SentinelByte = NWB::Tests::AllocCases::s_AllocCaseScratchReuseSentinelByte;
+constexpr u32 s_BlockBytes = NWB::Tests::AllocCases::s_AllocCaseScratchReuseBlockBytes;
+constexpr u32 s_FirstSentinel = NWB::Tests::AllocCases::s_AllocCaseScratchReuseFirstSentinel;
+constexpr u32 s_CollectionCount = NWB::Tests::AllocCases::s_AllocCaseScratchReuseCollectionCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NWB::Core::Alloc::ScratchArena;
+
+using AllocationRequest = NWB::Tests::AllocCases::AllocationRequest;
+
+
+template<usize Count>
+[[nodiscard]] static b8 RunAllocationBatch(const Array<AllocationRequest, Count>& requests, ScratchArena& arena){
+    Array<u8*, Count> allocations{};
+    usize prepared = 0u;
+    b8 valid = true;
+    for(; prepared < Count; ++prepared){
+        const AllocationRequest& request = requests[prepared];
+        auto* allocation = static_cast<u8*>(arena.allocate(request.alignment, request.bytes));
+        if(!allocation){
+            valid = false;
+            break;
+        }
+        allocations[prepared] = allocation;
+        valid &= reinterpret_cast<usize>(allocation) % request.alignment == 0u;
+        allocation[0u] = static_cast<u8>(prepared + 1u);
+        allocation[request.bytes - 1u] = static_cast<u8>(prepared + s_TailTagOffset);
+    }
+    while(prepared != 0u){
+        const usize index = --prepared;
+        const AllocationRequest& request = requests[index];
+        u8* allocation = allocations[index];
+        valid &= allocation[0u] == static_cast<u8>(index + 1u);
+        valid &= allocation[request.bytes - 1u] == static_cast<u8>(index + s_TailTagOffset);
+        arena.deallocate(allocation, request.alignment, request.bytes);
+    }
+    return valid;
+}
+
+// Public container operations model collecting and sorting transient work while a caller retains earlier storage.
+[[nodiscard]] static b8 RunScopedCollection(const usize count, ScratchArena& arena){
+    Vector<u64, ScratchArena> keys(arena);
+    keys.resize(count);
+    for(usize index = 0u; index < count; ++index)
+        keys[index] = static_cast<u64>(count - index - 1u);
+    Vector<u64, ScratchArena> payload(arena);
+    payload.resize(count * 3u);
+    for(usize index = 0u; index < payload.size(); ++index)
+        payload[index] = static_cast<u64>(index * 7u + 3u);
+    {
+        Vector<usize, ScratchArena> ordinals(arena);
+        ordinals.resize(count);
+        for(usize index = 0u; index < count; ++index)
+            ordinals[index] = index;
+        Sort(keys.begin(), keys.end());
+        AString<ScratchArena> path(arena);
+        path.reserve(s_PathReserveBytes);
+        path += "project/fixtures/transient_collection/";
+        path += "resolved_asset_name_with_a_nontrivial_path_length";
+        if(path.size() <= 32u)
+            return false;
+        for(usize index = 0u; index < count; ++index){
+            if(keys[index] != ordinals[index] || payload[index * 3u] != static_cast<u64>(index * 21u + 3u))
+                return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(ScratchArenaReuse, ReverseFreesCrossChunkBoundariesAndReuseAllEmptyChunks){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseCrossChunk}, 256u);
+    constexpr Array<AllocationRequest, 3> s_Requests = { AllocationRequest{ .alignment = 8u, .bytes = 192u }, AllocationRequest{ .alignment = 8u, .bytes = 128u }, AllocationRequest{ .alignment = 8u, .bytes = 768u } };
+    ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
+    const ArenaMemoryStats warm = arena.memoryStats();
+    EXPECT_EQ(warm.usedBytes, 0u);
+    EXPECT_EQ(warm.allocationCount, 3u);
+    EXPECT_EQ(warm.deallocationCount, 3u);
+    EXPECT_EQ(warm.peakUsedBytes, 1088u);
+    for(usize iteration = 0u; iteration < 32u; ++iteration){
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
+        const ArenaMemoryStats current = arena.memoryStats();
+        EXPECT_EQ(current.usedBytes, 0u);
+        EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
+        EXPECT_EQ(current.allocationCount, (iteration + 2u) * 3u);
+        EXPECT_EQ(current.deallocationCount, current.allocationCount);
+    }
+}
+
+TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
+    constexpr Array<usize, 9u> s_Alignments = { 1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
+    ArenaMemoryStats before;
+    ArenaMemoryStats live;
+    b8 valid = true;
+    usize expectedReserved = 0u;
+    ArenaMemoryStats released;
+    {
+        ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseColdAlignmentBuckets}, 257u);
+        Array<u8*, LengthOf(s_Alignments)> allocations = {};
+        before = HeapBackingMemoryStats();
+        for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
+            const usize alignment = s_Alignments[index];
+            const usize bytes = alignment + 3u;
+            allocations[index] = static_cast<u8*>(arena.allocate(alignment, bytes));
+            if(!allocations[index]){
+                valid = false;
+                continue;
+            }
+            valid &= reinterpret_cast<usize>(allocations[index]) % alignment == 0u;
+            allocations[index][0u] = static_cast<u8>(index + 1u);
+            allocations[index][bytes - 1u] = static_cast<u8>(index + 19u);
+            expectedReserved += Alignment(alignment, 257u);
+        }
+        live = HeapBackingMemoryStats();
+        valid &= arena.memoryStats().reservedBytes == expectedReserved;
+        for(usize index = LengthOf(s_Alignments); index != 0u;){
+            --index;
+            if(!allocations[index])
+                continue;
+            const usize alignment = s_Alignments[index];
+            const usize bytes = alignment + 3u;
+            valid &= allocations[index][0u] == static_cast<u8>(index + 1u);
+            valid &= allocations[index][bytes - 1u] == static_cast<u8>(index + 19u);
+            arena.deallocate(allocations[index], alignment, bytes);
+        }
+        released = arena.memoryStats();
+    }
+    const ArenaMemoryStats after = HeapBackingMemoryStats();
+    EXPECT_TRUE(valid);
+    EXPECT_EQ(live.allocationCount - before.allocationCount, LengthOf(s_Alignments));
+    EXPECT_EQ(after.deallocationCount - before.deallocationCount, LengthOf(s_Alignments));
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(released.usedBytes, 0u);
+    EXPECT_EQ(released.reservedBytes, expectedReserved);
+}
+
+TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseInvalidAlignment}, 256u);
+    auto* sentinel = static_cast<u8*>(arena.allocate(2u, 32u));
+    ASSERT_NE(sentinel, nullptr);
+    sentinel[0u] = s_SentinelByte;
+    const ArenaMemoryStats before = arena.memoryStats();
+#if defined(NWB_DEBUG)
+    EXPECT_DEATH_IF_SUPPORTED(EXPECT_EQ(arena.allocate(3u, 32u), nullptr), "");
+    EXPECT_DEATH_IF_SUPPORTED(EXPECT_EQ(arena.reallocate(sentinel, 3u, 64u), nullptr), "");
+    EXPECT_DEATH_IF_SUPPORTED({ arena.deallocate(sentinel, 3u, 32u); }, "");
+#else
+    EXPECT_EQ(arena.allocate(3u, 32u), nullptr);
+    EXPECT_EQ(arena.reallocate(sentinel, 3u, 64u), nullptr);
+    arena.deallocate(sentinel, 3u, 32u);
+#endif
+    EXPECT_EQ(sentinel[0u], s_SentinelByte);
+    EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
+    EXPECT_EQ(arena.memoryStats().allocationCount, before.allocationCount);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, before.reallocationCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
+    EXPECT_THROW(EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max), nullptr), AllocationSizeException);
+    EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
+    arena.deallocate(sentinel, 2u, 32u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentinels){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseAlignments}, 256u);
+    constexpr Array<usize, 4u> s_Alignments = { 1u, 8u, 64u, 256u };
+    Array<u8*, LengthOf(s_Alignments)> sentinels = {};
+    for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
+        sentinels[index] = static_cast<u8*>(arena.allocate(s_Alignments[index], 64u));
+        ASSERT_NE(sentinels[index], nullptr);
+        sentinels[index][0u] = static_cast<u8>(index + s_SentinelByte);
+        sentinels[index][63u] = static_cast<u8>(index + 83u);
+    }
+    const ArenaMemoryStats retained = arena.memoryStats();
+    constexpr Array<AllocationRequest, 8> s_Requests = {
+        AllocationRequest{ .alignment = 1u, .bytes = 256u }, AllocationRequest{ .alignment = 8u, .bytes = 256u }, AllocationRequest{ .alignment = 64u, .bytes = 256u }, AllocationRequest{ .alignment = 256u, .bytes = 256u },
+        AllocationRequest{ .alignment = 1u, .bytes = 1536u }, AllocationRequest{ .alignment = 8u, .bytes = 1536u }, AllocationRequest{ .alignment = 64u, .bytes = 1536u }, AllocationRequest{ .alignment = 256u, .bytes = 1536u },
+    };
+    for(usize iteration = 0u; iteration < 16u; ++iteration){
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
+        EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
+        for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
+            EXPECT_EQ(sentinels[index][0u], static_cast<u8>(index + s_SentinelByte));
+            EXPECT_EQ(sentinels[index][63u], static_cast<u8>(index + 83u));
+        }
+    }
+    // The alignment buckets are independent, so global reverse order is not required here.
+    for(usize index = 0u; index < LengthOf(s_Alignments); ++index)
+        arena.deallocate(sentinels[index], s_Alignments[index], 64u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, arena.memoryStats().deallocationCount);
+}
+
+TEST(ScratchArenaReuse, OutOfOrderFreeRemainsANoopUntilThatAllocationBecomesTop){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseOutOfOrder}, 256u);
+    auto* first = static_cast<u8*>(arena.allocate(8u, s_BlockBytes));
+    auto* second = static_cast<u8*>(arena.allocate(8u, s_BlockBytes));
+    auto* third = static_cast<u8*>(arena.allocate(8u, 192u));
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_NE(third, nullptr);
+    first[0u] = s_FirstSentinel;
+    first[95u] = 29u;
+    const ArenaMemoryStats before = arena.memoryStats();
+    arena.deallocate(first, 8u, s_BlockBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
+    arena.deallocate(third, 8u, 192u);
+    arena.deallocate(second, 8u, s_BlockBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, s_BlockBytes);
+    EXPECT_EQ(first[0u], s_FirstSentinel);
+    EXPECT_EQ(first[95u], 29u);
+    arena.deallocate(first, 8u, s_BlockBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 3u);
+}
+
+TEST(ScratchArenaReuse, RelocatedAndZeroSizedTopReallocationsExposeThePreviousLiveChunk){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseRelocation}, 256u);
+    auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
+    auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
+    ASSERT_NE(sentinel, nullptr);
+    ASSERT_NE(allocation, nullptr);
+    sentinel[0u] = 41u;
+    for(usize index = 0u; index < 128u; ++index)
+        allocation[index] = static_cast<u8>(index);
+    auto* grown = static_cast<u8*>(arena.reallocate(allocation, 8u, 1024u));
+    ASSERT_NE(grown, nullptr);
+    EXPECT_NE(grown, allocation);
+    for(usize index = 0u; index < 128u; ++index)
+        EXPECT_EQ(grown[index], static_cast<u8>(index));
+    EXPECT_EQ(arena.memoryStats().usedBytes, 1088u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 3u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
+    EXPECT_EQ(arena.reallocate(grown, 8u, 256u), grown);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 320u);
+    // Zero-size top resize returns the retired address.
+    EXPECT_EQ(arena.reallocate(grown, 8u, 0u), grown);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 64u);
+    EXPECT_EQ(sentinel[0u], 41u);
+    arena.deallocate(sentinel, 8u, 64u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 3u);
+
+    auto* sole = static_cast<u8*>(arena.allocate(8u, 128u));
+    ASSERT_NE(sole, nullptr);
+    sole[0u] = 97u;
+    auto* moved = static_cast<u8*>(arena.reallocate(sole, 8u, 8192u));
+    ASSERT_NE(moved, nullptr);
+    EXPECT_EQ(moved[0u], 97u);
+    arena.deallocate(moved, 8u, 8192u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    constexpr Array<AllocationRequest, 2> s_AfterRelocation = { AllocationRequest{ .alignment = 8u, .bytes = 128u }, AllocationRequest{ .alignment = 8u, .bytes = 8192u } };
+    ASSERT_TRUE(RunAllocationBatch(s_AfterRelocation, arena));
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLastChunk){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseZeroBytes}, 256u);
+    EXPECT_EQ(arena.allocate<u8>(0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
+    void* zero = arena.allocate(8u, 0u);
+    ASSERT_NE(zero, nullptr);
+    arena.deallocate(zero, 8u, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 0u);
+    auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
+    ASSERT_NE(allocation, nullptr);
+    allocation[0u] = 43u;
+    void* zeroAtTop = arena.allocate(8u, 0u);
+    ASSERT_NE(zeroAtTop, nullptr);
+    arena.deallocate(zeroAtTop, 8u, 0u);
+    EXPECT_EQ(allocation[0u], 43u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 128u);
+    arena.deallocate(allocation, 8u, 128u);
+    arena.deallocate(zeroAtTop, 8u, 0u);
+    const ArenaMemoryStats cached = arena.memoryStats();
+    EXPECT_EQ(cached.usedBytes, 0u);
+    void* reusedZero = arena.allocate(8u, 0u);
+    ASSERT_NE(reusedZero, nullptr);
+    arena.deallocate(reusedZero, 8u, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, cached.reservedBytes);
+    EXPECT_EQ(arena.memoryStats().allocationCount, cached.allocationCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, cached.deallocationCount);
+    void* resized = arena.allocate(8u, 64u);
+    ASSERT_NE(resized, nullptr);
+    EXPECT_EQ(arena.reallocate(resized, 8u, 0u), resized);
+    arena.deallocate(resized, 8u, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 2u);
+}
+
+TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllocation){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseZeroInitialCapacity}, 0u);
+    EXPECT_EQ(arena.allocate(8u, 0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 0u);
+    void* allocation = arena.allocate(8u, 9u);
+    ASSERT_NE(allocation, nullptr);
+    arena.deallocate(allocation, 8u, 9u);
+    const ArenaMemoryStats cached = arena.memoryStats();
+    EXPECT_NE(arena.allocate(8u, 0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, cached.reservedBytes);
+    EXPECT_EQ(arena.memoryStats().allocationCount, cached.allocationCount);
+}
+
+TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTop){
+    constexpr u32 s_CachedBytes = 1024u;
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseCachedRelocation}, 256u);
+    auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
+    auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
+    void* cached = arena.allocate(8u, s_CachedBytes);
+    ASSERT_NE(sentinel, nullptr);
+    ASSERT_NE(allocation, nullptr);
+    ASSERT_NE(cached, nullptr);
+    sentinel[0u] = 79u;
+    for(usize index = 0u; index < 128u; ++index)
+        allocation[index] = static_cast<u8>(index + 11u);
+    arena.deallocate(cached, 8u, s_CachedBytes);
+    const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
+    auto* relocated = static_cast<u8*>(arena.reallocate(allocation, 8u, s_CachedBytes));
+    const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
+    ASSERT_NE(relocated, nullptr);
+    EXPECT_EQ(relocated, cached);
+    EXPECT_EQ(afterHeap.allocationCount, beforeHeap.allocationCount);
+    EXPECT_EQ(afterHeap.deallocationCount, beforeHeap.deallocationCount);
+    for(usize index = 0u; index < 128u; ++index)
+        EXPECT_EQ(relocated[index], static_cast<u8>(index + 11u));
+    arena.deallocate(relocated, 8u, s_CachedBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 64u);
+    EXPECT_EQ(sentinel[0u], 79u);
+    arena.deallocate(sentinel, 8u, 64u);
+
+    // Relocation must release the old chunk beneath the replacement block.
+    allocation = static_cast<u8*>(arena.allocate(8u, 128u));
+    ASSERT_NE(allocation, nullptr);
+    allocation[0u] = 101u;
+    relocated = static_cast<u8*>(arena.reallocate(allocation, 8u, s_CachedBytes));
+    ASSERT_NE(relocated, nullptr);
+    EXPECT_EQ(relocated, cached);
+    EXPECT_EQ(relocated[0u], 101u);
+    arena.deallocate(relocated, 8u, s_CachedBytes);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    constexpr Array<AllocationRequest, 2> s_Requests = { AllocationRequest{ .alignment = 8u, .bytes = 128u }, AllocationRequest{ .alignment = 8u, .bytes = 1024u } };
+    ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, arena.memoryStats().deallocationCount);
+}
+
+TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndCounters){
+    constexpr u32 s_CachedBytes = 1536u;
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseFailedRelocation}, 256u);
+    auto* sentinel = static_cast<u8*>(arena.allocate(1u, 64u));
+    auto* allocation = static_cast<u8*>(arena.allocate(1u, 128u));
+    void* cached = arena.allocate(1u, s_CachedBytes);
+    ASSERT_NE(sentinel, nullptr);
+    ASSERT_NE(allocation, nullptr);
+    ASSERT_NE(cached, nullptr);
+    sentinel[0u] = 131u;
+    allocation[0u] = 139u;
+    allocation[127u] = 149u;
+    arena.deallocate(cached, 1u, s_CachedBytes);
+    const ArenaMemoryStats before = arena.memoryStats();
+    EXPECT_EQ(arena.reallocate(allocation, 1u, Limit<usize>::s_Max), nullptr);
+    // Aligned request that overflows only when adding the chunk header.
+    EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max - 255u), nullptr);
+    const ArenaMemoryStats after = arena.memoryStats();
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+    EXPECT_EQ(sentinel[0u], 131u);
+    EXPECT_EQ(allocation[0u], 139u);
+    EXPECT_EQ(allocation[127u], 149u);
+    void* reused = arena.allocate(1u, s_CachedBytes);
+    ASSERT_NE(reused, nullptr);
+    EXPECT_EQ(reused, cached);
+    arena.deallocate(reused, 1u, s_CachedBytes);
+    arena.deallocate(allocation, 1u, 128u);
+    arena.deallocate(sentinel, 1u, 64u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+TEST(ScratchArenaReuse, LargeSmallLargeRequestsDoNotRecreateUndersizedCachedChunks){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseMixedSizes}, 256u);
+    constexpr Array<AllocationRequest, 4> s_SmallFirst = {
+        AllocationRequest{ .alignment = 8u, .bytes = 64u },
+        AllocationRequest{ .alignment = 8u, .bytes = 8192u },
+        AllocationRequest{ .alignment = 8u, .bytes = 96u },
+        AllocationRequest{ .alignment = 8u, .bytes = 512u }
+    };
+    constexpr Array<AllocationRequest, 4> s_LargeFirst = {
+        AllocationRequest{ .alignment = 8u, .bytes = 8192u },
+        AllocationRequest{ .alignment = 8u, .bytes = 96u },
+        AllocationRequest{ .alignment = 8u, .bytes = 64u },
+        AllocationRequest{ .alignment = 8u, .bytes = 8192u }
+    };
+    for(usize iteration = 0u; iteration < 3u; ++iteration){
+        ASSERT_TRUE(RunAllocationBatch(s_SmallFirst, arena));
+        ASSERT_TRUE(RunAllocationBatch(s_LargeFirst, arena));
+    }
+    const ArenaMemoryStats warm = arena.memoryStats();
+    const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
+    b8 valid = true;
+    for(usize iteration = 0u; iteration < 64u; ++iteration){
+        valid &= RunAllocationBatch(s_SmallFirst, arena);
+        valid &= RunAllocationBatch(s_LargeFirst, arena);
+    }
+    const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
+    EXPECT_TRUE(valid);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, warm.reservedBytes);
+    EXPECT_EQ(afterHeap.allocationCount, beforeHeap.allocationCount);
+    EXPECT_EQ(afterHeap.deallocationCount, beforeHeap.deallocationCount);
+}
+
+TEST(ScratchArenaReuse, NestedContainerDestructionAndCallerUnwindPreserveEarlierStorage){
+    ScratchArena arena(Name{NWB::Tests::AllocCases::s_AllocCaseScratchReuseNestedContainers}, 256u);
+    Vector<u64, ScratchArena> caller(arena);
+    caller.assign(48u, 0x12345678u);
+    const ArenaMemoryStats retained = arena.memoryStats();
+    ASSERT_TRUE(RunScopedCollection(s_CollectionCount, arena));
+    const ArenaMemoryStats warm = arena.memoryStats();
+    EXPECT_EQ(warm.usedBytes, retained.usedBytes);
+    for(usize iteration = 0u; iteration < 16u; ++iteration){
+        ASSERT_TRUE(RunScopedCollection(s_CollectionCount, arena));
+        EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
+        EXPECT_EQ(arena.memoryStats().reservedBytes, warm.reservedBytes);
+    }
+    EXPECT_THROW(([&](){
+        Vector<u64, ScratchArena> outer(arena);
+        outer.resize(2048u, 23u);
+        Vector<u64, ScratchArena> inner(arena);
+        inner.resize(4096u, 47u);
+        throw RuntimeException("scratch nested scope unwind");
+    })(), RuntimeException
+    );
+    EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
+    for(const u64 value : caller)
+        EXPECT_EQ(value, 0x12345678u);
+}
+
+TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingFromUsage){
+    constexpr Name s_Owner = NWB::Tests::AllocCases::s_ScratchReuseOwnerLifecycle;
+    ArenaMemoryStats before;
+    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+    while(record){
+        ArenaMemoryOwnerSnapshot owner;
+        record = ReadArenaMemoryOwnerRecord(*record, owner);
+        if(owner.ownerName == s_Owner && owner.source == ArenaMemorySource::Arena){
+            before = owner.stats;
+            break;
+        }
+    }
+    ArenaMemoryStats live;
+    {
+        ScratchArena arena(s_Owner, 256u);
+        constexpr Array<AllocationRequest, 3> s_Requests = { AllocationRequest{ .alignment = 8u, .bytes = 192u }, AllocationRequest{ .alignment = 8u, .bytes = 128u }, AllocationRequest{ .alignment = 8u, .bytes = 768u } };
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
+        live = arena.memoryStats();
+        EXPECT_EQ(live.usedBytes, 0u);
+        EXPECT_GT(live.reservedBytes, 0u);
+        b8 found = false;
+        record = FirstArenaMemoryOwnerRecord();
+        while(record){
+            ArenaMemoryOwnerSnapshot owner;
+            record = ReadArenaMemoryOwnerRecord(*record, owner);
+            if(owner.ownerName != s_Owner || owner.source != ArenaMemorySource::Arena)
+                continue;
+            found = true;
+            EXPECT_EQ(owner.stats.usedBytes, 0u);
+            EXPECT_EQ(owner.stats.reservedBytes, live.reservedBytes);
+            EXPECT_EQ(owner.stats.allocationCount, before.allocationCount + live.allocationCount);
+            EXPECT_EQ(owner.stats.deallocationCount, before.deallocationCount + live.deallocationCount);
+            break;
+        }
+        EXPECT_TRUE(found);
+    }
+    b8 found = false;
+    record = FirstArenaMemoryOwnerRecord();
+    while(record){
+        ArenaMemoryOwnerSnapshot owner;
+        record = ReadArenaMemoryOwnerRecord(*record, owner);
+        if(owner.ownerName != s_Owner || owner.source != ArenaMemorySource::Arena)
+            continue;
+        found = true;
+        EXPECT_EQ(owner.stats.usedBytes, 0u);
+        EXPECT_EQ(owner.stats.reservedBytes, 0u);
+        EXPECT_EQ(owner.stats.allocationCount, before.allocationCount + live.allocationCount);
+        EXPECT_EQ(owner.stats.deallocationCount, before.deallocationCount + live.deallocationCount);
+        EXPECT_EQ(owner.stats.peakUsedBytes, Max(before.peakUsedBytes, live.peakUsedBytes));
+        break;
+    }
+    EXPECT_TRUE(found);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/arena_owner_fixture.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <global/arena_memory.h>
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+#include <tbb/scalable_allocator.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_allocator_usage_boundary_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core::Alloc;
+using NWB::Tests::OwnerStats;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
+    constexpr u32 s_OddBytes = 13u;
+    constexpr Name s_Owner = NWB::Tests::AllocCases::s_AllocationOwnersOddReallocation;
+    GlobalArena arena(s_Owner);
+    auto* pointer = static_cast<u8*>(arena.allocate(1u, s_OddBytes));
+    ASSERT_NE(pointer, nullptr);
+    for(usize index = 0u; index < s_OddBytes; ++index)
+        pointer[index] = static_cast<u8>(index + 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
+    EXPECT_EQ(arena.memoryStats().reservedBytes, CoreMsize(pointer));
+
+    auto* replacement = static_cast<u8*>(arena.reallocate(pointer, 1u, 21u));
+    ASSERT_NE(replacement, nullptr);
+    pointer = replacement;
+    for(usize index = 0u; index < s_OddBytes; ++index)
+        EXPECT_EQ(pointer[index], static_cast<u8>(index + 1u));
+    EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
+    EXPECT_EQ(OwnerStats(s_Owner).usedBytes, CoreMsize(pointer));
+
+    replacement = static_cast<u8*>(arena.reallocate(pointer, 1u, 7u));
+    ASSERT_NE(replacement, nullptr);
+    pointer = replacement;
+    EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
+    const ArenaMemoryStats beforeFailure = arena.memoryStats();
+    // Windows debug builds can use a separate CRT errno in the allocator DLL.
+    errno = ERANGE;
+    void* backendInvalidAlignment = scalable_aligned_realloc(pointer, 0u, 3u);
+    const i32 backendInvalidAlignmentError = errno;
+    errno = ERANGE;
+    void* invalidAlignment = arena.reallocate(pointer, 3u, 0u);
+    const i32 invalidAlignmentError = errno;
+    EXPECT_EQ(invalidAlignment, nullptr);
+    EXPECT_EQ(invalidAlignment, backendInvalidAlignment);
+    EXPECT_EQ(invalidAlignmentError, backendInvalidAlignmentError);
+    EXPECT_EQ(arena.reallocate(pointer, 1u, Limit<usize>::s_Max), nullptr);
+    EXPECT_EQ(arena.memoryStats().usedBytes, beforeFailure.usedBytes);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, beforeFailure.reservedBytes);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, beforeFailure.reallocationCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, beforeFailure.deallocationCount);
+    EXPECT_EQ(pointer[0u], 1u);
+    arena.deallocate(pointer, 1u, 7u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
+    EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 1u);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
+}
+
+TEST(AllocatorUsageBoundaries, ZeroSizeReallocationReleasesChargedBytes){
+    constexpr Name s_Owner = NWB::Tests::AllocCases::s_AllocationOwnersObjectAndZero;
+    GlobalArena arena(s_Owner);
+    void* allocation = arena.allocate(64u, 13u);
+    ASSERT_NE(allocation, nullptr);
+    EXPECT_EQ(arena.reallocate(allocation, 64u, 0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 1u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
+    EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

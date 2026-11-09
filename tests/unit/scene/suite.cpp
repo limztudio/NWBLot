@@ -1,0 +1,749 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/scene/name_cases.adhd.h>
+
+#include <impl/assets_scene/asset.h>
+#include <impl/assets_subsystem/asset.h>
+
+#include <core/assets/manager.h>
+
+#include <global/binary.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::SceneAssetTestHelpers{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core::Assets;
+using namespace NWB::Impl;
+
+inline constexpr Name s_RendererSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsRenderer;
+inline constexpr Name s_SkinningSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsSkinning;
+inline constexpr Name s_TransparentSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsTransparent;
+inline constexpr Name s_UiSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsUi;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena);
+[[nodiscard]] AssetBytes MakeSceneBinary(Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, Span<const SceneAsset::EntityRef> entities, AssetArena& arena);
+[[nodiscard]] AssetBytes MakeEntityBinary(Span<const EntityAsset::ComponentRef> components, AssetArena& arena);
+
+template<typename ComponentT, typename PayloadT>
+[[nodiscard]] inline AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
+    ComponentHeaderBinary header;
+    header.componentTypeHash = ComponentT::AssetTypeName().hash();
+    header.payloadByteCount = sizeof(PayloadT);
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + sizeof(PayloadT));
+    AppendPOD(binary, header);
+    AppendPOD(binary, payload);
+    return binary;
+}
+
+template<typename SubsystemT>
+inline void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
+    const usize count = subsystem.fieldCount();
+    for(usize i = 0u; i < count; ++i){
+        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+        if(descriptor.isArray){
+            if(subsystem.fieldValueCount(i) == 0u)
+                subsystem.appendFieldValue(i, Name(NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset));
+        }
+        else if(!subsystem.fieldValue(i))
+            subsystem.appendFieldValue(i, Name(NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset));
+    }
+}
+
+template<typename SubsystemT>
+[[nodiscard]] inline AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
+    const usize subsystemCount = subsystem.subsystems.size();
+    const usize fieldCount = subsystem.fieldCount();
+    u64 totalAssetCount = 0u;
+    for(usize i = 0u; i < fieldCount; ++i)
+        totalAssetCount += static_cast<u64>(subsystem.fieldValueCount(i));
+
+    SubsystemHeaderBinary header;
+    header.subsystemTypeHash = SubsystemT::AssetTypeName().hash();
+    header.subsystemCount = static_cast<u64>(subsystemCount);
+    header.fieldCount = static_cast<u64>(fieldCount);
+    header.assetCount = totalAssetCount;
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + subsystemCount * sizeof(NameHash) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
+    AppendPOD(binary, header);
+    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
+        AppendPOD(binary, ref.name().hash());
+    for(usize i = 0u; i < fieldCount; ++i){
+        const u64 valueCount = static_cast<u64>(subsystem.fieldValueCount(i));
+        AppendPOD(binary, valueCount);
+    }
+    for(usize i = 0u; i < fieldCount; ++i){
+        const usize valueCount = subsystem.fieldValueCount(i);
+        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex)
+            AppendPOD(binary, subsystem.fieldValue(i, elementIndex).hash());
+    }
+    return binary;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MapAssetBinarySource final : public IAssetBinarySource{
+public:
+    struct Entry{
+        AssetBytes binary;
+        Name path = s_NameNone;
+
+
+    public:
+        Entry(const Name& inPath, AssetBytes&& inBinary)noexcept
+            : binary(Move(inBinary))
+            , path(inPath)
+        {}
+    };
+
+
+public:
+    explicit MapAssetBinarySource(AssetArena& arena)noexcept
+        : m_arena(arena)
+        , m_entries(arena)
+    {}
+
+
+public:
+    void setBinary(const Name& virtualPath, Span<const u8> binary);
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override;
+
+
+private:
+    AssetArena& m_arena;
+    AssetVector<Entry> m_entries;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::SceneAssetTestHelpers{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena){
+    ProjectHeaderBinary header;
+    header.startSceneHash = startScene.hash();
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header));
+    AppendPOD(binary, header);
+    return binary;
+}
+
+AssetBytes MakeSceneBinary(const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, const Span<const SceneAsset::EntityRef> entities, AssetArena& arena){
+    SceneHeaderBinary header;
+    header.subsystemCount = static_cast<u64>(subsystems.size());
+    header.entityCount = static_cast<u64>(entities.size());
+    header.assetCount = static_cast<u64>(assets.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
+    AppendPOD(binary, header);
+    for(const SceneAsset::SubsystemRef& ref : subsystems)
+        AppendPOD(binary, ref.name().hash());
+    for(const SceneAsset::EntityRef& ref : entities)
+        AppendPOD(binary, ref.name().hash());
+    for(const auto& [nickname, ref] : assets){
+        SceneAssetEntryBinary entry;
+        entry.nicknameHash = nickname.hash();
+        entry.assetHash = ref.name().hash();
+        AppendPOD(binary, entry);
+    }
+    return binary;
+}
+
+AssetBytes MakeEntityBinary(const Span<const EntityAsset::ComponentRef> components, AssetArena& arena){
+    EntityHeaderBinary header;
+    header.componentCount = static_cast<u64>(components.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
+    AppendPOD(binary, header);
+    for(const EntityAsset::ComponentRef& ref : components)
+        AppendPOD(binary, ref.name().hash());
+    return binary;
+}
+
+void MapAssetBinarySource::setBinary(const Name& virtualPath, const Span<const u8> binary){
+    AssetBytes copy(m_arena);
+    copy.assign(binary.begin(), binary.end());
+    for(Entry& entry : m_entries){
+        if(entry.path == virtualPath){
+            entry.binary = Move(copy);
+            return;
+        }
+    }
+    m_entries.emplace_back(virtualPath, Move(copy));
+}
+
+b8 MapAssetBinarySource::readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const{
+    outBinary.clear();
+    for(const Entry& entry : m_entries){
+        if(entry.path == virtualPath){
+            outBinary.assign(entry.binary.begin(), entry.binary.end());
+            return true;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/module.h>
+
+#include <core/ecs/entity.h>
+
+#include <tests/common/ecs_test_world.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_camera_selection_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Impl::Scene;
+using NWB::Core::ECS::EntityID;
+using TestWorld = NWB::Tests::EcsTestWorld;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover){
+    TestWorld testWorld;
+    const EntityID fallback = CreateSceneCameraEntity(testWorld.world, Float4(1.0f, 0.0f, 0.0f));
+    const EntityID original = CreateSceneCameraEntity(testWorld.world, Float4(2.0f, 0.0f, 0.0f));
+    auto selector = testWorld.world.createEntity();
+    selector.addComponent<ActiveCameraComponent>().camera = original;
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, original);
+
+    testWorld.world.destroyEntity(original);
+    const EntityID replacement = CreateSceneCameraEntity(testWorld.world, Float4(3.0f, 0.0f, 0.0f));
+    ASSERT_EQ(original.index(), replacement.index());
+    ASSERT_NE(original.generation(), replacement.generation());
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, fallback);
+
+    selector.getComponent<ActiveCameraComponent>().camera = replacement;
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, replacement);
+    testWorld.world.entity(replacement).removeComponent<TransformComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, fallback);
+    testWorld.world.entity(replacement).addComponent<TransformComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, replacement);
+    testWorld.world.entity(replacement).removeComponent<CameraComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, fallback);
+    testWorld.world.entity(replacement).addComponent<CameraComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, replacement);
+}
+
+TEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding){
+    TestWorld testWorld;
+    const EntityID first = CreateSceneCameraEntity(testWorld.world, Float4(1.0f, 0.0f, 0.0f));
+    const EntityID second = CreateSceneCameraEntity(testWorld.world, Float4(2.0f, 0.0f, 0.0f));
+    auto firstSelector = testWorld.world.createEntity();
+    firstSelector.addComponent<ActiveCameraComponent>().camera = second;
+    auto secondSelector = testWorld.world.createEntity();
+    secondSelector.addComponent<ActiveCameraComponent>().camera = first;
+
+    SceneCameraView resolved = ResolveSceneCameraView(testWorld.world, 1.25f);
+    ASSERT_TRUE(resolved.valid());
+    EXPECT_EQ(resolved.entity, second);
+    firstSelector.removeComponent<ActiveCameraComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, first);
+    secondSelector.getComponent<ActiveCameraComponent>().camera = second;
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, second);
+}
+
+TEST(SceneCameraSelection, FallbackPreservesSparseViewOrderAfterRemoval){
+    TestWorld testWorld;
+    const EntityID first = CreateSceneCameraEntity(testWorld.world, Float4(1.0f, 0.0f, 0.0f));
+    const EntityID second = CreateSceneCameraEntity(testWorld.world, Float4(2.0f, 0.0f, 0.0f));
+    const EntityID third = CreateSceneCameraEntity(testWorld.world, Float4(3.0f, 0.0f, 0.0f));
+    testWorld.world.entity(first).removeComponent<CameraComponent>();
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, third);
+
+    auto selector = testWorld.world.createEntity();
+    selector.addComponent<ActiveCameraComponent>().camera = first;
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, third);
+    auto& thirdCamera = testWorld.world.entity(third).getComponent<CameraComponent>();
+    thirdCamera.setNearPlane(0.0f);
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, second);
+    testWorld.world.entity(second).getComponent<TransformComponent>().rotation = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    EXPECT_FALSE(ResolveSceneCameraView(testWorld.world).valid());
+    thirdCamera.setNearPlane(0.25f);
+    EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, third);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/scene/name_cases.adhd.h>
+
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_scene/component_assets.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_entity_component_asset_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core::Assets;
+using namespace NWB::Impl;
+using namespace NWB::Tests::SceneAssetTestHelpers;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SceneSubsystemAssets, RejectsInvalidLightFlagsAndTrailingComponentBytes){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    AssetArena arena(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneComponentBinaryEdges);
+    ComponentAssetCodec codec;
+
+    LightComponentPayloadBinary payload;
+    payload.enableCaustics = 2u;
+    const auto invalidFlags = MakeComponentBinary<LightComponentAsset>(payload, arena);
+    EXPECT_FALSE(codec.deserialize(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesInvalidLight, invalidFlags, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid light flags")));
+
+    payload.enableCaustics = 1u;
+    auto trailing = MakeComponentBinary<LightComponentAsset>(payload, arena);
+    trailing.push_back(0u);
+    EXPECT_FALSE(codec.deserialize(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesTrailingLight, trailing, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
+}
+
+
+TEST(SceneSubsystemAssets, RejectsMissingSharedOpticalGroupAndDuplicateEntityComponentTypes){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneEntityComponentAssets)};
+    Core::Alloc::GlobalArena globalArena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneEntityComponentAssetsGlobal)};
+    AssetRegistry registry(arena);
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ComponentAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<EntityAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
+
+    MapAssetBinarySource source(arena);
+    AssetManager assets(arena, registry, source);
+
+    RendererSubsystem rendererSubsystem(arena, s_RendererSubsystemPath);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+    source.setBinary(s_RendererSubsystemPath, MakeSubsystemBinary(rendererSubsystem, arena));
+
+    RendererComponentPayloadBinary invalidRendererPayload;
+    invalidRendererPayload.materialHash = Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectMaterialsMatSkinnedUv).hash();
+    invalidRendererPayload.opticalVolumeGroupHash = {};
+    invalidRendererPayload.opticalVolumeCoincidence = static_cast<u8>(OpticalVolumeCoincidence::SharedGroup);
+    invalidRendererPayload.opticalBoundaryMode = static_cast<u8>(OpticalBoundaryMode::ClosedPriority);
+    ComponentAssetCodec componentCodec;
+    EXPECT_FALSE(componentCodec.deserialize(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer), MakeComponentBinary<RendererComponentAsset>(invalidRendererPayload, arena), arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("shared_group optical volume requires optical_volume_group")));
+
+    TransformComponentPayloadBinary transformPayload;
+    transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
+    transformPayload.rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    transformPayload.scale = Float4(2.0f, 2.0f, 2.0f, 0.0f);
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesHeroTransform), MakeComponentBinary<TransformComponentAsset>(transformPayload, arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesHeroTransformDuplicate), MakeComponentBinary<TransformComponentAsset>(transformPayload, arena));
+
+    EntityAsset::ComponentRefVector duplicateComponents(arena);
+    duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform"));
+    duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform_duplicate"));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesDuplicateCompEntity), MakeEntityBinary(duplicateComponents, arena));
+
+    SceneAsset::SubsystemRefVector sceneSubsystems(arena);
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    SceneAsset::EntityRefVector duplicateSceneEntities(arena);
+    duplicateSceneEntities.push_back(SceneAsset::EntityRef("project/entities/duplicate_comp_entity"));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesDuplicateCompScene), MakeSceneBinary(sceneSubsystems, sceneAssets, duplicateSceneEntities, arena));
+
+    ActiveSceneSubsystems active(globalArena);
+    EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_comp_scene"), assets));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate component type")));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <CoolStuff/Testbed/fly_camera_motion.adhd.h>
+
+#include <core/input/module.h>
+
+#include <gtest/gtest.h>
+
+#include <global/simdmath.h>
+
+#include <limits>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_fly_camera_motion_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(FlyCameraMotion, PointerCaptureAndNonfiniteInputResetTheAnchor){
+    const Testbed::FlyCameraMotion motion;
+    b8 valid = true;
+    f64 lastX = 12.0;
+    f64 lastY = 24.0;
+    f32 deltaX = 3.0f;
+    f32 deltaY = 4.0f;
+    motion.updateMousePosition(100.0, 200.0, true, true, valid, lastX, lastY, deltaX, deltaY);
+    EXPECT_FALSE(valid);
+    EXPECT_FLOAT_EQ(deltaX, 3.0f);
+    EXPECT_FLOAT_EQ(deltaY, 4.0f);
+    motion.updateMousePosition(30.0, 40.0, false, true, valid, lastX, lastY, deltaX, deltaY);
+    EXPECT_TRUE(valid);
+    EXPECT_DOUBLE_EQ(lastX, 30.0);
+    EXPECT_DOUBLE_EQ(lastY, 40.0);
+    EXPECT_FLOAT_EQ(deltaX, 3.0f);
+    EXPECT_FLOAT_EQ(deltaY, 4.0f);
+    motion.updateMousePosition(std::numeric_limits<f64>::quiet_NaN(), 40.0, false, true, valid, lastX, lastY, deltaX, deltaY);
+    EXPECT_FALSE(valid);
+    EXPECT_FLOAT_EQ(deltaX, 3.0f);
+    EXPECT_FLOAT_EQ(deltaY, 4.0f);
+}
+
+TEST(FlyCameraMotion, CapturedKeyboardAndNonfiniteDeltaDoNotMove){
+    const Testbed::FlyCameraMotion motion;
+    const auto axes = motion.buildMoveAxes(true, true, false, true, false);
+    EXPECT_FLOAT_EQ(VectorGetX(axes), 0.0f);
+    EXPECT_FLOAT_EQ(VectorGetY(axes), 0.0f);
+    const auto position = VectorSet(1.0f, 2.0f, 3.0f, 0.0f);
+    const auto result = motion.resolvePosition(position, VectorSet(1.0f, 1.0f, 0.0f, 0.0f), VectorSet(0.0f, 0.0f, 0.0f, 1.0f), std::numeric_limits<f32>::infinity(), true);
+    EXPECT_FLOAT_EQ(VectorGetX(result), 1.0f);
+    EXPECT_FLOAT_EQ(VectorGetY(result), 2.0f);
+    EXPECT_FLOAT_EQ(VectorGetZ(result), 3.0f);
+}
+
+
+TEST(FlyCameraInput, CompletedDragSurvivesCaptureLossButActiveDragDoesNot){
+    Testbed::FlyCameraInput input;
+    input.updateButton(false, true, true, false);
+    input.updatePointer(10.0, 20.0, false);
+    input.updatePointer(15.0, 17.0, false);
+    input.updateButton(false, true, false, true);
+    input.pointerCaptureLost();
+    const auto completed = input.takePointerDelta(true);
+    EXPECT_FLOAT_EQ(completed.x, 5.0f);
+    EXPECT_FLOAT_EQ(completed.y, -3.0f);
+    const auto empty = input.takePointerDelta(false);
+    EXPECT_FLOAT_EQ(empty.x, 0.0f);
+    EXPECT_FLOAT_EQ(empty.y, 0.0f);
+
+    input.updateButton(false, true, true, false);
+    input.updatePointer(5.0, 6.0, false);
+    input.updatePointer(9.0, 8.0, false);
+    input.pointerCaptureLost();
+    const auto cancelled = input.takePointerDelta(false);
+    EXPECT_FLOAT_EQ(cancelled.x, 0.0f);
+    EXPECT_FLOAT_EQ(cancelled.y, 0.0f);
+}
+
+TEST(FlyCameraInput, InvalidKeyIndicesAndClearPreserveInputBounds){
+    Testbed::FlyCameraInput input;
+    input.setKeyState(-1, true);
+    input.setKeyState(NWB::Core::Key::Menu + 1, true);
+    EXPECT_FALSE(input.keyPressed(-1));
+    EXPECT_FALSE(input.keyPressed(NWB::Core::Key::Menu + 1));
+    input.setKeyState(NWB::Core::Key::W, true);
+    input.setKeyState(NWB::Core::Key::Menu, true);
+    EXPECT_TRUE(input.keyPressed(NWB::Core::Key::W));
+    EXPECT_TRUE(input.keyPressed(NWB::Core::Key::Menu));
+    input.clear();
+    EXPECT_FALSE(input.keyPressed(NWB::Core::Key::W));
+    EXPECT_FALSE(input.keyPressed(NWB::Core::Key::Menu));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/scene/name_cases.adhd.h>
+
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scene_subsystem_asset_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core::Assets;
+using namespace NWB::Impl;
+using namespace NWB::Tests::SceneAssetTestHelpers;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneSubsystemRoundTrip)};
+    SkinningSubsystem skinningSubsystem(arena, s_SkinningSubsystemPath);
+    PopulateRequiredSubsystemFields(skinningSubsystem);
+
+    const AssetBytes skinningBinary = MakeSubsystemBinary(skinningSubsystem, arena);
+    SubsystemAssetCodec codec;
+
+    TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec;
+    EXPECT_FALSE(rendererCodec.deserialize(s_SkinningSubsystemPath, skinningBinary, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("subsystem binary type does not match")));
+
+    AssetBytes trailing = skinningBinary;
+    trailing.push_back(0u);
+    EXPECT_FALSE(codec.deserialize(s_SkinningSubsystemPath, trailing, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
+
+    AssetBytes badMagic = skinningBinary;
+    badMagic[0] ^= 0xFFu;
+    EXPECT_FALSE(codec.deserialize(s_SkinningSubsystemPath, badMagic, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid subsystem asset format")));
+}
+
+TEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneProjectSceneRoundTrip)};
+    ProjectAssetCodec projectCodec;
+
+    const AssetBytes invalidProjectBinary = MakeProjectBinary(s_NameNone, arena);
+    EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("start_scene must not be empty")));
+
+    SceneAssetCodec sceneCodec;
+    SceneAsset::SubsystemRefVector emptySubsystems(arena);
+    SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    const AssetBytes emptySceneBinary = MakeSceneBinary(emptySubsystems, sceneAssets, {}, arena);
+    EXPECT_FALSE(sceneCodec.deserialize(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameProjectScenesEmpty), emptySceneBinary, arena).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("scene must declare at least one subsystem")));
+}
+
+TEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    AssetArena arena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneActiveSceneSubsystems)};
+    Core::Alloc::GlobalArena globalArena{Name(NWB::Tests::SceneAssetCases::s_SceneCaseTestsSceneActiveSceneSubsystemsGlobal)};
+    AssetRegistry registry(arena);
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
+
+    MapAssetBinarySource source(arena);
+    AssetManager assets(arena, registry, source);
+
+    RendererSubsystem rendererSubsystem(arena, s_RendererSubsystemPath);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+
+    SkinningSubsystem skinningSubsystem(arena, s_SkinningSubsystemPath);
+    PopulateRequiredSubsystemFields(skinningSubsystem);
+
+    TransparentSubsystem transparentSubsystem(arena, s_TransparentSubsystemPath);
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_SkinningSubsystemPath));
+    PopulateRequiredSubsystemFields(transparentSubsystem);
+
+    UiSubsystem uiSubsystem(arena, s_UiSubsystemPath);
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
+    PopulateRequiredSubsystemFields(uiSubsystem);
+
+    SceneAsset::SubsystemRefVector sceneSubsystems(arena);
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_UiSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_TransparentSubsystemPath));
+    SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    sceneAssets.emplace(Name(NWB::Tests::SceneAssetCases::s_SceneCaseCesiumManModel), SceneAsset::AssetRef("project/characters/cesium_man/model"));
+
+    source.setBinary(s_RendererSubsystemPath, MakeSubsystemBinary(rendererSubsystem, arena));
+    source.setBinary(s_SkinningSubsystemPath, MakeSubsystemBinary(skinningSubsystem, arena));
+    source.setBinary(s_TransparentSubsystemPath, MakeSubsystemBinary(transparentSubsystem, arena));
+    source.setBinary(s_UiSubsystemPath, MakeSubsystemBinary(uiSubsystem, arena));
+    source.setBinary(s_DefaultProjectVirtualPath, MakeProjectBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesMain), arena));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesMain), MakeSceneBinary(sceneSubsystems, sceneAssets, {}, arena));
+
+    ActiveSceneSubsystems active(globalArena);
+    ASSERT_TRUE(active.loadProjectStartScene(assets));
+    EXPECT_EQ(active.subsystemCount(), 4u);
+    EXPECT_FALSE(active.findSceneAsset(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameNonexistentNickname)).valid());
+
+    const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
+    ASSERT_NE(activeUi, nullptr);
+    ASSERT_EQ(activeUi->subsystems.size(), 1u);
+    EXPECT_EQ(activeUi->subsystems[0].name(), s_RendererSubsystemPath);
+
+    RendererSubsystem duplicateRendererSubsystem(arena, Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectSubsystemsRendererOverride));
+    PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectSubsystemsRendererOverride), MakeSubsystemBinary(duplicateRendererSubsystem, arena));
+    SceneAsset::SubsystemRefVector duplicateTypeSceneSubsystems(arena);
+    duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/renderer_override"));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesDuplicateType), MakeSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, {}, arena));
+    EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_type"), assets));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate subsystem type")));
+
+    SceneAsset::SubsystemRefVector brokenSceneSubsystems(arena);
+    brokenSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/missing_subsystem"));
+    source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesBroken), MakeSceneBinary(brokenSceneSubsystems, sceneAssets, {}, arena));
+
+    EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/broken"), assets));
+    EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
+    EXPECT_EQ(active.subsystemCount(), 4u);
+    EXPECT_EQ(active.findSceneAsset(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameCesiumManModel)).name(), Name("project/characters/cesium_man/model"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

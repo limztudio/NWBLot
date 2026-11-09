@@ -1,0 +1,528 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/ecs_test_world.h>
+
+#include <impl/assets_model/asset.h>
+#include <impl/ecs_model/system.h>
+#include <impl/ecs_scene/components.adhd.h>
+
+#include <core/assets/manager.h>
+#include <core/ecs/entity.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ModelTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
+public:
+    mutable usize readCount = 0u;
+
+
+public:
+    virtual b8 readAssetBinary(const Name& virtualPath, Core::Assets::AssetBytes& outBinary)const noexcept override;
+};
+
+struct RuntimeContext{
+    static constexpr AStringView s_ModelPath = "tests/model_runtime/model";
+
+
+public:
+    Tests::EcsTestWorld testWorld;
+    Core::Assets::AssetRegistry registry{ testWorld.arena };
+    EmptyAssetSource source;
+    Core::Assets::AssetManager assetManager{ testWorld.arena, registry, source };
+    Impl::ModelSystem system{ testWorld.arena, testWorld.world, assetManager };
+
+
+public:
+    [[nodiscard]] Core::ECS::EntityID makeOwner();
+    [[nodiscard]] Core::ECS::EntityID makeObject(Core::ECS::EntityID owner);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/model/name_cases.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ModelTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EmptyAssetSource::readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept{
+    outBinary.clear();
+    ++readCount;
+    return false;
+}
+
+Core::ECS::EntityID RuntimeContext::makeOwner(){
+    auto entity = testWorld.world.createEntity();
+    auto& component = entity.addComponent<Impl::ModelComponent>();
+    component.model = Core::Assets::AssetRef<Impl::Model>(s_ModelPath);
+    auto& runtime = entity.addComponent<Impl::ModelRuntimeComponent>();
+    runtime.model = component.model.name();
+    entity.addComponent<Impl::Scene::TransformComponent>();
+    return entity.id();
+}
+
+Core::ECS::EntityID RuntimeContext::makeObject(const Core::ECS::EntityID owner){
+    auto entity = testWorld.world.createEntity();
+    auto& object = entity.addComponent<Impl::ModelObjectComponent>();
+    object.owner = owner;
+    object.model = Name(s_ModelPath);
+    object.object = Name(NWB::Tests::ModelCases::s_ModelFixtureNameObject);
+    entity.addComponent<Impl::Scene::TransformComponent>();
+    if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))
+        ++runtime->objectCount;
+    return entity.id();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_skeleton/components.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_model_attachment_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::ModelTests;
+
+
+[[nodiscard]] static SkeletonJointMatrix Translation(const f32 x)noexcept{
+    SkeletonJointMatrix matrix = MatrixIdentity<Float34>();
+    matrix._14 = x;
+    return matrix;
+}
+
+[[nodiscard]] static Core::ECS::EntityID MakeSkeleton(RuntimeContext& context, const Core::ECS::EntityID owner, const usize jointCount, const f32 jointTranslation = 1.0f, const f32 objectTranslation = 0.0f){
+    auto& world = context.testWorld.world;
+    const auto skeleton = context.makeObject(owner);
+    auto& object = world.entity(skeleton).getComponent<ModelObjectComponent>();
+    object.kind = ModelObjectKind::Skeleton;
+    object.localTransform = Translation(objectTranslation);
+    auto& pose = world.entity(skeleton).addComponent<SkeletonPoseComponent>();
+    pose.parentJoints.reserve(jointCount);
+    pose.localJoints.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        pose.parentJoints.push_back(jointIndex == 0u ? s_SkeletonInvalidJointIndex : static_cast<u32>(jointIndex - 1u));
+        pose.localJoints.push_back(Translation(jointTranslation));
+    }
+    return skeleton;
+}
+
+[[nodiscard]] static Core::ECS::EntityID MakeAttachment(RuntimeContext& context, const Core::ECS::EntityID owner, const Core::ECS::EntityID parent, const u32 jointIndex, const f32 localTranslation = 0.0f){
+    const auto entity = context.makeObject(owner);
+    auto& attachment = context.testWorld.world.entity(entity).addComponent<ModelStaticMeshAttachmentComponent>();
+    attachment.parentEntity = parent;
+    attachment.parentJointIndex = jointIndex;
+    attachment.localTransform = Translation(localTranslation);
+    return entity;
+}
+
+TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    const auto parent = MakeSkeleton(context, owner, 2u, 1.0f, 5.0f);
+    const auto replacement = MakeSkeleton(context, owner, 2u, 4.0f, 10.0f);
+    const auto attached = MakeAttachment(context, owner, parent, 1u, 2.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 9.0f);
+
+    world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u] = Translation(3.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 11.0f);
+    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = s_SkeletonInvalidJointIndex;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 10.0f);
+    world.entity(attached).getComponent<ModelStaticMeshAttachmentComponent>().parentEntity = replacement;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 20.0f);
+
+    world.entity(replacement).removeComponent<SkeletonPoseComponent>();
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 20.0f);
+    auto& restored = world.entity(replacement).addComponent<SkeletonPoseComponent>();
+    restored.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
+    restored.localJoints = { Translation(2.0f), Translation(3.0f) };
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 17.0f);
+}
+
+TEST(ModelAttachment, InvalidUnrequestedJointsRejectWholePoseAndRecover){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    const auto parent = MakeSkeleton(context, owner, 2u);
+    const auto attached = MakeAttachment(context, owner, parent, 0u, 2.0f);
+    world.entity(attached).getComponent<Scene::TransformComponent>().position.x = 123.0f;
+    world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u]._11 = 0.0f;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+    world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u] = Translation(1.0f);
+    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = 1u;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = 0u;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 3.0f);
+}
+
+TEST(ModelAttachment, PreservesOriginalAttachmentTransformWriteOrder){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    world.entity(owner).getComponent<Scene::TransformComponent>().position.x = 10.0f;
+    const auto first = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, s_SkeletonInvalidJointIndex, 2.0f);
+    const auto second = MakeAttachment(context, owner, first, s_SkeletonInvalidJointIndex, 3.0f);
+    auto& pose = world.entity(first).addComponent<SkeletonPoseComponent>();
+    pose.parentJoints = { s_SkeletonInvalidJointIndex };
+    pose.localJoints = { Translation(1.0f) };
+    const auto jointFirst = MakeAttachment(context, owner, first, 0u, 4.0f);
+    const auto jointSecond = MakeAttachment(context, owner, first, 0u, 5.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(first).getComponent<Scene::TransformComponent>().position.x, 12.0f);
+    EXPECT_FLOAT_EQ(world.entity(second).getComponent<Scene::TransformComponent>().position.x, 15.0f);
+    EXPECT_FLOAT_EQ(world.entity(jointFirst).getComponent<Scene::TransformComponent>().position.x, 17.0f);
+    EXPECT_FLOAT_EQ(world.entity(jointSecond).getComponent<Scene::TransformComponent>().position.x, 18.0f);
+    world.entity(first).getComponent<ModelStaticMeshAttachmentComponent>().localTransform = Translation(7.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(second).getComponent<Scene::TransformComponent>().position.x, 20.0f);
+    EXPECT_FLOAT_EQ(world.entity(jointFirst).getComponent<Scene::TransformComponent>().position.x, 22.0f);
+    EXPECT_FLOAT_EQ(world.entity(jointSecond).getComponent<Scene::TransformComponent>().position.x, 23.0f);
+}
+
+TEST(ModelAttachment, GroupedQueriesRejectShrunkAndEmptyPalettesAndRecover){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    const auto parent = MakeSkeleton(context, owner, 2u);
+    const auto firstJoint = MakeAttachment(context, owner, parent, 0u);
+    const auto secondJoint = MakeAttachment(context, owner, parent, 1u);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x = 123.0f;
+    auto& pose = world.entity(parent).getComponent<SkeletonPoseComponent>();
+    pose.parentJoints.resize(1u);
+    pose.localJoints.erase(pose.localJoints.begin() + 1, pose.localJoints.end());
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 1.0f);
+    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+
+    pose.parentJoints.clear();
+    pose.localJoints.clear();
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 1.0f);
+    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+    pose.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
+    pose.localJoints = { Translation(2.0f), Translation(3.0f) };
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 2.0f);
+    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 5.0f);
+    pose.skinningMode = Limit<u32>::s_Max;
+    pose.localJoints[0u] = Translation(10.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 2.0f);
+    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 5.0f);
+    pose.skinningMode = SkeletonSkinningMode::LinearBlend;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 10.0f);
+    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 13.0f);
+}
+
+TEST(ModelAttachment, SingleQueryRejectsMissingJointBoundsAndRetainsReusableCapacity){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    const auto parent = MakeSkeleton(context, owner, 2u);
+    const auto attached = MakeAttachment(context, owner, parent, 1u);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    auto& pose = world.entity(parent).getComponent<SkeletonPoseComponent>();
+    pose.parentJoints.resize(1u);
+    pose.localJoints.erase(pose.localJoints.begin() + 1, pose.localJoints.end());
+    world.entity(attached).getComponent<Scene::TransformComponent>().position.x = 123.0f;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+    pose.parentJoints.clear();
+    pose.localJoints.clear();
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 123.0f);
+    pose.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
+    pose.localJoints = { Translation(2.0f), Translation(3.0f) };
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 5.0f);
+}
+
+TEST(ModelAttachment, InterleavedParentsKeepIndependentQueriesAndEntityGenerations){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto owner = context.makeOwner();
+    const auto firstParent = MakeSkeleton(context, owner, 2u, 1.0f);
+    const auto secondParent = MakeSkeleton(context, owner, 2u, 3.0f);
+    const auto first = MakeAttachment(context, owner, firstParent, 1u);
+    const auto second = MakeAttachment(context, owner, secondParent, 0u);
+    const auto third = MakeAttachment(context, owner, firstParent, 0u);
+    const auto fourth = MakeAttachment(context, owner, secondParent, 1u);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(first).getComponent<Scene::TransformComponent>().position.x, 2.0f);
+    EXPECT_FLOAT_EQ(world.entity(second).getComponent<Scene::TransformComponent>().position.x, 3.0f);
+    EXPECT_FLOAT_EQ(world.entity(third).getComponent<Scene::TransformComponent>().position.x, 1.0f);
+    EXPECT_FLOAT_EQ(world.entity(fourth).getComponent<Scene::TransformComponent>().position.x, 6.0f);
+
+    world.destroyEntity(firstParent);
+    const auto replacement = MakeSkeleton(context, owner, 2u, 5.0f);
+    ASSERT_EQ(replacement.index(), firstParent.index());
+    ASSERT_NE(replacement.generation(), firstParent.generation());
+    world.entity(third).getComponent<ModelStaticMeshAttachmentComponent>().parentEntity = replacement;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(first).getComponent<Scene::TransformComponent>().position.x, 2.0f);
+    EXPECT_FLOAT_EQ(world.entity(second).getComponent<Scene::TransformComponent>().position.x, 3.0f);
+    EXPECT_FLOAT_EQ(world.entity(third).getComponent<Scene::TransformComponent>().position.x, 5.0f);
+    EXPECT_FLOAT_EQ(world.entity(fourth).getComponent<Scene::TransformComponent>().position.x, 6.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/model/name_cases.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+#include <global/arena_memory.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_model_runtime_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::ModelTests;
+
+
+TEST(ModelRuntime, RemovingMultipleModelsDestroysEveryOwnedObjectInOneSync){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto retainedOwner = context.makeOwner();
+    const auto retainedObject = context.makeObject(retainedOwner);
+    const auto unrelated = world.createEntity().id();
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::ModelCases::s_ModelFixtureNameTestsModelRuntimeRemovedIds)};
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedOwners(scratchArena);
+    removedOwners.reserve(4u);
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedObjects(scratchArena);
+    removedObjects.reserve(68u);
+    for(const usize objectCount : { 1u, 0u, 64u, 3u }){
+        const auto owner = context.makeOwner();
+        removedOwners.push_back(owner);
+        for(usize objectIndex = 0u; objectIndex < objectCount; ++objectIndex)
+            removedObjects.push_back(context.makeObject(owner));
+        world.entity(owner).removeComponent<ModelComponent>();
+    }
+
+    context.system.prepare(world);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    for(const auto owner : removedOwners){
+        EXPECT_TRUE(world.entity(owner).alive());
+        EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(owner), nullptr);
+    }
+    for(const auto object : removedObjects)
+        EXPECT_FALSE(world.entity(object).alive());
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+    EXPECT_TRUE(world.entity(unrelated).alive());
+    ASSERT_NE(world.tryGetComponent<ModelRuntimeComponent>(retainedOwner), nullptr);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(retainedOwner)->objectCount, 1u);
+    EXPECT_EQ(world.entityCount(), removedOwners.size() + 3u);
+    EXPECT_EQ(context.source.readCount, 0u);
+
+    context.system.syncModelRuntimes();
+    EXPECT_EQ(world.entityCount(), removedOwners.size() + 3u);
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+}
+
+TEST(ModelRuntime, InvalidBindingsAndRemovedModelsUseIndependentCleanupBatches){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto invalidOwner = context.makeOwner();
+    const auto invalidObject = context.makeObject(invalidOwner);
+    const auto removedOwner = context.makeOwner();
+    const auto removedObject = context.makeObject(removedOwner);
+    const auto retainedOwner = context.makeOwner();
+    const auto retainedObject = context.makeObject(retainedOwner);
+    world.entity(invalidOwner).getComponent<ModelComponent>().model.reset();
+    world.entity(removedOwner).removeComponent<ModelComponent>();
+
+    context.system.syncModelRuntimes();
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FALSE(world.entity(invalidObject).alive());
+    EXPECT_FALSE(world.entity(removedObject).alive());
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(invalidOwner), nullptr);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(removedOwner), nullptr);
+    EXPECT_NE(world.tryGetComponent<ModelComponent>(invalidOwner), nullptr);
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+    EXPECT_EQ(context.source.readCount, 0u);
+}
+
+TEST(ModelRuntime, PrunesDestroyedOwnerGenerationWithoutTouchingItsReplacement){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto oldOwner = context.makeOwner();
+    const auto oldObject = context.makeObject(oldOwner);
+    world.destroyEntity(oldOwner);
+    const auto replacementOwner = context.makeOwner();
+    const auto replacementObject = context.makeObject(replacementOwner);
+    ASSERT_EQ(oldOwner.index(), replacementOwner.index());
+    ASSERT_NE(oldOwner.generation(), replacementOwner.generation());
+
+    context.system.syncModelRuntimes();
+    EXPECT_FALSE(world.entity(oldObject).alive());
+    EXPECT_TRUE(world.entity(replacementOwner).alive());
+    EXPECT_TRUE(world.entity(replacementObject).alive());
+    ASSERT_NE(world.tryGetComponent<ModelRuntimeComponent>(replacementOwner), nullptr);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(replacementOwner)->objectCount, 1u);
+    EXPECT_EQ(context.source.readCount, 0u);
+}
+
+TEST(ModelRuntime, SteadyStateAndEmptyRuntimeCleanupPerformNoBackingAllocations){
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto retainedOwner = context.makeOwner();
+    const auto retainedObject = context.makeObject(retainedOwner);
+    const auto emptyOwner = context.makeOwner();
+    world.entity(emptyOwner).getComponent<ModelComponent>().model.reset();
+    context.system.syncModelRuntimes();
+    const ArenaMemoryStats before = HeapBackingMemoryStats();
+    for(usize iteration = 0u; iteration < 32u; ++iteration)
+        context.system.syncModelRuntimes();
+    const ArenaMemoryStats after = HeapBackingMemoryStats();
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(emptyOwner), nullptr);
+    EXPECT_EQ(context.source.readCount, 0u);
+}
+
+TEST(ModelRuntime, FailedReplacementLoadClearsOnlyThatOwnersObjectsAndCanRetry){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    RuntimeContext context;
+    auto& world = context.testWorld.world;
+    const auto changedOwner = context.makeOwner();
+    const auto changedObject = context.makeObject(changedOwner);
+    const auto retainedOwner = context.makeOwner();
+    const auto retainedObject = context.makeObject(retainedOwner);
+    world.entity(changedOwner).getComponent<ModelComponent>().model = Core::Assets::AssetRef<Model>("tests/model_runtime/missing");
+
+    context.system.syncModelRuntimes();
+    EXPECT_FALSE(world.entity(changedObject).alive());
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+    ASSERT_NE(world.tryGetComponent<ModelRuntimeComponent>(changedOwner), nullptr);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner)->model, s_NameNone);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner)->objectCount, 0u);
+    EXPECT_EQ(context.source.readCount, 1u);
+
+    context.system.syncModelRuntimes();
+    EXPECT_EQ(context.source.readCount, 2u);
+    EXPECT_TRUE(world.entity(retainedObject).alive());
+    world.entity(changedOwner).removeComponent<ModelComponent>();
+    context.system.syncModelRuntimes();
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner), nullptr);
+    EXPECT_EQ(context.source.readCount, 2u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

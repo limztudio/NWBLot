@@ -28,15 +28,6 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace PresentationFpsStatus{
-    enum Enum : u8{
-        Waiting,
-        Interval,
-        Complete,
-        Invalid,
-    };
-};
-
 // Measure FPS from accepted presentation counts and steady-clock wall time.
 class PresentationFpsProbe final{
 public:

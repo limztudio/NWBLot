@@ -35,25 +35,19 @@ namespace __hidden_transparent_multi_scene_transforms{
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
 #endif
 
-[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const SIMDVectorSingle time)noexcept{
-    return QuaternionRotationRollPitchYawFromVector(VectorAndInt(time, s_SIMDMaskY));
-}
-
 static void ApplyTransparentSceneTransform(const NWB::Core::ECS::EntityID entity, const Float4& basePosition, const SIMDVectorSingle sceneRotation, const SIMDVectorSingle localRotation, NWB::Core::ECS::World& world)noexcept{
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
         return;
 
-    StoreFloat(Vector3Rotate(LoadFloat(basePosition), sceneRotation), transform->position);
-    StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), transform->rotation);
+    SIMDVectorSingle position;
+    SIMDVectorSingle rotation;
+    ComputeTransparentSceneTransform(LoadFloat(basePosition), sceneRotation, localRotation, position, rotation);
+    StoreFloat(position, transform->position);
+    StoreFloat(rotation, transform->rotation);
 }
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const SIMDVectorSingle time)noexcept{
-    const SIMDVectorSingle angles = VectorMultiply(time, VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
-    return QuaternionRotationRollPitchYawFromVector(angles);
-}
-
 static void ApplyTransparentCsgSceneTransform(
     const NWB::Core::ECS::EntityID receiverEntity,
     const NWB::Core::ECS::EntityID cutterEntity,
@@ -62,8 +56,9 @@ static void ApplyTransparentCsgSceneTransform(
     const SIMDVectorSingle localRotation,
     NWB::Core::ECS::World& world
 )noexcept{
-    const SIMDVectorSingle receiverPosition = Vector3Rotate(LoadFloat(receiverBasePosition), sceneRotation);
-    const SIMDVectorSingle receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
+    SIMDVectorSingle receiverPosition;
+    SIMDVectorSingle receiverRotation;
+    ComputeTransparentSceneTransform(LoadFloat(receiverBasePosition), sceneRotation, localRotation, receiverPosition, receiverRotation);
 
     if(auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiverEntity)){
         StoreFloat(receiverPosition, transform->position);
@@ -83,11 +78,10 @@ static void ApplyTransparentCsgSceneTransform(
 
 void TransparentMultiSceneTransforms::update(const f32 yaw, Core::ECS::World& world)const noexcept{
     using namespace __hidden_transparent_multi_scene_transforms;
-    const SIMDVectorSingle sceneYaw = VectorReplicate(yaw);
-    const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
+    const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(yaw);
     ApplyTransparentSceneTransform(leftShape, s_TransparentLeftShapeBasePosition, sceneRotation, QuaternionIdentity(), world);
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    ApplyTransparentCsgSceneTransform(csgReceiver, csgCutter, s_TransparentCenterShapeBasePosition, sceneRotation, BuildTransparentCsgRotation(sceneYaw), world);
+    ApplyTransparentCsgSceneTransform(csgReceiver, csgCutter, s_TransparentCenterShapeBasePosition, sceneRotation, BuildTransparentCsgRotation(yaw), world);
 #else
     ApplyTransparentSceneTransform(centerShape, s_TransparentCenterShapeBasePosition, sceneRotation, QuaternionIdentity(), world);
 #endif
@@ -110,4 +104,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -84,8 +84,12 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             for(usize i = 0u; i < callArgs.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
-                if(callArgs[i])
-                    m_emitter.emitSimdRegExpr(out, *callArgs[i], simdType);
+                if(callArgs[i]){
+                    if(IsRegisterPromotableSimdType(callArgs[i]->resolvedSimdType))
+                        m_emitter.emitSimdRegExpr(out, *callArgs[i], callArgs[i]->resolvedSimdType);
+                    else
+                        m_emitter.emitSimdRegExpr(out, *callArgs[i], simdType);
+                }
             }
             out.push_back(')');
         };

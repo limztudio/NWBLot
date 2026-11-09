@@ -30,15 +30,6 @@ namespace Tests::Smoke{
 class SkinningBenchmarkPoseAnimator final{
 public:
     static void Animate(Core::ECS::World& world, Span<const Core::ECS::EntityID> entities, Span<const Impl::SkeletonJointMatrix> bindJoints, f32 timeSeconds, b8 staticPreview)noexcept;
-
-private:
-    [[nodiscard]] static u32 RandomJointSeed(u32 jointIndex, u32 characterIndex)noexcept;
-    [[nodiscard]] static b8 ShouldAnimateJoint(u32 jointIndex, u32 characterIndex, b8 staticPreview)noexcept;
-    static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, u32 jointIndex, u32 characterIndex, f32 timeSeconds, b8 staticPreview, SIMDMatrix& outMatrix)noexcept;
-
-private:
-    static constexpr u32 s_AnimatedJointModulo = s_SkinningBenchmarkAnimatedJointModulo;
-    static constexpr u32 s_StaticPreviewAnimatedJointModulo = s_SkinningBenchmarkStaticPreviewAnimatedJointModulo;
 };
 
 
@@ -52,4 +43,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

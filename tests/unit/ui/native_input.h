@@ -22,14 +22,72 @@ namespace UiTestSupport{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] const HitTarget* FindHitTarget(Span<const HitTarget> targets, WidgetId widget)noexcept;
+[[nodiscard]] inline const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
+    for(const auto& target : targets){
+        if(target.id == widget)
+            return &target;
+    }
+    return nullptr;
+}
 
 // Native cursor adapter helpers for UI unit test fixtures.
-[[nodiscard]] InputEvent NativeInput(const InputEvent& event)noexcept;
-[[nodiscard]] InputEvent Pointer(InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept;
-[[nodiscard]] PointerInput Pointer(PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, b8 hoverCapable = false, PointerIntent::Enum intent = PointerIntent::Activate)noexcept;
-[[nodiscard]] InputEvent Key(InputEventType::Enum type, Core::Key::Enum key, b8 repeat = false, b8 shift = false)noexcept;
-[[nodiscard]] InputEvent Key(Core::Key::Enum key, b8 shift = false, b8 control = false, b8 alt = false, b8 repeat = false)noexcept;
+[[nodiscard]] inline InputEvent NativeInput(const InputEvent& event)noexcept{
+    InputEvent resolved = event;
+    switch(event.type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        resolved.source = { 0u, 1u };
+        resolved.hoverCapable = true;
+        resolved.extend = event.shift;
+        break;
+    default:
+        break;
+    }
+    return resolved;
+}
+
+[[nodiscard]] inline InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
+    InputEvent event;
+    event.type = type;
+    event.position = position;
+    return event;
+}
+
+[[nodiscard]] inline PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const b8 hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
+    PointerInput input;
+    input.source = source;
+    input.phase = phase;
+    input.intent = intent;
+    input.position = position;
+    input.hoverCapable = hoverCapable;
+    return input;
+}
+
+[[nodiscard]] inline InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const b8 repeat = false, const b8 shift = false)noexcept{
+    InputEvent event;
+    event.type = type;
+    event.key = key;
+    event.shift = shift;
+    event.repeat = repeat;
+    return event;
+}
+
+[[nodiscard]] inline InputEvent Key(const Core::Key::Enum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
+    InputEvent event;
+    event.type = InputEventType::KeyDown;
+    event.key = key;
+    event.shift = shift;
+    event.control = control;
+    event.alt = alt;
+    event.repeat = repeat;
+    return event;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,10 +102,22 @@ public:
 
 protected:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept = 0;
-    InputRoutingResult send(const InputEvent& event);
-    InputRoutingResult send(const PointerInput& input);
-    void click(const Point& position = { 15.0f, 15.0f });
-    void key(Core::Key::Enum value, b8 shift = false);
+    InputRoutingResult send(const InputEvent& event){
+        EXPECT_TRUE(inputRouter().queue(NativeInput(event)));
+        return inputRouter().process();
+    }
+    InputRoutingResult send(const PointerInput& input){
+        EXPECT_TRUE(inputRouter().queuePointer(input));
+        return inputRouter().process();
+    }
+    void click(const Point& position = { 15.0f, 15.0f }){
+        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, position)).pointerConsumed);
+        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, position)).pointerConsumed);
+    }
+    void key(const Core::Key::Enum value, const b8 shift = false){
+        EXPECT_TRUE(send(Key(InputEventType::KeyDown, value, false, shift)).commandConsumed);
+        EXPECT_TRUE(send(Key(InputEventType::KeyUp, value, false, shift)).commandConsumed);
+    }
 
 
 protected:
@@ -94,4 +164,3 @@ protected:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -327,7 +327,7 @@ using namespace NWB::Core::Assets;
 TEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths){
     AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryDuplicateRoots)};
     ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch)};
-    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "tests" / "smoke" / "assets" / "textures";
+    const NWB::Path root = ::Path(arena, NWB_REPO_ROOT).lexicallyNormal() / "tests" / "smoke" / "assets" / "textures";
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
     const auto single = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
@@ -351,7 +351,7 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
 #else
     AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCaseIdentity)};
     Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch)};
-    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / s_BuildDirectory / "metadata_discovery_case_identity";
+    const NWB::Path root = ::Path(arena, NWB_REPO_ROOT).lexicallyNormal() / s_BuildDirectory / "metadata_discovery_case_identity";
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     const NWB::Path upperPath = root / "Case.nwb";
     const NWB::Path lowerPath = root / "case.nwb";
@@ -379,7 +379,7 @@ TEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoo
     Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch)};
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::ReportOnly);
-    const NWB::Path repo = Tests::RepoRootOf(arena, __FILE__);
+    const NWB::Path repo = ::Path(arena, NWB_REPO_ROOT).lexicallyNormal();
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
     const NWB::Path invalidRoot = repo / "invalid|root";
 #else
@@ -929,7 +929,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
     CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / s_BuildDirectory / "metadata_registry_storage";
+    const NWB::Path root = ::Path(fixtureArena, NWB_REPO_ROOT).lexicallyNormal() / s_BuildDirectory / "metadata_registry_storage";
     ASSERT_TRUE(EnsureDirectories(root));
     DiscoveredNwbFileVector files(fixtureArena);
     constexpr usize s_SamplerCount = NWB::Tests::AssetsGraphicsFixture::s_MetadataRegistrySamplerCount;

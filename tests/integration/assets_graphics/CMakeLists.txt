@@ -9,7 +9,7 @@ nwb_target_adhd_sources(nwb_assets_graphics_tests NAMESPACE "NWB::Tests::AssetsG
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_sampler_and_shader_cook_cases.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_shader_and_texture_cases.adhd"
 )
-target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)
+target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1 NWB_REPO_ROOT="${CMAKE_SOURCE_DIR}")
 nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests nwb_assets_volume_cook nwb_assets_bunch_cook nwb_assets_material_volume_entry nwb_assets_skeleton_volume_entry nwb_assets_mesh_volume_entries nwb_assets_model_volume_entry
     nwb_assets_font_atlas_volume_entry nwb_assets_font_volume_entry nwb_assets_texture_volume_entry nwb_assets_ui_skin_volume_entry nwb_assets_sampler_volume_entry nwb_assets_graphics_volume_entry
     nwb_assets_scene_volume_entry nwb_assets_graphics_cook nwb_assets_graphics_gather)

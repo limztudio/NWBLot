@@ -879,7 +879,7 @@ b8 PrepareCleanDirectory(const Path& directory);
 b8 WriteTextFile(const Path& filePath, const AStringView text);
 AStringView AssetsGraphicsTestConfigurationName()noexcept;
 inline Path AssetsGraphicsTestRepoRoot(TestArena& testArena){
-    return NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
+    return ::Path(testArena.arena, NWB_REPO_ROOT).lexicallyNormal();
 }
 Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName);
 Expected<Path> PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName);

@@ -56,11 +56,6 @@ template<typename T>
 using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>;
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
-template<typename ArenaT>
-[[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){
-    return ::Path<ArenaT>(arena, sourceFile).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -4,6 +4,8 @@
 
 #include "crash_archive_extractor.h"
 
+#include <logger/server/crash_values.adhd.h>
+
 #include <global/binary.h>
 #include <global/filesystem/archive.h>
 #include <global/text_utils.h>

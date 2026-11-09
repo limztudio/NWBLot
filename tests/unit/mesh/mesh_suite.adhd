@@ -817,7 +817,7 @@ TEST(Mesh, DegenerateUvsUseStableTangentFallback){
     EXPECT_EQ(result->fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
-        EXPECT_TRUE(NWB::Tests::NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));
+        EXPECT_TRUE(NWB::Tests::NearlyEqual3(LoadFloat(vertex.normal), 0.0f, 0.0f, 1.0f));
         EXPECT_TRUE(NWB::Tests::NearlyEqual3(Vector3LengthSq(LoadFloat(vertex.tangent)), 1.0f, 1.0f, 1.0f));
         EXPECT_TRUE(NWB::Tests::NearlyEqual3(Vector3Dot(LoadFloat(vertex.normal), LoadFloat(vertex.tangent)), 0.0f, 0.0f, 0.0f));
     }

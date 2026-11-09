@@ -6,8 +6,9 @@
 
 
 #include "namespace.h"
-#include "fly_camera_input.h"
 #include "ui_skin_preview.h"
+
+#include <CoolStuff/Testbed/fly_camera_motion.adhd.h>
 
 #include <loader/project_entry.h>
 

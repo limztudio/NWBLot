@@ -211,6 +211,7 @@ NWB_ADHD_EXPORT_MEMBER_METHOD("emplace",                 true,  false, true,  fa
 NWB_ADHD_EXPORT_MEMBER_METHOD("try_emplace",             true,  false, true,  true,  FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("insert_or_assign",        true,  false, true,  true,  FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("clear",                   true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("fill",                    true,  false, true,  false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("insert",                  true,  false, true,  false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("erase",                   true,  false, false, false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("resize",                  true,  false, false, false, FixedType,              "void")

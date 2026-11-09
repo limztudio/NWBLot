@@ -10,6 +10,8 @@ const f32 s_FlyCameraMouseSensitivityDegreesPerPixel = 0.12f;
 const f32 s_FlyCameraPitchLimitDegrees = 89.0f;
 const f32 s_FlyCameraMouseSensitivityRadiansPerPixel = s_FlyCameraMouseSensitivityDegreesPerPixel * s_DegreesToRadians;
 const f32 s_FlyCameraPitchLimitRadians = s_FlyCameraPitchLimitDegrees * s_DegreesToRadians;
+const i32 s_FlyCameraMaxKeyCode = 348;
+const usize s_FlyCameraKeyStateCount = 349u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,6 +223,87 @@ class FlyCameraMotion{
             resolvedRotation = ::QuaternionRotationRollPitchYawFromVector(rotationAngles);
         }
         return resolvedRotation;
+    }
+}
+
+
+class FlyCameraInput{
+    private f64 m_lastMouseX = 0.0;
+    private f64 m_lastMouseY = 0.0;
+    private f32 m_pendingMouseDeltaX = 0.0f;
+    private f32 m_pendingMouseDeltaY = 0.0f;
+    private b8 m_mouseLookActive = false;
+    private b8 m_mousePositionValid = false;
+    private Array<b8, s_FlyCameraKeyStateCount> m_keyPressed;
+
+    public void clear(){
+        this.m_keyPressed.fill(false);
+        this.m_pendingMouseDeltaX = 0.0f;
+        this.m_pendingMouseDeltaY = 0.0f;
+        this.m_lastMouseX = 0.0;
+        this.m_lastMouseY = 0.0;
+        this.m_mouseLookActive = false;
+        this.m_mousePositionValid = false;
+    }
+
+    public void pointerCaptureLost(){
+        // Keep motion from an already completed gesture.
+        if(!this.m_mouseLookActive)
+            return;
+        this.m_mouseLookActive = false;
+        this.m_mousePositionValid = false;
+        this.m_pendingMouseDeltaX = 0.0f;
+        this.m_pendingMouseDeltaY = 0.0f;
+    }
+
+    public void updatePointer(in f64 xpos, in f64 ypos, in b8 wantsPointer){
+        const FlyCameraMotion motion();
+        motion.updateMousePosition(
+            xpos,
+            ypos,
+            wantsPointer,
+            this.m_mouseLookActive,
+            this.m_mousePositionValid,
+            this.m_lastMouseX,
+            this.m_lastMouseY,
+            this.m_pendingMouseDeltaX,
+            this.m_pendingMouseDeltaY
+        );
+    }
+
+    public void updateButton(in b8 wantsPointer, in b8 isRightButton, in b8 isPress, in b8 isRelease){
+        const FlyCameraMotion motion();
+        motion.updateMouseButton(
+            wantsPointer,
+            isRightButton,
+            isPress,
+            isRelease,
+            this.m_mouseLookActive,
+            this.m_mousePositionValid
+        );
+    }
+
+    public FlyCameraPointerDelta takePointerDelta(in b8 pointerCaptured){
+        const FlyCameraPointerDelta result(this.m_pendingMouseDeltaX, this.m_pendingMouseDeltaY);
+        this.m_pendingMouseDeltaX = 0.0f;
+        this.m_pendingMouseDeltaY = 0.0f;
+        if(pointerCaptured){
+            this.m_mouseLookActive = false;
+            this.m_mousePositionValid = false;
+        }
+        return result;
+    }
+
+    public void setKeyState(in i32 key, in b8 pressed){
+        if(key < 0 || key > s_FlyCameraMaxKeyCode)
+            return;
+        this.m_keyPressed[cast<usize>(key)] = pressed;
+    }
+
+    public b8 keyPressed(in i32 key)const{
+        if(key < 0 || key > s_FlyCameraMaxKeyCode)
+            return false;
+        return this.m_keyPressed[cast<usize>(key)];
     }
 }
 

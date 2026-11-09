@@ -13,7 +13,6 @@ target_sources(nwb_refraction_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.h"
     "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
-    "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.cpp"
     "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
 )

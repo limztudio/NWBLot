@@ -12,7 +12,6 @@ target_sources(nwb_telemetry_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
-    "${CMAKE_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
     "${CMAKE_SOURCE_DIR}/tests/smoke/gpu_pass_timing_probe.cpp"
     "${CMAKE_SOURCE_DIR}/tests/smoke/gpu_pass_timing_probe.h"

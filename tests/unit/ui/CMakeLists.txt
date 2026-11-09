@@ -15,7 +15,6 @@ target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
-    "${CMAKE_SOURCE_DIR}/tests/common/font_fixture.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/font_fixture.h"
 )
 target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_name_cases nwb_ui_gpu nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb_assets_font_atlas nwb::harfbuzz)

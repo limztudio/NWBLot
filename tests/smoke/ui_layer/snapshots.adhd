@@ -123,3 +123,18 @@ class UiSearchComboRange{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 SameSmokeRect(in SnapshotRect left, in SnapshotRect right){
+    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
+}
+
+PassiveSmokeColumns ResolvePassiveSmokeColumns(in SnapshotDisplay display){
+    PassiveSmokeColumns result();
+    result.mainWidth = Max(300.0f, display.logicalWidth * 0.5f - 40.0f);
+    result.rightColumn = 24.0f + result.mainWidth + 32.0f;
+    result.rightWidth = Max(220.0f, display.logicalWidth - result.rightColumn - 24.0f);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

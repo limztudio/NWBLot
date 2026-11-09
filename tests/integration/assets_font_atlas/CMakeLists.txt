@@ -12,7 +12,6 @@ target_sources(nwb_assets_font_atlas_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
-    "${CMAKE_SOURCE_DIR}/tests/common/font_fixture.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/font_fixture.h"
 )
 target_compile_definitions(nwb_assets_font_atlas_tests PRIVATE NWB_COOK=1 NWB_REPO_ROOT="${CMAKE_SOURCE_DIR}")

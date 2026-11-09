@@ -41,7 +41,6 @@ target_sources(nwb_global_tests PRIVATE
 )
 target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/simd_memory_tests.cpp"
-    "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.h"
 )
 target_sources(nwb_global_tests PRIVATE

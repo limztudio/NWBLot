@@ -17,7 +17,6 @@ target_link_libraries(nwb_simd_geometry_benchmark PRIVATE nwb_common nwb_alloc)
 nwb_declare_executable(nwb_simd_memory_storage_benchmark)
 target_sources(nwb_simd_memory_storage_benchmark PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/memory_storage_probe.cpp"
-    "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.h"
 )
 target_link_libraries(nwb_simd_memory_storage_benchmark PRIVATE nwb_common nwb_alloc)

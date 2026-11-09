@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_graphics/bindless/runtime_abi.h>
+
+#include <core/graphics/runtime/runtime.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ConfigureSmokeProjectRuntime(mut ProjectStartupContext context){
+    native(mut context){
+        if(!context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+            return false;
+
+#if defined(NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK)
+        if(!context.graphics.setSwapChainReadbackEnabled(true))
+            return false;
+#endif
+
+        // Request asynchronous compute unless the synchronous baseline opts out.
+#if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
+        return context.graphics.setAsyncComputeLaneEnabled(false);
+#else
+        return context.graphics.setAsyncComputeLaneEnabled(true);
+#endif
+    }
+}
+
+native{
+b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
+    return ConfigureSmokeProjectRuntime(context);
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

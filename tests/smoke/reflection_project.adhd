@@ -1,0 +1,2964 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "presentation_types.adhd"
+#include "framebuffer_capture.adhd"
+#include "csg_smoke_helpers.adhd"
+#include "gpu_pass_timing_probe.adhd"
+#include "smoke_cpu_gpu_timing_probe.adhd"
+#include "smoke_environment.adhd"
+#include "smoke_project_helpers.adhd"
+#include "smoke_scene_helpers.adhd"
+#include "smoke_skinned_scene_helpers.adhd"
+
+native{
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionOpticalCsgBuilder final : NoCopy{
+public:
+    explicit ReflectionOpticalCsgBuilder(Core::ECS::World& world)noexcept : m_world(world){}
+
+
+public:
+    Core::ECS::EntityID addPlane(Core::ECS::EntityID receiver, Name group, b8 affectOpaque, b8 affectTransparent, const Float4& normalDistance);
+    void addBox(Core::ECS::EntityID receiver, Name group, const Float4& halfExtents, SIMDVectorSingle center);
+
+
+private:
+    Core::ECS::World& m_world;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_csg/shape_registry.h>
+
+#include <global/simd/constant.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::ECS::EntityID ReflectionOpticalCsgBuilder::addPlane(const Core::ECS::EntityID receiver, const Name group, const b8 affectOpaque, const b8 affectTransparent, const Float4& normalDistance){
+    AddStaticCsgMeshReceiver(receiver, group, affectOpaque, affectTransparent, m_world);
+    auto cutterEntity = m_world.createEntity();
+    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+    cutter.receiverGroup = group;
+    cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
+    Impl::CsgPlaneShapeParameters parameters;
+    parameters.normalDistance = normalDistance;
+    AssignCsgCutterParameters(parameters, cutter);
+    AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+    return cutterEntity.id();
+}
+
+void ReflectionOpticalCsgBuilder::addBox(const Core::ECS::EntityID receiver, const Name group, const Float4& halfExtents, const SIMDVectorSingle center){
+    AddStaticCsgMeshReceiver(receiver, group, false, true, m_world);
+    auto cutterEntity = m_world.createEntity();
+    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+    cutter.receiverGroup = group;
+    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
+    Impl::CsgBoxShapeParameters parameters;
+    parameters.halfExtents = halfExtents;
+    AssignCsgCutterParameters(parameters, cutter);
+    AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world);
+
+[[nodiscard]] b8 CreateReflectionOpticalScene(AStringView caseName, Core::ECS::World& world);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_optical_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_SpecularParameterPath = "runtime.specular_f0";
+constexpr AStringView s_RoughnessParameterPath = "runtime.perceptual_roughness";
+constexpr AStringView s_OpticalCsgDenseCase = "optical_csg_dense";
+constexpr AStringView s_OpticalReferenceCase = "optical_reference";
+constexpr AStringView s_OpticalGroupEntryCase = "optical_group_entry";
+constexpr AStringView s_OpticalGroupGapSubUlpCase = "optical_group_gap_sub_ulp";
+constexpr AStringView s_OpticalGroupGapCase = "optical_group_gap";
+constexpr AStringView s_OpticalSubUlpCase = "optical_sub_ulp";
+constexpr AStringView s_OpticalSliverCase = "optical_sliver";
+constexpr AStringView s_OpticalCsgCavityCase = "optical_csg_cavity";
+constexpr AStringView s_OpticalCsgOpenTailCase = "optical_csg_open_tail";
+constexpr AStringView s_OpticalTirCase = "optical_tir";
+constexpr AStringView s_OpticalInsideCase = "optical_inside";
+constexpr AStringView s_OpticalPriorityTieBCase = "optical_priority_tie_b";
+constexpr AStringView s_OpticalPriorityACase = "optical_priority_a";
+constexpr AStringView s_OpticalMixedCase = "optical_mixed";
+constexpr AStringView s_OpticalNested3Case = "optical_nested3";
+constexpr AStringView s_OpticalOverflowCase = "optical_overflow";
+constexpr AStringView s_OpticalAlphaBeforeCase = "optical_alpha_before";
+constexpr AStringView s_OpticalDuplicateIdenticalCase = "optical_duplicate_identical";
+constexpr AStringView s_OpticalDuplicateReverseCase = "optical_duplicate_reverse";
+constexpr AStringView s_OpticalClearCase = "optical_clear";
+constexpr AStringView s_OpticalTiltedCase = "optical_tilted";
+constexpr AStringView s_OpticalMirroredCase = "optical_mirrored";
+constexpr AStringView s_OpticalUnspecifiedCase = "optical_unspecified";
+
+using namespace Tests::Smoke;
+
+struct OpticalReceiverEntities{
+    Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID cutter = Core::ECS::s_InvalidEntityId;
+};
+
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
+static constexpr SmokeMeshRef s_CsgOpenTail("project/meshes/reflection_csg_open_tail");
+static constexpr SmokeMeshRef s_Disconnected("project/meshes/reflection_disconnected_boxes");
+static constexpr SmokeMeshRef s_Overlapping("project/meshes/reflection_overlapping_boxes");
+static constexpr SmokeMeshRef s_Dense("project/meshes/reflection_dense_boxes");
+static constexpr SmokeMeshRef s_GroupGap("project/meshes/reflection_group_gap");
+static constexpr SmokeMeshRef s_GroupGapSubUlp("project/meshes/reflection_group_gap_sub_ulp");
+static constexpr SmokeMeshRef s_GroupEntry("project/meshes/reflection_group_entry");
+static constexpr SmokeMeshRef s_CsgGroupEntry("project/meshes/reflection_csg_group_entry");
+static constexpr SmokeMeshRef s_Torus("project/meshes/refraction_torus");
+static constexpr SmokeMeshRef s_Prism("project/meshes/reflection_tir_prism");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+static constexpr SmokeMaterialRef s_Volume("project/smoke/reflection/materials/optical_volume");
+static constexpr SmokeMaterialRef s_Pane("project/smoke/reflection/materials/optical_pane");
+static constexpr AStringView s_SurfaceInterface = "project/shaders/smoke_surface";
+static constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
+static constexpr Float4 s_Clear(1.f, 1.f, 1.f, 0.f);
+static constexpr Float4 s_Tinted(0.55f, 0.8f, 1.f, 0.f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Core::ECS::EntityID CreatePanel(const Float4& color, const Float4& position, const Float4& scale, Core::ECS::World& world, const f32 f0 = 0.f){
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_SurfaceInterface, color, position, scale, world);
+    if(!entity.valid())
+        return entity;
+    auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(0.f);
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return Core::ECS::s_InvalidEntityId;
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
+        return Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+static Core::ECS::EntityID CreateBoundary(
+    const SmokeMeshRef& mesh, const Float4& position, const Float4& scale, const f32 ior, const Float4& transmission,
+    Core::ECS::World& world,
+    const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested,
+    const i32 priority = 0, const f32 coverage = 0.f, const b8 pane = false
+){
+    const auto entity = CreateTintedStaticMeshEntity(mesh, pane ? s_Pane : s_Volume, s_OpticalInterface, Float4(0.9f, 0.6f, 0.f, coverage), position, scale, world);
+    if(!entity.valid())
+        return entity;
+    auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
+    renderer.opticalBoundaryMode = mode;
+    renderer.opticalMediumPriority = priority;
+    const Half packedIor = ConvertFloatToHalf(ior);
+    const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedIor)))
+        return Core::ECS::s_InvalidEntityId;
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))))
+        return Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+static Core::ECS::EntityID CreateBox(
+    const f32 centerZ, const f32 thickness, const f32 ior, const Float4& transmission,
+    Core::ECS::World& world,
+    const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
+    const f32 xyScale = 1.f
+){
+    return CreateBoundary(s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f), ior, transmission, world, mode, priority);
+}
+
+static Expected<OpticalReceiverEntities> CreateDenseReceiver(const b8 csg, Core::ECS::World& world){
+    // An admitted cutter leaves the nearest surface of the 18-crossing receiver intact.
+    const auto receiver = CreateTintedStaticMeshEntity(s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f), Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), world);
+    if(!receiver.valid())
+        return MakeUnexpected(Failure{});
+    const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(1.f);
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return MakeUnexpected(Failure{});
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
+        return MakeUnexpected(Failure{});
+    if(!csg)
+        return OpticalReceiverEntities{ .receiver = receiver };
+    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgDense;
+    const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, true, false, Float4(-1.f, 0.f, 0.f, 11.f));
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
+}
+
+static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(const SmokeMeshRef& mesh, const b8 cavity, const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world){
+    // The cavity case starts the reflected ray inside the removed receiver volume.
+    const auto receiver = CreateBoundary(mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f), Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, world, mode);
+    if(!receiver.valid())
+        return MakeUnexpected(Failure{});
+    const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgOptics;
+    const auto cutter = Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(0.f, 0.f, -1.f, -9.f));
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutter };
+}
+
+static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& world){
+    if(caseName == "optical_dense" || caseName == s_OpticalCsgDenseCase)
+        return CreateDenseReceiver(caseName == s_OpticalCsgDenseCase, world).has_value();
+    if(caseName == s_OpticalReferenceCase)
+        return true;
+    if(caseName == "optical_csg_reference")
+        return CreateBox(-9.5f, 1.f, 1.5f, s_Tinted, world).valid();
+    if(caseName == "optical_unspecified_reference")
+        return CreateBox(-9.5f, 1.f, 1.f, s_Clear, world, Impl::OpticalBoundaryMode::Unspecified).valid();
+    if(caseName == s_OpticalGroupEntryCase || caseName == "optical_csg_group_entry"){
+        // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
+        const b8 ordinary = caseName == s_OpticalGroupEntryCase;
+        const auto receiver = CreateBoundary(ordinary ? s_GroupEntry : s_CsgGroupEntry, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world);
+        if(!receiver.valid())
+            return false;
+        if(ordinary)
+            return true;
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeReflectionCsgGroupEntry;
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addBox(receiver, group, Float4(13.f, 10.f, 3.5e-6f, 0.f), VectorSet(0.f, 1.4f, -9.0000085f, 0.f));
+        return true;
+    }
+    const b8 groupGapSubUlp = caseName == s_OpticalGroupGapSubUlpCase || caseName == "optical_csg_group_gap_sub_ulp";
+    if(groupGapSubUlp || caseName == s_OpticalGroupGapCase || caseName == "optical_csg_group_gap"){
+        // Three closed components hide a positive gap inside a grouped 1 -> 0 -> 1 -> 2 winding sequence.
+        const auto receiver = CreateBoundary(groupGapSubUlp ? s_GroupGapSubUlp : s_GroupGap, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world);
+        if(!receiver.valid())
+            return false;
+        if(caseName == s_OpticalGroupGapCase || caseName == s_OpticalGroupGapSubUlpCase)
+            return true;
+        const Name group(groupGapSubUlp ? "smoke/reflection/csg_group_gap_sub_ulp" : "smoke/reflection/csg_group_gap");
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
+        return true;
+    }
+    const b8 subUlp = caseName == s_OpticalSubUlpCase || caseName == "optical_csg_sub_ulp";
+    if(subUlp || caseName == s_OpticalSliverCase || caseName == "optical_csg_sliver"){
+        // Preserve Fresnel loss when sub-ULP thickness rounds interfaces to equal ray distances.
+        const auto receiver = CreateBox(-9.f, subUlp ? 4e-7f : 8e-6f, 1.5f, s_Tinted, world);
+        if(!receiver.valid())
+            return false;
+        if(caseName == s_OpticalSliverCase || caseName == s_OpticalSubUlpCase)
+            return true;
+        const Name group(subUlp ? "smoke/reflection/csg_sub_ulp" : "smoke/reflection/csg_sliver");
+        Tests::Smoke::ReflectionOpticalCsgBuilder(world).addPlane(receiver, group, false, true, Float4(-1.f, 0.f, 0.f, 10.f));
+        return true;
+    }
+    const b8 unspecifiedCap = caseName == "optical_csg_unspecified_cap";
+    if(caseName == "optical_csg_cap" || caseName == s_OpticalCsgCavityCase || caseName == s_OpticalCsgOpenTailCase || unspecifiedCap)
+        return CreateCsgBoundaryReceiver(
+            caseName == s_OpticalCsgOpenTailCase ? s_CsgOpenTail : s_Box, caseName == s_OpticalCsgCavityCase,
+            unspecifiedCap ? 1.f : 1.5f, unspecifiedCap ? s_Clear : s_Tinted,
+            unspecifiedCap ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested, world
+        ).has_value();
+    if(caseName == s_OpticalTirCase)
+        return CreateBoundary(s_Prism, Float4(0.f, 1.4f, 0.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Clear, world).valid();
+    if(caseName == s_OpticalInsideCase || caseName == "optical_inside_nested"){
+        if(!CreateBox(-3.f, 14.f, 1.5f, s_Clear, world).valid())
+            return false;
+        if(caseName == s_OpticalInsideCase)
+            return true;
+        return CreateBox(-3.f, 10.f, 1.33f, s_Clear, world, Impl::OpticalBoundaryMode::ClosedNested, 0, 0.7f).valid();
+    }
+    if(caseName == "optical_same_mesh")
+        return CreateBoundary(s_Disconnected, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world).valid();
+    if(caseName == "optical_union_same_mesh")
+        return CreateBoundary(s_Overlapping, Float4(0.f, 1.4f, -9.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Tinted, world).valid();
+    if(caseName == "optical_union_single")
+        return CreateBox(-9.f, 0.8f, 1.5f, s_Tinted, world).valid();
+    if(caseName == "optical_disconnected"){
+        return CreateBox(-8.f, 0.5f, 1.5f, s_Tinted, world).valid() && CreateBox(-10.f, 0.5f, 1.5f, s_Tinted, world).valid();
+    }
+    if(caseName == "optical_torus"){
+        const auto entity = CreateBoundary(s_Torus, Float4(0.f, 1.4f, -9.5f, 0.f), Float4(2.f, 2.f, 2.f, 0.f), 1.5f, s_Tinted, world);
+        if(!entity.valid())
+            return false;
+        auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+        return true;
+    }
+    if(caseName == "optical_priority_tie_a" || caseName == s_OpticalPriorityTieBCase){
+        const b8 reverse = caseName == s_OpticalPriorityTieBCase;
+        for(u32 index = 0u; index < 2u; ++index){
+            const b8 firstMedium = reverse ? index == 1u : index == 0u;
+            if(!CreateBox(firstMedium ? -8.5f : -9.5f, 2.f, firstMedium ? 1.5f : 1.33f, firstMedium ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f), world, Impl::OpticalBoundaryMode::ClosedPriority, 10).valid())
+                return false;
+        }
+        return true;
+    }
+    if(caseName == s_OpticalPriorityACase || caseName == "optical_priority_b" || caseName == s_OpticalMixedCase){
+        const b8 firstWins = caseName == s_OpticalPriorityACase;
+        return
+            CreateBox(-8.5f, 2.f, 1.5f, s_Tinted, world, Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 20 : 10).valid()
+            && CreateBox(-9.5f, 2.f, 1.33f, Float4(1.f, 0.7f, 0.45f, 0.f), world, caseName == s_OpticalMixedCase ? Impl::OpticalBoundaryMode::ClosedNested : Impl::OpticalBoundaryMode::ClosedPriority, firstWins ? 10 : 20).valid()
+        ;
+    }
+    if(caseName == "optical_nested2" || caseName == s_OpticalNested3Case || caseName == s_OpticalOverflowCase){
+        const u32 count = caseName == s_OpticalOverflowCase ? 5u : caseName == s_OpticalNested3Case ? 3u : 2u;
+        for(u32 index = 0u; index < count; ++index){
+            const f32 indexFloat = static_cast<f32>(index);
+            const f32 thickness = count == 5u ? 4.f - 0.6f * indexFloat : 3.f / static_cast<f32>(1u << index);
+            const f32 opacity = 1.f - 0.1f * indexFloat;
+            const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : 0.02f * static_cast<f32>(index - 2u) + 1.1f;
+            const Float4 transmission = index == 0u ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f);
+            if(!CreateBox(-9.f, thickness, ior, transmission, world, Impl::OpticalBoundaryMode::ClosedNested, 0, opacity).valid())
+                return false;
+        }
+        return true;
+    }
+    if(caseName == s_OpticalAlphaBeforeCase || caseName == "optical_alpha_after"){
+        if(!CreateBox(-9.f, 2.f, 1.5f, s_Tinted, world).valid())
+            return false;
+        for(u32 index = 0u; index < 3u; ++index){
+            const f32 x = index == 0u ? -7.f : index == 1u ? 0.f : 7.f;
+            const f32 halfWidth = index == 1u ? 2.f : 5.f;
+            const auto entity = CreateBoundary(
+                s_Plane, Float4(x, 1.4f, caseName == s_OpticalAlphaBeforeCase ? -7.f : -11.f, 0.f),
+                Float4(halfWidth, 1.f, 9.f, 0.f), 1.f, s_Clear, world, Impl::OpticalBoundaryMode::Unspecified,
+                0, static_cast<f32>(index) * 0.5f, true
+            );
+            if(!entity.valid())
+                return false;
+            auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+            StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+        }
+        return true;
+    }
+    const b8 duplicate = caseName == s_OpticalDuplicateIdenticalCase || caseName == "optical_duplicate_group" || caseName == s_OpticalDuplicateReverseCase;
+    const b8 independent = caseName == "optical_coincident_independent";
+    if(!duplicate && !independent && caseName != s_OpticalClearCase && caseName != "optical_tinted" && caseName != s_OpticalTiltedCase && caseName != s_OpticalMirroredCase && caseName != s_OpticalUnspecifiedCase)
+        return false;
+    const u32 count = duplicate || independent ? 2u : 1u;
+    for(u32 index = 0u; index < count; ++index){
+        const b8 sameInputs = caseName == s_OpticalDuplicateIdenticalCase;
+        const b8 selected = caseName == s_OpticalDuplicateReverseCase ? index == 1u : index == 0u;
+        const Float4 transmission = caseName == s_OpticalClearCase ? s_Clear : !duplicate || sameInputs || selected ? s_Tinted : Float4(1.f, 0.5f, 0.2f, 0.f);
+        const auto entity = CreateBox(-9.f, 2.f, 1.5f, transmission, world, caseName == s_OpticalUnspecifiedCase ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested);
+        if(!entity.valid())
+            return false;
+        auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+        if(caseName == s_OpticalMirroredCase)
+            transform.scale.x = -24.f;
+        if(caseName == s_OpticalTiltedCase)
+            StoreFloat(QuaternionRotationRollPitchYaw(0.f, 0.2f, 0.f), transform.rotation);
+        if(duplicate){
+            auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
+            renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
+            renderer.opticalVolumeGroup = Name(NWB::Tests::Smoke::s_SmokeNameSmokeReflectionOpticalDuplicate);
+            renderer.opticalVolumePriority = selected ? 20 : 10;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world){
+    using namespace __hidden_reflection_optical_scene;
+    if(!CreateReflectionOpticalScene(s_OpticalReferenceCase, world))
+        return MakeUnexpected(Failure{});
+    const auto small = CreateCsgBoundaryReceiver(s_Box, false, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedNested, world);
+    if(!small)
+        return MakeUnexpected(small.error());
+    const auto dense = CreateDenseReceiver(true, world);
+    if(!dense)
+        return MakeUnexpected(dense.error());
+    ReflectionCsgContextEntities entities;
+    entities.smallReceiver = small->receiver;
+    entities.denseReceiver = dense->receiver;
+    entities.smallCutter = small->cutter;
+    entities.denseCutter = dense->cutter;
+    return entities;
+}
+
+b8 CreateReflectionOpticalScene(const AStringView caseName, Core::ECS::World& world){
+    using namespace __hidden_reflection_optical_scene;
+    if(!CreatePanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f), world).valid())
+        return false;
+    if(!CreatePanel(Float4(0.f, 0.f, 0.f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), world, 0.95f).valid())
+        return false;
+    if(caseName != s_OpticalTirCase){
+        for(u32 stripe = 0u; stripe < 31u; ++stripe){
+            const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f) : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
+            const f32 x = (static_cast<f32>(stripe) - 15.f) * 0.8f;
+            if(!CreatePanel(color, Float4(x, 1.4f, -14.f, 0.f), Float4(0.4f, 1.f, 8.f, 0.f), world).valid())
+                return false;
+        }
+    }
+    return CreateOpticalObjects(caseName, world);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <impl/ecs_render/reflection/types.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Impl{
+class RendererSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReportReflectionSlicePackets(u32 rayCapacity, u64 sourceFrame, b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer);
+
+// Synchronized probe for reflection CSG captures and packet receipts.
+class ReflectionCsgContextProbe final{
+private:
+    [[nodiscard]] static b8 ShouldCapture(void* owner, u64 sourceFrame)noexcept;
+
+
+public:
+    ReflectionCsgContextProbe(u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept;
+    ~ReflectionCsgContextProbe()noexcept = default;
+
+
+public:
+    [[nodiscard]] b8 create(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
+
+
+private:
+    [[nodiscard]] b8 beginPhase();
+
+
+private:
+    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
+    ReflectionCsgContextEntities m_entities;
+    UniquePtr<FramebufferCapture> m_capture;
+    ProjectRuntimeContext& m_context;
+    Core::ECS::World& m_world;
+    Impl::RendererSystem& m_renderer;
+    u64 m_phaseSource = 0u;
+    u64 m_targetSource = Limit<u64>::s_Max;
+    u64 m_packetSource = Limit<u64>::s_Max;
+    u64 m_lastSequence = 0u;
+    u64 m_lastGeneration = 0u;
+    const u32 m_rayCapacity;
+    u32 m_phase = 0u;
+    u32 m_completed = 0u;
+    b8 m_done = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
+#include <impl/ecs_csg/components.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/telemetry/frame_graph_contributor.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, const b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer){
+    NWB::Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
+    NWB::Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
+    NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
+    NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
+    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeScratchNameTestsSmokeReflectionFrameGraph)};
+    NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
+    const b8 graphAvailable = renderer.appendFrameGraph(builder);
+    const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
+    u64 planGeneration = 0u;
+    b8 runtimePresent = false;
+    for(const auto& node : nodes){
+        if(node.name == Name(NWB::Tests::Smoke::s_SmokeTimingNameEcsRenderFrame) && node.runtimeStatistics.present){
+            // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
+            runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
+            planGeneration = node.runtimeStatistics.planGeneration;
+            break;
+        }
+    }
+    const u32 expectedSlices = csg ? (rayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
+    Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
+    uniquePackets.reserve(expectedSlices);
+    Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
+    sliceIdentities.reserve(expectedSlices);
+    for(u32 slice = 0u; slice < expectedSlices; ++slice){
+        if(!csg){
+            sliceIdentities.push_back(Name(NWB::Tests::Smoke::s_SmokeTimingNameRenderReflectionHardware));
+            continue;
+        }
+        const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
+        if(!sliceIdentity){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
+            return;
+        }
+        sliceIdentities.push_back(*sliceIdentity);
+    }
+    Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
+    observedSlices.resize(expectedSlices, 0u);
+    u32 hardwareNodes = 0u;
+    u32 indexedSlices = 0u;
+    u32 compiledNodes = 0u;
+    u32 acceptedPackets = 0u;
+    u32 singleTaskPackets = 0u;
+    u32 graphicsPackets = 0u;
+    for(const auto& node : nodes){
+        if(node.label != "Reflection Hardware Resolve")
+            continue;
+        ++hardwareNodes;
+        u32 sliceIndex = expectedSlices;
+        for(u32 index = 0u; index < expectedSlices; ++index){
+            if(node.name == sliceIdentities[index]){
+                sliceIndex = index;
+                break;
+            }
+        }
+        if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
+            continue;
+        observedSlices[sliceIndex] = 1u;
+        ++indexedSlices;
+        if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
+            continue;
+        ++compiledNodes;
+        b8 unique = true;
+        for(const u32 packetIndex : uniquePackets){
+            if(packetIndex == node.compiledTask.packetIndex){
+                unique = false;
+                break;
+            }
+        }
+        if(unique)
+            uniquePackets.push_back(node.compiledTask.packetIndex);
+        if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+            continue;
+        for(const auto& packet : packetStatistics){
+            if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
+                continue;
+            ++acceptedPackets;
+            if(packet.taskCount == 1u)
+                ++singleTaskPackets;
+            if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
+                ++graphicsPackets;
+            break;
+        }
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
+        NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
+        NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
+        , sourceFrame
+        , planGeneration
+        , primaryGraphics.deviceGeneration
+        , primaryGraphics.index
+        , runtimePresent ? 1u : 0u
+        , rayCapacity
+        , expectedSlices
+        , hardwareNodes
+        , indexedSlices
+        , compiledNodes
+        , uniquePackets.size()
+        , acceptedPackets
+        , singleTaskPackets
+        , graphicsPackets
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame)noexcept{
+    return sourceFrame == MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->m_targetSource;
+}
+
+ReflectionCsgContextProbe::ReflectionCsgContextProbe(const u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept
+    : m_capturePaths(context.objectArena)
+    , m_context(context)
+    , m_world(world)
+    , m_renderer(renderer)
+    , m_rayCapacity(rayCapacity)
+{}
+
+b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
+    const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    if(!output){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
+        return false;
+    }
+    const auto scene = CreateReflectionCsgContextScene(m_world);
+    if(!scene)
+        return false;
+    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
+    auto series = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).prepareSeries(*output, 5u, options);
+    if(!series)
+        return false;
+    m_capturePaths = Move(series->paths);
+    m_capture = Move(series->capture);
+    m_entities = *scene;
+    return beginPhase();
+}
+
+b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
+    // Wait before advancing the world so latest-only diagnostic rows are not skipped.
+    if(!m_context.graphics.waitForIdle()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
+        return false;
+    }
+    if(m_done)
+        return true;
+    const u64 frame = m_context.graphics.getFrameIndex();
+    if(frame > 0u && frame - 1u != m_packetSource){
+        m_packetSource = frame - 1u;
+        ReportReflectionSlicePackets(m_rayCapacity, m_packetSource, m_phase != 2u, m_context, m_renderer);
+    }
+    if(statistics.sequence != m_lastSequence || statistics.generation != m_lastGeneration){
+        m_lastSequence = statistics.sequence;
+        m_lastGeneration = statistics.generation;
+        if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= m_phaseSource && statistics.acceptedToken.valid())
+            ++m_completed;
+    }
+    m_capture->update();
+    if(m_capture->captureReady()){
+        const u64 source = m_capture->capturedGraphicsFrameIndex();
+        if(source != m_targetSource || source < m_phaseSource || m_completed < 16u){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: capture missed the qualified phase source frame"));
+            return false;
+        }
+        if(statistics.graphicsFrameIndex < source)
+            return true;
+        if(statistics.graphicsFrameIndex != source){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"), source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation);
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"), m_phase, source, m_completed);
+        if(m_phase == 4u){
+            m_done = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: complete captures=5"));
+            m_capture->finish();
+            return true;
+        }
+        ++m_phase;
+        if(!m_capture->rearm(Move(m_capturePaths[m_phase])))
+            return false;
+        return beginPhase();
+    }
+    if(m_targetSource == Limit<u64>::s_Max && m_completed >= 16u)
+        m_targetSource = frame;
+    return true;
+}
+
+b8 ReflectionCsgContextProbe::beginPhase(){
+    const b8 small = m_phase == 0u || m_phase == 3u;
+    const b8 csg = m_phase != 2u;
+    m_world.entity(m_entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
+    // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
+    m_world.entity(m_entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = small ? 40.f : 0.f;
+    m_world.entity(m_entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
+    m_world.entity(m_entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = !small && csg;
+    m_phaseSource = m_context.graphics.getFrameIndex();
+    m_completed = 0u;
+    m_targetSource = Limit<u64>::s_Max;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <loader/project_entry.h>
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionCpuTimingProbe final{
+private:
+    static constexpr u64 s_PreparationPresentations = 64u;
+    static constexpr u64 s_MinimumPresentations = NWB::Tests::Smoke::s_SmokeProbeMinimumPresentations;
+    static constexpr u32 s_MinimumPositiveIntervals = 11u;
+    static constexpr f64 s_MinimumMeasurementSeconds = NWB::Tests::Smoke::s_SmokeProbeMinimumMeasurementSeconds;
+
+
+public:
+    explicit ReflectionCpuTimingProbe(ProjectRuntimeContext& context)noexcept;
+
+
+public:
+    [[nodiscard]] b8 initialize(AStringView caseName, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 update();
+    void finish();
+
+
+private:
+    ProjectRuntimeContext& m_context;
+    SmokeCpuGpuTimingProbe m_publications;
+    PresentationFpsProbe m_presentation{ 5.0 };
+    Timer m_preparationBegin = {};
+    u64 m_intervalSourceFrame = 0u;
+    u32 m_positiveIntervals = 0u;
+    b8 m_prepared = false;
+    b8 m_measuring = false;
+    b8 m_complete = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionCpuTimingProbe::ReflectionCpuTimingProbe(ProjectRuntimeContext& context)noexcept
+    : m_context(context)
+    , m_publications(NWB_TEXT("reflection"), context.objectArena)
+{}
+
+b8 ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Alloc::ScratchArena& scratchArena){
+    if((caseName != "optical_csg_cap" && caseName != "optical_csg_reference") || !m_context.requestQuit){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires the cap or matched slab fixture and a quit callback"));
+        return false;
+    }
+    const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
+    if(!m_publications.initialize(true, true, outputPath ? AStringView(outputPath->data(), outputPath->size()) : AStringView{}))
+        return false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), ConvertString(caseName));
+    return true;
+}
+
+b8 ReflectionCpuTimingProbe::update(){
+    if(m_complete)
+        return true;
+    const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
+    const u64 sourceFrame = m_context.perfSession.frameIndex();
+    const Timer now = TimerNow();
+    if(!m_prepared){
+        if(presentations < s_PreparationPresentations)
+            return true;
+        m_prepared = true;
+        m_preparationBegin = now;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: preparation complete presentations={} source_frame={}"), presentations, sourceFrame);
+    }
+    const auto status = m_presentation.observe(presentations, now);
+    if(status == PresentationFpsStatus::Invalid){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: presentation counter or steady clock regressed"));
+        return false;
+    }
+    if(m_presentation.measurementStarted() && !m_measuring){
+        m_measuring = true;
+        m_intervalSourceFrame = sourceFrame;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}"), presentations, sourceFrame, DurationInSeconds<f64>(now, m_preparationBegin));
+    }
+    if(!m_publications.observe(m_context.perfSession, m_presentation, presentations, false))
+        return false;
+    if(status != PresentationFpsStatus::Interval)
+        return true;
+    const auto& interval = m_presentation.interval();
+    if(interval.presentations() > 0u)
+        ++m_positiveIntervals;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: interval presentations={} seconds={} first={} last={}") NWB_TEXT(" first_source={} end_source={}")
+        , interval.presentations()
+        , interval.wallSeconds
+        , interval.firstPresentationCount
+        , interval.lastPresentationCount
+        , m_intervalSourceFrame
+        , sourceFrame
+    );
+    m_intervalSourceFrame = sourceFrame;
+    const auto& total = m_presentation.total();
+    if(
+        total.wallSeconds < s_MinimumMeasurementSeconds || total.presentations() < s_MinimumPresentations
+        || m_positiveIntervals < s_MinimumPositiveIntervals
+        || !m_publications.hasCompletedGpuSamples(Impl::RendererGpuTimingScope::s_Frame.identity, s_MinimumPresentations)
+        || !m_publications.hasCompletedGpuSamples(Impl::ReflectionGpuTimingScope::s_Hardware.identity, s_MinimumPresentations)
+    )
+        return true;
+    if(!m_publications.observe(m_context.perfSession, m_presentation, presentations, true))
+        return false;
+    m_complete = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement complete presentations={} seconds={} first={} last={}") NWB_TEXT(" positive_intervals={} end_source={} diagnostic_only=1")
+        , total.presentations()
+        , total.wallSeconds
+        , total.firstPresentationCount
+        , total.lastPresentationCount
+        , m_positiveIntervals
+        , sourceFrame
+    );
+    m_context.requestQuit();
+    return true;
+}
+
+void ReflectionCpuTimingProbe::finish(){
+    if(!m_complete)
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: shutdown before the diagnostic measurement completed"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ReflectionFeedbackCase{
+    enum Enum : u8{ Boundary, Mutation, LongMiss };
+};
+
+class ReflectionFeedbackScene final{
+public:
+    explicit ReflectionFeedbackScene(Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
+    [[nodiscard]] b8 applyMutation()noexcept;
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, b8 horizontal = false);
+
+
+private:
+    Core::ECS::World& m_world;
+    Core::ECS::EntityID m_green;
+    ReflectionFeedbackCase::Enum m_case = ReflectionFeedbackCase::Boundary;
+    b8 m_finalState = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_feedback_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionFeedbackScene::ReflectionFeedbackScene(Core::ECS::World& world)noexcept
+    : m_world(world){}
+
+b8 ReflectionFeedbackScene::create(const AStringView caseName, const b8 finalState){
+    if(caseName == "feedback_mutation")
+        m_case = ReflectionFeedbackCase::Mutation;
+    else if(caseName == "feedback_long_miss")
+        m_case = ReflectionFeedbackCase::LongMiss;
+    else if(caseName != "feedback_boundary")
+        return false;
+    if(m_case == ReflectionFeedbackCase::LongMiss){
+        if(!createPanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 8.f, 0.f), Float4(6.f, 1.f, 6.f, 0.f)).valid())
+            return false;
+        if(!createPanel(Float4(0.008f, 0.008f, 0.008f, 1.f), Float4(0.f, 0.f, 2.f, 0.f), Float4(4.f, 1.f, 6.f, 0.f), 0.95f, true).valid())
+            return false;
+        const auto red = createPanel(Float4(1.f, 0.01f, 0.01f, 1.f), Float4(-1.7f, 3.6f, 6.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+        m_green = createPanel(Float4(0.01f, 1.f, 0.01f, 1.f), Float4(1.7f, 3.6f, 6.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+        return red.valid() && m_green.valid() && !finalState;
+    }
+    if(!createPanel(Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f)).valid())
+        return false;
+    if(!createPanel(Float4(0.008f, 0.008f, 0.008f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), 0.95f).valid())
+        return false;
+    const auto red = createPanel(Float4(1.f, 0.01f, 0.01f, 1.f), Float4(-1.7f, 1.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.25f, 0.f));
+    // Move the off-screen green panel into view to trigger provisional SSR feedback.
+    m_green = createPanel(Float4(0.01f, 1.f, 0.01f, 1.f), Float4(3.f, 2.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
+    if(!red.valid() || !m_green.valid())
+        return false;
+    return !finalState || applyMutation();
+}
+
+b8 ReflectionFeedbackScene::applyMutation()noexcept{
+    if(m_case != ReflectionFeedbackCase::Mutation)
+        return false;
+    if(m_finalState)
+        return true;
+    m_world.entity(m_green).getComponent<Impl::Scene::TransformComponent>().position.x = 1.7f;
+    m_finalState = true;
+    return true;
+}
+
+Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const b8 horizontal){
+    using namespace __hidden_reflection_feedback_scene;
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, color, position, scale, m_world);
+    if(!entity.valid())
+        return entity;
+    if(!horizontal){
+        auto& transform = m_world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    }
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(0.f);
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return Core::ECS::s_InvalidEntityId;
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
+        return Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionReferenceScene final{
+public:
+    ReflectionReferenceScene(Core::ECS::World& world, b8 glassRoughnessCase, f32 authoredRoughness)noexcept;
+
+
+public:
+    void createMirrorScene(b8 moved);
+    void createOnscreenMirrorScene(b8 moved, b8 boundary);
+    void createFloorMirrorScene();
+    void createOpaqueGlassScene();
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 specularF0 = 0.0f);
+    void createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 specularF0 = 0.0f);
+    void createMirrorBackdrop();
+
+
+private:
+    Core::ECS::World& m_world;
+    b8 m_glassRoughnessCase;
+    f32 m_authoredRoughness;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_reference_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
+static constexpr SmokeMeshRef s_SphereMesh{"project/meshes/caustic_sphere"};
+static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/reflection/materials/opaque"};
+static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/reflection/materials/glass"};
+static constexpr SmokeMaterialRef s_TransparentMaterial{"project/smoke/refraction/materials/transparent"};
+static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
+static constexpr f32 s_GlassIor = s_ReflectionReferenceGlassIor;
+static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / ((s_GlassIor + 1.0f) * (s_GlassIor + 1.0f));
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace __hidden_reflection_reference_scene;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionReferenceScene::ReflectionReferenceScene(Core::ECS::World& world, const b8 glassRoughnessCase, const f32 authoredRoughness)noexcept
+    : m_world(world)
+    , m_glassRoughnessCase(glassRoughnessCase)
+    , m_authoredRoughness(authoredRoughness)
+{}
+
+void ReflectionReferenceScene::createMirrorScene(const b8 moved){
+    createMirrorBackdrop();
+    const f32 shift = moved ? 0.9f : 0.0f;
+    // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
+    const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+    const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+    NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: offscreen markers failed"));
+}
+
+void ReflectionReferenceScene::createOnscreenMirrorScene(const b8 moved, const b8 boundary){
+    createMirrorBackdrop();
+    const f32 redX = moved ? -1.45f : -1.7f;
+    const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
+    // Hybrid reflection resolves provisional screen hits against virtual images at z=+3.
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+}
+
+void ReflectionReferenceScene::createFloorMirrorScene(){
+    createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+    const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
+    NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: floor mirror creation failed"));
+    // Reflection through y=0 places virtual marker centers at y=-2.
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+}
+
+void ReflectionReferenceScene::createOpaqueGlassScene(){
+    for(u32 stripe = 0u; stripe < 24u; ++stripe){
+        const f32 value = (stripe & 1u) != 0u ? 0.55f : 0.015f;
+        const f32 x = static_cast<f32>(stripe) * 0.3f - 3.45f;
+        createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(x, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 3.0f, 0.0f));
+    }
+    const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
+    const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
+    NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: opaque/glass spheres failed"));
+    m_world.entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+    createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
+    createPanel(s_TransparentMaterial, Float4(0.015f, 0.025f, 1.0f, 0.90f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(2.0f, 1.0f, 0.08f, 0.0f));
+}
+
+NWB::Core::ECS::EntityID ReflectionReferenceScene::createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0){
+    const auto entity = CreateTintedStaticMeshEntity(mesh, material, s_MaterialInterface, color, position, scale, m_world);
+    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: mesh creation failed"));
+    const Name materialInterface(s_MaterialInterface);
+    const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
+    const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
+    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3,
+        NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
+    ), NWB_TEXT("ReflectionSmokeProjectImpl: F0 override failed")
+    );
+    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16,
+        NWB::Impl::PackMaterialInstanceValue(roughness)
+    ), NWB_TEXT("ReflectionSmokeProjectImpl: roughness override failed")
+    );
+    return entity;
+}
+
+void ReflectionReferenceScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0){
+    const auto entity = createMesh(s_PlaneMesh, material, color, position, scale, specularF0);
+    auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+}
+
+void ReflectionReferenceScene::createMirrorBackdrop(){
+    createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 2.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+    createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <loader/project_entry.h>
+
+#include <impl/assets_skeleton/asset.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ReflectionRoughnessCase{
+    enum Enum : u8{ Static, Furnace, Camera, Transform, Material, Light, Deform, StaticDeform };
+};
+
+class ReflectionRoughnessScene final{
+public:
+    ReflectionRoughnessScene(Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness, ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
+
+    [[nodiscard]] b8 deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
+    [[nodiscard]] b8 applyMutation();
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
+    [[nodiscard]] b8 createDeformingSource();
+
+
+private:
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
+    ProjectRuntimeContext& m_context;
+    Core::ECS::World& m_world;
+    Core::ECS::EntityID m_camera;
+    Core::ECS::EntityID m_light;
+    Core::ECS::EntityID m_red;
+    Core::ECS::EntityID m_skeleton;
+    f32 m_roughness;
+    ReflectionRoughnessCase::Enum m_case = ReflectionRoughnessCase::Static;
+    b8 m_finalState = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <impl/assets_skeleton/asset.h>
+
+#include <core/common/log.h>
+#include <core/assets/manager.h>
+
+#include <global/assert.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_roughness_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Tests::Smoke;
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+static constexpr SmokeMaterialRef s_Lit("project/smoke/reflection/materials/roughness_lit");
+static constexpr SmokeModelRef s_Model("project/characters/body/model");
+constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionRoughnessScene::ReflectionRoughnessScene(const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness, ProjectRuntimeContext& context, NWB::Core::ECS::World& world)noexcept
+    : m_bindJoints(context.objectArena)
+    , m_context(context)
+    , m_world(world)
+    , m_camera(camera)
+    , m_light(light)
+    , m_roughness(roughness){}
+
+b8 ReflectionRoughnessScene::create(const AStringView caseName, const b8 finalState){
+    using namespace __hidden_reflection_roughness_scene;
+    if(caseName == "rough_furnace")
+        m_case = ReflectionRoughnessCase::Furnace;
+    else if(caseName == "temporal_camera")
+        m_case = ReflectionRoughnessCase::Camera;
+    else if(caseName == "temporal_transform")
+        m_case = ReflectionRoughnessCase::Transform;
+    else if(caseName == "temporal_material")
+        m_case = ReflectionRoughnessCase::Material;
+    else if(caseName == "temporal_light")
+        m_case = ReflectionRoughnessCase::Light;
+    else if(caseName == "temporal_deform")
+        m_case = ReflectionRoughnessCase::Deform;
+    else if(caseName == "rough_deform")
+        m_case = ReflectionRoughnessCase::StaticDeform;
+    else if(caseName != "rough")
+        return false;
+    const auto backdrop = createPanel(s_Opaque, Float4(0.12f, 0.12f, 0.12f, 1.f), Float4(0.f, 1.4f, 2.f, 0.f), Float4(6.f, 1.f, 4.5f, 0.f));
+    const auto mirror = createPanel(s_Opaque, Float4(0.f, 0.f, 0.f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), m_case == ReflectionRoughnessCase::Furnace ? 1.f : 0.95f, m_roughness);
+    if(!backdrop.valid() || !mirror.valid())
+        return false;
+    if(m_case == ReflectionRoughnessCase::Furnace)
+        return true;
+    const auto green = createPanel(s_Opaque, Float4(0.f, 1.f, 0.f, 1.f), Float4(1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
+    if(!green.valid())
+        return false;
+    if(deforming()){
+        if(!createDeformingSource())
+            return false;
+    }
+    else{
+        m_red = createPanel(m_case == ReflectionRoughnessCase::Light ? s_Lit : s_Opaque, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 1.4f, -8.f, 0.f), Float4(0.75f, 1.f, 0.75f, 0.f));
+        if(!m_red.valid())
+            return false;
+    }
+    return !finalState || applyMutation();
+}
+
+b8 ReflectionRoughnessScene::applyMutation(){
+    using namespace __hidden_reflection_roughness_scene;
+    if(m_finalState)
+        return true;
+    switch(m_case){
+    case ReflectionRoughnessCase::Camera:
+        m_world.entity(m_camera).getComponent<NWB::Impl::Scene::TransformComponent>().position.x = 0.6f;
+        break;
+    case ReflectionRoughnessCase::Transform:
+        m_world.entity(m_red).getComponent<NWB::Impl::Scene::TransformComponent>().position.z = -150.f;
+        break;
+    case ReflectionRoughnessCase::Material:
+        if(!NWB::Impl::SetMaterialMutableHalf4(m_world, m_red, Name(s_Interface), "runtime.color_tint", Float4(0.f, 0.f, 0.f, 1.f)))
+            return false;
+        break;
+    case ReflectionRoughnessCase::Light:
+        // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
+        m_world.entity(m_light).getComponent<NWB::Impl::Scene::LightComponent>().setColor(VectorZero());
+        break;
+    case ReflectionRoughnessCase::Deform:{
+        auto& pose = m_world.entity(m_skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
+        if(pose.localJoints.size() != m_bindJoints.size())
+            return false;
+        for(u32 joint = 1u; joint < pose.localJoints.size(); ++joint){
+            const f32 angle = (joint & 1u) != 0u ? 0.32f : -0.32f;
+            StoreFloat(MatrixMultiply(LoadFloat(m_bindJoints[joint]), MatrixRotationRollPitchYaw(0.15f, angle, 0.12f)), pose.localJoints[joint]);
+        }
+        break;
+    }
+    default:
+        return false;
+    }
+    m_finalState = true;
+    return true;
+}
+
+NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
+    using namespace __hidden_reflection_roughness_scene;
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, material, s_Interface, color, position, scale, m_world);
+    if(!entity.valid())
+        return entity;
+    auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(roughness);
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
+        return NWB::Core::ECS::s_InvalidEntityId;
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(packedRoughness)))
+        return NWB::Core::ECS::s_InvalidEntityId;
+    return entity;
+}
+
+b8 ReflectionRoughnessScene::createDeformingSource(){
+    using namespace __hidden_reflection_roughness_scene;
+    const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
+    if(!modelAsset)
+        return false;
+    NWB_ASSERT(*modelAsset);
+    const NWB::Impl::Model* modelPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset->get());
+    if(!modelPtr)
+        return false;
+    const auto& model = *modelPtr;
+    if(model.skeletonObjects().empty())
+        return false;
+    const auto skeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name());
+    if(!skeletonAsset)
+        return false;
+    NWB_ASSERT(*skeletonAsset);
+    const NWB::Impl::Skeleton* skeletonPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset->get());
+    if(!skeletonPtr)
+        return false;
+    const auto& skeleton = *skeletonPtr;
+    if(skeleton.joints().size() < 2u)
+        return false;
+    m_bindJoints.reserve(skeleton.joints().size());
+    for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
+        m_bindJoints.push_back(joint.localBindPose);
+    const auto redModel = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), m_world);
+    m_red = redModel.entity;
+    if(!m_red.valid() || !redModel.tintApplied)
+        return false;
+    SyncSmokeModelRuntimes(m_world);
+    m_skeleton = FindSpawnedModelObject(m_red, s_SmokeNameSkeleton, NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    return m_skeleton.valid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/reflection/settings.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionSmokeConfiguration final{
+public:
+    [[nodiscard]] static b8 ReadFlag(AStringView name, Core::Alloc::ScratchArena& scratchArena, b8& value);
+    [[nodiscard]] b8 configure(Impl::RendererSystem& renderer, Core::GraphicsRuntime& graphics, b8 extendedCase, b8 feedbackCase, b8 opticalCase, b8 furnace, b8 opticalTir, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Impl::ReflectionSettings& settings()noexcept{ return m_settings; }
+    [[nodiscard]] const Impl::ReflectionSettings& settings()const noexcept{ return m_settings; }
+    [[nodiscard]] u32 targetSamples()const noexcept{ return m_targetSamples; }
+    [[nodiscard]] u32 postResetSamples()const noexcept{ return m_postResetSamples; }
+    [[nodiscard]] u32 requestedSeed()const noexcept{ return m_requestedSeed; }
+    [[nodiscard]] f32 authoredRoughness()const noexcept{ return m_authoredRoughness; }
+    [[nodiscard]] b8 feedbackCapture()const noexcept{ return m_feedbackCapture; }
+    [[nodiscard]] b8 freshFinalState()const noexcept{ return m_freshFinalState; }
+
+
+private:
+    [[nodiscard]] static b8 ReadU32(AStringView name, u32 minimum, u32 maximum, Core::Alloc::ScratchArena& scratchArena, u32& value);
+
+
+private:
+    Impl::ReflectionSettings m_settings;
+    u32 m_targetSamples = 16u;
+    u32 m_postResetSamples = 1u;
+    u32 m_requestedSeed = 0u;
+    f32 m_authoredRoughness = 0.f;
+    b8 m_feedbackCapture = false;
+    b8 m_freshFinalState = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <impl/ecs_render/module.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/constant.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_smoke_configuration{
+inline constexpr AStringView s_HardwareRoute = s_ReflectionSmokeHardwareRoute;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionSmokeConfiguration::ReadFlag(const AStringView name, NWB::Core::Alloc::ScratchArena& scratchArena, b8& value){
+    const auto text = ReadSmokeEnvironmentText(scratchArena, name);
+    if(!text)
+        return true;
+    if(*text == "0")
+        value = false;
+    else if(*text == "1")
+        value = true;
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: {} must be 0 or 1"), ConvertString(name));
+        return false;
+    }
+    return true;
+}
+
+b8 ReflectionSmokeConfiguration::ReadU32(const AStringView name, const u32 minimum, const u32 maximum, NWB::Core::Alloc::ScratchArena& scratchArena, u32& value){
+    const auto text = ReadSmokeEnvironmentText(scratchArena, name);
+    if(!text)
+        return true;
+    const auto parsed = ParseU64(AStringView(text->data(), text->size()));
+    if(!parsed || *parsed < minimum || *parsed > maximum){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: {} must be in [{}, {}]"), ConvertString(name), minimum, maximum);
+        return false;
+    }
+    value = static_cast<u32>(*parsed);
+    return true;
+}
+
+
+b8 ReflectionSmokeConfiguration::configure(Impl::RendererSystem& renderer, Core::GraphicsRuntime& graphics, const b8 extendedCase, const b8 feedbackCase, const b8 opticalCase, const b8 furnace, const b8 opticalTir, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_reflection_smoke_configuration;
+    auto& settings = m_settings;
+    settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
+    settings.environmentTop = Float3U(0.0f, 0.0f, 0.0f);
+    settings.environmentBottom = Float3U(0.0f, 0.0f, 0.0f);
+    settings.maxHardwareRaysPerFrame = 2u * 960u * 720u;
+    settings.diagnosticsEnabled = true;
+    settings.temporalEnabled = extendedCase && !opticalCase && !feedbackCase;
+    settings.spatialFilterEnabled = false;
+    m_targetSamples = extendedCase && !opticalCase ? 64u : 16u;
+    if(
+        !ReadFlag("NWB_REFLECTION_SMOKE_DIAGNOSTICS", scratchArena, settings.diagnosticsEnabled)
+        || !ReadFlag("NWB_REFLECTION_SMOKE_FEEDBACK", scratchArena, settings.screenFeedbackEnabled)
+        || !ReadFlag("NWB_REFLECTION_SMOKE_FEEDBACK_CAPTURE", scratchArena, m_feedbackCapture)
+        || !ReadFlag("NWB_REFLECTION_SMOKE_TEMPORAL", scratchArena, settings.temporalEnabled)
+        || !ReadFlag("NWB_REFLECTION_SMOKE_SPATIAL", scratchArena, settings.spatialFilterEnabled)
+        || !ReadFlag("NWB_REFLECTION_SMOKE_FINAL_STATE", scratchArena, m_freshFinalState)
+        || !ReadU32("NWB_REFLECTION_SMOKE_HISTORY_SAMPLES", 1u, 256u, scratchArena, m_targetSamples)
+        || !ReadU32("NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES", 1u, 256u, scratchArena, m_postResetSamples)
+        || !ReadU32("NWB_REFLECTION_SMOKE_SEED", 0u, Limit<u32>::s_Max, scratchArena, m_requestedSeed)
+        || !ReadU32("NWB_REFLECTION_SMOKE_OPTICAL_QUERIES", 1u, 16u, scratchArena, settings.maxOpticalQueries)
+        || !ReadU32("NWB_REFLECTION_SMOKE_SCREEN_STEPS", 1u, 256u, scratchArena, settings.screenMaxSteps)
+    )
+        return false;
+    settings.temporalMaxSamples = m_targetSamples;
+    settings.samplingSeed = m_freshFinalState ? m_requestedSeed + 1u : m_requestedSeed;
+    if(extendedCase && !feedbackCase){
+        m_authoredRoughness = 0.4f;
+        const auto roughnessText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_ROUGHNESS");
+        if(roughnessText){
+            const auto roughness = ParseF32FromChars(AStringView(roughnessText->data(), roughnessText->size()));
+            if(!roughness || !IsFinite(*roughness) || *roughness < 0.f || *roughness > 1.f)
+                return false;
+            m_authoredRoughness = *roughness;
+        }
+        NWB::Impl::PresentationSettings presentation;
+        presentation.shoulder = 1.f;
+        if(!renderer.setPresentationSettings(presentation))
+            return false;
+    }
+    if(furnace || opticalTir){
+        settings.environmentTop = Float3U(1.f, 1.f, 1.f);
+        settings.environmentBottom = Float3U(1.f, 1.f, 1.f);
+        settings.roughnessCutoff = 1.f;
+    }
+    const auto budgetText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_RAY_BUDGET");
+    if(budgetText){
+        const auto parsed = ParseU64(AStringView(budgetText->data(), budgetText->size()));
+        if(!parsed || *parsed > Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: ray budget must be a nonnegative u32"));
+            return false;
+        }
+        settings.maxHardwareRaysPerFrame = static_cast<u32>(*parsed);
+    }
+    const auto routeText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_MODE");
+    const b8 hasRoute = routeText.has_value();
+    const AStringView route = hasRoute ? AStringView(routeText->data(), routeText->size()) : AStringView(s_HardwareRoute);
+    if(route == "disabled")
+        settings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
+    else if(route == "screen")
+        settings.traceMode = NWB::Impl::ReflectionTraceMode::ScreenSpace;
+    else if(route == "hybrid")
+        settings.traceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
+    else if(route != s_HardwareRoute){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown reflection mode '{}'"), ConvertString(route));
+        return false;
+    }
+    const auto debugText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_DEBUG");
+    if(debugText){
+        const AStringView debugView(debugText->data(), debugText->size());
+        if(debugView == "source")
+            settings.debugView = NWB::Impl::ReflectionDebugView::TraceSource;
+        else if(debugView == "confidence")
+            settings.debugView = NWB::Impl::ReflectionDebugView::Confidence;
+        else if(debugView != "none"){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown debug view '{}'"), ConvertString(debugView));
+            return false;
+        }
+    }
+    if(!renderer.setReflectionSettings(settings))
+        return false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: screen feedback {}"), settings.screenFeedbackEnabled ? 1u : 0u);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: screen steps {}"), settings.screenMaxSteps);
+    renderer.setRefractionEnabled(true);
+    renderer.setRefractionHardwareTracingEnabled(true);
+    const b8 hardwareAvailable = graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: hardware {}"), hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: reflection mode {}"), ConvertString(route));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
+    if(opticalCase)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: optical query limit {}"), settings.maxOpticalQueries);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_render/reflection/settings.adhd.h>
+
+#include <core/perf/timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Impl{
+class RendererSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Observes completed reflection history and timing without owning renderer resources.
+class ReflectionSpatialOwnerProbe final{
+public:
+    ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)noexcept;
+
+
+public:
+    [[nodiscard]] b8 configure(AStringView selection, Impl::ReflectionSettings& settings);
+    [[nodiscard]] b8 update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings);
+    [[nodiscard]] b8 shouldCapture(u64 graphicsFrame)const noexcept{ return m_finalReset && graphicsFrame == m_finalSource; }
+    [[nodiscard]] b8 canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const noexcept;
+
+
+private:
+    [[nodiscard]] b8 observeTiming(const Core::Perf::TimingView& timing);
+    [[nodiscard]] b8 beginPhase(Impl::ReflectionSettings& settings);
+
+
+private:
+    Core::Perf::TimingStats m_phaseWork;
+    Core::Perf::TimingStats m_captureWork;
+    Array<u32, 4u> m_radii = { 1u, 3u, 2u, 1u };
+    ProjectRuntimeContext& m_context;
+    Impl::RendererSystem& m_renderer;
+    u64 m_phaseSource = Limit<u64>::s_Max;
+    u64 m_finalSource = Limit<u64>::s_Max;
+    u64 m_lastPublish = 0u;
+    u32 m_phase = 0u;
+    u32 m_lastPhase = 0u;
+    b8 m_started = false;
+    b8 m_finalReset = false;
+    b8 m_hasPublication = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionSpatialOwnerProbe::ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)noexcept
+    : m_context(context)
+    , m_renderer(renderer)
+{}
+
+b8 ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::ReflectionSettings& settings){
+    if(selection == "fresh1")
+        m_radii[0] = 1u;
+    else if(selection == "fresh2")
+        m_radii[0] = 2u;
+    else if(selection == "fresh3")
+        m_radii[0] = 3u;
+    else if(selection == "sequence3")
+        m_lastPhase = 1u;
+    else if(selection == "sequence2")
+        m_lastPhase = 2u;
+    else if(selection == "sequence1")
+        m_lastPhase = 3u;
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: unknown selection"));
+        return false;
+    }
+    if(settings.traceMode != Impl::ReflectionTraceMode::Hardware || !settings.diagnosticsEnabled || !settings.temporalEnabled || settings.temporalMaxSamples != 1u || !settings.spatialFilterEnabled || settings.screenFeedbackEnabled){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
+        return false;
+    }
+    settings.spatialRadius = m_radii[0];
+    settings.samplingSeed = 99u;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), ConvertString(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
+    return true;
+}
+
+b8 ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings){
+    if(!observeTiming(timing))
+        return false;
+    if(m_finalReset || statistics.sequence == 0u || !statistics.hardwareReady || !statistics.historyEligible)
+        return true;
+    if(!m_started){
+        if(statistics.frameIndex < 3u)
+            return true;
+        return beginPhase(settings);
+    }
+    const u32 phaseSeed = 101u + m_phase;
+    if(
+        statistics.samplingSeed != phaseSeed || statistics.historyStartGraphicsFrame != m_phaseSource
+        || statistics.historySampleCount != 1u || statistics.sampleIndex < 2u
+        || !m_phaseWork.valid() || statistics.graphicsFrameIndex < m_phaseWork.lastSampleFrameIndex
+    )
+        return true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}") NWB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
+        , m_phase, statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
+        , statistics.historyStartGraphicsFrame, statistics.sampleIndex, statistics.samplingSeed
+        , m_phaseWork.publishFrameIndex, m_phaseWork.firstSampleFrameIndex, m_phaseWork.lastSampleFrameIndex, m_phaseWork.sampleCount
+    );
+    if(m_phase < m_lastPhase){
+        ++m_phase;
+        return beginPhase(settings);
+    }
+    settings.samplingSeed = 0u;
+    if(!m_renderer.setReflectionSettings(settings)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: final seed reset rejected"));
+        return false;
+    }
+    m_finalSource = m_context.graphics.getFrameIndex();
+    m_finalReset = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0"), settings.spatialRadius, m_finalSource);
+    return true;
+}
+
+b8 ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& statistics, const u64 capturedSource)const noexcept{
+    return
+        m_finalReset && capturedSource == m_finalSource && m_captureWork.valid()
+        && statistics.hardwareReady && statistics.historyEligible && statistics.samplingSeed == 0u
+        && statistics.historyStartGraphicsFrame == m_finalSource
+        && statistics.graphicsFrameIndex >= Max(capturedSource, m_captureWork.lastSampleFrameIndex)
+    ;
+}
+
+b8 ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& timing){
+    const Core::Perf::TimingStats& work = timing.stats(Impl::ReflectionGpuTimingScope::s_Spatial.identity);
+    if(!work.valid() || (m_hasPublication && work.publishFrameIndex == m_lastPublish))
+        return true;
+    if((m_hasPublication && work.publishFrameIndex < m_lastPublish) || work.firstSampleFrameIndex > work.lastSampleFrameIndex || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u || !IsFinite(work.seconds) || work.seconds < 0.0){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
+        return false;
+    }
+    m_hasPublication = true;
+    m_lastPublish = work.publishFrameIndex;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}"), work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount);
+    if(m_started && !m_finalReset && !m_phaseWork.valid() && work.firstSampleFrameIndex >= m_phaseSource)
+        m_phaseWork = work;
+    // Require one completed spatial timing range per source frame in the window.
+    if(m_finalReset && work.firstSampleFrameIndex <= m_finalSource && work.lastSampleFrameIndex >= m_finalSource && work.sampleCount == work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u)
+        m_captureWork = work;
+    return true;
+}
+
+b8 ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings){
+    settings.spatialRadius = m_radii[m_phase];
+    settings.samplingSeed = 101u + m_phase;
+    if(!m_renderer.setReflectionSettings(settings)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: radius transition rejected"));
+        return false;
+    }
+    m_phaseSource = m_context.graphics.getFrameIndex();
+    m_phaseWork = {};
+    m_started = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}"), m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/reflection/statistics_types.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionStatisticsReporter final{
+public:
+    [[nodiscard]] b8 poll(Impl::RendererSystem& renderer);
+    [[nodiscard]] const Impl::ReflectionStatistics& latest()const noexcept{ return m_latestStatistics; }
+    [[nodiscard]] b8 feedbackObservedBypass()const noexcept{ return m_feedbackObservedBypass; }
+
+
+private:
+    u64 m_statisticsSequence = 0u;
+    u64 m_statisticsGeneration = 0u;
+    Impl::ReflectionStatistics m_latestStatistics;
+    b8 m_feedbackObservedBypass = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/module.h>
+
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionStatisticsReporter::poll(Impl::RendererSystem& renderer){
+    const auto statisticsResult = renderer.tryGetLatestReflectionStatistics();
+    if(!statisticsResult)
+        return false;
+    const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
+    if(statistics.sequence == m_statisticsSequence && statistics.generation == m_statisticsGeneration)
+        return false;
+    m_statisticsSequence = statistics.sequence;
+    m_statisticsGeneration = statistics.generation;
+    m_latestStatistics = statistics;
+    m_feedbackObservedBypass = m_feedbackObservedBypass || statistics.feedbackBypassedPixels > 0u;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
+        NWB_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
+        NWB_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
+        NWB_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
+        NWB_TEXT(" screen_attempts={} screen_hits={}")
+        , statistics.sequence
+        , statistics.generation
+        , statistics.frameIndex
+        , static_cast<u32>(statistics.traceMode)
+        , statistics.width
+        , statistics.height
+        , statistics.requestedHardwareBudget
+        , statistics.effectiveHardwareBudget
+        , statistics.queueCapacity
+        , statistics.hardwareRequested ? 1u : 0u
+        , statistics.hardwareAvailable ? 1u : 0u
+        , statistics.hardwareReady ? 1u : 0u
+        , static_cast<u32>(statistics.acceptedToken.queue)
+        , statistics.acceptedToken.value
+        , statistics.acceptedToken.physicalQueueIndex
+        , statistics.acceptedToken.deviceGeneration
+        , statistics.candidates
+        , statistics.hardwareRays
+        , statistics.hardwareHits
+        , statistics.opaquePixels
+        , statistics.glassPixels
+        , statistics.fallbackPixels
+        , statistics.screenAttempts
+        , statistics.screenHits
+    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}") NWB_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
+        , statistics.sequence
+        , statistics.generation
+        , statistics.graphicsFrameIndex
+        , statistics.historyEpoch
+        , statistics.historyStartGraphicsFrame
+        , statistics.historySampleCount
+        , statistics.sampleIndex
+        , statistics.samplingSeed
+        , statistics.historyEligible ? 1u : 0u
+        , statistics.historyReused ? 1u : 0u
+        , statistics.historyReset ? 1u : 0u
+        , static_cast<u32>(statistics.historyResetReason)
+    );
+    {
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} query_budget_units={} physical_queries={}")
+            NWB_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
+            NWB_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
+            , statistics.sequence
+            , statistics.generation
+            , statistics.maxOpticalQueries
+            , statistics.queryBudgetUnits
+            , statistics.physicalQueries
+            , statistics.bootstrapEvents
+            , statistics.transparentPaths
+            , statistics.unsupportedPaths
+            , statistics.limitedPaths
+            , statistics.ambiguousPaths
+            , statistics.tirEvents
+            , statistics.mediumOverflowPaths
+            , statistics.opticalTransportEnabled ? 1u : 0u
+        );
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedback: sequence={} generation={} graphics_frame={}")
+        NWB_TEXT(" feedback_sequence={} epoch={} start_graphics_frame={} probe_index={}")
+        NWB_TEXT(" requested={} enabled={} reused={} reset={} reason={} scheduling_valid={}")
+        NWB_TEXT(" potential_receivers={} screen_returns={} bypassed_pixels={} probe_tiles={}")
+        NWB_TEXT(" screen_iterations={} screen_limit_misses={}")
+        , statistics.sequence
+        , statistics.generation
+        , statistics.graphicsFrameIndex
+        , statistics.feedbackSequence
+        , statistics.feedbackEpoch
+        , statistics.feedbackStartGraphicsFrame
+        , statistics.feedbackProbeIndex
+        , statistics.feedbackRequested ? 1u : 0u
+        , statistics.feedbackEnabled ? 1u : 0u
+        , statistics.feedbackReused ? 1u : 0u
+        , statistics.feedbackReset ? 1u : 0u
+        , static_cast<u32>(statistics.feedbackResetReason)
+        , statistics.schedulingCounterValid ? 1u : 0u
+        , statistics.potentialReceivers
+        , statistics.screenReturns
+        , statistics.feedbackBypassedPixels
+        , statistics.feedbackProbeTiles
+        , statistics.screenIterations
+        , statistics.screenLimitMisses
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <core/graphics/runtime/render_pass.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionTimingRenderPass final : public Core::IRenderPass{
+private:
+    static constexpr u32 s_InFlightRanges = s_ReflectionTimingInFlightRanges;
+
+
+public:
+    explicit ReflectionTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept;
+
+
+public:
+    [[nodiscard]] b8 prepareQueries(u32 width, u32 height);
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionTimingRenderPass::ReflectionTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept
+    : IRenderPass(graphics)
+{}
+
+b8 ReflectionTimingRenderPass::prepareQueries(const u32 width, const u32 height){
+    u32 mipCount = 0u;
+    for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
+        ++mipCount;
+    if(width == 0u || height == 0u || mipCount > NWB_REFLECTION_MAX_DEPTH_MIPS){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: invalid extent for depth timing capacity"));
+        return false;
+    }
+    const Array<Name, 17> singleRangeScopes = {
+        NWB::Impl::RendererGpuTimingScope::s_Frame.identity,
+        NWB::Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
+        NWB::Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
+        NWB::Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
+        NWB::Impl::RendererGpuTimingScope::s_DeferredComposite.identity,
+        NWB::Impl::RendererGpuTimingScope::s_DeferredPresent.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitClear.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitOccupancy.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitDepthWarp.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitExtinction.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitIntegration.identity,
+        NWB::Impl::RendererGpuTimingScope::s_AvboitAccumulate.identity,
+        NWB::Impl::ReflectionGpuTimingScope::s_Classify.identity,
+        NWB::Impl::ReflectionGpuTimingScope::s_BuildArgs.identity,
+        NWB::Impl::ReflectionGpuTimingScope::s_Hardware.identity,
+        NWB::Impl::ReflectionGpuTimingScope::s_Temporal.identity,
+        NWB::Impl::ReflectionGpuTimingScope::s_Spatial.identity,
+    };
+    auto& graphics = getGraphics();
+    auto& timing = graphics.gpuTiming();
+    auto& device = graphics.getDevice();
+    // Reserve enough timer queries to cover all in-flight passes and depth mips.
+    for(const Name& scope : singleRangeScopes){
+        if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
+            return false;
+        }
+    }
+    if(!timing.prepareScopeQueries(NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_InFlightRanges * mipCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare depth timing capacity"));
+        return false;
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing in-flight ranges {}"), s_InFlightRanges);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing depth mip count {}"), mipCount);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <loader/project_entry.h>
+
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
+#include <impl/ecs_scene/module.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/ecs/entity.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_contributor.h>
+
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_SmokeCaseEnvironment = "NWB_REFLECTION_SMOKE_CASE";
+constexpr TStringView s_ProjectName = NWB_TEXT("ReflectionSmokeProjectImpl");
+constexpr AStringView s_OffscreenCase = "offscreen";
+constexpr AStringView s_RoughCase = "rough";
+constexpr AStringView s_CapturePathEnvironment = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH";
+constexpr AStringView s_OnscreenMovedCase = "onscreen_moved";
+constexpr AStringView s_BoundaryCase = "boundary";
+constexpr AStringView s_FloorCase = "floor";
+constexpr AStringView s_MovedCase = "moved";
+constexpr AStringView s_OpaqueGlassCase = "opaque_glass";
+
+using namespace NWB::Tests::Smoke;
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World& world, NWB::ProjectRuntimeContext& context){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+    const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
+    const b8 hasCase = caseText.has_value();
+    const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView{};
+    if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
+        AddSmokeSkinnedRenderSystems(world, context);
+        return *MakeNotNull(world.getSystem<NWB::Impl::RendererSystem>());
+    }
+    return AddSmokeRenderSystems(world, context);
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionSmokeProjectImpl final : public NWB::IProjectEntryCallbacks{
+public:
+    explicit ReflectionSmokeProjectImpl(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateSmokeWorldOrDie(s_ProjectName, context))
+        , m_renderer(CreateReflectionRenderer(*m_world, context)){}
+    virtual ~ReflectionSmokeProjectImpl()noexcept override{ destroyWorld(); }
+
+
+public:
+    virtual b8 onStartup()override{
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
+        const b8 hasCase = caseText.has_value();
+        const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView(s_OffscreenCase);
+        m_feedbackCase = caseName.starts_with("feedback_");
+        m_opticalCase = caseName.starts_with("optical_");
+        m_csgOpticalCase = caseName.starts_with("optical_csg_") && caseName != "optical_csg_reference";
+        m_extendedCase = m_feedbackCase || m_opticalCase || caseName.starts_with(s_RoughCase) || caseName.starts_with("temporal_");
+        m_opticalTir = caseName == "optical_tir";
+        m_furnace = caseName == "rough_furnace";
+        m_glassRoughnessCase = caseName == "rough_glass";
+        if(!m_configuration.configure(m_renderer, m_context.graphics, m_extendedCase, m_feedbackCase, m_opticalCase, m_furnace, m_opticalTir, scratchArena))
+            return false;
+        b8 cpuDiagnostics = false;
+        if(!ReflectionSmokeConfiguration::ReadFlag("NWB_REFLECTION_SMOKE_CPU_DIAGNOSTICS", scratchArena, cpuDiagnostics))
+            return false;
+        const auto cpuTimingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
+        if(cpuTimingPath.has_value() != cpuDiagnostics){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: diagnostic request and explicit output path must agree"));
+            return false;
+        }
+        if(cpuDiagnostics){
+            if(
+                m_configuration.settings().diagnosticsEnabled || m_configuration.settings().temporalEnabled
+                || m_configuration.settings().spatialFilterEnabled || m_configuration.settings().screenFeedbackEnabled
+                || m_configuration.settings().traceMode != NWB::Impl::ReflectionTraceMode::Hardware
+                || ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment)
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics"));
+                return false;
+            }
+            m_cpuTimingProbe = MakeUnique<ReflectionCpuTimingProbe>(m_context);
+            if(!m_cpuTimingProbe->initialize(caseName, scratchArena))
+                return false;
+        }
+        const auto spatialOwnerSelection = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
+        if(spatialOwnerSelection){
+            if(caseName != s_RoughCase || m_configuration.authoredRoughness() != 0.4f){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
+                return false;
+            }
+            m_spatialOwnerProbe = MakeUnique<ReflectionSpatialOwnerProbe>(m_context, m_renderer);
+            if(!m_spatialOwnerProbe || !m_spatialOwnerProbe->configure(AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_configuration.settings()) || !m_renderer.setReflectionSettings(m_configuration.settings()))
+                return false;
+        }
+        const b8 screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
+        if(caseName != s_OffscreenCase && caseName != s_MovedCase && caseName != s_OpaqueGlassCase && !screenCase && !m_extendedCase){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown case '{}'"), ConvertString(caseName));
+            return false;
+        }
+        const auto cameraId = CreateSmokeCamera(1.4f, 6.0f, 0.0f, *m_world);
+        auto& camera = m_world->entity(cameraId).getComponent<NWB::Impl::Scene::CameraComponent>();
+        camera.setVerticalFovRadians(s_PI / 3.0f);
+        const auto extent = NWB::QueryProjectFrameClientSize();
+        camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
+        m_csgSliceRayCapacity = Min(m_configuration.settings().maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
+        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
+        if(m_opticalCase)
+            m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
+
+        ReflectionReferenceScene referenceScene(*m_world, m_glassRoughnessCase, m_configuration.authoredRoughness());
+        if(m_feedbackCase){
+            m_feedbackScene = MakeUnique<ReflectionFeedbackScene>(*m_world);
+            if(!m_feedbackScene->create(caseName, m_configuration.freshFinalState()))
+                return false;
+        }
+        else if(caseName == "optical_csg_context_transition"){
+            m_csgContextProbe = MakeUnique<ReflectionCsgContextProbe>(m_csgSliceRayCapacity, m_context, *m_world, m_renderer);
+            if(!m_csgContextProbe || !m_csgContextProbe->create(scratchArena))
+                return false;
+        }
+        else if(m_opticalCase){
+            if(!CreateReflectionOpticalScene(caseName, *m_world))
+                return false;
+        }
+        else if(m_extendedCase && !m_glassRoughnessCase){
+            m_roughnessScene = MakeUnique<ReflectionRoughnessScene>(cameraId, light, m_configuration.authoredRoughness(), m_context, *m_world);
+            if(!m_roughnessScene->create(caseName, m_configuration.freshFinalState()))
+                return false;
+            if(m_roughnessScene->mutationCase() && !m_roughnessScene->deforming() && m_configuration.settings().temporalEnabled && (m_configuration.targetSamples() < 32u || m_configuration.postResetSamples() > m_configuration.targetSamples())){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
+                return false;
+            }
+        }
+        else if(caseName == s_OpaqueGlassCase || m_glassRoughnessCase)
+            referenceScene.createOpaqueGlassScene();
+        else if(caseName == s_FloorCase)
+            referenceScene.createFloorMirrorScene();
+        else if(screenCase)
+            referenceScene.createOnscreenMirrorScene(caseName == s_OnscreenMovedCase, caseName == s_BoundaryCase);
+        else
+            referenceScene.createMirrorScene(caseName == s_MovedCase);
+        if(!configureFramebufferCapture(scratchArena))
+            return false;
+        if(m_spatialOwnerProbe && !m_framebufferCapture){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
+            return false;
+        }
+        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe || m_cpuTimingProbe){
+            auto captureOptions = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
+            captureOptions.cpuTiming = m_cpuTimingProbe != nullptr;
+            m_context.setPerfCapture(captureOptions);
+            if(!m_timingRenderPass.prepareQueries(extent.width, extent.height))
+                return false;
+            m_context.graphics.addRenderPassToBack(m_timingRenderPass);
+            m_timingRenderPassRegistered = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), ConvertString(caseName));
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        if(m_cpuTimingProbe)
+            m_cpuTimingProbe->finish();
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        if(m_cpuTimingProbe && !m_cpuTimingProbe->update())
+            return false;
+        if(m_csgContextProbe && !m_csgContextProbe->sampleSynchronizedFrame(m_statisticsReporter.latest()))
+            return false;
+        if(m_framebufferCapture)
+            m_framebufferCapture->update();
+        if(m_spatialOwnerProbe && !m_spatialOwnerProbe->update(m_statisticsReporter.latest(), m_context.gpuTimingView(), m_configuration.settings()))
+            return false;
+        reportCsgSlicePackets();
+        updateRoughnessScene();
+        updateFeedbackScene();
+        if(!m_cpuTimingProbe){
+            m_fpsProbe.recordFrame(delta);
+            m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
+        }
+        const f32 fixedDelta = RendererBaselineFixedDelta();
+        if(!TickSmokeWorld(fixedDelta > 0.0f ? fixedDelta : delta, *m_world))
+            return false;
+        reportReflectionStatistics();
+        return true;
+    }
+
+
+private:
+    void updateRoughnessScene(){
+        if(!m_roughnessScene || !m_roughnessScene->mutationCase() || m_mutationApplied || m_statisticsReporter.latest().sequence == 0u)
+            return;
+        const b8 warmed = m_roughnessScene->deforming() || !m_configuration.settings().temporalEnabled ? m_statisticsReporter.latest().frameIndex >= 32u : m_statisticsReporter.latest().historySampleCount >= 32u;
+        if(!warmed)
+            return;
+        m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
+        if(m_configuration.freshFinalState()){
+            m_configuration.settings().samplingSeed = m_configuration.requestedSeed();
+            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), NWB_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
+        }
+        else
+            NWB_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: scene mutation failed"));
+        m_mutationApplied = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u, m_configuration.requestedSeed());
+    }
+
+    void updateFeedbackScene(){
+        if(!m_feedbackScene || !m_feedbackScene->mutationCase() || m_mutationApplied)
+            return;
+        if(m_statisticsReporter.latest().feedbackSequence < m_configuration.targetSamples() || (!m_configuration.freshFinalState() && !m_statisticsReporter.feedbackObservedBypass()))
+            return;
+        m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
+        if(m_configuration.freshFinalState()){
+            m_configuration.settings().samplingSeed = m_configuration.requestedSeed();
+            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), NWB_TEXT("ReflectionSmokeProject: fresh feedback reset failed"));
+        }
+        else
+            NWB_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: feedback mutation failed"));
+        m_mutationApplied = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u);
+    }
+
+    b8 shouldCapture(const u64 graphicsFrame)const noexcept{
+        if(m_spatialOwnerProbe)
+            return m_spatialOwnerProbe->shouldCapture(graphicsFrame);
+        if(m_feedbackScene && m_feedbackScene->mutationCase())
+            return m_mutationApplied && graphicsFrame == m_mutationGraphicsFrame;
+        if(m_configuration.feedbackCapture())
+            return m_statisticsReporter.latest().feedbackSequence >= m_configuration.targetSamples();
+        if(m_roughnessScene && m_roughnessScene->mutationCase()){
+            if(!m_mutationApplied)
+                return false;
+            if(m_configuration.postResetSamples() == 1u)
+                return graphicsFrame == m_mutationGraphicsFrame;
+            return m_statisticsReporter.latest().historyStartGraphicsFrame == m_mutationGraphicsFrame && m_statisticsReporter.latest().historySampleCount >= m_configuration.postResetSamples();
+        }
+        return m_configuration.settings().temporalEnabled && !(m_roughnessScene && m_roughnessScene->deforming()) ? m_statisticsReporter.latest().historySampleCount >= m_configuration.targetSamples() : m_statisticsReporter.latest().frameIndex >= Max(m_configuration.targetSamples(), 3u);
+    }
+
+    void reportCsgSlicePackets(){
+        if(!m_csgOpticalCase || !m_configuration.settings().diagnosticsEnabled || m_csgContextProbe)
+            return;
+        const u64 frame = m_context.graphics.getFrameIndex();
+        if(frame < 3u || frame - 1u == m_slicePacketSourceFrame)
+            return;
+        m_slicePacketSourceFrame = frame - 1u;
+        ReportReflectionSlicePackets(m_csgSliceRayCapacity, m_slicePacketSourceFrame, true, m_context, m_renderer);
+    }
+
+    void reportReflectionStatistics(){
+        if(!m_statisticsReporter.poll(m_renderer))
+            return;
+        const NWB::Impl::ReflectionStatistics& statistics = m_statisticsReporter.latest();
+        if(
+            (m_extendedCase || m_configuration.feedbackCapture()) && m_framebufferCapture && m_framebufferCapture->captureReady()
+            && statistics.graphicsFrameIndex >= m_framebufferCapture->capturedGraphicsFrameIndex()
+            && (!m_spatialOwnerProbe || m_spatialOwnerProbe->canFinish(statistics, m_framebufferCapture->capturedGraphicsFrameIndex()))
+        )
+            m_framebufferCapture->finish();
+    }
+
+    b8 configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
+        if(m_csgContextProbe)
+            return true;
+        FramebufferCaptureOptions options;
+        if(m_extendedCase || m_configuration.feedbackCapture()){
+            if(!m_configuration.settings().diagnosticsEnabled){
+                // Timing-only extended scenes do not request completed-state capture.
+                const auto capturePath = ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment);
+                if(capturePath){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
+                    return false;
+                }
+            }
+            options.quitWhenReady = false;
+            options.predicateContext = this;
+            options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
+                return MakeNotNull(static_cast<ReflectionSmokeProjectImpl*>(owner))->shouldCapture(graphicsFrame);
+            };
+        }
+        constexpr u32 s_DefaultCaptureFrameCount = 16u;
+        auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(s_ProjectName, s_DefaultCaptureFrameCount, options, scratchArena);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
+    }
+
+    void destroyWorld(){
+        m_csgContextProbe.reset();
+        if(m_timingRenderPassRegistered){
+            m_context.graphics.removeRenderPass(m_timingRenderPass);
+            m_timingRenderPassRegistered = false;
+        }
+        if(m_world.owner() && m_world->getSystem<NWB::Impl::MeshSkinningSystem>())
+            DestroySmokeSkinnedRenderWorld(m_context, m_world);
+        else
+            DestroySmokeRenderWorld(m_context, m_world);
+        if(m_framebufferCapture){
+            m_framebufferCapture->stop();
+            m_framebufferCapture.reset();
+        }
+        m_spatialOwnerProbe.reset();
+    }
+
+
+private:
+    NWB::ProjectRuntimeContext& m_context;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Impl::RendererSystem& m_renderer;
+    ReflectionTimingRenderPass m_timingRenderPass{ m_context.graphics };
+    UniquePtr<FramebufferCapture> m_framebufferCapture;
+    FpsProbe m_fpsProbe{ s_ProjectName };
+    GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
+    ReflectionStatisticsReporter m_statisticsReporter;
+    ReflectionSmokeConfiguration m_configuration;
+    u64 m_slicePacketSourceFrame = Limit<u64>::s_Max;
+    UniquePtr<ReflectionRoughnessScene> m_roughnessScene;
+    UniquePtr<ReflectionFeedbackScene> m_feedbackScene;
+    UniquePtr<ReflectionSpatialOwnerProbe> m_spatialOwnerProbe;
+    UniquePtr<ReflectionCsgContextProbe> m_csgContextProbe;
+    UniquePtr<ReflectionCpuTimingProbe> m_cpuTimingProbe;
+    u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
+    u32 m_csgSliceRayCapacity = 0u;
+    b8 m_extendedCase = false;
+    b8 m_feedbackCase = false;
+    b8 m_opticalCase = false;
+    b8 m_csgOpticalCase = false;
+    b8 m_opticalTir = false;
+    b8 m_furnace = false;
+    b8 m_glassRoughnessCase = false;
+    b8 m_mutationApplied = false;
+    b8 m_timingRenderPassRegistered = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Tests::Smoke{ using ReflectionSmokeProjectImpl = __hidden_reflection_smoke::ReflectionSmokeProjectImpl; }
+}
+
+class ReflectionSmokeProject : IProjectEntryCallbacks{
+    public ReflectionSmokeProject(mut ProjectRuntimeContext context){
+        this.m_impl = ReflectionSmokeProjectImpl(context);
+    }
+
+    public b8 onStartup()override{
+        return this.m_impl.onStartup();
+    }
+
+    public void onShutdown()override{
+        this.m_impl.onShutdown();
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        return this.m_impl.onUpdate(delta);
+    }
+
+    private ReflectionSmokeProjectImpl m_impl;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    NWB::Core::Alloc::ScratchArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
+    const auto extent = Tests::Smoke::ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SMOKE_EXTENT");
+    if(!extent || *extent == "native")
+        return { 960, 720 };
+    NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
+    return { 953, 713 };
+}
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Reflection Smoke"); }
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<NWB::Tests::Smoke::ReflectionSmokeProject>(context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}

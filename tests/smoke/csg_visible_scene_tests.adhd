@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "csg_visible_scene.adhd"
+
+native{
+#include <tests/common/ecs_test_world.h>
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+
+#include <gtest/gtest.h>
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_NE(...) native{ EXPECT_NE(...) }
+#define ASSERT_TRUE(...) native{ ASSERT_TRUE(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
+    native{
+        NWB::Tests::EcsTestWorld testWorld;
+        auto& world = testWorld.world;
+        const auto camera = world.createEntity().id();
+        const auto light = world.createEntity().id();
+        CsgVisibleScene scene;
+        scene.create(SmokeMaterialRef{"project/smoke/csg_visible/materials/solid"}, false, camera, light, world);
+
+        EntityID missingReceiver = {};
+        EntityID remainingReceiver = {};
+        EntityID remainingCutter = {};
+        world.view<Impl::StaticCsgMeshComponent>().each([&](const EntityID entity, Impl::StaticCsgMeshComponent& receiver){
+            if(receiver.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisiblePlaneReceiver)
+                missingReceiver = entity;
+            if(receiver.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
+                remainingReceiver = entity;
+        });
+        world.view<Impl::CsgCutterComponent>().each([&](const EntityID entity, Impl::CsgCutterComponent& cutter){
+            if(cutter.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
+                remainingCutter = entity;
+        });
+        ASSERT_TRUE(missingReceiver.valid());
+        ASSERT_TRUE(remainingReceiver.valid());
+        ASSERT_TRUE(remainingCutter.valid());
+        world.destroyEntity(missingReceiver);
+
+        const auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(remainingReceiver);
+        const auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(remainingCutter);
+        ASSERT_NE(transform, nullptr);
+        ASSERT_NE(cutter, nullptr);
+        const Float4 oldRotation = transform->rotation;
+        const Float34 oldCutterTransform = cutter->shapeToWorld;
+        scene.update(1.0f, world);
+        transform = world.tryGetComponent<Impl::Scene::TransformComponent>(remainingReceiver);
+        cutter = world.tryGetComponent<Impl::CsgCutterComponent>(remainingCutter);
+        ASSERT_NE(transform, nullptr);
+        ASSERT_NE(cutter, nullptr);
+        EXPECT_NE(transform->rotation.y, oldRotation.y);
+        b8 cutterChanged = false;
+        for(usize index = 0u; index < 12u; ++index)
+            cutterChanged = cutterChanged || cutter->shapeToWorld.raw[index] != oldCutterTransform.raw[index];
+        EXPECT_TRUE(cutterChanged);
+    }
+}
+
+native{
+TEST(CsgVisibleScene, MissingReceiverDoesNotStopOtherPoseUpdates){
+    VerifyCsgVisibleSceneMissingReceiverPoseUpdates();
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

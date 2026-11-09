@@ -1,0 +1,188 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_environment.adhd"
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+
+native{
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/perf/timing.h>
+
+#include <global/basic_string.h>
+#include <global/containers.h>
+#include <global/filesystem.h>
+#include <global/name.h>
+#include <global/simplemath.h>
+#include <global/type.h>
+
+namespace NWB::Tests::Smoke{
+using Core::Alloc::GlobalArena;
+using Core::Alloc::ScratchArena;
+using Core::Perf::TimingStats;
+using Core::Perf::TimingView;
+class GpuPassTimingScopeState;
+using GpuPassTimingScopeStateVector = Vector<GpuPassTimingScopeState, GlobalArena>;
+
+inline void OpenGpuPassTimingFile(ScratchArena& scratchArena, OutputFileStream& timingFile){
+    const auto timingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_GPU_TIMING_FILE");
+    if(!timingPath)
+        return;
+
+    timingFile.open(timingPath->c_str(), s_FileOpenAppend);
+    if(!timingFile.is_open())
+        NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: failed to open requested timing output"));
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuPassTimingScopeState{
+    public GpuPassTimingScopeAccum interval = GpuPassTimingScopeAccum();
+    public u64 lastFoldedPublish = 0u;
+}
+
+// Normalize asynchronous GPU timing windows by dispatch count.
+const f64 s_GpuTimingWarmupSeconds = 0.25;
+const f64 s_GpuTimingReportIntervalSeconds = s_SmokeProbeReportIntervalSeconds;
+const f64 s_GpuTimingMillisecondsPerSecond = 1000.0;
+const i32 s_GpuTimingFilePrecision = 4;
+
+class GpuPassTimingProbe{
+
+    public GpuPassTimingProbe(in TStringView label){
+        this.m_arena = GlobalArena(Name(s_SmokeNameSmokeGpuPassTimingProbe));
+        this.m_scopes = GpuPassTimingScopeStateVector(this.m_arena);
+        this.m_label = label;
+    }
+
+    public void recordFrame(in f32 delta, in TimingView gpuTiming){
+        f64 safeDelta = 0.0;
+        if(IsFinite(delta))
+            safeDelta = Max(cast<f64>(delta), 0.0);
+        if(safeDelta <= 0.0)
+            return;
+
+        this.m_elapsedSeconds += safeDelta;
+        if(this.m_elapsedSeconds < s_GpuTimingWarmupSeconds)
+            return;
+        if(!gpuTiming.valid())
+            return;
+
+        this.m_intervalSeconds += safeDelta;
+        ++this.m_intervalFrames;
+        this.accumulate(gpuTiming);
+
+        if(this.m_intervalSeconds < s_GpuTimingReportIntervalSeconds)
+            return;
+
+        this.report(gpuTiming);
+        this.resetInterval();
+    }
+
+    private void accumulate(in TimingView gpuTiming){
+        const usize scopeCount = gpuTiming.scopeCount();
+        if(this.m_scopes.size() < scopeCount)
+            this.m_scopes.resize(scopeCount);
+        for(usize i = 0u; i < scopeCount; ++i){
+            const TimingStats stats = gpuTiming.statsAt(i);
+            if(!stats.valid())
+                continue;
+
+            // Track the last folded GPU window index so resets never double-count.
+            if(this.m_scopes[i].lastFoldedPublish == stats.publishFrameIndex)
+                continue;
+            this.m_scopes[i].lastFoldedPublish = stats.publishFrameIndex;
+
+            if(this.m_scopes[i].interval.frames == 0u){
+                this.m_scopes[i].interval.minSeconds = stats.seconds;
+                this.m_scopes[i].interval.maxSeconds = stats.seconds;
+            }
+            else{
+                this.m_scopes[i].interval.minSeconds = Min(this.m_scopes[i].interval.minSeconds, stats.seconds);
+                this.m_scopes[i].interval.maxSeconds = Max(this.m_scopes[i].interval.maxSeconds, stats.seconds);
+            }
+            this.m_scopes[i].interval.sumSeconds += stats.seconds;
+            this.m_scopes[i].interval.samples += stats.sampleCount;
+            ++this.m_scopes[i].interval.frames;
+        }
+    }
+
+    private void report(in TimingView gpuTiming){
+        [essential] info("{}: gpu per-pass timing over {} frames / {}s", this.m_label, this.m_intervalFrames, this.m_intervalSeconds);
+
+        native{
+            // Write per-pass timings to the optional file sink for A/B scripts.
+            ScratchArena scratchArena(s_SmokeEnvironmentArena);
+            OutputFileStream timingFile;
+            OpenGpuPassTimingFile(scratchArena, timingFile);
+            if(timingFile.is_open()){
+                timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
+                timingFile.precision(s_GpuTimingFilePrecision);
+                timingFile << "=== interval: " << this->m_intervalFrames << " frames / " << this->m_intervalSeconds << "s ===\n";
+            }
+
+            const usize scopeCount = gpuTiming.scopeCount();
+            for(usize i = 0u; i < scopeCount; ++i){
+                const GpuPassTimingScopeAccum& accum = this->m_scopes[i].interval;
+                if(accum.frames == 0u)
+                    continue;
+
+                const Name scopeName = gpuTiming.scopeNameAt(i);
+                const f64 averageSeconds = accum.sumSeconds / static_cast<f64>(accum.frames);
+                const f64 avgMs = averageSeconds * s_GpuTimingMillisecondsPerSecond;
+                const f64 minMs = accum.minSeconds * s_GpuTimingMillisecondsPerSecond;
+                const f64 maxMs = accum.maxSeconds * s_GpuTimingMillisecondsPerSecond;
+                const f64 totalMs = accum.sumSeconds * s_GpuTimingMillisecondsPerSecond;
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
+                    , ConvertString(scopeName.resolvedText())
+                    , avgMs
+                    , minMs
+                    , maxMs
+                    , accum.frames
+                );
+                if(timingFile.is_open()){
+                    timingFile
+                        << "  " << scopeName.resolvedText()
+                        << ": window_avg_ms=" << avgMs
+                        << " window_min_ms=" << minMs
+                        << " window_max_ms=" << maxMs
+                        << " published_windows=" << accum.frames
+                        << " total_ms=" << totalMs
+                        << " gpu_samples=" << accum.samples
+                        << " sample_avg_ms=" << (totalMs / static_cast<f64>(accum.samples))
+                        << "\n"
+                    ;
+                }
+            }
+            if(timingFile.is_open()){
+                timingFile.close();
+                if(!timingFile.good())
+                    NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: timing output write or close failed"));
+            }
+        }
+    }
+
+    private void resetInterval(){
+        this.m_intervalSeconds = 0.0;
+        this.m_intervalFrames = 0u;
+        for(usize i = 0u; i < this.m_scopes.size(); ++i)
+            this.m_scopes[i].interval = GpuPassTimingScopeAccum();
+    }
+
+    private GlobalArena m_arena;
+    private GpuPassTimingScopeStateVector m_scopes;
+    private TStringView m_label;
+    private f64 m_elapsedSeconds = 0.0;
+    private f64 m_intervalSeconds = 0.0;
+    private u32 m_intervalFrames = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

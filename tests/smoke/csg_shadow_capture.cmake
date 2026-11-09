@@ -1,7 +1,7 @@
         set(_nwb_csg_shadow_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_shadow_smoke_runtime/$<CONFIG>")
         nwb_declare_executable(nwb_csg_shadow_smoke)
-        target_sources(nwb_csg_shadow_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
+        nwb_target_adhd_sources(nwb_csg_shadow_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         target_compile_definitions(nwb_csg_shadow_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_shadow_smoke "${_nwb_csg_shadow_runtime_root}")
@@ -48,8 +48,8 @@
 
         set(_nwb_csg_caustic_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_caustic_smoke_runtime/$<CONFIG>")
         nwb_declare_executable(nwb_csg_caustic_smoke)
-        target_sources(nwb_csg_caustic_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
+        nwb_target_adhd_sources(nwb_csg_caustic_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         target_compile_definitions(nwb_csg_caustic_smoke PRIVATE NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_caustic_smoke "${_nwb_csg_caustic_runtime_root}" nwb_ecs_csg)

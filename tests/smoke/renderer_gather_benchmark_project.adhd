@@ -1,0 +1,1093 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "presentation_types.adhd"
+#include "smoke_cpu_gpu_timing_probe.adhd"
+#include "smoke_environment.adhd"
+#include "smoke_project_helpers.adhd"
+#include "smoke_scene_helpers.adhd"
+#include "smoke_skinned_scene_helpers.adhd"
+
+native{
+
+
+#include <core/alloc/general.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/task/gpu/compiled_graph.h>
+
+#include <global/filesystem.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Impl{
+    class RendererSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Optional test-only observation of existing immutable compiler statistics, with no timer or GPU query of its own.
+class RendererCompilerStatisticsProbe final : public Core::IRenderPass{
+private:
+    struct Sample{
+        Core::GpuTaskGraphCompileStatistics compile;
+        u64 sourceFrame = 0u;
+        u64 recordingAttempt = 0u;
+        usize acceptedPackets = 0u;
+        usize acceptedTasks = 0u;
+        usize rejectedPackets = 0u;
+        usize rejectedTasks = 0u;
+        b8 valid = false;
+    };
+
+
+private:
+    static constexpr usize s_Capacity = 1024u;
+
+
+public:
+    RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept;
+    virtual ~RendererCompilerStatisticsProbe()noexcept override;
+
+
+public:
+    // Release the borrowed renderer pointer before world destruction.
+    [[nodiscard]] b8 start(AStringView path, Impl::RendererSystem& renderer);
+    void stop();
+    [[nodiscard]] b8 write()const;
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+    virtual void render(Core::Framebuffer*)override;
+
+
+private:
+    Vector<Sample, Core::Alloc::GlobalArena> m_samples;
+    AString<Core::Alloc::GlobalArena> m_output;
+    Impl::RendererSystem* m_renderer = nullptr;
+    u64 m_attempts = 0u;
+    b8 m_enabled = false;
+    b8 m_registered = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/module.h>
+
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/packet_runtime.h>
+
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_renderer_compiler_statistics_probe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_ValidStatus = "valid";
+
+struct DurationField{
+    AStringView name;
+    f64 Core::GpuTaskGraphCompileStatistics::*member;
+};
+
+struct CountField{
+    AStringView name;
+    usize Core::GpuTaskGraphCompileStatistics::*member;
+};
+
+static constexpr Array<DurationField, 12> s_Durations = {{
+    { "declaration", &Core::GpuTaskGraphCompileStatistics::declarationSeconds },
+    { "analysis", &Core::GpuTaskGraphCompileStatistics::analysisSeconds },
+    { "validation", &Core::GpuTaskGraphCompileStatistics::validationSeconds },
+    { "dependency_analysis", &Core::GpuTaskGraphCompileStatistics::dependencyAnalysisSeconds },
+    { "hazard_analysis", &Core::GpuTaskGraphCompileStatistics::hazardAnalysisSeconds },
+    { "topological_order", &Core::GpuTaskGraphCompileStatistics::topologicalOrderSeconds },
+    { "queue_assignment", &Core::GpuTaskGraphCompileStatistics::queueAssignmentSeconds },
+    { "planning", &Core::GpuTaskGraphCompileStatistics::planningSeconds },
+    { "total", &Core::GpuTaskGraphCompileStatistics::totalSeconds },
+    { "packetization", &Core::GpuTaskGraphCompileStatistics::packetizationSeconds },
+    { "resource_state_planning", &Core::GpuTaskGraphCompileStatistics::resourceStatePlanningSeconds },
+    { "packet_dependency_planning", &Core::GpuTaskGraphCompileStatistics::packetDependencyPlanningSeconds },
+}};
+
+static constexpr Array<CountField, 19> s_Counts = {{
+    { "task", &Core::GpuTaskGraphCompileStatistics::taskCount },
+    { "resource", &Core::GpuTaskGraphCompileStatistics::resourceCount },
+    { "resource_use", &Core::GpuTaskGraphCompileStatistics::resourceUseCount },
+    { "resource_version", &Core::GpuTaskGraphCompileStatistics::resourceVersionCount },
+    { "resource_version_edge", &Core::GpuTaskGraphCompileStatistics::resourceVersionEdgeCount },
+    { "explicit_dependency", &Core::GpuTaskGraphCompileStatistics::explicitDependencyCount },
+    { "inferred_dependency", &Core::GpuTaskGraphCompileStatistics::inferredDependencyCount },
+    { "external_dependency", &Core::GpuTaskGraphCompileStatistics::externalDependencyCount },
+    { "packet", &Core::GpuTaskGraphCompileStatistics::packetCount },
+    { "packet_dependency", &Core::GpuTaskGraphCompileStatistics::packetDependencyCount },
+    { "packet_external_dependency", &Core::GpuTaskGraphCompileStatistics::packetExternalDependencyCount },
+    { "cross_queue_packet_dependency", &Core::GpuTaskGraphCompileStatistics::crossQueuePacketDependencyCount },
+    { "prologue_state_seed", &Core::GpuTaskGraphCompileStatistics::prologueStateSeedCount },
+    { "prologue_barrier", &Core::GpuTaskGraphCompileStatistics::prologueBarrierCount },
+    { "epilogue_barrier", &Core::GpuTaskGraphCompileStatistics::epilogueBarrierCount },
+    { "state_export_barrier", &Core::GpuTaskGraphCompileStatistics::stateExportBarrierCount },
+    { "resource_set", &Core::GpuTaskGraphCompileStatistics::resourceSetCount },
+    { "direct_resource_use", &Core::GpuTaskGraphCompileStatistics::directResourceUseCount },
+    { "expanded_resource_set_member_use", &Core::GpuTaskGraphCompileStatistics::expandedResourceSetMemberUseCount },
+}};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept
+    : IRenderPass(graphics)
+    , m_samples(arena)
+    , m_output(arena)
+{}
+
+RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe()noexcept{ stop(); }
+
+b8 RendererCompilerStatisticsProbe::start(const AStringView path, Impl::RendererSystem& renderer){
+    if(m_enabled || path.empty())
+        return false;
+    m_output.assign(path);
+    m_samples.reserve(s_Capacity);
+    m_renderer = &renderer;
+    getGraphics().addRenderPassToBack(*this);
+    m_registered = true;
+    m_enabled = true;
+    return true;
+}
+
+void RendererCompilerStatisticsProbe::stop(){
+    if(m_registered){
+        getGraphics().removeRenderPass(*this);
+        m_registered = false;
+    }
+    m_renderer = nullptr;
+}
+
+b8 RendererCompilerStatisticsProbe::write()const{
+    if(!m_enabled)
+        return true;
+    if(m_registered)
+        return false;
+    OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
+    if(!output.is_open())
+        return false;
+    output.precision(17);
+    output << "{\"type\":\"compiler_statistics_configuration\",\"schema\":1,\"capacity\":" << s_Capacity << "}\n";
+    usize invalid = 0u;
+    for(usize index = 0u; index < m_samples.size(); ++index){
+        const Sample& sample = m_samples[index];
+        AStringView status = sample.valid ? __hidden_renderer_compiler_statistics_probe::s_ValidStatus : "invalid_snapshot";
+        if(sample.valid){
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
+                const f64 seconds = sample.compile.*field.member;
+                if(!IsFinite(seconds) || seconds < 0.0){
+                    status = "invalid_duration";
+                    break;
+                }
+            }
+            for(usize previous = 0u; previous < index; ++previous){
+                const Sample& prior = m_samples[previous];
+                if(prior.valid && prior.compile.graphGeneration == sample.compile.graphGeneration && prior.compile.planGeneration == sample.compile.planGeneration && prior.compile.deviceGeneration == sample.compile.deviceGeneration){
+                    status = "duplicate_plan";
+                    break;
+                }
+            }
+        }
+        if(index != 0u && sample.sourceFrame <= m_samples[index - 1u].sourceFrame)
+            status = "non_monotonic_frame";
+        output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
+        if(status == __hidden_renderer_compiler_statistics_probe::s_ValidStatus){
+            output << ",\"identity\":{\"graph_generation\":" << sample.compile.graphGeneration
+                << ",\"plan_generation\":" << sample.compile.planGeneration
+                << ",\"device_generation\":" << sample.compile.deviceGeneration
+                << ",\"recording_attempt_generation\":" << sample.recordingAttempt << "},\"seconds\":{";
+            b8 first = true;
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
+                if(!first)
+                    output << ',';
+                first = false;
+                output << '\"' << field.name << "\":" << sample.compile.*field.member;
+            }
+            output << "},\"counts\":{";
+            first = true;
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Counts){
+                if(!first)
+                    output << ',';
+                first = false;
+                output << '\"' << field.name << "\":" << sample.compile.*field.member;
+            }
+            output << "},\"submission\":{\"accepted_packets\":" << sample.acceptedPackets << ",\"accepted_tasks\":" << sample.acceptedTasks << ",\"rejected_packets\":" << sample.rejectedPackets << ",\"rejected_tasks\":" << sample.rejectedTasks << '}';
+        }
+        else
+            ++invalid;
+        output << "}\n";
+    }
+    const u64 overflow = m_attempts - m_samples.size();
+    const b8 complete = !m_samples.empty() && overflow == 0u;
+    output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
+    output.close();
+    return output.good() && complete;
+}
+
+void RendererCompilerStatisticsProbe::render(Core::Framebuffer*){
+    if(!m_renderer)
+        return;
+    ++m_attempts;
+    if(m_samples.size() == s_Capacity)
+        return;
+    Sample sample;
+    sample.sourceFrame = getGraphics().getFrameIndex();
+    // Read compiler statistics after frame submission and before the next frame resets them.
+    const auto statistics = m_renderer->deferredTaskGraphRuntimeStatistics();
+    sample.valid = statistics.valid() && statistics.compile.deviceGeneration != 0u;
+    if(sample.valid){
+        sample.compile = statistics.compile;
+        sample.recordingAttempt = statistics.recording.recordingAttemptGeneration;
+        sample.acceptedPackets = statistics.submission.acceptedPacketCount;
+        sample.acceptedTasks = statistics.submission.acceptedTaskCount;
+        sample.rejectedPackets = statistics.submission.rejectedPacketCount;
+        sample.rejectedTasks = statistics.submission.rejectedTaskCount;
+    }
+    m_samples.push_back(Move(sample));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <core/perf/report.h>
+
+#include <global/filesystem.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One sample is one published successful graphics frame, never an onUpdate call or publication-window average.
+class RendererGatherBenchmarkProbe final : NoCopy{
+public:
+    static constexpr u32 s_WarmupFrames = 96u;
+    static constexpr u32 s_SampleFrames = 256u;
+    static constexpr u32 s_DrainFrames = 32u;
+    static constexpr u32 s_CpuScopeCount = 8u;
+    static constexpr u32 s_GpuScopeCount = 18u;
+    static constexpr u32 s_ArenaScopeCount = 3u;
+    static constexpr Array<StringView, s_CpuScopeCount> s_CpuNames = {
+        "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes",
+        "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame",
+    };
+    static constexpr Array<StringView, s_GpuScopeCount> s_GpuNames = {
+        "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
+        "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
+        "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
+        "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
+        "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
+    };
+    static constexpr Array<StringView, s_ArenaScopeCount> s_ArenaNames = { "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph", };
+
+
+private:
+    struct CpuSample{
+        Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> memory = {};
+        Array<f64, s_CpuScopeCount> milliseconds = {};
+        u64 sourceFrame = 0u;
+        u64 publishFrame = 0u;
+    };
+    struct GpuSample{
+        Core::Perf::TimingStats timing;
+        u32 scope = 0u;
+    };
+
+
+private:
+    static void WriteMemory(Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output);
+
+
+public:
+    explicit RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena);
+
+
+public:
+    [[nodiscard]] b8 poll(const Core::Perf::SessionReport& report, b8 memoryEnabled);
+
+    [[nodiscard]] b8 finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
+
+    [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
+
+    [[nodiscard]] b8 write(AStringView path, AStringView workload, b8 memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
+
+
+private:
+    Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
+    Array<u64, s_GpuScopeCount> m_gpuPublish = {};
+    Vector<CpuSample, Core::Alloc::GlobalArena> m_cpu;
+    Vector<GpuSample, Core::Alloc::GlobalArena> m_gpu;
+    Array<b8, s_GpuScopeCount> m_hasGpuPublication = {};
+    u64 m_lastPublish = 0u;
+    u32 m_successfulFrames = 0u;
+    b8 m_hasPublication = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_renderer_gather_benchmark_probe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr f64 s_MillisecondsPerSecond = s_PresentationPacingMsPerSecond;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererGatherBenchmarkProbe::WriteMemory(const Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output){
+    output << '{';
+    for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
+        if(scope != 0u)
+            output << ',';
+        const auto& snapshot = snapshots[scope];
+        output << '"' << s_ArenaNames[scope] << "\":{\"present\":" << (snapshot.valid() ? "true" : "false")
+            << ",\"frame\":" << snapshot.frameIndex << ",\"reserved\":" << snapshot.reservedBytes
+            << ",\"used\":" << snapshot.usedBytes << ",\"historical_arena_peak\":" << snapshot.peakUsedBytes
+            << ",\"allocations\":" << snapshot.allocationCount << ",\"reallocations\":" << snapshot.reallocationCount
+            << ",\"deallocations\":" << snapshot.deallocationCount << '}';
+    }
+    output << '}';
+}
+
+RendererGatherBenchmarkProbe::RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena)
+    : m_cpu(arena)
+    , m_gpu(arena)
+{
+    m_cpu.reserve(s_SampleFrames);
+    m_gpu.reserve((s_WarmupFrames + s_SampleFrames + s_DrainFrames) * s_GpuScopeCount);
+}
+
+b8 RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, const b8 memoryEnabled){
+    const auto& frame = report.cpuTiming.stats(Name(s_CpuNames[0u]));
+    if(!frame.valid() || (m_hasPublication && frame.publishFrameIndex == m_lastPublish))
+        return true;
+    if((m_hasPublication && frame.publishFrameIndex < m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
+        return false;
+    const auto& failedPreparation = report.cpuTiming.stats(Name(s_PresentationTimingNamePrepareResourcesFailed));
+    if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex)
+        return false;
+    const auto& preamble = report.cpuTiming.stats(Name(s_PresentationTimingNameFramePreamble));
+    if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && m_successfulFrames == 0u)
+        return true; // Initial hidden-window maintenance is not a rendered frame or part of warm-up.
+    CpuSample sample;
+    sample.sourceFrame = frame.firstSampleFrameIndex;
+    sample.publishFrame = frame.publishFrameIndex;
+    for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
+        const auto scopeName = Name::FromText(s_CpuNames[scope]);
+        if(!scopeName)
+            return false;
+        const auto& timing = report.cpuTiming.stats(*scopeName);
+        if(!timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame)
+            return false;
+        sample.milliseconds[scope] = timing.seconds;
+    }
+    u32 scope = 0u;
+    for(; scope + 1u < s_CpuScopeCount; scope += 2u){
+        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(sample.milliseconds[scope], sample.milliseconds[scope + 1u], 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
+        sample.milliseconds[scope] = VectorDoubleGetX(milliseconds);
+        sample.milliseconds[scope + 1u] = VectorDoubleGetY(milliseconds);
+    }
+    if(scope < s_CpuScopeCount)
+        sample.milliseconds[scope] = sample.milliseconds[scope] * (__hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
+    if(memoryEnabled){
+        for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
+            const auto arenaName = Name::FromText(s_ArenaNames[scope]);
+            if(!arenaName)
+                return false;
+            const auto& snapshot = report.memory.snapshot(*arenaName, Core::Perf::MemorySource::Arena);
+            if(snapshot.valid() && snapshot.frameIndex != sample.publishFrame)
+                return false;
+            sample.memory[scope] = snapshot;
+        }
+    }
+    for(u32 scope = 0u; scope < s_GpuScopeCount; ++scope){
+        const auto scopeName = Name::FromText(s_GpuNames[scope]);
+        if(!scopeName)
+            return false;
+        const auto& timing = report.gpuTiming.stats(*scopeName);
+        if(!timing.valid() || (m_hasGpuPublication[scope] && timing.publishFrameIndex == m_gpuPublish[scope]))
+            continue;
+        if(m_hasGpuPublication[scope] && timing.publishFrameIndex < m_gpuPublish[scope])
+            return false;
+        m_hasGpuPublication[scope] = true;
+        m_gpuPublish[scope] = timing.publishFrameIndex;
+        m_gpu.push_back(GpuSample{ timing, scope });
+    }
+    m_lastPublish = frame.publishFrameIndex;
+    m_hasPublication = true;
+    ++m_successfulFrames;
+    if(m_successfulFrames == s_WarmupFrames)
+        m_memoryBaseline = sample.memory;
+    if(m_successfulFrames > s_WarmupFrames && m_cpu.size() < s_SampleFrames)
+        m_cpu.push_back(Move(sample));
+    return true;
+}
+
+b8 RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const b8 memoryEnabled, const u32 renderers, const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
+    const b8 complete = finished() && m_cpu.size() == s_SampleFrames;
+    const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
+    OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
+    if(!output.is_open())
+        return false;
+    output.setf(s_FileFormatFixed, s_FileFormatFloatField);
+    output.precision(9);
+    output << "{\"type\":\"configuration\",\"schema\":2,\"workload\":\"" << workload
+        << "\",\"mode\":\"" << (memoryEnabled ? "memory" : "timing")
+        << "\",\"width\":960,\"height\":720,\"warmup\":" << s_WarmupFrames
+        << ",\"samples\":" << s_SampleFrames << ",\"drain\":" << s_DrainFrames
+        << ",\"successful_frames\":" << m_successfulFrames << ",\"renderers\":" << renderers
+        << ",\"runtime_renderers\":" << runtimeRenderers << ",\"transparent_renderers\":" << transparentRenderers
+        << ",\"runtime_owners\":" << runtimeOwners
+        << ",\"reflection_mode\":\"hardware\",\"hardware_budget\":4096,\"optical_queries\":16"
+        << ",\"temporal\":false,\"spatial\":false,\"feedback\":false,\"diagnostics\":false"
+        << ",\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}\n";
+    if(memoryEnabled){
+        output << "{\"type\":\"memory_baseline\",\"arenas\":";
+        WriteMemory(m_memoryBaseline, output);
+        output << "}\n";
+    }
+    for(const CpuSample& sample : m_cpu){
+        output << "{\"type\":\"cpu\",\"source_frame\":" << sample.sourceFrame << ",\"publish_frame\":" << sample.publishFrame << ",\"scopes_ms\":{";
+        for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
+            if(scope != 0u)
+                output << ',';
+            output << '"' << s_CpuNames[scope] << "\":" << sample.milliseconds[scope];
+        }
+        output << '}';
+        if(memoryEnabled){
+            output << ",\"arenas\":";
+            WriteMemory(sample.memory, output);
+        }
+        output << "}\n";
+    }
+    for(usize index = 0u; index < m_gpu.size(); index += 2u){
+        const usize count = Min(usize{ 2u }, m_gpu.size() - index);
+        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0, 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
+        for(usize lane = 0u; lane < count; ++lane){
+            const GpuSample& sample = m_gpu[index + lane];
+            output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]
+                << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
+                << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
+                << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
+                << ",\"total_ms\":" << VectorDoubleGetByIndex(milliseconds, lane)
+                << ",\"samples\":" << sample.timing.sampleCount << "}\n";
+        }
+    }
+    if(complete)
+        output << "{\"type\":\"complete\"}\n";
+    output.close();
+    return output.good() && complete;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+namespace Tests::Smoke{
+
+
+class RendererGatherBenchmarkScene final : NoCopy{
+public:
+    using Counts = RendererGatherBenchmarkSceneCounts;
+
+
+public:
+    explicit RendererGatherBenchmarkScene(Core::ECS::World& world)noexcept : m_world(world){}
+    [[nodiscard]] b8 build(AStringView workload, b8 runtime, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Counts& counts()noexcept{ return m_counts; }
+
+
+private:
+    [[nodiscard]] b8 createBackdrop();
+    [[nodiscard]] b8 createRuntime(u32 index, const Float4& position);
+
+
+private:
+    Core::ECS::World& m_world;
+    Counts m_counts;
+    b8 m_runtime = false;
+};
+
+
+};
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <impl/ecs_render/module.h>
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+namespace Tests::Smoke{
+
+
+namespace __hidden_renderer_gather_scene{
+constexpr AStringView s_OpaqueWorkload = s_GatherBenchmarkOpaqueWorkload;
+constexpr AStringView s_HybridWorkload = s_GatherBenchmarkHybridWorkload;
+constexpr AStringView s_UniqueWorkload = s_GatherBenchmarkUniqueWorkload;
+constexpr AStringView s_OverridesWorkload = s_GatherBenchmarkOverridesWorkload;
+static constexpr SmokeMeshRef s_Mesh("project/meshes/octahedron");
+static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
+static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
+static constexpr SmokeMaterialRef s_Glass("project/smoke/gather_benchmark/materials/glass_00");
+static constexpr SmokeModelRef s_Model("project/characters/body/model");
+static constexpr AStringView s_Interface = s_SmokeSurfaceMaterialInterface;
+static constexpr u32 s_ObjectCount = s_GatherBenchmarkObjectCount;
+};
+
+using namespace __hidden_renderer_gather_scene;
+
+
+b8 RendererGatherBenchmarkScene::build(const AStringView workload, const b8 runtime, Core::Alloc::ScratchArena& scratchArena){
+    m_runtime = runtime;
+    const auto cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, m_world);
+    if(!cameraEntity.valid())
+        return false;
+    const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(m_world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
+    m_world.entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
+    if(!createBackdrop())
+        return false;
+    for(u32 index = 0u; index < s_ObjectCount; ++index){
+        const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.0f, 0.0f), VectorSet(3.5f, 0.0f, 0.0f, 0.0f));
+        const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.0f, 0.0f));
+        Float4 position;
+        StoreFloat(VectorAdd(VectorSet(0.0f, 0.7f, 0.0f, 0.0f), spacing), position);
+        if(m_runtime && index % 8u == 0u){
+            if(!createRuntime(index, position))
+                return false;
+            continue;
+        }
+        const b8 opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
+        SmokeMeshRef mesh = s_Mesh;
+        SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
+        if(workload == s_UniqueWorkload){
+            const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
+            const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
+            const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
+            if(!meshReference)
+                return false;
+            mesh = *meshReference;
+            const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
+            if(!materialReference)
+                return false;
+            material = *materialReference;
+        }
+        auto entity = m_world.createEntity();
+        auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
+        transform.position = position;
+        transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
+        entity.addComponent<NWB::Impl::MeshComponent>().mesh = mesh;
+        auto& component = entity.addComponent<NWB::Impl::RendererComponent>();
+        component.material = material;
+        if(!opaque){
+            component.opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+            ++m_counts.transparentRenderers;
+        }
+        ++m_counts.renderers;
+        if(workload == s_OverridesWorkload){
+            entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
+            const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
+            if(!NWB::Impl::SetMaterialMutableHalf4(m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
+                return false;
+        }
+    }
+    if(m_runtime)
+        SyncSmokeModelRuntimes(m_world);
+    return true;
+}
+
+
+b8 RendererGatherBenchmarkScene::createBackdrop(){
+    const auto backdrop = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f), m_world);
+    if(!backdrop.valid())
+        return false;
+    auto& transform = m_world.entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+    const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
+    const Half roughness = ConvertFloatToHalf(0.0f);
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))))
+        return false;
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(roughness)))
+        return false;
+    ++m_counts.renderers;
+    return true;
+}
+
+b8 RendererGatherBenchmarkScene::createRuntime(const u32 index, const Float4& position){
+    const auto modelResult = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f), m_world);
+    const auto owner = modelResult.entity;
+    if(!owner.valid() || !modelResult.tintApplied)
+        return false;
+    SyncSmokeModelRuntimes(m_world);
+    const auto skeleton = FindSpawnedModelObject(owner, Name(NWB::Tests::Smoke::s_SmokeNameSkeleton), NWB::Impl::ModelObjectKind::Skeleton, m_world);
+    if(!skeleton.valid())
+        return false;
+    auto& pose = m_world.entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
+    if(pose.localJoints.size() < 2u)
+        return false;
+    const f32 yaw = (index & 8u) != 0u ? 0.08f : -0.08f;
+    StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
+    // Held real skeletal pose: runtime preparation stays live, with no animation-phase difference between arms.
+    ++m_counts.runtimeOwners;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_mesh/skinning/system.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_renderer_gather_benchmark{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_OpaqueWorkload = "opaque";
+constexpr AStringView s_HybridWorkload = "hybrid";
+constexpr AStringView s_UniqueWorkload = "unique";
+constexpr AStringView s_OverridesWorkload = "overrides";
+constexpr AStringView s_RuntimeWorkload = "runtime";
+constexpr AStringView s_MemoryMode = "memory";
+
+using namespace NWB;
+using namespace NWB::Tests::Smoke;
+
+static constexpr f32 s_FixedDelta = 0.016666667f;
+static constexpr u32 s_InFlightRanges = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TimingPass final : public NWB::Core::IRenderPass{
+public:
+    explicit TimingPass(NWB::Core::GraphicsRuntime& graphics)noexcept
+        : IRenderPass(graphics)
+    {}
+
+
+public:
+    [[nodiscard]] b8 prepareQueries(){
+        auto& graphics = getGraphics();
+        for(const StringView scope : RendererGatherBenchmarkProbe::s_GpuNames){
+            // Hardware-only reflection has no depth pyramid, temporal pass or spatial filter.
+            if(scope == "render.reflection_depth_pyramid")
+                continue;
+            const auto scopeName = Name::FromText(scope);
+            if(!scopeName)
+                return false;
+            if(!graphics.gpuTiming().prepareScopeQueries(*scopeName, graphics.getDevice(), s_InFlightRanges))
+                return false;
+        }
+        return true;
+    }
+
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererGatherBenchmarkProjectImpl final : public IProjectEntryCallbacks{
+public:
+    explicit RendererGatherBenchmarkProjectImpl(ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateSmokeWorldOrDie(NWB_TEXT("RendererGatherBenchmark"), context))
+        , m_scene(*m_world)
+        , m_timingPass(context.graphics)
+        , m_probe(context.objectArena)
+        , m_compilerProbe(context.graphics, context.objectArena)
+        , m_workload(context.objectArena)
+        , m_output(context.objectArena)
+    {}
+    virtual ~RendererGatherBenchmarkProjectImpl()noexcept override{ destroyWorld(); }
+
+
+public:
+    virtual b8 onStartup()override{
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
+        if(!requestedWorkload)
+            return false;
+        auto requestedOutput = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_OUTPUT");
+        if(!requestedOutput)
+            return false;
+        m_workload = Move(*requestedWorkload);
+        m_output = Move(*requestedOutput);
+        const AStringView workload(m_workload.data(), m_workload.size());
+        if(workload != s_OpaqueWorkload && workload != s_HybridWorkload && workload != "shared" && workload != s_UniqueWorkload && workload != s_OverridesWorkload && workload != s_RuntimeWorkload)
+            return false;
+        const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_BENCHMARK_MODE");
+        if(!mode || (*mode != "timing" && *mode != s_MemoryMode))
+            return false;
+        m_memoryEnabled = *mode == s_MemoryMode;
+        m_runtime = workload == s_RuntimeWorkload;
+        if(!m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
+            return false;
+        }
+        if(m_runtime)
+            AddSmokeSkinnedRenderSystems(*m_world, m_context);
+        else
+            AddSmokeRenderSystems(*m_world, m_context);
+        NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
+        m_worldReady = true;
+        NWB::Impl::ReflectionSettings settings;
+        settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
+        settings.maxHardwareRaysPerFrame = 4096u;
+        settings.maxOpticalQueries = 16u;
+        settings.temporalEnabled = false;
+        settings.spatialFilterEnabled = false;
+        settings.screenFeedbackEnabled = false;
+        settings.diagnosticsEnabled = false;
+        settings.samplingSeed = 0u;
+        if(!renderer.setReflectionSettings(settings))
+            return false;
+        renderer.setRefractionEnabled(true);
+        renderer.setRefractionHardwareTracingEnabled(true);
+        if(!m_scene.build(workload, m_runtime, scratchArena))
+            return false;
+        if(!m_timingPass.prepareQueries())
+            return false;
+        m_context.graphics.addRenderPassToBack(m_timingPass);
+        m_timingRegistered = true;
+        const auto compilerOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
+        if(compilerOutput){
+            if(!m_compilerProbe.start(AStringView(*compilerOutput), renderer))
+                return false;
+        }
+        NWB::Core::Perf::CaptureOptions capture;
+        capture.enabled = true;
+        capture.cpuTiming = true;
+        capture.gpuTiming = true;
+        capture.memory = m_memoryEnabled;
+        m_context.setPerfCapture(capture);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), ConvertString(workload), ConvertString(*mode));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVSyncEnabled() ? 1u : 0u);
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        m_compilerProbe.stop();
+        if(!m_compilerProbe.write())
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
+        if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers, m_scene.counts().runtimeOwners))
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
+    }
+
+    virtual b8 onUpdate(const f32)override{
+        if(!m_probe.poll(m_context.perfSession.report(), m_memoryEnabled)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: incomplete or mismatched successful CPU frame"));
+            return false;
+        }
+        if(m_probe.finished()){
+            m_context.requestQuit();
+            return true;
+        }
+        if(m_probe.successfulFrames() == 64u && !m_actualCountsRead){
+            if(!readActualCounts())
+                return false;
+            m_actualCountsRead = true;
+        }
+        return TickSmokeWorld(s_FixedDelta, *m_world);
+    }
+
+
+private:
+    [[nodiscard]] b8 readActualCounts(){
+        NWB::Impl::MeshSystem& meshes = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
+        m_scene.counts().renderers = 0u;
+        m_scene.counts().runtimeRenderers = 0u;
+        auto view = m_world->view<NWB::Impl::RendererComponent>();
+        for(auto&& [entity, renderer] : view){
+            if(!renderer.visible)
+                continue;
+            const auto meshResult = meshes.resolveRenderableMeshStatus(entity);
+            if(!meshResult)
+                continue;
+            const auto& mesh = *meshResult;
+            ++m_scene.counts().renderers;
+            if(mesh.runtime)
+                ++m_scene.counts().runtimeRenderers;
+        }
+        if(m_scene.counts().renderers != 65u || (m_runtime && (m_scene.counts().runtimeRenderers != 8u || m_scene.counts().runtimeOwners != 8u)) || (!m_runtime && m_scene.counts().runtimeRenderers != 0u)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers);
+        return true;
+    }
+
+    void destroyWorld(){
+        m_compilerProbe.stop();
+        if(m_timingRegistered){
+            m_context.graphics.removeRenderPass(m_timingPass);
+            m_timingRegistered = false;
+        }
+        if(!m_worldReady)
+            return;
+        if(m_runtime)
+            DestroySmokeSkinnedRenderWorld(m_context, m_world);
+        else
+            DestroySmokeRenderWorld(m_context, m_world);
+        m_worldReady = false;
+    }
+
+
+private:
+    ProjectRuntimeContext& m_context;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    RendererGatherBenchmarkScene m_scene;
+    TimingPass m_timingPass;
+    RendererGatherBenchmarkProbe m_probe;
+    RendererCompilerStatisticsProbe m_compilerProbe;
+    SmokeEnvironmentString m_workload;
+    SmokeEnvironmentString m_output;
+    b8 m_runtime = false;
+    b8 m_memoryEnabled = false;
+    b8 m_worldReady = false;
+    b8 m_timingRegistered = false;
+    b8 m_actualCountsRead = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Tests::Smoke{ using RendererGatherBenchmarkProjectImpl = __hidden_renderer_gather_benchmark::RendererGatherBenchmarkProjectImpl; }
+}
+
+class RendererGatherBenchmarkProject : IProjectEntryCallbacks{
+    public RendererGatherBenchmarkProject(mut ProjectRuntimeContext context){
+        this.m_impl = RendererGatherBenchmarkProjectImpl(context);
+    }
+
+    public b8 onStartup()override{
+        return this.m_impl.onStartup();
+    }
+
+    public void onShutdown()override{
+        this.m_impl.onShutdown();
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        return this.m_impl.onUpdate(delta);
+    }
+
+    private RendererGatherBenchmarkProjectImpl m_impl;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<NWB::Tests::Smoke::RendererGatherBenchmarkProject>(context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}

@@ -294,7 +294,9 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         emitIndent(out, indent + 1u);
         const MStringView trimmedNative = TrimView(stmt.nativeCode);
         AppendTextDiscardCrAndExpandLf(out, trimmedNative);
-        if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}')
+        const usize lastNl = trimmedNative.rfind('\n');
+        const MStringView lastLine = TrimView(lastNl == MStringView::npos ? trimmedNative : trimmedNative.substr(lastNl + 1u));
+        if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}' && (lastLine.empty() || lastLine[0] != '#'))
             out.push_back(';');
         out.append("\r\n");
         emitIndent(out, indent);

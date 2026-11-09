@@ -1,0 +1,217 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+#include "smoke_environment.adhd"
+
+native{
+#include <core/common/log.h>
+#include <core/perf/session.h>
+
+#include <global/filesystem.h>
+
+namespace NWB::Tests::Smoke{
+using Core::Alloc::GlobalArena;
+using Core::Perf::CaptureOptions;
+using Core::Perf::Session;
+using Core::Perf::TimingScopeId;
+using Core::Perf::TimingStats;
+using Core::Perf::TimingView;
+struct SmokeCpuGpuTimingScope{
+    Name name = s_NameNone;
+    u64 lastPublication = 0u;
+    u64 eligibleSamples = 0u;
+    u32 generation = 0u;
+    b8 recorded = false;
+};
+
+struct SmokeCpuGpuTimingRecord{
+    TimingStats stats = {};
+    u64 observationFrame = 0u;
+    u64 presentations = 0u;
+    u32 scope = 0u;
+    u32 generation = 0u;
+    b8 gpu = false;
+};
+
+inline constexpr usize s_MaxScopesPerDomain = 512u;
+inline constexpr usize s_MaxRecords = s_SmokeTimingMaxRecords;
+
+using SmokeCpuGpuTimingScopeTable = Array<Array<SmokeCpuGpuTimingScope, s_MaxScopesPerDomain>, 2u>;
+using SmokeCpuGpuTimingRecordVector = Vector<SmokeCpuGpuTimingRecord, GlobalArena>;
+};
+}
+
+class SmokeCpuGpuTimingProbe{
+
+    public SmokeCpuGpuTimingProbe(in TStringView owner, mut GlobalArena arena){
+        this.m_scopes = SmokeCpuGpuTimingScopeTable();
+        this.m_records = SmokeCpuGpuTimingRecordVector(arena);
+        this.m_outputPath = SmokeEnvironmentString(arena);
+        this.m_owner = owner;
+    }
+
+    public b8 initialize(in b8 requested, in b8 presentationTimingEnabled, in AStringView outputPath){
+        const b8 hasOutput = !outputPath.empty();
+        if(hasOutput != requested || (requested && !presentationTimingEnabled) || this.m_owner.empty()){
+            error("SmokeCpuGpuTimingProbe: diagnostics require an owner, presentation timing and an explicit output path");
+            return false;
+        }
+        this.m_outputPath.assign(outputPath.data(), outputPath.size());
+        this.m_enabled = requested;
+        if(!this.m_enabled)
+            return true;
+        // Reserve before warmup: no publication rows allocate or write files inside the measured window.
+        this.m_records.reserve(s_MaxRecords);
+        [essential] info("SmokeCpuGpuTimingProbe: enabled owner={} cpu=1 gpu=1 memory=0 diagnostic_only=1", this.m_owner);
+        return true;
+    }
+
+    public b8 observe(in Session session, in PresentationFpsProbe presentation, in u64 successfulPresentations, in b8 complete){
+        if(!this.m_enabled || this.m_complete || !presentation.measurementStarted())
+            return true;
+        const CaptureOptions options = session.captureOptions();
+        if(!options.cpuTimingActive() || !options.gpuTimingActive() || options.memoryActive()){
+            error("SmokeCpuGpuTimingProbe: active capture options disagree with requested diagnostics");
+            return false;
+        }
+        if(!this.m_started){
+            this.m_firstSourceFrame = session.frameIndex();
+            this.m_firstPresentation = successfulPresentations;
+            this.m_started = true;
+        }
+        if(!this.capture(session.cpuTimingView(), false, session.frameIndex(), successfulPresentations))
+            return false;
+        if(!this.capture(session.gpuTimingView(), true, session.frameIndex(), successfulPresentations))
+            return false;
+        if(!complete)
+            return true;
+        // The presentation probe sampled its final steady-clock timestamp before this potentially slow file write.
+        if(!this.write(presentation.total(), session.frameIndex()))
+            return false;
+        this.m_complete = true;
+        [essential] info(
+            "SmokeCpuGpuTimingProbe: complete owner={} records={} first={} last={} first_source={} end_source={}"
+            , this.m_owner
+            , cast<u64>(this.m_records.size())
+            , this.m_firstPresentation
+            , successfulPresentations
+            , this.m_firstSourceFrame
+            , session.frameIndex()
+        );
+        return true;
+    }
+
+    public b8 hasCompletedGpuSamples(in Name name, in u64 minimumSamples){
+        for(usize i = 0u; i < s_MaxScopesPerDomain; ++i){
+            if(this.m_scopes[1u][i].recorded && this.m_scopes[1u][i].name == name)
+                return this.m_scopes[1u][i].eligibleSamples >= minimumSamples;
+        }
+        return false;
+    }
+
+    private b8 capture(in TimingView timing, in b8 gpu, in u64 frame, in u64 presentations){
+        if(!timing.valid() || timing.scopeCount() > s_MaxScopesPerDomain){
+            error("SmokeCpuGpuTimingProbe: timing view invalid or scope capacity exceeded");
+            return false;
+        }
+        usize domainIndex = 0u;
+        if(gpu)
+            domainIndex = 1u;
+        for(usize index = 0u; index < timing.scopeCount(); ++index){
+            const TimingStats stats = timing.statsAt(index);
+            if(!stats.valid())
+                continue;
+            const TimingScopeId id = timing.scopeAt(index);
+            const Name name = timing.scopeNameAt(index);
+            if(this.m_scopes[domainIndex][index].recorded && (this.m_scopes[domainIndex][index].generation != id.generation || this.m_scopes[domainIndex][index].name != name)){
+                error("SmokeCpuGpuTimingProbe: scope identity changed inside measurement");
+                return false;
+            }
+            if(this.m_scopes[domainIndex][index].recorded && this.m_scopes[domainIndex][index].lastPublication == stats.publishFrameIndex)
+                continue;
+            if((this.m_scopes[domainIndex][index].recorded && stats.publishFrameIndex < this.m_scopes[domainIndex][index].lastPublication) || this.m_records.size() >= s_MaxRecords){
+                error("SmokeCpuGpuTimingProbe: publication regressed or record capacity exceeded");
+                return false;
+            }
+            if(stats.firstSampleFrameIndex >= this.m_firstSourceFrame && stats.lastSampleFrameIndex < frame){
+                if(stats.sampleCount > (~cast<u64>(0u)) - this.m_scopes[domainIndex][index].eligibleSamples){
+                    error("SmokeCpuGpuTimingProbe: completed sample count overflow");
+                    return false;
+                }
+                this.m_scopes[domainIndex][index].eligibleSamples += stats.sampleCount;
+            }
+            this.m_scopes[domainIndex][index].name = name;
+            this.m_scopes[domainIndex][index].generation = id.generation;
+            this.m_scopes[domainIndex][index].lastPublication = stats.publishFrameIndex;
+            this.m_scopes[domainIndex][index].recorded = true;
+            SmokeCpuGpuTimingRecord record = SmokeCpuGpuTimingRecord();
+            record.stats = stats;
+            record.observationFrame = frame;
+            record.presentations = presentations;
+            record.scope = cast<u32>(index);
+            record.generation = id.generation;
+            record.gpu = gpu;
+            this.m_records.push_back(record);
+        }
+        return true;
+    }
+
+    private b8 write(in PresentationFpsSample presentation, in u64 endFrame){
+        if(presentation.firstPresentationCount != this.m_firstPresentation || endFrame <= this.m_firstSourceFrame){
+            error("SmokeCpuGpuTimingProbe: presentation and source-frame boundaries disagree");
+            return false;
+        }
+        native{
+            OutputFileStream output(this->m_outputPath.c_str(), s_FileOpenTruncate);
+            if(!output.is_open()){
+                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: failed to open diagnostic output"));
+                return false;
+            }
+            output.precision(17);
+            output << "NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1\n";
+            output << "capture cpu=1 gpu=1 memory=0 diagnostic_only=1\n";
+            output << "window " << presentation.firstPresentationCount << ' ' << presentation.lastPresentationCount << ' ' << this->m_firstSourceFrame << ' ' << endFrame << ' ' << presentation.wallSeconds << '\n';
+            usize scopeCount = 0u;
+            for(usize domain = 0u; domain < 2u; ++domain){
+                for(usize index = 0u; index < s_MaxScopesPerDomain; ++index){
+                    const SmokeCpuGpuTimingScope& scope = this->m_scopes[domain][index];
+                    if(!scope.recorded)
+                        continue;
+                    output << "scope " << domain << ' ' << index << ' ' << scope.generation << ' ' << scope.name.resolvedText() << '\n';
+                    ++scopeCount;
+                }
+            }
+            for(const SmokeCpuGpuTimingRecord& record : this->m_records){
+                const TimingStats& stats = record.stats;
+                output << "sample " << (record.gpu ? 1u : 0u) << ' ' << record.scope << ' ' << record.generation << ' ' << record.observationFrame
+                    << ' ' << record.presentations << ' ' << stats.publishFrameIndex
+                    << ' ' << stats.firstSampleFrameIndex << ' ' << stats.lastSampleFrameIndex << ' ' << stats.sampleCount
+                    << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
+                ;
+            }
+            output << "complete " << this->m_records.size() << ' ' << scopeCount << '\n';
+            output.close();
+            if(!output.good()){
+                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: diagnostic output write failed"));
+                return false;
+            }
+            return true;
+        }
+    }
+
+    private SmokeCpuGpuTimingScopeTable m_scopes;
+    private SmokeCpuGpuTimingRecordVector m_records;
+    private SmokeEnvironmentString m_outputPath;
+    private TStringView m_owner;
+    private u64 m_firstSourceFrame = 0u;
+    private u64 m_firstPresentation = 0u;
+    private b8 m_enabled = false;
+    private b8 m_started = false;
+    private b8 m_complete = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,161 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "csg_smoke_helpers.adhd"
+#include "smoke_scene_helpers.adhd"
+
+native{
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+
+#include <global/simd/frame.h>
+
+namespace NWB::Tests::Smoke{
+using Core::ECS::EntityID;
+using Core::ECS::World;
+using CsgVisibleMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
+using CsgVisibleMaterialRef = Core::Assets::AssetRef<Impl::Material>;
+
+inline constexpr f32 s_ReceiverScale = s_CsgVisibleReceiverScale;
+inline constexpr f32 s_CutterScale = s_CsgVisibleCutterScale;
+inline constexpr CsgVisibleMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
+inline constexpr f32 s_OverlappingReceiverDepthOffset = s_CsgVisibleOverlappingReceiverDepthOffset;
+
+static_assert(static_cast<usize>(CsgVisibleShapeSlot::kCount) == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
+
+inline constexpr Array<Name, s_CsgVisibleShapeCount> s_CsgVisibleReceiverGroups = {
+    Name(s_SmokeSceneNameProjectSmokeCsgVisiblePlaneReceiver),
+    Name(s_SmokeSceneNameProjectSmokeCsgVisibleBoxReceiver),
+    Name(s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver),
+    Name(s_SmokeSceneNameProjectSmokeCsgVisibleCapsuleReceiver),
+};
+
+[[nodiscard]] inline EntityID CreateSolidCubeEntity(const Name receiverGroup, const Float4& colorTint, const Float4& position, const Float4& scale, const b8 csgReceiver, const CsgVisibleMaterialRef& material, World& world){
+    const EntityID entity = CreateTintedStaticMeshEntity(s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale, world);
+    if(!entity.valid())
+        return Core::ECS::s_InvalidEntityId;
+
+    if(csgReceiver)
+        AddStaticCsgMeshReceiver(entity, receiverGroup, true, false, world);
+
+    return entity;
+}
+
+inline void ApplyCubeRotation(const EntityID entity, const SIMDVectorSingle rotation, World& world)noexcept{
+    auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
+    if(!transform)
+        return;
+
+    StoreFloat(rotation, transform->rotation);
+}
+
+inline void ApplyCutterTransform(const EntityID cutterEntity, const SIMDVectorSingle receiverCenter, const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalOffset, World& world)noexcept{
+    auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity);
+    if(!cutter)
+        return;
+
+    const SIMDVectorSingle cutterCenter = VectorAdd(receiverCenter, Vector3Rotate(cutterLocalOffset, receiverRotation));
+    AssignCsgCutterTransform(cutterCenter, receiverRotation, *cutter);
+}
+
+[[nodiscard]] inline EntityID CreateCutter(const usize shapeSlot, const Name receiverGroup, const SIMDVectorSingle center, World& world){
+    auto cutterEntity = world.createEntity();
+    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+    cutter.receiverGroup = receiverGroup;
+    AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
+
+    switch(shapeSlot){
+    case static_cast<usize>(CsgVisibleShapeSlot::Plane):{
+        cutter.shapeType = Name(Impl::s_CsgPlaneShapeName);
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+        AssignCsgCutterParameters(parameters, cutter);
+        break;
+    }
+    case static_cast<usize>(CsgVisibleShapeSlot::Box):{
+        cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
+        Impl::CsgBoxShapeParameters parameters;
+        parameters.halfExtents = Float4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f);
+        AssignCsgCutterParameters(parameters, cutter);
+        break;
+    }
+    case static_cast<usize>(CsgVisibleShapeSlot::Sphere):{
+        cutter.shapeType = Name(Impl::s_CsgSphereShapeName);
+        Impl::CsgSphereShapeParameters parameters;
+        parameters.radius = Float4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f);
+        AssignCsgCutterParameters(parameters, cutter);
+        break;
+    }
+    case static_cast<usize>(CsgVisibleShapeSlot::Capsule):{
+        cutter.shapeType = Name(Impl::s_CsgCapsuleShapeName);
+        Impl::CsgCapsuleShapeParameters parameters;
+        parameters.radiusHalfHeight = Float4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f);
+        AssignCsgCutterParameters(parameters, cutter);
+        break;
+    }
+    default:
+        cutter.active = false;
+        break;
+    }
+    return cutterEntity.id();
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgVisibleScene{
+    public void create(in SmokeMaterialRef material, in b8 overlapping, in EntityID camera, in EntityID light, mut World world){
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const VectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
+            f32x4 receiverPosition = f32x4();
+            StoreFloat(receiverPositionVector, receiverPosition);
+            const VectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
+            const VectorSingle cutterSum = receiverPositionVector + cutterLocalOffset;
+            const VectorSingle cutterPosition = VectorSingle(cutterSum.x, cutterSum.y, cutterSum.z, 0.0f);
+            this.m_receivers[shapeSlot] = CreateSolidCubeEntity(s_CsgVisibleReceiverGroups[shapeSlot], CsgVisibleShapeColor(shapeSlot), receiverPosition, f32x4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f), true, material, world);
+            this.m_cutters[shapeSlot] = CreateCutter(shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition, world);
+            this.m_receiverCenters[shapeSlot] = receiverPosition;
+        }
+
+        b8 allEntitiesValid = camera.valid() && light.valid();
+        if(overlapping){
+            const VectorSingle planePosition = CsgVisibleShapePosition(cast<usize>(CsgVisibleShapeSlot::Plane));
+            const f32x4 receiverPosition = f32x4(planePosition.x, planePosition.y, planePosition.z + s_OverlappingReceiverDepthOffset, planePosition.w);
+            const EntityID receiver = CreateSolidCubeEntity(
+                s_CsgVisibleReceiverGroups[cast<usize>(CsgVisibleShapeSlot::Plane)],
+                CsgVisibleShapeColor(cast<usize>(CsgVisibleShapeSlot::Plane)),
+                receiverPosition,
+                f32x4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
+                true,
+                material,
+                world
+            );
+            allEntitiesValid = allEntitiesValid && receiver.valid();
+            [essential] info("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125");
+        }
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
+            allEntitiesValid = allEntitiesValid && this.m_receivers[shapeSlot].valid() && this.m_cutters[shapeSlot].valid();
+        [essential] assert(allEntitiesValid, "CsgVisibleSmokeProject failed to create all scene entities");
+    }
+
+    public void update(in f32 animationTime, mut World world){
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const f32 rotationPhase = cast<f32>(shapeSlot) * 0.18f;
+            const VectorSingle rotation = BuildCsgVisibleCubeRotation(animationTime, rotationPhase);
+            ApplyCubeRotation(this.m_receivers[shapeSlot], rotation, world);
+            ApplyCutterTransform(this.m_cutters[shapeSlot], LoadFloat(this.m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot), world);
+        }
+    }
+
+    private Array<f32x4, s_CsgVisibleShapeCount> m_receiverCenters;
+    private Array<EntityID, s_CsgVisibleShapeCount> m_receivers;
+    private Array<EntityID, s_CsgVisibleShapeCount> m_cutters;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

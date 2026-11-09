@@ -1,0 +1,344 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+
+native{
+#include <tests/common/frame_graph_snapshot_validation.h>
+
+#include <loader/project_entry.h>
+
+#include <core/common/log.h>
+#include <core/global.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/codec.h>
+#include <core/telemetry/frame_graph.h>
+#include <core/telemetry/frame_graph_registry.h>
+#include <core/telemetry/session.h>
+
+#include <global/filesystem.h>
+
+namespace NWB::Tests::Smoke{
+using Core::Telemetry::FrameGraphPayload;
+using Core::Telemetry::FrameGraphPhysicalQueueId;
+using FrameGraphQueueClassEnum = Core::Telemetry::FrameGraphQueueClass::Enum;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StressFrameGraphSnapshotWriter{
+    public b8 write(in FrameGraphPayload payload, in u64 graphicsFrame, in u64 completedFrames, mut OutputFileStream output){
+        native{
+            output.precision(17);
+            output << "{\n\"type\":\"stress_frame_graph_snapshot\",\"source_frame\":" << payload.frameIndex
+                << ",\"graphics_frame_at_capture\":" << graphicsFrame << ",\"completed_frames\":" << completedFrames
+                << ",\"diagnostic_only\":true,\"compiled_state_seed_ids_available\":false"
+                << ",\"compiler_extra_dependency_ids_available\":false,\"edge_scope\":\"public_analysis_edges\",\n\"nodes\":[\n";
+            for(usize index = 0u; index < payload.nodes.size(); ++index){
+                const auto& node = payload.nodes[index];
+                if(index != 0u)
+                    output << ",\n";
+                output << "{\"index\":" << index << ",\"name\":";
+                this->writeJsonText(node.name.resolvedText(), output);
+                output << ",\"label\":";
+                this->writeJsonText(node.label, output);
+                output << ",\"kind\":" << static_cast<u32>(node.kind) << ",\"flags\":" << static_cast<u32>(node.flags);
+                if(node.compiledTask.present){
+                    output << ",\"plan_generation\":" << node.compiledTask.planGeneration << ",\"packet_index\":" << node.compiledTask.packetIndex << ",\"packetization_decision\":" << static_cast<u32>(node.compiledTask.packetizationDecision);
+                }
+                if(node.queueAssignment.present){
+                    output << ",\"queue_class\":";
+                    this->writeJsonText(this->queueClassLabel(node.queueAssignment.queueClass), output);
+                    output << ",\"planned_queue\":";
+                    this->writeQueue(node.queueAssignment.plannedQueue, output);
+                    output << ",\"accepted_queue\":";
+                    this->writeQueue(node.queueAssignment.acceptedQueue, output);
+                    output << ",\"dedicated\":" << (node.queueAssignment.dedicated ? "true" : "false") << ",\"assignment_reason\":" << static_cast<u32>(node.queueAssignment.reason) << ",\"assignment_modifiers\":" << static_cast<u32>(node.queueAssignment.modifiers);
+                }
+                if(node.runtimeStatistics.present){
+                    const auto& statistics = node.runtimeStatistics;
+                    output << ",\"runtime\":{\"graph_generation\":" << statistics.graphGeneration
+                        << ",\"plan_generation\":" << statistics.planGeneration
+                        << ",\"recording_attempt_generation\":" << statistics.recordingAttemptGeneration
+                        << ",\"tasks\":" << statistics.compile.taskCount << ",\"packets\":" << statistics.compile.packetCount
+                        << ",\"packet_dependencies\":" << statistics.compile.packetDependencyCount
+                        << ",\"transitions\":" << statistics.compile.transitionBarrierCount
+                        << ",\"accepted_packets\":" << statistics.submission.acceptedPacketCount
+                        << ",\"accepted_tasks\":" << statistics.submission.acceptedTaskCount
+                        << ",\"rejected_packets\":" << statistics.submission.rejectedPacketCount
+                        << ",\"rejected_tasks\":" << statistics.submission.rejectedTaskCount
+                        << ",\"rejected_native_submissions\":" << statistics.submission.rejectedSubmissionCount
+                        << ",\"recovery_submissions\":" << statistics.submission.recoverySubmissionCount
+                        << ",\"planned_waits\":" << statistics.submission.plannedWaitTokenCount
+                        << ",\"same_queue_elisions\":" << statistics.submission.sameQueueWaitElisionCount
+                        << ",\"timeline_waits\":" << statistics.submission.timelineWaitCount
+                        << ",\"merged_timeline_waits\":" << statistics.submission.mergedTimelineWaitCount
+                        << ",\"inherited_timeline_wait_elisions\":" << statistics.submission.inheritedTimelineWaitElisionCount << '}';
+                }
+                output << '}';
+            }
+            output << "\n],\n\"edges\":[\n";
+            for(usize index = 0u; index < payload.edges.size(); ++index){
+                const auto& edge = payload.edges[index];
+                if(index != 0u)
+                    output << ",\n";
+                output << "{\"from\":" << edge.fromNodeIndex << ",\"to\":" << edge.toNodeIndex << ",\"kind\":" << static_cast<u32>(edge.kind) << ",\"flags\":" << static_cast<u32>(edge.flags) << '}';
+            }
+            output << "\n],\n\"physical_queues\":[\n";
+            for(usize index = 0u; index < payload.physicalQueueRuntimeStatistics.size(); ++index){
+                const auto& record = payload.physicalQueueRuntimeStatistics[index];
+                const auto& statistics = record.statistics;
+                if(index != 0u)
+                    output << ",\n";
+                output << "{\"owner_node\":" << record.ownerNodeIndex << ",\"queue\":";
+                this->writeQueue(statistics.queue, output);
+                output << ",\"queue_class\":";
+                this->writeJsonText(this->queueClassLabel(statistics.queueClass), output);
+                output << ",\"tasks\":" << statistics.compile.taskCount << ",\"packets\":" << statistics.compile.packetCount
+                    << ",\"prologue_barriers\":" << statistics.compile.prologueBarrierCount
+                    << ",\"epilogue_barriers\":" << statistics.compile.epilogueBarrierCount
+                    << ",\"accepted_packets\":" << statistics.submission.acceptedPacketCount
+                    << ",\"planned_waits\":" << statistics.submission.plannedWaitTokenCount
+                    << ",\"same_queue_elisions\":" << statistics.submission.sameQueueWaitElisionCount
+                    << ",\"timeline_waits\":" << statistics.submission.timelineWaitCount
+                    << ",\"merged_timeline_waits\":" << statistics.submission.mergedTimelineWaitCount
+                    << ",\"inherited_timeline_wait_elisions\":" << statistics.submission.inheritedTimelineWaitElisionCount << '}';
+            }
+            output << "\n],\n\"packets\":[\n";
+            for(usize index = 0u; index < payload.packetSubmissionStatistics.size(); ++index){
+                const auto& packet = payload.packetSubmissionStatistics[index];
+                if(index != 0u)
+                    output << ",\n";
+                output << "{\"owner_node\":" << packet.ownerNodeIndex << ",\"plan_generation\":" << packet.packetGeneration << ",\"packet_index\":" << packet.packetIndex << ",\"queue\":";
+                this->writeQueue(packet.queue, output);
+                output << ",\"queue_class\":";
+                this->writeJsonText(this->queueClassLabel(packet.queueClass), output);
+                output << ",\"tasks\":" << packet.taskCount << ",\"command_lists\":" << packet.commandListCount
+                    << ",\"planned_waits\":" << packet.plannedWaitTokenCount
+                    << ",\"same_queue_elisions\":" << packet.sameQueueWaitElisionCount
+                    << ",\"timeline_waits\":" << packet.timelineWaitCount
+                    << ",\"merged_timeline_waits\":" << packet.mergedTimelineWaitCount
+                    << ",\"inherited_timeline_wait_elisions\":" << packet.inheritedTimelineWaitElisionCount
+                    << ",\"joins_accepted_frontier\":" << (packet.joinsAcceptedQueueFrontier ? "true" : "false")
+                    << ",\"recovery\":" << (packet.recoverySubmission ? "true" : "false")
+                    << ",\"submission_seconds\":" << packet.submissionSeconds << '}';
+            }
+            output << "\n]\n}\n";
+            output.flush();
+            return output.good();
+        }
+    }
+
+    private void writeJsonText(in AStringView text, mut OutputFileStream output){
+        native{
+            constexpr AStringView s_HexDigits = s_StressSnapshotHexDigits;
+            constexpr u8 s_JsonControlCharLimit = s_StressSnapshotJsonControlCharLimit;
+            constexpr u8 s_NibbleBits = s_StressSnapshotNibbleBits;
+            constexpr u8 s_NibbleMask = s_StressSnapshotNibbleMask;
+            output << '"';
+            for(const char ch : text){
+                switch(ch){
+                case '"': output << "\\\""; break;
+                case '\\': output << "\\\\"; break;
+                case '\n': output << "\\n"; break;
+                case '\r': output << "\\r"; break;
+                case '\t': output << "\\t"; break;
+                default:
+                    if(static_cast<u8>(ch) < s_JsonControlCharLimit)
+                        output << "\\u00" << s_HexDigits[static_cast<u8>(ch) >> s_NibbleBits] << s_HexDigits[static_cast<u8>(ch) & s_NibbleMask];
+                    else
+                        output << ch;
+                    break;
+                }
+            }
+            output << '"';
+        }
+    }
+
+    private AStringView queueClassLabel(in FrameGraphQueueClassEnum queueClass){
+        AStringView label = AStringView("Unknown");
+        native(in queueClass, mut label){
+            switch(queueClass){
+            case Core::Telemetry::FrameGraphQueueClass::Graphics: label = AStringView("Graphics"); break;
+            case Core::Telemetry::FrameGraphQueueClass::Compute: label = AStringView("Compute"); break;
+            case Core::Telemetry::FrameGraphQueueClass::Transfer: label = AStringView("Transfer"); break;
+            default: break;
+            }
+        }
+        return label;
+    }
+
+    private void writeQueue(in FrameGraphPhysicalQueueId queue, mut OutputFileStream output){
+        native{
+            if(!queue.valid()){
+                output << "null";
+                return;
+            }
+            output << "{\"index\":" << queue.index << ",\"device_generation\":" << queue.deviceGeneration << '}';
+        }
+    }
+}
+
+b8 ValidateStressFrameGraphSnapshot(in FrameGraphPayload payload, in u64 sourceFrame){
+    if(payload.frameIndex != sourceFrame || payload.nodes.empty() || payload.edges.empty() || !payload.packetSubmissionStatisticsPresent || payload.packetSubmissionStatistics.empty() || payload.physicalQueueRuntimeStatistics.empty()){
+        usize runtimeOwners = 0u;
+        usize compiledTasks = 0u;
+        for(usize i = 0u; i < payload.nodes.size(); ++i){
+            if(payload.nodes[i].runtimeStatistics.present)
+                ++runtimeOwners;
+            if(payload.nodes[i].compiledTask.present)
+                ++compiledTasks;
+        }
+        [essential] info(
+            "StressFrameGraphSnapshot: invalid payload source_frame={} payload_frame={} nodes={} edges={} runtime_owners={} compiled_tasks={} packet_statistics_present={} packets={} physical_queues={}"
+            , sourceFrame, payload.frameIndex, payload.nodes.size(), payload.edges.size(), runtimeOwners, compiledTasks, payload.packetSubmissionStatisticsPresent, payload.packetSubmissionStatistics.size(), payload.physicalQueueRuntimeStatistics.size()
+        );
+        return false;
+    }
+    usize runtimeOwnerCount = 0u;
+    u64 planGeneration = 0u;
+    u64 expectedTaskCount = 0u;
+    for(usize i = 0u; i < payload.nodes.size(); ++i){
+        if(!payload.nodes[i].runtimeStatistics.present)
+            continue;
+        ++runtimeOwnerCount;
+        const auto statistics = payload.nodes[i].runtimeStatistics;
+        if(statistics.planGeneration == 0u || statistics.compile.taskCount == 0u || statistics.compile.packetCount == 0u || statistics.submission.acceptedPacketCount == 0u || !ValidateNormalFrameSnapshotCompletion(payload, statistics)){
+            [essential] info(
+                "StressFrameGraphSnapshot: invalid normal completion graph={} plan={} attempt={} tasks={} packets={} rejected_packets={} rejected_tasks={} rejected_submissions={} recovery_submissions={} accepted_packets={} accepted_tasks={}"
+                , statistics.graphGeneration, statistics.planGeneration, statistics.recordingAttemptGeneration, statistics.compile.taskCount, statistics.compile.packetCount
+                , statistics.submission.rejectedPacketCount, statistics.submission.rejectedTaskCount, statistics.submission.rejectedSubmissionCount, statistics.submission.recoverySubmissionCount
+                , statistics.submission.acceptedPacketCount, statistics.submission.acceptedTaskCount
+            );
+            return false;
+        }
+        planGeneration = statistics.planGeneration;
+        expectedTaskCount = statistics.compile.taskCount;
+    }
+    if(runtimeOwnerCount != 1u){
+        [essential] info(
+            "StressFrameGraphSnapshot: runtime owner count expected=1 observed={} source_frame={} nodes={} packets={} physical_queues={}"
+            , runtimeOwnerCount, sourceFrame, payload.nodes.size(), payload.packetSubmissionStatistics.size(), payload.physicalQueueRuntimeStatistics.size()
+        );
+        return false;
+    }
+    usize compiledTaskCount = 0u;
+    for(usize i = 0u; i < payload.nodes.size(); ++i){
+        if(!payload.nodes[i].compiledTask.present)
+            continue;
+        if(payload.nodes[i].compiledTask.planGeneration != planGeneration){
+            [essential] info("StressFrameGraphSnapshot: compiled task plan expected={} observed={} packet_index={}", planGeneration, payload.nodes[i].compiledTask.planGeneration, payload.nodes[i].compiledTask.packetIndex);
+            return false;
+        }
+        ++compiledTaskCount;
+    }
+    if(compiledTaskCount != expectedTaskCount){
+        [essential] info("StressFrameGraphSnapshot: compiled task count expected={} observed={} plan={}", expectedTaskCount, compiledTaskCount, planGeneration);
+        return false;
+    }
+    for(usize i = 0u; i < payload.packetSubmissionStatistics.size(); ++i){
+        const auto packet = payload.packetSubmissionStatistics[i];
+        if(packet.packetGeneration != planGeneration || !packet.queue.valid() || packet.taskCount == 0u){
+            [essential] info(
+                "StressFrameGraphSnapshot: invalid packet expected_plan={} observed_plan={} packet_index={} queue_index={} queue_generation={} tasks={}"
+                , planGeneration, packet.packetGeneration, packet.packetIndex, packet.queue.index, packet.queue.deviceGeneration, packet.taskCount
+            );
+            return false;
+        }
+    }
+    for(usize i = 0u; i < payload.physicalQueueRuntimeStatistics.size(); ++i){
+        const auto queue = payload.physicalQueueRuntimeStatistics[i];
+        if(queue.statistics.planGeneration != planGeneration || !queue.statistics.queue.valid()){
+            [essential] info(
+                "StressFrameGraphSnapshot: invalid physical queue expected_plan={} observed_plan={} queue_index={} queue_generation={}"
+                , planGeneration, queue.statistics.planGeneration, queue.statistics.queue.index, queue.statistics.queue.deviceGeneration
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+// Captures the pixel-freeze frame snapshot through public telemetry.
+b8 CaptureStressFrameGraphSnapshot(in AStringView outputPath, in u64 completedFrames, mut ProjectRuntimeContext context){
+    const u64 graphicsFrame = context.graphics.getFrameIndex();
+    if(outputPath.empty() || completedFrames == 0u || graphicsFrame == 0u){
+        error("StressFrameGraphSnapshot: no completed frame or output path");
+        return false;
+    }
+    // Capture the completed frame before runFrame advances the frame index.
+    const u64 sourceFrame = graphicsFrame - 1u;
+    native{
+        Core::Telemetry::TelemetryArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshot)};
+        Core::Telemetry::CaptureSession session(arena);
+        session.setCaptureOptions(Core::Telemetry::CaptureOptions::FrameGraphOnly());
+        session.setFrameIndex(sourceFrame);
+        if(!context.frameGraphRegistry.record(session) || session.eventCount() != 1u){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: public frame graph capture failed"));
+            return false;
+        }
+        const auto* const event = session.view().eventAt(0u);
+        if(!event || event->header.kind != Core::Telemetry::EventKind::FrameGraphFrame || event->header.frameIndex != sourceFrame){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
+            return false;
+        }
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshotScratch)};
+        const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
+        if(!payload){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: frame graph payload parse failed source_frame={} payload_bytes={}"), sourceFrame, event->payload.size());
+            return false;
+        }
+        if(!ValidateStressFrameGraphSnapshot(*payload, sourceFrame)){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
+            return false;
+        }
+        Core::Telemetry::TelemetryBytes encoded(arena);
+        if(!Core::Telemetry::EncodeEventStream(session.view(), encoded) || encoded.size() > static_cast<usize>(Limit<StreamSize>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: event stream encoding failed"));
+            return false;
+        }
+        AString<Core::Telemetry::TelemetryArena> binaryPath(arena);
+        binaryPath.assign(outputPath);
+        binaryPath.append(".nwbs");
+        OutputFileStream binary(binaryPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
+        if(!binary.is_open()){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: encoded stream output could not be opened"));
+            return false;
+        }
+        binary.write(reinterpret_cast<const char*>(encoded.data()), static_cast<StreamSize>(encoded.size()));
+        binary.close();
+        if(!binary.good()){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: encoded stream output failed"));
+            return false;
+        }
+        AString<Core::Telemetry::TelemetryArena> jsonPath(arena);
+        jsonPath.assign(outputPath);
+        OutputFileStream output(jsonPath.c_str(), s_FileOpenTruncate);
+        if(!output.is_open()){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
+            return false;
+        }
+        const b8 snapshotWritten = StressFrameGraphSnapshotWriter().write(*payload, graphicsFrame, completedFrames, output);
+        output.close();
+        if(!snapshotWritten || !output.good()){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressFrameGraphSnapshot: complete source_frame={} completed_frames={} nodes={} edges={} packets={}")
+            , sourceFrame
+            , completedFrames
+            , payload->nodes.size()
+            , payload->edges.size()
+            , payload->packetSubmissionStatistics.size()
+        );
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,333 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "csg_visible_scene.adhd"
+#include "presentation_types.adhd"
+#include "framebuffer_capture.adhd"
+#include "gpu_pass_timing_probe.adhd"
+#include "smoke_scene_helpers.adhd"
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_csg/shape_id.adhd.h>
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/material/material_instance.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/perf/report.h>
+
+#include <global/simd/frame.h>
+#include <global/simdmath.h>
+#include <global/timer.h>
+
+namespace NWB::Tests::Smoke{
+using GlobalPath = ::Path<Core::Alloc::GlobalArena>;
+using GlobalPathVector = Vector<GlobalPath, Core::Alloc::GlobalArena>;
+
+inline constexpr AStringView s_GiTemporalEnvironment = "NWB_CSG_GI_TEMPORAL";
+inline constexpr f32 s_CameraStartDepth = 6.5f;
+inline constexpr Float2U s_CameraStart = Float2U(0.0f, s_CsgVisibleCameraTargetY);
+inline constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
+inline constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
+inline constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
+inline constexpr f32 s_CubeRotationSpeed = 0.25f;
+inline constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
+inline constexpr CsgVisibleMaterialRef s_SolidMaterial{"project/smoke/csg_visible/materials/solid"};
+inline constexpr CsgVisibleMaterialRef s_IndirectMaterial{"project/smoke/csg_visible/materials/indirect"};
+inline constexpr CsgVisibleMaterialRef s_DirectMaterial{"project/smoke/csg_visible/materials/direct"};
+inline constexpr CsgVisibleMaterialRef s_NormalMaterial{"project/smoke/csg_visible/materials/normal"};
+inline constexpr CsgVisibleMaterialRef s_PositionMaterial{"project/smoke/csg_visible/materials/position"};
+inline constexpr CsgVisibleMaterialRef s_CapStateMaterial{"project/smoke/csg_visible/materials/cap_state"};
+inline constexpr CsgVisibleMaterialRef s_IntervalStateMaterial{"project/smoke/csg_visible/materials/interval_state"};
+inline constexpr CsgVisibleMaterialRef s_EventStateMaterial{"project/smoke/csg_visible/materials/event_state"};
+inline constexpr CsgVisibleMaterialRef s_EventDataMaterial{"project/smoke/csg_visible/materials/event_data"};
+inline constexpr CsgVisibleMaterialRef s_EventOrderMaterial{"project/smoke/csg_visible/materials/event_order"};
+inline constexpr CsgVisibleMaterialRef s_SpanStateMaterial{"project/smoke/csg_visible/materials/span_state"};
+inline constexpr u32 s_TemporalSampleCount = 32u;
+inline constexpr u64 s_TemporalMinimumFrame = 360u;
+inline constexpr f64 s_TemporalWarmupSeconds = 30.0;
+inline constexpr u64 s_TemporalFrameInterval = 8u;
+
+[[nodiscard]] inline TStringView CsgVisibleFpsLabel()noexcept{
+    return NWB_TEXT("CsgVisibleSmokeProject");
+}
+
+[[nodiscard]] inline NotNullUniquePtr<World> CreateCsgVisibleWorldOrDie(ProjectRuntimeContext& context){
+    auto world = CreateSmokeWorldOrDie(CsgVisibleFpsLabel(), context);
+
+    if(context.graphics.queryFeatureSupport(Core::Feature::Meshlets))
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+    else
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
+
+    auto& renderer = AddSmokeRenderSystems(*world, context);
+    if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
+        Impl::ReflectionSettings reflection;
+        reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
+        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid temporal reflection settings"));
+        renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
+    }
+
+    return world;
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgVisibleSmokeProject : IProjectEntryCallbacks{
+    public CsgVisibleSmokeProject(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateCsgVisibleWorldOrDie(context);
+        this.m_capturePaths = GlobalPathVector(context.objectArena);
+        this.m_fpsProbe = FpsProbe(CsgVisibleFpsLabel());
+        this.m_gpuPassTimingProbe = GpuPassTimingProbe(CsgVisibleFpsLabel());
+    }
+
+    public ~CsgVisibleSmokeProject(){
+        this.destroyWorld();
+    }
+
+    public b8 onStartup()override{
+        this.m_temporalEnabled = ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
+        const b8 overlapping = this.m_temporalEnabled && ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
+        CsgVisibleMaterialRef material = s_SolidMaterial;
+        if(this.m_temporalEnabled){
+            b8 configured = true;
+            native(mut material, mut configured){
+                Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
+                this->m_context->setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
+                const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+                const auto view = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_VIEW");
+                if(!output || !view){
+                    configured = false;
+                }
+                else{
+                    if(*view == "indirect")
+                        material = s_IndirectMaterial;
+                    else if(*view == "direct")
+                        material = s_DirectMaterial;
+                    else if(*view == "normal")
+                        material = s_NormalMaterial;
+                    else if(*view == "position")
+                        material = s_PositionMaterial;
+                    else if(*view == "cap_state")
+                        material = s_CapStateMaterial;
+                    else if(*view == "interval_state")
+                        material = s_IntervalStateMaterial;
+                    else if(*view == "event_state")
+                        material = s_EventStateMaterial;
+                    else if(*view == "event_data"){
+                        material = s_EventDataMaterial;
+                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"));
+                    }
+                    else if(*view == "event_order"){
+                        material = s_EventOrderMaterial;
+                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"));
+                    }
+                    else if(*view == "span_state"){
+                        material = s_SpanStateMaterial;
+                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"));
+                    }
+                    else if(*view != "full"){
+                        configured = false;
+                    }
+
+                    if(configured){
+                        const FramebufferCaptureOptions captureOptions{
+                            .shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
+                                return frame >= MakeNotNull(static_cast<CsgVisibleSmokeProject*>(ctx))->m_nextCaptureFrame;
+                            },
+                            .predicateContext = this,
+                            .requiredWidth = 1280u,
+                            .requiredHeight = 900u,
+                            .quitWhenReady = false
+                        };
+                        auto captureSeries = SmokeCaptureFactory(*this->m_context).prepareSeries(AStringView(*output), s_TemporalSampleCount, captureOptions);
+                        if(!captureSeries){
+                            configured = false;
+                        }
+                        else{
+                            this->m_capturePaths = Move(captureSeries->paths);
+                            this->m_capture = Move(captureSeries->capture);
+                            this->m_temporalAnimated = ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
+                            if(overlapping && this->m_temporalAnimated){
+                                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
+                                configured = false;
+                            }
+                            else{
+                                const auto intervalText = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_INTERVAL");
+                                if(intervalText){
+                                    const auto interval = ParseU64(AStringView(intervalText->data(), intervalText->size()));
+                                    if(!interval || *interval == 0u || *interval > 64u){
+                                        NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal interval must be between 1 and 64"));
+                                        configured = false;
+                                    }
+                                    else{
+                                        this->m_temporalFrameInterval = *interval;
+                                    }
+                                }
+                                if(configured){
+                                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(this->m_temporalAnimated), ConvertString(*view), this->m_temporalFrameInterval);
+                                    if(this->m_temporalAnimated)
+                                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if(!configured)
+                return false;
+        }
+        native(in material, in overlapping){
+            auto activeCameraEntity = this->m_world->createEntity();
+            auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
+            activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(*this->m_world, Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth));
+            const auto directionalLight = Impl::Scene::CreateDirectionalLightEntity(*this->m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
+            this->m_scene.create(material, overlapping, activeCamera.camera, directionalLight, *this->m_world);
+        }
+        [essential] info("CsgVisibleSmokeProject: visible CSG interval receiver scene created");
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.destroyWorld();
+        [essential] info("CsgVisibleSmokeProject: shutdown");
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        f32 safeDelta = 0.0f;
+        if(IsFinite(delta))
+            safeDelta = Max(delta, 0.0f);
+        this.m_fpsProbe.recordFrame(safeDelta);
+        if(this.m_temporalEnabled){
+            this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
+            const u32 posePhase = cast<u32>(this.m_context.graphics.getFrameIndex() % 240u);
+            if(this.m_temporalAnimated)
+                this.m_animationTime = cast<f32>(Min(posePhase, 240u - posePhase)) * 0.3f / 120.0f;
+            else
+                this.m_animationTime = 0.0f;
+            this.updateTemporalCapture();
+        }
+        else
+            this.m_animationTime = Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed + this.m_animationTime;
+
+        b8 ticked = false;
+        native(in safeDelta, mut ticked){
+            this->m_scene.update(this->m_animationTime, *this->m_world);
+            ticked = TickSmokeWorld(this->m_temporalEnabled ? 1.0f / 60.0f : safeDelta, *this->m_world);
+        }
+        return ticked;
+    }
+
+    private void destroyWorld(){
+        native{
+            if(this->m_capture){
+                this->m_capture->stop();
+                this->m_capture.reset();
+            }
+            DestroySmokeRenderWorld(*this->m_context, this->m_world);
+        }
+    }
+
+    private void updateTemporalCapture(){
+        if(this.m_temporalSample == s_TemporalSampleCount)
+            return;
+        if(!this.m_temporalWarmupStarted){
+            const u64 frame = this.m_context.graphics.getFrameIndex();
+            if(frame < s_TemporalMinimumFrame)
+                return;
+            native{
+                this->m_temporalWarmupStart = TimerNow();
+            }
+            this.m_temporalWarmupStarted = true;
+            [essential] info("CsgVisibleSmokeProject: temporal warmup started graphics frame {}", frame);
+            return;
+        }
+        if(!this.m_temporalCaptureStarted){
+            f64 elapsed = 0.0;
+            native(mut elapsed){
+                elapsed = DurationInSeconds<f64>(TimerNow(), this->m_temporalWarmupStart);
+            }
+            if(elapsed < s_TemporalWarmupSeconds)
+                return;
+            this.m_nextCaptureFrame = this.m_context.graphics.getFrameIndex();
+            [essential] info("CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds={:.6f} first_frame={}", elapsed, this.m_nextCaptureFrame);
+            this.m_temporalCaptureStarted = true;
+            return;
+        }
+        native{
+            if(this->m_temporalFrameInterval == 1u && this->m_capture->capturedGraphicsFrameIndex() != Limit<u64>::s_Max){
+                if(!this->m_context->graphics.waitForIdle()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: consecutive capture completion failed"));
+                    this->m_context->requestQuit();
+                    return;
+                }
+            }
+            this->m_capture->update();
+            if(!this->m_capture->captureReady())
+                return;
+            const u64 sourceFrame = this->m_capture->capturedGraphicsFrameIndex();
+            if(sourceFrame != this->m_nextCaptureFrame){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal sample missed frame {} (captured {})"), this->m_nextCaptureFrame, sourceFrame);
+                this->m_context->requestQuit();
+                return;
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal sample {} graphics frame {}"), this->m_temporalSample, sourceFrame);
+            ++this->m_temporalSample;
+            if(this->m_temporalSample == s_TemporalSampleCount){
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal series complete samples=32"));
+                this->m_capture->finish();
+                return;
+            }
+            this->m_nextCaptureFrame += this->m_temporalFrameInterval;
+            if(!this->m_capture->rearm(Move(this->m_capturePaths[this->m_temporalSample])))
+                this->m_context->requestQuit();
+        }
+    }
+
+    private CsgVisibleScene m_scene = CsgVisibleScene();
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private FpsProbe m_fpsProbe;
+    private GpuPassTimingProbe m_gpuPassTimingProbe;
+    private GlobalPathVector m_capturePaths;
+    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
+    private Timer m_temporalWarmupStart = Timer();
+    private u64 m_nextCaptureFrame = ~cast<u64>(0u);
+    private u64 m_temporalFrameInterval = s_TemporalFrameInterval;
+    private f32 m_animationTime = 0.0f;
+    private u32 m_temporalSample = 0u;
+    private b8 m_temporalEnabled = false;
+    private b8 m_temporalAnimated = false;
+    private b8 m_temporalWarmupStarted = false;
+    private b8 m_temporalCaptureStarted = false;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { 1280, 900 };
+}
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{
+    return NWB_TEXT("NWB CSG Visible Smoke");
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<NWB::Tests::Smoke::CsgVisibleSmokeProject>(context);
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

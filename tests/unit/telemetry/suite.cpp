@@ -4242,7 +4242,7 @@ TEST(Telemetry, PacketStatisticsSeededDuplicatesRemainInvalidPayloads){
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
-#include <tests/smoke/gpu_pass_timing_probe.h>
+#include <tests/smoke/gpu_pass_timing_probe.adhd.h>
 #include <tests/unit/telemetry/perf_case_types.adhd.h>
 
 #include <global/text_utils.h>

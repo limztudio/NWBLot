@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+
+native{
+#include <impl/ecs_csg/components.adhd.h>
+
+#include <core/ecs/entity.h>
+#include <core/ecs/world.h>
+
+#include <global/simd/frame.h>
+
+namespace NWB::Tests::Smoke{
+using Core::ECS::EntityID;
+using Core::ECS::World;
+using Impl::CsgCutterComponent;
+using Impl::StaticCsgMeshComponent;
+using Impl::SkinnedCsgMeshComponent;
+
+template<typename ParameterT>
+inline void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
+    cutter.parameterBytes.resize(sizeof(ParameterT));
+    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
+}
+
+template<typename ReceiverComponentT>
+inline ReceiverComponentT& AddCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
+    auto& receiver = world.entity(entity).addComponent<ReceiverComponentT>();
+    receiver.receiverGroup = receiverGroup;
+    receiver.affectOpaquePass = affectOpaquePass;
+    receiver.affectTransparentPass = affectTransparentPass;
+    return receiver;
+}
+
+inline Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
+    return AddCsgMeshReceiver<Impl::StaticCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+}
+
+inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
+    return AddCsgMeshReceiver<Impl::SkinnedCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AssignCsgCutterTransform(in VectorSingle center, in VectorSingle rotation, mut CsgCutterComponent cutter){
+    MatrixSingle worldToShape = MatrixSingle();
+    MatrixSingle shapeToWorld = MatrixSingle();
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, cutter.worldToShape);
+    StoreFloat(shapeToWorld, cutter.shapeToWorld);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

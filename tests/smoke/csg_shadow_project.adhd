@@ -1,0 +1,1135 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "presentation_types.adhd"
+#include "framebuffer_capture.adhd"
+#include "csg_smoke_helpers.adhd"
+#include "smoke_cpu_gpu_timing_probe.adhd"
+#include "smoke_project_helpers.adhd"
+#include "smoke_scene_helpers.adhd"
+
+native{
+
+
+
+
+#include <loader/project_entry.h>
+
+#include <core/graphics/runtime/render_pass.h>
+
+#include <global/expected.h>
+#include <global/filesystem/path.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgCausticTimingProbe final : public Core::IRenderPass{
+private:
+    struct Record{
+        Core::Perf::TimingStats stats;
+        u64 observation = 0u;
+        u32 scope = 0u;
+    };
+
+    struct NativeEndpoint{
+        Timer timestamp = {};
+        u64 source = 0u;
+        u64 presentations = 0u;
+        u32 completeMask = 0u;
+        u32 positiveMask = 0u;
+        u32 beginMask = 0u;
+        u32 endMask = 0u;
+    };
+
+    struct Interval{
+        PresentationFpsSample presentation;
+        u64 firstSource = 0u;
+        u64 endSource = 0u;
+    };
+
+
+private:
+    static constexpr usize s_GpuScopeCount = 6u;
+    static constexpr usize s_CpuScopeCount = 5u;
+    static constexpr usize s_ScopeCount = s_GpuScopeCount + s_CpuScopeCount;
+    static constexpr usize s_MaxRecords = NWB::Tests::Smoke::s_SmokeTimingMaxRecords;
+    static constexpr usize s_MaxIntervals = 2048u;
+    static constexpr usize s_MaxNativeEndpoints = 131072u;
+    static constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
+    static constexpr u64 s_PreparationPresentations = 64u;
+    static constexpr u64 s_MinimumPresentations = NWB::Tests::Smoke::s_SmokeProbeMinimumPresentations;
+    static constexpr u32 s_MinimumPositiveIntervals = 11u;
+    static constexpr f64 s_MinimumMeasurementSeconds = NWB::Tests::Smoke::s_SmokeProbeMinimumMeasurementSeconds;
+
+
+public:
+    explicit CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept;
+
+
+public:
+    [[nodiscard]] b8 initialize(b8 diagnostic, b8 csg, b8 hardware, AStringView outputPath, AStringView cpuOutputPath, AStringView startPath);
+    [[nodiscard]] b8 update();
+    void finish();
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+
+
+private:
+    [[nodiscard]] b8 capture(const Core::Perf::TimingView& view, u64 sourceFrame, b8 cpu);
+    [[nodiscard]] Expected<b8> selectCommonWindow();
+    [[nodiscard]] b8 write(u64 collectionEndSource);
+
+
+private:
+    SmokeCpuGpuTimingProbe m_cpu;
+    PresentationFpsProbe m_presentation{ 30.0 };
+    Array<u64, s_ScopeCount> m_lastPublication{};
+    Array<u32, s_ScopeCount> m_generations{};
+    ::Path<Core::Alloc::GlobalArena> m_startPath;
+    Vector<Record, Core::Alloc::GlobalArena> m_records;
+    Vector<NativeEndpoint, Core::Alloc::GlobalArena> m_native;
+    Vector<Interval, Core::Alloc::GlobalArena> m_intervals;
+    SmokeEnvironmentString m_output;
+    PresentationFpsSample m_commonPresentation;
+    ProjectRuntimeContext& m_context;
+    Timer m_preparationBegin = {};
+    u64 m_firstSource = 0u;
+    usize m_commonBegin = Limit<usize>::s_Max;
+    usize m_commonEnd = 0u;
+    u32 m_positiveIntervals = 0u;
+    b8 m_diagnostic = false;
+    b8 m_prepared = false;
+    b8 m_measuring = false;
+    b8 m_complete = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/filesystem.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
+    Impl::RendererGpuTimingScope::s_Frame,
+    Impl::RendererGpuTimingScope::s_CausticPhotons,
+    Impl::RendererGpuTimingScope::s_CausticResolve,
+    Impl::RendererGpuTimingScope::s_OpaqueRegular,
+    Impl::RendererGpuTimingScope::s_DeferredComposite,
+    Impl::RendererGpuTimingScope::s_DeferredPresent,
+};
+
+static constexpr Array<Name, 5> s_CausticCpuTimingScopes = {
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsFrame),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPrepareResources),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsRenderPasses),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsBeginFrame),
+    Name(NWB::Tests::Smoke::s_SmokeTimingNameGraphicsPresent),
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept
+    : IRenderPass(context.graphics)
+    , m_cpu(NWB_TEXT("csg_caustic"), context.objectArena)
+    , m_startPath(context.objectArena)
+    , m_records(context.objectArena)
+    , m_native(context.objectArena)
+    , m_intervals(context.objectArena)
+    , m_output(context.objectArena)
+    , m_context(context)
+{}
+
+b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8 hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
+    if(!m_context.requestQuit || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
+        return false;
+    }
+    static_assert(s_CausticGpuTimingScopes.size() == s_GpuScopeCount);
+    static_assert(s_CausticCpuTimingScopes.size() == s_CpuScopeCount);
+    m_diagnostic = diagnostic;
+    m_output.assign(outputPath.data(), outputPath.size());
+    m_startPath = startPath;
+    m_records.resize(s_MaxRecords);
+    m_records.clear();
+    m_native.resize(s_MaxNativeEndpoints);
+    m_native.clear();
+    m_intervals.resize(s_MaxIntervals);
+    m_intervals.clear();
+    if(!m_cpu.initialize(diagnostic, true, cpuOutputPath))
+        return false;
+    auto capture = Core::Perf::CaptureOptions::GpuTimingOnly();
+    capture.cpuTiming = diagnostic;
+    m_context.setPerfCapture(capture);
+    for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
+        if(!m_context.graphics.gpuTiming().prepareScopeQueries(scope.identity, m_context.graphics.getDevice(), 32u))
+            return false;
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: configured mode={} csg={} hardware={} preparation_presentations=64 warmup_seconds=30 minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 capture=0")
+        , diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), csg ? 1u : 0u, hardware ? 1u : 0u
+    );
+    return true;
+}
+
+b8 CsgCausticTimingProbe::update(){
+    if(m_complete)
+        return true;
+    const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
+    const u64 frame = m_context.perfSession.frameIndex();
+    const Timer now = TimerNow();
+    if(!m_prepared){
+        const auto started = FileExists(m_startPath);
+        if(!started){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: focus gate status failed"));
+            return false;
+        }
+        if(!*started)
+            return true;
+        if(presentations < s_PreparationPresentations)
+            return true;
+        const Core::Perf::TimingView& view = m_context.perfSession.gpuTimingView();
+        if(!view.valid())
+            return true;
+        // Steady warm-up starts only after every measured GPU pass has completed real work.
+        for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
+            b8 ready = false;
+            for(usize index = 0u; index < view.scopeCount(); ++index){
+                if(view.scopeNameAt(index) == scope.identity && view.statsAt(index).valid() && view.statsAt(index).seconds > 0.0)
+                    ready = true;
+            }
+            if(!ready)
+                return true;
+        }
+        m_prepared = true;
+        m_preparationBegin = now;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: preparation presentations={} source={} gpu_ready_scopes=6"), presentations, frame);
+    }
+    const auto status = m_presentation.observe(presentations, now);
+    if(status == PresentationFpsStatus::Invalid){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native counter or clock regressed"));
+        return false;
+    }
+    if(m_presentation.measurementStarted() && !m_measuring){
+        m_measuring = true;
+        m_firstSource = frame;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: begin presentations={} source={} warmup_seconds={}"), presentations, frame, DurationInSeconds<f64>(now, m_preparationBegin));
+    }
+    if(!m_measuring)
+        return true;
+    const auto options = m_context.perfSession.captureOptions();
+    if(!options.gpuTimingActive() || options.cpuTimingActive() != m_diagnostic || options.memoryActive()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: capture mode changed inside measurement"));
+        return false;
+    }
+    if(m_native.size() == s_MaxNativeEndpoints || (!m_native.empty() && (frame != m_native.back().source + 1u || presentations > m_native.back().presentations + 1u))){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native source endpoints are not contiguous or capacity was exceeded"));
+        return false;
+    }
+    m_native.push_back({ .timestamp = now, .source = frame, .presentations = presentations });
+    if(!capture(m_context.perfSession.gpuTimingView(), frame, false) || (m_diagnostic && !capture(m_context.perfSession.cpuTimingView(), frame, true)))
+        return false;
+    if(m_diagnostic && !m_cpu.observe(m_context.perfSession, m_presentation, presentations, false))
+        return false;
+    const auto common = selectCommonWindow();
+    if(!common)
+        return false;
+    if(!*common)
+        return true;
+    if((m_diagnostic && !m_cpu.observe(m_context.perfSession, m_presentation, presentations, true)) || !write(frame))
+        return false;
+    m_complete = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: common first={} last={} first_source={} end_source={} collection_end={}")
+        , m_commonPresentation.firstPresentationCount, m_commonPresentation.lastPresentationCount, m_native[m_commonBegin].source, m_native[m_commonEnd].source, frame
+    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: complete mode={} presentations={} seconds={} positive_intervals={}")
+        , m_diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), m_commonPresentation.presentations(), m_commonPresentation.wallSeconds, m_positiveIntervals
+    );
+    m_context.requestQuit();
+    return true;
+}
+
+void CsgCausticTimingProbe::finish(){
+    if(!m_complete)
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: shutdown before measurement completion"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 sourceFrame, const b8 cpu){
+    if(!view.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing view is invalid"));
+        return false;
+    }
+    const usize scopeBegin = cpu ? s_GpuScopeCount : 0u;
+    const usize scopeEnd = cpu ? s_ScopeCount : s_GpuScopeCount;
+    for(usize scope = scopeBegin; scope < scopeEnd; ++scope){
+        const Name& name = cpu ? s_CausticCpuTimingScopes[scope - s_GpuScopeCount] : s_CausticGpuTimingScopes[scope].identity;
+        for(usize index = 0u; index < view.scopeCount(); ++index){
+            if(view.scopeNameAt(index) != name)
+                continue;
+            const Core::Perf::TimingStats& stats = view.statsAt(index);
+            if(!stats.valid() || stats.publishFrameIndex == m_lastPublication[scope])
+                continue;
+            const u32 generation = view.scopeAt(index).generation;
+            if((m_generations[scope] != 0u && generation != m_generations[scope]) || stats.publishFrameIndex < m_lastPublication[scope]){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing identity or publication order changed"));
+                return false;
+            }
+            m_generations[scope] = generation;
+            m_lastPublication[scope] = stats.publishFrameIndex;
+            if(stats.firstSampleFrameIndex < m_firstSource)
+                continue;
+            // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
+            if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || m_records.size() == s_MaxRecords){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints"));
+                return false;
+            }
+            const u32 bit = 1u << static_cast<u32>(scope);
+            const usize first = static_cast<usize>(stats.firstSampleFrameIndex - m_firstSource);
+            const usize end = static_cast<usize>(stats.lastSampleFrameIndex - m_firstSource + 1u);
+            for(usize frame = first; frame < end; ++frame){
+                NativeEndpoint& endpoint = m_native[frame];
+                if((endpoint.completeMask & bit) != 0u){
+                    NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: same-scope publication source ranges overlap"));
+                    return false;
+                }
+                endpoint.completeMask |= bit;
+                if(stats.minSeconds > 0.0)
+                    endpoint.positiveMask |= bit;
+            }
+            m_native[first].beginMask |= bit;
+            m_native[end].endMask |= bit;
+            m_records.push_back({ stats, sourceFrame, static_cast<u32>(scope) });
+        }
+    }
+    return true;
+}
+
+Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
+    const u32 mask = (1u << static_cast<u32>(m_diagnostic ? s_ScopeCount : s_GpuScopeCount)) - 1u;
+    if(m_commonBegin == Limit<usize>::s_Max){
+        for(usize index = 0u; index + 1u < m_native.size(); ++index){
+            if(m_native[index].beginMask == mask && m_native[index].completeMask == mask){
+                m_commonBegin = index;
+                m_commonEnd = index;
+                break;
+            }
+        }
+    }
+    if(m_commonBegin == Limit<usize>::s_Max)
+        return false;
+    while(m_commonEnd + 1u < m_native.size() && m_native[m_commonEnd].completeMask == mask)
+        ++m_commonEnd;
+    usize end = m_commonEnd;
+    while(end > m_commonBegin && m_native[end].endMask != mask)
+        --end;
+    const NativeEndpoint& first = m_native[m_commonBegin];
+    const NativeEndpoint& last = m_native[end];
+    const f64 seconds = DurationInSeconds<f64>(last.timestamp, first.timestamp);
+    if(seconds < s_MinimumMeasurementSeconds || last.presentations < first.presentations + s_MinimumPresentations)
+        return false;
+    m_intervals.clear();
+    usize begin = m_commonBegin;
+    u32 positiveMask = 0u;
+    m_positiveIntervals = 0u;
+    Array<u32, s_ScopeCount> positiveScopeIntervals{};
+    for(usize frame = begin + 1u; frame <= end; ++frame){
+        positiveMask |= m_native[frame - 1u].positiveMask;
+        if(DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp) < s_ReportIntervalSeconds && frame != end)
+            continue;
+        if(m_intervals.size() == s_MaxIntervals){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native interval capacity exceeded"));
+            return MakeUnexpected(Failure{});
+        }
+        const PresentationFpsSample interval{
+            .firstPresentationCount = m_native[begin].presentations,
+            .lastPresentationCount = m_native[frame].presentations,
+            .wallSeconds = DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp),
+        };
+        if(interval.presentations() != 0u){
+            ++m_positiveIntervals;
+            for(usize scope = 0u; scope < (m_diagnostic ? s_ScopeCount : s_GpuScopeCount); ++scope){
+                if((positiveMask & (1u << static_cast<u32>(scope))) != 0u)
+                    ++positiveScopeIntervals[scope];
+            }
+        }
+        m_intervals.push_back({ interval, m_native[begin].source, m_native[frame].source });
+        begin = frame;
+        positiveMask = 0u;
+    }
+    if(m_positiveIntervals < s_MinimumPositiveIntervals)
+        return false;
+    for(usize scope = 0u; scope < (m_diagnostic ? s_ScopeCount : s_GpuScopeCount); ++scope){
+        if(positiveScopeIntervals[scope] < s_MinimumPositiveIntervals)
+            return false;
+    }
+    m_commonPresentation = { .firstPresentationCount = first.presentations, .lastPresentationCount = last.presentations, .wallSeconds = seconds };
+    m_commonEnd = end;
+    return true;
+}
+
+b8 CsgCausticTimingProbe::write(const u64 collectionEndSource){
+    OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
+    if(!output.is_open()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output open failed"));
+        return false;
+    }
+    output.precision(17);
+    const auto& total = m_commonPresentation;
+    const u64 firstSource = m_native[m_commonBegin].source;
+    const u64 endSource = m_native[m_commonEnd].source;
+    output << "NWB_CSG_CAUSTIC_TIMING 2\nmode " << (m_diagnostic ? "diagnostic" : "performance") << '\n';
+    output << "window " << total.firstPresentationCount << ' ' << total.lastPresentationCount << ' ' << firstSource << ' ' << endSource << ' ' << total.wallSeconds << '\n';
+    const auto& collection = m_presentation.total();
+    output << "collection " << collection.firstPresentationCount << ' ' << collection.lastPresentationCount << ' ' << m_firstSource << ' ' << collectionEndSource << ' ' << collection.wallSeconds << '\n';
+    for(usize scope = 0u; scope < s_GpuScopeCount; ++scope)
+        output << "scope " << scope << ' ' << s_CausticGpuTimingScopes[scope].identity.resolvedText() << '\n';
+    for(const Interval& interval : m_intervals){
+        output << "interval " << interval.presentation.firstPresentationCount << ' ' << interval.presentation.lastPresentationCount << ' ' << interval.firstSource << ' ' << interval.endSource << ' ' << interval.presentation.wallSeconds << '\n';
+    }
+    usize recordCount = 0u;
+    for(const Record& row : m_records){
+        const auto& stats = row.stats;
+        if(row.scope >= s_GpuScopeCount || stats.firstSampleFrameIndex < firstSource || stats.lastSampleFrameIndex >= endSource)
+            continue;
+        ++recordCount;
+        output << "gpu " << row.scope << ' ' << row.observation << ' ' << stats.publishFrameIndex << ' ' << stats.firstSampleFrameIndex << ' '
+            << stats.lastSampleFrameIndex << ' ' << stats.sampleCount << ' ' << stats.seconds << ' ' << stats.minSeconds << ' ' << stats.maxSeconds << ' ' << stats.lastSeconds << '\n'
+        ;
+    }
+    output << "complete " << m_intervals.size() << ' ' << recordCount << '\n';
+    output.close();
+    if(!output.good()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output write or close failed"));
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+inline constexpr AStringView s_CsgShadowMaterialInterface = s_ShadowSmokeMaterialInterface;
+
+
+class CsgShadowAtlas final{
+public:
+    CsgShadowAtlas(Core::ECS::World& world, const CsgShadowMode& mode, const SmokeMaterialRef& opaqueMaterial)noexcept
+        : m_world(world)
+        , m_mode(mode)
+        , m_opaqueMaterial(opaqueMaterial)
+    {}
+
+
+public:
+    [[nodiscard]] b8 create();
+    void moveCutters();
+
+private:
+    using Box = SmokeBoxBounds;
+    using EntityID = Core::ECS::EntityID;
+    EntityID createBox(const Box& box, b8 transparent, const SmokeMeshRef& mesh = SmokeMeshRef{"project/meshes/cube_hard_edges"});
+    void createReferencePieces(const Box& box, const Box& cutter, b8 transparent);
+    void addCaster(const Box& box, const Box& cutterBox, u32 groupIndex, b8 transparent, b8 moving);
+    void createAtlas();
+    template<typename ParameterT>
+    void addAnalyticCutter(u32 groupIndex, Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld);
+    void createAnalyticAtlas();
+    [[nodiscard]] b8 createOpenAtlas();
+
+private:
+    Core::ECS::World& m_world;
+    const CsgShadowMode& m_mode;
+    SmokeMaterialRef m_opaqueMaterial;
+    Array<Float4, 2u> m_finalCutterCenters{};
+    Array<EntityID, 2u> m_movingCutters{};
+    u32 m_movingCount = 0u;
+};
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#include <impl/ecs_csg/module.h>
+
+#include <global/simd/frame.h>
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+namespace Arm = CsgShadowArm;
+namespace OpenCase = CsgShadowOpenCase;
+using EntityID = Core::ECS::EntityID;
+using Box = SmokeBoxBounds;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_PlaneShapePath = NWB::Tests::Smoke::s_ShadowSmokePlaneShapePath;
+constexpr AStringView s_CapsuleShapePath = NWB::Tests::Smoke::s_ShadowSmokeCapsuleShapePath;
+static constexpr AStringView s_EngineCsgSphere = NWB::Tests::Smoke::s_ShadowSmokeEngineCsgSphere;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_caustic/materials/glass"};
+#else
+static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/materials/glass"};
+#endif
+static constexpr SmokeMaterialRef s_OpenMaterial{"project/smoke/reflection/materials/optical_volume"};
+static constexpr AStringView s_OpenInterface = NWB::Tests::Smoke::s_ShadowSmokeOpenInterface;
+static constexpr Array<Name, 7> s_Groups = {
+    Name(s_SmokeSceneNameCsgShadowOpaqueHole), Name(s_SmokeSceneNameCsgShadowOpaqueCap), Name(s_SmokeSceneNameCsgShadowGlassDepth), Name(s_SmokeSceneNameCsgShadowGlassHole),
+    Name(s_SmokeSceneNameCsgShadowOverlapA), Name(s_SmokeSceneNameCsgShadowOverlapB), Name(s_SmokeSceneNameCsgShadowGlassControl),
+};
+static constexpr Array<Name, 6> s_AnalyticGroups = {
+    Name(s_SmokeSceneNameCsgShadowAnalyticPlane), Name(s_SmokeSceneNameCsgShadowAnalyticSphere), Name(s_SmokeSceneNameCsgShadowAnalyticCapsule),
+    Name(s_SmokeSceneNameCsgShadowAnalyticAxialCapsule), Name(s_SmokeSceneNameCsgShadowAnalyticUnion), Name(s_SmokeSceneNameCsgShadowAnalyticControl),
+};
+static constexpr Array<Name, 2> s_OpenGroups = { Name(s_SmokeSceneNameCsgShadowOpenFive), Name(s_SmokeSceneNameCsgShadowOpenSix) };
+static constexpr SmokeMeshRef s_OpenPairMesh{"project/meshes/csg_shadow_open_2"};
+static constexpr SmokeMeshRef s_OpenFiveMesh{"project/meshes/csg_shadow_open_5"};
+static constexpr SmokeMeshRef s_OpenSixMesh{"project/meshes/csg_shadow_open_6"};
+static constexpr SmokeMeshRef s_OpenBoundaryMesh{"project/meshes/csg_shadow_open_64"};
+static constexpr SmokeMeshRef s_OpenOverflowMesh{"project/meshes/csg_shadow_open_65"};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CsgShadowAtlas::create(){
+    if(m_mode.openAtlas)
+        return createOpenAtlas();
+    if(m_mode.analyticAtlas)
+        createAnalyticAtlas();
+    else
+        createAtlas();
+    return true;
+}
+
+void CsgShadowAtlas::moveCutters(){
+    for(u32 index = 0u; index < m_movingCount; ++index){
+        auto& cutter = *MakeNotNull(m_world.tryGetComponent<Impl::CsgCutterComponent>(m_movingCutters[index]));
+        AssignCsgCutterTransform(LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity(), cutter);
+    }
+}
+
+
+EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const SmokeMeshRef& mesh){
+    const SIMDVectorSingle minimum = LoadFloat(box.minimum);
+    const SIMDVectorSingle maximum = LoadFloat(box.maximum);
+    Float4 center;
+    Float4 extent;
+    StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
+    StoreFloat(VectorSubtract(maximum, minimum), extent);
+    const auto entity = CreateTintedStaticMeshEntity(
+        mesh, transparent ? (m_mode.openAtlas ? s_OpenMaterial : s_GlassMaterial) : m_opaqueMaterial,
+        transparent && m_mode.openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_CsgShadowMaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
+        center, extent, m_world
+    );
+    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: box creation failed"));
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    if(transparent)
+        m_world.entity(entity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+#endif
+    if(transparent && m_mode.openAtlas){
+        const Half packedIor = ConvertFloatToHalf(1.5f);
+        const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
+        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+            m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
+            NWB::Impl::PackMaterialInstanceValue(packedIor)
+        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet IOR override failed")
+        );
+        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+            m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
+            NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
+        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet transmission override failed")
+        );
+    }
+    return entity;
+}
+
+void CsgShadowAtlas::createReferencePieces(const Box& box, const Box& cutter, const b8 transparent){
+    // Six disjoint ordinary boxes represent the subtraction without CSG components or generated caps.
+    Array<Box, 6> pieces{};
+    if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces)){
+        createBox(box, transparent);
+        return;
+    }
+    for(const auto& piece : pieces){
+        if(SmokeBoxBoundsValid(piece))
+            createBox(piece, transparent);
+    }
+}
+
+void CsgShadowAtlas::addCaster(const Box& box, const Box& cutterBox, const u32 groupIndex, const b8 transparent, const b8 moving){
+    if(m_mode.arm == Arm::Reference){
+        createReferencePieces(box, cutterBox, transparent);
+        return;
+    }
+    const auto entity = createBox(box, transparent);
+    AddStaticCsgMeshReceiver(entity, s_Groups[groupIndex], !transparent, transparent, m_world);
+    auto cutterEntity = m_world.createEntity();
+    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+    cutter.receiverGroup = s_Groups[groupIndex];
+    cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
+    cutter.active = m_mode.arm != Arm::Uncut;
+    NWB::Impl::CsgBoxShapeParameters parameters;
+    const SIMDVectorSingle minimum = LoadFloat(cutterBox.minimum);
+    const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
+    StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
+    AssignCsgCutterParameters(parameters, cutter);
+    const SIMDVectorSingle finalCenter = VectorScale(VectorAdd(minimum, maximum), 0.5f);
+    SIMDVectorSingle initialCenter = finalCenter;
+    if(moving && m_mode.arm == Arm::Moved)
+        initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_mode.pointLight ? 0.5f : 1.0f));
+    AssignCsgCutterTransform(initialCenter, QuaternionIdentity(), cutter);
+    if(moving){
+        NWB_ASSERT(m_movingCount < m_movingCutters.size());
+        m_movingCutters[m_movingCount] = cutterEntity.id();
+        StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
+        ++m_movingCount;
+    }
+}
+
+void CsgShadowAtlas::createAtlas(){
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    const Box split{ Float3U(-2.0f, -0.7f, -7.0f), Float3U(-0.6f, 0.7f, -5.0f) };
+    const Box cavity{ Float3U(-2.2f, -0.9f, -6.5f), Float3U(-0.4f, 0.9f, -5.5f) };
+    if(m_mode.arm == Arm::Reference)
+        createBox(split, true, SmokeMeshRef{"project/meshes/csg_caustic_split"});
+    else
+        addCaster(split, cavity, 2u, true, false);
+    const Box control{ Float3U(0.6f, -0.7f, -7.0f), Float3U(2.0f, 0.7f, -5.0f) };
+    createBox(control, true);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two"));
+#else
+    const f32 xyScale = m_mode.pointLight ? 0.5f : 1.0f;
+    for(u32 slot = 0u; slot < 6u; ++slot){
+        const f32 centerX = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f * xyScale;
+        const f32 centerY = (slot < 3u ? 1.0f : -1.0f) * xyScale;
+        const f32 halfExtent = 0.7f * xyScale;
+        const Box box{ Float3U(centerX - halfExtent, centerY - halfExtent, -7.0f), Float3U(centerX + halfExtent, centerY + halfExtent, -5.0f) };
+        const b8 hole = slot == 0u || slot == 3u;
+        const f32 holeHalfWidth = m_mode.pointLight ? 0.36f : 0.24f;
+        const f32 holeCenterX = centerX + 0.3f * xyScale;
+        const f32 holeHalfHeight = 0.4f * xyScale;
+        Box cutter = hole
+            ? Box{ Float3U(holeCenterX - holeHalfWidth, centerY - holeHalfHeight, -7.2f), Float3U(holeCenterX + holeHalfWidth, centerY + holeHalfHeight, -4.8f) }
+            : Box{ Float3U(centerX - 1.0f, centerY - 1.0f, -6.0f), Float3U(centerX + 1.0f, centerY + 1.0f, -4.8f) };
+        if(slot == 5u){
+            cutter.minimum.x += 20.0f;
+            cutter.maximum.x += 20.0f;
+        }
+        const u32 groupIndex = slot == 5u ? 6u : slot;
+        addCaster(box, cutter, groupIndex, slot >= 2u, hole);
+        if(slot == 4u){
+            const Box shiftedBox{ Float3U(box.minimum.x, box.minimum.y, box.minimum.z - 0.5f), Float3U(box.maximum.x, box.maximum.y, box.maximum.z - 0.5f) };
+            const Box shiftedCutter{ Float3U(cutter.minimum.x, cutter.minimum.y, cutter.minimum.z - 0.5f), Float3U(cutter.maximum.x, cutter.maximum.y, cutter.maximum.z - 0.5f) };
+            addCaster(shiftedBox, shiftedCutter, 5u, true, false);
+        }
+    }
+#endif
+}
+
+template<typename ParameterT>
+void CsgShadowAtlas::addAnalyticCutter(const u32 groupIndex, const Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld){
+    auto cutterEntity = m_world.createEntity();
+    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
+    cutter.receiverGroup = s_AnalyticGroups[groupIndex];
+    cutter.shapeType = shapeType;
+    cutter.active = m_mode.arm == Arm::Cut;
+    AssignCsgCutterParameters(parameters, cutter);
+    SIMDVectorSingle determinant;
+    StoreFloat(MatrixInverse(&determinant, shapeToWorld), cutter.worldToShape);
+    StoreFloat(shapeToWorld, cutter.shapeToWorld);
+}
+
+void CsgShadowAtlas::createAnalyticAtlas(){
+    for(u32 slot = 0u; slot < 6u; ++slot){
+        const f32 centerX = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f;
+        const f32 centerY = slot < 3u ? 1.0f : -1.0f;
+        const Box box{ Float3U(centerX - 0.7f, centerY - 0.7f, -7.0f), Float3U(centerX + 0.7f, centerY + 0.7f, -5.0f) };
+        const auto entity = createBox(box, true);
+        AddStaticCsgMeshReceiver(entity, s_AnalyticGroups[slot], false, true, m_world);
+    }
+
+    NWB::Impl::CsgPlaneShapeParameters plane;
+    plane.normalDistance = Float4(0.5f, 0.0f, 1.0f, 0.0f);
+    addAnalyticCutter(0u, Name(s_PlaneShapePath), plane, MatrixTranslation(-2.0f, 1.0f, -6.0f));
+
+    NWB::Impl::CsgSphereShapeParameters sphere;
+    sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
+    addAnalyticCutter(1u, Name(s_EngineCsgSphere), sphere, ellipsoid);
+
+    NWB::Impl::CsgCapsuleShapeParameters capsule;
+    capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
+    addAnalyticCutter(2u, Name(s_CapsuleShapePath), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
+    capsule.radiusHalfHeight = Float4(0.3f, 0.4f, 0.0f, 0.0f);
+    // An exact axis permutation exercises the capsule's zero radial-speed branch.
+    const SIMDMatrix alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    addAnalyticCutter(3u, Name(s_CapsuleShapePath), capsule, alongLight);
+
+    sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
+    addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+    addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+    // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
+    plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
+    addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
+}
+
+b8 CsgShadowAtlas::createOpenAtlas(){
+    const b8 clipped = m_mode.openCase == OpenCase::Clipped || m_mode.openCase == OpenCase::ClippedReference;
+    if(m_mode.openCase == OpenCase::Reference){
+        if(!createBox({ Float3U(-1.9f, -0.7f, -7.0f), Float3U(-0.5f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
+            return false;
+        // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
+        for(u32 pair = 0u; pair < 3u; ++pair){
+            const f32 lower = -7.0f + static_cast<f32>(pair) * 0.8f;
+            if(!createBox({ Float3U(0.5f, -0.7f, lower), Float3U(1.9f, 0.7f, lower + 0.4f) }, true, s_OpenPairMesh).valid())
+                return false;
+        }
+    }
+    else if(m_mode.openCase == OpenCase::ClippedReference){
+        for(u32 pair = 0u; pair < 2u; ++pair){
+            const f32 lower = -6.5f + static_cast<f32>(pair);
+            if(!createBox({ Float3U(-1.9f, -0.7f, lower), Float3U(-0.5f, 0.7f, lower + 0.5f) }, true, s_OpenPairMesh).valid())
+                return false;
+        }
+        if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
+            return false;
+    }
+    else{
+        const SmokeMeshRef firstMesh = m_mode.openCase == OpenCase::Boundary64 ? s_OpenBoundaryMesh : m_mode.openCase == OpenCase::Terminal65 ? s_OpenOverflowMesh : s_OpenFiveMesh;
+        const Array<SmokeMeshRef, 2> meshes = { firstMesh, s_OpenSixMesh };
+        for(u32 tile = 0u; tile < 2u; ++tile){
+            const f32 x = tile == 0u ? -1.2f : 1.2f;
+            const Box bounds{ Float3U(x - 0.7f, -0.7f, -7.0f), Float3U(x + 0.7f, 0.7f, -5.0f) };
+            const auto receiver = createBox(bounds, true, meshes[tile]);
+            AddStaticCsgMeshReceiver(receiver, s_OpenGroups[tile], false, true, m_world);
+            auto entity = m_world.createEntity();
+            if(!entity.id().valid())
+                return false;
+            auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
+            cutter.receiverGroup = s_OpenGroups[tile];
+            cutter.shapeType = Name(s_PlaneShapePath);
+            NWB::Impl::CsgPlaneShapeParameters plane;
+            plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, clipped ? 6.75f : 8.0f);
+            AssignCsgCutterParameters(plane, cutter);
+            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+        }
+    }
+    const u32 firstCount = m_mode.openCase == OpenCase::Boundary64 ? 64u : m_mode.openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
+        , ConvertString(m_mode.openCaseName())
+        , firstCount
+        , clipped ? 5u : 6u
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+#endif
+
+
+#include <loader/project_entry.h>
+
+#include <impl/assets_csg/shape_id.adhd.h>
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_render/module.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_csg_shadow_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProjectImpl");
+
+using NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+using NWB::Tests::Smoke::s_ShadowSmokePoint;
+using NWB::Tests::Smoke::s_ShadowSmokeHard;
+using NWB::Tests::Smoke::s_ShadowSmokeFinite;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Tests::Smoke;
+namespace Arm = NWB::Tests::Smoke::CsgShadowArm;
+namespace OpenCase = NWB::Tests::Smoke::CsgShadowOpenCase;
+
+static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_caustic/materials/receiver"};
+#else
+static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
+#endif
+static constexpr f32 s_CameraDepth = NWB::Tests::Smoke::s_ShadowSmokeCameraDepth;
+static constexpr u32 s_MoveUpdate = NWB::Tests::Smoke::s_ShadowSmokeMoveUpdate;
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgShadowSmokeProjectImpl final : public NWB::IProjectEntryCallbacks{
+private:
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorld(NWB::ProjectRuntimeContext& context){
+        auto world = CreateSmokeWorldOrDie(s_ProjectName, context);
+        auto& renderer = AddSmokeRenderSystems(*world, context);
+        NWB::Impl::ReflectionSettings reflection;
+        reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
+        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid CSG shadow reflection settings"));
+        renderer.setRefractionEnabled(false);
+        NWB::Impl::PresentationSettings presentation;
+        presentation.toneMap = NWB::Impl::PresentationToneMap::LinearClamp;
+        NWB_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), NWB_TEXT("Invalid CSG shadow presentation settings"));
+        return world;
+    }
+
+
+public:
+    explicit CsgShadowSmokeProjectImpl(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorld(context))
+        , m_atlas(*m_world, m_mode, s_OpaqueMaterial)
+    {}
+    virtual ~CsgShadowSmokeProjectImpl()noexcept override{ destroyWorld(); }
+
+
+public:
+    virtual b8 onStartup()override{
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        constexpr b8 s_Caustic = true;
+#else
+        constexpr b8 s_Caustic = false;
+#endif
+        if(!m_mode.read(s_Caustic))
+            return false;
+        const auto camera = CreateSmokeCamera(0.0f, -s_CameraDepth, 0.0f, *m_world);
+        NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera creation failed"));
+        auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
+        const f32 cameraX = m_mode.arm == Arm::CameraShift ? 0.3f : 0.0f;
+        cameraTransform.position.x = cameraX;
+        const auto receiver = CreateTintedStaticMeshEntity(s_PlaneMesh, s_OpaqueMaterial, s_CsgShadowMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f), *m_world);
+        NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera/receiver creation failed"));
+        auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
+        const auto light = m_mode.pointLight
+            ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
+            : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: light creation failed"));
+        auto& lightComponent = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light));
+        lightComponent.angularRadius = m_mode.finiteLightSource && !m_mode.pointLight ? 0.005f : 0.0f;
+        lightComponent.sourceRadius = m_mode.finiteLightSource && m_mode.pointLight ? 0.02f : 0.0f;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        lightComponent.enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+#else
+        lightComponent.enableCaustics = false;
+#endif
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: light_source={} angular_radius={:.3f} source_radius={:.3f}")
+            , ConvertString(m_mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard)
+            , static_cast<f64>(lightComponent.angularRadius)
+            , static_cast<f64>(lightComponent.sourceRadius)
+        );
+        if(!m_atlas.create())
+            return false;
+        const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
+            , static_cast<u32>(m_mode.arm)
+            , ConvertString(m_mode.pointLight ? s_ShadowSmokePoint : s_ShadowSmokeDirectional)
+            , hardware ? 1u : 0u
+            , static_cast<f64>(cameraX)
+        );
+        constexpr u32 s_DefaultCaptureFrameCount = NWB::Tests::Smoke::s_ShadowSmokeDefaultCaptureFrameCount;
+        auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(s_ProjectName, s_DefaultCaptureFrameCount, {});
+        if(!capture)
+            return false;
+        m_capture = Move(*capture);
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        if(!configureTiming(scratchArena))
+            return false;
+#endif
+        return true;
+    }
+
+    virtual void onShutdown()override{
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing)
+            m_timing->finish();
+#endif
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        if(m_capture)
+            m_capture->update();
+        ++m_update;
+        if(m_mode.arm == Arm::Moved && m_update == s_MoveUpdate){
+            m_atlas.moveCutters();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: cutters moved at update40"));
+        }
+        const f32 fixedDelta = RendererBaselineFixedDelta();
+        if(!TickSmokeWorld(fixedDelta > 0.0f ? fixedDelta : delta, *m_world))
+            return false;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing && !m_timing->update())
+            return false;
+#endif
+        return true;
+    }
+
+
+private:
+
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    b8 configureTiming(NWB::Core::Alloc::ScratchArena& scratchArena){
+        const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_MODE");
+        const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_FILE");
+        const auto cpuOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_CPU_GPU_FILE");
+        const auto start = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_START_FILE");
+        if(!mode){
+            if(output || cpuOutput || start){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: mode and explicit output must agree"));
+                return false;
+            }
+            return true;
+        }
+        const AStringView modeView(mode->data(), mode->size());
+        const auto route = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_ROUTE");
+        const AStringView routeView = route ? AStringView(route->data(), route->size()) : AStringView{};
+        if(
+            (modeView != "performance" && modeView != "diagnostic") || (routeView != "hardware" && routeView != "software") || !output || !start || m_capture || !m_context.requestQuit
+            || (m_mode.arm != Arm::Reference && m_mode.arm != Arm::Cut) || m_mode.pointLight || m_mode.finiteLightSource || m_mode.analyticAtlas || m_mode.openAtlas || ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED")
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: requires uncaptured directional hard-light reference/cut boxes and an explicit route"));
+            return false;
+        }
+        const b8 rayTracing = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        const b8 rayQuery = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const b8 hardware = rayTracing && rayQuery;
+        if(routeView == "hardware" && !hardware){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: hardware unavailable rt_accel={} ray_query={}"), rayTracing ? 1u : 0u, rayQuery ? 1u : 0u);
+            m_context.requestQuit();
+            return true;
+        }
+        if((routeView == "hardware") != hardware){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: actual route differs from requested acquisition"));
+            return false;
+        }
+        const usize receivers = m_world->view<NWB::Impl::StaticCsgMeshComponent>().candidateCount() + m_world->view<NWB::Impl::SkinnedCsgMeshComponent>().candidateCount();
+        const usize cutters = m_world->view<NWB::Impl::CsgCutterComponent>().candidateCount();
+        if(receivers != (m_mode.arm == Arm::Cut ? 1u : 0u) || cutters != receivers){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: fixture receiver/cutter identity differs from selected arm"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: scene arm={} receivers={} cutters={} expected_shader_csg={} camera=960x720 light=directional capture=0")
+            , m_mode.arm == Arm::Cut ? NWB_TEXT("cut") : NWB_TEXT("reference")
+            , receivers
+            , cutters
+            , receivers != 0u ? 1u : 0u
+        );
+        m_timing = MakeUnique<NWB::Tests::Smoke::CsgCausticTimingProbe>(m_context);
+        if(!m_timing->initialize(
+            modeView == "diagnostic", receivers != 0u, hardware, AStringView(output->data(), output->size())
+            , cpuOutput ? AStringView(cpuOutput->data(), cpuOutput->size()) : AStringView{}, AStringView(start->data(), start->size())
+        ))
+            return false;
+        m_context.graphics.addRenderPassToBack(*m_timing);
+        m_timingRegistered = true;
+        return true;
+    }
+#endif
+
+    void destroyWorld(){
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timingRegistered){
+            m_context.graphics.removeRenderPass(*m_timing);
+            m_timingRegistered = false;
+        }
+        m_timing.reset();
+#endif
+        if(m_capture){
+            m_capture->stop();
+            m_capture.reset();
+        }
+        DestroySmokeRenderWorld(m_context, m_world);
+    }
+
+
+private:
+    NWB::ProjectRuntimeContext& m_context;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    CsgShadowMode m_mode;
+    CsgShadowAtlas m_atlas;
+    UniquePtr<FramebufferCapture> m_capture;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    UniquePtr<NWB::Tests::Smoke::CsgCausticTimingProbe> m_timing;
+#endif
+    u32 m_update = 0u;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    b8 m_timingRegistered = false;
+#endif
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Tests::Smoke{ using CsgShadowSmokeProjectImpl = __hidden_csg_shadow_smoke::CsgShadowSmokeProjectImpl; }
+}
+
+class CsgShadowSmokeProject : IProjectEntryCallbacks{
+    public CsgShadowSmokeProject(mut ProjectRuntimeContext context){
+        this.m_impl = CsgShadowSmokeProjectImpl(context);
+    }
+
+    public b8 onStartup()override{
+        return this.m_impl.onStartup();
+    }
+
+    public void onShutdown()override{
+        this.m_impl.onShutdown();
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        return this.m_impl.onUpdate(delta);
+    }
+
+    private CsgShadowSmokeProjectImpl m_impl;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<NWB::Tests::Smoke::CsgShadowSmokeProject>(context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}

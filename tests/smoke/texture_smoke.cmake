@@ -9,9 +9,9 @@ if(TARGET nwb_tex_conv)
     set(_nwb_texture_smoke_generator "${CMAKE_CURRENT_LIST_DIR}/generate_texture_smoke_input.py")
 
     nwb_declare_executable(nwb_texture_smoke)
-    target_sources(nwb_texture_smoke PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.cpp"
-    )
+    nwb_target_adhd_sources(nwb_texture_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.adhd"
+        )
     target_compile_definitions(nwb_texture_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
     nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}")
 

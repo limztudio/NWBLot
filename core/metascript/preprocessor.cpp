@@ -303,15 +303,13 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         const MStringView trimmed = directiveCandidate;
 
         if(!trimmed.empty() && trimmed[0] == '#'){
-            const MStringView afterHash = TrimView(trimmed.substr(1u));
-            const b8 isNativeInclude = (nativeBraceDepth > 0u) && afterHash.starts_with("include") && (afterHash.size() == 7u || !IsAsciiIdentifierChar(afterHash[7u]));
-            const b8 isNativePragma = (nativeBraceDepth > 0u) && afterHash.starts_with("pragma") && (afterHash.size() == 6u || !IsAsciiIdentifierChar(afterHash[6u]));
-            if(isNativeInclude || isNativePragma){
+            if(nativeBraceDepth > 0u){
                 if(isActive)
                     outProcessed.append(rawLine.data(), rawLine.size());
                 outProcessed.push_back('\n');
             }
             else{
+                const MStringView afterHash = TrimView(trimmed.substr(1u));
                 if(isActive && !commentPrefix.empty())
                     outProcessed.append(commentPrefix.data(), commentPrefix.size());
                 if(!handleDirective(afterHash, startLine, depth, currentFileKey, condStack, outProcessed))

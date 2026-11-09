@@ -1,0 +1,102 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+
+native{
+#include <tests/common/ecs_test_world.h>
+#include <impl/ecs_skeleton/components.adhd.h>
+#include <core/ecs/entity.h>
+#include <gtest/gtest.h>
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_GT(...) native{ EXPECT_GT(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 JointMatricesEqual(in Span<f32x3x4> lhs, in Span<f32x3x4> rhs, in usize index){
+    b8 equal = false;
+    native(in lhs, in rhs, in index, mut equal){
+        equal = NWB_MEMCMP(&lhs[index], &rhs[index], sizeof(lhs[index])) == 0;
+    }
+    return equal;
+}
+
+void VerifySkinningBenchmarkPoseStep1(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints, mut Vector<f32x3x4> firstPose){
+    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    u32 changedJoints = 0u;
+    for(usize i = 0u; i < bindJoints.size(); ++i){
+        firstPose.push_back(localJoints[i]);
+        if(!JointMatricesEqual(localJoints, bindJoints, i))
+            ++changedJoints;
+    }
+    EXPECT_GT(changedJoints, 0u);
+}
+
+void VerifySkinningBenchmarkPoseStep2(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
+    for(usize i = 0u; i < firstPose.size(); ++i)
+        EXPECT_TRUE(JointMatricesEqual(localJoints, firstPose, i));
+}
+
+void VerifySkinningBenchmarkPoseStep3(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
+    b8 changedWithTime = false;
+    for(usize i = 1u; i < firstPose.size(); ++i)
+        changedWithTime = changedWithTime || !JointMatricesEqual(localJoints, firstPose, i);
+    EXPECT_TRUE(changedWithTime);
+}
+
+void VerifySkinningBenchmarkPoseStep4(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints){
+    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    b8 changedInBenchmarkMode = false;
+    for(usize i = 1u; i < bindJoints.size(); ++i)
+        changedInBenchmarkMode = changedInBenchmarkMode || !JointMatricesEqual(localJoints, bindJoints, i);
+    EXPECT_TRUE(changedInBenchmarkMode);
+}
+
+native{
+using namespace NWB;
+
+namespace __hidden_skinning_benchmark_pose_tests{
+
+static void AnimateEntities(Core::ECS::World& world, const Span<const Core::ECS::EntityID> entities, const Span<const Impl::SkeletonJointMatrix> bindJoints, const f32 timeSeconds, const b8 staticPreview)noexcept{
+    for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
+        auto* pose = world.tryGetComponent<Impl::SkeletonPoseComponent>(entities[entityIndex]);
+        if(!pose)
+            continue;
+        AnimateSkinningBenchmarkPoseJoints(bindJoints, static_cast<u32>(entityIndex), timeSeconds, staticPreview, pose->localJoints);
+    }
+}
+
+};
+
+TEST(SkinningBenchmarkPose, MissingPoseIsSkippedAndSeededJointsAreDeterministic){
+    Tests::EcsTestWorld context;
+    auto& world = context.world;
+    const auto skeleton = world.createEntity().id();
+    const auto missingPose = world.createEntity().id();
+    auto& pose = world.entity(skeleton).addComponent<Impl::SkeletonPoseComponent>();
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> bindJoints(context.arena);
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> firstPose(context.arena);
+    for(u32 i = 0u; i < 64u; ++i){
+        bindJoints.push_back(MatrixIdentity<Float34>());
+        pose.localJoints.push_back(bindJoints.back());
+    }
+    const Array<Core::ECS::EntityID, 2> entities = { missingPose, skeleton };
+    __hidden_skinning_benchmark_pose_tests::AnimateEntities(world, entities, bindJoints, 0.25f, true);
+    VerifySkinningBenchmarkPoseStep1(bindJoints, pose.localJoints, firstPose);
+    __hidden_skinning_benchmark_pose_tests::AnimateEntities(world, entities, bindJoints, 0.25f, true);
+    VerifySkinningBenchmarkPoseStep2(firstPose, pose.localJoints);
+    __hidden_skinning_benchmark_pose_tests::AnimateEntities(world, entities, bindJoints, 1.0f, true);
+    VerifySkinningBenchmarkPoseStep3(firstPose, pose.localJoints);
+    __hidden_skinning_benchmark_pose_tests::AnimateEntities(world, entities, bindJoints, 0.25f, false);
+    VerifySkinningBenchmarkPoseStep4(bindJoints, pose.localJoints);
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

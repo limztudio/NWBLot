@@ -1,0 +1,511 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+#include "smoke_skinned_scene_helpers.adhd"
+#include "smoke_scene_helpers.adhd"
+#include "smoke_project_helpers.adhd"
+#include "gpu_pass_timing_probe.adhd"
+
+native{
+#include <loader/project_entry.h>
+
+#include <impl/assets_model/asset.h>
+#include <impl/assets_material/asset.h>
+#include <impl/assets_skeleton/asset.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_model/system.h>
+#include <impl/ecs_model_renderer/model_renderer.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_mesh/skinning/system.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/assert.h>
+#include <global/environment.h>
+#include <global/simd/vector.h>
+
+namespace NWB::Tests::Smoke{
+inline constexpr AStringView s_SkinningUnknownLabel = "unknown";
+inline constexpr TStringView s_SkinningBenchmarkProjectName = NWB_TEXT("SkinningCullingBenchmark");
+
+using BenchmarkModelRef = Core::Assets::AssetRef<Impl::Model>;
+using BenchmarkMaterialRef = Core::Assets::AssetRef<Impl::Material>;
+using GlobalEntityIdVector = Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena>;
+using GlobalBindJointVector = Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>;
+enum class BenchmarkMode : u8{
+    NoCulling,
+    FrustumOnly,
+    FrustumCone,
+};
+
+enum class BenchmarkView : u8{
+    Front,
+    Back,
+    Close,
+    Far,
+};
+
+struct BenchmarkCase{
+    BenchmarkMode mode = BenchmarkMode::NoCulling;
+    BenchmarkView view = BenchmarkView::Front;
+};
+inline constexpr u32 s_SkinningCharacterCount = 64u;
+inline constexpr u32 s_BenchmarkRepeatCount = 4u;
+inline constexpr u32 s_SkinningWarmupFrameCount = 8u;
+inline constexpr u32 s_SkinningSampleFrameCount = 16u;
+inline constexpr u32 s_SkinningFinishDrainFrameCount = 30u;
+// Keeps the full benchmark as the default while letting smoke runs exercise animated skinning uploads without a long soak.
+inline constexpr u32 s_FastSmokeCharacterCount = 1u;
+inline constexpr u32 s_FastSmokeWarmupFrameCount = 1u;
+inline constexpr u32 s_FastSmokeSampleFrameCount = 3u;
+inline constexpr u32 s_FastSmokeFinishDrainFrameCount = 1u;
+inline constexpr f32 s_FrontCameraDistance = 3.2f;
+inline constexpr f32 s_BackCameraDistance = 3.2f;
+inline constexpr f32 s_CloseCameraDistance = 1.65f;
+inline constexpr f32 s_FarCameraDistance = 5.6f;
+inline constexpr f32 s_SkinningCameraHeight = 1.1f;
+inline constexpr BenchmarkModelRef s_BenchmarkModel{"project/characters/body/model"};
+inline constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke/skinning_culling_benchmark/materials/solid"};
+inline constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
+inline constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
+inline constexpr StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
+
+inline constexpr Array<BenchmarkCase, 12> s_BenchmarkCases = {{
+    { BenchmarkMode::NoCulling, BenchmarkView::Front },
+    { BenchmarkMode::NoCulling, BenchmarkView::Back },
+    { BenchmarkMode::NoCulling, BenchmarkView::Close },
+    { BenchmarkMode::NoCulling, BenchmarkView::Far },
+    { BenchmarkMode::FrustumOnly, BenchmarkView::Front },
+    { BenchmarkMode::FrustumOnly, BenchmarkView::Back },
+    { BenchmarkMode::FrustumOnly, BenchmarkView::Close },
+    { BenchmarkMode::FrustumOnly, BenchmarkView::Far },
+    { BenchmarkMode::FrustumCone, BenchmarkView::Front },
+    { BenchmarkMode::FrustumCone, BenchmarkView::Back },
+    { BenchmarkMode::FrustumCone, BenchmarkView::Close },
+    { BenchmarkMode::FrustumCone, BenchmarkView::Far },
+}};
+inline constexpr usize s_BenchmarkCaseCount = s_BenchmarkCases.size();
+using Impl::IRuntimeMeshProvider;
+using Impl::MeshSkinningSystem;
+using Impl::RuntimeMeshDesc;
+using Impl::RuntimeMeshRequestSet;
+
+class BenchmarkRuntimeMeshProvider final : public Impl::IRuntimeMeshProvider{
+public:
+    BenchmarkRuntimeMeshProvider() = default;
+    ~BenchmarkRuntimeMeshProvider()override{
+        uninstall();
+    }
+
+    void install(Impl::MeshSystem& meshSystem, Impl::MeshSkinningSystem& meshSkinningSystem){
+        if(m_registered)
+            return;
+        m_meshSystem = &meshSystem;
+        m_meshSkinningSystem = &meshSkinningSystem;
+        m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
+        m_meshSystem->registerRuntimeMeshProvider(*this);
+        m_registered = true;
+    }
+
+    void uninstall(){
+        if(!m_registered || !m_meshSystem || !m_meshSkinningSystem)
+            return;
+        m_meshSystem->unregisterRuntimeMeshProvider(*this);
+        m_meshSystem->registerRuntimeMeshProvider(*m_meshSkinningSystem);
+        m_meshSystem = nullptr;
+        m_meshSkinningSystem = nullptr;
+        m_registered = false;
+    }
+
+    void setMode(const BenchmarkMode mode){
+        m_mode = mode;
+    }
+
+    virtual Expected<Impl::RuntimeMeshDesc> resolveRuntimeMesh(const Core::ECS::EntityID entity)override{
+        if(!m_meshSkinningSystem)
+            return MakeUnexpected(Failure{});
+        auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
+        if(!mesh)
+            return mesh;
+        switch(m_mode){
+        case BenchmarkMode::NoCulling:
+            mesh->dynamicMeshletBoundsFresh = false;
+            mesh->dynamicMeshletConesFresh = false;
+            break;
+        case BenchmarkMode::FrustumOnly:
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = false;
+            break;
+        case BenchmarkMode::FrustumCone:
+        default:
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = true;
+            break;
+        }
+        return mesh;
+    }
+
+    virtual void markLiveRuntimeMeshes(Impl::RuntimeMeshRequestSet& requests)override{
+        if(m_meshSkinningSystem)
+            m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
+    }
+
+    virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
+        return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
+    }
+
+private:
+    Impl::MeshSystem* m_meshSystem = nullptr;
+    Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
+    BenchmarkMode m_mode = BenchmarkMode::FrustumCone;
+    b8 m_registered = false;
+};
+};
+}
+
+AStringView BenchmarkModeName(in BenchmarkMode mode){
+    switch(mode){
+    case BenchmarkMode::NoCulling: return "no_culling";
+    case BenchmarkMode::FrustumOnly: return "frustum_only";
+    case BenchmarkMode::FrustumCone: return "frustum_cone";
+    default: return s_SkinningUnknownLabel;
+    }
+}
+
+AStringView BenchmarkViewName(in BenchmarkView view){
+    switch(view){
+    case BenchmarkView::Front: return "front";
+    case BenchmarkView::Back: return "back";
+    case BenchmarkView::Close: return "close";
+    case BenchmarkView::Far: return "far";
+    default: return s_SkinningUnknownLabel;
+    }
+}
+
+b8 PopulateSkinningBenchmarkScene(
+        in u32 characterCount,
+        in b8 staticPreview,
+        in SmokeModelRef model,
+        in SmokeMaterialRef material,
+        in Name skeletonObject,
+        in Float4 cameraPosition,
+        mut World world,
+        mut GlobalEntityIdVector skeletonEntities,
+        mut EntityID cameraEntity
+    ){
+        b8 ok = true;
+        native(in characterCount, in staticPreview, in model, in material, in skeletonObject, in cameraPosition, mut world, mut skeletonEntities, mut cameraEntity, mut ok){
+            auto activeCameraEntity = world.createEntity();
+            auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
+            activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, cameraPosition);
+            cameraEntity = activeCamera.camera;
+            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(world, -0.65f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
+            if(!activeCamera.camera.valid() || !directionalLight.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+                ok = false;
+            }
+            else{
+                skeletonEntities.reserve(characterCount);
+                Core::Alloc::ScratchArena scratchArena{Name(s_SmokeNameTestsSkinningCullingModelOwners)};
+                Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> modelOwners(scratchArena);
+                modelOwners.reserve(characterCount);
+                for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
+                    auto entity = world.createEntity();
+                    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+                    const SIMDVectorSingle position = staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
+                    StoreFloat(position, transform.position);
+                    transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
+                    auto& modelComponent = entity.addComponent<Impl::ModelComponent>();
+                    modelComponent.model = model;
+                    auto& renderer = entity.addComponent<Impl::RendererComponent>();
+                    renderer.material = material;
+                    modelOwners.push_back(entity.id());
+                }
+
+                SyncSmokeModelRuntimes(world);
+                for(const Core::ECS::EntityID owner : modelOwners){
+                    const Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(owner, skeletonObject, Impl::ModelObjectKind::Skeleton, world);
+                    if(!skeletonEntity.valid()){
+                        NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
+                        ok = false;
+                        break;
+                    }
+                    skeletonEntities.push_back(skeletonEntity);
+                }
+            }
+        }
+    return ok;
+}
+
+class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
+    public SkinningCullingBenchmarkProject(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_SkinningBenchmarkProjectName, SmokeRenderQualitySettings(), context);
+        this.m_entities = GlobalEntityIdVector(context.objectArena);
+        this.m_bindJoints = GlobalBindJointVector(context.objectArena);
+        this.m_gpuPassTimingProbe = GpuPassTimingProbe(s_SkinningBenchmarkProjectName);
+        this.m_staticPreview = ReadSmokeEnvironmentFlag(s_StaticPreviewEnv);
+        this.m_fastSmoke = !this.m_staticPreview && ReadSmokeEnvironmentFlag(s_FastSmokeEnv);
+        this.m_gpuTimingEnabled = ReadSmokeEnvironmentFlag(s_GpuTimingEnv);
+    }
+
+    public ~SkinningCullingBenchmarkProject(){
+        this.destroyWorld();
+    }
+
+    public b8 onStartup()override{
+        native{
+            if(!this->m_staticPreview)
+                this->m_context->setTelemetryCapture(Core::Telemetry::CaptureOptions::PerfOnly());
+            if(this->m_gpuTimingEnabled)
+                this->m_context->setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
+        }
+
+        native{
+            auto bindJoints = LoadSmokeSkeletonBindJoints(s_BenchmarkModel, s_SkinningBenchmarkProjectName, s_SmokeNameSkeleton, true, this->m_context->objectArena, this->m_context->assetManager);
+            if(!bindJoints){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
+                this->requestQuit();
+                return true;
+            }
+            this->m_bindJoints = Move(*bindJoints);
+            Impl::MeshSystem& meshSystem = *MakeNotNull(this->m_world->getSystem<Impl::MeshSystem>());
+            Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(this->m_world->getSystem<Impl::MeshSkinningSystem>());
+
+            this->m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
+
+            const u32 characterCount = this->m_staticPreview ? 1u : (this->m_fastSmoke ? s_FastSmokeCharacterCount : s_SkinningCharacterCount);
+            if(!PopulateSkinningBenchmarkScene(characterCount, this->m_staticPreview, s_BenchmarkModel, s_SkinningBenchmarkMaterial,
+                s_SmokeNameSkeleton, Float4(0.0f, s_SkinningCameraHeight, -s_FrontCameraDistance, 0.0f), *this->m_world, this->m_entities, this->m_cameraEntity)){
+                this->requestQuit();
+                return true;
+            }
+
+            if(this->m_staticPreview){
+                this->m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
+                this->configureCamera(BenchmarkView::Front);
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
+            }
+            else
+                this->configureCase();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(this->m_bindJoints.size()));
+        }
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.destroyWorld();
+        [essential] info("SkinningCullingBenchmark: shutdown");
+        if(!this.m_staticPreview){
+            if(!this.m_context.flushTelemetryUpload(true))
+                warning("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown");
+        }
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        f32 safeDelta = 1.0f / 60.0f;
+        if(IsFinite(delta) && delta > 0.0f)
+            safeDelta = delta;
+        if(this.m_gpuTimingEnabled)
+            this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
+        if(this.m_finished){
+            if(this.m_finishDrainFrames > 0u){
+                --this.m_finishDrainFrames;
+                return true;
+            }
+            this.requestQuit();
+            return true;
+        }
+
+        if(!this.m_staticPreview){
+            this.advanceCaseOrFinish();
+            if(this.m_finished)
+                return true;
+        }
+
+        this.m_totalTimeSeconds = this.m_totalTimeSeconds + cast<f64>(safeDelta);
+        b8 ticked = false;
+        native(in safeDelta, mut ticked){
+            for(usize entityIndex = 0u; entityIndex < this->m_entities.size(); ++entityIndex){
+                auto* pose = this->m_world->tryGetComponent<Impl::SkeletonPoseComponent>(this->m_entities[entityIndex]);
+                if(!pose)
+                    continue;
+                AnimateSkinningBenchmarkPoseJoints(this->m_bindJoints, static_cast<u32>(entityIndex), static_cast<f32>(this->m_totalTimeSeconds), this->m_staticPreview, pose->localJoints);
+            }
+            ticked = TickSmokeWorld(safeDelta, *this->m_world);
+        }
+        if(!ticked)
+            return false;
+        ++this.m_caseRenderedFrames;
+        return true;
+    }
+
+    private void destroyWorld(){
+        native{
+            if(!this->m_world.owner())
+                return;
+            this->m_runtimeMeshProvider.uninstall();
+            DestroySmokeSkinnedRenderWorld(*this->m_context, this->m_world);
+        }
+    }
+
+    private void requestQuit(){
+        if(this.m_quitRequested)
+            return;
+        this.m_quitRequested = true;
+        native{
+            if(this->m_context->requestQuit)
+                this->m_context->requestQuit();
+        }
+    }
+
+    private void configureCamera(in BenchmarkView view){
+        native(in view){
+            auto* transform = this->m_world->tryGetComponent<Impl::Scene::TransformComponent>(this->m_cameraEntity);
+            if(!transform)
+                return;
+
+            switch(view){
+            case BenchmarkView::Back:
+                transform->position = Float4(0.0f, s_SkinningCameraHeight, s_BackCameraDistance, 0.0f);
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), transform->rotation);
+                return;
+            case BenchmarkView::Close:
+                transform->position = Float4(0.0f, s_SkinningCameraHeight, -s_CloseCameraDistance, 0.0f);
+                transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+                return;
+            case BenchmarkView::Far:
+                transform->position = Float4(0.0f, s_SkinningCameraHeight, -s_FarCameraDistance, 0.0f);
+                transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+                return;
+            case BenchmarkView::Front:
+            default:
+                transform->position = Float4(0.0f, s_SkinningCameraHeight, -s_FrontCameraDistance, 0.0f);
+                transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+                return;
+            }
+        }
+    }
+
+    private u32 repeatCount()const{
+        if(this.m_fastSmoke)
+            return 1u;
+        return s_BenchmarkRepeatCount;
+    }
+
+    private usize caseCount()const{
+        if(this.m_fastSmoke)
+            return 1u;
+        return s_BenchmarkCaseCount;
+    }
+
+    private u32 warmupFrameCount()const{
+        if(this.m_fastSmoke)
+            return s_FastSmokeWarmupFrameCount;
+        return s_SkinningWarmupFrameCount;
+    }
+
+    private u32 sampleFrameCount()const{
+        if(this.m_fastSmoke)
+            return s_FastSmokeSampleFrameCount;
+        return s_SkinningSampleFrameCount;
+    }
+
+    private u32 finishDrainFrameCount()const{
+        if(this.m_fastSmoke)
+            return s_FastSmokeFinishDrainFrameCount;
+        return s_SkinningFinishDrainFrameCount;
+    }
+
+    private void configureCase(){
+        native{
+            const BenchmarkCase& benchmarkCase = s_BenchmarkCases[this->m_caseIndex];
+            this->m_runtimeMeshProvider.setMode(benchmarkCase.mode);
+            this->configureCamera(benchmarkCase.view);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), this->m_repeatIndex + 1u, this->repeatCount(), ConvertString(BenchmarkModeName(benchmarkCase.mode)), ConvertString(BenchmarkViewName(benchmarkCase.view)));
+        }
+    }
+
+    private void finishCase(){
+        native{
+            const BenchmarkCase& benchmarkCase = s_BenchmarkCases[this->m_caseIndex];
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
+                , this->m_repeatIndex + 1u
+                , this->repeatCount()
+                , ConvertString(BenchmarkModeName(benchmarkCase.mode))
+                , ConvertString(BenchmarkViewName(benchmarkCase.view))
+                , this->sampleFrameCount()
+            );
+        }
+    }
+
+    private void finishBenchmark(){
+        [essential] info("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}", this.repeatCount(), cast<u32>(this.caseCount()), this.warmupFrameCount(), this.sampleFrameCount());
+    }
+
+    private void advanceCaseOrFinish(){
+        if(this.m_caseRenderedFrames < this.warmupFrameCount() + this.sampleFrameCount())
+            return;
+
+        this.finishCase();
+        ++this.m_caseIndex;
+        this.m_caseRenderedFrames = 0u;
+
+        if(this.m_caseIndex >= this.caseCount()){
+            ++this.m_repeatIndex;
+            if(this.m_repeatIndex >= this.repeatCount()){
+                this.finishBenchmark();
+                this.m_finished = true;
+                this.m_finishDrainFrames = this.finishDrainFrameCount();
+                return;
+            }
+
+            this.m_caseIndex = 0u;
+        }
+
+        this.configureCase();
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private BenchmarkRuntimeMeshProvider m_runtimeMeshProvider = BenchmarkRuntimeMeshProvider();
+    private GlobalEntityIdVector m_entities;
+    private GlobalBindJointVector m_bindJoints;
+    private GpuPassTimingProbe m_gpuPassTimingProbe;
+    private f64 m_totalTimeSeconds = 0.0;
+    private usize m_caseIndex = 0u;
+    private EntityID m_cameraEntity = s_InvalidEntityId;
+    private u32 m_caseRenderedFrames = 0u;
+    private u32 m_finishDrainFrames = 0u;
+    private u32 m_repeatIndex = 0u;
+    private b8 m_gpuTimingEnabled;
+    private b8 m_finished = false;
+    private b8 m_quitRequested = false;
+    private b8 m_staticPreview;
+    private b8 m_fastSmoke;
+}
+
+native{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { 1280, 900 };
+}
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{
+    return NWB_TEXT("NWB Skinning Culling Benchmark");
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<NWB::Tests::Smoke::SkinningCullingBenchmarkProject>(context);
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

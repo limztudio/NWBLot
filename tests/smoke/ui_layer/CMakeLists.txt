@@ -10,23 +10,13 @@ set(_nwb_ui_smoke_default_timeout_seconds 90)
 math(EXPR _nwb_ui_smoke_default_ctest_timeout_seconds "${_nwb_ui_smoke_default_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
 
 nwb_declare_executable(nwb_ui_layer_smoke)
-nwb_target_adhd_sources(nwb_ui_layer_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/snapshots.adhd")
-target_sources(nwb_ui_layer_smoke PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/*.c"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.h"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
+nwb_target_adhd_sources(nwb_ui_layer_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/snapshots.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/entry.adhd"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES WIN32_EXECUTABLE ON DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}" VS_DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}")
 nwb_target_link_libraries_whole_archive(nwb_ui_layer_smoke nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene)
-target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui nwb_ui_widgets nwb_presentation_smoke_types)
+target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui nwb_ui_widgets nwb_presentation_smoke_types nwb_smoke_runtime_helpers)
 if(COMMAND nwb_copy_aftermath_runtime)
     nwb_copy_aftermath_runtime(nwb_ui_layer_smoke)
 endif()

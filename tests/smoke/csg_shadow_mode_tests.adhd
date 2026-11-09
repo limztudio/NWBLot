@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "presentation_types.adhd"
+#include "scene_types.adhd"
+
+native{
+#include <cstdlib>
+#include <gtest/gtest.h>
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#define ASSERT_TRUE(...) native{ ASSERT_TRUE(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 hasValue){
+    String nameCopy = String(name);
+    String valueCopy = String(value);
+    native(in nameCopy, in valueCopy, in hasValue){
+        ASSERT_EQ(hasValue ? ::setenv(nameCopy.c_str(), valueCopy.c_str(), 1) : ::unsetenv(nameCopy.c_str()), 0);
+    }
+}
+
+void VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations(){
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ATLAS", "open", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "", false);
+    CsgShadowMode initial = CsgShadowMode();
+    EXPECT_FALSE(initial.read(false));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "boundary64", true);
+    CsgShadowMode open = CsgShadowMode();
+    ASSERT_TRUE(open.read(false));
+    EXPECT_EQ(open.openCase, CsgShadowOpenCase::Boundary64);
+    EXPECT_EQ(open.openCaseName(), "boundary64");
+    CsgShadowMode openCaustic = CsgShadowMode();
+    EXPECT_FALSE(openCaustic.read(true));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "point", true);
+    CsgShadowMode openPoint = CsgShadowMode();
+    EXPECT_FALSE(openPoint.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "directional", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "finite", true);
+    CsgShadowMode openFinite = CsgShadowMode();
+    EXPECT_FALSE(openFinite.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "hard", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "unknown", true);
+    CsgShadowMode openUnknown = CsgShadowMode();
+    EXPECT_FALSE(openUnknown.read(false));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ATLAS", "analytic", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "uncut", true);
+    CsgShadowMode analyticUncut = CsgShadowMode();
+    EXPECT_TRUE(analyticUncut.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "moved", true);
+    CsgShadowMode analyticMoved = CsgShadowMode();
+    EXPECT_FALSE(analyticMoved.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "invalid", true);
+    CsgShadowMode analyticInvalid = CsgShadowMode();
+    EXPECT_FALSE(analyticInvalid.read(false));
+}
+
+native{
+TEST(CsgShadowMode, RejectsIncompatibleAtlasCombinations){
+    VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations();
+}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

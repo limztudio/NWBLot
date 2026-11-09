@@ -1,7 +1,7 @@
 nwb_declare_executable(nwb_reflection_smoke)
-target_sources(nwb_reflection_smoke PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
-)
+nwb_target_adhd_sources(nwb_reflection_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_project.adhd"
+        )
 target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
 nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
 # Only the temporal suite's light mutation needs its lit BXDF material, so other reflection runs keep the shared catalog.

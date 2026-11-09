@@ -67,6 +67,7 @@ LIT_BLURS = "blurs"
 LIT_RESET = "reset"
 LIT_HOME = "Home"
 LIT_UI_TEXTAREA_FIXTURE = "UI TextArea fixture"
+LIT_TEXTAREA_GRACEFUL_EXIT_TIMEOUT_SECONDS = 60.0
 LIT_CROSS_LINE_CLIPBOARD_TEXT = "f\nx\nabcde"
 LIT_CANONICAL_PASTE_TEXT = "ab\ncdef\nxy"
 
@@ -440,7 +441,7 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle)
+                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle, graceful_exit_timeout=LIT_TEXTAREA_GRACEFUL_EXIT_TIMEOUT_SECONDS)
                 require_normal_process_exit(exit_code, tail, LIT_UI_TEXTAREA_FIXTURE)
         finally:
             try:

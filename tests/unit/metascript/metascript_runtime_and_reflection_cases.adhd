@@ -1,0 +1,870 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 MetascriptRuntimeAndReflectionCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/metascript/suite.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/metascript/lexer.h>
+#include <core/metascript/literal_decoder.h>
+#include <core/metascript/parser.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_metascript_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_AssetVariable = "asset";
+constexpr AStringView s_NameField = "name";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Document = NWB::Core::Metascript::Document;
+using Value = NWB::Core::Metascript::Value;
+using MStringView = NWB::Core::Metascript::MStringView;
+using AString = NWB::Tests::TestAString;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DestinationArenaTag{};
+
+using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
+
+static void CheckParseFailsWithMessage(const MStringView source, MStringView expectedMessage){
+    DestinationArena arena;
+    Document document(arena.arena);
+
+    const b8 parsed = document.parse(source);
+    EXPECT_FALSE(parsed);
+    ASSERT_TRUE(document.hasErrors());
+    ASSERT_FALSE(document.errors().empty());
+
+    const auto& error = document.errors()[0u];
+    EXPECT_EQ(MStringView(error.message), expectedMessage);
+}
+
+TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_TRUE(document.structs().empty());
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
+
+    ASSERT_TRUE(document.parse(LiteralView("[custom(\"argument\")] struct Description{ [field] float value; };")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
+    EXPECT_EQ(document.findVariable("Description"), nullptr);
+    ASSERT_EQ(document.structs().size(), 1u);
+    EXPECT_NE(document.structs().find(LiteralView("Description")), document.structs().end());
+}
+
+TEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("number Parameters = 3; struct Parameters{ float value; }; Parameters runtime; runtime.value = 4;")));
+    ASSERT_EQ(document.structs().size(), 1u);
+    ASSERT_EQ(document.declarations().size(), 2u);
+    EXPECT_EQ(document.findVariable("Parameters")->asInteger(), 3);
+    const auto* declaration = document.findDeclaration("runtime");
+    ASSERT_NE(declaration, nullptr);
+    EXPECT_EQ(declaration->type, "Parameters");
+    EXPECT_EQ(declaration->variable, "runtime");
+    const Value* runtime = document.findVariable("runtime");
+    ASSERT_NE(runtime, nullptr);
+    ASSERT_TRUE(runtime->isMap());
+    EXPECT_EQ(runtime->findField("value")->asInteger(), 4);
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
+    EXPECT_EQ(document.findVariable("structs"), nullptr);
+    EXPECT_EQ(document.findVariable("instances"), nullptr);
+}
+
+TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
+    DestinationArena arena;
+    Document document(arena.arena);
+    {
+        AString source("struct Description{ float value; }; Description runtime;\n");
+        for(usize index = 0u; index < 128u; ++index){
+            Array<char, s_DecimalTextBufferBytes> indexText = {};
+            const AStringView indexView = FormatDecimal(index, indexText);
+            source.append("float extra");
+            source.append(indexView.data(), indexView.size());
+            source.append(";\n");
+        }
+        ASSERT_TRUE(document.parse(source));
+    }
+    ASSERT_EQ(document.declarations().size(), 129u);
+    const auto structure = document.structs().find(LiteralView("Description"));
+    ASSERT_NE(structure, document.structs().end());
+    const Value* fields = structure.value().findField("fields");
+    ASSERT_NE(fields, nullptr);
+    ASSERT_TRUE(fields->isList());
+    ASSERT_EQ(fields->asList().size(), 1u);
+    const Value* fieldName = fields->asList()[0u].findField(s_NameField);
+    ASSERT_NE(fieldName, nullptr);
+    EXPECT_EQ(fieldName->asString(), "value");
+    EXPECT_EQ(document.findDeclaration("runtime")->type, "Description");
+    ASSERT_NE(document.findVariable("runtime"), nullptr);
+    EXPECT_TRUE(document.findVariable("runtime")->isNull());
+}
+
+TEST(Metascript, StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces){
+    CheckParseFailsWithMessage("struct Duplicate{ float value; float value; };", "duplicate struct field declaration");
+    CheckParseFailsWithMessage("struct Duplicate{}; struct Duplicate{};", "duplicate struct declaration");
+    CheckParseFailsWithMessage("struct Description{}; Description runtime; Description runtime;", "duplicate variable declaration");
+    CheckParseFailsWithMessage("number value; text value;", "duplicate variable declaration");
+}
+
+TEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("struct Old{ float value; }; Old previous;")));
+    ASSERT_FALSE(document.parse(LiteralView("struct Partial{}; number value; number value;")));
+    ASSERT_TRUE(document.hasErrors());
+    ASSERT_TRUE(document.parse(LiteralView("text current = \"new\";")));
+    EXPECT_FALSE(document.hasErrors());
+    EXPECT_TRUE(document.structs().empty());
+    ASSERT_EQ(document.declarations().size(), 1u);
+    EXPECT_EQ(document.findDeclaration("previous"), nullptr);
+    EXPECT_EQ(document.findVariable("previous"), nullptr);
+    EXPECT_EQ(document.findVariable("value"), nullptr);
+    EXPECT_EQ(document.findVariable("current")->asString(), "new");
+    ASSERT_TRUE(document.parse(LiteralView("")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_EQ(document.findVariable("current"), nullptr);
+}
+
+TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
+    struct InvalidTargetCase{
+        MStringView source;
+        MStringView message;
+        i64 retainedValue;
+    };
+    const Array<InvalidTargetCase, 2u> cases = {
+        InvalidTargetCase{ "float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7 },
+        InvalidTargetCase{ "float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9 },
+    };
+    for(const auto& testCase : cases){
+        SCOPED_TRACE(testCase.message.data());
+        DestinationArena arena;
+        Document document(arena.arena);
+        EXPECT_FALSE(document.parse(testCase.source));
+        ASSERT_EQ(document.errors().size(), 1u);
+        EXPECT_EQ(document.errors()[0u].line, 2u);
+        EXPECT_EQ(document.errors()[0u].column, 1u);
+        EXPECT_EQ(MStringView(document.errors()[0u].message), testCase.message);
+        const Value* asset = document.findVariable(s_AssetVariable);
+        ASSERT_NE(asset, nullptr);
+        ASSERT_TRUE(asset->isInteger());
+        EXPECT_EQ(asset->asInteger(), testCase.retainedValue);
+        EXPECT_EQ(document.findVariable("missing"), nullptr);
+    }
+}
+
+
+TEST(Metascript, UnicodeCharLiteralRejectsWideValueBeforeNarrowing){
+    using NWB::Core::Metascript::LiteralDecoder;
+    constexpr b8 rejectsWide = []()noexcept{
+        i64 value = 7;
+        return !LiteralDecoder::TryDecodeCharLiteral("'\\U100000000'", value) && value == 7;
+    }();
+    static_assert(rejectsWide);
+
+    i64 value = 7;
+    EXPECT_FALSE(LiteralDecoder::TryDecodeCharLiteral("'\\UD800'", value));
+    EXPECT_EQ(value, 7);
+    EXPECT_FALSE(LiteralDecoder::TryDecodeCharLiteral("'\\U110000'", value));
+    EXPECT_EQ(value, 7);
+    EXPECT_TRUE(LiteralDecoder::TryDecodeCharLiteral("'\\U10FFFF'", value));
+    EXPECT_EQ(value, 0x10FFFF);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/metascript/parser.h>
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/metascript/generated/compact_string.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_metascript_value_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_ItemsField = NWB::Tests::s_MetascriptValueItemsField;
+using Value = NWB::Core::Metascript::Value;
+using MStringView = NWB::Core::Metascript::MStringView;
+using AString = NWB::Tests::TestAString;
+struct SourceArenaTag{};
+struct DestinationArenaTag{};
+using SourceArena = NWB::Tests::TestArena<SourceArenaTag>;
+using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void CheckStringListElement(const Value& value, const MStringView expected){
+    ASSERT_TRUE(value.isString());
+    EXPECT_EQ(value.asString(), expected);
+}
+
+static void CheckSingleStringListValue(const Value& value, const MStringView text){
+    ASSERT_TRUE(value.isList());
+    ASSERT_EQ(value.asList().size(), 1u);
+    CheckStringListElement(value.asList()[0u], text);
+}
+
+template<typename ArenaT>
+static void MakeSingleStringList(Value& list, ArenaT& arena, const MStringView text){
+    list.makeList();
+    list.append(Value(text, arena.arena));
+}
+
+TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
+    SourceArena sourceArena;
+    DestinationArena destinationArena;
+    const AString text(128u, 'm');
+
+    Value source(text, sourceArena.arena);
+    Value destination(destinationArena.arena);
+
+    destination = Move(source);
+
+    EXPECT_TRUE(source.isNull());
+    EXPECT_EQ(destination.asString(), text);
+}
+
+TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena){
+    SourceArena sourceArena;
+    DestinationArena destinationArena;
+    const AString text(128u, 'c');
+
+    Value source(sourceArena.arena);
+    source.makeMap();
+    Value& list = source.field(s_ItemsField);
+    MakeSingleStringList(list, sourceArena, text);
+
+    Value destination(destinationArena.arena);
+
+    destination = source;
+
+    EXPECT_TRUE(source.isMap());
+    const Value* copiedList = destination.findField(s_ItemsField);
+    ASSERT_NE(copiedList, nullptr);
+    CheckSingleStringListValue(*copiedList, text);
+}
+
+TEST(Metascript, CrossArenaListConcatCopiesIntoResultArena){
+    SourceArena sourceArena;
+    DestinationArena destinationArena;
+    const AString text(128u, 'p');
+
+    Value source(sourceArena.arena);
+    MakeSingleStringList(source, sourceArena, text);
+
+    Value destination(destinationArena.arena);
+    destination.makeList();
+
+    Value result = destination + source;
+
+    CheckSingleStringListValue(result, text);
+}
+
+TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
+    SourceArena sourceArena;
+    DestinationArena destinationArena;
+    const AString text(128u, 'a');
+
+    Value source(text, sourceArena.arena);
+    Value destination(destinationArena.arena);
+    destination.makeList();
+
+    destination.append(Move(source));
+
+    EXPECT_TRUE(source.isNull());
+    CheckSingleStringListValue(destination, text);
+}
+
+TEST(Metascript, ListSelfAppendCopiesOriginalValues){
+    DestinationArena arena;
+    const AString text(128u, 's');
+
+    Value list(arena.arena);
+    MakeSingleStringList(list, arena, text);
+
+    list += list;
+
+    ASSERT_EQ(list.asList().size(), 2u);
+    CheckStringListElement(list.asList()[0u], text);
+    CheckStringListElement(list.asList()[1u], text);
+}
+
+TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
+    DestinationArena arena;
+    const AString text(128u, 'v');
+
+    Value list(arena.arena);
+    MakeSingleStringList(list, arena, text);
+
+    list.append(Move(list));
+
+    ASSERT_TRUE(list.isList());
+    ASSERT_EQ(list.asList().size(), 2u);
+    CheckStringListElement(list.asList()[0u], text);
+    ASSERT_TRUE(list.asList()[1u].isList());
+    ASSERT_EQ(list.asList()[1u].asList().size(), 1u);
+    const Value& nestedText = list.asList()[1u].asList()[0u];
+    CheckStringListElement(nestedText, text);
+}
+
+TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
+    DestinationArena arena;
+    const AString text(128u, 'e');
+
+    Value list(arena.arena);
+    MakeSingleStringList(list, arena, text);
+
+    list.append(Move(list.asList()[0u]));
+
+    ASSERT_TRUE(list.isList());
+    ASSERT_EQ(list.asList().size(), 2u);
+    EXPECT_TRUE(list.asList()[0u].isNull());
+    CheckStringListElement(list.asList()[1u], text);
+}
+
+TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
+    DestinationArena arena;
+    const AString text(128u, 'r');
+
+    Value list(arena.arena);
+    MakeSingleStringList(list, arena, text);
+
+    list += list.asList()[0u];
+
+    ASSERT_TRUE(list.isList());
+    ASSERT_EQ(list.asList().size(), 2u);
+    CheckStringListElement(list.asList()[0u], text);
+    CheckStringListElement(list.asList()[1u], text);
+}
+
+TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
+    constexpr usize s_InitialCount = NWB::Tests::s_MetascriptValueInitialCount;
+    const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
+    for(const usize sourceIndex : sourceIndices){
+        for(const b8 moveSource : { false, true }){
+            DestinationArena arena;
+            Value list(arena.arena);
+            list.makeList();
+            list.asList().reserve(s_InitialCount);
+            const usize originalCount = list.asList().capacity();
+            for(usize index = 0u; index < originalCount; ++index)
+                list.append(Value(static_cast<i64>(index), arena.arena));
+
+            if(moveSource)
+                list.append(Move(list.asList()[sourceIndex]));
+            else
+                list += list.asList()[sourceIndex];
+
+            ASSERT_EQ(list.asList().size(), originalCount + 1u);
+            EXPECT_EQ(list.asList().back().asInteger(), static_cast<i64>(sourceIndex));
+            for(usize index = 0u; index < originalCount; ++index){
+                if(moveSource && index == sourceIndex)
+                    EXPECT_TRUE(list.asList()[index].isNull());
+                else
+                    EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
+            }
+        }
+    }
+}
+
+TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
+    constexpr usize s_InitialCount = NWB::Tests::s_MetascriptValueInitialCount;
+    const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
+    const AString text(128u, 'n');
+    for(const usize sourceIndex : sourceIndices){
+        DestinationArena arena;
+        Value list(arena.arena);
+        list.makeList();
+        list.asList().reserve(s_InitialCount);
+        const usize originalCount = list.asList().capacity();
+        for(usize index = 0u; index < originalCount; ++index)
+            list.append(Value(static_cast<i64>(index), arena.arena));
+        MakeSingleStringList(list.asList()[sourceIndex], arena, text);
+
+        list += list.asList()[sourceIndex];
+
+        ASSERT_EQ(list.asList().size(), originalCount + 1u);
+        EXPECT_GT(list.asList().capacity(), originalCount);
+        CheckStringListElement(list.asList().back(), text);
+        for(usize index = 0u; index < originalCount; ++index){
+            if(index == sourceIndex)
+                CheckSingleStringListValue(list.asList()[index], text);
+            else
+                EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/metascript/parser.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_metascript_reader_failure_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core::Metascript;
+
+struct ReaderArenaTag{};
+using ReaderArena = NWB::Tests::TestArena<ReaderArenaTag>;
+
+class UnexpectedReadFailure final : public GeneralException{
+public:
+    [[nodiscard]] virtual const char* what()const noexcept override{ return "unexpected reader failure"; }
+};
+
+class ThrowingReader final : public IMetaReader{
+public:
+    [[nodiscard]] virtual Expected<usize> read(MChar*, usize)override{ throw UnexpectedReadFailure{}; }
+};
+
+class EndOfFileReader final : public IMetaReader{
+public:
+    [[nodiscard]] virtual Expected<usize> read(MChar*, usize)noexcept override{ return 0u; }
+};
+
+class RejectedReader final : public IMetaReader{
+public:
+    explicit RejectedReader(const b8 oversized)noexcept
+        : m_oversized(oversized)
+    {}
+
+
+public:
+    [[nodiscard]] virtual Expected<usize> read(MChar*, const usize maxBytes)noexcept override{
+        if(m_oversized)
+            return maxBytes + 1u;
+        return MakeUnexpected(Failure{});
+    }
+
+
+private:
+    b8 m_oversized;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Metascript, UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors){
+    ReaderArena arena;
+    Document document(arena.arena);
+    ThrowingReader reader;
+
+    EXPECT_THROW(EXPECT_TRUE(document.parse(reader)), UnexpectedReadFailure);
+    EXPECT_FALSE(document.hasErrors());
+}
+
+TEST(Metascript, ReportedReaderFailureRemainsAnExplicitParseError){
+    ReaderArena arena;
+    Document document(arena.arena);
+    RejectedReader reader(false);
+
+    EXPECT_FALSE(document.parse(reader));
+    ASSERT_EQ(document.errors().size(), 1u);
+    EXPECT_EQ(document.errors()[0u].message, "read error");
+}
+
+TEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure){
+    ReaderArena arena;
+    Document document(arena.arena);
+    EndOfFileReader reader;
+
+    ASSERT_TRUE(document.parse(LiteralView("struct Previous{}; number prior;")));
+    EXPECT_TRUE(document.parse(reader));
+    EXPECT_FALSE(document.hasErrors());
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_TRUE(document.structs().empty());
+    EXPECT_EQ(document.findVariable("prior"), nullptr);
+}
+
+TEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer){
+    ReaderArena arena;
+    Document document(arena.arena);
+    RejectedReader reader(true);
+
+    EXPECT_FALSE(document.parse(reader));
+    ASSERT_EQ(document.errors().size(), 1u);
+    EXPECT_EQ(document.errors()[0u].message, "reader returned more bytes than requested");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_METASCRIPT_GENERATED_TESTS)
+
+#include <tests/unit/metascript/generated/reflection_container.adhd.h>
+
+#include <core/metascript/value.h>
+
+#include <global/algorithm.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_reflection_container_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames){
+    NWB::AdhdCompilerTestsDetail::AdhdTestArena arena;
+    using NWB::Core::Metascript::MStringView;
+    using NWB::Core::Metascript::Value;
+    constexpr Array<char, 3u> invalidBytes = { 'b', '\0', 'd' };
+    const MStringView invalid(invalidBytes.data(), invalidBytes.size());
+    Value input(arena.arena);
+    auto& names = input.field("names");
+    names.append(Value(MStringView("first"), arena.arena));
+    names.append(Value(invalid, arena.arena));
+    names.append(Value(i64(7), arena.arena));
+    names.append(Value(MStringView("last"), arena.arena));
+    auto& fixed = input.field("fixedNames");
+    fixed.append(Value(MStringView("fixed/first"), arena.arena));
+    fixed.append(Value(invalid, arena.arena));
+    fixed.append(Value(MStringView("fixed/last"), arena.arena));
+    auto& bounded = input.field("boundedNames");
+    bounded.append(Value(invalid, arena.arena));
+    bounded.append(Value(MStringView("bounded/first"), arena.arena));
+    bounded.append(Value(MStringView("bounded/last"), arena.arena));
+    auto& counts = input.field("counts");
+    counts.field("valid").setInteger(9);
+    counts.field(invalid).setInteger(3);
+    counts.field("wrong_type").setString("not a number");
+    auto& assets = input.field("assets");
+    assets.field("valid").setString("project/asset");
+    assets.field(invalid).setString("project/ignored");
+    assets.field("invalid_value").setString(invalid);
+    assets.field("wrong_type").setInteger(3);
+    auto& enumAssets = input.field("enumAssets");
+    enumAssets.field("Valid").setString("project/enum_asset");
+    enumAssets.field("unknown").setString("project/ignored_enum");
+
+    NWB::Tests::ReflectionContainerFixture value;
+    value.fixedNames[1u] = Name("fixed/retained");
+    ASSERT_TRUE(value.deserializeNwb(input));
+    ASSERT_EQ(value.names.size(), 2u);
+    EXPECT_EQ(value.names[0u], Name("first"));
+    EXPECT_EQ(value.names[1u], Name("last"));
+    EXPECT_EQ(value.fixedNames[0u], Name("fixed/first"));
+    EXPECT_EQ(value.fixedNames[1u], Name("fixed/retained"));
+    EXPECT_EQ(value.fixedNames[2u], Name("fixed/last"));
+    ASSERT_EQ(value.boundedNames.size(), 2u);
+    EXPECT_EQ(value.boundedNames[0u], Name("bounded/first"));
+    EXPECT_EQ(value.boundedNames[1u], Name("bounded/last"));
+    ASSERT_EQ(value.counts.size(), 1u);
+    const auto count = value.counts.find(Name("valid"));
+    ASSERT_NE(count, value.counts.end());
+    EXPECT_EQ(count.value(), 9u);
+    ASSERT_EQ(value.assets.size(), 1u);
+    const auto asset = value.assets.find(Name("valid"));
+    ASSERT_NE(asset, value.assets.end());
+    EXPECT_EQ(asset.value().name(), Name("project/asset"));
+    ASSERT_EQ(value.enumAssets.size(), 1u);
+    Vector<Name, NWB::Core::Metascript::MetaArena> dependencies(arena.arena);
+    ASSERT_TRUE(NWB::Tests::ReflectionContainerFixture::extractNwbAssetDependencies(input, [&](const Name& name){ dependencies.push_back(name); }));
+    ASSERT_EQ(dependencies.size(), 2u);
+    EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [](const Name& name)noexcept{ return name == Name("project/asset"); }), dependencies.end());
+    EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [](const Name& name)noexcept{ return name == Name("project/enum_asset"); }), dependencies.end());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/metascript/generated/compact_string.adhd.h>
+#include <tests/unit/metascript/generated/builtin_shadow_global.adhd.h>
+
+#include <global/floating_point_environment.h>
+#include <tests/common/floating_point_environment_guard.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText){
+    const ACompactString value("Find\\NEEDLE");
+    EXPECT_EQ(NWB::Tests::FindCompact(value), 5u);
+    EXPECT_EQ(NWB::Tests::FirstCompact(value), static_cast<u8>('f'));
+    EXPECT_EQ(NWB::Tests::LastCompact(value), static_cast<u8>('e'));
+    EXPECT_EQ(NWB::Tests::FindCompact(ACompactString("missing")), ACompactString::s_NPos);
+}
+
+
+TEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce){
+    i32 counter = 1;
+    EXPECT_FLOAT_EQ(NWB::Tests::LerpWithCounter(counter), 6.0f);
+    EXPECT_EQ(counter, 2);
+}
+
+
+struct LerpMoveOnly{
+    i32 value = 10;
+    LerpMoveOnly() = default;
+    explicit LerpMoveOnly(i32 v) : value(v){}
+    LerpMoveOnly(const LerpMoveOnly&) = delete;
+    LerpMoveOnly(LerpMoveOnly&&) = default;
+    LerpMoveOnly operator-(const LerpMoveOnly& rhs)&&{ return LerpMoveOnly(value - rhs.value); }
+    LerpMoveOnly operator*(LerpMoveOnly&& rhs)&&{ return LerpMoveOnly(value * rhs.value); }
+    LerpMoveOnly operator+(LerpMoveOnly&& rhs)&{ return LerpMoveOnly(value + rhs.value); }
+    LerpMoveOnly operator+(LerpMoveOnly&& rhs)&&{ return LerpMoveOnly(value + rhs.value + 100); }
+};
+
+TEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories){
+    LerpMoveOnly value(2);
+    const LerpMoveOnly result = NWB::Tests::LerpMoveOnly(value);
+    EXPECT_EQ(result.value, 82);
+    EXPECT_EQ(value.value, 2);
+}
+
+
+TEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode){
+    EXPECT_EQ(NWB::Tests::CallShadowedMax(3, 7), -4);
+}
+
+
+TEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd){
+    EXPECT_FLOAT_EQ(NWB::Tests::CallShadowedVectorMax(), -4.0f);
+}
+
+
+TEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation){
+    EXPECT_FLOAT_EQ(NWB::Tests::CallBuiltinVectorMin(), 3.0f);
+}
+
+
+TEST(AdhdCompiler, LocalCallableShadowsBuiltin){
+    EXPECT_EQ(NWB::Tests::CallShadowedLocalMin(), 17);
+}
+
+
+TEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity){
+    EXPECT_FLOAT_EQ(NWB::Tests::CallNestedShadowedVector(), -4.0f);
+}
+
+
+TEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply){
+    EXPECT_FLOAT_EQ(NWB::Tests::CallShadowedMatrixMul(), 3.0f);
+}
+
+
+TEST(AdhdCompiler, LocalCallableShadowsSimdReduction){
+    EXPECT_FLOAT_EQ(NWB::Tests::CallShadowedLocalDot(), -4.0f);
+}
+
+
+TEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant){
+    EXPECT_EQ(NWB::Tests::CallShadowedEntityConstant(37), 37);
+}
+
+
+TEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves){
+    EXPECT_TRUE(NWB::Tests::ReadBuiltinEntityConstant() == NWB::Core::ECS::s_InvalidEntityId);
+}
+
+
+TEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference){
+    EXPECT_EQ(NWB::Tests::ReadShadowedGlobalConstant(), 44);
+}
+
+
+TEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory){
+    const LerpMoveOnly result = NWB::Tests::LerpTemporary<LerpMoveOnly>();
+    EXPECT_EQ(result.value, 110);
+}
+
+
+TEST(AdhdCompiler, TrimViewBorrowsLocalCompactString){
+    EXPECT_EQ(NWB::Tests::TrimLocalCompact(), 7u);
+}
+
+
+TEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation){
+    i32 recvCounter = 0;
+    i32 posCounter = 0;
+    i32 countCounter = 0;
+    const AString result = NWB::Tests::ExtractLongStringSubstrOnce(recvCounter, posCounter, countCounter);
+    EXPECT_EQ(recvCounter, 1);
+    EXPECT_EQ(posCounter, 1);
+    EXPECT_EQ(countCounter, 1);
+    EXPECT_EQ(result.size(), 72u);
+    EXPECT_EQ(AStringView(result.data(), result.size()), AStringView("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_tail_segm"));
+
+    const ACompactString compact("Header/SubstrPayload/Tail");
+    const ACompactString sliced = NWB::Tests::ExtractCompactSubstr(compact, 7u, 13u);
+    EXPECT_EQ(sliced.view(), AStringView("substrpayload"));
+}
+
+
+TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation){
+    static constexpr char s_ViewBytes[] = { static_cast<char>(0x80u), static_cast<char>(0x7fu), static_cast<char>(0xffu) };
+    static constexpr char s_CompactBytes[] = { static_cast<char>(0x80u), static_cast<char>(0xfeu), '\0' };
+    const AStringView viewValue(s_ViewBytes, sizeof(s_ViewBytes));
+    const ACompactString compactValue(s_CompactBytes);
+
+    const u32 expected = (0x80u + 0xffu + 0x80u + 0xfeu)
+        + static_cast<u32>(1000 + 0x80)
+        + static_cast<u32>(2000 + 0xfe)
+        + (0x40u + 0x81u + 0x80u);
+    EXPECT_EQ(NWB::Tests::ExerciseHighByteStringOps(viewValue, compactValue), expected);
+    EXPECT_EQ(NWB::Tests::BorrowLocalStringAcrossValueCall(), 76u + 72u);
+}
+
+
+TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    const NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+    volatile u32 snan32 = 0x7f800123u;
+    volatile u64 snan64 = 0x7ff0000000000123ull;
+    const SIMDVectorSingle inactive32 = VectorSetInt(0u, 0u, 0u, snan32);
+    const SIMDVectorSingle shortCircuit32 = VectorSetInt(0x3f800000u, snan32, 0u, snan32);
+    const SIMDVectorSingle active32 = VectorSetInt(0u, snan32, 0u, 0u);
+    const SIMDVectorDouble inactive64 = VectorDoubleSetInt(0ull, 0ull, 0ull, snan64);
+    const SIMDVectorDouble shortCircuit64 = VectorDoubleSetInt(0x3ff0000000000000ull, snan64, 0ull, snan64);
+    const SIMDVectorDouble active64 = VectorDoubleSetInt(0ull, snan64, 0ull, 0ull);
+
+    for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::AnyLaneGreater3Single(inactive32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::AnyLaneGreater3Single(shortCircuit32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::AnyLaneGreater3Single(active32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::AnyLaneGreater3Double(inactive64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::AnyLaneGreater3Double(shortCircuit64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::AnyLaneGreater3Double(active64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::AnyLaneGreater2Single(shortCircuit32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::FiniteLane3Single(inactive32));
+        EXPECT_FALSE(NWB::Tests::FiniteLane3Single(active32));
+        EXPECT_TRUE(NWB::Tests::FiniteLane3Double(inactive64));
+        EXPECT_FALSE(NWB::Tests::FiniteLane3Double(active64));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

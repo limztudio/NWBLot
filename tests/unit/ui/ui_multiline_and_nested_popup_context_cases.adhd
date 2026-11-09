@@ -1,0 +1,1692 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiMultilineAndNestedPopupContextCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_multiline_text_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+constexpr AStringView s_NextLine = "\xC2\x85";
+constexpr AStringView s_LineSeparator = "\xE2\x80\xA8";
+constexpr AStringView s_ParagraphSeparator = "\xE2\x80\xA9";
+constexpr AStringView s_ThreeByteScalar = "\xED\x95\x9C";
+constexpr AStringView s_FourByteScalar = "\xF0\x9F\x92\xBB";
+
+constexpr AStringView s_BorrowedSourceText = "prefix a\r\nb\tz suffix";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes){
+    Tests::TestArena arena;
+    const Array<AStringView, 5> cases{ "", "\n", "\n\n", "\nfirst\n", "first\n\nlast\n" };
+    for(const AStringView text : cases){
+        SCOPED_TRACE(text);
+        EXPECT_TRUE(ValidateMultilineText(text));
+        auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        ASSERT_TRUE(normalized);
+        const auto& output = *normalized;
+        EXPECT_EQ(AStringView(output.data(), output.size()), text);
+        EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
+    }
+}
+
+TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNormalization){
+    constexpr u32 s_AsciiTilde = 0x7Eu;
+    Tests::TestArena arena;
+    for(u32 scalar = 0u; scalar < s_Utf8OneByteMaxExclusive; ++scalar){
+        if(scalar > s_UnicodeSpace && scalar < s_AsciiTilde)
+            continue;
+        SCOPED_TRACE(scalar);
+        const Array<char, 3> bytes{ 'a', static_cast<char>(scalar), 'b' };
+        const AStringView text(bytes.data(), 3u);
+        const b8 canonical = scalar == s_UnicodeLineFeed || (scalar >= s_UnicodeSpace && scalar < s_UnicodeDelete);
+        EXPECT_EQ(ValidateMultilineText(text), canonical);
+        const b8 normalizable = canonical || scalar == s_UnicodeTab || scalar == s_UnicodeCarriageReturn;
+        auto normalized = NormalizeMultilineText(arena.arena, text, 3u);
+        EXPECT_EQ(normalized.has_value(), normalizable);
+        if(normalizable){
+            ASSERT_TRUE(normalized);
+            AString<Core::Alloc::GlobalArena> output(Move(*normalized));
+            const char replacement = scalar == s_UnicodeTab ? ' ' : scalar == s_UnicodeCarriageReturn ? '\n' : static_cast<char>(scalar);
+            const Array<char, 3> expected{ 'a', replacement, 'b' };
+            EXPECT_EQ(AStringView(output.data(), output.size()), AStringView(expected.data(), 3u));
+            EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
+        }
+        else{
+            ASSERT_FALSE(normalized);
+            EXPECT_EQ(normalized.error(), EditTextStatus::InvalidText);
+        }
+    }
+}
+
+TEST(UiMultilineText, RejectsEveryC1ControlExceptNelDuringNormalization){
+    constexpr u32 s_Utf8C1LeadByte = 0xC2u;
+    Tests::TestArena arena;
+    for(u32 scalar = s_Utf8OneByteMaxExclusive; scalar <= s_UnicodeC1Last; ++scalar){
+        SCOPED_TRACE(scalar);
+        const Array<char, 4> bytes{ 'a', static_cast<char>(s_Utf8C1LeadByte), static_cast<char>(scalar), 'b' };
+        const AStringView text(bytes.data(), 4u);
+        EXPECT_FALSE(ValidateMultilineText(text));
+        auto normalized = NormalizeMultilineText(arena.arena, text, 4u);
+        if(scalar == s_UnicodeNextLine){
+            ASSERT_TRUE(normalized);
+            EXPECT_EQ(*normalized, "a\nb");
+        }
+        else
+            EXPECT_EQ(normalized, MakeUnexpected(EditTextStatus::InvalidText));
+    }
+}
+
+TEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSeparator){
+    struct SeparatorCase{
+        AStringView source;
+        AStringView expected;
+    };
+    const Array<SeparatorCase, 6> cases{
+        SeparatorCase{ "\t", " " }, SeparatorCase{ "\r", "\n" }, SeparatorCase{ "\r\n", "\n" }, SeparatorCase{ s_NextLine, "\n" },
+        SeparatorCase{ s_LineSeparator, "\n" }, SeparatorCase{ s_ParagraphSeparator, "\n" }
+    };
+    Tests::TestArena arena;
+    for(const SeparatorCase& test : cases){
+        SCOPED_TRACE(test.source);
+        EXPECT_FALSE(ValidateMultilineText(test.source));
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, 1u);
+        ASSERT_TRUE(normalized);
+        const auto& output = *normalized;
+        EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
+        EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
+    }
+}
+
+TEST(UiMultilineText, PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizingBreaks){
+    struct LineCase{
+        AStringView source;
+        AStringView expected;
+    };
+    const Array<LineCase, 7> cases{
+        LineCase{ "\r\r\n", "\n\n" }, LineCase{ "\r\n\r", "\n\n" }, LineCase{ "\n\r\n", "\n\n" },
+        LineCase{ "\r\n\r\n", "\n\n" }, LineCase{ "\r\nfirst\r\n\r\nlast\r", "\nfirst\n\nlast\n" },
+        LineCase{ "\xC2\x85\xE2\x80\xA8\xE2\x80\xA9", "\n\n\n" }, LineCase{ "last\r\n", "last\n" },
+    };
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output(arena.arena);
+    for(const LineCase& test : cases){
+        SCOPED_TRACE(test.source);
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
+        EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
+        EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
+    }
+}
+
+TEST(UiMultilineText, UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBytes){
+    const Array<AStringView, 12> cases{
+        "\xC2\xA0", "\xDF\xBF", "\xE0\xA0\x80", "\xED\x9F\xBF", "\xEE\x80\x80",
+        "\xEF\xBF\xBF", "\xF0\x90\x80\x80", "\xF4\x8F\xBF\xBF",
+        "\xE2\x80\xA7", "\xE2\x80\xAA", "\xE2\x80\x8B", "\xE2\x80\x8D",
+    };
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output(arena.arena);
+    for(const AStringView text : cases){
+        SCOPED_TRACE(text);
+        EXPECT_TRUE(ValidateMultilineText(text));
+        auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
+        EXPECT_EQ(AStringView(output.data(), output.size()), text);
+    }
+}
+
+TEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequences){
+    const Array<AStringView, 26> cases{
+        "\x80", "\xBF", "\xC0\x80", "\xC0\xAF", "\xC1\xBF", "\xE0\x80\x80", "\xF0\x80\x80\x80",
+        "\xED\xA0\x80", "\xED\xBF\xBF", "\xF4\x90\x80\x80", "\xF5\x80\x80\x80", "\xFE", "\xFF",
+        "\xC2", "\xE2", "\xE2\x82", "\xF0", "\xF0\x9F", "\xF0\x9F\x92",
+        "\xC2 ", "\xE2\x28\xA1", "\xF0\x28\x8C\xBC", "\xE2\x82" "x",
+        "\xF8\x88\x80\x80\x80", "valid\r\n\xED\xA0\x80", AStringView("a\0b", 3u)
+    };
+    Tests::TestArena arena;
+    for(const AStringView text : cases){
+        SCOPED_TRACE(text);
+        EXPECT_FALSE(ValidateMultilineText(text));
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 128u), MakeUnexpected(EditTextStatus::InvalidText));
+    }
+}
+
+TEST(UiMultilineText, RejectedControlsAfterNormalizedPrefixesFailWithInvalidText){
+    const Array<AStringView, 7> cases{ "prefix\r\n\t\x01", "prefix\r\n\v", "prefix\r\n\f", "prefix\xC2\x85\x7F", "prefix\xE2\x80\xA8\xC2\x80", "prefix\xE2\x80\xA9\xC2\x9F", AStringView("prefix\r\n\0tail", 13u) };
+    Tests::TestArena arena;
+    for(const AStringView text : cases){
+        SCOPED_TRACE(text);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 64u), MakeUnexpected(EditTextStatus::InvalidText));
+    }
+}
+
+TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
+    struct BudgetCase{
+        AStringView source;
+        AStringView expected;
+    };
+    const Array<BudgetCase, 7> cases{
+        BudgetCase{ "a\r\nb", "a\nb" }, BudgetCase{ "\r\n\r\n", "\n\n" }, BudgetCase{ "\xE2\x80\xA8\xE2\x80\xA9", "\n\n" },
+        BudgetCase{ "\xC2\x85\t", "\n " }, BudgetCase{ s_ThreeByteScalar, s_ThreeByteScalar },
+        BudgetCase{ s_FourByteScalar, s_FourByteScalar },
+        BudgetCase{ "\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n " }
+    };
+    Tests::TestArena arena;
+    for(const BudgetCase& test : cases){
+        SCOPED_TRACE(test.source);
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        ASSERT_TRUE(normalized);
+        const auto& output = *normalized;
+        EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, test.source, test.expected.size() - 1u), MakeUnexpected(EditTextStatus::TooLarge));
+        EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
+    }
+}
+
+TEST(UiMultilineText, ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput){
+    Tests::TestArena arena;
+    const Array<AStringView, 7> cases{ "a", "\n", "\r\n", "\t", s_NextLine, s_LineSeparator, s_ParagraphSeparator };
+    for(const AStringView text : cases){
+        SCOPED_TRACE(text);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 0u), MakeUnexpected(EditTextStatus::TooLarge));
+    }
+    auto nullText = NormalizeMultilineText(arena.arena, AStringView{}, 0u);
+    ASSERT_TRUE(nullText);
+    EXPECT_TRUE(nullText->empty());
+    EXPECT_TRUE(ValidateMultilineText(AStringView{}));
+    auto emptyText = NormalizeMultilineText(arena.arena, "", 0u);
+    ASSERT_TRUE(emptyText);
+    EXPECT_TRUE(emptyText->empty());
+}
+
+TEST(UiMultilineText, SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets){
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output("a\r\nb\t\xED\x95\x9C\xE2\x80\xA9", arena.arena);
+    const AStringView whole(output.data(), output.size());
+    auto normalizedWhole = NormalizeMultilineText(arena.arena, whole, 8u);
+    ASSERT_TRUE(normalizedWhole);
+    output = Move(*normalizedWhole);
+    EXPECT_EQ(output, "a\nb \xED\x95\x9C\n");
+
+    output.assign(s_BorrowedSourceText);
+    const AStringView middle(output.data() + 7u, 6u);
+    auto normalizedMiddle = NormalizeMultilineText(arena.arena, middle, 5u);
+    ASSERT_TRUE(normalizedMiddle);
+    output = Move(*normalizedMiddle);
+    EXPECT_EQ(output, "a\nb z");
+
+    output.assign("prefix\xE2\x80\xA8");
+    const AStringView trailing(output.data() + 6u, 3u);
+    auto normalizedTrailing = NormalizeMultilineText(arena.arena, trailing, 1u);
+    ASSERT_TRUE(normalizedTrailing);
+    output = Move(*normalizedTrailing);
+    EXPECT_EQ(output, "\n");
+
+    const AStringView empty(output.data() + output.size(), 0u);
+    auto normalizedEmpty = NormalizeMultilineText(arena.arena, empty, 0u);
+    ASSERT_TRUE(normalizedEmpty);
+    output = Move(*normalizedEmpty);
+    EXPECT_TRUE(output.empty());
+}
+
+TEST(UiMultilineText, RejectedBorrowedViewsPreserveSourceBytesAndStorage){
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output(s_BorrowedSourceText, arena.arena);
+    output.reserve(128u);
+    const AString<Core::Alloc::GlobalArena> savedAlias(output, arena.arena);
+    const char* storage = output.data();
+    const usize aliasCapacity = output.capacity();
+    const AStringView whole(output.data(), output.size());
+    EXPECT_EQ(NormalizeMultilineText(arena.arena, whole, 1u), MakeUnexpected(EditTextStatus::TooLarge));
+    EXPECT_EQ(output, savedAlias);
+    EXPECT_EQ(output.data(), storage);
+    EXPECT_EQ(output.capacity(), aliasCapacity);
+    const AStringView middle(output.data() + 7u, 6u);
+    EXPECT_EQ(NormalizeMultilineText(arena.arena, middle, 4u), MakeUnexpected(EditTextStatus::TooLarge));
+    EXPECT_EQ(output, savedAlias);
+    EXPECT_EQ(output.data(), storage);
+    EXPECT_EQ(output.capacity(), aliasCapacity);
+
+    const Array<AStringView, 3> invalidAlias{ "prefix a\r\nb\x01", "prefix a\r\nb\xE2\x82", AStringView("prefix a\r\nb\0tail", 16u) };
+    for(const AStringView text : invalidAlias){
+        output.assign(text.data(), text.size());
+        const AString<Core::Alloc::GlobalArena> savedInvalid(output, arena.arena);
+        const char* invalidStorage = output.data();
+        const usize invalidCapacity = output.capacity();
+        const AStringView source(output.data() + 7u, output.size() - 7u);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, source, 64u), MakeUnexpected(EditTextStatus::InvalidText));
+        EXPECT_EQ(output, savedInvalid);
+        EXPECT_EQ(output.data(), invalidStorage);
+        EXPECT_EQ(output.capacity(), invalidCapacity);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_multiline_view_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiMultilineViewTests;
+
+class UiMultilineViewTests : public MultilineViewFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiMultilineViewTests, SnapshotOwnsMultilineModeTextAndCrossLineSelection){
+    ASSERT_TRUE(m_model.setText("ab\ncd"));
+    ASSERT_TRUE(m_model.setSelection(1u, 4u));
+    ASSERT_TRUE(shapeView());
+    EXPECT_EQ(m_view.displayText(), "ab\ncd");
+    EXPECT_EQ(m_view.selectionRange().begin, 1u);
+    EXPECT_EQ(m_view.selectionRange().end, 4u);
+    EXPECT_EQ(m_view.displayCaret(), 4u);
+    const u64 revision = m_view.revision();
+    ASSERT_TRUE(m_model.setText("replacement\ntext"));
+    EXPECT_EQ(m_view.displayText(), "ab\ncd");
+    EXPECT_EQ(m_view.layout().utf8(), "ab\ncd");
+    EXPECT_EQ(m_view.revision(), revision);
+    EXPECT_EQ(m_view.selectionRange().begin, 1u);
+    EXPECT_EQ(m_view.selectionRange().end, 4u);
+    ASSERT_TRUE(place());
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 20.0f, 32.0f, 1.0f, 12.0f });
+}
+
+TEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrHits){
+    ASSERT_TRUE(m_model.setText("old\nview"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place());
+    const EditBoxPlacement previous = m_placement;
+    ASSERT_TRUE(m_model.setText("new\ncontent\n"));
+    ASSERT_TRUE(m_view.snapshot(m_model));
+    EXPECT_FALSE(m_view.ready());
+    EXPECT_FALSE(place());
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, previous));
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(m_view.adoptLayout(Move(*layout)));
+    EXPECT_TRUE(m_view.ready());
+    ASSERT_TRUE(place());
+    EXPECT_EQ(m_view.layout().lines().size(), 3u);
+}
+
+TEST_F(UiMultilineViewTests, EmptyAndTrailingHardLinesKeepDistinctCaretRows){
+    ASSERT_TRUE(m_model.setText("ab\n\ncd\n"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_EQ(m_view.layout().lines().size(), 4u);
+    ASSERT_EQ(m_view.caretGeometry().lines().size(), 4u);
+    EXPECT_EQ(m_view.caretStops().size(), 8u);
+    EXPECT_EQ(m_view.caretGeometry().lines()[1u].byteBegin, 3u);
+    EXPECT_EQ(m_view.caretGeometry().lines()[1u].byteEnd, 3u);
+    EXPECT_EQ(m_view.caretGeometry().lines()[3u].byteBegin, 7u);
+    EXPECT_FLOAT_EQ(m_view.layout().measure().y, 48.0f);
+    ASSERT_TRUE(place());
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 56.0f, 1.0f, 12.0f });
+    EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 20.0f);
+    ASSERT_TRUE(m_model.setText(""));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place());
+    ASSERT_EQ(m_view.caretStops().size(), 1u);
+    ASSERT_EQ(m_view.caretGeometry().lines().size(), 1u);
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
+}
+
+TEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine){
+    ASSERT_TRUE(m_model.setText("ab\ncd\n"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place());
+    Expected<usize> hit = m_view.hitTest({ 21.0f, 26.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 1u);
+    hit = m_view.hitTest({ 21.0f, 50.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 6u);
+    hit = m_view.hitTest({ 21.0f, -100.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 1u);
+    hit = m_view.hitTest({ 100.0f, 400.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 6u);
+}
+
+TEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets){
+    ASSERT_TRUE(m_model.setText("ffi\nffi"));
+    ASSERT_TRUE(m_model.setSelection(1u, 6u));
+    ASSERT_TRUE(shapeView());
+    ASSERT_EQ(m_view.layout().clusters().size(), 2u);
+    ASSERT_EQ(m_view.caretStops().size(), 8u);
+    EXPECT_EQ(m_view.caretStops()[1u].lineIndex, 0u);
+    EXPECT_FLOAT_EQ(m_view.caretStops()[1u].x, 10.0f);
+    EXPECT_EQ(m_view.caretStops()[5u].lineIndex, 1u);
+    EXPECT_EQ(m_view.caretStops()[5u].committedByte, 5u);
+    EXPECT_FLOAT_EQ(m_view.caretStops()[5u].x, 10.0f);
+    ASSERT_TRUE(place());
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 30.0f, 32.0f, 1.0f, 12.0f });
+    const Expected<usize> hit = m_view.hitTest({ 21.0f, 38.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
+}
+
+TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrapheme){
+    ASSERT_TRUE(m_model.setText("A\nB\nC"));
+    ASSERT_TRUE(m_model.setSelection(2u, 3u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x\n\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab", 0u, 5u));
+    ASSERT_TRUE(shapeView());
+    EXPECT_EQ(m_model.text(), "A\nB\nC");
+    EXPECT_EQ(m_view.displayText(), "A\nx\n\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab\nC");
+    EXPECT_EQ(m_view.replacementRange().begin, 2u);
+    EXPECT_EQ(m_view.replacementRange().end, 3u);
+    EXPECT_EQ(m_view.preeditRange().begin, 2u);
+    EXPECT_EQ(m_view.preeditRange().end, 13u);
+    EXPECT_EQ(m_view.selectionRange().begin, 2u);
+    EXPECT_EQ(m_view.selectionRange().end, 7u);
+    EXPECT_EQ(m_view.displayCaret(), 7u);
+    ASSERT_TRUE(place());
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
+    const Expected<usize> hit = m_view.hitTest({ 20.0f, 62.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
+    m_model.cancelComposition();
+    ASSERT_TRUE(m_model.setText("changed"));
+    EXPECT_TRUE(m_view.composing());
+    EXPECT_EQ(m_view.displayCaret(), 7u);
+    ASSERT_TRUE(place());
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
+}
+
+TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeOrShrink){
+    ASSERT_TRUE(m_model.setText("abcde\nabcdef\nabcdefg"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place(20.0f, 12.0f));
+    EXPECT_FLOAT_EQ(m_placement.scroll, 51.0f);
+    EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
+    const Expected<usize> hit = m_view.hitTest({ m_placement.caret.x, m_placement.caret.y + 6.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, m_model.caret());
+    const Point previous{ m_placement.scroll, m_placement.scrollY };
+    ASSERT_TRUE(m_model.move(EditMove::DocumentHome));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place(20.0f, 12.0f, previous));
+    EXPECT_FLOAT_EQ(m_placement.scroll, 0.0f);
+    EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
+    ASSERT_TRUE(m_model.setText("A"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place(20.0f, 12.0f, previous));
+    EXPECT_FLOAT_EQ(m_placement.scroll, 0.0f);
+    EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
+}
+
+TEST_F(UiMultilineViewTests, PaddingAndOuterClipIntersectWithoutChangingLogicalLineGeometry){
+    ASSERT_TRUE(m_model.setText("ab\ncd"));
+    ASSERT_TRUE(shapeView());
+    const auto arranged = m_view.arrange({ 10.0f, 20.0f, 100.0f, 40.0f }, { 8.0f, 4.0f, 8.0f, 4.0f }, { 30.0f, 22.0f, 20.0f, 40.0f }, Point{});
+    ASSERT_TRUE(arranged);
+    m_placement = *arranged;
+    UiPaintAssertions::ExpectRect(m_placement.frameClip, { 30.0f, 22.0f, 20.0f, 38.0f });
+    UiPaintAssertions::ExpectRect(m_placement.clip, { 30.0f, 24.0f, 20.0f, 32.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 38.0f, 36.0f, 1.0f, 12.0f });
+    EXPECT_FLOAT_EQ(m_view.caretGeometry().lines()[1u].top, 12.0f);
+}
+
+TEST_F(UiMultilineViewTests, ZeroViewportKeepsFiniteCaretAndScrollAndProducesAnEmptyClip){
+    ASSERT_TRUE(m_model.setText("abcde\nabcdef\nabcdefg"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place(0.0f, 0.0f, { 500.0f, 500.0f }));
+    EXPECT_FLOAT_EQ(m_placement.clip.width, 0.0f);
+    EXPECT_FLOAT_EQ(m_placement.clip.height, 0.0f);
+    EXPECT_FLOAT_EQ(m_placement.scroll, 71.0f);
+    EXPECT_FLOAT_EQ(m_placement.scrollY, 36.0f);
+    const SIMDVectorSingle caretEnd = VectorAdd(VectorSet(m_placement.caret.x, m_placement.caret.y, 0.0f, 0.0f), VectorSet(m_placement.caret.width, m_placement.caret.height, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(VectorGetX(caretEnd), m_placement.content.x);
+    EXPECT_FLOAT_EQ(VectorGetY(caretEnd), m_placement.content.y);
+}
+
+TEST_F(UiMultilineViewTests, FailedPlacementPreservesStateAndInvalidHitsAreRejected){
+    ASSERT_TRUE(m_model.setText("abc\ndef"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place(20.0f, 12.0f));
+    const EditBoxPlacement previous = m_placement;
+    EXPECT_FALSE(place(20.0f, 12.0f, { 0.0f, Limit<f32>::s_QuietNaN }));
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(place(20.0f, 12.0f, { 0.0f, -1.0f }));
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(m_view.arrange({ 10.0f, 20.0f, -1.0f, 20.0f }, {}, {}, Point{}));
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(m_view.arrange(previous.bounds, { 0.0f, -1.0f }, previous.clip, Point{}));
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(m_view.arrange(previous.bounds, {}, previous.clip, Point{}, 0.0f));
+    ExpectPlacement(m_placement, previous);
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, Limit<f32>::s_QuietNaN }, previous));
+    EditBoxPlacement malformed = previous;
+    malformed.textOrigin.y = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, malformed));
+}
+
+TEST_F(UiMultilineViewTests, FailedLayoutAdoptionRetainsMultilineGeometryAndPlacement){
+    ASSERT_TRUE(m_model.setText("ab\ncd"));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place());
+    const EditBoxPlacement previous = m_placement;
+    auto wrong = m_layoutBuilder.layout({ "other\ntext" });
+    ASSERT_TRUE(wrong);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*wrong)));
+    ShapeRequest request{ m_view.displayText() };
+    request.direction = TextDirection::RightToLeft;
+    auto rtl = m_layoutBuilder.layout(request);
+    ASSERT_TRUE(rtl);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*rtl)));
+    EXPECT_EQ(m_view.layout().utf8(), "ab\ncd");
+    EXPECT_EQ(m_view.caretGeometry().lines().size(), 2u);
+    EXPECT_TRUE(m_view.ready());
+    ASSERT_TRUE(place());
+    ExpectPlacement(m_placement, previous);
+    EXPECT_NE(m_view.shape(m_text), TextLayoutStatus::Success);
+    ASSERT_TRUE(place());
+    ExpectPlacement(m_placement, previous);
+}
+
+TEST_F(UiMultilineViewTests, MovingTheViewRetainsOwnedPreeditLineMappingsAndReadyGeometry){
+    ASSERT_TRUE(m_model.setText("ab\ncd"));
+    ASSERT_TRUE(m_model.setSelection(1u, 4u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x\ny", 0u, 3u));
+    ASSERT_TRUE(shapeView());
+    ASSERT_TRUE(place());
+    const EditBoxPlacement previous = m_placement;
+    EditBoxView moved(Move(m_view));
+    EditBoxView assigned(m_arena);
+    assigned = Move(moved);
+    m_model.cancelComposition();
+    ASSERT_TRUE(m_model.setText("replacement"));
+    EXPECT_EQ(assigned.displayText(), "ax\nyd");
+    EXPECT_EQ(assigned.layout().utf8(), "ax\nyd");
+    EXPECT_TRUE(assigned.composing());
+    EXPECT_TRUE(assigned.ready());
+    const auto arranged = assigned.arrange(previous.bounds, {}, previous.clip, Point{});
+    ASSERT_TRUE(arranged);
+    m_placement = *arranged;
+    ExpectPlacement(m_placement, previous);
+    const Expected<usize> hit = assigned.hitTest({ 30.0f, 38.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
+}
+
+TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedHardLine){
+    ASSERT_TRUE(loadFont());
+    ASSERT_TRUE(m_model.setText("ab\n\ncd\n"));
+    ASSERT_TRUE(m_model.setSelection(1u, 6u));
+    ASSERT_TRUE(m_view.snapshot(m_model));
+    ASSERT_EQ(m_view.shape(m_text), TextLayoutStatus::Success);
+    ASSERT_TRUE(place(300.0f, 200.0f));
+    ASSERT_TRUE(m_model.setText("changed"));
+    EditBoxStyle style;
+    style.selection = { 1.0f, 0.0f, 0.0f, 1.0f };
+    EditBoxPaintFlags flags;
+    flags.focused = true;
+    flags.caretVisible = false;
+    const auto snapshot = paintView(style, flags);
+    ASSERT_TRUE(snapshot);
+    PaintVector<Rect> selected(m_arena);
+    CollectSolidRects(*snapshot, style.selection, selected);
+    ASSERT_EQ(selected.size(), 3u);
+    for(u32 line = 0u; line < 3u; ++line){
+        EXPECT_FLOAT_EQ(selected[line].y, m_placement.textOrigin.y + m_view.caretGeometry().lines()[line].top);
+        EXPECT_FLOAT_EQ(selected[line].height, m_view.caretGeometry().lines()[line].height);
+    }
+    EXPECT_FLOAT_EQ(selected[1u].x, m_placement.textOrigin.x);
+    EXPECT_FLOAT_EQ(selected[1u].width, 1.0f);
+    EXPECT_FLOAT_EQ(selected[2u].width, m_view.caretGeometry().lines()[2u].advance);
+    EXPECT_FALSE(snapshot->glyphPages().empty());
+    EXPECT_EQ(m_view.layout().utf8(), "ab\n\ncd\n");
+}
+
+TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine){
+    ASSERT_TRUE(loadFont());
+    ASSERT_TRUE(m_model.setText("A\nB\nC"));
+    ASSERT_TRUE(m_model.setSelection(2u, 3u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x\n\nz", 0u, 4u));
+    ASSERT_TRUE(m_view.snapshot(m_model));
+    ASSERT_EQ(m_view.shape(m_text), TextLayoutStatus::Success);
+    ASSERT_TRUE(place(300.0f, 200.0f));
+    m_model.cancelComposition();
+    ASSERT_TRUE(m_model.setText("changed"));
+    EditBoxStyle style;
+    style.preedit = { 0.0f, 1.0f, 0.0f, 1.0f };
+    EditBoxPaintFlags flags;
+    flags.focused = true;
+    flags.caretVisible = false;
+    flags.preeditCaretVisible = false;
+    const auto snapshot = paintView(style, flags);
+    ASSERT_TRUE(snapshot);
+    PaintVector<Rect> underlines(m_arena);
+    CollectSolidRects(*snapshot, style.preedit, underlines);
+    ASSERT_EQ(underlines.size(), 3u);
+    for(u32 index = 0u; index < 3u; ++index){
+        const EditCaretLine& line = m_view.caretGeometry().lines()[index + 1u];
+        EXPECT_FLOAT_EQ(underlines[index].y, m_placement.textOrigin.y + line.top + line.height - 1.0f);
+        EXPECT_FLOAT_EQ(underlines[index].height, 1.0f);
+    }
+    EXPECT_FLOAT_EQ(underlines[1u].width, 1.0f);
+}
+
+TEST_F(UiMultilineViewTests, SingleLineCenteringRejectsVerticalScrollInfluence){
+    ASSERT_TRUE(m_model.setText("abc\ndef"));
+    ASSERT_TRUE(shapeView());
+    EditModel single(m_arena);
+    ASSERT_TRUE(single.setText("abc"));
+    ASSERT_TRUE(m_view.snapshot(single));
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(m_view.adoptLayout(Move(*layout)));
+    ASSERT_TRUE(place(100.0f, 40.0f, { 0.0f, 20.0f }));
+    EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
+    EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 34.0f);
+    EXPECT_FLOAT_EQ(m_placement.caret.y, 34.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_nested_popup_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiWidgetTests;
+
+constexpr AStringView s_BeforeKey = "before";
+constexpr AStringView s_ApplyKey = "apply";
+constexpr AStringView s_AfterKey = "after";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNestedPopupBuilderTests : public WidgetFixture{
+protected:
+    [[nodiscard]] static WidgetOptions Control(const f32 width = 120.0f)noexcept{
+        WidgetOptions options;
+        options.width = { LayoutSizePolicy::Fixed, width };
+        options.height = { LayoutSizePolicy::Fixed, 30.0f };
+        return options;
+    }
+
+
+protected:
+    virtual void SetUp()override{
+        WidgetFixture::SetUp();
+        m_parent.open();
+        m_child.open();
+    }
+
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, NestedParentOptions());
+    }
+
+    [[nodiscard]] b8 prepareButtons(const u64 generation){
+        if(!beginParent(generation))
+            return false;
+        m_beforeActivated = m_builder.button(s_BeforeKey, "Before", Control());
+        if(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions())){
+            m_childActivated = m_builder.button(s_ApplyKey, "Child", Control());
+            if(!m_builder.endPopup())
+                return false;
+        }
+        else if(m_context.failed())
+            return false;
+        m_afterActivated = m_builder.button(s_AfterKey, "After", Control());
+        return m_builder.endPopup() && finishRoot();
+    }
+
+    [[nodiscard]] b8 acceptButtons(const u64 generation){
+        return prepareButtons(generation) && m_context.commitFrame(generation);
+    }
+
+
+protected:
+    PopupState m_parent;
+    PopupState m_child;
+    b8 m_beforeActivated = false;
+    b8 m_afterActivated = false;
+    b8 m_childActivated = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestoresItsPopupToken){
+    ASSERT_TRUE(beginParent(1u));
+    const PopupToken parent = m_context.popupToken();
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
+    const PopupToken child = m_context.popupToken();
+    EXPECT_NE(child, parent);
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_EQ(m_context.popupToken(), parent);
+    EXPECT_FALSE(m_builder.balanced());
+    EXPECT_FALSE(m_builder.button(s_AfterKey, "After", Control()));
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_TRUE(m_builder.balanced());
+    EXPECT_FALSE(m_context.popupToken().valid());
+    ASSERT_TRUE(finishRoot());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+
+    const HitTarget* before = target(UiTestSupport::RequireWidgetId(parentId(), s_BeforeKey));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
+    ASSERT_NE(before, nullptr);
+    ASSERT_NE(after, nullptr);
+    ASSERT_NE(apply, nullptr);
+    EXPECT_EQ(before->popup, parent);
+    EXPECT_EQ(after->popup, parent);
+    EXPECT_EQ(apply->popup, child);
+    EXPECT_FLOAT_EQ(after->rectangle.x, before->rectangle.x);
+    EXPECT_FLOAT_EQ(after->rectangle.y, before->rectangle.y + before->rectangle.height + m_builder.style().gap);
+    EXPECT_GT(apply->rectangle.x, m_parent.placement().bounds.x + m_parent.placement().bounds.width);
+    EXPECT_EQ(m_context.input().focus(), apply->id);
+}
+
+TEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentContainer){
+    ASSERT_TRUE(beginParent(1u));
+    ContainerOptions rowOptions;
+    rowOptions.width = { LayoutSizePolicy::Fixed, 240.0f };
+    rowOptions.height = { LayoutSizePolicy::Fixed, 30.0f };
+    rowOptions.gap = 5.0f;
+    ASSERT_TRUE(m_builder.beginRow("row", rowOptions));
+    const WidgetId row = UiTestSupport::RequireWidgetId(parentId(), "row");
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control(100.0f)));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_EQ(m_context.scopeId(), row);
+    EXPECT_FALSE(m_builder.button(s_AfterKey, "After", Control(100.0f)));
+    ASSERT_TRUE(m_builder.endContainer());
+    ASSERT_TRUE(m_builder.endPopup());
+    ASSERT_TRUE(finishRoot());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+
+    const HitTarget* before = target(UiTestSupport::RequireWidgetId(row, s_BeforeKey));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(row, s_AfterKey));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(row, s_ChildPopupKey), s_ApplyKey));
+    ASSERT_NE(before, nullptr);
+    ASSERT_NE(after, nullptr);
+    ASSERT_NE(apply, nullptr);
+    EXPECT_FLOAT_EQ(after->rectangle.x, before->rectangle.x + before->rectangle.width + rowOptions.gap);
+    EXPECT_FLOAT_EQ(after->rectangle.y, before->rectangle.y);
+    EXPECT_EQ(before->popup, after->popup);
+    EXPECT_NE(apply->popup, before->popup);
+}
+
+TEST_F(UiNestedPopupBuilderTests, ClosedChildBeginLeavesParentScopeAndFollowingControlsIntact){
+    m_child.close();
+    ASSERT_TRUE(beginParent(1u));
+    const PopupToken parent = m_context.popupToken();
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
+    EXPECT_FALSE(m_context.failed());
+    EXPECT_EQ(m_context.popupToken(), parent);
+    EXPECT_EQ(m_context.scopeId(), parentId());
+    EXPECT_FALSE(m_builder.button(s_AfterKey, "After", Control()));
+    ASSERT_TRUE(m_builder.endPopup());
+    ASSERT_TRUE(finishRoot());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey)), nullptr);
+    EXPECT_EQ(target(childId()), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey))->popup, parent);
+}
+
+TEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrdered){
+    ASSERT_TRUE(prepareButtons(1u));
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_FALSE(snapshot.commands().empty());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
+    ASSERT_NE(apply, nullptr);
+    EXPECT_GT(apply->clip.x, m_parent.placement().bounds.x + m_parent.placement().bounds.width);
+    EXPECT_LE(apply->clip.x, apply->rectangle.x);
+    EXPECT_LE(apply->clip.y, apply->rectangle.y);
+    // Lanes are clip right, clip bottom, rectangle right, rectangle bottom.
+    const SIMDVectorSingle edges = VectorAdd(VectorSet(apply->clip.x, apply->clip.y, apply->rectangle.x, apply->rectangle.y), VectorSet(apply->clip.width, apply->clip.height, apply->rectangle.width, apply->rectangle.height));
+    EXPECT_GE(VectorGetX(edges), VectorGetZ(edges));
+    EXPECT_GE(VectorGetY(edges), VectorGetW(edges));
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey)), nullptr);
+    EXPECT_GT(apply->layer, target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey))->layer);
+    const Point applyCenter = Center(apply->rectangle);
+    EXPECT_EQ(m_context.input().hitTest(applyCenter), apply->id);
+    u32 previousLayer = 0u;
+    b8 childPainted = false;
+    for(const DrawCommand& command : snapshot.commands()){
+        EXPECT_GE(command.layer, previousLayer);
+        previousLayer = command.layer;
+        childPainted |= command.layer == apply->layer;
+    }
+    EXPECT_TRUE(childPainted);
+}
+
+TEST_F(UiNestedPopupBuilderTests, ChildActionLeavesBothParentControlsAvailableOnLaterDeclarations){
+    ASSERT_TRUE(acceptButtons(1u));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
+    ASSERT_NE(apply, nullptr);
+    const Point applyCenter = Center(apply->rectangle);
+    click(applyCenter);
+    ASSERT_TRUE(acceptButtons(2u));
+    EXPECT_TRUE(m_childActivated);
+    EXPECT_FALSE(m_beforeActivated);
+    EXPECT_FALSE(m_afterActivated);
+    m_child.close();
+    ASSERT_TRUE(acceptButtons(3u));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
+    ASSERT_NE(after, nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey)), nullptr);
+    const Point afterCenter = Center(after->rectangle);
+    click(afterCenter);
+    ASSERT_TRUE(acceptButtons(4u));
+    EXPECT_TRUE(m_afterActivated);
+    EXPECT_FALSE(m_beforeActivated);
+    EXPECT_TRUE(m_parent.isOpen());
+}
+
+TEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutPublishingTheCandidate){
+    Array<PopupState, s_InputMaxPopups + 1u> states;
+    ASSERT_TRUE(begin(1u));
+    for(usize index = 0u; index < s_InputMaxPopups; ++index){
+        states[index].open();
+        ASSERT_TRUE(m_builder.beginPopup("level", states[index], NestedParentOptions()));
+    }
+    states[s_InputMaxPopups].open();
+    EXPECT_FALSE(m_builder.beginPopup("level", states[s_InputMaxPopups], NestedChildOptions()));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+    EXPECT_TRUE(m_context.input().targets().empty());
+}
+
+TEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublishIt){
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+    EXPECT_TRUE(m_context.input().targets().empty());
+}
+
+TEST_F(UiNestedPopupBuilderTests, UnbalancedChildContainerPreventsTheOuterFrameFromPublishing){
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
+    ASSERT_TRUE(m_builder.beginColumn("unbalanced"));
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.endRoot());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/context.adhd.h>
+
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_nested_popup_context_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+constexpr AStringView s_ParentPopupKey = "parent";
+constexpr AStringView s_ChildPopupKey = "child";
+
+struct PopupDeclaration{
+    WidgetState owner;
+    WidgetState action;
+    PopupScope scope;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNestedPopupContextTests : public UiTestSupport::ContextTestFixture{
+public:
+    UiNestedPopupContextTests()
+        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiNestedPopupContext))
+    {}
+
+
+protected:
+    [[nodiscard]] b8 begin(const u64 generation){
+        return m_context.beginFrame(generation) && m_context.beginRoot({ 1401u, 1u });
+    }
+
+    [[nodiscard]] Expected<PopupDeclaration> reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
+        PopupDeclaration result;
+        const auto owner = m_context.declare(key, WidgetKind::Popup);
+        EXPECT_TRUE(owner);
+        if(!owner)
+            return MakeUnexpected(owner.error());
+        result.owner = **owner;
+        result.scope.token = { (*owner)->id, (*owner)->declarationGeneration, 900u, 1u };
+        result.scope.bounds = bounds;
+        result.scope.viewport = { 0.0f, 0.0f, 400.0f, 300.0f };
+        result.scope.parent = m_context.popupToken();
+        EXPECT_TRUE(m_context.registerPopupScope(result.owner, result.scope));
+        const auto action = m_context.declarePart(result.owner, "action", WidgetKind::Button);
+        EXPECT_TRUE(action);
+        if(!action)
+            return MakeUnexpected(action.error());
+        result.action = **action;
+        return result;
+    }
+
+    [[nodiscard]] b8 publish(const PopupDeclaration& popup){
+        HitTarget barrier;
+        barrier.rectangle = popup.scope.bounds;
+        barrier.clip = popup.scope.viewport;
+        if(!m_context.addTarget(popup.owner, barrier))
+            return false;
+        HitTarget action;
+        const SIMDVectorSingle origin = VectorAdd(VectorSet(popup.scope.bounds.x, popup.scope.bounds.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+        action.rectangle = { VectorGetX(origin), VectorGetY(origin), 24.0f, 18.0f };
+        action.clip = popup.scope.bounds;
+        action.focusable = true;
+        action.activatable = true;
+        return m_context.addTarget(popup.action, action);
+    }
+
+    [[nodiscard]] b8 finish(){
+        return m_context.endRoot() && m_context.finishFrame();
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNestedPopupContextTests, NestedActivationRestoresExactParentScopeAndLayer){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    EXPECT_FALSE(m_context.popupToken().valid());
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    ASSERT_TRUE(publish(parent));
+    const auto childResult = reserve(s_ChildPopupKey, { 180.0f, 120.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    EXPECT_EQ(child.scope.parent, parent.scope.token);
+    EXPECT_EQ(m_context.popupToken(), parent.scope.token);
+    EXPECT_EQ(m_context.popupLayer(), 1u);
+    ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
+    ASSERT_TRUE(publish(child));
+    EXPECT_EQ(m_context.popupToken(), child.scope.token);
+    EXPECT_EQ(m_context.popupLayer(), 2u);
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    EXPECT_EQ(m_context.popupToken(), parent.scope.token);
+    EXPECT_EQ(m_context.popupLayer(), 1u);
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    EXPECT_FALSE(m_context.popupToken().valid());
+    EXPECT_EQ(m_context.popupLayer(), 0u);
+    ASSERT_TRUE(finish());
+    EXPECT_FALSE(m_context.input().hasPopup());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_context.input().focus(), child.action.id);
+    EXPECT_EQ(m_context.input().hitTest({ 185.0f, 125.0f }), child.action.id);
+    EXPECT_FALSE(m_context.input().hitTest({ 65.0f, 45.0f }).valid());
+}
+
+TEST_F(UiNestedPopupContextTests, ReservationOrderControlsLayersAcrossReactivationAndReversePaintOrder){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey, { 30.0f, 30.0f, 150.0f, 110.0f });
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto firstResult = reserve("first", { 1.0f, 1.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(firstResult);
+    PopupDeclaration first = *firstResult;
+    const auto secondResult = reserve("second", { 1.0f, 1.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(secondResult);
+    PopupDeclaration second = *secondResult;
+    EXPECT_EQ(m_context.popupLayer(first.scope.token), 2u);
+    EXPECT_EQ(m_context.popupLayer(second.scope.token), 3u);
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    first.scope.bounds = { 100.0f, 70.0f, 100.0f, 60.0f };
+    second.scope.bounds = first.scope.bounds;
+    ASSERT_TRUE(m_context.updatePopupScope(first.scope.token, first.scope));
+    ASSERT_TRUE(m_context.updatePopupScope(second.scope.token, second.scope));
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    ASSERT_TRUE(publish(parent));
+    ASSERT_TRUE(m_context.activatePopupScope(second.scope.token));
+    ASSERT_TRUE(publish(second));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(m_context.activatePopupScope(first.scope.token));
+    ASSERT_TRUE(publish(first));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    EXPECT_EQ(m_context.topPopupToken(), second.scope.token);
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id), nullptr);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id)->layer, 2u);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id)->layer, 3u);
+    EXPECT_GT(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id)->paintOrder, UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id)->paintOrder);
+    EXPECT_EQ(m_context.input().hitTest({ 105.0f, 75.0f }), second.action.id);
+    EXPECT_EQ(m_context.input().focus(), second.action.id);
+}
+
+TEST_F(UiNestedPopupContextTests, HiddenAncestorDropsReservedDescendantsAndTheirPublishedTargets){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    ASSERT_TRUE(publish(parent));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
+    ASSERT_TRUE(publish(child));
+    const auto deferredResult = reserve("deferred");
+    ASSERT_TRUE(deferredResult);
+    const PopupDeclaration deferred = *deferredResult;
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(m_context.endPopupScope(false));
+    EXPECT_FALSE(m_context.hasPopupScope(parent.scope.token));
+    EXPECT_FALSE(m_context.hasPopupScope(child.scope.token));
+    EXPECT_FALSE(m_context.hasPopupScope(deferred.scope.token));
+    EXPECT_FALSE(m_context.topPopupToken().valid());
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_TRUE(m_context.input().targets().empty());
+}
+
+TEST_F(UiNestedPopupContextTests, DiscardingInactiveFamilyPreservesAnUnrelatedTopLevelScopeAndItsLayer){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    ASSERT_TRUE(publish(parent));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
+    ASSERT_TRUE(publish(child));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    const auto unrelatedResult = reserve("unrelated", { 240.0f, 170.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(unrelatedResult);
+    const PopupDeclaration unrelated = *unrelatedResult;
+    ASSERT_TRUE(m_context.activatePopupScope(unrelated.scope.token));
+    ASSERT_TRUE(publish(unrelated));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    m_context.discardPopupScope(parent.scope.token);
+    m_context.discardPopupScope(parent.scope.token);
+    EXPECT_FALSE(m_context.failed());
+    EXPECT_FALSE(m_context.hasPopupScope(parent.scope.token));
+    EXPECT_FALSE(m_context.hasPopupScope(child.scope.token));
+    EXPECT_TRUE(m_context.hasPopupScope(unrelated.scope.token));
+    EXPECT_EQ(m_context.popupLayer(unrelated.scope.token), 3u);
+    EXPECT_EQ(m_context.topPopupToken(), unrelated.scope.token);
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_EQ(m_context.input().targets().size(), 2u);
+    EXPECT_EQ(m_context.input().focus(), unrelated.action.id);
+}
+
+TEST_F(UiNestedPopupContextTests, DiscardingInactiveChildKeepsItsActiveParentBalanced){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    m_context.discardPopupScope(child.scope.token);
+    EXPECT_FALSE(m_context.failed());
+    EXPECT_EQ(m_context.popupToken(), parent.scope.token);
+    EXPECT_EQ(m_context.popupLayer(), 1u);
+    ASSERT_TRUE(publish(parent));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_context.input().focus(), parent.action.id);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), child.owner.id), nullptr);
+}
+
+TEST_F(UiNestedPopupContextTests, DiscardingAnActiveAncestorFailsWithoutRemovingItsActivation){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
+    m_context.discardPopupScope(parent.scope.token);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_context.popupToken(), child.scope.token);
+    EXPECT_TRUE(m_context.hasPopupScope(parent.scope.token));
+    EXPECT_TRUE(m_context.hasPopupScope(child.scope.token));
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+TEST_F(UiNestedPopupContextTests, ChildCannotActivateWithoutItsExactCurrentParent){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    EXPECT_FALSE(m_context.activatePopupScope(child.scope.token));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.popupToken().valid());
+    EXPECT_FALSE(m_context.finishFrame());
+}
+
+TEST_F(UiNestedPopupContextTests, RegistrationRejectsAnAncestorTokenFromAnotherOpenEpoch){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto declared = m_context.declare(s_ChildPopupKey, WidgetKind::Popup);
+    ASSERT_TRUE(declared);
+    const WidgetState child = **declared;
+    PopupScope invalid = parent.scope;
+    invalid.token = { child.id, child.declarationGeneration, 901u, 1u };
+    invalid.parent = parent.scope.token;
+    ++invalid.parent.openGeneration;
+    EXPECT_FALSE(m_context.registerPopupScope(child, invalid));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_context.popupToken(), parent.scope.token);
+    EXPECT_FALSE(m_context.hasPopupScope(invalid.token));
+}
+
+TEST_F(UiNestedPopupContextTests, FinalGeometryCannotRebindParentTokenOrReservedLayer){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    const auto childResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    PopupScope invalid = child.scope;
+    invalid.layer = 1u;
+    EXPECT_FALSE(m_context.updatePopupScope(child.scope.token, invalid));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_context.popupLayer(child.scope.token), 2u);
+    m_context.abandonFrame();
+    ASSERT_TRUE(begin(2u));
+    const auto nextParentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(nextParentResult);
+    const PopupDeclaration nextParent = *nextParentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(nextParent.scope.token));
+    const auto nextChildResult = reserve(s_ChildPopupKey);
+    ASSERT_TRUE(nextChildResult);
+    const PopupDeclaration nextChild = *nextChildResult;
+    invalid = nextChild.scope;
+    invalid.parent = {};
+    EXPECT_FALSE(m_context.updatePopupScope(nextChild.scope.token, invalid));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_context.popupToken(), nextParent.scope.token);
+}
+
+TEST_F(UiNestedPopupContextTests, InvalidFinalGeometryCannotPublishThePreparedFamily){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    PopupScope invalid = parent.scope;
+    invalid.bounds.width = 0.0f;
+    EXPECT_FALSE(m_context.updatePopupScope(parent.scope.token, invalid));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_TRUE(m_context.hasPopupScope(parent.scope.token));
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 0u);
+}
+
+TEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThatChildActivation){
+    ASSERT_TRUE(begin(1u));
+    const auto parentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
+    ASSERT_TRUE(publish(parent));
+    const auto childResult = reserve(s_ChildPopupKey, { 180.0f, 120.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
+    ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
+    ASSERT_TRUE(publish(child));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(m_context.endPopupScope(true));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_TRUE(send({ .position = { 185.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 185.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    ASSERT_TRUE(begin(2u));
+    const auto nextParentResult = reserve(s_ParentPopupKey);
+    ASSERT_TRUE(nextParentResult);
+    const PopupDeclaration nextParent = *nextParentResult;
+    ASSERT_TRUE(m_context.activatePopupScope(nextParent.scope.token));
+    const auto nextChildResult = reserve(s_ChildPopupKey, child.scope.bounds);
+    ASSERT_TRUE(nextChildResult);
+    const PopupDeclaration nextChild = *nextChildResult;
+    EXPECT_EQ(nextChild.action.id, child.action.id);
+    EXPECT_FALSE(m_context.takeActivation(nextChild.action, true));
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    ASSERT_TRUE(m_context.activatePopupScope(nextChild.scope.token));
+    EXPECT_TRUE(m_context.takeActivation(nextChild.action, true));
+    EXPECT_FALSE(m_context.takeActivation(nextChild.action, true));
+}
+
+TEST_F(UiNestedPopupContextTests, EighthNestedActivationIsBoundedAndNinthReservationFails){
+    ASSERT_TRUE(begin(1u));
+    const Array<AStringView, 8> keys{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
+    for(usize index = 0u; index < s_InputMaxPopups; ++index){
+        const auto popupResult = reserve(keys[index]);
+        ASSERT_TRUE(popupResult);
+        const PopupDeclaration popup = *popupResult;
+        ASSERT_TRUE(m_context.activatePopupScope(popup.scope.token));
+        ASSERT_TRUE(publish(popup));
+        EXPECT_EQ(m_context.popupLayer(), static_cast<u32>(index + 1u));
+    }
+    const auto declared = m_context.declare("overflow", WidgetKind::Popup);
+    ASSERT_TRUE(declared);
+    const WidgetState overflow = **declared;
+    PopupScope scope;
+    scope.token = { overflow.id, overflow.declarationGeneration, 901u, 1u };
+    scope.parent = m_context.popupToken();
+    scope.bounds = { 60.0f, 40.0f, 120.0f, 80.0f };
+    scope.viewport = { 0.0f, 0.0f, 400.0f, 300.0f };
+    EXPECT_FALSE(m_context.registerPopupScope(overflow, scope));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_nested_popup_lifetime_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiPopupToolsTests;
+using namespace NWB::UiSearchComboTests;
+
+constexpr AStringView s_MenuRowsKey = "rows";
+constexpr AStringView s_BeforeKey = "before";
+constexpr AStringView s_AfterKey = "after";
+constexpr AStringView s_DeepPopupKey = "deep";
+constexpr AStringView s_LeafKey = "leaf";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNestedPopupLifetimeTests : public SearchFixture{
+protected:
+    virtual void SetUp()override{
+        SearchFixture::SetUp();
+        m_source.count = 5u;
+        m_searchSource.full.count = 5u;
+        m_parent.open();
+        m_child.open();
+        for(PopupState& state : m_deeper)
+            state.open();
+    }
+
+    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ComboKey); }
+
+    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parentId(), s_MenuKey), s_MenuRowsKey); }
+
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
+            return false;
+        const b8 activated = m_builder.button(s_BeforeKey, "Before");
+        return !activated;
+    }
+
+    [[nodiscard]] b8 finishParent(const u64 generation){
+        const b8 activated = m_builder.button(s_AfterKey, "After");
+        return !activated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+    }
+
+    [[nodiscard]] b8 acceptPlain(const u64 generation){
+        if(!beginParent(generation))
+            return false;
+        m_childVisible = m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
+        if(m_childVisible){
+            const b8 activated = m_builder.button("apply", "Child");
+            if(activated || !m_builder.endPopup())
+                return false;
+        }
+        else if(m_context.failed())
+            return false;
+        return finishParent(generation);
+    }
+
+    [[nodiscard]] b8 acceptCombo(const u64 generation){
+        if(!beginParent(generation))
+            return false;
+        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options());
+        return m_result.valid && finishParent(generation);
+    }
+
+    [[nodiscard]] b8 acceptSearch(const u64 generation){
+        if(!beginParent(generation))
+            return false;
+        m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
+        return m_searchResult.combo.valid && finishParent(generation);
+    }
+
+    [[nodiscard]] b8 acceptMenu(const u64 generation){
+        if(!beginParent(generation))
+            return false;
+        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
+        if(activated)
+            return false;
+        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu);
+        return m_menuResult.valid && finishParent(generation);
+    }
+
+    [[nodiscard]] b8 declareReserved(const u64 generation, const b8 overflow){
+        if(!beginParent(generation) || !m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options()).valid)
+            return false;
+        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
+        if(activated || !m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu).valid)
+            return false;
+        if(!m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox(s_ComboKey, m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
+            return false;
+        for(usize index = 0u; index < 3u; ++index){
+            if(!m_builder.beginPopup(s_DeepPopupKey, m_deeper[index], UiWidgetTests::NestedChildOptions()))
+                return false;
+        }
+        if(overflow)
+            return m_builder.beginPopup(s_DeepPopupKey, m_deeper[3u], UiWidgetTests::NestedChildOptions());
+        const b8 leafActivated = m_builder.button(s_LeafKey, "Deepest");
+        if(leafActivated)
+            return false;
+        for(usize index = 0u; index < 4u; ++index){
+            if(!m_builder.endPopup())
+                return false;
+        }
+        const b8 afterActivated = m_builder.button(s_AfterKey, "Parent after");
+        return !afterActivated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
+    }
+
+    void reopenParent()noexcept{ m_parent.close(); m_parent.open(); }
+
+    void expectParentControls()const{
+        const HitTarget* before = target(UiTestSupport::RequireWidgetId(parentId(), s_BeforeKey));
+        const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
+        ASSERT_NE(before, nullptr);
+        ASSERT_NE(after, nullptr);
+        EXPECT_EQ(before->popup, after->popup);
+        EXPECT_EQ(before->popup.openGeneration, m_parent.openGeneration());
+        EXPECT_TRUE(m_parent.isOpen());
+    }
+
+
+protected:
+    PopupState m_parent;
+    PopupState m_child;
+    Array<PopupState, 4u> m_deeper;
+    ComboState m_childCombo;
+    ContextMenuState m_menu;
+    PopupToolsSource m_menuSource;
+    ContextMenuResult m_menuResult;
+    b8 m_childVisible = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNestedPopupLifetimeTests, ParentReopeningRetiresTheOldPlainChildAndKeepsParentControls){
+    ASSERT_TRUE(acceptPlain(1u));
+    ASSERT_TRUE(m_childVisible);
+    ASSERT_NE(target(childId()), nullptr);
+    const PopupToken oldChild = target(childId())->popup;
+    const u64 oldParentGeneration = m_parent.openGeneration();
+    reopenParent();
+    EXPECT_NE(m_parent.openGeneration(), oldParentGeneration);
+    ASSERT_TRUE(acceptPlain(2u));
+    EXPECT_FALSE(m_childVisible);
+    EXPECT_FALSE(m_child.isOpen());
+    EXPECT_EQ(target(childId()), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(childId(), "apply")), nullptr);
+    EXPECT_TRUE(m_context.input().actions().empty());
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+    EXPECT_EQ(oldChild.openGeneration, m_child.openGeneration());
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, DeliberateChildReopeningAfterParentReopeningUsesANewPermittedLifetime){
+    ASSERT_TRUE(acceptPlain(1u));
+    ASSERT_NE(target(childId()), nullptr);
+    const PopupToken oldChild = target(childId())->popup;
+    reopenParent();
+    m_child.close();
+    m_child.open();
+    ASSERT_TRUE(acceptPlain(2u));
+    EXPECT_TRUE(m_childVisible);
+    EXPECT_TRUE(m_child.isOpen());
+    ASSERT_NE(target(childId()), nullptr);
+    const PopupToken newChild = target(childId())->popup;
+    EXPECT_EQ(newChild.instanceGeneration, oldChild.instanceGeneration);
+    EXPECT_NE(newChild.openGeneration, oldChild.openGeneration);
+    EXPECT_EQ(newChild, target(UiTestSupport::RequireWidgetId(childId(), "apply"))->popup);
+    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(childId(), "apply"));
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, ParentReopeningClosesTheOldComboPopupAndPreservesItsCommittedKey){
+    m_state.select(2u);
+    m_state.open();
+    ASSERT_TRUE(acceptCombo(1u));
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(fieldId(), "rows")), nullptr);
+    reopenParent();
+    ASSERT_TRUE(acceptCombo(2u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 2u);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(fieldId(), "rows")), nullptr);
+    ASSERT_NE(target(fieldId()), nullptr);
+    EXPECT_EQ(target(fieldId())->popup.openGeneration, m_parent.openGeneration());
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, ExplicitComboOpeningAfterParentReopeningKeepsTheNewPopupOpen){
+    m_state.select(2u);
+    m_state.open();
+    ASSERT_TRUE(acceptCombo(1u));
+    const WidgetId rowsId = UiTestSupport::RequireWidgetId(fieldId(), s_ComboRowsKey);
+    ASSERT_NE(target(rowsId), nullptr);
+    const PopupToken oldCombo = target(rowsId)->popup;
+    reopenParent();
+    m_state.open();
+    ASSERT_TRUE(acceptCombo(2u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 2u);
+    ASSERT_NE(target(rowsId), nullptr);
+    EXPECT_NE(target(rowsId)->popup.openGeneration, oldCombo.openGeneration);
+    EXPECT_EQ(target(rowsId)->popup.instanceGeneration, oldCombo.instanceGeneration);
+    EXPECT_EQ(m_context.input().focus(), rowsId);
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, SearchParentReplacementCancelsStalePreeditAndPermitsAFreshOpening){
+    m_search.combo().select(2u);
+    ASSERT_TRUE(m_search.query().setText(s_SecondHalfQuery));
+    m_search.combo().open();
+    ASSERT_TRUE(acceptSearch(1u));
+    const WidgetId queryId = UiTestSupport::RequireWidgetId(fieldId(), "query");
+    ASSERT_NE(target(queryId), nullptr);
+    const PopupToken oldSearch = target(queryId)->popup;
+    const u64 loans = m_host.loans;
+    ASSERT_TRUE(m_search.query().beginComposition());
+    ASSERT_TRUE(m_search.query().updateComposition("preedit", 0u, 7u));
+    reopenParent();
+    ASSERT_TRUE(acceptSearch(2u));
+    EXPECT_TRUE(m_searchResult.combo.closed);
+    EXPECT_FALSE(m_search.combo().isOpen());
+    EXPECT_EQ(m_search.combo().selectedKey(), 2u);
+    EXPECT_EQ(m_search.query().text(), s_SecondHalfQuery);
+    EXPECT_FALSE(m_search.query().composition().active);
+    EXPECT_FALSE(m_search.editorState().focused);
+    EXPECT_EQ(m_host.loans, loans);
+    EXPECT_EQ(target(queryId), nullptr);
+    expectParentControls();
+
+    reopenParent();
+    m_search.combo().open();
+    ASSERT_TRUE(acceptSearch(3u));
+    EXPECT_TRUE(m_search.combo().isOpen());
+    EXPECT_EQ(m_search.combo().selectedKey(), 2u);
+    ASSERT_NE(target(queryId), nullptr);
+    EXPECT_NE(target(queryId)->popup.openGeneration, oldSearch.openGeneration);
+    EXPECT_GT(m_host.loans, loans);
+    EXPECT_EQ(m_host.lastPopup, target(queryId)->popup);
+    EXPECT_EQ(m_context.input().focus(), queryId);
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, ParentReopeningClosesTheOldContextMenuWithoutRemovingItsAnchor){
+    ASSERT_TRUE(m_menu.open({ 80.0f, 120.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(acceptMenu(1u));
+    ASSERT_NE(target(menuRows()), nullptr);
+    reopenParent();
+    ASSERT_TRUE(acceptMenu(2u));
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_EQ(m_menu.cursorKey(), 0u);
+    EXPECT_EQ(target(menuRows()), nullptr);
+    const HitTarget* anchor = target(UiTestSupport::RequireWidgetId(parentId(), s_AnchorKey));
+    ASSERT_NE(anchor, nullptr);
+    EXPECT_TRUE(anchor->contextMenu);
+    EXPECT_EQ(anchor->popup.openGeneration, m_parent.openGeneration());
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, ExplicitMenuOpeningAfterParentReopeningKeepsTheNewCommandLifetime){
+    ASSERT_TRUE(m_menu.open({ 80.0f, 120.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(acceptMenu(1u));
+    ASSERT_NE(target(menuRows()), nullptr);
+    const PopupToken oldMenu = target(menuRows())->popup;
+    reopenParent();
+    ASSERT_TRUE(m_menu.open({ 100.0f, 160.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(acceptMenu(2u));
+    EXPECT_TRUE(m_menu.isOpen());
+    EXPECT_EQ(m_menu.cursorKey(), 1u);
+    ASSERT_NE(target(menuRows()), nullptr);
+    EXPECT_NE(target(menuRows())->popup.openGeneration, oldMenu.openGeneration);
+    EXPECT_EQ(target(menuRows())->popup.instanceGeneration, oldMenu.instanceGeneration);
+    EXPECT_EQ(m_context.input().focus(), menuRows());
+    expectParentControls();
+}
+
+TEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclaredLayersAndCountTowardTheEightScopeLimit){
+    m_state.open();
+    m_childCombo.open();
+    ASSERT_TRUE(m_menu.open({ 80.0f, 180.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(declareReserved(1u, false));
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const WidgetId parentRows = UiTestSupport::RequireWidgetId(fieldId(), s_ComboRowsKey);
+    const WidgetId childField = UiTestSupport::RequireWidgetId(childId(), s_ComboKey);
+    const WidgetId childRows = UiTestSupport::RequireWidgetId(childField, s_ComboRowsKey);
+    ASSERT_NE(target(parentId()), nullptr);
+    ASSERT_NE(target(parentRows), nullptr);
+    ASSERT_NE(target(menuRows()), nullptr);
+    ASSERT_NE(target(childId()), nullptr);
+    ASSERT_NE(target(childRows), nullptr);
+    EXPECT_EQ(target(parentId())->layer, 1u);
+    EXPECT_EQ(target(parentRows)->layer, 2u);
+    EXPECT_EQ(target(menuRows())->layer, 3u);
+    EXPECT_EQ(target(childId())->layer, 4u);
+    EXPECT_EQ(target(childRows)->layer, 5u);
+    WidgetId deepest = childId();
+    for(usize index = 0u; index < 3u; ++index)
+        deepest = UiTestSupport::RequireWidgetId(deepest, s_DeepPopupKey);
+    ASSERT_NE(target(deepest), nullptr);
+    EXPECT_EQ(target(deepest)->layer, s_InputMaxPopups);
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(deepest, s_LeafKey)), nullptr);
+    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(deepest, s_LeafKey));
+    u32 previousLayer = 0u;
+    for(const DrawCommand& command : snapshot.commands()){
+        EXPECT_GE(command.layer, previousLayer);
+        previousLayer = command.layer;
+    }
+
+    EXPECT_FALSE(declareReserved(2u, true));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    ASSERT_NE(target(parentRows), nullptr);
+    EXPECT_EQ(target(parentRows)->layer, 2u);
+    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(deepest, s_LeafKey));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

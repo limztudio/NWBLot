@@ -1,0 +1,1833 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+native{
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/asset.adhd.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiFixtureSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopulateBakedFontTables(Span<const u8> bytes, Core::Alloc::GlobalArena& arena, Impl::FontAtlasPayload& payload);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintAssertions{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected);
+// Callers validate snapshot sizes before comparing the common geometry fields.
+void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected);
+void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected);
+void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/id.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiTestSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Assert valid widget IDs and return a fallback ID only after recording a test failure.
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireRootId(const NWB::Impl::Ui::WidgetRoot& root);
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetId(NWB::Impl::Ui::WidgetId parent, AStringView stableKey);
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetPartId(NWB::Impl::Ui::WidgetId parent, u64 partKey);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
+
+#include <global/filesystem.h>
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiWidgetTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+
+inline constexpr AStringView s_TestSkinPath = "tests/ui/skin";
+inline constexpr AStringView s_TestLatinFontPath = "tests/ui/fonts/latin";
+inline constexpr AStringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
+inline constexpr Name s_FontScratchArenaName = NWB::Tests::UiCases::s_UiCaseNameFontScratch;
+
+[[nodiscard]] Point Center(const Rect& bounds)noexcept;
+void ExpectRectExact(const Rect& actual, const Rect& expected);
+void ExpectHitTargetIdentity(const HitTarget& actual, const HitTarget& expected);
+
+template<usize Capacity>
+struct AcceptedInputState{
+    Array<HitTarget, Capacity> targets{};
+    usize count = 0u;
+    usize popupCount = 0u;
+    u64 layoutGeneration = 0u;
+    WidgetId focus;
+    WidgetId capture;
+};
+
+template<usize Capacity, typename Input>
+[[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input)noexcept(
+    noexcept(DeclVal<usize&>() = input.targets().size())
+    && noexcept(DeclVal<usize&>() = input.popupCount())
+    && noexcept(DeclVal<u64&>() = input.layoutGeneration())
+    && noexcept(DeclVal<WidgetId&>() = input.focus())
+    && noexcept(DeclVal<WidgetId&>() = input.capture())
+    && noexcept(DeclVal<HitTarget&>() = input.targets()[DeclVal<usize&>()])
+){
+    AcceptedInputState<Capacity> saved;
+    saved.count = input.targets().size();
+    saved.popupCount = input.popupCount();
+    saved.layoutGeneration = input.layoutGeneration();
+    saved.focus = input.focus();
+    saved.capture = input.capture();
+    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
+        saved.targets[index] = input.targets()[index];
+    return saved;
+}
+
+template<typename Input>
+void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targets, const usize count, const b8 checkOwnerDeclaration = false){
+    ASSERT_EQ(input.targets().size(), count);
+    ASSERT_LE(count, targets.size());
+    for(usize index = 0u; index < count; ++index){
+        const HitTarget& before = targets[index];
+        const HitTarget& after = input.targets()[index];
+        ExpectHitTargetIdentity(after, before);
+        if(checkOwnerDeclaration)
+            EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+        EXPECT_EQ(after.popup, before.popup);
+        UiPaintAssertions::ExpectRect(after.rectangle, before.rectangle);
+        UiPaintAssertions::ExpectRect(after.clip, before.clip);
+    }
+}
+
+template<usize Capacity, typename Input>
+void ExpectAcceptedInput(
+    const Input& input,
+    const AcceptedInputState<Capacity>& saved,
+    const b8 checkOwnerDeclaration = true,
+    const b8 checkFocus = false,
+    const b8 checkPopupCount = false,
+    const b8 checkCapture = true
+){
+    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
+    if(checkPopupCount)
+        EXPECT_EQ(input.popupCount(), saved.popupCount);
+    if(checkFocus)
+        EXPECT_EQ(input.focus(), saved.focus);
+    if(checkCapture)
+        EXPECT_EQ(input.capture(), saved.capture);
+    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwnerDeclaration);
+}
+
+template<typename VertexVector>
+void CopyGlyphVertices(const DrawSnapshot& snapshot, VertexVector& vertices){
+    vertices.reserve(snapshot.indices().size());
+    for(const DrawCommand& command : snapshot.commands()){
+        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
+            continue;
+        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
+            vertices.push_back(snapshot.vertices()[snapshot.indices()[index]]);
+    }
+}
+
+inline constexpr AStringView s_ParentPopupKey = "parent";
+inline constexpr AStringView s_ChildPopupKey = "child";
+
+[[nodiscard]] PopupOptions NestedParentOptions()noexcept;
+[[nodiscard]] PopupOptions NestedChildOptions()noexcept;
+[[nodiscard]] PopupOptions LargeLoanParentOptions()noexcept;
+[[nodiscard]] PopupOptions LargeLoanChildOptions()noexcept;
+[[nodiscard]] NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept;
+
+struct SkinPaintSample{
+    usize quads = 0u;
+    Rect bounds;
+    Color color;
+    f32 maximumU = 0.0f;
+};
+
+[[nodiscard]] b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, StringView filename, Font& font);
+[[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class WidgetFixture : public testing::Test{
+protected:
+    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f)noexcept;
+
+
+public:
+    WidgetFixture();
+
+
+protected:
+    virtual void SetUp()override;
+    void configureSkin(AStringView omitted = {});
+    [[nodiscard]] b8 begin(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
+    [[nodiscard]] b8 finishWindow(){ return m_builder.endWindow() && m_context.endRoot() && m_context.finishFrame(); }
+    [[nodiscard]] b8 panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){ return begin(generation) && m_builder.beginPanel(key, bounds); }
+    [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
+    [[nodiscard]] b8 finishPanel(){ return m_builder.endPanel() && finishRoot(); }
+    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey); }
+    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ChildPopupKey); }
+    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), parent), child); }
+    [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{ return UiTestSupport::FindHitTarget(m_context.input().targets(), widget); }
+    [[nodiscard]] InputRoutingResult send(const InputEvent& event);
+    void click(const Point& point);
+    void drag(const Point& origin, const Point& destination);
+    void press(Core::Key::Enum value, b8 repeat = false, b8 shift = false);
+    [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;
+    [[nodiscard]] b8 installKoreanFallback();
+    [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, u32 slot)const noexcept;
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    Font m_font;
+    TextService m_text;
+    UiSkin m_skin;
+    PaintBuilder m_paint;
+    Context m_context;
+    Builder m_builder;
+    WidgetRoot m_root{ 86u, 2u };
+    u64 m_skinGeneration = 1u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr Rect s_ComboPanelBounds{ 10.0f, 10.0f, 320.0f, 240.0f };
+inline constexpr AStringView s_ComboPanelKey = "panel";
+inline constexpr AStringView s_ComboKey = "combo";
+inline constexpr AStringView s_SecondComboKey = "other";
+// The combo popup list part and the list's own row container share the "rows" text.
+inline constexpr AStringView s_ComboRowsKey = "rows";
+inline constexpr AStringView s_ListRowsKey = "rows";
+
+
+// Arithmetic combo source with stable keys across reorder and removal.
+class ComboSource : public IListDataSource{
+public:
+    virtual ~ComboSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
+    [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+    void resetCounters()const noexcept;
+
+
+protected:
+    virtual void observeCallback()const noexcept{}
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
+        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
+    }
+
+
+public:
+    u64 count = 100000u;
+    u64 generation = 701u;
+    u64 contentRevision = 1u;
+    u64 removed = 0u;
+    u64 disabled = 0u;
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 searchCalls = 0u;
+    mutable u64 textCalls = 0u;
+    mutable u64 enabledCalls = 0u;
+    b8 reverse = false;
+};
+
+[[nodiscard]] ComboOptions Options()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComboFixture : public WidgetFixture{
+protected:
+    using WidgetFixture::press;
+
+
+protected:
+    [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return declareSource(generation, m_source, m_state, options, bounds);
+    }
+    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds);
+    [[nodiscard]] b8 prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return declareCombo(generation, options, bounds) && finishPanel();
+    }
+    [[nodiscard]] b8 accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return prepare(generation, options, bounds) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "popup"); }
+    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), s_ComboRowsKey); }
+    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(list(combo), s_ListRowsKey), key);
+    }
+    [[nodiscard]] b8 openByPointer(u64 generation);
+
+
+protected:
+    ComboSource m_source;
+    ComboState m_state;
+    ComboResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd.h>
+
+#include <global/simplemath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditCaretTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+inline constexpr f32 s_CaretGlyphAdvance = 10.0f;
+
+namespace ShaperFault{
+    enum Enum : u8{ None, LeadingGap, TrailingGap, Overlap, InconsistentGlyphEnd, NonfinitePlacement };
+};
+
+class CaretShaper final : public ITextShaper{
+public:
+    explicit CaretShaper(Core::Alloc::GlobalArena& arena)noexcept : m_arena(arena){}
+    virtual ~CaretShaper()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
+
+
+public:
+    f32 scalarAdvance = s_CaretGlyphAdvance;
+    ShaperFault::Enum fault = ShaperFault::None;
+    b8 variedHeight = false;
+    b8 zeroAdvance = false;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditCaretFixture : public testing::Test{
+public:
+    EditCaretFixture();
+
+
+protected:
+    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
+        return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
+    }
+    [[nodiscard]] b8 identityMapping(StringView text);
+    [[nodiscard]] b8 adopt(StringView text, usize committedBytes, EditTextMode::Enum mode = EditTextMode::Multiline);
+    [[nodiscard]] b8 adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
+        return identityMapping(text) && adopt(text, text.size(), mode);
+    }
+    void expectCaret(usize byte, f32 x, f32 y, f32 height = 12.0f)const;
+    void expectRange(EditBoxRange range, u32 line, Rect expected, f32 cap = 1.0f)const;
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    CaretShaper m_shaper;
+    TextLayoutBuilder m_builder;
+    EditCaretGeometry m_geometry;
+    PaintVector<EditCaretMapping> m_mapping;
+    EditBoundaryVector m_boundaries;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditFixture : public testing::Test{
+public:
+    EditFixture()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiEditFixture))
+        , m_model(m_arena)
+    {}
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    Impl::Ui::EditModel m_model;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiHorizontalNavigationTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+
+HitTarget Part(const HitTarget& host)noexcept;
+PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class HorizontalNavigationFixture : public UiTestSupport::RouterTestFixture{
+public:
+    HorizontalNavigationFixture();
+
+
+protected:
+    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
+    [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
+    void press(Core::Key::Enum key);
+    void focusTarget(usize index = 0u);
+    [[nodiscard]] b8 publish(usize count = 2u, Span<const PopupScope> popups = {});
+    [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
+    void bindEditor(usize hostIndex = 0u)noexcept;
+
+
+protected:
+    Array<HitTarget, 3u> m_targets;
+    u64 m_generation = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiFixtureSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<Impl::Ui::SharedImageSource> MakeSeededImage(StringView path, u8 seed, u32 width, u32 height, Core::Alloc::GlobalArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListBehaviorTestSupport{
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RangeSource final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
+        ++keyCalls;
+        if(index >= count)
+            return 0u;
+        return reversed ? count - index : index + 1u;
+    }
+
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
+        u64 index = 0u;
+        ++lookupCalls;
+        if(changeRevisionOnLookup){
+            changeRevisionOnLookup = false;
+            ++revisionValue;
+        }
+        if(key == 0u || key > count)
+            return MakeUnexpected(Failure{});
+        index = badLookup ? count : wrongLookup ? 0u : reversed ? count - key : key - 1u;
+        return index;
+    }
+
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+        u64 index = 0u;
+        ++findCalls;
+        if(start >= count)
+            return MakeUnexpected(Failure{});
+        if(badFind){
+            index = count;
+            return index;
+        }
+        index = start;
+        if(index >= disabledBegin && index < disabledEnd){
+            if(reverse){
+                if(disabledBegin == 0u)
+                    return MakeUnexpected(Failure{});
+                index = disabledBegin - 1u;
+            }
+            else{
+                if(disabledEnd >= count)
+                    return MakeUnexpected(Failure{});
+                index = disabledEnd;
+            }
+        }
+        return index;
+    }
+
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        ++enabledCalls;
+        return index < count && (index < disabledBegin || index >= disabledEnd);
+    }
+
+    void clearCalls()noexcept{
+        keyCalls = 0u;
+        lookupCalls = 0u;
+        findCalls = 0u;
+        enabledCalls = 0u;
+    }
+
+
+public:
+    u64 generation = 41u;
+    mutable u64 revisionValue = 1u;
+    u64 count = 10u;
+    u64 disabledBegin = Limit<u64>::s_Max;
+    u64 disabledEnd = Limit<u64>::s_Max;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
+    b8 badFind = false;
+    mutable b8 changeRevisionOnLookup = false;
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 findCalls = 0u;
+    mutable u64 enabledCalls = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
+    ControlAction action;
+    action.control = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
+    action.kind = kind;
+    return action;
+}
+
+inline void ExpectResult(const ListResult& actual, const ListResult& expected){
+    EXPECT_EQ(actual.valid, expected.valid);
+    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
+    EXPECT_EQ(actual.activated, expected.activated);
+    EXPECT_EQ(actual.focused, expected.focused);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_PanelKey = "panel";
+inline constexpr AStringView s_ListKey = "list";
+inline constexpr AStringView s_PopupKey = "popup";
+inline constexpr AStringView s_UpperPopupKey = "upper";
+inline constexpr AStringView s_RowsKey = "rows";
+inline constexpr AStringView s_ScrollbarKey = "scrollbar";
+inline constexpr AStringView s_FirstRowText = "Ax";
+
+
+// Arithmetic list source that computes rows on demand without allocating per row.
+class ArithmeticSource final : public IListDataSource{
+public:
+    virtual ~ArithmeticSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+
+
+private:
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
+        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
+    }
+    void invalidateText()const noexcept{ temporary.fill('?'); }
+
+
+public:
+    u64 count = 100000u;
+    u64 generation = 301u;
+    u64 contentRevision = 1u;
+    u64 removed = 0u;
+    u64 disabled = 0u;
+    u64 specialIndex = Limit<u64>::s_Max;
+    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 textCalls = 0u;
+    mutable Array<u64, 32u> textCallsByIndex{};
+    b8 reverse = false;
+    b8 duplicate = false;
+    b8 malformedLookup = false;
+    mutable Array<char, 128u> temporary{};
+};
+
+[[nodiscard]] ListOptions Options()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiListBuilderTests : public WidgetFixture{
+protected:
+    [[nodiscard]] b8 prepare(const u64 generation, const ListOptions& options = Options()){
+        return prepareSource(generation, m_source, m_state, options);
+    }
+    [[nodiscard]] b8 prepareSource(u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
+    [[nodiscard]] b8 accept(const u64 generation, const ListOptions& options = Options()){
+        return prepare(generation, options) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] b8 preparePopups(u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr);
+    [[nodiscard]] WidgetId row(const u64 key)const{
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_RowsKey), key);
+    }
+    [[nodiscard]] b8 wheel(f64 delta = -1.0);
+
+
+protected:
+    ArithmeticSource m_source;
+    ListState m_state;
+    ListResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
+
+#include <tests/unit/ui/fixture_text_shaping.adhd.h>
+
+#include <tests/common/font_fixture.adhd.h>
+
+#include <global/filesystem.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiMultilineViewTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_MultilineViewFontPath = "tests/ui/widgets/multiline_view/font";
+inline constexpr AStringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
+inline constexpr Rect s_MultilineViewViewport{ 0.0f, 0.0f, 500.0f, 500.0f };
+
+using NWB::Tests::UiFixtureText::FixtureShaper;
+
+void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected);
+void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MultilineViewFixture : public testing::Test{
+public:
+    MultilineViewFixture();
+
+
+protected:
+    [[nodiscard]] b8 shapeView();
+    [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
+    [[nodiscard]] b8 loadFont();
+    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    EditModel m_model;
+    FixtureShaper m_shaper;
+    TextLayoutBuilder m_layoutBuilder;
+    EditBoxView m_view;
+    EditBoxPlacement m_placement;
+    Font m_font;
+    TextService m_text;
+    UiSkin m_skin;
+    PaintBuilder m_paint;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiCoreAndListFixturesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+
+
+#include <global/sha256.h>
+#include <global/scope_exit.h>
+
+#include <hb.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiFixtureSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopulateBakedFontTables(const Span<const u8> bytes, Core::Alloc::GlobalArena& arena, FontAtlasPayload& payload){
+    hb_blob_t* const blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
+    ScopeExit releaseBlob([blob]()noexcept{ hb_blob_destroy(blob); });
+    hb_face_t* const face = hb_face_create(blob, 0u);
+    ScopeExit releaseFace([face]()noexcept{ hb_face_destroy(face); });
+    payload.unitsPerEm = hb_face_get_upem(face);
+    payload.sourceGlyphCount = hb_face_get_glyph_count(face);
+    const Array<u32, 3u> tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
+    for(const u32 tag : tags){
+        hb_blob_t* const tableBlob = hb_face_reference_table(face, tag);
+        ScopeExit releaseTable([tableBlob]()noexcept{ hb_blob_destroy(tableBlob); });
+        u32 size = 0u;
+        const char* data = hb_blob_get_data(tableBlob, &size);
+        if(size != 0u){
+            payload.positioningTables.emplace_back(arena);
+            FontAtlasPositioningTable& table = payload.positioningTables.back();
+            table.tag = tag;
+            table.bytes.assign(reinterpret_cast<const u8*>(data), reinterpret_cast<const u8*>(data) + size);
+            table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComboSource::key(const u64 index)const noexcept{
+    observeCallback();
+    ++keyCalls;
+    return rawKey(index);
+}
+
+Expected<u64> ComboSource::indexOf(const u64 value)const noexcept{
+    observeCallback();
+    ++lookupCalls;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+}
+
+Expected<u64> ComboSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
+    observeCallback();
+    ++searchCalls;
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+}
+
+StringView ComboSource::text(const u64 index)const{
+    observeCallback();
+    ++textCalls;
+    return index % 2u == 0u ? "First" : "Second";
+}
+
+b8 ComboSource::enabled(const u64 index)const noexcept{
+    observeCallback();
+    ++enabledCalls;
+    return index < count && rawKey(index) != disabled;
+}
+
+void ComboSource::resetCounters()const noexcept{
+    keyCalls = 0u;
+    lookupCalls = 0u;
+    searchCalls = 0u;
+    textCalls = 0u;
+    enabledCalls = 0u;
+}
+
+ComboOptions Options()noexcept{
+    ComboOptions options;
+    options.width = { LayoutSizePolicy::Fixed, 220.0f };
+    options.height = { LayoutSizePolicy::Fixed, 32.0f };
+    options.popupHeight = 144.0f;
+    options.placeholder = "Choose";
+    return options;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
+    if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
+        return false;
+    m_result = m_builder.comboBox(s_ComboKey, source, state, options);
+    return m_result.valid;
+}
+
+b8 ComboFixture::openByPointer(const u64 generation){
+    const HitTarget* field = target(id(s_ComboKey, s_ComboPanelKey));
+    if(!field)
+        return false;
+    click(Center(field->rectangle));
+    return accept(generation) && m_state.isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/fixture_text_shaping.adhd.h>
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditCaretTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeRequest& request){
+    ShapedRun run(m_arena);
+    run.metrics = variedHeight && request.text == "TALL" ? FontMetrics{ 10.0f, 4.0f, 6.0f } : FontMetrics{ 8.0f, 2.0f, 2.0f };
+    if(fault == ShaperFault::Overlap){
+        run.glyphs.push_back({ {}, 1u, 0u, 2u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 1u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    }
+    else if(fault == ShaperFault::InconsistentGlyphEnd){
+        run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 0u, 3u, {}, {}, {} });
+    }
+    else if(fault == ShaperFault::NonfinitePlacement){
+        run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { Limit<f32>::s_Max, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 1u, 2u, { Limit<f32>::s_Max, 0.0f }, {}, {} });
+    }
+    else if(request.text == "ffi")
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
+    else if(request.text == "A\xcc\x81" "B"){
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    }
+    else if(request.text == "e\xcc\x81")
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    else if(request.text == "\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab")
+        run.glyphs.push_back({ {}, 1u, 0u, 9u, {}, { 12.0f, 0.0f }, {} });
+    else{
+        usize begin = fault == ShaperFault::LeadingGap ? 1u : 0u;
+        const usize limit = request.text.size() - (fault == ShaperFault::TrailingGap && !request.text.empty() ? 1u : 0u);
+        while(begin < limit){
+            usize end = begin + 1u;
+            while(end < limit && IsUtf8Continuation(static_cast<u8>(request.text[end])))
+                ++end;
+            run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { scalarAdvance, 0.0f }, {} });
+            begin = end;
+        }
+    }
+    if(zeroAdvance){
+        for(ShapedGlyph& glyph : run.glyphs)
+            glyph.advance.x = 0.0f;
+    }
+    if(request.direction == TextDirection::RightToLeft)
+        Tests::UiFixtureText::ReverseGlyphs(run);
+    return run;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditCaretFixture::EditCaretFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsEditCaret))
+    , m_shaper(m_arena)
+    , m_builder(m_arena, m_shaper)
+    , m_geometry(m_arena)
+    , m_mapping(m_arena)
+    , m_boundaries(m_arena)
+{}
+
+b8 EditCaretFixture::identityMapping(const StringView text){
+    auto boundaries = GraphemeSegmentation::Build(m_arena, text);
+    if(!boundaries)
+        return false;
+    m_boundaries = Move(*boundaries);
+    m_mapping.clear();
+    m_mapping.reserve(m_boundaries.size());
+    for(const usize boundary : m_boundaries)
+        m_mapping.push_back({ boundary, boundary });
+    return true;
+}
+
+b8 EditCaretFixture::adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode){
+    auto candidate = layout(text);
+    return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
+}
+
+void EditCaretFixture::expectCaret(const usize byte, const f32 x, const f32 y, const f32 height)const{
+    const auto rectangle = m_geometry.caretRect(byte);
+    ASSERT_TRUE(rectangle);
+    EXPECT_FLOAT_EQ(rectangle->x, x);
+    EXPECT_FLOAT_EQ(rectangle->y, y);
+    EXPECT_FLOAT_EQ(rectangle->width, 0.0f);
+    EXPECT_FLOAT_EQ(rectangle->height, height);
+}
+
+void EditCaretFixture::expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap)const{
+    const auto rectangle = m_geometry.rangeOnLine(range, line, cap);
+    ASSERT_TRUE(rectangle);
+    EXPECT_FLOAT_EQ(rectangle->x, expected.x);
+    EXPECT_FLOAT_EQ(rectangle->y, expected.y);
+    EXPECT_FLOAT_EQ(rectangle->width, expected.width);
+    EXPECT_FLOAT_EQ(rectangle->height, expected.height);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiHorizontalNavigationTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HitTarget Part(const HitTarget& host)noexcept{
+    HitTarget part;
+    part.id = { 4u };
+    part.declarationGeneration = host.declarationGeneration;
+    part.rectangle = { 20.0f, 20.0f, 60.0f, 20.0f };
+    part.clip = host.clip;
+    part.paintOrder = 1u;
+    part.activatable = true;
+    part.control = host.control;
+    part.owner = host.id;
+    part.ownerDeclarationGeneration = host.declarationGeneration;
+    part.value = 91u;
+    part.popup = host.popup;
+    part.layer = host.layer;
+    return part;
+}
+
+PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{
+    PopupScope popup;
+    popup.token = { owner.id, owner.declarationGeneration, 6u, openGeneration };
+    popup.bounds = { 0.0f, 0.0f, 300.0f, 200.0f };
+    popup.viewport = popup.bounds;
+    popup.layer = 1u;
+    return popup;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HorizontalNavigationFixture::HorizontalNavigationFixture()
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiHorizontalNavigation))
+{
+    for(usize index = 0u; index < 2u; ++index){
+        HitTarget& host = m_targets[index];
+        host.id = { index + 1u };
+        host.declarationGeneration = 7u;
+        host.rectangle = { static_cast<f32>(index) * 140.0f, 0.0f, 100.0f, 100.0f };
+        host.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+        host.focusable = true;
+        host.control = { 11u + index, 21u, 31u };
+        host.navigable = true;
+        host.horizontalNavigation = true;
+        host.pageRows = 4u;
+    }
+    HitTarget& editor = m_targets[2u];
+    editor.id = { 3u };
+    editor.declarationGeneration = 9u;
+    editor.rectangle = { 0.0f, 120.0f, 120.0f, 24.0f };
+    editor.clip = m_targets[0u].clip;
+    editor.focusable = true;
+    editor.textEditable = true;
+    editor.control = { 101u, 102u, 103u };
+}
+
+InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
+    return send({ .key = key, .type = InputEventType::KeyDown, .repeat = repeat  });
+}
+
+InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
+    return send({ .key = key , .type = InputEventType::KeyUp });
+}
+
+void HorizontalNavigationFixture::press(const Core::Key::Enum key){
+    EXPECT_TRUE(keyDown(key).commandConsumed);
+    EXPECT_TRUE(keyUp(key).commandConsumed);
+}
+
+void HorizontalNavigationFixture::focusTarget(const usize index){
+    const Rect& rectangle = m_targets[index].rectangle;
+    const Point point{ rectangle.x + 10.0f, rectangle.y + 10.0f };
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
+    EXPECT_EQ(m_router.focus(), m_targets[index].id);
+}
+
+b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
+    const u64 generation = m_generation + 1u;
+    if(!m_router.commitTargets(Span<const HitTarget>(m_targets.data(), count), generation, popups))
+        return false;
+    m_generation = generation;
+    return true;
+}
+
+Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noexcept{
+    const HitTarget& host = m_targets[index];
+    return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
+}
+
+void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
+    const HitTarget& host = m_targets[hostIndex];
+    HitTarget& editor = m_targets[2u];
+    editor.commandOwner = host.id;
+    editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
+    editor.commandControl = host.control;
+    editor.popup = host.popup;
+    editor.layer = host.layer;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiFixtureSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<SharedImageSource> MakeSeededImage(const StringView path, const u8 seed, const u32 width, const u32 height, Core::Alloc::GlobalArena& arena){
+    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
+    if(!mipCount)
+        return MakeUnexpected(mipCount.error());
+    Texture::MipLevelVector mips(arena);
+    mips.reserve(*mipCount);
+    u32 mipWidth = width;
+    u32 mipHeight = height;
+    u64 offset = 0u;
+    for(u32 index = 0u; index < *mipCount; ++index){
+        const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
+        if(!plane)
+            return MakeUnexpected(plane.error());
+        mips.push_back({ offset, plane->planeByteCount, mipWidth, mipHeight, plane->blocksX, plane->blocksY, 1u });
+        offset += plane->planeByteCount;
+        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
+        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
+    }
+    if(offset > Limit<usize>::s_Max)
+        return MakeUnexpected(Failure{});
+    Core::Assets::AssetBytes bytes(arena);
+    bytes.resize(static_cast<usize>(offset));
+    for(usize index = 0u; index < bytes.size(); ++index)
+        bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
+    const auto textureName = Name::FromText(path);
+    if(!textureName)
+        return MakeUnexpected(Failure{});
+    Texture texture(arena, *textureName);
+    texture.setPayload(width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
+    return MakeImageSource(arena, texture);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ArithmeticSource::instanceGeneration()const noexcept{
+    invalidateText();
+    return generation;
+}
+
+u64 ArithmeticSource::revision()const noexcept{
+    invalidateText();
+    return contentRevision;
+}
+
+u64 ArithmeticSource::rowCount()const noexcept{
+    invalidateText();
+    return count;
+}
+
+u64 ArithmeticSource::key(const u64 index)const noexcept{
+    invalidateText();
+    ++keyCalls;
+    if(duplicate)
+        return 1u;
+    return rawKey(index);
+}
+
+Expected<u64> ArithmeticSource::indexOf(const u64 value)const noexcept{
+    invalidateText();
+    ++lookupCalls;
+    if(malformedLookup)
+        return count;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+}
+
+Expected<u64> ArithmeticSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
+    invalidateText();
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+}
+
+StringView ArithmeticSource::text(const u64 index)const noexcept{
+    ++textCalls;
+    if(index < textCallsByIndex.size())
+        ++textCallsByIndex[index];
+    if(index == specialIndex){
+        for(usize byte = 0u; byte < specialText.size(); ++byte)
+            temporary[byte] = specialText[byte];
+        return { temporary.data(), specialText.size() };
+    }
+    temporary[0u] = static_cast<char>('A' + index % 26u);
+    temporary[1u] = 'x';
+    return { temporary.data(), 2u };
+}
+
+b8 ArithmeticSource::enabled(const u64 index)const noexcept{
+    invalidateText();
+    return rawKey(index) != disabled;
+}
+
+ListOptions Options()noexcept{
+    ListOptions options;
+    options.width = { LayoutSizePolicy::Fixed, 280.0f };
+    options.height = { LayoutSizePolicy::Fixed, 120.0f };
+    return options;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
+    if(!begin(generation, display) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+        return false;
+    m_result = m_builder.virtualList(s_ListKey, source, state, options);
+    return m_result.valid && finishPanel();
+}
+
+b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
+    if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+        return false;
+    if(!m_builder.virtualList(s_ListKey, m_source, m_state, Options()).valid || !m_builder.endPanel())
+        return false;
+    PopupOptions popup;
+    popup.anchor = { 350.0f, 10.0f, 10.0f, 10.0f };
+    popup.size = { 320.0f, 180.0f };
+    if(m_builder.beginPopup(s_PopupKey, lowerPopup, popup)){
+        if(!m_builder.virtualList(s_ListKey, m_source, lowerState, Options()).valid || !m_builder.endPopup())
+            return false;
+    }
+    if(upperPopup && upperState){
+        popup.anchor = { 400.0f, 220.0f, 10.0f, 10.0f };
+        if(m_builder.beginPopup(s_UpperPopupKey, *upperPopup, popup)){
+            if(!m_builder.virtualList(s_ListKey, m_source, *upperState, Options()).valid || !m_builder.endPopup())
+                return false;
+        }
+    }
+    return m_context.endRoot() && m_context.finishFrame();
+}
+
+b8 UiListBuilderTests::wheel(const f64 delta){
+    const HitTarget* accepted = target(id(s_ListKey, s_PanelKey));
+    if(!accepted)
+        return false;
+    InputEvent event;
+    event.type = InputEventType::PointerWheel;
+    event.position = Center(accepted->rectangle);
+    event.scrollY = delta;
+    return send(event).pointerConsumed;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiMultilineViewTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
+    NWB::UiPaintAssertions::ExpectRect(actual.bounds, expected.bounds);
+    NWB::UiPaintAssertions::ExpectRect(actual.frameClip, expected.frameClip);
+    NWB::UiPaintAssertions::ExpectRect(actual.content, expected.content);
+    NWB::UiPaintAssertions::ExpectRect(actual.clip, expected.clip);
+    NWB::UiPaintAssertions::ExpectRect(actual.caret, expected.caret);
+    EXPECT_FLOAT_EQ(actual.textOrigin.x, expected.textOrigin.x);
+    EXPECT_FLOAT_EQ(actual.textOrigin.y, expected.textOrigin.y);
+    EXPECT_FLOAT_EQ(actual.scroll, expected.scroll);
+    EXPECT_FLOAT_EQ(actual.scrollY, expected.scrollY);
+}
+
+void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
+    output.clear();
+    for(const DrawCommand& command : snapshot.commands()){
+        if(command.material != PaintMaterial::Solid)
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
+            if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
+                continue;
+            const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            output.push_back({ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y });
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MultilineViewFixture::MultilineViewFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsMultilineView))
+    , m_model(m_arena, {}, EditTextMode::Multiline)
+    , m_shaper(m_arena)
+    , m_layoutBuilder(m_arena, m_shaper)
+    , m_view(m_arena)
+    , m_font(m_arena, Name(s_MultilineViewFontPath))
+    , m_text(m_arena)
+    , m_skin(m_arena, Name(s_MultilineViewSkinPath))
+    , m_paint(m_arena)
+{
+    UiSkin::RegionVector regions(m_arena);
+    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/widgets/multiline_view/texture"), 4u, 4u, 1.0f, Move(regions));
+}
+
+b8 MultilineViewFixture::shapeView(){
+    if(!m_view.snapshot(m_model))
+        return false;
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    return layout && m_view.adoptLayout(Move(*layout));
+}
+
+b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point previousScroll)noexcept{
+    const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, s_MultilineViewViewport, previousScroll);
+    if(!placement)
+        return false;
+    m_placement = *placement;
+    return true;
+}
+
+b8 MultilineViewFixture::loadFont(){
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    return InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text);
+}
+
+Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
+    m_paint.begin({ s_MultilineViewViewport.width, s_MultilineViewViewport.height, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_MultilineViewSkinPath), m_skin);
+    if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
+        return MakeUnexpected(Failure{});
+    EXPECT_FALSE(m_paint.popClip());
+    return m_paint.freeze();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

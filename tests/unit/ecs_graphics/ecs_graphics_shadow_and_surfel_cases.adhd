@@ -1,0 +1,1581 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 EcsGraphicsShadowAndSurfelCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ecs_graphics/suite.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
+
+#include <core/alloc/global.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(ShadowMaterialContext, TypedByteCountPreservesAlignmentAndWrapping){
+    const usize maximum = Limit<usize>::s_Max;
+    EXPECT_EQ(Impl::ResolveMaterialTypedBufferByteCount(0u, sizeof(u32)), sizeof(u32));
+    EXPECT_EQ(Impl::ResolveMaterialTypedBufferByteCount(5u, sizeof(u32)), 8u);
+    EXPECT_EQ(Impl::ResolveMaterialTypedBufferByteCount(maximum - 3u, sizeof(u32)), maximum - 3u);
+    EXPECT_EQ(Impl::ResolveMaterialTypedBufferByteCount(maximum - 2u, sizeof(u32)), 0u);
+    EXPECT_EQ(Impl::ResolveMaterialTypedBufferByteCount(maximum, sizeof(u32)), 0u);
+}
+
+TEST(ShadowMaterialContext, RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowMaterialContext)};
+    const Array<Impl::NwbRtInstanceMaterialGpu, 2> materials{};
+    const Array<Impl::InstanceGpuData, 2> instances{};
+    const Array<u8, 4> typed{ 1u, 2u, 3u, 4u };
+    Vector<u8, Core::Alloc::GlobalArena> materialBytes(arena);
+    Vector<u8, Core::Alloc::GlobalArena> instanceBytes(arena);
+    Vector<u8, Core::Alloc::GlobalArena> typedBytes(arena);
+    Impl::ShadowMaterialContextPolicy().captureBytes(
+        Span<const Impl::NwbRtInstanceMaterialGpu>(materials.data(), materials.size()),
+        Span<const Impl::InstanceGpuData>(instances.data(), instances.size()),
+        Span<const u8>(typed.data(), typed.size()),
+        materialBytes,
+        instanceBytes,
+        typedBytes
+    );
+    EXPECT_EQ(instanceBytes.size(), instances.size() * sizeof(Impl::InstanceGpuData));
+    const auto validate = [&](const usize materialSize, const usize instanceSize, const usize typedSize)noexcept{
+        return Impl::ShadowMaterialContextPolicy().validateRetainState(
+            Impl::PreparedShadowMaterialContextRoute::Hardware,
+            materials.size(),
+            instances.size(),
+            typed.size(),
+            true,
+            materials.size(),
+            materials.size(),
+            instances.size(),
+            instances.size(),
+            typed.size(),
+            typed.size(),
+            true,
+            true,
+            false,
+            false,
+            0u,
+            0u,
+            0u,
+            materialSize,
+            instanceSize,
+            typedSize
+        );
+    };
+    EXPECT_TRUE(validate(materialBytes.size(), instanceBytes.size(), typedBytes.size()));
+    EXPECT_FALSE(validate(materialBytes.size() - 1u, instanceBytes.size(), typedBytes.size()));
+    EXPECT_FALSE(validate(materialBytes.size(), instanceBytes.size() - 1u, typedBytes.size()));
+    EXPECT_FALSE(validate(materialBytes.size(), instanceBytes.size(), typedBytes.size() - 1u));
+    EXPECT_EQ(logger.errorCount(), 3u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/types.adhd.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_shadow_quality_settings_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Impl;
+
+
+TEST(ShadowQualitySettings, WrappingReceiverExtentPreservesOverflowAndZeroGroupBehavior){
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(11u, 2u, 4u), 2u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(9u, 2u, 4u), 2u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(Limit<u32>::s_Max, 2u, 4u), 0u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(0u, 2u, 4u), 0u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(11u, 2u, 0u), 0u);
+}
+
+TEST(ShadowQualitySettings, UnknownModesAreRejectedAndCannotRemoveAllSamples){
+    ShadowQualitySettings settings;
+    settings.transparentSampling = static_cast<TransparentShadowSampling::Enum>(2u);
+    EXPECT_FALSE(ValidateShadowQualitySettings(settings));
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 3u);
+    settings.transparentSampling = static_cast<TransparentShadowSampling::Enum>(255u);
+    EXPECT_FALSE(ValidateShadowQualitySettings(settings));
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
+}
+
+TEST(ShadowQualitySettings, RejectsUnknownReceiverResolution){
+    ShadowQualitySettings settings;
+    for(const u8 invalid : { u8(0u), u8(1u), u8(3u), u8(255u) }){
+        settings.receiverResolution = static_cast<ShadowReceiverResolution::Enum>(invalid);
+        EXPECT_FALSE(ValidateShadowQualitySettings(settings));
+    }
+}
+
+TEST(ShadowQualitySettings, RgbHistoryRequiresAcceptedWritesForEveryRequestedSlot){
+    TransparentShadowSamplingHistory history;
+    const ShadowQualitySettings settings{ TransparentShadowSampling::TemporalOne };
+    EXPECT_FALSE(history.covers(0u));
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(1u)), 3u);
+    history.record(1u);
+    EXPECT_FALSE(history.covers(1u));
+    history.accept();
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(1u)), 1u);
+    // Existing history for light zero does not initialize a newly assigned shadow slot.
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(3u)), 3u);
+    history.record(3u);
+    history.accept();
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(3u)), 1u);
+}
+
+TEST(ShadowQualitySettings, OpaqueOnlyAcceptedFramesInvalidateRgbQualification){
+    TransparentShadowSamplingHistory history;
+    history.record(3u);
+    history.accept();
+    ASSERT_TRUE(history.covers(3u));
+    // The shared selector swaps on an opaque-only frame, without any RGB merge being recorded.
+    history.accept();
+    EXPECT_FALSE(history.covers(1u));
+    history.record(3u);
+    EXPECT_FALSE(history.covers(3u));
+    history.accept();
+    EXPECT_TRUE(history.covers(3u));
+}
+
+TEST(ShadowQualitySettings, FailedSubmissionsRetainAcceptedFrontButCannotPublishPendingWrites){
+    TransparentShadowSamplingHistory history;
+    history.record(1u);
+    history.accept();
+    history.record(3u);
+    history.discardPending();
+    EXPECT_TRUE(history.covers(1u));
+    EXPECT_FALSE(history.covers(3u));
+    history.accept();
+    EXPECT_FALSE(history.covers(1u));
+    history.record(3u);
+    history.reset();
+    history.accept();
+    EXPECT_FALSE(history.covers(3u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
+
+#include <core/task/gpu/compiler_internal.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_shadow_visibility_merge_validator_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ShadowPacketPlan{
+    TestArena<> testArena;
+    Core::GpuTaskGraph graph;
+    Core::GpuCompiledGraph compiledGraph;
+    Impl::PreparedShadowVisibilityTasks tasks;
+
+
+public:
+    ShadowPacketPlan()
+        : graph(testArena.arena)
+        , compiledGraph(testArena.arena)
+    {}
+
+
+public:
+    [[nodiscard]] b8 build(const b8 combinedUpsample, const b8 temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const b8 combinedWavelet = false, const b8 combinedTemporal = false, const b8 diagnostics = false){
+        const Array<Name, 8> identities = {
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaque), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueWavelet),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueUpsample), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTrace),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTemporal), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentWavelet),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTerminal), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketDiagnostics)
+        };
+        constexpr Array<AStringView, 8> s_Labels = { "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace", "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics" };
+        static_assert(s_Labels.size() == identities.size());
+        Array<Core::GpuTaskId, 8> stages{};
+        Core::GpuTaskId previous;
+        for(u32 index = 0u; index < LengthOf(identities); ++index){
+            if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge) || (index == 7u && !diagnostics))
+                continue;
+            Core::GpuTaskSchedulingHint scheduling;
+            scheduling.mergeWithPrevious = previous.valid();
+            scheduling.forceSubmissionBoundary = index == splitStage;
+            const auto stageResult = graph.addTask(
+                Core::GpuTaskDesc{}
+                    .setIdentity(identities[index])
+                    .setMarkerLabel(s_Labels[index])
+                    .setScheduling(scheduling)
+                    .setDependencies({ previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u }),
+                Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics });
+            if(!stageResult){
+                ADD_FAILURE() << "stage declaration=" << index;
+                return false;
+            }
+            stages[index] = *stageResult;
+            previous = stages[index];
+        }
+        tasks.terminal = stages[6];
+        tasks.opaque = stages[0];
+        tasks.opaqueFirstWavelet = stages[1];
+        tasks.opaqueResolve = stages[2];
+        tasks.transparentTrace = stages[3];
+        tasks.transparentTemporalMerge = stages[4];
+        tasks.transparentFirstWavelet = stages[5];
+        tasks.diagnostics = stages[7];
+        tasks.combinedUpsample = combinedUpsample;
+        tasks.combinedWavelet = combinedWavelet;
+        tasks.combinedTemporal = combinedTemporal;
+        const Core::GpuPhysicalQueueInfo queue{
+            .familyIndex = 0u,
+            .queueIndex = 0u,
+            .id = { .index = 0u, .deviceGeneration = 1u },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = static_cast<Core::GpuQueueCapability::Mask>(Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer),
+        };
+        const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+        Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketScratch)};
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraphCompiler compiler;
+        Core::GpuTaskGraphCompileOptions options;
+        options.allowMetadataOnlyTasks = true;
+        if(!compiler.compile(declarations, topology, options, scratchArena, analysis, assignments, compiledGraph)){
+            ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status) << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
+            return false;
+        }
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalSelectsOpaqueEvenWhenUpsampleIsCombined){
+    const Core::GpuTaskId opaque{ .generation = 1u, .index = 1u };
+    const Core::GpuTaskId wavelet{ .generation = 1u, .index = 2u };
+    const Core::GpuTaskId resolve{ .generation = 1u, .index = 3u };
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(true, true, opaque, wavelet, resolve), opaque);
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(false, true, opaque, wavelet, resolve), wavelet);
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(false, false, opaque, wavelet, resolve), resolve);
+    EXPECT_FALSE(Impl::SelectOpaqueShadowCompletion(true, false, {}, wavelet, resolve).valid());
+}
+
+TEST(ShadowVisibilityMergeValidator, FusionOmitsOnlyOpaqueUpsampleAndKeepsOptionalTemporalMerge){
+    for(const b8 temporalMerge : { false, true }){
+        ShadowPacketPlan fixture;
+        ASSERT_TRUE(fixture.build(true, temporalMerge));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        EXPECT_FALSE(fixture.tasks.opaqueResolve.valid());
+        EXPECT_EQ(fixture.tasks.transparentTemporalMerge.valid(), temporalMerge);
+        EXPECT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+
+        Impl::PreparedShadowVisibilityTasks ordinary = fixture.tasks;
+        ordinary.combinedUpsample = false;
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, ordinary));
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, SeparateRouteRequiresItsOpaqueUpsample){
+    for(const b8 temporalMerge : { false, true }){
+        ShadowPacketPlan fixture;
+        ASSERT_TRUE(fixture.build(false, temporalMerge));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        EXPECT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+
+        Impl::PreparedShadowVisibilityTasks unexpectedTail = fixture.tasks;
+        unexpectedTail.combinedUpsample = true;
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, unexpectedTail));
+        Impl::PreparedShadowVisibilityTasks missingTail = fixture.tasks;
+        missingTail.opaqueResolve = {};
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingTail));
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, MissingStagesAndForeignGraphIdentitiesCannotProveOneAcceptancePacket){
+    for(const b8 combined : { false, true }){
+        ShadowPacketPlan fixture;
+        ShadowPacketPlan foreign;
+        ASSERT_TRUE(fixture.build(combined, true));
+        ASSERT_TRUE(foreign.build(combined, true));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        const Array<Core::GpuTaskId Impl::PreparedShadowVisibilityTasks::*, 4> required = {
+            &Impl::PreparedShadowVisibilityTasks::terminal,
+            &Impl::PreparedShadowVisibilityTasks::opaqueFirstWavelet,
+            &Impl::PreparedShadowVisibilityTasks::transparentTrace,
+            &Impl::PreparedShadowVisibilityTasks::transparentFirstWavelet,
+        };
+        for(const auto member : required){
+            Impl::PreparedShadowVisibilityTasks missing = fixture.tasks;
+            missing.*member = {};
+            EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missing));
+            Impl::PreparedShadowVisibilityTasks stale = fixture.tasks;
+            stale.*member = foreign.tasks.*member;
+            EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, stale));
+        }
+        Impl::PreparedShadowVisibilityTasks staleMerge = fixture.tasks;
+        staleMerge.transparentTemporalMerge = foreign.tasks.transparentTemporalMerge;
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, staleMerge));
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePreparedChain){
+    for(const b8 combined : { false, true }){
+        for(u32 splitStage = 1u; splitStage < 7u; ++splitStage){
+            if(combined && splitStage == 2u)
+                continue;
+            SCOPED_TRACE(combined);
+            SCOPED_TRACE(splitStage);
+            ShadowPacketPlan fixture;
+            ASSERT_TRUE(fixture.build(combined, true, splitStage));
+            const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+            EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+        }
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket){
+    for(const b8 combined : { false, true }){
+        {
+            ShadowPacketPlan fixture;
+            ASSERT_TRUE(fixture.build(combined, true, 7u, false, false, true));
+            const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+            Impl::PreparedShadowVisibilityTasks withoutDiagnostics = fixture.tasks;
+            withoutDiagnostics.diagnostics = {};
+            ASSERT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, withoutDiagnostics));
+            EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+        }
+        ShadowPacketPlan merged;
+        ShadowPacketPlan foreign;
+        ASSERT_TRUE(merged.build(combined, true, Limit<u32>::s_Max, false, false, true));
+        ASSERT_TRUE(foreign.build(combined, true, Limit<u32>::s_Max, false, false, true));
+        const Core::GpuCompiledGraph::ReadView plan(merged.compiledGraph);
+        ASSERT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, merged.tasks));
+        Impl::PreparedShadowVisibilityTasks stale = merged.tasks;
+        stale.diagnostics = foreign.tasks.diagnostics;
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, stale));
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, CombinedWaveletRequiresBothTemporalPhasesAndCombinedTerminal){
+    ShadowPacketPlan fixture;
+    ASSERT_TRUE(fixture.build(true, true, Limit<u32>::s_Max, true));
+    const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+    EXPECT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+    Impl::PreparedShadowVisibilityTasks missingTemporal = fixture.tasks;
+    missingTemporal.transparentTemporalMerge = {};
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingTemporal));
+    Impl::PreparedShadowVisibilityTasks separateTerminal = fixture.tasks;
+    separateTerminal.combinedUpsample = false;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, separateTerminal));
+}
+
+TEST(ShadowVisibilityMergeValidator, CombinedWaveletRejectsEveryProducerOrTerminalPacketSplit){
+    for(const u32 stage : { 1u, 3u, 4u, 5u, 6u }){
+        ShadowPacketPlan fixture;
+        ASSERT_TRUE(fixture.build(true, true, stage, true));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks)) << stage;
+    }
+}
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge){
+    ShadowPacketPlan fixture;
+    ASSERT_TRUE(fixture.build(true, true, Limit<u32>::s_Max, true, true));
+    const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+    EXPECT_FALSE(fixture.tasks.opaqueFirstWavelet.valid());
+    EXPECT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+
+    Impl::PreparedShadowVisibilityTasks separateTemporal = fixture.tasks;
+    separateTemporal.combinedTemporal = false;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, separateTemporal));
+    Impl::PreparedShadowVisibilityTasks missingMerge = fixture.tasks;
+    missingMerge.transparentTemporalMerge = {};
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingMerge));
+    Impl::PreparedShadowVisibilityTasks missingCombinedWavelet = fixture.tasks;
+    missingCombinedWavelet.combinedWavelet = false;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingCombinedWavelet));
+    Impl::PreparedShadowVisibilityTasks duplicateMerge = fixture.tasks;
+    duplicateMerge.opaqueFirstWavelet = fixture.tasks.transparentTemporalMerge;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, duplicateMerge));
+}
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalRejectsEveryRemainingPacketSplit){
+    for(const u32 stage : { 3u, 4u, 5u, 6u }){
+        ShadowPacketPlan fixture;
+        ASSERT_TRUE(fixture.build(true, true, stage, true, true));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks)) << stage;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_soft_shadow_resolve_dispatch_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SoftShadowResolveDispatchBuilder, AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries){
+    Core::Alloc::GlobalArena arena(Tests::EcsGraphicsCases::s_EcsCaseTestsSoftShadowResolveDispatchBuilder);
+    RendererRayTracingState state(arena);
+    DeferredFrameTargets targets;
+    targets.bindless.shadowHistB = Core::GpuDescriptorHandle(31u);
+    targets.bindless.shadowMomentsB = Core::GpuDescriptorHandle(32u);
+    targets.bindless.shadowSoftHalfA = Core::GpuDescriptorHandle(33u);
+    targets.bindless.transparentHistA = Core::GpuDescriptorHandle(41u);
+    targets.bindless.transparentMomentsA = Core::GpuDescriptorHandle(42u);
+    OpaqueSoftShadowResolveOptions opaque;
+    opaque.frontIsA = true;
+    opaque.temporalActive = true;
+    opaque.dispatchResolve = true;
+    opaque.phase = SoftShadowOpaqueResolvePhase::WaveletOnly;
+    const SoftShadowResolveDispatch first = SoftShadowResolveDispatchBuilder::Opaque(opaque, state, targets);
+    EXPECT_EQ(first.firstWaveletResources.inputColor, 31u);
+    EXPECT_EQ(first.firstWaveletResources.moments, 32u);
+    EXPECT_TRUE(first.graphOwnsFirstWaveletInputState);
+    EXPECT_TRUE(first.graphOwnsWaveletMomentsEntryState);
+    EXPECT_TRUE(first.graphOwnsFirstWaveletOutputState);
+    EXPECT_FALSE(first.firstWaveletWritesHalfA);
+    EXPECT_EQ(first.fold, SoftShadowUpsampleFold::Overwrite);
+    opaque.temporalActive = false;
+    opaque.phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+    const SoftShadowResolveDispatch noHistory = SoftShadowResolveDispatchBuilder::Opaque(opaque, state, targets);
+    EXPECT_EQ(noHistory.firstWaveletResources.inputColor, 33u);
+    EXPECT_FALSE(noHistory.graphOwnsFirstWaveletInputState);
+
+    TransparentSoftShadowResolveOptions transparent;
+    transparent.frontIsA = false;
+    transparent.temporalActive = true;
+    transparent.dispatchResolve = true;
+    transparent.splitResolve = true;
+    const SoftShadowResolveDispatch second = SoftShadowResolveDispatchBuilder::Transparent(transparent, state, targets);
+    EXPECT_EQ(second.firstWaveletResources.inputColor, 41u);
+    EXPECT_EQ(second.firstWaveletResources.moments, 42u);
+    EXPECT_TRUE(second.graphOwnsFirstWaveletInputState);
+    EXPECT_TRUE(second.graphOwnsWaveletMomentsEntryState);
+    EXPECT_TRUE(second.graphOwnsFirstWaveletOutputState);
+    EXPECT_TRUE(second.firstWaveletWritesHalfA);
+    EXPECT_EQ(second.fold, SoftShadowUpsampleFold::Multiply);
+    transparent.dispatchTemporalMerge = true;
+    const SoftShadowResolveDispatch ownMerge = SoftShadowResolveDispatchBuilder::Transparent(transparent, state, targets);
+    EXPECT_FALSE(ownMerge.graphOwnsFirstWaveletInputState);
+    EXPECT_FALSE(ownMerge.graphOwnsWaveletMomentsEntryState);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_soft_shadow_wavelet_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SoftShadowWavelet, IndependentFreshTemporalInputsPermitExactlyOneWaveletPerChannel){
+    EXPECT_TRUE(CanCombineSoftShadowWavelets(true, true, true, true, 1u, 1u));
+    for(const u32 count : { 0u, 2u, 3u, 5u }){
+        EXPECT_FALSE(CanCombineSoftShadowWavelets(true, true, true, true, count, 1u));
+        EXPECT_FALSE(CanCombineSoftShadowWavelets(true, true, true, true, 1u, count));
+    }
+}
+
+TEST(SoftShadowWavelet, EveryUnpreparedRouteRetainsSeparateWavelets){
+    for(u32 flags = 0u; flags < 16u; ++flags){
+        EXPECT_EQ(CanCombineSoftShadowWavelets((flags & 1u) != 0u, (flags & 2u) != 0u, (flags & 4u) != 0u, (flags & 8u) != 0u, 1u, 1u), flags == 15u) << flags;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/push_constants.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_software_transparent_sampling_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SoftwareTransparentSampling, OnlyAcceptedCompleteStaticScenePermitsLocalBudgetSelection){
+    SoftwareTransparentSamplingHistory history;
+    const RayTracingSceneContentStamp scene{ 10u, 20u, true };
+    const SceneLightGpuData light;
+    history.prepareScene(scene);
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    EXPECT_FALSE(history.usable());
+    history.accept();
+    EXPECT_TRUE(history.usable());
+    history.prepareScene(scene);
+    EXPECT_FALSE(history.usable());
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    EXPECT_TRUE(history.usable());
+    history.discard();
+    EXPECT_FALSE(history.usable());
+}
+
+TEST(SoftwareTransparentSampling, MovingCasterWithStationaryReceiverCannotReuseTheReducedBudget){
+    SoftwareTransparentSamplingHistory history;
+    const SceneLightGpuData light;
+    history.prepareScene({ 10u, 20u, true });
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    history.accept();
+    // No camera/receiver input changes: the caster transform is part of the independently gathered scene identity.
+    history.prepareScene({ 11u, 20u, true });
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    EXPECT_FALSE(history.usable());
+    history.accept();
+    EXPECT_TRUE(history.usable());
+    history.prepareScene({ 11u, 21u, true });
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    EXPECT_FALSE(history.usable());
+    history.prepareScene({ 11u, 20u, false });
+    history.prepareLighting(Span<const SceneLightGpuData>(&light, 1u));
+    history.accept();
+    EXPECT_FALSE(history.usable());
+}
+
+TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
+    const RayTracingSceneContentStamp scene{ 10u, 20u, true };
+    Array<SceneLightGpuData, 2> original{};
+    original[1].direction.x = 0.25f;
+    constexpr Array<Float4 SceneLightGpuData::*, 5> s_Fields = {
+        &SceneLightGpuData::position, &SceneLightGpuData::direction,
+        &SceneLightGpuData::colorIntensity, &SceneLightGpuData::params,
+        &SceneLightGpuData::params2,
+    };
+    for(const auto field : s_Fields){
+        SoftwareTransparentSamplingHistory history;
+        history.prepareScene(scene);
+        history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 2u));
+        history.accept();
+        Array<SceneLightGpuData, 2> changed = { original[0], original[1] };
+        Float4& value = changed[0].*field;
+        value.x = value.x + 0.125f;
+        history.prepareLighting(Span<const SceneLightGpuData>(changed.data(), 2u));
+        EXPECT_FALSE(history.usable());
+    }
+    SoftwareTransparentSamplingHistory history;
+    history.prepareScene(scene);
+    history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 2u));
+    history.accept();
+    Array<SceneLightGpuData, 2> reversed = { original[1], original[0] };
+    history.prepareLighting(Span<const SceneLightGpuData>(reversed.data(), 2u));
+    EXPECT_FALSE(history.usable());
+    history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 1u));
+    EXPECT_FALSE(history.usable());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_surfel_coverage_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Compile the production Slang math as C++ so these assertions exercise the same coverage path as the GPU.
+struct ShaderFloat3{
+    float x;
+    float y;
+    float z;
+
+
+public:
+    explicit ShaderFloat3(float value)noexcept : x(value), y(value), z(value){}
+    ShaderFloat3(float red, float green, float blue)noexcept : x(red), y(green), z(blue){}
+};
+
+struct ShaderFloat4{
+    float x;
+    float y;
+    float z;
+    float w;
+
+
+public:
+    ShaderFloat4(ShaderFloat3 rgb, float alpha)noexcept : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
+};
+using float3 = ShaderFloat3;
+using float4 = ShaderFloat4;
+
+ShaderFloat3 operator/(ShaderFloat3 value, float divisor)noexcept{
+    const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorSet(divisor, divisor, divisor, 1.0f));
+    return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
+}
+
+// Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.
+inline float exp(const float value)noexcept{ return ::Exp(value); }
+
+#include <impl/assets/graphics/gi/surfel/surfel_coverage.slangi>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SurfelCoverage, EmptyAndSaturatedGatherCoverageStayWithinEndpoints){
+    const float full = NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT;
+    ASSERT_GT(full, 0.0f);
+    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(0.0f), 0.0f);
+    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full), 1.0f);
+    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full * 2.0f), 1.0f);
+}
+
+TEST(SurfelCoverage, UpsampleRejectsIncompatibleNormalsAndDistantGeometry){
+    const float gate = NWB_SURFEL_UPSAMPLE_NORMAL_GATE;
+    EXPECT_TRUE(nwbSurfelUpsampleNormalCompatible(gate));
+    EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(gate - 0.01f));
+    EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(0.0f));
+
+    EXPECT_FLOAT_EQ(nwbSurfelUpsampleGeometryWeight(0.25f, 0.0f, 2.0f), 0.25f);
+    EXPECT_LT(nwbSurfelUpsampleGeometryWeight(0.25f, 4.0f, 2.0f), 0.001f);
+}
+
+TEST(SurfelCoverage, MissingAndPartialTapsRetainFractionalAlpha){
+    const float weight = nwbSurfelUpsampleGeometryWeight(0.25f, 0.0f, 1.0f);
+    const float partial = nwbSurfelUpsampleCoveredWeight(weight, 0.5f);
+    const float full = nwbSurfelUpsampleCoveredWeight(weight, 1.0f);
+    EXPECT_FLOAT_EQ(partial, 0.125f);
+    EXPECT_FLOAT_EQ(full, 0.25f);
+
+    // A fully covered tap and a missing compatible tap have half coverage, not a renormalized 1.0.
+    const float4 result = nwbSurfelUpsampleFinalize(float3(0.5f, 0.25f, 0.125f), full, weight * 2.0f);
+    EXPECT_FLOAT_EQ(result.x, 2.0f);
+    EXPECT_FLOAT_EQ(result.y, 1.0f);
+    EXPECT_FLOAT_EQ(result.z, 0.5f);
+    EXPECT_FLOAT_EQ(result.w, 0.5f);
+
+    const float4 partialOnly = nwbSurfelUpsampleFinalize(float3(0.125f, 0.0f, 0.0f), partial, weight);
+    EXPECT_FLOAT_EQ(partialOnly.x, 1.0f);
+    EXPECT_FLOAT_EQ(partialOnly.w, 0.5f);
+}
+
+TEST(SurfelCoverage, EmptyUpsampleWeightRemainsFiniteAndZero){
+    const float4 empty = nwbSurfelUpsampleFinalize(float3(0.0f), 0.0f, 1.0f);
+    EXPECT_FLOAT_EQ(empty.x, 0.0f);
+    EXPECT_FLOAT_EQ(empty.y, 0.0f);
+    EXPECT_FLOAT_EQ(empty.z, 0.0f);
+    EXPECT_FLOAT_EQ(empty.w, 0.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/gi/lifecycle_types.adhd.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_surfel_gi_quality_settings_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Impl;
+
+TEST(SurfelGiQualitySettings, ReadbackTokenRequiresMatchingPhysicalQueueIdentity){
+    const NWB::Core::QueueSubmissionToken accepted{ .value = 7u, .physicalQueueIndex = 2u, .deviceGeneration = 3u, .queue = NWB::Core::CommandQueue::Compute };
+    EXPECT_TRUE(SurfelReadbackSubmissionMatches(accepted, accepted));
+    EXPECT_FALSE(SurfelReadbackSubmissionMatches({}, accepted));
+    auto candidate = accepted;
+    candidate.physicalQueueIndex = 4u;
+    EXPECT_FALSE(SurfelReadbackSubmissionMatches(accepted, candidate));
+    candidate = accepted;
+    candidate.deviceGeneration = 0u;
+    EXPECT_FALSE(SurfelReadbackSubmissionMatches(accepted, candidate));
+    candidate = accepted;
+    candidate.queue = NWB::Core::CommandQueue::Graphics;
+    EXPECT_FALSE(SurfelReadbackSubmissionMatches(accepted, candidate));
+    candidate = accepted;
+    candidate.value = 0u;
+    EXPECT_FALSE(SurfelReadbackSubmissionMatches(accepted, candidate));
+}
+
+TEST(SurfelGiQualitySettings, SpawnGroupsHandleOddZeroAndMaximumExtents){
+    EXPECT_EQ(ResolveSurfelSpawnDispatchGroup(0u, 8u), 0u);
+    EXPECT_EQ(ResolveSurfelSpawnDispatchGroup(128u, 8u), 1u);
+    EXPECT_EQ(ResolveSurfelSpawnDispatchGroup(129u, 8u), 2u);
+    EXPECT_EQ(ResolveSurfelSpawnDispatchGroup(Limit<u32>::s_Max, 8u), 33554432u);
+    EXPECT_EQ(ResolveSurfelSpawnDispatchGroup(129u, 0u), 0u);
+}
+
+TEST(SurfelGiQualitySettings, StorageCountsAndResolveExtentsRejectEitherEmptyDimension){
+    EXPECT_FALSE(IsValidSurfelGiStorageCounts(0u, 1u));
+    EXPECT_FALSE(IsValidSurfelGiStorageCounts(1u, 0u));
+    EXPECT_TRUE(IsValidSurfelGiStorageCounts(Limit<u32>::s_Max, Limit<u32>::s_Max));
+    EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(0u, 1u, 2u)));
+    EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 0u, 2u)));
+    EXPECT_TRUE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 1u, 2u)));
+    EXPECT_EQ(SurfelGiResolveSize::reflectedMethodCount(), 0u);
+}
+
+TEST(SurfelGiQualitySettings, BufferByteSizeKeepsWideMultiplicationAndWrapping){
+    EXPECT_EQ(ComputeSurfelBufferByteSize(96u, Limit<u32>::s_Max), 96ull * static_cast<u64>(Limit<u32>::s_Max));
+    EXPECT_EQ(ComputeSurfelBufferByteSize(Limit<u64>::s_Max, 2u), Limit<u64>::s_Max - 1u);
+    EXPECT_EQ(ComputeSurfelBufferByteSize(Limit<u64>::s_Max, 0u), 0u);
+}
+
+TEST(SurfelGiQualitySettings, ResolveFactorDoesNotTruncateToTheEnumWidth){
+    EXPECT_TRUE(IsValidSurfelGiResolveFactor(2u));
+    EXPECT_TRUE(IsValidSurfelGiResolveFactor(4u));
+    EXPECT_FALSE(IsValidSurfelGiResolveFactor(258u));
+    EXPECT_FALSE(IsValidSurfelGiResolveFactor(260u));
+    EXPECT_FALSE(IsValidSurfelGiResolveFactor(Limit<u32>::s_Max));
+}
+
+TEST(SurfelGiQualitySettings, RejectsUnsupportedResolveScales){
+    for(const u32 factor : { 0u, 1u, 3u, 5u, 255u })
+        EXPECT_FALSE(ValidateSurfelGiQualitySettings({ static_cast<SurfelGiResolveResolution::Enum>(factor) }));
+}
+
+TEST(SurfelGiQualitySettings, OddResizeKeepsEveryFullPixelInsideTheGatherGrid){
+    for(const u32 factor : { 2u, 4u }){
+        for(const u32 width : { 1u, 3u, 4u, 5u, 1000u, 1001u }){
+            for(const u32 height : { 1u, 3u, 4u, 5u, 700u, 701u }){
+                const SurfelGiResolveSize size = MakeSurfelGiResolveSize(width, height, factor);
+                ASSERT_GT(size.width, 0u);
+                ASSERT_GT(size.height, 0u);
+                EXPECT_LT((size.width - 1u) * factor, width);
+                EXPECT_LT((size.height - 1u) * factor, height);
+                EXPECT_GE(size.width * factor, width);
+                EXPECT_GE(size.height * factor, height);
+                EXPECT_LT((width - 1u) / factor, size.width);
+                EXPECT_LT((height - 1u) / factor, size.height);
+            }
+        }
+    }
+}
+
+TEST(SurfelGiQualitySettings, EmptyAndLargestExtentsDoNotWrapTheReducedSize){
+    for(const u32 factor : { 2u, 4u }){
+        const SurfelGiResolveSize empty = MakeSurfelGiResolveSize(0u, 0u, factor);
+        EXPECT_EQ(empty.width, 0u);
+        EXPECT_EQ(empty.height, 0u);
+        const SurfelGiResolveSize largest = MakeSurfelGiResolveSize(Limit<u32>::s_Max, Limit<u32>::s_Max, factor);
+        EXPECT_GE(static_cast<u64>(largest.width) * factor, static_cast<u64>(Limit<u32>::s_Max));
+        EXPECT_LT(static_cast<u64>(largest.width - 1u) * factor, static_cast<u64>(Limit<u32>::s_Max));
+        EXPECT_EQ(largest.width, largest.height);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <global/array.h>
+#include <global/simd/type.h>
+#include <global/simd/convert.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_surfel_hash_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Compile the production Slang cell/hash predicates using C++ equivalents of its vector builtins.
+using float3 = Float3U;
+using uint = u32;
+
+struct ShaderInt3{
+    i32 x;
+    i32 y;
+    i32 z;
+
+
+public:
+    ShaderInt3(const i32 xValue, const i32 yValue, const i32 zValue)noexcept
+        : x(xValue)
+        , y(yValue)
+        , z(zValue)
+    {}
+    explicit ShaderInt3(const float3 value)noexcept
+        : x(static_cast<i32>(value.x))
+        , y(static_cast<i32>(value.y))
+        , z(static_cast<i32>(value.z))
+    {}
+};
+using int3 = ShaderInt3;
+
+float3 operator/(const float3 value, const f32 divisor)noexcept{
+    return float3(value.x / divisor, value.y / divisor, value.z / divisor);
+}
+
+b8 operator==(const int3 first, const int3 second)noexcept{
+    return first.x == second.x && first.y == second.y && first.z == second.z;
+}
+
+float3 FloorShaderVector(const float3 value)noexcept{
+    float3 floored;
+    StoreFloat(VectorFloor(LoadFloat(value)), floored);
+    return floored;
+}
+
+b8 AllShaderLanes(const b8 value)noexcept{ return value; }
+
+#define floor FloorShaderVector
+#define max Max
+#define all AllShaderLanes
+#include <impl/assets/graphics/gi/surfel/surfel_hash.slangi>
+#undef all
+#undef max
+#undef floor
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct FieldRecord{
+    float3 position;
+    f32 radiance;
+    int3 cell;
+};
+
+f32 GatherBoundaryValue(const float3 position, const b8 validateCell)noexcept{
+    // Move only lane Z.
+    const float3 biasedPosition(position.x, position.y, position.z + 0.05f);
+    const int3 baseCell = nwbSurfelCellCoord(biasedPosition, NWB_SURFEL_CELL_SIZE);
+    const Array<FieldRecord, 2> records = {{
+        { float3(0.61f, 0.61f, 0.0f), 1.0f, nwbSurfelCellCoord(float3(0.61f, 0.61f, 0.0f), NWB_SURFEL_CELL_SIZE) },
+        { float3(1.21f, 0.61f, 0.0f), 0.0f, nwbSurfelCellCoord(float3(1.21f, 0.61f, 0.0f), NWB_SURFEL_CELL_SIZE) },
+    }};
+    f32 irradiance = 0.0f;
+    f32 totalWeight = 0.0f;
+    for(i32 z = -2; z <= 2; ++z)
+    for(i32 y = -2; y <= 2; ++y)
+    for(i32 x = -2; x <= 2; ++x){
+        const int3 visitedCell(baseCell.x + x, baseCell.y + y, baseCell.z + z);
+        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, NWB_SURFEL_HASH_CELL_COUNT);
+        for(const FieldRecord& record : records){
+            if(nwbSurfelHashCell(record.cell, NWB_SURFEL_HASH_CELL_COUNT) != visitedBucket)
+                continue;
+            if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
+                continue;
+            const f32 dx = biasedPosition.x - record.position.x;
+            const f32 dy = biasedPosition.y - record.position.y;
+            const f32 dz = biasedPosition.z - record.position.z;
+            const f32 distance = Sqrt(dx * dx + dy * dy + dz * dz);
+            const f32 weight = Max(1.0f - (distance / NWB_SURFEL_DEFAULT_RADIUS), 0.0f);
+            irradiance += record.radiance * weight;
+            totalWeight += weight;
+        }
+    }
+    return irradiance / totalWeight;
+}
+
+
+TEST(SurfelHash, SymmetricHashCollisionAdmitsEachResidentCellOnce){
+    const int3 negative(-1, -1, 0);
+    const int3 positive(1, 1, 0);
+    ASSERT_EQ(nwbSurfelHashCell(negative, NWB_SURFEL_HASH_CELL_COUNT), nwbSurfelHashCell(positive, NWB_SURFEL_HASH_CELL_COUNT));
+    const Array<float3, 2> residents = { float3(-0.01f, -0.01f, 0.0f), float3(0.61f, 0.61f, 0.0f) };
+    const Array<int3, 2> residentCells = { nwbSurfelCellCoord(residents[0], NWB_SURFEL_CELL_SIZE), nwbSurfelCellCoord(residents[1], NWB_SURFEL_CELL_SIZE) };
+    Array<u32, 2> bucketVisits{};
+    Array<u32, 2> admittedVisits{};
+    for(i32 z = -2; z <= 2; ++z)
+    for(i32 y = -2; y <= 2; ++y)
+    for(i32 x = -2; x <= 2; ++x){
+        const int3 visitedCell(x, y, z);
+        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, NWB_SURFEL_HASH_CELL_COUNT);
+        for(usize index = 0u; index < 2u; ++index){
+            if(nwbSurfelHashCell(residentCells[index], NWB_SURFEL_HASH_CELL_COUNT) != visitedBucket)
+                continue;
+            ++bucketVisits[index];
+            if(nwbSurfelSameCell(residentCells[index], visitedCell))
+                ++admittedVisits[index];
+        }
+    }
+    for(usize index = 0u; index < 2u; ++index){
+        EXPECT_GT(bucketVisits[index], 1u);
+        EXPECT_EQ(admittedVisits[index], 1u);
+    }
+}
+
+TEST(SurfelHash, NeighborCellBoundaryPreservesTheNormalizedField){
+    const float3 before(1.2f - 1e-6f, 0.61f, 0.0f);
+    const float3 after(1.2f + 1e-6f, 0.61f, 0.0f);
+    ASSERT_EQ(nwbSurfelCellCoord(before, NWB_SURFEL_CELL_SIZE).x, 1);
+    ASSERT_EQ(nwbSurfelCellCoord(after, NWB_SURFEL_CELL_SIZE).x, 2);
+    EXPECT_GT(Abs(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false)), 0.1f);
+    EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
+}
+
+TEST(SurfelHash, CollidingDistantCellsRetainUpperCoordinateBits){
+    const int3 nearCell(1, -1, 0);
+    const int3 distantCell(1 + static_cast<i32>(NWB_SURFEL_HASH_CELL_COUNT), -1, 0);
+    ASSERT_EQ(nwbSurfelHashCell(nearCell, NWB_SURFEL_HASH_CELL_COUNT), nwbSurfelHashCell(distantCell, NWB_SURFEL_HASH_CELL_COUNT));
+    EXPECT_FALSE(nwbSurfelSameCell(distantCell, nearCell));
+    EXPECT_FALSE(nwbSurfelSameCell(nearCell, distantCell));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_surfel_spawn_policy_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Compile and test the shader surfel spawn predicate in C++.
+#include <impl/assets/graphics/gi/surfel/surfel_spawn_policy.slangi>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr float s_Radius = 0.9f;
+constexpr float s_NormalBias = 0.05f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SurfelSpawnPolicy, PerpendicularSurfaceInTheSameCellNeedsItsOwnSurfel){
+    EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(true, 0.0f, 0.1f * 0.1f, 0.0f, s_Radius, s_NormalBias));
+    EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(true, 0.8f, 0.1f * 0.1f, 0.0f, s_Radius, s_NormalBias));
+}
+
+TEST(SurfelSpawnPolicy, DifferentCellsSharingAHashBucketDoNotDeduplicate){
+    EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(false, 1.0f, 0.0f, 0.0f, s_Radius, s_NormalBias));
+}
+
+TEST(SurfelSpawnPolicy, DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel){
+    EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(true, 1.0f, 0.8f * 0.8f, 0.0f, s_Radius, s_NormalBias));
+    EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(true, 1.0f, 0.1f * 0.1f, 0.08f, s_Radius, s_NormalBias));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
+
+#include <core/perf/timing.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_task_timing_feedback_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
+using NWB::Tests::EcsGraphicsCases::AcceptedToken;
+using NWB::Tests::EcsGraphicsCases::PublishedSample;
+using NWB::Tests::EcsGraphicsCases::RetiredSample;
+using NWB::Tests::EcsGraphicsCases::ExpectArenaMemoryUnchanged;
+using NWB::Tests::EcsGraphicsCases::ExpectPolicyEqual;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingSampleFirst;
+    const Core::GpuPhysicalQueueId queue{ .index = 2u, .deviceGeneration = 7u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingSampleFirstTask), .variant = 3u, .resolutionClass = 4u, .queue = Core::CommandQueue::Compute, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 42u, false));
+    state.completeSample(PublishedSample(attribution, scopeName, queue, 42u, 0.004), true);
+
+    const ArenaMemoryStats beforeAcceptance = testArena.arena.memoryStats();
+    state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
+    const ArenaMemoryStats afterAcceptance = testArena.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(beforeAcceptance, afterAcceptance);
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(drain.acceptedAssignmentCount, 1u);
+    EXPECT_EQ(drain.recordedSampleCount, 1u);
+    EXPECT_EQ(drain.retiredSampleCount, 1u);
+    EXPECT_EQ(drain.rejectedAssignmentCount, 0u);
+    EXPECT_EQ(drain.rejectedSampleCount, 0u);
+
+    history.snapshot(snapshot);
+    ASSERT_TRUE(snapshot.valid());
+    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key));
+    const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
+    ASSERT_NE(assignment, nullptr);
+    ASSERT_NE(timing, nullptr);
+    EXPECT_EQ(assignment->lastAcceptedQueue, queue);
+    EXPECT_EQ(assignment->lastAcceptedFrameIndex, 42u);
+    EXPECT_EQ(timing->sampleCount, 1u);
+}
+
+TEST(RendererTaskTimingFeedbackState, FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy){
+    const Core::GpuTaskTimingFeedbackPolicy enabledPolicy{ .minimumAbsoluteBenefitSeconds = 0.002, .minimumRelativeBenefit = 0.3, .minimumFramesBetweenSwitches = 13u, .minimumSampleCount = 7u, .calibrationIntervalFrames = 9u, .enabled = true, };
+    const Core::GpuTaskTimingFeedbackPolicy disabledPolicy{ .minimumAbsoluteBenefitSeconds = 0.004, .minimumRelativeBenefit = 0.4, .minimumFramesBetweenSwitches = 23u, .minimumSampleCount = 17u, .calibrationIntervalFrames = 19u, .enabled = false, };
+    Core::GpuTaskTimingFeedbackPolicy currentPolicy = disabledPolicy;
+
+    const Impl::RendererTaskTimingFeedbackPolicyTransition failedEnableTransition = Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(enabledPolicy, true, currentPolicy);
+    EXPECT_EQ(failedEnableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Enable);
+    ExpectPolicyEqual(currentPolicy, disabledPolicy);
+    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(failedEnableTransition, false, currentPolicy);
+    ExpectPolicyEqual(currentPolicy, disabledPolicy);
+
+    currentPolicy = enabledPolicy;
+    const Impl::RendererTaskTimingFeedbackPolicyTransition failedDisableTransition = Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(disabledPolicy, true, currentPolicy);
+    EXPECT_EQ(failedDisableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Disable);
+    ExpectPolicyEqual(currentPolicy, disabledPolicy);
+    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(failedDisableTransition, false, currentPolicy);
+    ExpectPolicyEqual(currentPolicy, enabledPolicy);
+}
+
+TEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingCallbackAllocation;
+    const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 2u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingCallbackAllocationTask), .queue = Core::CommandQueue::Compute, };
+    const auto rejectedAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(rejectedAttributionResult);
+    const Core::GpuTimingSampleAttribution rejectedAttribution = *rejectedAttributionResult;
+    const auto discardedAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(discardedAttributionResult);
+    const Core::GpuTimingSampleAttribution discardedAttribution = *discardedAttributionResult;
+    ASSERT_TRUE(state.trackSample(rejectedAttribution, scopeName, key, queue, 1u, false));
+    ASSERT_TRUE(state.trackSample(discardedAttribution, scopeName, key, queue, 2u, false));
+
+    const ArenaMemoryStats beforeRejection = testArena.arena.memoryStats();
+    state.acceptSubmission(rejectedAttribution, {}, true);
+    const ArenaMemoryStats afterRejection = testArena.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(beforeRejection, afterRejection);
+
+    const ArenaMemoryStats beforeDiscard = testArena.arena.memoryStats();
+    state.discardRecording(discardedAttribution);
+    const ArenaMemoryStats afterDiscard = testArena.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(beforeDiscard, afterDiscard);
+}
+
+TEST(RendererTaskTimingFeedbackState, AcceptancePublishesAssignmentBeforeLateDurationWithoutDoubleCommit){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingAcceptFirst;
+    const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 5u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingAcceptFirstTask), .variant = 1u, .resolutionClass = 2u, .queue = Core::CommandQueue::Compute, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 18u, false));
+
+    const ArenaMemoryStats beforeAcceptance = testArena.arena.memoryStats();
+    state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
+    const ArenaMemoryStats afterAcceptance = testArena.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(beforeAcceptance, afterAcceptance);
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult assignmentDrain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(assignmentDrain.acceptedAssignmentCount, 1u);
+    EXPECT_EQ(assignmentDrain.recordedSampleCount, 0u);
+    EXPECT_EQ(assignmentDrain.retiredSampleCount, 0u);
+    history.snapshot(snapshot);
+    ASSERT_NE(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)), nullptr);
+    EXPECT_EQ(snapshot.find(key, queue), nullptr);
+
+    const ArenaMemoryStats beforeCompletion = testArena.arena.memoryStats();
+    state.completeSample(PublishedSample(attribution, scopeName, queue, 18u, 0.006), true);
+    const ArenaMemoryStats afterCompletion = testArena.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(beforeCompletion, afterCompletion);
+
+    const Impl::RendererTaskTimingFeedbackDrainResult sampleDrain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(sampleDrain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(sampleDrain.recordedSampleCount, 1u);
+    EXPECT_EQ(sampleDrain.retiredSampleCount, 1u);
+    history.snapshot(snapshot);
+    const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key));
+    const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
+    ASSERT_NE(assignment, nullptr);
+    ASSERT_NE(timing, nullptr);
+    EXPECT_EQ(assignment->lastAcceptedFrameIndex, 18u);
+    EXPECT_EQ(assignment->lastSwitchFrameIndex, 18u);
+    EXPECT_EQ(timing->sampleCount, 1u);
+}
+
+TEST(RendererTaskTimingFeedbackState, UnpublishedSamplesRetireInEitherRaceOrderWithoutLosingAssignments){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Core::GpuPhysicalQueueId queue{ .index = 0u, .deviceGeneration = 3u };
+    const Name firstScope = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingUnpublishedFirst;
+    const Name secondScope = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingUnpublishedSecond;
+    const Core::GpuTaskTimingKey firstKey{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingUnpublishedFirstTask), .queue = Core::CommandQueue::Compute, };
+    const Core::GpuTaskTimingKey secondKey{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingUnpublishedSecondTask), .queue = Core::CommandQueue::Compute, };
+    const auto firstAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(firstAttributionResult);
+    const Core::GpuTimingSampleAttribution firstAttribution = *firstAttributionResult;
+    const auto secondAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(secondAttributionResult);
+    const Core::GpuTimingSampleAttribution secondAttribution = *secondAttributionResult;
+    ASSERT_TRUE(state.trackSample(firstAttribution, firstScope, firstKey, queue, 10u, false));
+    ASSERT_TRUE(state.trackSample(secondAttribution, secondScope, secondKey, queue, 11u, false));
+
+    state.completeSample(RetiredSample(firstAttribution, queue), true);
+    state.acceptSubmission(firstAttribution, AcceptedToken(firstKey, queue), true);
+    state.acceptSubmission(secondAttribution, AcceptedToken(secondKey, queue), true);
+    state.completeSample(RetiredSample(secondAttribution, queue), true);
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(drain.acceptedAssignmentCount, 2u);
+    EXPECT_EQ(drain.recordedSampleCount, 0u);
+    EXPECT_EQ(drain.retiredSampleCount, 2u);
+    history.snapshot(snapshot);
+    EXPECT_NE(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(firstKey)), nullptr);
+    EXPECT_NE(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(secondKey)), nullptr);
+    EXPECT_EQ(snapshot.find(firstKey, queue), nullptr);
+    EXPECT_EQ(snapshot.find(secondKey, queue), nullptr);
+}
+
+TEST(RendererTaskTimingFeedbackState, InvalidPublishedMetadataIsTerminalButKeepsAcceptedAssignment){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingInvalidMetadata;
+    const Core::GpuPhysicalQueueId queue{ .index = 3u, .deviceGeneration = 9u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingInvalidMetadataTask), .queue = Core::CommandQueue::Graphics, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 70u, false));
+    state.completeSample(PublishedSample(attribution, Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingWrongScope), queue, 70u, 0.002), true);
+    state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(drain.acceptedAssignmentCount, 1u);
+    EXPECT_EQ(drain.recordedSampleCount, 0u);
+    EXPECT_EQ(drain.retiredSampleCount, 1u);
+    history.snapshot(snapshot);
+    EXPECT_NE(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)), nullptr);
+    EXPECT_EQ(snapshot.find(key, queue), nullptr);
+
+    const Impl::RendererTaskTimingFeedbackDrainResult repeatedDrain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(repeatedDrain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(repeatedDrain.recordedSampleCount, 0u);
+    EXPECT_EQ(repeatedDrain.retiredSampleCount, 0u);
+}
+
+TEST(RendererTaskTimingFeedbackState, NonFiniteDurationIsTerminalButKeepsAcceptedAssignment){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingNonFiniteDuration;
+    const Core::GpuPhysicalQueueId queue{ .index = 2u, .deviceGeneration = 10u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingNonFiniteDurationTask), .queue = Core::CommandQueue::Compute, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 80u, false));
+    state.completeSample(PublishedSample(attribution, scopeName, queue, 80u, Limit<f64>::s_QuietNaN), true);
+    state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, queue.deviceGeneration);
+    EXPECT_EQ(drain.acceptedAssignmentCount, 1u);
+    EXPECT_EQ(drain.recordedSampleCount, 0u);
+    EXPECT_EQ(drain.retiredSampleCount, 1u);
+    history.snapshot(snapshot);
+    EXPECT_NE(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)), nullptr);
+    EXPECT_EQ(snapshot.find(key, queue), nullptr);
+}
+
+
+TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsAcceptedEntryAwaitingOldSample){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingDeviceChange;
+    const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 6u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingDeviceChangeTask), .queue = Core::CommandQueue::Compute, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 31u, false));
+    state.acceptSubmission(attribution, AcceptedToken(key, oldQueue), true);
+
+    history.resetForDeviceGeneration(oldQueue.deviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult assignmentDrain = state.drain(history, oldQueue.deviceGeneration);
+    EXPECT_EQ(assignmentDrain.acceptedAssignmentCount, 1u);
+    EXPECT_EQ(assignmentDrain.retiredSampleCount, 0u);
+
+    const u16 newDeviceGeneration = 7u;
+    history.resetForDeviceGeneration(newDeviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult resetDrain = state.drain(history, newDeviceGeneration);
+    EXPECT_EQ(resetDrain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(resetDrain.recordedSampleCount, 0u);
+    EXPECT_EQ(resetDrain.retiredSampleCount, 1u);
+    history.snapshot(snapshot);
+    ASSERT_TRUE(snapshot.valid());
+    EXPECT_EQ(snapshot.deviceGeneration(), newDeviceGeneration);
+    EXPECT_EQ(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)), nullptr);
+
+    state.completeSample(PublishedSample(attribution, scopeName, oldQueue, 31u, 0.005), true);
+    const Impl::RendererTaskTimingFeedbackDrainResult lateDrain = state.drain(history, newDeviceGeneration);
+    EXPECT_EQ(lateDrain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(lateDrain.recordedSampleCount, 0u);
+    EXPECT_EQ(lateDrain.retiredSampleCount, 0u);
+}
+
+TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsEntryBeforeSubmissionResolution){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
+    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
+    Core::GpuTaskTimingHistoryStore history(testArena.arena);
+    const Name scopeName = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsRendererTimingUnresolvedDeviceChange;
+    const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 12u };
+    const Core::GpuTaskTimingKey key{ .task = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRendererTimingUnresolvedDeviceChangeTask), .queue = Core::CommandQueue::Compute, };
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
+    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 40u, false));
+
+    const u16 newDeviceGeneration = 13u;
+    history.resetForDeviceGeneration(newDeviceGeneration);
+    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, newDeviceGeneration);
+    EXPECT_EQ(drain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(drain.recordedSampleCount, 0u);
+    EXPECT_EQ(drain.retiredSampleCount, 1u);
+
+    state.acceptSubmission(attribution, AcceptedToken(key, oldQueue), true);
+    state.completeSample(PublishedSample(attribution, scopeName, oldQueue, 40u, 0.005), true);
+    const Impl::RendererTaskTimingFeedbackDrainResult lateDrain = state.drain(history, newDeviceGeneration);
+    EXPECT_EQ(lateDrain.acceptedAssignmentCount, 0u);
+    EXPECT_EQ(lateDrain.recordedSampleCount, 0u);
+    EXPECT_EQ(lateDrain.retiredSampleCount, 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

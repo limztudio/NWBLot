@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "light_space_plan.adhd"
+
+
 native{
 #include <impl/ecs_render/shadow/light_space_csg.adhd.h>
 #include <impl/ecs_render/shadow/light_space_plan.adhd.h>
@@ -188,6 +191,15 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<u32> LightSpaceShadowDrawCount(in Span<LightSpaceShadowCaster> casters){
+    u64 drawCount = 0u;
+    for(usize i = 0u; i < casters.size(); ++i){
+        drawCount += LightSpaceCasterDrawCount(casters[i].meshletCount);
+        if(drawCount > u32.max)
+            return MakeUnexpected(Failure());
+    }
+    return cast<u32>(drawCount);
+}
 b8 ImplEcsRenderShadowLightSpaceShadowAdhdModule(in u64 value){
     return value != 0u;
 }

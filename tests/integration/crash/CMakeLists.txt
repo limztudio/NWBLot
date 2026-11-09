@@ -2,6 +2,7 @@ nwb_declare_gtest_executable(nwb_crash_tests)
 nwb_target_adhd_sources(nwb_crash_tests NAMESPACE "NWB::Tests::CrashCases" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/suite.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_package_and_spool_cases.adhd"
 )
 target_link_libraries(nwb_crash_tests PRIVATE nwb_crash_test_paths nwb_crash_package nwb_common nwb_alloc)
 if(TARGET nwb_crash_handler)

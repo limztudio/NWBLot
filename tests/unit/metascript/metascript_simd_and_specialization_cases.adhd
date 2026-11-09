@@ -1,0 +1,1211 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 MetascriptSimdAndSpecializationCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/metascript/suite.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_compiler_simd_parallel_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::AdhdCompilerTestsDetail;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MStringView;
+
+TEST(AdhdCompiler, RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_InvalidNestedSerializeSource =
+        "[serialize]\r\n"
+        "class BadBinaryPacket {\r\n"
+        "    public Array<String, 4> names = Array<String, 4>();\r\n"
+        "}\r\n";
+    CompileResult badSerRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_InvalidNestedSerializeSource, "impl/scene/bad_packet.adhd", arena.arena, badSerRes));
+
+    static constexpr MStringView s_InvalidWaitTargetSource =
+        "void BadWait() {\r\n"
+        "    wait(NonExistentTask);\r\n"
+        "}\r\n";
+    CompileResult badWaitRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_InvalidWaitTargetSource, "impl/scene/bad_wait.adhd", arena.arena, badWaitRes));
+}
+
+TEST(AdhdCompiler, RejectsMismatchedTemplatedInterfaceOverrideSignature){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_MismatchedTemplatedInterfaceSource =
+        "interface ISink<T> {\r\n"
+        "    void send(in T item);\r\n"
+        "}\r\n"
+        "class BadSink : ISink<i32> {\r\n"
+        "    public void send(in f32 item)override {}\r\n"
+        "}\r\n";
+    CompileResult badSinkRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd", arena.arena, badSinkRes));
+}
+
+TEST(AdhdCompiler, HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_NativeBraceCharSource =
+        "void InspectNative(mut String text) {\r\n"
+        "    native(mut s = text) {\r\n"
+        "        if(!s.empty() && s[0] == '{') {\r\n"
+        "            s[0] = '}';\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    EXPECT_TRUE(Compiler::Compile(s_NativeBraceCharSource, "impl/data/indexed_bucket.adhd", arena.arena, res));
+
+    static constexpr MStringView s_VariadicNativeMacroSource =
+        "#define EXPECTED_COUNT 1u\r\n"
+        "#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }\r\n"
+        "#define EXPECT_NEAR_VAL(val, ...) native{ EXPECT_NEAR(val, __VA_ARGS__) }\r\n"
+        "void FillBytes(mut Span<u8> bytes) {\r\n"
+        "    for(usize i = 0u; i < bytes.size(); ++i)\r\n"
+        "        bytes[i] = cast<u8>(i);\r\n"
+        "}\r\n"
+        "void ConsumeVec(in Vector<i32> items) {}\r\n"
+        "void VerifyItems(in f32 sample) {\r\n"
+        "    Vector<i32> items;\r\n"
+        "    items.push_back(42);\r\n"
+        "    ConsumeVec(items);\r\n"
+        "    if(!items.empty())\r\n"
+        "        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n"
+        "    else\r\n"
+        "        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n"
+        "}\r\n";
+    CompileResult variadicMacroRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_VariadicNativeMacroSource, "tests/unit/sample_check.adhd", arena.arena, variadicMacroRes));
+    const MStringView variadicHdrView(variadicMacroRes.generatedHeader.data(), variadicMacroRes.generatedHeader.size());
+    const MStringView variadicSrcView(variadicMacroRes.generatedSource.data(), variadicMacroRes.generatedSource.size());
+    EXPECT_NE(variadicHdrView.find("void FillBytes(const Span<u8> bytes)noexcept;"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("void FillBytes(const Span<u8> bytes)noexcept{"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("EXPECT_EQ(items.size(), 1u);"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("EXPECT_NEAR(sample, 0.0f, 1e-4f);"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("ConsumeVec(items);"), MStringView::npos);
+    EXPECT_EQ(variadicSrcView.find("Move(items)"), MStringView::npos);
+
+    static constexpr MStringView s_CtorMemberLiftSource =
+        "class Child {\r\n"
+        "    private mut i32 m_target;\r\n"
+        "    public Child(mut i32 target) {\r\n"
+        "        this.m_target = target;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class Parent {\r\n"
+        "    private Child m_child;\r\n"
+        "    public Parent(mut i32 target) {\r\n"
+        "        this.m_child = Child(target);\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult ctorLiftRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_CtorMemberLiftSource, "impl/data/ctor_lift.adhd", arena.arena, ctorLiftRes));
+    const MStringView ctorLiftHdrView(ctorLiftRes.generatedHeader.data(), ctorLiftRes.generatedHeader.size());
+    const MStringView ctorLiftSrcView(ctorLiftRes.generatedSource.data(), ctorLiftRes.generatedSource.size());
+    EXPECT_NE(ctorLiftHdrView.find("Child m_child;"), MStringView::npos);
+    EXPECT_EQ(ctorLiftHdrView.find("Child m_child{};"), MStringView::npos);
+    EXPECT_NE(ctorLiftHdrView.find("Parent(i32& target)noexcept : m_child(target){"), MStringView::npos);
+    EXPECT_EQ(ctorLiftHdrView.find("this->m_child = Child(target)"), MStringView::npos);
+    EXPECT_EQ(ctorLiftSrcView.find("this->m_child = Child(target)"), MStringView::npos);
+
+    static constexpr MStringView s_ExternalIfaceAndTrailingNativeSource =
+        "native{\r\n"
+        "interface IExternalCallback;\r\n"
+        "}\r\n"
+        "class CallbackRunner : IExternalCallback {\r\n"
+        "    public ~CallbackRunner() {}\r\n"
+        "    public b8 onTick(in f32 dt)override {\r\n"
+        "        RegisterSelf(this);\r\n"
+        "        return dt > 0.0f && ExternalEnum::Active != 0;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "native{\r\n"
+        "void RegisterRunner(CallbackRunner& runner);\r\n"
+        "}\r\n";
+    CompileResult extIfaceRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ExternalIfaceAndTrailingNativeSource, "impl/data/ext_iface.adhd", arena.arena, extIfaceRes));
+    const MStringView extIfaceHdrView(extIfaceRes.generatedHeader.data(), extIfaceRes.generatedHeader.size());
+    const MStringView extIfaceSrcView(extIfaceRes.generatedSource.data(), extIfaceRes.generatedSource.size());
+    EXPECT_NE(extIfaceHdrView.find("class CallbackRunner final : public IExternalCallback{"), MStringView::npos);
+    EXPECT_NE(extIfaceHdrView.find("virtual ~CallbackRunner()noexcept override"), MStringView::npos);
+    EXPECT_NE(extIfaceHdrView.find("virtual b8 onTick(const f32 dt)noexcept override"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("RegisterSelf((*this));"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("ExternalEnum::Active"), MStringView::npos);
+    EXPECT_EQ(extIfaceHdrView.find("void RegisterRunner(CallbackRunner& runner);"), MStringView::npos);
+    EXPECT_NE(extIfaceSrcView.find("void RegisterRunner(CallbackRunner& runner);"), MStringView::npos);
+
+    static constexpr MStringView s_BadVariadicParamSource =
+        "#define BAD_VARIADIC(..., x) (x)\r\n"
+        "const i32 kVal = 1;\r\n";
+    CompileResult badVariadicRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadVariadicParamSource, "impl/data/bad_variadic.adhd", arena.arena, badVariadicRes));
+
+    static constexpr MStringView s_DuplicateFreeFnSource =
+        "i32 DupFn(in i32 x) { return x; }\r\n"
+        "i32 DupFn(in i32 x) { return x + 1; }\r\n";
+    CompileResult dupFreeRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateFreeFnSource, "impl/data/dup_fn.adhd", arena.arena, dupFreeRes));
+
+    static constexpr MStringView s_DuplicateClassMethodSource =
+        "class DupMethod {\r\n"
+        "    public i32 calc(in i32 x)const { return x; }\r\n"
+        "    public i32 calc(in i32 y)const { return y; }\r\n"
+        "}\r\n";
+    CompileResult dupMethodRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateClassMethodSource, "impl/data/dup_method.adhd", arena.arena, dupMethodRes));
+}
+
+TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonicalParallelFor){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidMatrixSplatSource =
+        "MatrixSingle MakeSplatMatrix(in f32 s) {\r\n"
+        "    MatrixSingle m = MatrixSingle(s);\r\n"
+        "    return m;\r\n"
+        "}\r\n";
+    CompileResult validMatRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ValidMatrixSplatSource, "impl/sim/mat_splat.adhd", arena.arena, validMatRes));
+    const MStringView matSrcView(validMatRes.generatedSource.data(), validMatRes.generatedSource.size());
+    EXPECT_NE(matSrcView.find("::MatrixSet("), MStringView::npos);
+
+    static constexpr MStringView s_StorageOnlySimdParamSource =
+        "VectorSingle CombinePlane(in VectorSingle rawNormal, in VectorSingle cameraPosition) {\r\n"
+        "    return rawNormal + cameraPosition;\r\n"
+        "}\r\n"
+        "VectorSingle BuildSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition) {\r\n"
+        "    const VectorSingle rawNormal = forward * tanHalfAngle + side;\r\n"
+        "    return CombinePlane(VectorSingle(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n"
+        "}\r\n";
+    CompileResult storageOnlyRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_StorageOnlySimdParamSource, "impl/sim/storage_only_param.adhd", arena.arena, storageOnlyRes));
+    const MStringView storageOnlyView(storageOnlyRes.generatedSource.data(), storageOnlyRes.generatedSource.size());
+    const usize buildSidePos = storageOnlyView.find("BuildSidePlane(");
+    ASSERT_NE(buildSidePos, MStringView::npos);
+    EXPECT_EQ(storageOnlyView.substr(buildSidePos).find("::LoadFloat(cameraPosition)"), MStringView::npos);
+
+    static constexpr MStringView s_BadStorageSimdParamSource =
+        "void BadStorageParam(in f32x4 v) {\r\n"
+        "}\r\n";
+    CompileResult badStorageParamRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadStorageSimdParamSource, "impl/sim/bad_storage_param.adhd", arena.arena, badStorageParamRes));
+
+    static constexpr MStringView s_BadSimdCalcFieldSource =
+        "class BadCalcField {\r\n"
+        "    public VectorSingle centroid(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "}\r\n";
+    CompileResult badSimdCalcFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcFieldSource, "impl/sim/bad_calc_field.adhd", arena.arena, badSimdCalcFieldRes));
+
+    static constexpr MStringView s_BadSimdCalcContainerSource =
+        "void BadCalcContainer() {\r\n"
+        "    Array<VectorSingle, 3u> positions;\r\n"
+        "}\r\n";
+    CompileResult badSimdCalcContainerRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcContainerSource, "impl/sim/bad_calc_container.adhd", arena.arena, badSimdCalcContainerRes));
+
+    static constexpr MStringView s_BadSimdCalcGlobalConstSource =
+        "const VectorSingle s_DefaultVec(0.0f, 0.0f, 0.0f, 0.0f);\r\n";
+    CompileResult badSimdCalcGlobalConstRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcGlobalConstSource, "impl/sim/bad_calc_const.adhd", arena.arena, badSimdCalcGlobalConstRes));
+
+    static constexpr MStringView s_BadMixedSimdSplatSource =
+        "void BadMixedSplat() {\r\n"
+        "    f32x3_i32 v = f32x3_i32(1.0f);\r\n"
+        "}\r\n";
+    CompileResult badMixedSplatRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadMixedSimdSplatSource, "impl/sim/bad_mixed_splat.adhd", arena.arena, badMixedSplatRes));
+
+    static constexpr MStringView s_BadMixedSimdIndexSource =
+        "f32 BadMixedIndex() {\r\n"
+        "    f32x3_i32 v(1.0f, 2.0f, 3.0f, 4);\r\n"
+        "    return v[0];\r\n"
+        "}\r\n";
+    CompileResult badMixedIdxRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadMixedSimdIndexSource, "impl/sim/bad_mixed_idx.adhd", arena.arena, badMixedIdxRes));
+
+    static constexpr MStringView s_BadSimdAritySource =
+        "void BadSimdArity() {\r\n"
+        "    f32x4 v = f32x4(1.0f, 2.0f);\r\n"
+        "}\r\n";
+    CompileResult badSimdArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdAritySource, "impl/sim/bad_simd_arity.adhd", arena.arena, badSimdArityRes));
+
+    static constexpr MStringView s_BadParStepZeroSource =
+        "void BadParStep() {\r\n"
+        "    parallel_for(usize i = 0u; i < 8u; i += 0u) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParStepRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadParStepZeroSource, "impl/sim/bad_par_step.adhd", arena.arena, badParStepRes));
+
+    static constexpr MStringView s_BadParFloatIndexSource =
+        "void BadParFloatIdx() {\r\n"
+        "    parallel_for(f32 i = 0.0f; i < 8.0f; ++i) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParFloatRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadParFloatIndexSource, "impl/sim/bad_par_float.adhd", arena.arena, badParFloatRes));
+
+    static constexpr MStringView s_BadMutThisLambdaInParSource =
+        "class Collector {\r\n"
+        "    public Vector<i32> items;\r\n"
+        "    public void runParallel() {\r\n"
+        "        auto addFn = lambda[mut this](in i32 v) -> void {\r\n"
+        "            this.items.push_back(v);\r\n"
+        "        };\r\n"
+        "        parallel_for(usize i = 0u; i < 4u; ++i) {\r\n"
+        "            addFn(cast<i32>(i));\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badMutThisParRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadMutThisLambdaInParSource, "impl/sim/bad_mut_this_par.adhd", arena.arena, badMutThisParRes));
+
+    static constexpr MStringView s_SimdMutCondSaturateMatRowSource =
+        "b8 TryLoadVec(mut VectorSingle outVec) {\r\n"
+        "    outVec = VectorSingle(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
+        "    return true;\r\n"
+        "}\r\n"
+        "f32 ComputeFromCondAndMat(in MatrixSingle mat) {\r\n"
+        "    VectorSingle trackMin = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "    if(!TryLoadVec(trackMin))\r\n"
+        "        return 0.0f;\r\n"
+        "    const VectorSingle clamped = Saturate(trackMin);\r\n"
+        "    return clamped.x + mat[0].x;\r\n"
+        "}\r\n";
+    CompileResult mutCondRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SimdMutCondSaturateMatRowSource, "impl/sim/mut_cond_mat.adhd", arena.arena, mutCondRes));
+    const MStringView mutCondView(mutCondRes.generatedSource.data(), mutCondRes.generatedSource.size());
+    EXPECT_NE(mutCondView.find("::VectorSaturate(trackMin)"), MStringView::npos);
+    EXPECT_NE(mutCondView.find("mat.v[0]"), MStringView::npos);
+
+    static constexpr MStringView s_SimdLaneInsertAndPermuteSource =
+        "VectorSingle NormalizeTangentWithSign(in VectorSingle tangent, in VectorSingle normal, in f32x3u posIn, mut f32x3u outPos) {\r\n"
+        "    const VectorSingle loadedPos = VectorSingle(posIn.x, posIn.y, posIn.z, 0.0f);\r\n"
+        "    outPos = f32x3u(loadedPos.x, loadedPos.y, loadedPos.z);\r\n"
+        "    if(LengthSq(tangent.xyz) > 0.0001f) {\r\n"
+        "        const VectorSingle normalized = Normalize(tangent.xyz);\r\n"
+        "        f32 sign = 1.0f;\r\n"
+        "        if(tangent.w < 0.0f)\r\n"
+        "            sign = -1.0f;\r\n"
+        "        return VectorSingle(normalized.x, normalized.y, normalized.z, sign);\r\n"
+        "    }\r\n"
+        "    const VectorSingle fallback = Normalize(normal.xyz);\r\n"
+        "    return VectorSingle(fallback.x, fallback.y, fallback.z, normal.w);\r\n"
+        "}\r\n";
+    CompileResult laneInsertRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SimdLaneInsertAndPermuteSource, "impl/sim/lane_insert.adhd", arena.arena, laneInsertRes));
+    const MStringView laneInsertView(laneInsertRes.generatedSource.data(), laneInsertRes.generatedSource.size());
+    EXPECT_NE(laneInsertView.find("::LoadFloat(posIn)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::StoreFloat(loadedPos, outPos)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorSetW(normalized, sign)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorPermute<0u, 1u, 2u, 7u>(fallback, normal)"), MStringView::npos);
+    EXPECT_EQ(laneInsertView.find("::VectorSet("), MStringView::npos);
+}
+
+TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLogicChains){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_SimdOptSource =
+        "const f32 s_AffineW = 1.0f;\r\n"
+        "const f32x4 s_ZeroVec(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "const f32x4 s_AxisY(0.0f, 1.0f, 0.0f, 0.0f);\r\n"
+        "class BoxData {\r\n"
+        "    public f32x3u minPt = f32x3u(0.0f, 0.0f, 0.0f);\r\n"
+        "    public f32x4 extent4 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "}\r\n"
+        "VectorSingle OptimizeSimdOps(in VectorSingle a, in VectorSingle b, in VectorDouble d, in MatrixSingle m, in BoxData box, in f32 scale, mut BoxData outBox) {\r\n"
+        "    const MatrixSingle idMat = MatrixSingle(\r\n"
+        "        1.0f, 0.0f, 0.0f, 0.0f,\r\n"
+        "        0.0f, 1.0f, 0.0f, 0.0f,\r\n"
+        "        0.0f, 0.0f, 1.0f, 0.0f,\r\n"
+        "        0.0f, 0.0f, 0.0f, 1.0f\r\n"
+        "    );\r\n"
+        "    const MatrixSingle scaledMat = idMat * scale;\r\n"
+        "    const MatrixSingle projMat = MatrixSingle(\r\n"
+        "        a.x, 0.0f, 0.0f, 0.0f,\r\n"
+        "        0.0f, a.y, 0.0f, 0.0f,\r\n"
+        "        0.0f, 0.0f, a.z, a.w,\r\n"
+        "        0.0f, 0.0f, 1.0f, 0.0f\r\n"
+        "    );\r\n"
+        "    const VectorSingle unitMul = (a * 1.0f) + (b * -1.0f);\r\n"
+        "    const VectorSingle negFma = (-a) * b + unitMul;\r\n"
+        "    const VectorSingle splatMul = VectorSingle(scale) * 2.0f;\r\n"
+        "    const VectorSingle pad3 = VectorSingle(scale, scale, scale, 0.0f);\r\n"
+        "    const VectorSingle signFlipSplat = VectorSingle(scale, -scale, scale, -scale);\r\n"
+        "    const f32 dot3ZeroW = Dot(a, VectorSingle(1.0f, 2.0f, 3.0f, 0.0f));\r\n"
+        "    const f32 sumAll = Dot(a, VectorSingle(1.0f));\r\n"
+        "    const VectorSingle satClamp = Clamp(a, 0.0f, 1.0f);\r\n"
+        "    const VectorSingle satMinMax = Min(Max(b, 0.0f), 1.0f);\r\n"
+        "    const VectorSingle storageSwiz = VectorSingle(box.minPt.z, box.minPt.y, box.minPt.x, 0.0f);\r\n"
+        "    const VectorSingle storageBinOp = VectorSingle(box.minPt.x + box.extent4.x, box.minPt.y + box.extent4.y, box.minPt.z + box.extent4.z, 0.0f);\r\n"
+        "    const VectorSingle storageNeg3 = VectorSingle(-box.minPt.x, -box.minPt.y, -box.minPt.z, 0.0f);\r\n"
+        "    const VectorSingle laneMathMin = VectorSingle(Min(a.x, b.x), Min(a.y, b.y), Min(a.z, b.z), Min(a.w, b.w));\r\n"
+        "    const VectorSingle altMaskSplat = VectorSingle(scale, 0.0f, scale, 0.0f);\r\n"
+        "    const VectorSingle zeroSubAdd = (0.0f - a) + (b - 0.0f);\r\n"
+        "    const VectorSingle lerpZero = Lerp(a, b, 0.0f);\r\n"
+        "    const f32 swizGetX = (a.zyx).x;\r\n"
+        "    const f32 max3 = Max(a.x, Max(a.y, a.z));\r\n"
+        "    const VectorSingle max4Splat = VectorSingle(Max(Max(a.x, a.y), Max(a.z, a.w)));\r\n"
+        "    const u32 bitsY = bit_cast<u32>(a.y);\r\n"
+        "    const VectorSingle swizFromDouble = VectorSingle(cast<f32>(d.z), cast<f32>(d.y), cast<f32>(d.x), cast<f32>(d.w));\r\n"
+        "    const MatrixSingle mulTrans = Transpose(m * scaledMat);\r\n"
+        "    const f32x4 zeroStorageVec = f32x4(0.0f);\r\n"
+        "    const f32x4x4 zeroStorageMat = f32x4x4(0.0f);\r\n"
+        "    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
+        "    const VectorSingle halfVec = VectorSingle(0.5f);\r\n"
+        "    const VectorSingle axisW = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    const VectorSingle constZero = VectorSingle(s_ZeroVec);\r\n"
+        "    const VectorSingle constAxisY = VectorSingle(s_AxisY);\r\n"
+        "    const VectorSingle negRep = VectorSingle(-scale, -scale, -scale, -scale);\r\n"
+        "    const VectorSingle masked3 = VectorSingle(a.x, a.y, a.z, 0.0f);\r\n"
+        "    const VectorSingle clearX = VectorSingle(0.0f, a.y, a.z, a.w);\r\n"
+        "    const VectorSingle flipYW = VectorSingle(a.x, -a.y, a.z, -a.w);\r\n"
+        "    const VectorSingle storageMaskXY = VectorSingle(box.extent4.x, box.extent4.y, 0.0f, 0.0f);\r\n"
+        "    const VectorSingle neg3KeepW = VectorSingle(-a.x, -a.y, -a.z, a.w);\r\n"
+        "    const VectorSingle laneBinOp = VectorSingle(a.x * scale, a.y * scale, a.z * scale, 0.0f);\r\n"
+        "    const VectorSingle axisYWithW = VectorSingle(0.0f, 1.0f, 0.0f, a.w);\r\n"
+        "    const VectorDouble xyUnitZW = VectorDouble(d.x, d.y, 1.0, 1.0);\r\n"
+        "    const VectorSingle splatZ = a.zzzz;\r\n"
+        "    const VectorSingle foldedSwiz = (a.yzxw).wxyz;\r\n"
+        "    const VectorSingle identitySwiz = (a.yzxw).zxyw;\r\n"
+        "    const VectorSingle fromDouble = VectorSingle(cast<f32>(d.x), cast<f32>(d.y), cast<f32>(d.z), cast<f32>(d.w));\r\n"
+        "    const VectorSingle proj = a * Dot(a.xyz, b.xyz);\r\n"
+        "    const VectorSingle scaled = b * VectorSingle(scale);\r\n"
+        "    const VectorSingle invLen = a * Rsqrt(LengthSq(a.xyz));\r\n"
+        "    const VectorSingle pt = Mul(VectorSingle(box.minPt, s_AffineW), scaledMat);\r\n"
+        "    const VectorSingle pt2 = Mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), projMat);\r\n"
+        "    const VectorSingle nrm = Mul(VectorSingle(b, 0.0f), m) + unitMul;\r\n"
+        "    const MatrixSingle transposed = Transpose(m);\r\n"
+        "    const VectorSingle transRow0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);\r\n"
+        "    const VectorSingle transRow2 = Mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), Transpose(m));\r\n"
+        "    const VectorSingle matCol0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), m);\r\n"
+        "    const VectorSingle norm3 = Normalize(a.xyz);\r\n"
+        "    const VectorSingle norm3ZeroW = VectorSingle(norm3, 0.0f);\r\n"
+        "    const VectorSingle scaledNorm3 = norm3 * 2.0f;\r\n"
+        "    const VectorSingle scaledNorm3Swiz = VectorSingle(scaledNorm3.y, scaledNorm3.z, scaledNorm3.x, 0.0f);\r\n"
+        "    const VectorDouble mixedBounds = VectorDouble(Min(d.x, 1.0), Min(d.y, 2.0), Max(d.z, 3.0), Max(d.w, 4.0));\r\n"
+        "    const VectorSingle nonUniformAdd = VectorSingle(a.x + scale, a.y + 1.0f, a.z + 2.0f, a.w + 3.0f);\r\n"
+        "    const VectorSingle mixedAddSub = VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);\r\n"
+        "    const VectorSingle uniformLaneMul = VectorSingle(a.x * b.y, a.y * b.y, a.z * b.y, a.w * b.y);\r\n"
+        "    const VectorSingle planeEq = VectorSingle(norm3, -Dot(norm3.xyz, b.xyz));\r\n"
+        "    const VectorSingle negNorm3ZeroW = VectorSingle(-norm3, 0.0f);\r\n"
+        "    const VectorSingle negScaleFma = a * (-scale) + b;\r\n"
+        "    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n"
+        "    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n"
+        "    const VectorDouble maxD = Max(minD, divD);\r\n"
+        "    const VectorSingle narrowXY = VectorSingle(cast<f32>(maxD.x), cast<f32>(maxD.y), 0.0f, 0.0f);\r\n"
+        "    const VectorSingle negAxisZ = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);\r\n"
+        "    const VectorSingle unitXW = VectorSingle(1.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    const VectorSingle negZPosW = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);\r\n"
+        "    const VectorSingle withUnitW = VectorSingle(a, 1.0f);\r\n"
+        "    const f32 idxGetZ = a[2u];\r\n"
+        "    outBox.extent4 = f32x4(box.minPt.x, box.minPt.y, box.minPt.z, 0.0f);\r\n"
+        "    outBox.extent4 = f32x4(a, b.w);\r\n"
+        "    if(!IsFinite(box.extent4[0u]) || !IsFinite(box.extent4[1u]) || !IsFinite(box.extent4[2u]) || !IsFinite(box.extent4[3u]))\r\n"
+        "        return negAxisZ;\r\n"
+        "    if(!IsFinite(d.x) || d.x > 10.0 || !IsFinite(d.y) || d.y > 10.0)\r\n"
+        "        return constZero;\r\n"
+        "    if(Abs(box.minPt.x) > 1.0f || Abs(box.minPt.y) > 1.0f || Abs(box.minPt.z) > 1.0f)\r\n"
+        "        return constAxisY;\r\n"
+        "    if(!IsFinite(a.x) || !IsFinite(a.y) || !IsFinite(a.z) || !IsFinite(a.w) || !IsFinite(a.x + a.z) || !IsFinite(a.y + a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n"
+        "        return unitVec;\r\n"
+        "    if(scale >= a.x && 2.0f >= a.y && scale < a.z && 2.0f < a.w)\r\n"
+        "        return planeEq;\r\n"
+        "    if(a.x <= a.z && a.y <= a.w && IsFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
+        "        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negAxisZ + unitXW + negZPosW + withUnitW + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + Mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + idxGetZ + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
+        "}\r\n";
+
+    CompileResult optRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SimdOptSource, "impl/sim/simd_opt.adhd", arena.arena, optRes));
+    const MStringView optView(optRes.generatedSource.data(), optRes.generatedSource.size());
+    EXPECT_NE(optView.find("#pragma STDC FENV_ACCESS ON\r\n"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negAxisZ = ::VectorAndInt(::s_SIMDNegativeOne, ::s_SIMDMaskZ);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitXW = ::VectorOrInt(::s_SIMDIdentityR0, ::s_SIMDIdentityR3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negZPosW = ::VectorPermute<0u, 1u, 6u, 3u>(::s_SIMDIdentityR3, ::s_SIMDNegativeOne);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle withUnitW = ::VectorPermute<0u, 1u, 2u, 7u>(a, ::s_SIMDIdentityR3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 idxGetZ = ::VectorGetZ(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("::StoreFloat(::LoadFloat(box.minPt), outBox.extent4);"), MStringView::npos);
+    EXPECT_NE(optView.find("((!::IsFinite(box.extent4.raw[0u]) || !::IsFinite(box.extent4.raw[1u])) || !::IsFinite(box.extent4.raw[2u])) || !::IsFinite(box.extent4.raw[3u])"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle scaledNorm3Swiz = ::VectorSwizzle<1u, 2u, 0u, 3u>(scaledNorm3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorDouble mixedBounds = ::VectorDoublePermute<0u, 1u, 6u, 7u>(::VectorDoubleMin(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)), ::VectorDoubleMax(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle nonUniformAdd = ::VectorAdd(a, ::VectorSet(scale, 1.0f, 2.0f, 3.0f));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle mixedAddSub = ::VectorAdd(a, ::VectorXorInt(b, ::s_SIMDFlipYW));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle uniformLaneMul = ::VectorMultiply(a, ::VectorSplatY(b));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle planeEq = ::VectorPermute<0u, 1u, 2u, 7u>(norm3, ::VectorNegate(::Vector3Dot(norm3, b)));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negNorm3ZeroW = ::VectorXorInt(norm3, ::s_SIMDNegate3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negScaleFma = ::VectorNegativeMultiplySubtract(a, ::VectorReplicate(scale), b);"), MStringView::npos);
+    EXPECT_NE(optView.find("!::IsFinite((::VectorGetX(a) + ::VectorGetZ(a))) || !::IsFinite((::VectorGetY(a) + ::VectorGetW(a)))"), MStringView::npos);
+    EXPECT_NE(optView.find("(scale >= ::VectorGetX(a)) && (2.0f >= ::VectorGetY(a)) && (scale < ::VectorGetZ(a)) && (2.0f < ::VectorGetW(a))"), MStringView::npos);
+
+    EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
+    EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);
+    EXPECT_NE(optView.find("::SIMDMatrix{ .v = { ::VectorAndInt(a, ::s_SIMDMaskX), ::VectorAndInt(a, ::s_SIMDMaskY), ::VectorAndCInt(a, ::s_SIMDMaskXY), ::s_SIMDIdentityR2 } }"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitMul = ::VectorSubtract(a, b);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negFma = ::VectorNegativeMultiplySubtract(a, b, unitMul);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle splatMul = ::VectorReplicate((scale * 2.0f));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle pad3 = ::VectorAndInt(::VectorReplicate(scale), ::s_SIMDMask3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle signFlipSplat = ::VectorXorInt(::VectorReplicate(scale), ::s_SIMDFlipYW);"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 dot3ZeroW = ::VectorGetX(::Vector3Dot(a, ::VectorSet(1.0f, 2.0f, 3.0f, 0.0f)));"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 sumAll = ::VectorGetX(::VectorSum(a));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle satClamp = ::VectorSaturate(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle satMinMax = ::VectorSaturate(b);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle storageSwiz = ::VectorSwizzle<2u, 1u, 0u, 3u>(::LoadFloat(box.minPt));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle storageBinOp = ::VectorAndInt(::VectorAdd(::LoadFloat(box.minPt), ::LoadFloat(box.extent4)), ::s_SIMDMask3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle storageNeg3 = ::VectorXorInt(::LoadFloat(box.minPt), ::s_SIMDNegate3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle laneMathMin = ::VectorMin(a, b);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle altMaskSplat = ::VectorAndCInt(::VectorReplicate(scale), ::s_SIMDSelect0101);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle zeroSubAdd = ::VectorSubtract(b, a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle lerpZero = a;"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 swizGetX = ::VectorGetZ(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 max3 = ::VectorGetX(::Vector3MaxComponent(a));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle max4Splat = ::Vector4MaxComponent(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const u32 bitsY = ::VectorGetIntY(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle swizFromDouble = ::VectorSwizzle<2u, 1u, 0u, 3u>(::ConvertVectorDoubleToSingle(d));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDMatrix mulTrans = ::MatrixMultiplyTranspose(m, scaledMat);"), MStringView::npos);
+    EXPECT_NE(optView.find("const Float4 zeroStorageVec = Float4{};"), MStringView::npos);
+    EXPECT_NE(optView.find("const Float44 zeroStorageMat = Float44{};"), MStringView::npos);
+    EXPECT_NE(optView.find("::s_SIMDOne"), MStringView::npos);
+    EXPECT_NE(optView.find("::s_SIMDOneHalf"), MStringView::npos);
+    EXPECT_NE(optView.find("::s_SIMDIdentityR3"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle constZero = ::VectorZero();"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle constAxisY = ::s_SIMDIdentityR1;"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorReplicate(-scale)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorAndInt(a, ::s_SIMDMask3)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorAndCInt(a, ::s_SIMDMaskX)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorXorInt(a, ::s_SIMDFlipYW)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorAndInt(::LoadFloat(box.extent4), ::s_SIMDMaskXY)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorXorInt(a, ::s_SIMDNegate3)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorAndInt(::VectorScale(a, scale), ::s_SIMDMask3)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorPermute<4u, 5u, 6u, 3u>(a, ::s_SIMDIdentityR1)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorDoublePermute<0u, 1u, 6u, 7u>(d, ::s_DoubleSIMDOne)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorSplatZ(a)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorSwizzle<3u, 1u, 2u, 0u>(a)"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle identitySwiz = a;"), MStringView::npos);
+    EXPECT_NE(optView.find("::ConvertVectorDoubleToSingle(d)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorMultiply(a, ::Vector3Dot(a, b))"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorScale(b, scale)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorMultiply(a, ::Vector3ReciprocalLength(a))"), MStringView::npos);
+    EXPECT_NE(optView.find("::Vector3Transform(::LoadFloat(box.minPt), scaledMat)"), MStringView::npos);
+    EXPECT_NE(optView.find("::Vector2Transform(a, projMat)"), MStringView::npos);
+    EXPECT_NE(optView.find("::Vector3TransformNormal(b, m)"), MStringView::npos);
+    EXPECT_NE(optView.find("::StoreFloat(::VectorPermute<0u, 1u, 2u, 7u>(a, b), outBox.extent4)"), MStringView::npos);
+    EXPECT_NE(optView.find("::VectorIsFinite(b, ::VectorComponentMask::s_XYZ)"), MStringView::npos);
+    EXPECT_EQ(optView.find("::MatrixTranspose(m)"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow0 = m.v[0u];"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow2 = m.v[2u];"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle matCol0 = ::Vector4Transform(::s_SIMDIdentityR0, m);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle norm3ZeroW = norm3;"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle narrowXY = ::ConvertVectorDoubleToSingle(maxD);"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorDoubleIsFinite(d,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorMoveMask(::VectorGreater(::VectorAbs(::LoadFloat(box.minPt)),"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorIsFinite(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::VectorMoveMask(::VectorLess(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::Vector2LessOrEqual(a,"), MStringView::npos);
+    EXPECT_EQ(optView.find("::Vector3Equal(a, b)"), MStringView::npos);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/metascript/adhd/ast/ast_common.h>
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_compiler_specialization_containers_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::AdhdCompilerTestsDetail;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MStringView;
+
+TEST(AdhdCompiler, ExcludesUnannotatedPrivateMembersFromReflectionAndRejectsParallelNativeContainerMutation){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "[reflect]\r\n"
+        "class JobNode {\r\n"
+        "    public i32 visibleId = 1;\r\n"
+        "    private i32 hiddenState = 2;\r\n"
+        "    [reflect]\r\n"
+        "    private i32 reflectedSecret = 3;\r\n"
+        "    private void internalHelper() {}\r\n"
+        "    [reflect]\r\n"
+        "    private void reflectedHelper() {}\r\n"
+        "    public void run() {}\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/job/job_node.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("reflectedFieldCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("inMap.findField(\"hiddenState\")"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inMap.findField(\"reflectedSecret\")"), MStringView::npos);
+    EXPECT_EQ(cppView.find("return \"hiddenState\";"), MStringView::npos);
+    EXPECT_EQ(cppView.find("return \"internalHelper\";"), MStringView::npos);
+
+    static constexpr MStringView s_UnsafeParallelNativeMutContainer =
+        "type IntVec = Vector<i32>;\r\n"
+        "void BadParallelNative(mut IntVec items) {\r\n"
+        "    parallel_for(u32 i = 0u; i < 8u; ++i) {\r\n"
+        "        native(mut v = items, in i) {\r\n"
+        "            v.push_back(static_cast<i32>(i));\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParNativeRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UnsafeParallelNativeMutContainer, "impl/job/bad_par_native.adhd", arena.arena, badParNativeRes));
+}
+
+TEST(AdhdCompiler, RejectsUninitializedLocalReferencesAndUnknownLambdaCaptures){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_UninitRefLocalSource =
+        "void BadUninitRef() {\r\n"
+        "    mut String s;\r\n"
+        "}\r\n";
+    CompileResult badRefRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UninitRefLocalSource, "impl/sim/bad_ref.adhd", arena.arena, badRefRes));
+
+    static constexpr MStringView s_UnknownLambdaCaptureSource =
+        "void BadCapture() {\r\n"
+        "    auto fn = lambda[in missingVar]() -> void {\r\n"
+        "    };\r\n"
+        "}\r\n";
+    CompileResult badCapRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UnknownLambdaCaptureSource, "impl/sim/bad_cap.adhd", arena.arena, badCapRes));
+}
+
+TEST(AdhdCompiler, RejectsUncapturedOrConstThisLambdaMutationsDuplicateSwitchDefaultsAndBodylessOolMethods){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_UncapturedThisInLambdaSource =
+        "class BadNode {\r\n"
+        "    public i32 x = 1;\r\n"
+        "    public i32 test()const {\r\n"
+        "        auto fn = lambda() -> i32 {\r\n"
+        "            return this.x;\r\n"
+        "        };\r\n"
+        "        return fn();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badUncapturedThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UncapturedThisInLambdaSource, "impl/sim/bad_this_cap.adhd", arena.arena, badUncapturedThisRes));
+
+    static constexpr MStringView s_MutateInThisLambdaSource =
+        "class BadConstThis {\r\n"
+        "    public i32 x = 1;\r\n"
+        "    public void test() {\r\n"
+        "        auto fn = lambda[in this]() -> void {\r\n"
+        "            this.x = 2;\r\n"
+        "        };\r\n"
+        "        fn();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badMutInThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_MutateInThisLambdaSource, "impl/sim/bad_in_this.adhd", arena.arena, badMutInThisRes));
+
+    static constexpr MStringView s_DuplicateDefaultSwitchSource =
+        "void BadSwitch(in u32 x) {\r\n"
+        "    switch (x) {\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badDupDefaultRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateDefaultSwitchSource, "impl/sim/bad_dup_default.adhd", arena.arena, badDupDefaultRes));
+
+    static constexpr MStringView s_BodylessOutOfLineSource =
+        "class Box {\r\n"
+        "    public void run();\r\n"
+        "}\r\n"
+        "void Box::run();\r\n";
+    CompileResult badOolRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BodylessOutOfLineSource, "impl/sim/bad_ool.adhd", arena.arena, badOolRes));
+}
+
+TEST(AdhdCompiler, RejectsOutOfBoundsSwizzleAndWrongBuiltinArity){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_MixedSwizzleSource =
+        "void BadSwizzle() {\r\n"
+        "    f32x3_i32 v(1.0f, 2.0f, 3.0f, 4);\r\n"
+        "    f32x3_i32 s = v.xyzw;\r\n"
+        "}\r\n";
+    CompileResult badSwizzleRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_MixedSwizzleSource, "impl/sim/bad_mixed_swizzle.adhd", arena.arena, badSwizzleRes));
+
+    static constexpr MStringView s_WrongBuiltinAritySource =
+        "f32 BadDot(in VectorSingle a) {\r\n"
+        "    return Dot(a);\r\n"
+        "}\r\n";
+    CompileResult badBuiltinArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_WrongBuiltinAritySource, "impl/sim/bad_builtin_arity.adhd", arena.arena, badBuiltinArityRes));
+}
+
+
+TEST(AdhdCompiler, LowerBoundRejectsNonUsizeSpanArguments){
+    AdhdTestArena arena;
+    CompileResult valid(arena.arena);
+    ASSERT_TRUE(Compiler::Compile("usize F(in Span<usize> b){ return LowerBoundIndex(b.subspan(0u, b.size()), 0u); }", "valid.adhd", arena.arena, valid));
+    EXPECT_TRUE(MStringView(valid.generatedHeader).find("::LowerBoundIndex(") != MStringView::npos || MStringView(valid.generatedSource).find("::LowerBoundIndex(") != MStringView::npos);
+
+    constexpr Array<MStringView, 2> s_InvalidSources{
+        "usize F(){ return LowerBoundIndex(3u, 0u); }",
+        "usize F(in Span<u32> b){ return LowerBoundIndex(b, 0u); }",
+    };
+    for(const MStringView source : s_InvalidSources){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(source, "invalid.adhd", arena.arena, invalid));
+        ASSERT_FALSE(invalid.errors.empty());
+        EXPECT_EQ(MStringView(invalid.errors[0u].message), "built-in function argument must be Span<usize>");
+    }
+}
+
+
+TEST(AdhdCompiler, ByteBuiltinsCheckContainerTypesAndAlignmentUsesSize){
+    AdhdTestArena arena;
+    CompileResult valid(arena.arena);
+    constexpr MStringView s_Valid =
+        "Expected<usize> Align(in usize value){ return AlignUpChecked(value, 4u); }\n"
+        "void Store(in f32 value, mut FixedVector<u8, 8u> bytes){ WriteF32LittleEndianAt(value, 0u, bytes); }\n";
+    ASSERT_TRUE(Compiler::Compile(s_Valid, "byte_builtins.adhd", arena.arena, valid));
+    EXPECT_TRUE(MStringView(valid.generatedHeader).find("::AlignUpCheckedSize(") != MStringView::npos || MStringView(valid.generatedSource).find("::AlignUpCheckedSize(") != MStringView::npos);
+    constexpr Array<MStringView, 3> s_InvalidSources{
+        "u32 F(in Span<u32> b){ return ReadPartialU32LittleEndian(b, 0u); }",
+        "void F(in f32 v, mut FixedVector<u32, 8u> b){ WriteF32LittleEndianAt(v, 0u, b); }",
+        "void F(in f32 v, in FixedVector<u8, 8u> b){ WriteF32LittleEndianAt(v, 0u, b); }",
+    };
+    for(const MStringView source : s_InvalidSources){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(source, "bad_byte_builtins.adhd", arena.arena, invalid));
+    }
+}
+
+
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("u32")->byteSize == 4u);
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("f64")->isFloat);
+static_assert(NWB::Core::Metascript::Adhd::BuiltinTypeSemantics::FindBuiltinScalarType("unknown") == nullptr);
+
+
+TEST(AdhdCompiler, NumericGrammarAndBoundBuiltinsCheckArguments){
+    AdhdTestArena arena;
+    CompileResult valid(arena.arena);
+    constexpr MStringView s_Valid =
+        "u8 Integer(in StringView s){ return ClassifyIntegerGrammar(s); }\n"
+        "b8 Incomplete(in StringView s){ return ClassifyFloatGrammar(s) == s_NumericGrammarIncomplete; }\n"
+        "f32 Bound(in f64 v, in b8 upper){ return RoundF64ToF32Bound(v, upper); }\n"
+        "f64 Step(in f64 v, in f64 lo, in f64 hi, in f64 delta, in b8 up){ return StepF64Bounded(v, lo, hi, delta, up); }\n"
+        "void Advance(mut u64 value){ AdvanceWrappingNonzeroU64(value); }\n"
+        "u32 Width(in u32 value){ return BitWidthLowU32(value, 8u); }\n";
+    ASSERT_TRUE(Compiler::Compile(s_Valid, "numeric_builtins.adhd", arena.arena, valid));
+    const MStringView source(valid.generatedSource);
+    const MStringView header(valid.generatedHeader);
+    EXPECT_NE(header.find("#include <global/binary_big_endian.h>"), MStringView::npos);
+    EXPECT_NE(header.find("#include <global/binary_little_endian.h>"), MStringView::npos);
+    EXPECT_NE(header.find("#include <global/numeric_range.h>"), MStringView::npos);
+    for(const MStringView name : { MStringView("::ClassifyIntegerGrammar("), MStringView("::ClassifyFloatGrammar("), MStringView("::RoundF64ToF32Bound("), MStringView("::StepF64Bounded("), MStringView("::AdvanceWrappingNonzero("), MStringView("::BitWidthLowU32("), MStringView("::s_NumericGrammarIncomplete") })
+        EXPECT_TRUE(source.find(name) != MStringView::npos || header.find(name) != MStringView::npos);
+    constexpr Array<MStringView, 8> s_Invalid{
+        "u8 F(in u32 value){ return ClassifyIntegerGrammar(value); }",
+        "f32 F(in f32 value, in b8 upper){ return RoundF64ToF32Bound(value, upper); }",
+        "f32 F(in f64 value, in u32 upper){ return RoundF64ToF32Bound(value, upper); }",
+        "f64 F(in f64 v, in b8 up){ return StepF64Bounded(v, v, v, v); }",
+        "f64 F(in f64 v, in u32 up){ return StepF64Bounded(v, v, v, v, up); }",
+        "void F(in u64 v){ AdvanceWrappingNonzeroU64(v); }",
+        "void F(mut u32 v){ AdvanceWrappingNonzeroU64(v); }",
+        "u32 F(in u64 v){ return BitWidthLowU32(v, 8u); }",
+    };
+    for(const MStringView text : s_Invalid){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(text, "bad_numeric_builtins.adhd", arena.arena, invalid));
+    }
+}
+
+
+TEST(AdhdCompiler, RawSimdHashKeepsRegisterAndMutableSeed){
+    AdhdTestArena arena;
+    CompileResult valid(arena.arena);
+    ASSERT_TRUE(Compiler::Compile("void F(in VectorSingle v, mut usize seed){ HashCombineF32x4(v, seed); } b8 Eq(in VectorSingle a, in VectorSingle b){ return EqualF32x4Bits(a, b); }", "hash.adhd", arena.arena, valid));
+    const MStringView header(valid.generatedHeader);
+    const MStringView source(valid.generatedSource);
+    const MStringView generated = source.find("::HashCombineF32x4(") != MStringView::npos ? source : header;
+    EXPECT_NE(generated.find("::HashCombineF32x4(v, seed)"), MStringView::npos);
+    EXPECT_EQ(generated.find("::LoadFloat("), MStringView::npos);
+    constexpr Array<MStringView, 3> s_InvalidSources{
+        "void F(in VectorSingle v){ HashCombineF32x4(v, 1u); }",
+        "void F(in VectorSingle v, in usize seed){ HashCombineF32x4(v, seed); }",
+        "void F(in VectorDouble v, mut usize seed){ HashCombineF32x4(v, seed); }",
+    };
+    for(const MStringView text : s_InvalidSources){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(text, "bad_hash.adhd", arena.arena, invalid));
+    }
+    CompileResult shadowed(arena.arena);
+    ASSERT_TRUE(Compiler::Compile("void HashCombineF32x4(in u32 v, mut usize seed){ seed = cast<usize>(v); } void F(in u32 v, mut usize seed){ HashCombineF32x4(v, seed); }", "shadow_hash.adhd", arena.arena, shadowed));
+}
+
+
+TEST(AdhdCompiler, RectangleIntrinsicsKeepRegistersAndRejectWrongTypes){
+    AdhdTestArena arena;
+    constexpr MStringView s_Valid =
+        "type RectVec = VectorSingle;\n"
+        "VectorSingle Combine(in RectVec a, in RectVec b){ return IntersectRectVec(IntersectRectBoundsVec(a, b), b); }\n"
+        "b8 Visible(in RectVec a, in RectVec b){ return HasVisibleRectIntersectionVec(a, b); }\n"
+        "VectorSingle Inset(in RectVec a, in RectVec b){ return InsetRectVec(a, b); }\n"
+        "void Take(in RectVec v){} void Call(in RectVec a, in RectVec b){ Take(IntersectRectVec(a, b)); }\n";
+    CompileResult valid(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Valid, "rect.adhd", arena.arena, valid));
+    const MStringView source(valid.generatedSource);
+    const MStringView header(valid.generatedHeader);
+    const MStringView generated = source.find("::IntersectRectValuePreservingExtent(") != MStringView::npos ? source : header;
+    EXPECT_NE(generated.find("::IntersectRectBoundsValue("), MStringView::npos);
+    EXPECT_NE(generated.find("::IntersectRectValuePreservingExtent("), MStringView::npos);
+    EXPECT_EQ(generated.find("::LoadFloat("), MStringView::npos);
+    EXPECT_TRUE(source.find("::HasVisibleRectIntersection(") != MStringView::npos || header.find("::HasVisibleRectIntersection(") != MStringView::npos);
+    EXPECT_TRUE(source.find("::InsetRectValuePreservingExtent(") != MStringView::npos || header.find("::InsetRectValuePreservingExtent(") != MStringView::npos);
+
+    constexpr Array<MStringView, 3> s_Invalid{
+        "VectorSingle F(in VectorSingle a){ return IntersectRectVec(a, 1.0f); }",
+        "VectorSingle F(in VectorDouble a, in VectorSingle b){ return IntersectRectVec(a, b); }",
+        "VectorSingle F(in MatrixSingle a, in VectorSingle b){ return IntersectRectVec(a, b); }",
+    };
+    for(const MStringView text : s_Invalid){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(text, "invalid_rect.adhd", arena.arena, invalid));
+        ASSERT_FALSE(invalid.errors.empty());
+        EXPECT_EQ(MStringView(invalid.errors[0u].message), "built-in function argument must be VectorSingle");
+    }
+    constexpr Array<MStringView, 2> s_MutationTargets{
+        "void Take(mut VectorSingle v){} void F(in VectorSingle a){ Take(IntersectRectVec(a, a)); }",
+        "void Take(mut b8 v){} void F(in VectorSingle a){ Take(HasVisibleRectIntersectionVec(a, a)); }",
+    };
+    for(const MStringView text : s_MutationTargets){
+        CompileResult invalid(arena.arena);
+        EXPECT_FALSE(Compiler::Compile(text, "mut_rect.adhd", arena.arena, invalid));
+        ASSERT_FALSE(invalid.errors.empty());
+        EXPECT_EQ(MStringView(invalid.errors[0u].message), "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+    }
+
+    CompileResult shadowed(arena.arena);
+    constexpr MStringView s_Shadow = "VectorSingle IntersectRectVec(in VectorSingle a, in VectorSingle b){ return a; } VectorSingle F(in VectorSingle a, in VectorSingle b){ return IntersectRectVec(a, b); }";
+    ASSERT_TRUE(Compiler::Compile(s_Shadow, "shadow_rect.adhd", arena.arena, shadowed));
+    EXPECT_EQ(MStringView(shadowed.generatedHeader).find("::IntersectRectValuePreservingExtent("), MStringView::npos);
+    EXPECT_EQ(MStringView(shadowed.generatedSource).find("::IntersectRectValuePreservingExtent("), MStringView::npos);
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_compiler_templates_interfaces_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::AdhdCompilerTestsDetail;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MString;
+using NWB::Core::Metascript::MStringView;
+using NWB::Core::Metascript::MetaArena;
+
+TEST(AdhdCompiler, RejectsTemplateBoundViolationsAndInterfaceDowncasts){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_InvalidBoundArgSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PlainData {\r\n"
+        "    public u32 value = 0;\r\n"
+        "}\r\n"
+        "class TaskRunner<T : ITask> {\r\n"
+        "    public T task = T();\r\n"
+        "}\r\n"
+        "void BadUse() {\r\n"
+        "    TaskRunner<PlainData> runner = TaskRunner<PlainData>();\r\n"
+        "}\r\n";
+
+    CompileResult invalidBoundRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_InvalidBoundArgSource, "impl/bad_bound.adhd", arena.arena, invalidBoundRes));
+
+    static constexpr MStringView s_DowncastInterfaceSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PhysicsTask : ITask {\r\n"
+        "    public void execute(in f32 dt) override {}\r\n"
+        "}\r\n"
+        "void BadDowncast(in ITask task) {\r\n"
+        "    PhysicsTask p = cast<PhysicsTask>(task);\r\n"
+        "}\r\n";
+    CompileResult downcastRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DowncastInterfaceSource, "impl/bad_downcast.adhd", arena.arena, downcastRes));
+}
+
+TEST(AdhdCompiler, RejectsNonConstMethodCallsOnInParameters){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ConstViolationSource =
+        "class Counter {\r\n"
+        "    private u32 count = 0;\r\n"
+        "    public void bump() {\r\n"
+        "        this.count += 1;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "void BadConstCall(in Counter c) {\r\n"
+        "    c.bump();\r\n"
+        "}\r\n";
+    CompileResult constRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ConstViolationSource, "impl/bad_const.adhd", arena.arena, constRes));
+}
+
+TEST(AdhdCompiler, RejectsUnboundedMethodCallsCStyleArraysRawCppIncludesAndByValueInterfaces){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_UnboundedMethodCall =
+        "void BadUnbounded<T>(mut T comp) {\r\n"
+        "    comp.step(1.0f);\r\n"
+        "}\r\n";
+    CompileResult unboundedRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UnboundedMethodCall, "impl/bad_unbounded.adhd", arena.arena, unboundedRes));
+
+    static constexpr MStringView s_CStyleArraySource =
+        "void BadArray() {\r\n"
+        "    i32 values[4] = 0;\r\n"
+        "}\r\n";
+    CompileResult cArrayRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_CStyleArraySource, "impl/bad_array.adhd", arena.arena, cArrayRes));
+
+    static constexpr MStringView s_CppIncludeOutsideNative =
+        "#include <vector>\r\n"
+        "void Nop() {}\r\n";
+    CompileResult cppIncRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_CppIncludeOutsideNative, "impl/bad_inc.adhd", arena.arena, cppIncRes));
+
+    static constexpr MStringView s_ByValueInterfaceVar =
+        "interface IComponent {\r\n"
+        "    void step(in f32 dt);\r\n"
+        "}\r\n"
+        "class Comp : IComponent {\r\n"
+        "    public void step(in f32 dt) override {}\r\n"
+        "}\r\n"
+        "void BadByValue() {\r\n"
+        "    Comp c = Comp();\r\n"
+        "    IComponent val = c;\r\n"
+        "}\r\n";
+    CompileResult byValIfaceRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ByValueInterfaceVar, "impl/bad_val_iface.adhd", arena.arena, byValIfaceRes));
+
+    static constexpr MStringView s_MismatchedOverrideConst =
+        "interface IComponent {\r\n"
+        "    u32 id()const;\r\n"
+        "}\r\n"
+        "class BadComp : IComponent {\r\n"
+        "    public u32 id() override {\r\n"
+        "        return 0;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult mismatchOverrideRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedOverrideConst, "impl/bad_override_sig.adhd", arena.arena, mismatchOverrideRes));
+}
+
+TEST(AdhdCompiler, OmitsIncludedDeclarationsFromGeneratedOutputAndRejectsInvalidEnumOperatorsAndControlFlow){
+    AdhdTestArena arena;
+    MockIncludeResolver resolver;
+
+    static constexpr MStringView s_SplitImplSource =
+        "#include \"shared_service.adhd\"\r\n"
+        "i32 SharedService::accumulate(in i32 delta) {\r\n"
+        "    this.m_total += delta;\r\n"
+        "    return this.m_total;\r\n"
+        "}\r\n";
+
+    CompileResult splitRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", &resolver, arena.arena, splitRes));
+    const MStringView hdrView(splitRes.generatedHeader.data(), splitRes.generatedHeader.size());
+    const MStringView cppView(splitRes.generatedSource.data(), splitRes.generatedSource.size());
+    EXPECT_NE(hdrView.find("#include \"shared_service.adhd.h\""), MStringView::npos);
+    EXPECT_EQ(hdrView.find("class SharedService final"), MStringView::npos);
+    EXPECT_EQ(cppView.find("SharedService::reflectedFieldCount"), MStringView::npos);
+
+    static constexpr MStringView s_EnumBitwiseOp =
+        "enum<u8> Mode {\r\n"
+        "    Idle = 0,\r\n"
+        "    Active = 1,\r\n"
+        "}\r\n"
+        "Mode BadBitwise() {\r\n"
+        "    return Mode::Idle | Mode::Active;\r\n"
+        "}\r\n";
+    CompileResult badEnumBitwiseRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_EnumBitwiseOp, "impl/bad_enum_bitwise.adhd", arena.arena, badEnumBitwiseRes));
+
+    static constexpr MStringView s_InvalidOperatorArity =
+        "class Mask {\r\n"
+        "    public u32 bits = 0;\r\n"
+        "    public Mask operator~(in Mask other)const {\r\n"
+        "        return Mask();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badOpArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_InvalidOperatorArity, "impl/bad_op_arity.adhd", arena.arena, badOpArityRes));
+
+    static constexpr MStringView s_MismatchedTemplateArgOverride =
+        "interface IBatch {\r\n"
+        "    void process(in Span<i32> items);\r\n"
+        "}\r\n"
+        "class BadBatch : IBatch {\r\n"
+        "    public void process(in Span<f32> items) override {}\r\n"
+        "}\r\n";
+    CompileResult badTemplateOverrideRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
+
+    static constexpr MStringView s_DuplicateFieldSource =
+        "class DupClass {\r\n"
+        "    public u32 value = 0;\r\n"
+        "    private u32 value = 1;\r\n"
+        "}\r\n";
+    CompileResult dupFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateFieldSource, "impl/dup_field.adhd", arena.arena, dupFieldRes));
+
+    static constexpr MStringView s_UnknownThisMemberSource =
+        "class KnownClass {\r\n"
+        "    public u32 count = 0;\r\n"
+        "    public u32 readBad()const {\r\n"
+        "        return this.missingField;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult unknownThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_UnknownThisMemberSource, "impl/unknown_this.adhd", arena.arena, unknownThisRes));
+
+    static constexpr MStringView s_InterfaceMethodByValueReturn =
+        "interface IFactory {\r\n"
+        "    IFactory cloneSelf();\r\n"
+        "}\r\n";
+    CompileResult ifaceValRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_InterfaceMethodByValueReturn, "impl/bad_iface_ret.adhd", arena.arena, ifaceValRetRes));
+
+    static constexpr MStringView s_TemplateArgCountMismatchSource =
+        "class Pair<T, U> {\r\n"
+        "    public T first = 0;\r\n"
+        "    public U second = 0;\r\n"
+        "}\r\n"
+        "void BadPairUse() {\r\n"
+        "    Pair<u8> p;\r\n"
+        "}\r\n";
+    CompileResult badTplArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_TemplateArgCountMismatchSource, "impl/bad_tpl_arity.adhd", arena.arena, badTplArityRes));
+
+    static constexpr MStringView s_DuplicateEnumeratorSource =
+        "enum<u8> DupMode {\r\n"
+        "    Alpha,\r\n"
+        "    Alpha\r\n"
+        "}\r\n";
+    CompileResult dupEnumRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateEnumeratorSource, "impl/dup_enum.adhd", arena.arena, dupEnumRes));
+
+    static constexpr MStringView s_DuplicateLocalVarSource =
+        "void BadScope(in u32 x) {\r\n"
+        "    u32 x = 1u;\r\n"
+        "}\r\n";
+    CompileResult dupLocalRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateLocalVarSource, "impl/dup_local.adhd", arena.arena, dupLocalRes));
+
+    static constexpr MStringView s_BreakOutsideLoopSource =
+        "void BadBreak() {\r\n"
+        "    break;\r\n"
+        "}\r\n";
+    CompileResult badBreakRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BreakOutsideLoopSource, "impl/bad_break.adhd", arena.arena, badBreakRes));
+
+    static constexpr MStringView s_ReturnInParallelSource =
+        "u32 BadParReturn() {\r\n"
+        "    parallel_for (u32 i = 0u; i < 4u; ++i) {\r\n"
+        "        return i;\r\n"
+        "    }\r\n"
+        "    return 0u;\r\n"
+        "}\r\n";
+    CompileResult badParRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ReturnInParallelSource, "impl/bad_par_ret.adhd", arena.arena, badParRetRes));
+
+    static constexpr MStringView s_VoidReturnValueSource =
+        "void BadVoidRet() {\r\n"
+        "    return 42;\r\n"
+        "}\r\n";
+    CompileResult badVoidRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
+}
+
+TEST(AdhdCompiler, PopsIncludeScopesAndOmitsTransitiveHeaderReemission){
+    AdhdTestArena arena;
+
+    class TransitiveSplitResolver final : public NWB::Core::Metascript::IIncludeResolver{
+    public:
+        [[nodiscard]] virtual b8 resolveInclude(const MStringView includePath, const b8, MetaArena& rArena, MString& outResolvedKey, MString& outContent)override{
+            if(includePath == "split_decl.adhd"){
+                outResolvedKey = MString("/abs/split_decl.adhd", rArena);
+                static constexpr MStringView s_DeclCode =
+                    "#include \"sub/leaf.adhd\"\r\n"
+                    "i32 ComputeCrossFile(in i32 x);\r\n"
+                    "class CrossBox<T> {\r\n"
+                    "    public T m_item;\r\n"
+                    "    public T fetch()const;\r\n"
+                    "}\r\n";
+                outContent = MString(s_DeclCode.data(), s_DeclCode.size(), rArena);
+                return true;
+            }
+            if(includePath == "sub/leaf.adhd"){
+                outResolvedKey = MString("/abs/sub/leaf.adhd", rArena);
+                static constexpr MStringView s_LeafCode =
+                    "const i32 s_LeafBias = 7;\r\n";
+                outContent = MString(s_LeafCode.data(), s_LeafCode.size(), rArena);
+                return true;
+            }
+            return false;
+        }
+
+        virtual void popIncludeScope()noexcept override{
+            ++popCount;
+        }
+
+
+    public:
+        u32 popCount = 0u;
+    };
+
+    static constexpr MStringView s_ImplSource =
+        "#include \"split_decl.adhd\"\r\n"
+        "i32 ComputeCrossFile(in i32 x) {\r\n"
+        "    return x + s_LeafBias;\r\n"
+        "}\r\n"
+        "T CrossBox<T>::fetch()const {\r\n"
+        "    return this.m_item;\r\n"
+        "}\r\n";
+
+    TransitiveSplitResolver resolver;
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ImplSource, "impl/split_impl.adhd", &resolver, arena.arena, res));
+
+    EXPECT_EQ(resolver.popCount, 2u);
+    ASSERT_EQ(res.unit.includedAdhdFiles.size(), 1u);
+    EXPECT_EQ(MStringView(res.unit.includedAdhdFiles[0].data(), res.unit.includedAdhdFiles[0].size()), MStringView("split_decl.adhd"));
+    ASSERT_EQ(res.unit.resolvedIncludedFiles.size(), 2u);
+    EXPECT_EQ(MStringView(res.unit.resolvedIncludedFiles[0].data(), res.unit.resolvedIncludedFiles[0].size()), MStringView("/abs/split_decl.adhd"));
+    EXPECT_EQ(MStringView(res.unit.resolvedIncludedFiles[1].data(), res.unit.resolvedIncludedFiles[1].size()), MStringView("/abs/sub/leaf.adhd"));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    EXPECT_NE(hdrView.find("#include \"split_decl.adhd.h\""), MStringView::npos);
+    EXPECT_EQ(hdrView.find("#include \"sub/leaf.adhd.h\""), MStringView::npos);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_simd_index_edge_tests{
+
+
+using namespace NWB::AdhdCompilerTestsDetail;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MStringView;
+
+
+TEST(AdhdCompiler, KeepsDynamicLaneIndicesDynamicWhileFoldingConstantIndices){
+    AdhdTestArena arena;
+    static constexpr MStringView s_Source =
+        "f32 Lanes(mut VectorSingle value, in usize index) {\r\n"
+        "    value[2u] = 1.0f;\r\n"
+        "    value[index] = 2.0f;\r\n"
+        "    return value[2u] + value[index];\r\n"
+        "}\r\n";
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/lane_index_edges.adhd", arena.arena, result));
+    const MStringView generated(result.generatedSource.data(), result.generatedSource.size());
+    EXPECT_NE(generated.find("::VectorSetZ("), MStringView::npos);
+    EXPECT_NE(generated.find("::VectorSetByIndex("), MStringView::npos);
+    EXPECT_NE(generated.find("::VectorGetZ("), MStringView::npos);
+    EXPECT_NE(generated.find("::VectorGetByIndex("), MStringView::npos);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

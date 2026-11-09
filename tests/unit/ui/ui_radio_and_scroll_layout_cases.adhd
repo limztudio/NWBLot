@@ -1,0 +1,1535 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiRadioAndScrollLayoutCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_radio_group_layout_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+
+[[nodiscard]] static RadioGroupChoices Choices(const u32 count)noexcept{
+    RadioGroupChoices choices;
+    choices.sourceGeneration = 41u;
+    choices.sourceRevision = 7u;
+    choices.count = count;
+    for(u32 index = 0u; index < count && index < s_RadioGroupMaxChoices; ++index)
+        choices.rows[index] = { index + 1u, index % 2u == 0u };
+    return choices;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
+    const RadioGroupChoices choices = Choices(3u);
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    auto placement = PlaceRadioGroup({ 10.0f, 20.0f, 140.0f, 112.0f }, { 30.0f, 30.0f, 70.0f, 80.0f }, choices, *metrics);
+    ASSERT_TRUE(placement);
+    UiPaintAssertions::ExpectRect(placement->clip, { 30.0f, 30.0f, 70.0f, 80.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[0u].clip, { 30.0f, 30.0f, 70.0f, 18.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[0u].textClip, { 46.0f, 30.0f, 54.0f, 18.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[2u].clip, { 30.0f, 80.0f, 70.0f, 24.0f });
+}
+
+TEST(UiRadioGroupLayoutTests, FullChoiceBoundProducesAllRowsWithoutVirtualization){
+    const RadioGroupChoices choices = Choices(s_RadioGroupMaxChoices);
+    auto metrics = MeasureRadioGroup(choices.count, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    EXPECT_FLOAT_EQ(metrics->contentSize.y, 1796.0f);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 140.0f, 1796.0f }, { 0.0f, 0.0f, 140.0f, 1796.0f }, choices, *metrics);
+    ASSERT_TRUE(placement);
+    EXPECT_EQ(placement->count, 64u);
+    EXPECT_EQ(placement->rows[63u].key, 64u);
+    EXPECT_FLOAT_EQ(placement->rows[63u].rectangle.y, 1768.0f);
+    EXPECT_FLOAT_EQ(placement->rows[63u].rectangle.height, 24.0f);
+}
+
+TEST(UiRadioGroupLayoutTests, EmptyGroupHasOnlyPaddingAndNoChoiceGeometry){
+    const RadioGroupChoices choices = Choices(0u);
+    auto metrics = MeasureRadioGroup(0u, {}, {}, {});
+    ASSERT_TRUE(metrics);
+    EXPECT_FLOAT_EQ(metrics->contentSize.x, 8.0f);
+    EXPECT_FLOAT_EQ(metrics->contentSize.y, 8.0f);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 8.0f, 8.0f }, choices, *metrics);
+    ASSERT_TRUE(placement);
+    EXPECT_EQ(placement->count, 0u);
+    UiPaintAssertions::ExpectRect(placement->content, { 4.0f, 4.0f, 0.0f, 0.0f });
+    EXPECT_EQ(placement->rows[0u].key, 0u);
+}
+
+TEST(UiRadioGroupLayoutTests, NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabelArea){
+    const RadioGroupChoices choices = Choices(1u);
+    auto metrics = MeasureRadioGroup(1u, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 20.0f, 40.0f }, { 0.0f, 0.0f, 20.0f, 40.0f }, choices, *metrics);
+    ASSERT_TRUE(placement);
+    UiPaintAssertions::ExpectRect(placement->rows[0u].indicator, { 4.0f, 10.0f, 12.0f, 12.0f });
+    EXPECT_FLOAT_EQ(placement->rows[0u].mark.width, 4.8f);
+    EXPECT_FLOAT_EQ(placement->rows[0u].textClip.width, 0.0f);
+}
+
+TEST(UiRadioGroupLayoutTests, TinyAndZeroBoundsSafelyClipEveryChoice){
+    const RadioGroupChoices choices = Choices(2u);
+    auto metrics = MeasureRadioGroup(2u, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 2.0f, 2.0f }, { 0.0f, 0.0f, 2.0f, 2.0f }, choices, *metrics);
+    ASSERT_TRUE(placement);
+    EXPECT_EQ(placement->count, 2u);
+    EXPECT_FLOAT_EQ(placement->rows[0u].indicator.width, 0.0f);
+    EXPECT_FLOAT_EQ(placement->rows[0u].clip.height, 0.0f);
+    placement = PlaceRadioGroup({}, {}, choices, *metrics);
+    ASSERT_TRUE(placement);
+    EXPECT_EQ(placement->count, 2u);
+    EXPECT_FLOAT_EQ(placement->rows[1u].textClip.width, 0.0f);
+    EXPECT_FLOAT_EQ(placement->rows[1u].textClip.height, 0.0f);
+}
+
+TEST(UiRadioGroupLayoutTests, InvalidOptionsOrChoiceCountsRejectMetrics){
+    RadioGroupOptions options;
+    options.width = { LayoutSizePolicy::Fixed, -1.0f };
+    EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, options, {}));
+    options.width = { LayoutSizePolicy::Fixed, Limit<f32>::s_QuietNaN };
+    EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, options, {}));
+    EXPECT_FALSE(MeasureRadioGroup(65u, { 100.0f, 16.0f }, {}, {}));
+    EXPECT_FALSE(MeasureRadioGroup(3u, { -1.0f, 16.0f }, {}, {}));
+}
+
+TEST(UiRadioGroupLayoutTests, InvalidStyleMetricsAndTintsRejectMetrics){
+    for(u32 mode = 0u; mode < 8u; ++mode){
+        RadioGroupStyle style;
+        switch(mode){
+        case 0u: style.padding.top = -1.0f; break;
+        case 1u: style.rowGap = Limit<f32>::s_Infinity; break;
+        case 2u: style.indicatorExtent = 0.0f; break;
+        case 3u: style.gap = -1.0f; break;
+        case 4u: style.markInset = 0.51f; break;
+        case 5u: style.hoverTint.r = Limit<f32>::s_QuietNaN; break;
+        case 6u: style.pressedTint.g = -1.0f; break;
+        case 7u: style.disabledTint.a = 1.1f; break;
+        }
+        EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, style));
+    }
+}
+
+TEST(UiRadioGroupLayoutTests, OverflowingContentHeightRejectsMetrics){
+    EXPECT_FALSE(MeasureRadioGroup(64u, { 100.0f, Limit<f32>::s_Max }, {}, {}));
+}
+
+TEST(UiRadioGroupLayoutTests, InvalidAndUnrepresentableBoundsRejectPlacement){
+    const RadioGroupChoices choices = Choices(3u);
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
+    const Array<Rect, 4> invalid{
+        Rect{ 0.0f, 0.0f, -1.0f, 112.0f }, Rect{ Limit<f32>::s_QuietNaN, 0.0f, 140.0f, 112.0f },
+        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, Rect{ 0.0f, 1.0e20f, 140.0f, 112.0f },
+    };
+    for(const Rect& rectangle : invalid){
+        EXPECT_FALSE(PlaceRadioGroup(rectangle, bounds, choices, *metrics));
+    }
+    EXPECT_FALSE(PlaceRadioGroup(bounds, { 0.0f, 0.0f, 140.0f, -1.0f }, choices, *metrics));
+}
+
+TEST(UiRadioGroupLayoutTests, MismatchedCountKeysOrMetricsRejectPlacement){
+    RadioGroupChoices choices = Choices(3u);
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
+    ASSERT_TRUE(metrics);
+    const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
+    choices.count = 2u;
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
+    choices.count = 3u;
+    choices.rows[1u].key = 1u;
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
+    choices.rows[1u].key = 0u;
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
+    choices.rows[1u].key = 2u;
+    metrics->contentSize.y = 0.0f;
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_radio_group_loan_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiRadioGroupTests;
+
+class UiRadioGroupLoanTests : public RadioGroupFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiRadioGroupLoanTests, IdenticalSelectionInAKeyCallbackRejectsBeforeTheNextBorrowedCall){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    const u64 token = m_state.inputGeneration();
+    m_source.resetCounters();
+    m_source.armSelection(m_state, RadioCallbackSite::Key, 10u);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    EXPECT_NE(m_state.inputGeneration(), token);
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(m_source.m_textCalls, 0u);
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, SelectionAwayAndBackInEnabledCallbackCannotPassTheSnapshotFence){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    const RadioGroupSnapshot saved = m_state.snapshot();
+    m_source.resetCounters();
+    m_source.armSelection(m_state, RadioCallbackSite::Enabled, 10u, true);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    EXPECT_EQ(m_state.cursorKey(), 10u);
+    EXPECT_FALSE(m_state.matches(saved));
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, SourceRevisionChangedMidReconcileIsPreservedWithoutPublishingPartialChoices){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    const RadioGroupSnapshot saved = m_state.snapshot();
+    const u64 revision = m_source.m_contentRevision;
+    m_source.armSource(RadioCallbackSite::Key);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_contentRevision, revision + 1u);
+    EXPECT_TRUE(m_state.matches(saved));
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, SourceReplacementInsideALabelCallbackRetainsTheApplicationMutation){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    const u64 generation = m_source.m_generation;
+    m_source.armSource(RadioCallbackSite::Text, true);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_generation, generation + 1u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, FinalCountCallbackRevisionMutationRejectsEvenAfterEarlierMetadataMatched){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declare(2u));
+    const RadioGroupSnapshot prepared = m_state.snapshot();
+    const u64 revision = m_source.m_contentRevision;
+    m_source.armSource(RadioCallbackSite::Count);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.ready());
+    EXPECT_EQ(m_source.m_contentRevision, revision + 1u);
+    EXPECT_TRUE(m_state.matches(prepared));
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, ExplicitSameValueIntentAfterDeclarationRejectsBeforeAnyFurtherSourceCall){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declare(2u));
+    m_source.resetCounters();
+    m_state.select(10u);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_calls, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, SharingOneStateAcrossDeclarationsRejectsBeforeTheSecondSourceIsLent){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declare(2u));
+    RadioSource other;
+    other.m_generation = 1901u;
+    EXPECT_FALSE(m_builder.radioGroup("other", other, m_state).valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(other.m_calls, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, ResetDuringInitialRevisionMetadataRejectsWithoutAnotherSourceCallback){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Revision);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, ResetInsideAKeyCallbackCannotClearTheScopeUnderTheBorrow){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Key);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(m_source.m_textCalls, 0u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, BalancedPanelReentryInsideEnabledCallbackRejectsBothOperations){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Enabled, true);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_source.m_beginAccepted);
+    EXPECT_FALSE(m_source.m_endAccepted);
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, LabelCallbackResetStopsBeforeTheNextLabelOrMetadataBorrow){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Text);
+    EXPECT_FALSE(declare(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_source.m_textCalls, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, FinalizationCountCallbackCannotBeginAndEndAReplacementPanel){
+    ASSERT_TRUE(accept(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declare(2u));
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Count, true);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_source.m_beginAccepted);
+    EXPECT_FALSE(m_source.m_endAccepted);
+    EXPECT_EQ(m_source.m_mutations, 1u);
+    EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    expectAccepted(displayed);
+}
+
+TEST_F(UiRadioGroupLoanTests, CompletedScopeReleasesTheSourceBeforeAcceptedPublication){
+    ASSERT_TRUE(prepare(1u));
+    m_source.resetCounters();
+    m_source.armReentry(m_builder, RadioCallbackSite::Revision);
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_source.m_calls, 0u);
+    EXPECT_EQ(m_source.m_mutations, 0u);
+    EXPECT_FALSE(m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_radio_group_popup_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiRadioGroupTests;
+
+
+class UiRadioGroupPopupTests : public RadioGroupFixture{
+protected:
+    virtual void SetUp()override{
+        RadioGroupFixture::SetUp();
+        m_childSource.m_generation = 2001u;
+        m_laterSource.m_generation = 2101u;
+        m_childState.select(20u);
+        m_parent.open();
+        m_child.open();
+    }
+
+    [[nodiscard]] WidgetId parentHost()const{
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey), s_RadioGroupKey);
+    }
+
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
+            return false;
+        m_result = m_builder.radioGroup(s_RadioGroupKey, m_source, m_state);
+        return m_result.valid;
+    }
+
+    [[nodiscard]] b8 declareFamily(const u64 generation){
+        if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()))
+            return false;
+        m_childResult = m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_childState);
+        return m_childResult.valid && m_builder.endPopup();
+    }
+
+    [[nodiscard]] b8 finishParent(){
+        return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
+    }
+
+    [[nodiscard]] b8 acceptParent(const u64 generation){
+        return beginParent(generation) && finishParent() && m_context.commitFrame(generation);
+    }
+
+    [[nodiscard]] b8 acceptFamily(const u64 generation){
+        return declareFamily(generation) && finishParent() && m_context.commitFrame(generation);
+    }
+
+    void expectSourceClosure(const RadioCallbackSite::Enum site){
+        ASSERT_TRUE(acceptParent(1u));
+        ASSERT_EQ(m_context.input().focus(), parentHost());
+        InputEvent held;
+        held.type = InputEventType::KeyDown;
+        held.key = Core::Key::Right;
+        ASSERT_TRUE(send(held).commandConsumed);
+        const RadioGroupSnapshot before = m_state.snapshot();
+        m_source.resetCounters();
+        m_source.armClose(m_parent, site);
+        ASSERT_TRUE(beginParent(2u));
+        EXPECT_FALSE(m_parent.isOpen());
+        EXPECT_TRUE(m_result.valid);
+        EXPECT_FALSE(m_result.selectionChanged);
+        EXPECT_FALSE(m_result.activated);
+        EXPECT_TRUE(m_state.matches(before));
+        EXPECT_EQ(m_state.selectedKey(), 10u);
+        EXPECT_EQ(m_source.m_mutations, 1u);
+        EXPECT_EQ(m_source.m_callbacksAfterMutation, 0u);
+        EXPECT_EQ(m_source.m_textCalls, 0u);
+        ASSERT_TRUE(finishParent());
+        ASSERT_TRUE(m_context.commitFrame(2u));
+        EXPECT_EQ(m_context.input().popupCount(), 0u);
+        EXPECT_EQ(target(parentHost()), nullptr);
+        m_parent.open();
+        ASSERT_TRUE(acceptParent(3u));
+        held.repeat = true;
+        ASSERT_TRUE(send(held).commandConsumed);
+        ASSERT_TRUE(acceptParent(4u));
+        EXPECT_EQ(m_state.selectedKey(), 10u);
+        EXPECT_FALSE(m_result.selectionChanged);
+        EXPECT_FALSE(m_result.activated);
+        held.type = InputEventType::KeyUp;
+        ASSERT_TRUE(send(held).commandConsumed);
+    }
+
+
+protected:
+    PopupState m_parent;
+    PopupState m_child;
+    RadioSource m_childSource;
+    RadioSource m_laterSource;
+    RadioGroupState m_childState;
+    RadioGroupState m_laterState;
+    RadioGroupResult m_childResult;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiRadioGroupPopupTests, ChildEndKeepsTheRadioStateLoanThroughTheOutermostPopupEnd){
+    ASSERT_TRUE(acceptFamily(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declareFamily(2u));
+    const u64 token = m_childState.inputGeneration();
+    m_childState.select(20u);
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_NE(m_childState.inputGeneration(), token);
+    EXPECT_EQ(m_childState.selectedKey(), 20u);
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    // Discarding a rejected popup candidate may retire displayed popup focus/scopes, but never replaces its layout.
+    expectAccepted(displayed, false, false);
+}
+
+TEST_F(UiRadioGroupPopupTests, ParentLabelCallbackRejectsAnIdenticalIntentOnTheAlreadyEndedChild){
+    ASSERT_TRUE(acceptFamily(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declareFamily(2u));
+    const u64 token = m_childState.inputGeneration();
+    m_laterSource.armSelection(m_childState, RadioCallbackSite::Text, 20u);
+    ASSERT_TRUE(m_builder.radioGroup("later", m_laterSource, m_laterState).valid);
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_NE(m_childState.inputGeneration(), token);
+    EXPECT_EQ(m_childState.selectedKey(), 20u);
+    EXPECT_EQ(m_laterSource.m_mutations, 1u);
+    expectAccepted(displayed, false, false);
+}
+
+TEST_F(UiRadioGroupPopupTests, ChildMetadataMutationCannotPublishTheAlreadyPaintedParentGroup){
+    ASSERT_TRUE(acceptFamily(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(declareFamily(2u));
+    m_childSource.armSelection(m_state, RadioCallbackSite::Revision, 50u);
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 50u);
+    EXPECT_EQ(m_childSource.m_mutations, 1u);
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    expectAccepted(displayed, false, false);
+}
+
+TEST_F(UiRadioGroupPopupTests, AParentStateCannotBeAliasedByItsLiveChildRadioGroup){
+    ASSERT_TRUE(acceptFamily(1u));
+    const AcceptedInputState<128u> displayed = accepted();
+    ASSERT_TRUE(beginParent(2u));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
+    m_childSource.resetCounters();
+    EXPECT_FALSE(m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_state).valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_childSource.m_calls, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 10u);
+    expectAccepted(displayed, false, false);
+}
+
+TEST_F(UiRadioGroupPopupTests, AncestorClosureSuppressesMetadataAndRetiresCaptureBeforeFreshChildReuse){
+    ASSERT_TRUE(acceptFamily(1u));
+    ASSERT_TRUE(declareFamily(2u));
+    const RadioGroupChoicePlacement* row = choice(20u, m_childState);
+    ASSERT_NE(row, nullptr);
+    const Point point = UiWidgetTests::Center(row->rectangle);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(m_context.input().capture().valid());
+    m_source.resetCounters();
+    m_childSource.resetCounters();
+    m_parent.close();
+    ASSERT_TRUE(finishParent());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_source.m_calls, 0u);
+    EXPECT_EQ(m_childSource.m_calls, 0u);
+    EXPECT_EQ(m_context.input().popupCount(), 0u);
+    EXPECT_FALSE(m_context.input().capture().valid());
+    EXPECT_EQ(m_childState.selectedKey(), 20u);
+    m_parent.open();
+    ASSERT_TRUE(beginParent(3u));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
+    EXPECT_FALSE(m_child.isOpen());
+    ASSERT_TRUE(finishParent());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    m_child.open();
+    ASSERT_TRUE(acceptFamily(4u));
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
+    ASSERT_TRUE(acceptFamily(5u));
+    EXPECT_EQ(m_childState.selectedKey(), 20u);
+    EXPECT_FALSE(m_childResult.activated);
+}
+
+TEST_F(UiRadioGroupPopupTests, InstanceCallbackClosingThePopupRetiresQueuedRightBeforeReconcile){
+    expectSourceClosure(RadioCallbackSite::Instance);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_radio_group_state_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+
+TEST(UiRadioGroupStateTests, IdenticalPublicSelectionRetiresInputAndAdvancesRevision){
+    RadioGroupState state;
+    state.select(41u);
+    const RadioGroupSnapshot before = state.snapshot();
+    state.select(41u);
+    EXPECT_EQ(state.instanceGeneration(), before.instanceGeneration);
+    EXPECT_NE(state.inputGeneration(), before.inputGeneration);
+    EXPECT_EQ(state.revision(), before.revision + 1u);
+    EXPECT_EQ(state.selectedKey(), 41u);
+    EXPECT_EQ(state.cursorKey(), 41u);
+    EXPECT_FALSE(state.matches(before));
+}
+
+TEST(UiRadioGroupStateTests, SelectionAwayAndBackCannotRestoreAnOldSnapshot){
+    RadioGroupState state;
+    state.select(41u);
+    const RadioGroupSnapshot before = state.snapshot();
+    state.select(42u);
+    state.select(41u);
+    EXPECT_EQ(state.selectedKey(), before.selectedKey);
+    EXPECT_EQ(state.cursorKey(), before.cursorKey);
+    EXPECT_NE(state.inputGeneration(), before.inputGeneration);
+    EXPECT_EQ(state.revision(), before.revision + 2u);
+    EXPECT_FALSE(state.matches(before));
+}
+
+TEST(UiRadioGroupStateTests, ResetRetiresSelectionSnapshotsEvenWhenAlreadyEmpty){
+    RadioGroupState state;
+    state.select(41u);
+    const u64 identity = state.instanceGeneration();
+    state.reset();
+    EXPECT_EQ(state.instanceGeneration(), identity);
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.cursorKey(), 0u);
+    const RadioGroupSnapshot before = state.snapshot();
+    state.reset();
+    EXPECT_NE(state.inputGeneration(), before.inputGeneration);
+    EXPECT_EQ(state.revision(), before.revision + 1u);
+    EXPECT_FALSE(state.matches(before));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/scroll.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_scroll_layout_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+static_assert(!IsConstructible_V<ScrollState, const ScrollState&>);
+static_assert(!IsConstructible_V<ScrollState, ScrollState&&>);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiScrollLayoutTests, EmptyContentUsesFullPaddedViewportAndEmptyVisibleRange){
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement({ 10.0f, 20.0f, 200.0f, 120.0f }, { 0.0f, 0.0f, 400.0f, 300.0f }, { 8.0f, 6.0f, 4.0f, 14.0f }, 12.0f, 16.0f, 0u, 20.0f, 500.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, placement.viewport);
+    NWB::UiPaintAssertions::ExpectRect(placement.track, {});
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, {});
+    EXPECT_DOUBLE_EQ(placement.contentHeight, 0.0);
+    EXPECT_DOUBLE_EQ(placement.offset, 0.0);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 0.0);
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 0u);
+    EXPECT_EQ(placement.rowCount, 0u);
+    EXPECT_FALSE(placement.scrollbarVisible);
+}
+
+TEST(UiScrollLayoutTests, ContentExactlyFittingDoesNotReserveScrollbarWidth){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 5u, 20.0f, 10.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    EXPECT_FALSE(placement.scrollbarVisible);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 0.0);
+    EXPECT_DOUBLE_EQ(placement.offset, 0.0);
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 5u);
+}
+
+TEST(UiScrollLayoutTests, OverscrollClampsThumbToTheFinalVisibleRow){
+    const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 999.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_DOUBLE_EQ(placement.offset, 300.0);
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, { 188.0f, 75.0f, 12.0f, 25.0f });
+    EXPECT_EQ(placement.firstRow, 15u);
+    EXPECT_EQ(placement.endRow, 20u);
+}
+
+TEST(UiScrollLayoutTests, MinimumThumbNeverExceedsItsTrack){
+    const Rect bounds{ 0.0f, 0.0f, 200.0f, 20.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 80.0f, 100000u, 32.0f, 1000.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, placement.track);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 3199980.0);
+}
+
+TEST(UiScrollLayoutTests, ZeroScrollbarWidthLeavesScrollableContentAtFullWidth){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 0.0f, 16.0f, 100u, 10.0f, 150.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    NWB::UiPaintAssertions::ExpectRect(placement.track, {});
+    EXPECT_FALSE(placement.scrollbarVisible);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 900.0);
+    EXPECT_EQ(placement.firstRow, 15u);
+    EXPECT_EQ(placement.endRow, 25u);
+}
+
+TEST(UiScrollLayoutTests, ExcessiveScrollbarWidthShrinksToAvailableWidthAndCullsAllRows){
+    const Rect bounds{ 10.0f, 20.0f, 8.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 80.0f, 16.0f, 20u, 20.0f, 0.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.track, bounds);
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 0u);
+}
+
+TEST(UiScrollLayoutTests, ExtremeFiniteOffsetClampsBeforeProducingVisibleFloatGeometry){
+    const Rect bounds{ 10.0f, 20.0f, 240.0f, 128.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 100000u, 32.0f, Limit<f64>::s_Max);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_DOUBLE_EQ(placement.offset, 3199872.0);
+    EXPECT_EQ(placement.firstRow, 99996u);
+    EXPECT_EQ(placement.endRow, 100000u);
+    Rect last;
+    const auto lastResult = CalculateScrollRowBounds(99999u, placement, 32.0f);
+    ASSERT_TRUE(lastResult);
+    last = *lastResult;
+    NWB::UiPaintAssertions::ExpectRect(last, { 10.0f, 116.0f, 228.0f, 32.0f });
+}
+
+TEST(UiScrollLayoutTests, FractionalOffsetsIncludePartialRowsAtBothEdges){
+    const Rect bounds{ 0.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 100u, 12.5f, 6.25);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 9u);
+    Rect first;
+    const auto firstResult = CalculateScrollRowBounds(0u, placement, 12.5f);
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
+    NWB::UiPaintAssertions::ExpectRect(first, { 0.0f, 13.75f, 188.0f, 12.5f });
+}
+
+TEST(UiScrollLayoutTests, ExclusiveBottomBoundaryDoesNotDeclareTheTouchingNextRow){
+    const Rect bounds{ 0.0f, 0.0f, 200.0f, 60.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 100u, 20.0f, 40.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_EQ(placement.firstRow, 2u);
+    EXPECT_EQ(placement.endRow, 5u);
+}
+
+TEST(UiScrollLayoutTests, InheritedVerticalClipCullsRowsWithoutChangingLogicalRangeOrThumb){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, { 10.0f, 60.0f, 200.0f, 20.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 10.0f, 20.0f, 188.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, { 10.0f, 60.0f, 188.0f, 20.0f });
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 300.0);
+    EXPECT_FLOAT_EQ(placement.thumb.height, 25.0f);
+    EXPECT_EQ(placement.firstRow, 4u);
+    EXPECT_EQ(placement.endRow, 5u);
+}
+
+TEST(UiScrollLayoutTests, InheritedHorizontalClipKeepsRowOriginAndWidthStable){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, { 50.0f, 20.0f, 30.0f, 100.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, { 50.0f, 20.0f, 30.0f, 100.0f });
+    Rect first;
+    const auto firstResult = CalculateScrollRowBounds(2u, placement, 20.0f);
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
+    NWB::UiPaintAssertions::ExpectRect(first, { 10.0f, 20.0f, 188.0f, 20.0f });
+}
+
+TEST(UiScrollLayoutTests, DisjointAndZeroAreaClipsHaveNoVisibleRowsButKeepScrolling){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    const Array<Rect, 4> clips = { Rect{ 300.0f, 20.0f, 100.0f, 100.0f }, Rect{ 10.0f, 200.0f, 100.0f, 100.0f }, Rect{ 10.0f, 20.0f, 0.0f, 100.0f }, Rect{ 10.0f, 20.0f, 100.0f, 0.0f } };
+    for(const Rect& clip : clips){
+        ScrollPlacement placement;
+        const auto placementResult = CalculateScrollPlacement(bounds, clip, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
+        ASSERT_TRUE(placementResult);
+        placement = *placementResult;
+        EXPECT_EQ(placement.firstRow, 0u);
+        EXPECT_EQ(placement.endRow, 0u);
+        EXPECT_DOUBLE_EQ(placement.offset, 40.0);
+        EXPECT_DOUBLE_EQ(placement.maxOffset, 300.0);
+        EXPECT_TRUE(placement.scrollbarVisible);
+    }
+}
+
+TEST(UiScrollLayoutTests, PaddingCanCollapseLogicalViewportWithoutNegativeSizes){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, { 300.0f, 200.0f, 300.0f, 200.0f }, 12.0f, 16.0f, 20u, 20.0f, 40.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 210.0f, 120.0f, 0.0f, 0.0f });
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 0u);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 400.0);
+    EXPECT_FALSE(placement.scrollbarVisible);
+}
+
+TEST(UiScrollLayoutTests, ZeroHeightBoundsCanKeepAStoredOffsetUntilRestored){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 0.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 300.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_DOUBLE_EQ(placement.offset, 300.0);
+    EXPECT_DOUBLE_EQ(placement.maxOffset, 400.0);
+    EXPECT_EQ(placement.firstRow, 0u);
+    EXPECT_EQ(placement.endRow, 0u);
+}
+
+TEST(UiScrollLayoutTests, RowBoundsRejectsCulledAndInvalidRows){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollPlacement placement;
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_FALSE(CalculateScrollRowBounds(1u, placement, 20.0f));
+    EXPECT_FALSE(CalculateScrollRowBounds(7u, placement, 20.0f));
+    EXPECT_FALSE(CalculateScrollRowBounds(Limit<u64>::s_Max, placement, 20.0f));
+    EXPECT_FALSE(CalculateScrollRowBounds(2u, placement, Limit<f32>::s_QuietNaN));
+    placement.offset = Limit<f64>::s_Infinity;
+    EXPECT_FALSE(CalculateScrollRowBounds(2u, placement, 20.0f));
+}
+
+TEST(UiScrollLayoutTests, ExtentsBeyondDoubleViewportPrecisionFailInsteadOfLosingTheFinalPage){
+    const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
+    EXPECT_FALSE(CalculateScrollPlacement(bounds, bounds, {}, 12.0f, 16.0f, Limit<u64>::s_Max, Limit<f32>::s_Max, Limit<f64>::s_Max));
+}
+
+TEST(UiScrollLayoutTests, InvalidLayoutInputsRejectPlacement){
+    const Rect validBounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    const Insets validPadding{ 4.0f, 8.0f, 12.0f, 16.0f };
+    const auto reject = [](const Rect& bounds, const Rect& clip, const Insets& padding, const f32 width, const f32 minimum, const f32 height, const f64 offset){
+        EXPECT_FALSE(CalculateScrollPlacement(bounds, clip, padding, width, minimum, 20u, height, offset));
+    };
+    Rect bounds = validBounds;
+    bounds.x = Limit<f32>::s_QuietNaN;
+    reject(bounds, validBounds, validPadding, 12.0f, 16.0f, 20.0f, 40.0);
+    bounds = validBounds;
+    bounds.width = -1.0f;
+    reject(bounds, validBounds, validPadding, 12.0f, 16.0f, 20.0f, 40.0);
+    bounds = { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 100.0f };
+    reject(bounds, validBounds, validPadding, 12.0f, 16.0f, 20.0f, 40.0);
+    Rect clip = validBounds;
+    clip.height = Limit<f32>::s_Infinity;
+    reject(validBounds, clip, validPadding, 12.0f, 16.0f, 20.0f, 40.0);
+    clip = validBounds;
+    clip.y = -Limit<f32>::s_Infinity;
+    reject(validBounds, clip, validPadding, 12.0f, 16.0f, 20.0f, 40.0);
+    Insets padding = validPadding;
+    padding.left = -1.0f;
+    reject(validBounds, validBounds, padding, 12.0f, 16.0f, 20.0f, 40.0);
+    padding = validPadding;
+    padding.bottom = Limit<f32>::s_QuietNaN;
+    reject(validBounds, validBounds, padding, 12.0f, 16.0f, 20.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, -1.0f, 16.0f, 20.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, Limit<f32>::s_Infinity, 16.0f, 20.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, -1.0f, 20.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, Limit<f32>::s_QuietNaN, 20.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, 16.0f, 0.0f, 40.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, 16.0f, Limit<f32>::s_Infinity, 40.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, 16.0f, 20.0f, -1.0);
+    reject(validBounds, validBounds, validPadding, 12.0f, 16.0f, 20.0f, Limit<f64>::s_QuietNaN);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiScrollStateTests, IndependentAndRecreatedStatesHaveUniqueNonzeroIdentity){
+    u64 retiredIdentity = 0u;
+    {
+        ScrollState retired;
+        retiredIdentity = retired.instanceGeneration();
+    }
+    ScrollState first;
+    ScrollState second;
+    EXPECT_NE(first.instanceGeneration(), retiredIdentity);
+    EXPECT_NE(second.instanceGeneration(), retiredIdentity);
+    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
+}
+
+TEST(UiScrollStateTests, OffsetAcceptsFiniteNonnegativeValuesAndRejectsInvalidAtomically){
+    ScrollState state;
+    const u64 identity = state.instanceGeneration();
+    ASSERT_TRUE(state.setOffset(45.25));
+    EXPECT_DOUBLE_EQ(state.offset(), 45.25);
+    EXPECT_FALSE(state.setOffset(-1.0));
+    EXPECT_FALSE(state.setOffset(Limit<f64>::s_QuietNaN));
+    EXPECT_FALSE(state.setOffset(Limit<f64>::s_Infinity));
+    EXPECT_DOUBLE_EQ(state.offset(), 45.25);
+    ASSERT_TRUE(state.setOffset(Limit<f64>::s_Max));
+    EXPECT_DOUBLE_EQ(state.offset(), Limit<f64>::s_Max);
+    ASSERT_TRUE(state.setOffset(-0.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 0.0);
+    EXPECT_EQ(state.instanceGeneration(), identity);
+}
+
+TEST(UiScrollStateTests, OversizedRowsAlignTheirStartAndZeroViewportCanStoreTheirStart){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(100.0));
+    ASSERT_TRUE(state.ensureVisible(120.0, 320.0, 80.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 120.0);
+    ASSERT_TRUE(state.ensureVisible(300.0, 320.0, 0.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 300.0);
+}
+
+TEST(UiScrollStateTests, EnsureVisibleAvoidsOffsetPlusViewportOverflow){
+    ScrollState state;
+    const f64 large = Limit<f64>::s_Max * 0.75;
+    ASSERT_TRUE(state.setOffset(large));
+    ASSERT_TRUE(state.ensureVisible(large, Limit<f64>::s_Max, large));
+    EXPECT_DOUBLE_EQ(state.offset(), large);
+}
+
+TEST(UiScrollStateTests, InvalidEnsureVisibleRequestsLeaveTheOffsetUntouched){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(75.0));
+    EXPECT_FALSE(state.ensureVisible(-1.0, 40.0, 100.0));
+    EXPECT_FALSE(state.ensureVisible(60.0, 40.0, 100.0));
+    EXPECT_FALSE(state.ensureVisible(0.0, Limit<f64>::s_Infinity, 100.0));
+    EXPECT_FALSE(state.ensureVisible(0.0, 40.0, -1.0));
+    EXPECT_FALSE(state.ensureVisible(0.0, 40.0, Limit<f64>::s_QuietNaN));
+    EXPECT_DOUBLE_EQ(state.offset(), 75.0);
+}
+
+TEST(UiScrollStateTests, ScrollByClampsBothEndsAndAppliesDeltaAfterContentShrink){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(50.0));
+    ASSERT_TRUE(state.scrollBy(-1000.0, 400.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 0.0);
+    ASSERT_TRUE(state.scrollBy(1000.0, 400.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 300.0);
+    ASSERT_TRUE(state.scrollBy(-20.0, 200.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 80.0);
+}
+
+TEST(UiScrollStateTests, ExtremeDeltaAndOffsetDoNotOverflowWhenClamping){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(Limit<f64>::s_Max));
+    ASSERT_TRUE(state.scrollBy(Limit<f64>::s_Max, 400.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 300.0);
+    ASSERT_TRUE(state.scrollBy(-Limit<f64>::s_Max, 400.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 0.0);
+    ASSERT_TRUE(state.scrollBy(Limit<f64>::s_Max, Limit<f64>::s_Max, 0.0));
+    EXPECT_DOUBLE_EQ(state.offset(), Limit<f64>::s_Max);
+}
+
+TEST(UiScrollStateTests, ClampSupportsEmptyContentAndCollapsedViewports){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(350.0));
+    ASSERT_TRUE(state.clamp(400.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 300.0);
+    ASSERT_TRUE(state.clamp(400.0, 0.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 300.0);
+    ASSERT_TRUE(state.clamp(50.0, 100.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 0.0);
+    ASSERT_TRUE(state.setOffset(20.0));
+    ASSERT_TRUE(state.clamp(0.0, 0.0));
+    EXPECT_DOUBLE_EQ(state.offset(), 0.0);
+}
+
+TEST(UiScrollStateTests, InvalidScrollAndClampRangesLeaveTheOffsetUntouched){
+    ScrollState state;
+    ASSERT_TRUE(state.setOffset(75.0));
+    EXPECT_FALSE(state.scrollBy(Limit<f64>::s_QuietNaN, 400.0, 100.0));
+    EXPECT_FALSE(state.scrollBy(10.0, -1.0, 100.0));
+    EXPECT_FALSE(state.scrollBy(10.0, 400.0, -1.0));
+    EXPECT_FALSE(state.scrollBy(10.0, Limit<f64>::s_Infinity, 100.0));
+    EXPECT_FALSE(state.clamp(-1.0, 100.0));
+    EXPECT_FALSE(state.clamp(400.0, Limit<f64>::s_QuietNaN));
+    EXPECT_DOUBLE_EQ(state.offset(), 75.0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd.h>
+
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_scrollbar_layout_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+static void ExpectBar(const ScrollbarPlacement& actual, const ScrollbarPlacement& expected){
+    UiPaintAssertions::ExpectRect(actual.track, expected.track);
+    UiPaintAssertions::ExpectRect(actual.thumb, expected.thumb);
+    EXPECT_DOUBLE_EQ(actual.contentExtent, expected.contentExtent);
+    EXPECT_DOUBLE_EQ(actual.viewportExtent, expected.viewportExtent);
+    EXPECT_DOUBLE_EQ(actual.maximum, expected.maximum);
+    EXPECT_DOUBLE_EQ(actual.offset, expected.offset);
+    EXPECT_EQ(actual.visible, expected.visible);
+}
+
+static void ExpectPlacement(const ScrollViewportPlacement& actual, const ScrollViewportPlacement& expected){
+    UiPaintAssertions::ExpectRect(actual.viewport, expected.viewport);
+    UiPaintAssertions::ExpectRect(actual.contentClip, expected.contentClip);
+    UiPaintAssertions::ExpectRect(actual.corner, expected.corner);
+    ExpectBar(actual.horizontal, expected.horizontal);
+    ExpectBar(actual.vertical, expected.vertical);
+}
+
+static void ExpectReservedGeometry(const ScrollViewportPlacement& actual, const ScrollViewportPlacement& expected){
+    UiPaintAssertions::ExpectRect(actual.viewport, expected.viewport);
+    UiPaintAssertions::ExpectRect(actual.contentClip, expected.contentClip);
+    UiPaintAssertions::ExpectRect(actual.corner, expected.corner);
+    UiPaintAssertions::ExpectRect(actual.horizontal.track, expected.horizontal.track);
+    UiPaintAssertions::ExpectRect(actual.vertical.track, expected.vertical.track);
+    EXPECT_FLOAT_EQ(actual.horizontal.thumb.width, expected.horizontal.thumb.width);
+    EXPECT_FLOAT_EQ(actual.horizontal.thumb.height, expected.horizontal.thumb.height);
+    EXPECT_FLOAT_EQ(actual.vertical.thumb.width, expected.vertical.thumb.width);
+    EXPECT_FLOAT_EQ(actual.vertical.thumb.height, expected.vertical.thumb.height);
+    EXPECT_DOUBLE_EQ(actual.horizontal.contentExtent, expected.horizontal.contentExtent);
+    EXPECT_DOUBLE_EQ(actual.vertical.contentExtent, expected.vertical.contentExtent);
+    EXPECT_DOUBLE_EQ(actual.horizontal.viewportExtent, expected.horizontal.viewportExtent);
+    EXPECT_DOUBLE_EQ(actual.vertical.viewportExtent, expected.vertical.viewportExtent);
+    EXPECT_DOUBLE_EQ(actual.horizontal.maximum, expected.horizontal.maximum);
+    EXPECT_DOUBLE_EQ(actual.vertical.maximum, expected.vertical.maximum);
+    EXPECT_EQ(actual.horizontal.visible, expected.horizontal.visible);
+    EXPECT_EQ(actual.vertical.visible, expected.vertical.visible);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiScrollbarLayoutTests, FittingContentKeepsPaddedViewportAndClampsStoredOffsets){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 120.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, { 8.0f, 6.0f, 4.0f, 14.0f }, { 100.0f, 80.0f }, 2.0f, { 40.0f, 60.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
+    UiPaintAssertions::ExpectRect(placement.contentClip, placement.viewport);
+    UiPaintAssertions::ExpectRect(placement.corner, {});
+    UiPaintAssertions::ExpectRect(placement.horizontal.track, {});
+    UiPaintAssertions::ExpectRect(placement.vertical.track, {});
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 0.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 0.0);
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+}
+
+TEST(UiScrollbarLayoutTests, ExactContentFitDoesNotReserveEitherBar){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 99.0f, 80.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 0.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 0.0);
+}
+
+TEST(UiScrollbarLayoutTests, HorizontalExtentIncludesCaretWidth){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 100.0f, 40.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 68.0f });
+    EXPECT_TRUE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 1.0);
+}
+
+TEST(UiScrollbarLayoutTests, VerticalReservationCanRequireHorizontalBar){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 89.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
+    UiPaintAssertions::ExpectRect(placement.horizontal.track, { 0.0f, 88.0f, 88.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(placement.vertical.track, { 88.0f, 0.0f, 12.0f, 88.0f });
+    UiPaintAssertions::ExpectRect(placement.corner, { 88.0f, 88.0f, 12.0f, 12.0f });
+    EXPECT_TRUE(placement.horizontal.visible);
+    EXPECT_TRUE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 2.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 112.0);
+}
+
+TEST(UiScrollbarLayoutTests, HorizontalReservationCanRequireVerticalBar){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 199.0f, 90.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
+    EXPECT_TRUE(placement.horizontal.visible);
+    EXPECT_TRUE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 112.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 2.0);
+}
+
+TEST(UiScrollbarLayoutTests, ExactFitAfterOtherAxisReservationDoesNotAddBar){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 87.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 100.0f });
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_TRUE(placement.vertical.visible);
+    const auto placementResult2 = CalculateScrollViewportPlacement(bounds, bounds, {}, { 199.0f, 88.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult2);
+    placement = *placementResult2;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 88.0f });
+    EXPECT_TRUE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+}
+
+TEST(UiScrollbarLayoutTests, SmallerContentRemovesReservationsAndClampsBothAxes){
+    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 300.0f }, 1.0f, { 200.0f, 150.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    const auto placementResult2 = CalculateScrollViewportPlacement(bounds, bounds, {}, { 49.0f, 40.0f }, 1.0f, { 200.0f, 150.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult2);
+    placement = *placementResult2;
+    UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    UiPaintAssertions::ExpectRect(placement.corner, {});
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 0.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 0.0);
+}
+
+TEST(UiScrollbarLayoutTests, MinimumThumbIsClampedToEachTrackEvenWithRemainingScrollRange){
+    const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 999.0f, 900.0f }, 1.0f, { 400.0f, 300.0f }, 12.0f, 1000.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
+    UiPaintAssertions::ExpectRect(placement.vertical.thumb, placement.vertical.track);
+    EXPECT_GT(placement.horizontal.maximum, 0.0);
+    EXPECT_GT(placement.vertical.maximum, 0.0);
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ Limit<f32>::s_Max, Limit<f32>::s_Max }, placement));
+    UiPaintAssertions::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
+    UiPaintAssertions::ExpectRect(placement.vertical.thumb, placement.vertical.track);
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, placement.horizontal.maximum);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, placement.vertical.maximum);
+}
+
+TEST(UiScrollbarLayoutTests, ZeroMinimumThumbUsesViewportToContentRatio){
+    const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f, {}, 12.0f, 0.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_FLOAT_EQ(placement.horizontal.thumb.width, 88.36f);
+    EXPECT_FLOAT_EQ(placement.vertical.thumb.height, 38.72f);
+}
+
+TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrollableExtents){
+    const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f, { 350.0f, 100.0f }, 0.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 300.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 120.0);
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 300.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 100.0);
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 40.0f, 50.0f }, placement));
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 40.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 50.0);
+    UiPaintAssertions::ExpectRect(placement.horizontal.thumb, {});
+    UiPaintAssertions::ExpectRect(placement.vertical.thumb, {});
+}
+
+TEST(UiScrollbarLayoutTests, InheritedClipChangesOnlyContentClip){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    ScrollViewportPlacement reference;
+    const auto referenceResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(referenceResult);
+    reference = *referenceResult;
+    ScrollViewportPlacement clipped;
+    const auto clippedResult = CalculateScrollViewportPlacement(bounds, { 50.0f, 60.0f, 40.0f, 20.0f }, {}, { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(clippedResult);
+    clipped = *clippedResult;
+    UiPaintAssertions::ExpectRect(clipped.contentClip, { 50.0f, 60.0f, 40.0f, 20.0f });
+    reference.contentClip = clipped.contentClip;
+    ExpectPlacement(clipped, reference);
+}
+
+TEST(UiScrollbarLayoutTests, DisjointAndZeroAreaClipsKeepOffsetsAndLogicalBars){
+    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
+    const Array<Rect, 4> clips = { Rect{ 300.0f, 20.0f, 10.0f, 100.0f }, Rect{ 10.0f, 200.0f, 200.0f, 10.0f }, Rect{ 10.0f, 20.0f, 0.0f, 100.0f }, Rect{ 10.0f, 20.0f, 200.0f, 0.0f } };
+    for(const Rect& clip : clips){
+        ScrollViewportPlacement placement;
+        const auto placementResult = CalculateScrollViewportPlacement(bounds, clip, {}, { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f);
+        ASSERT_TRUE(placementResult);
+        placement = *placementResult;
+        EXPECT_TRUE(placement.contentClip.width == 0.0f || placement.contentClip.height == 0.0f);
+        EXPECT_TRUE(placement.horizontal.visible);
+        EXPECT_TRUE(placement.vertical.visible);
+        EXPECT_DOUBLE_EQ(placement.horizontal.offset, 60.0);
+        EXPECT_DOUBLE_EQ(placement.vertical.offset, 70.0);
+    }
+}
+
+TEST(UiScrollbarLayoutTests, ExcessivePaddingCollapsesViewportWithoutNegativeTracks){
+    const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, { 200.0f, 120.0f, 200.0f, 120.0f }, { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 110.0f, 100.0f, 0.0f, 0.0f });
+    UiPaintAssertions::ExpectRect(placement.corner, {});
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 400.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 300.0);
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 60.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 70.0);
+}
+
+TEST(UiScrollbarLayoutTests, TinyBoundsClampBarThicknessAndKeepZeroLengthTracksHidden){
+    const Rect bounds{ 10.0f, 20.0f, 2.0f, 3.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 99.0f, 100.0f }, 1.0f, { 10.0f, 20.0f }, Limit<f32>::s_Max, Limit<f32>::s_Max);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 0.0f });
+    UiPaintAssertions::ExpectRect(placement.corner, bounds);
+    UiPaintAssertions::ExpectRect(placement.horizontal.track, {});
+    UiPaintAssertions::ExpectRect(placement.vertical.track, {});
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 100.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 100.0);
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 1000.0f, 1000.0f }, placement));
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 100.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 100.0);
+}
+
+TEST(UiScrollbarLayoutTests, OneCollapsedAxisKeepsOtherAxisExtentWithoutVisibleTrack){
+    const Rect bounds{ 10.0f, 20.0f, 0.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 99.0f, 200.0f }, 1.0f, { 10.0f, 20.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    EXPECT_FALSE(placement.horizontal.visible);
+    EXPECT_FALSE(placement.vertical.visible);
+    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 100.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 120.0);
+}
+
+TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmetic){
+    const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f, { Limit<f32>::s_Max, Limit<f32>::s_Max }, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 312.0);
+    EXPECT_DOUBLE_EQ(placement.vertical.offset, 132.0);
+    // Lanes are horizontal thumb end, horizontal track end, vertical thumb end, vertical track end.
+    const SIMDVectorSingle starts = VectorSet(placement.horizontal.thumb.x, placement.horizontal.track.x, placement.vertical.thumb.y, placement.vertical.track.y);
+    const SIMDVectorSingle ends = VectorAdd(starts, VectorSet(placement.horizontal.thumb.width, placement.horizontal.track.width, placement.vertical.thumb.height, placement.vertical.track.height));
+    EXPECT_FLOAT_EQ(VectorGetX(ends), VectorGetY(ends));
+    EXPECT_FLOAT_EQ(VectorGetZ(ends), VectorGetW(ends));
+}
+
+TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStartGeometry){
+    const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
+    ScrollViewportPlacement placement;
+    const auto placementResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 0.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    const ScrollViewportPlacement initial = placement;
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 1000.0f, 1000.0f }, placement));
+    ExpectReservedGeometry(placement, initial);
+    UiPaintAssertions::ExpectRect(placement.horizontal.thumb, { 85.0f, 120.0f, 25.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(placement.vertical.thumb, { 110.0f, 95.0f, 12.0f, 25.0f });
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({}, placement));
+    ExpectPlacement(placement, initial);
+}
+
+TEST(UiScrollbarLayoutTests, InvalidCalculationInputsRejectPlacement){
+    const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
+    const Insets padding{ 1.0f, 2.0f, 3.0f, 4.0f };
+    const auto reject = [](const Rect& valueBounds, const Rect& clip, const Insets& valuePadding, const Point& measure, const f32 caret, const Point& scroll, const f32 thickness, const f32 minimum){
+        EXPECT_FALSE(CalculateScrollViewportPlacement(valueBounds, clip, valuePadding, measure, caret, scroll, thickness, minimum));
+    };
+    const f32 nan = Limit<f32>::s_QuietNaN;
+    const f32 infinity = Limit<f32>::s_Infinity;
+    reject({ nan, 20.0f, 112.0f, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject({ 10.0f, 20.0f, -1.0f, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject({ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, { 10.0f, infinity, 112.0f, 112.0f }, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, { 10.0f, 20.0f, 112.0f, -1.0f }, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, { -1.0f, 2.0f, 3.0f, 4.0f }, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, { 1.0f, 2.0f, 3.0f, nan }, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { -1.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, nan }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { infinity, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 0.0f, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, infinity, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, nan, {}, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, { -1.0f, 0.0f }, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, { 0.0f, infinity }, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, { nan, 0.0f }, 12.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, -1.0f, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, infinity, 16.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, -1.0f);
+    reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, nan);
+}
+
+TEST(UiScrollbarLayoutTests, UnrepresentableFinalViewportRejectsExtremeContent){
+    const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
+    EXPECT_FALSE(CalculateScrollViewportPlacement(bounds, bounds, {}, { Limit<f32>::s_Max, Limit<f32>::s_Max }, Limit<f32>::s_Max, { Limit<f32>::s_Max, Limit<f32>::s_Max }, 12.0f, 16.0f));
+    EXPECT_FALSE(CalculateScrollViewportPlacement(bounds, bounds, {}, { 1.0e30f, 1.0e30f }, 1.0f, {}, 0.0f, 16.0f));
+}
+
+TEST(UiScrollbarLayoutTests, UnrepresentableBarReservationRejectsCalculation){
+    const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
+    EXPECT_FALSE(CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 1.0e-30f, 0.0f));
+}
+
+TEST(UiScrollbarLayoutTests, InvalidOffsetRequestsPreserveBothAxesAndGeometry){
+    const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
+    ScrollViewportPlacement previous;
+    const auto previousResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, { 40.0f, 50.0f }, 12.0f, 16.0f);
+    ASSERT_TRUE(previousResult);
+    previous = *previousResult;
+    const Array<Point, 4> inputs = { Point{ -1.0f, 0.0f }, Point{ 0.0f, -1.0f }, Point{ Limit<f32>::s_QuietNaN, 0.0f }, Point{ 0.0f, Limit<f32>::s_Infinity } };
+    for(const Point& input : inputs){
+        ScrollViewportPlacement placement = previous;
+        EXPECT_FALSE(TryUpdateScrollViewportOffsets(input, placement));
+        ExpectPlacement(placement, previous);
+    }
+}
+
+TEST(UiScrollbarLayoutTests, InvalidOwnedProjectionRejectsOffsetUpdateAtomically){
+    const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
+    ScrollViewportPlacement previous;
+    const auto previousResult = CalculateScrollViewportPlacement(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(previousResult);
+    previous = *previousResult;
+    const auto reject = [](ScrollViewportPlacement& placement){
+        const ScrollViewportPlacement expected = placement;
+        EXPECT_FALSE(TryUpdateScrollViewportOffsets({ 40.0f, 50.0f }, placement));
+        ExpectPlacement(placement, expected);
+    };
+    ScrollViewportPlacement placement = previous;
+    placement.horizontal.maximum = -1.0;
+    reject(placement);
+    placement = previous;
+    placement.vertical.offset = placement.vertical.maximum + 1.0;
+    reject(placement);
+    placement = previous;
+    placement.horizontal.viewportExtent = placement.horizontal.viewportExtent + 1.0;
+    reject(placement);
+    placement = previous;
+    placement.vertical.thumb.height = placement.vertical.track.height + 1.0f;
+    reject(placement);
+    placement = previous;
+    placement.horizontal.visible = false;
+    reject(placement);
+    placement = previous;
+    placement.corner.width = -1.0f;
+    reject(placement);
+    placement = previous;
+    placement.contentClip.y = Limit<f32>::s_Infinity;
+    reject(placement);
+    placement = previous;
+    placement.vertical.contentExtent = Limit<f64>::s_Infinity;
+    reject(placement);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

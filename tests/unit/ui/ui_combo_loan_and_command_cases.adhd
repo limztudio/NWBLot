@@ -1,0 +1,1684 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiComboLoanAndCommandCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_combo_loan_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiComboTests;
+
+namespace MutationKind{
+    enum Enum : u8{ None, RevisionSelect, KeySelect, TextSelect, EnabledOpen, TextRevision };
+};
+
+
+// Reentrant combo source that mutates host selection during callbacks.
+class CallbackSource final : public ComboSource{
+public:
+    explicit CallbackSource(ComboState& state)noexcept
+        : m_state(state)
+    {}
+
+
+public:
+    [[nodiscard]] virtual u64 revision()const noexcept override{
+        mutate(MutationKind::RevisionSelect);
+        return ComboSource::revision() + m_revisionDelta;
+    }
+
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
+        mutate(MutationKind::KeySelect);
+        return ComboSource::key(index);
+    }
+
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
+        mutate(MutationKind::TextSelect);
+        if(m_kind == MutationKind::TextRevision){
+            m_kind = MutationKind::None;
+            ++m_mutations;
+            ++m_revisionDelta;
+        }
+        return ComboSource::text(index);
+    }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        mutate(MutationKind::EnabledOpen);
+        return ComboSource::enabled(index);
+    }
+
+    void arm(const MutationKind::Enum kind, const u64 key = 8u)noexcept{
+        m_kind = kind;
+        m_key = key;
+    }
+
+    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
+
+
+private:
+    void mutate(const MutationKind::Enum kind)const noexcept{
+        if(m_kind != kind)
+            return;
+        m_kind = MutationKind::None;
+        ++m_mutations;
+        if(kind == MutationKind::EnabledOpen)
+            m_state.open();
+        else
+            m_state.select(m_key);
+    }
+
+
+private:
+    ComboState& m_state;
+    mutable MutationKind::Enum m_kind = MutationKind::None;
+    u64 m_key = 8u;
+    mutable u64 m_mutations = 0u;
+    mutable u64 m_revisionDelta = 0u;
+};
+
+using AcceptedState = UiWidgetTests::AcceptedInputState<32u>;
+
+class ForeignRevisionSource final : public ComboSource{
+public:
+    explicit ForeignRevisionSource(ComboSource& source)noexcept
+        : m_foreign(source)
+    {}
+
+
+public:
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
+        if(m_armed){
+            m_armed = false;
+            ++m_foreign.contentRevision;
+            ++m_mutations;
+        }
+        return ComboSource::text(index);
+    }
+
+    void arm()noexcept{ m_armed = true; }
+
+    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
+
+
+private:
+    ComboSource& m_foreign;
+    mutable b8 m_armed = false;
+    mutable u64 m_mutations = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiComboLoanTests : public ComboFixture{
+public:
+    UiComboLoanTests()
+        : m_callbacks(m_state)
+    {}
+
+
+protected:
+    [[nodiscard]] b8 declareCallbacks(const u64 generation){
+        return declareSource(generation, m_callbacks, m_state);
+    }
+
+    [[nodiscard]] b8 acceptCallbacks(const u64 generation){
+        return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
+    }
+
+    [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
+
+    void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
+
+
+protected:
+    CallbackSource m_callbacks;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiComboLoanTests, SameValueApplicationSelectionAfterDeclarationRejectsDeferredPaint){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    const AcceptedState displayed = accepted();
+    ASSERT_TRUE(declareCombo(2u));
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_state.select(1u);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.ready());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, ClosingBetweenDeclarationAndEndKeepsTheApplicationClose){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    ASSERT_TRUE(declareCombo(3u));
+    const AcceptedState displayed = accepted();
+    m_state.close();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, ReopeningBetweenDeclarationAndEndCannotPublishTheOldPopupLifetime){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    ASSERT_TRUE(declareCombo(3u));
+    const AcceptedState displayed = accepted();
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_state.open();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(3u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, SourceRevisionBetweenDeclarationAndEndRejectsTheWholeCandidate){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    ASSERT_TRUE(declareCombo(3u));
+    const AcceptedState displayed = accepted();
+    ++m_source.contentRevision;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(3u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, SourceCountBetweenDeclarationAndEndRejectsEvenWithoutARevisionChange){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(declareCombo(2u));
+    const AcceptedState displayed = accepted();
+    --m_source.count;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, RevisionCallbackAtDeferredValidationKeepsExplicitApplicationSelection){
+    m_state.select(1u);
+    ASSERT_TRUE(acceptCallbacks(1u));
+    ASSERT_TRUE(declareCallbacks(2u));
+    const AcceptedState displayed = accepted();
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_callbacks.arm(MutationKind::RevisionSelect, 8u);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_callbacks.mutations(), 1u);
+    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(m_state.selectedKey(), 8u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, PopupTextCallbackCannotOverwriteApplicationSelectionOrAcceptedTargets){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(acceptCallbacks(1u));
+    ASSERT_TRUE(declareCallbacks(2u));
+    const AcceptedState displayed = accepted();
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_callbacks.arm(MutationKind::TextSelect, 8u);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_callbacks.mutations(), 1u);
+    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(m_state.selectedKey(), 8u);
+    EXPECT_FALSE(m_state.isOpen());
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, EnabledCallbackOpenDuringPopupRowsRejectsTheBorrowedLifetime){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(acceptCallbacks(1u));
+    ASSERT_TRUE(declareCallbacks(2u));
+    const AcceptedState displayed = accepted();
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_callbacks.arm(MutationKind::EnabledOpen);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, TextCallbackSourceRevisionRejectsThePopupAndKeepsAcceptedGeometry){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(acceptCallbacks(1u));
+    ASSERT_TRUE(declareCallbacks(2u));
+    const AcceptedState displayed = accepted();
+    m_callbacks.arm(MutationKind::TextRevision);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_callbacks.mutations(), 1u);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, ReconcileCallbackSelectionRejectsBeforeAnyQueuedCommitIsApplied){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(acceptCallbacks(1u));
+    click(Center(target(row(2u))->rectangle));
+    m_callbacks.arm(MutationKind::KeySelect, 8u);
+    EXPECT_FALSE(declareCallbacks(2u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_result.valid);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 8u);
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+}
+
+TEST_F(UiComboLoanTests, ClosedUserPopupSuppressesLaterComboBeforeSourceOrModelCallbacks){
+    PopupState popupState;
+    popupState.open();
+    PopupOptions options;
+    options.anchor = { 30.0f, 40.0f, 100.0f, 30.0f };
+    options.size = { 280.0f, 200.0f };
+    m_state.select(1u);
+    const u64 inputGeneration = m_state.inputGeneration();
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPopup("owner", popupState, options));
+    popupState.close();
+    m_callbacks.arm(MutationKind::RevisionSelect, 8u);
+    const ComboResult result = m_builder.comboBox(s_ComboKey, m_callbacks, m_state, Options());
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(m_context.failed());
+    EXPECT_EQ(m_callbacks.mutations(), 0u);
+    EXPECT_EQ(m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+TEST_F(UiComboLoanTests, MatchingPanelEndReleasesItsSourceAndStateBeforeTheNextPanel){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(declareCallbacks(1u));
+    ASSERT_TRUE(m_builder.endPanel());
+    m_state.select(8u);
+    m_callbacks.arm(MutationKind::RevisionSelect, 9u);
+    m_callbacks.count = 0u;
+    ++m_callbacks.contentRevision;
+    ASSERT_TRUE(m_builder.beginPanel("later", { 400.0f, 10.0f, 200.0f, 120.0f }));
+    ASSERT_TRUE(m_builder.label("label", "Later panel"));
+    ASSERT_TRUE(m_builder.endPanel());
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_callbacks.mutations(), 0u);
+    EXPECT_EQ(m_state.selectedKey(), 8u);
+    EXPECT_NE(target(popup()), nullptr);
+}
+
+TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint){
+    m_state.select(1u);
+    m_state.open();
+    ComboState other;
+    other.select(2u);
+    other.open();
+    const auto declarePair = [this, &other](const u64 generation){
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
+            return false;
+        return m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid && m_builder.comboBox(s_SecondComboKey, m_callbacks, other, Options()).valid;
+    };
+    ASSERT_TRUE(declarePair(1u));
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const AcceptedState displayed = accepted();
+    ASSERT_TRUE(declarePair(2u));
+    m_callbacks.arm(MutationKind::TextSelect, 8u);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_callbacks.mutations(), 1u);
+    EXPECT_EQ(m_state.selectedKey(), 8u);
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_EQ(other.selectedKey(), 2u);
+    EXPECT_TRUE(other.isOpen());
+    expectAccepted(displayed);
+}
+
+TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanWasChecked){
+    m_state.select(1u);
+    m_state.open();
+    ComboState other;
+    other.select(2u);
+    other.open();
+    ForeignRevisionSource source(m_source);
+    const auto declarePair = [this, &other, &source](const u64 generation){
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
+            return false;
+        return m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid && m_builder.comboBox(s_SecondComboKey, source, other, Options()).valid;
+    };
+    ASSERT_TRUE(declarePair(1u));
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const AcceptedState displayed = accepted();
+    const u64 revision = m_source.contentRevision;
+    ASSERT_TRUE(declarePair(2u));
+    source.arm();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(source.mutations(), 1u);
+    EXPECT_EQ(m_source.contentRevision, revision + 1u);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(other.selectedKey(), 2u);
+    expectAccepted(displayed);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_command_input_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+HitTarget Target(const u64 id = 1u)noexcept{
+    HitTarget target;
+    target.id = { id };
+    target.rectangle = { 0.0f, 0.0f, 80.0f, 40.0f };
+    target.clip = { 0.0f, 0.0f, 200.0f, 100.0f };
+    target.declarationGeneration = 7u;
+    target.focusable = true;
+    target.activatable = true;
+    target.focusOnCommit = true;
+    return target;
+}
+
+HitTarget Control(const u64 id = 1u)noexcept{
+    HitTarget target = Target(id);
+    target.navigable = true;
+    target.horizontalNavigation = true;
+    target.control = { 11u, 21u, 31u };
+    return target;
+}
+
+InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const b8 repeat = false)noexcept{
+    InputEvent event;
+    event.type = type;
+    event.source = source;
+    event.command = command;
+    event.repeat = repeat;
+    return event;
+}
+
+InputEvent Key(const InputEventType::Enum type, const b8 shift = false, const b8 repeat = false)noexcept{
+    InputEvent event;
+    event.type = type;
+    event.key = Core::Key::W;
+    event.shift = shift;
+    event.repeat = repeat;
+    return event;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RoutedInput{
+    InputRoutingResult routing;
+    InputEvent event;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiCommandInputTests : public testing::Test{
+public:
+    UiCommandInputTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiCommandInput))
+        , m_router(m_arena)
+    {}
+
+
+protected:
+    [[nodiscard]] RoutedInput send(const InputEvent& event){
+        const auto resolved = m_router.queue(UiTestSupport::NativeInput(event));
+        EXPECT_TRUE(resolved);
+        if(!resolved)
+            return {};
+        return { m_router.process(), *resolved };
+    }
+
+    [[nodiscard]] Expected<ControlAction> take(const HitTarget& host)noexcept{
+        return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
+    }
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    InputRouter m_router;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameCommand){
+    const HitTarget host = Control();
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
+    const InputSource first{ 1u, 5u };
+    const InputSource second{ 2u, 5u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Down)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Down)).routing.commandConsumed);
+    ControlAction action;
+    const auto actionResult1 = take(host);
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    const u64 firstSequence = action.id.sequence;
+    const auto actionResult2 = take(host);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    EXPECT_GT(action.id.sequence, firstSequence);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.ownsSource(first));
+    EXPECT_TRUE(m_router.ownsSource(second));
+    InputEvent resolved;
+    const auto dispatchResult = send(Command(InputEventType::CommandDown, second, InputCommand::Right));
+    EXPECT_TRUE(dispatchResult.routing.commandConsumed);
+    resolved = dispatchResult.event;
+    EXPECT_EQ(resolved.command, InputCommand::Down);
+    EXPECT_TRUE(resolved.repeat);
+    const auto actionResult3 = take(host);
+    ASSERT_TRUE(actionResult3);
+    action = *actionResult3;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.ownsSource(second));
+    EXPECT_FALSE(take(host));
+}
+
+TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissionAcrossProfileReplacement){
+    const HitTarget host = Control();
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
+    const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Down, InputSelectionPolicy::Shift, true, true };
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
+    InputEvent resolved;
+    const auto dispatchResult1 = send(Key(InputEventType::KeyDown, true));
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
+    resolved = dispatchResult1.event;
+    EXPECT_EQ(resolved.command, InputCommand::Down);
+    EXPECT_TRUE(resolved.extend);
+    EXPECT_TRUE(resolved.edit);
+    EXPECT_TRUE(resolved.allowText);
+    const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::Up, InputSelectionPolicy::None, false };
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
+    m_router.restoreDefaultBindings();
+    const auto dispatchResult2 = send(Key(InputEventType::KeyDown));
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
+    resolved = dispatchResult2.event;
+    EXPECT_EQ(resolved.command, InputCommand::Down);
+    EXPECT_TRUE(resolved.repeat);
+    EXPECT_TRUE(resolved.extend);
+    EXPECT_TRUE(resolved.edit);
+    EXPECT_TRUE(resolved.allowText);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::W));
+    const auto dispatchResult3 = send(Key(InputEventType::KeyUp));
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
+    resolved = dispatchResult3.event;
+    EXPECT_EQ(resolved.command, InputCommand::Down);
+    EXPECT_TRUE(resolved.allowText);
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::W));
+    ControlAction action;
+    const auto actionResult1 = take(host);
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    const auto actionResult2 = take(host);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
+    const auto dispatchResult4 = send(Key(InputEventType::KeyDown));
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
+    resolved = dispatchResult4.event;
+    EXPECT_EQ(resolved.command, InputCommand::Up);
+    EXPECT_FALSE(resolved.extend);
+    EXPECT_FALSE(resolved.edit);
+    EXPECT_FALSE(resolved.allowText);
+    const auto actionResult3 = take(host);
+    ASSERT_TRUE(actionResult3);
+    action = *actionResult3;
+    EXPECT_EQ(action.kind, ControlActionKind::Up);
+}
+
+TEST_F(UiCommandInputTests, AnUnconsumedInitialPressCannotClaimUiAfterFocusAppears){
+    const InputSource source{ 1u, 1u };
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.ownsSource(source));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].origin, InputActionSource::Command);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTargetReturns){
+    const HitTarget host = Control();
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
+    const InputSource source{ 3u, 9u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
+    ControlAction action;
+    const auto actionResult1 = take(host);
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    m_router.invalidateTarget(host.id);
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 2u));
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down, true)).routing.commandConsumed);
+    EXPECT_FALSE(take(host));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
+    const auto actionResult2 = take(host);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+}
+
+TEST_F(UiCommandInputTests, RetiredEditorCannotBorrowAHeldCommandAfterReturningWithItsOldIdentity){
+    HitTarget editor = Target();
+    editor.textEditable = true;
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
+    const InputSource source{ 3u, 9u };
+    InputEvent resolved;
+    const auto dispatchResult1 = send(Command(InputEventType::CommandDown, source, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
+    resolved = dispatchResult1.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    m_router.invalidateTarget(editor.id);
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 2u));
+    const auto dispatchResult2 = send(Command(InputEventType::CommandDown, source, InputCommand::Left, true));
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
+    resolved = dispatchResult2.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    const auto dispatchResult3 = send(Command(InputEventType::CommandDown, source, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
+    resolved = dispatchResult3.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+}
+
+TEST_F(UiCommandInputTests, HeldEditingCommandCannotMoveToAnotherFocusedEditor){
+    HitTarget first = Target();
+    first.textEditable = true;
+    HitTarget second = Target(2u);
+    second.textEditable = true;
+    second.focusOnCommit = false;
+    second.rectangle.x = 100.0f;
+    const Array<HitTarget, 2> targets = { first, second };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    const InputSource edit{ 3u, 1u };
+    InputEvent resolved;
+    const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
+    resolved = dispatchResult1.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    const InputSource traverse{ 3u, 2u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), second.id);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
+    resolved = dispatchResult2.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.commandConsumed);
+    const auto dispatchResult3 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
+    resolved = dispatchResult3.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+}
+
+TEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVerticalNavigationDoesNot){
+    HitTarget editor = Target();
+    editor.textEditable = true;
+    HitTarget host = Control(2u);
+    host.focusOnCommit = false;
+    host.rectangle.x = 100.0f;
+    editor.commandOwner = host.id;
+    editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
+    editor.commandControl = host.control;
+    const Array<HitTarget, 2> targets = { editor, host };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    const InputSource submit{ 4u, 1u };
+    InputEvent resolved;
+    const auto dispatchResult1 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept));
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
+    resolved = dispatchResult1.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    EXPECT_FALSE(take(host));
+    const auto submitRelease = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, submit, InputCommand::None)));
+    ASSERT_TRUE(submitRelease);
+    EXPECT_TRUE(m_router.canSubmitCommand(*submitRelease));
+    EXPECT_TRUE(m_router.process().commandConsumed);
+    ControlAction action;
+    const auto actionResult1 = take(host);
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.kind, ControlActionKind::Submit);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, submit, InputCommand::None)).routing.commandConsumed);
+    const InputSource navigate{ 4u, 2u };
+    const auto dispatchResult2 = send(Command(InputEventType::CommandDown, navigate, InputCommand::Down));
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
+    resolved = dispatchResult2.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    const auto actionResult2 = take(host);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, navigate, InputCommand::None)).routing.commandConsumed);
+    const auto dispatchResult3 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept));
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
+    resolved = dispatchResult3.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    m_router.invalidateTarget(host.id);
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 2u));
+    const auto dispatchResult4 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept, true));
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
+    resolved = dispatchResult4.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    EXPECT_FALSE(take(host));
+}
+
+TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCancelPendingSubmissions){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputSource held{ 5u, 1u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    m_router.clearFocus();
+    EXPECT_TRUE(m_router.ownsSource(held));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
+    EXPECT_TRUE(m_router.ownsSource(held));
+    EXPECT_TRUE(m_router.wantsCommands());
+    const InputSource traverse{ 5u, 2u };
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), target.id);
+}
+
+TEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBeforeProcessing){
+    const HitTarget host = Control();
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
+    const InputKeyBinding initial{ Core::Key::W, 0, 0, InputCommand::Left };
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
+    InputEvent first;
+    InputEvent release;
+    InputEvent second;
+    const auto firstResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyDown)));
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
+    const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::Right };
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
+    const auto releaseResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
+    ASSERT_TRUE(releaseResult);
+    release = *releaseResult;
+    const auto secondResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyDown)));
+    ASSERT_TRUE(secondResult);
+    second = *secondResult;
+    EXPECT_EQ(first.command, InputCommand::Left);
+    EXPECT_EQ(release.command, InputCommand::Left);
+    EXPECT_EQ(second.command, InputCommand::Right);
+    EXPECT_TRUE(m_router.process().commandConsumed);
+    ControlAction action;
+    const auto actionResult1 = take(host);
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.kind, ControlActionKind::Left);
+    const u64 sequence = action.id.sequence;
+    const auto actionResult2 = take(host);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+    EXPECT_EQ(action.kind, ControlActionKind::Right);
+    EXPECT_GT(action.id.sequence, sequence);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::W));
+}
+
+TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBeforeEditingOrNavigation){
+    HitTarget editor = Target();
+    editor.textEditable = true;
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
+    const InputSource edit{ 7u, 1u };
+    InputEvent resolved;
+    const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
+    resolved = dispatchResult1.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).routing.commandConsumed);
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 2u));
+    EXPECT_TRUE(m_router.focus().valid());
+    const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
+    EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
+    resolved = dispatchResult2.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    EXPECT_TRUE(m_router.ownsSource(edit));
+    const auto dispatchResult3 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
+    resolved = dispatchResult3.event;
+    EXPECT_FALSE(m_router.canEditCommand(resolved));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, edit, InputCommand::None)).routing.commandConsumed);
+    const auto dispatchResult4 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
+    EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
+    resolved = dispatchResult4.event;
+    EXPECT_TRUE(m_router.canEditCommand(resolved));
+    m_router.reset();
+    HitTarget button = Target(2u);
+    button.focusOnCommit = false;
+    button.rectangle.x = 100.0f;
+    const Array<HitTarget, 2> targets = { editor, button };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    const InputSource traverse{ 7u, 2u };
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), editor.id);
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), button.id);
+    const InputSource activate{ 7u, 3u };
+    EXPECT_FALSE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate, true)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(button.id));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(button.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(button.id));
+}
+
+TEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExistingOwners){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    InputEvent output;
+    const Array<InputSource, 2> invalidSources = {{ {}, { 1u, 0u } }};
+    for(const InputSource source : invalidSources){
+        EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, source, InputCommand::Activate))));
+    }
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, { 1u, 1u }, static_cast<InputCommand::Enum>(255u)))));
+    EXPECT_FALSE(m_router.process().commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    InputEvent strayRelease = Command(InputEventType::CommandUp, { 2u, 2u }, InputCommand::None);
+    strayRelease.allowText = true;
+    const auto outputResult = m_router.queue(UiTestSupport::NativeInput(strayRelease));
+    ASSERT_TRUE(outputResult);
+    output = *outputResult;
+    EXPECT_FALSE(output.allowText);
+    EXPECT_FALSE(m_router.process().commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 0u, 1u }, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 0u, 1u }, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputSource first{ 31u, 7u };
+    const InputSource second{ 32u, 7u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Activate)).routing.commandConsumed);
+    m_router.cancelDeviceInput(first.device);
+    EXPECT_FALSE(m_router.ownsSource(first));
+    EXPECT_TRUE(m_router.ownsSource(second));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, first, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].inputSource, second);
+}
+
+TEST_F(UiCommandInputTests, ExactSourceCapacityRejectsOverflowWithoutLosingReleaseOrRebindingState){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    for(usize index = 0u; index < s_InputMaxSources; ++index){
+        EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, index + 1u }, InputCommand::Left)).routing.commandConsumed);
+    }
+    const InputSource overflow{ 1u, s_InputMaxSources + 1u };
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, overflow, InputCommand::Right))));
+    EXPECT_TRUE(m_router.ownsSource({ 1u, 1u }));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, 1u }, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, overflow, InputCommand::Right)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.ownsSource(overflow));
+    m_router.reset();
+    EXPECT_TRUE(m_router.ownsSource(overflow));
+    EXPECT_TRUE(m_router.wantsCommands());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, overflow, InputCommand::None)).routing.commandConsumed);
+    for(usize index = 1u; index < s_InputMaxSources; ++index)
+        EXPECT_TRUE(send(Command(InputEventType::CommandUp, { 1u, index + 1u }, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.wantsCommands());
+}
+
+TEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource){
+    const HitTarget host = Control();
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
+    const InputSource source{ 8u, 8u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
+    for(usize index = 0u; index < s_InputMaxEvents; ++index)
+        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove })));
+    InputEvent output;
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, source, InputCommand::None))));
+    EXPECT_FALSE(m_router.process().commandConsumed);
+    EXPECT_TRUE(m_router.ownsSource(source));
+    const auto dispatchResult = send(Command(InputEventType::CommandDown, source, InputCommand::Up, true));
+    EXPECT_TRUE(dispatchResult.routing.commandConsumed);
+    output = dispatchResult.event;
+    EXPECT_EQ(output.command, InputCommand::Down);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+}
+
+TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesNotRepeatOrActivate){
+    HitTarget target = Target();
+    target.contextMenu = true;
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputSource source{ 9u, 9u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::ContextMenu)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeContextMenu(target.id, target.declarationGeneration));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+    ContextMenuAction action;
+    const auto actionResult = m_router.consumeContextMenu(target.id, target.declarationGeneration);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
+    EXPECT_EQ(action.origin, InputActionSource::Command);
+    EXPECT_FLOAT_EQ(action.position.x, target.rectangle.x);
+    EXPECT_FLOAT_EQ(action.position.y, target.rectangle.y + target.rectangle.height);
+    EXPECT_FALSE(m_router.consumeContextMenu(target.id, target.declarationGeneration));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
+}
+
+TEST_F(UiCommandInputTests, IndependentControllerSubmitReleasesDoNotTransferOrRepeat){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputSource first{ 1u, 8u };
+    const InputSource second{ 2u, 8u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, { 3u, 8u }, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, first, InputCommand::None, true)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(m_router.pressed(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Submit, true)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.pressed(target.id));
+    EXPECT_FALSE(send(Command(InputEventType::CommandUp, second, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, SubmitCannotReviveWhenFocusReturnsToTheOriginalDeclaration){
+    HitTarget first = Target();
+    HitTarget second = Target(2u);
+    second.focusOnCommit = false;
+    second.rectangle.x = 100.0f;
+    const Array<HitTarget, 2> targets = { first, second };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    const InputSource activate{ 5u, 5u };
+    const InputSource traverse{ 5u, 6u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), second.id);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, traverse, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusPrevious)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), first.id);
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, activate, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(first.id));
+    EXPECT_FALSE(m_router.consumeActivation(second.id));
+}
+
+TEST_F(UiCommandInputTests, EditorCancelRetiresAllSubmitSourcesButKeepsTheirReleasesOwned){
+    HitTarget editor = Target();
+    editor.textEditable = true;
+    editor.activatable = false;
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
+    const InputSource first{ 2u, 1u };
+    const InputSource second{ 3u, 1u };
+    const InputSource cancel{ 2u, 2u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, second, InputCommand::Accept)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.pressed(editor.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, cancel, InputCommand::Cancel)).routing.commandConsumed);
+    EXPECT_EQ(m_router.focus(), editor.id);
+    EXPECT_FALSE(m_router.pressed(editor.id));
+    for(const InputSource source : { first, second }){
+        const auto release = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, source, InputCommand::None)));
+        ASSERT_TRUE(release);
+        EXPECT_FALSE(m_router.canSubmitCommand(*release));
+        EXPECT_TRUE(m_router.process().commandConsumed);
+    }
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, cancel, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Submit)).routing.commandConsumed);
+    const auto release = m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, first, InputCommand::None, true)));
+    ASSERT_TRUE(release);
+    EXPECT_FALSE(release->repeat);
+    EXPECT_TRUE(m_router.canSubmitCommand(*release));
+    m_router.cancelSubmitCommands(editor.id);
+    EXPECT_FALSE(m_router.canSubmitCommand(*release));
+    EXPECT_TRUE(m_router.process().commandConsumed);
+}
+
+TEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndProfileChanges){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Activate };
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, true)).routing.commandConsumed);
+    const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::FocusNext };
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    const auto release = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
+    ASSERT_TRUE(release);
+    EXPECT_EQ(release->command, InputCommand::Activate);
+    EXPECT_TRUE(m_router.process().commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand){
+    const HitTarget target = Target();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    const InputSource released{ 41u, 1u };
+    const InputSource held{ 41u, 2u };
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, released, InputCommand::Activate)).routing.commandConsumed);
+    EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
+    ASSERT_TRUE(m_router.queue(Command(InputEventType::CommandUp, released, InputCommand::None)));
+    m_router.reset();
+    EXPECT_FALSE(m_router.ownsSource(released));
+    EXPECT_TRUE(m_router.ownsSource(held));
+    EXPECT_TRUE(m_router.actions().empty());
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_FALSE(m_router.pressed(target.id));
+    const auto fresh = send(Command(InputEventType::CommandDown, released, InputCommand::Activate));
+    EXPECT_FALSE(fresh.event.repeat);
+    EXPECT_TRUE(fresh.routing.commandConsumed);
+    EXPECT_TRUE(m_router.pressed(target.id));
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, released, InputCommand::None)).routing.commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_command_owner_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+[[nodiscard]] static HitTarget Editor()noexcept{
+    HitTarget target;
+    target.id = { 1u };
+    target.declarationGeneration = 7u;
+    target.rectangle = { 0.0f, 0.0f, 120.0f, 24.0f };
+    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+    target.focusable = true;
+    target.textEditable = true;
+    target.control = { 101u, 102u, 103u };
+    return target;
+}
+
+[[nodiscard]] static HitTarget List(const u64 id = 2u, const f32 x = 0.0f)noexcept{
+    HitTarget target;
+    target.id = { id };
+    target.declarationGeneration = 11u;
+    target.rectangle = { x, 40.0f, 120.0f, 120.0f };
+    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+    target.focusable = true;
+    target.navigable = true;
+    target.control = { 31u, 41u, 51u };
+    target.pageRows = 5u;
+    return target;
+}
+
+using UiTestSupport::Key;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiCommandOwnerTests : public UiTestSupport::RouterTestFixture{
+public:
+    UiCommandOwnerTests()
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiKeyboardOwner))
+    {
+        m_targets = { Editor(), List(), List(3u, 140.0f) };
+        m_targets[2u].control.instanceGeneration = 32u;
+        bind(m_targets[1u]);
+    }
+
+
+protected:
+    void bind(const HitTarget& owner)noexcept{
+        m_targets[0u].commandOwner = owner.id;
+        m_targets[0u].commandOwnerDeclarationGeneration = owner.declarationGeneration;
+        m_targets[0u].commandControl = owner.control;
+    }
+
+    void clearBinding()noexcept{
+        m_targets[0u].commandOwner = {};
+        m_targets[0u].commandOwnerDeclarationGeneration = 0u;
+        m_targets[0u].commandControl = {};
+    }
+
+    void press(const Core::Key::Enum key){
+        EXPECT_TRUE(send(Key(InputEventType::KeyDown, key)).commandConsumed);
+        EXPECT_TRUE(send(Key(InputEventType::KeyUp, key)).commandConsumed);
+    }
+
+    void focus(){
+        InputEvent event;
+        event.type = InputEventType::PrimaryDown;
+        event.position = { 10.0f, 10.0f };
+        EXPECT_TRUE(send(event).pointerConsumed);
+        event.type = InputEventType::PrimaryUp;
+        EXPECT_TRUE(send(event).pointerConsumed);
+        EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    }
+
+    [[nodiscard]] Expected<ControlAction> take(const usize owner = 1u)noexcept{
+        const HitTarget& target = m_targets[owner];
+        return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
+    }
+
+    [[nodiscard]] PopupScope popup()noexcept{
+        PopupScope scope;
+        scope.token = { { 10u }, 12u, 13u, 14u };
+        scope.bounds = { 0.0f, 0.0f, 300.0f, 200.0f };
+        scope.viewport = scope.bounds;
+        scope.layer = 1u;
+        return scope;
+    }
+
+
+protected:
+    Array<HitTarget, 3u> m_targets;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiCommandOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
+    press(Core::Key::Up);
+    ControlAction down;
+    ControlAction submit;
+    ControlAction up;
+    const auto downResult = take();
+    ASSERT_TRUE(downResult);
+    down = *downResult;
+    const auto submitResult = take();
+    ASSERT_TRUE(submitResult);
+    submit = *submitResult;
+    const auto upResult = take();
+    ASSERT_TRUE(upResult);
+    up = *upResult;
+    EXPECT_EQ(down.kind, ControlActionKind::Down);
+    EXPECT_EQ(submit.kind, ControlActionKind::Submit);
+    EXPECT_EQ(up.kind, ControlActionKind::Up);
+    EXPECT_LT(down.id.sequence, submit.id.sequence);
+    EXPECT_LT(submit.id.sequence, up.id.sequence);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+}
+
+TEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    m_targets[1u].pageRows = 17u;
+    m_targets[1u].rectangle.height = 180.0f;
+    press(Core::Key::PageDown);
+    ControlAction action;
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.pageRows, 5u);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
+    press(Core::Key::PageDown);
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
+    EXPECT_EQ(action.pageRows, 17u);
+    EXPECT_EQ(action.id.layoutGeneration, 2u);
+}
+
+TEST_F(UiCommandOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance){
+    EXPECT_FALSE(m_router.commitTargets(Span(&m_targets[0u], 1u), 1u));
+    m_targets[1u].enabled = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    m_targets[1u].enabled = true;
+    m_targets[1u].navigable = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    m_targets[1u].navigable = true;
+    m_targets[1u].focusable = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    EXPECT_TRUE(m_router.targets().empty());
+}
+
+TEST_F(UiCommandOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    ++m_targets[0u].commandOwnerDeclarationGeneration;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
+    EXPECT_EQ(m_router.layoutGeneration(), 1u);
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    bind(m_targets[1u]);
+    ++m_targets[0u].commandControl.contentRevision;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
+    bind(m_targets[1u]);
+    m_targets[0u].commandOwner = {};
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
+    press(Core::Key::Down);
+    ControlAction action;
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
+    EXPECT_EQ(action.id.layoutGeneration, 1u);
+}
+
+TEST_F(UiCommandOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNavigation){
+    m_targets[0u].textEditable = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    m_targets[0u].textEditable = true;
+    m_targets[0u].enabled = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    m_targets[0u].enabled = true;
+    m_targets[0u].focusable = false;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    m_targets[0u].focusable = true;
+    m_targets[0u].owner = m_targets[1u].id;
+    m_targets[0u].ownerDeclarationGeneration = m_targets[1u].declarationGeneration;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+}
+
+TEST_F(UiCommandOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejected){
+    m_targets[0u].commandOwner = m_targets[0u].id;
+    m_targets[0u].commandOwnerDeclarationGeneration = m_targets[0u].declarationGeneration;
+    m_targets[0u].commandControl = m_targets[0u].control;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+    bind(m_targets[1u]);
+    m_targets[0u].navigable = true;
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
+}
+
+TEST_F(UiCommandOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
+    ASSERT_EQ(m_router.controlActions().size(), 1u);
+    bind(m_targets[2u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
+    EXPECT_TRUE(m_router.controlActions().empty());
+    bind(m_targets[1u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
+    press(Core::Key::Down);
+    ControlAction action;
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
+}
+
+TEST_F(UiCommandOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    bind(m_targets[2u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
+    bind(m_targets[1u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_FALSE(take(2u));
+    press(Core::Key::Enter);
+    const auto submitted = take();
+    ASSERT_TRUE(submitted);
+    EXPECT_EQ(submitted->kind, ControlActionKind::Submit);
+    EXPECT_FALSE(take(2u));
+}
+
+TEST_F(UiCommandOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
+    ASSERT_TRUE(m_router.commitTargets(Span(&m_targets[1u], 2u), 2u));
+    EXPECT_TRUE(m_router.controlActions().empty());
+    m_targets[1u].focusOnCommit = true;
+    ASSERT_TRUE(m_router.commitTargets(Span(&m_targets[1u], 2u), 3u));
+    EXPECT_EQ(m_router.focus(), m_targets[1u].id);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
+}
+
+TEST_F(UiCommandOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
+    clearBinding();
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    press(Core::Key::Left);
+    bind(m_targets[1u]);
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
+}
+
+TEST_F(UiCommandOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    press(Core::Key::Down);
+    ++m_targets[0u].declarationGeneration;
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
+    EXPECT_TRUE(m_router.controlActions().empty());
+    focus();
+    press(Core::Key::Down);
+    ++m_targets[0u].control.instanceGeneration;
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
+    EXPECT_TRUE(m_router.controlActions().empty());
+}
+
+TEST_F(UiCommandOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
+    ControlToken replacement = m_targets[1u].control;
+    ++replacement.contentRevision;
+    m_router.fenceControl(m_targets[1u].id, m_targets[1u].declarationGeneration, replacement);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
+    EXPECT_TRUE(m_router.controlActions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
+}
+
+TEST_F(UiCommandOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers){
+    PopupScope scope = popup();
+    for(auto& target : m_targets){
+        target.popup = scope.token;
+        target.layer = scope.layer;
+    }
+    HitTarget barrier;
+    barrier.id = scope.token.widget;
+    barrier.declarationGeneration = scope.token.declarationGeneration;
+    barrier.rectangle = scope.bounds;
+    barrier.clip = scope.viewport;
+    barrier.popup = scope.token;
+    barrier.layer = scope.layer;
+    Array<HitTarget, 4u> targets{ barrier, m_targets[0u], m_targets[1u], m_targets[2u] };
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u, Span(&scope, 1u)));
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    press(Core::Key::Down);
+    ControlAction action;
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
+    EXPECT_EQ(action.popup, scope.token);
+    targets[2u].popup = {};
+    targets[2u].layer = 0u;
+    EXPECT_FALSE(m_router.commitTargets(targets, 2u, Span(&scope, 1u)));
+    EXPECT_EQ(m_router.layoutGeneration(), 1u);
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+}
+
+TEST_F(UiCommandOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    focus();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).commandConsumed);
+    EXPECT_FALSE(take());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    ControlAction action;
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
+    EXPECT_EQ(action.kind, ControlActionKind::Submit);
+    EXPECT_FALSE(take());
+    press(Core::Key::Enter);
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_context_claim_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+constexpr AStringView s_SliderKey = "slider";
+constexpr AStringView s_ListKey = "list";
+
+
+class UiContextClaimTests : public testing::Test{
+public:
+    UiContextClaimTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContextClaim))
+        , m_context(m_arena)
+    {}
+
+
+protected:
+    [[nodiscard]] b8 begin(const u64 generation){
+        return m_context.beginFrame(generation) && m_context.beginRoot({ 17u, 1u });
+    }
+
+    [[nodiscard]] b8 commit(const u64 generation){
+        return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+    }
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    Context m_context;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiContextClaimTests, DifferentKindsCanShareAnInstanceGenerationWhilePreservingTheFullGeneration){
+    ASSERT_TRUE(begin(1u));
+    const auto slider = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    const auto list = m_context.declare(s_ListKey, WidgetKind::VirtualList);
+    ASSERT_TRUE(slider);
+    ASSERT_TRUE(list);
+    EXPECT_TRUE(m_context.claimState(**slider, Limit<u64>::s_Max));
+    EXPECT_TRUE(m_context.claimState(**list, Limit<u64>::s_Max));
+    EXPECT_TRUE(m_context.claimState(**slider, Limit<u32>::s_Max));
+    EXPECT_TRUE(m_context.claimState(**list, Limit<u32>::s_Max));
+    ASSERT_TRUE(commit(1u));
+}
+
+TEST_F(UiContextClaimTests, ASharedKindAndInstanceFailsAcrossDistinctRoots){
+    ASSERT_TRUE(begin(1u));
+    const auto first = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(m_context.claimState(**first, 91u));
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.beginRoot({ 18u, 1u }));
+    const auto second = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(second);
+    EXPECT_NE((*first)->id, (*second)->id);
+    EXPECT_FALSE(m_context.claimState(**second, 91u));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+TEST_F(UiContextClaimTests, ASharedKindAndInstanceFailsAcrossDistinctScopes){
+    ASSERT_TRUE(begin(1u));
+    const auto first = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(m_context.claimState(**first, 91u));
+    ASSERT_TRUE(m_context.pushScope("nested"));
+    const auto second = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(second);
+    EXPECT_NE((*first)->id, (*second)->id);
+    EXPECT_FALSE(m_context.claimState(**second, 91u));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiContextClaimTests, AcceptedAndAbandonedFramesReleaseTheirClaimsBeforeTheNextFrame){
+    ASSERT_TRUE(begin(1u));
+    const auto first = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(m_context.claimState(**first, 91u));
+    ASSERT_TRUE(commit(1u));
+
+    ASSERT_TRUE(begin(2u));
+    const auto second = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(second);
+    ASSERT_TRUE(m_context.claimState(**second, 91u));
+    EXPECT_FALSE(m_context.claimState(**second, 91u));
+    m_context.abandonFrame();
+
+    ASSERT_TRUE(begin(3u));
+    const auto third = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(third);
+    EXPECT_TRUE(m_context.claimState(**third, 91u));
+    ASSERT_TRUE(commit(3u));
+}
+
+TEST_F(UiContextClaimTests, ZeroInstancesAndStaleDeclarationsStillRejectTheFrame){
+    ASSERT_TRUE(begin(1u));
+    const auto first = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(first);
+    const WidgetState stale = **first;
+    EXPECT_FALSE(m_context.claimState(**first, 0u));
+    EXPECT_TRUE(m_context.failed());
+    m_context.abandonFrame();
+
+    ASSERT_TRUE(begin(2u));
+    const auto current = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(current);
+    ASSERT_TRUE(m_context.claimState(**current, 91u));
+    EXPECT_FALSE(m_context.claimState(stale, 92u));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiContextClaimTests, PromotedClaimsStillRejectPairsFromTheInlinePrefix){
+    ASSERT_TRUE(begin(1u));
+    const auto slider = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    const auto list = m_context.declare(s_ListKey, WidgetKind::VirtualList);
+    ASSERT_TRUE(slider);
+    ASSERT_TRUE(list);
+    for(u64 instance = 1u; instance <= 32u; ++instance)
+        ASSERT_TRUE(m_context.claimState(**slider, instance));
+    ASSERT_TRUE(m_context.claimState(**list, 1u));
+    EXPECT_FALSE(m_context.claimState(**slider, 1u));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiContextClaimTests, DuplicateAtThePromotionBoundaryRejectsTheFrame){
+    ASSERT_TRUE(begin(1u));
+    const auto slider = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    ASSERT_TRUE(slider);
+    for(u64 instance = 1u; instance <= 32u; ++instance)
+        ASSERT_TRUE(m_context.claimState(**slider, instance));
+    EXPECT_FALSE(m_context.claimState(**slider, 32u));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiContextClaimTests, LargeSmallAndEmptyFramesDoNotLeakPreviousPairsIntoPromotion){
+    for(u64 generation = 1u; generation <= 4u; ++generation){
+        ASSERT_TRUE(begin(generation));
+        const auto slider = m_context.declare(s_SliderKey, WidgetKind::Slider);
+        const auto list = m_context.declare(s_ListKey, WidgetKind::VirtualList);
+        ASSERT_TRUE(slider);
+        ASSERT_TRUE(list);
+        const u64 claims = generation == 1u ? 128u : generation == 2u ? 16u : generation == 3u ? 0u : 33u;
+        for(u64 instance = 1u; instance <= claims; ++instance)
+            ASSERT_TRUE(m_context.claimState(**slider, instance));
+        if(generation == 4u){
+            EXPECT_TRUE(m_context.claimState(**slider, 128u));
+            EXPECT_TRUE(m_context.claimState(**list, 1u));
+            EXPECT_FALSE(m_context.claimState(**slider, 1u));
+            EXPECT_TRUE(m_context.failed());
+        }
+        else
+            ASSERT_TRUE(commit(generation));
+    }
+}
+
+TEST_F(UiContextClaimTests, CapacityCountsDistinctKindAndInstancePairs){
+    ASSERT_TRUE(begin(1u));
+    const auto slider = m_context.declare(s_SliderKey, WidgetKind::Slider);
+    const auto list = m_context.declare(s_ListKey, WidgetKind::VirtualList);
+    ASSERT_TRUE(slider);
+    ASSERT_TRUE(list);
+    for(usize index = 0u; index < s_InputMaxTargets / 2u; ++index){
+        const u64 instance = static_cast<u64>(index + 1u);
+        ASSERT_TRUE(m_context.claimState(**slider, instance));
+        ASSERT_TRUE(m_context.claimState(**list, instance));
+    }
+    EXPECT_FALSE(m_context.claimState(**slider, Limit<u64>::s_Max));
+    EXPECT_TRUE(m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

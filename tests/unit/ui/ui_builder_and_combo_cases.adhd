@@ -1,0 +1,1767 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiBuilderAndComboCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_builder_skin_palette_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiWidgetTests;
+
+[[nodiscard]] static UiSkinPalette MakePalette(const f32 offset)noexcept{
+    UiSkinPalette palette;
+    for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
+        // Lane x is the base value and lane y is alpha.
+        const SIMDVectorSingle steps = VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorSet(0.02f, 0.01f, 0.0f, 0.0f), VectorSet(offset, 0.5f, 0.0f, 0.0f));
+        const SIMDVectorSingle channels = VectorAdd(VectorSplatX(steps), VectorSet(0.0f, 0.01f, 0.02f, 0.0f));
+        palette.colors[index] = { VectorGetX(steps), VectorGetY(channels), VectorGetZ(channels), VectorGetY(steps) };
+    }
+    return palette;
+}
+
+static void ExpectColor(const Color& actual, const UiSkinColor& expected){
+    EXPECT_FLOAT_EQ(actual.r, expected.r);
+    EXPECT_FLOAT_EQ(actual.g, expected.g);
+    EXPECT_FLOAT_EQ(actual.b, expected.b);
+    EXPECT_FLOAT_EQ(actual.a, expected.a);
+}
+
+class UiBuilderSkinPaletteTests : public WidgetFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiBuilderSkinPaletteTests, SkinChangeInsidePanelFailsWithoutReplacingActiveStyle){
+    m_builder.style().fontSize = WidgetStyle{}.fontSize;
+    const UiSkinPalette first = MakePalette(0.1f);
+    m_skin.setPalette(first);
+    m_skin.setTypography({ 20.0f });
+    m_builder.setSkin(m_skin);
+    ASSERT_FLOAT_EQ(m_builder.style().fontSize, 20.0f);
+
+    UiSkin replacement(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiReplacementSkin));
+    UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
+    replacement.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    replacement.setPalette(MakePalette(0.3f));
+    replacement.setTypography({ 22.0f });
+    ASSERT_TRUE(replacement.validatePayload());
+
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 0.0f, 0.0f, 200.0f, 100.0f }));
+    m_builder.setSkin(replacement);
+    EXPECT_TRUE(m_builder.failed());
+    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 20.0f);
+    ExpectColor(m_builder.style().text, first.colors[UiSkinColorRole::TextNormal]);
+    EXPECT_FALSE(m_builder.endPanel());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
+
+#include <global/filesystem.h>
+#include <global/sha256.h>
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_CaptionKey = "caption";
+constexpr AStringView s_ApplyKey = "apply";
+
+class UiBuilderTests : public UiTestSupport::InputTestFixtureBase{
+public:
+    UiBuilderTests()
+        : InputTestFixtureBase(Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilder))
+        , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
+        , m_text(m_arena)
+        , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
+        , m_paint(m_arena)
+        , m_context(m_arena)
+        , m_builder(m_arena, m_context, m_paint, m_text)
+    {}
+
+
+protected:
+    virtual void SetUp()override{
+        Core::Alloc::ScratchArena fontScratchArena(UiWidgetTests::s_FontScratchArenaName);
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
+        configureSkin();
+        ASSERT_TRUE(m_skin.validatePayload());
+        m_builder.setSkin(m_skin);
+    }
+
+    void configureSkin(const b8 includePanel = true, const b8 includeButton = true){
+        UiSkin::RegionVector regions(m_arena);
+        if(includePanel)
+            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCasePanelNormal), { 0u, 0u, 8u, 8u }, {}, { 4.0f, 6.0f, 8.0f, 10.0f } });
+        if(includeButton)
+            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal), { 8u, 0u, 8u, 8u }, {}, { 1.0f, 2.0f, 3.0f, 4.0f }, 20.0f, 20.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonHover), { 16u, 0u, 8u, 8u }, {}, { 7.0f, 1.0f, 2.0f, 3.0f }, 40.0f, 30.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonPressed), { 24u, 0u, 8u, 8u }, {}, { 2.0f, 9.0f, 5.0f, 1.0f }, 30.0f, 35.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonDisabled), { 32u, 0u, 8u, 8u }, {}, { 3.0f, 4.0f, 11.0f, 12.0f }, 70.0f, 50.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxNormal), { 40u, 0u, 8u, 8u }, {}, {}, 10.0f, 10.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxHover), { 48u, 0u, 8u, 8u }, {}, {}, 20.0f, 24.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxChecked), { 56u, 0u, 8u, 8u }, {}, {}, 28.0f, 30.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxDisabled), { 64u, 0u, 8u, 8u }, {}, {}, 34.0f, 32.0f });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxMark), { 72u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseFocusOverlay), { 80u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
+    }
+
+    [[nodiscard]] b8 begin(const u64 generation, const Rect& bounds = { 0.0f, 0.0f, 300.0f, 200.0f }){
+        if(!m_context.beginFrame(generation))
+            return false;
+        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
+        return m_context.beginRoot(m_root) && m_builder.beginPanel(s_PanelKey, bounds);
+    }
+
+    [[nodiscard]] b8 finish(){
+        return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
+    }
+
+    [[nodiscard]] WidgetId id(const AStringView stableKey)const{
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_PanelKey), stableKey);
+    }
+
+    [[nodiscard]] const WidgetState* state(const WidgetId widget)const noexcept{
+        for(const WidgetState& entry : m_context.states().entries()){
+            if(entry.id == widget)
+                return &entry;
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
+        // Lanes are first U, last U, first V, last V.
+        const SIMDVectorSingle expected = VectorSetW(VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f)), 0.5f);
+        for(const DrawCommand& command : snapshot.commands()){
+            if(command.material != PaintMaterial::Skin)
+                continue;
+            for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
+                const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
+                const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
+                const SIMDVectorSingle error = VectorAbs(VectorSubtract(VectorSet(first.texCoord.x, last.texCoord.x, first.texCoord.y, last.texCoord.y), expected));
+                if(Vector4Less(error, VectorReplicate(1e-6f)))
+                    return Rect{ first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y };
+            }
+        }
+        return MakeUnexpected(Failure{});
+    }
+
+    [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
+
+
+protected:
+    Font m_font;
+    TextService m_text;
+    UiSkin m_skin;
+    PaintBuilder m_paint;
+    Context m_context;
+    Builder m_builder;
+    WidgetRoot m_root{ 55u, 3u };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiBuilderTests, LabelTextChangesPreserveStableIdAndDeclarationLifetime){
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "A"));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    ASSERT_EQ(first.generation(), 1u);
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const WidgetId caption = id(s_CaptionKey);
+    const WidgetState* original = state(caption);
+    ASSERT_NE(original, nullptr);
+    const u64 lifetime = original->declarationGeneration;
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "A changed caption"));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot second = m_paint.freeze();
+    const WidgetState* updated = state(caption);
+    ASSERT_NE(updated, nullptr);
+    EXPECT_EQ(updated->id, caption);
+    EXPECT_EQ(updated->declarationGeneration, lifetime);
+    EXPECT_GT(second.vertices().size(), first.vertices().size());
+    EXPECT_EQ(first.generation(), 1u);
+    EXPECT_FALSE(first.glyphPages().empty());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+}
+
+TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds){
+    b8 checked = false;
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("enabled"));
+    ASSERT_NE(control, nullptr);
+    const SIMDVectorSingle centerValue = VectorAdd(VectorSet(control->rectangle.x, control->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    const Point center{ VectorGetX(centerValue), VectorGetY(centerValue) };
+    click(center);
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    EXPECT_FALSE(m_context.input().process().pointerConsumed);
+    EXPECT_EQ(m_context.input().actions().size(), 1u);
+    ASSERT_TRUE(begin(2u));
+    EXPECT_TRUE(m_builder.checkbox("enabled", "Enabled", checked));
+    EXPECT_TRUE(checked);
+    EXPECT_TRUE(m_context.input().actions().empty());
+    ASSERT_TRUE(finish());
+    EXPECT_FALSE(m_context.beginFrame(3u));
+    EXPECT_FALSE(m_context.input().process().pointerConsumed);
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    ASSERT_TRUE(begin(3u));
+    EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
+    EXPECT_TRUE(checked);
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+}
+
+TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivation){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    ASSERT_FALSE(m_context.failed());
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey));
+    ASSERT_NE(control, nullptr);
+    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(control->rectangle.x, control->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
+    click(point);
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    ASSERT_TRUE(begin(2u));
+    WidgetOptions disabled;
+    disabled.enabled = false;
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply", disabled));
+    EXPECT_FALSE(m_context.failed());
+    EXPECT_TRUE(m_context.input().actions().empty());
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    control = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey));
+    ASSERT_NE(control, nullptr);
+    EXPECT_FALSE(control->enabled);
+    EXPECT_FALSE(control->focusable);
+    EXPECT_FALSE(control->activatable);
+    EXPECT_NE(m_context.input().hitTest(point), control->id);
+    click(point);
+    EXPECT_TRUE(m_context.input().actions().empty());
+    ASSERT_TRUE(begin(3u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    EXPECT_FALSE(m_context.failed());
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey))->enabled);
+}
+
+TEST_F(UiBuilderTests, MissingSkinRejectsDeclarationsWithoutPublishingCandidateTargets){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const WidgetId accepted = id(s_ApplyKey);
+    ASSERT_EQ(m_context.input().targets().size(), 2u);
+    Builder noSkin(m_arena, m_context, m_paint, m_text);
+    ASSERT_TRUE(m_context.beginFrame(2u));
+    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
+    ASSERT_TRUE(m_context.beginRoot(m_root));
+    EXPECT_FALSE(noSkin.beginPanel(s_PanelKey, { 100.0f, 100.0f, 100.0f, 100.0f }));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(m_context.input().targets().size(), 2u);
+    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), accepted);
+    EXPECT_EQ(first.generation(), 1u);
+}
+
+TEST_F(UiBuilderTests, MissingBaseControlRegionRejectsFrameAndKeepsAcceptedHitLayout){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    configureSkin(true, false);
+    ASSERT_TRUE(begin(2u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
+    EXPECT_TRUE(regionQuad(first, 1u));
+}
+
+TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
+    ContainerOptions row;
+    row.width = { LayoutSizePolicy::Fixed, 100.0f };
+    row.height = { LayoutSizePolicy::Fixed, 70.0f };
+    row.padding = { 2.0f, 3.0f, 4.0f, 5.0f };
+    row.gap = 6.0f;
+    ASSERT_TRUE(begin(1u, { 10.0f, 20.0f, 150.0f, 90.0f }));
+    ASSERT_TRUE(m_builder.beginRow("actions", row));
+    EXPECT_FALSE(m_builder.button("first", "i"));
+    EXPECT_FALSE(m_builder.button("second", "ii"));
+    ASSERT_TRUE(m_builder.endContainer());
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const WidgetId rowId = id("actions");
+    const WidgetId firstId = UiTestSupport::RequireWidgetId(rowId, "first");
+    const WidgetId secondId = UiTestSupport::RequireWidgetId(rowId, "second");
+    const HitTarget* secondTarget = UiTestSupport::FindHitTarget(m_context.input().targets(), secondId);
+    ASSERT_NE(secondTarget, nullptr);
+    EXPECT_FLOAT_EQ(secondTarget->clip.width, 18.0f);
+    EXPECT_EQ(m_context.input().hitTest({ 100.0f, 40.0f }), secondId);
+    EXPECT_NE(m_context.input().hitTest({ 125.0f, 40.0f }), secondId);
+    click({ 125.0f, 40.0f });
+    EXPECT_TRUE(m_context.input().actions().empty());
+    click({ 100.0f, 40.0f });
+    EXPECT_TRUE(m_context.input().consumeActivation(secondId));
+    EXPECT_FALSE(m_context.input().consumeActivation(firstId));
+}
+
+TEST_F(UiBuilderTests, ScopedKeysRemainDistinctAndDuplicateDeclarationsRejectPublication){
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginRow("left"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "Left"));
+    ASSERT_TRUE(m_builder.endContainer());
+    ASSERT_TRUE(m_builder.beginRow("right"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "Right"));
+    ASSERT_TRUE(m_builder.endContainer());
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const WidgetId left = UiTestSupport::RequireWidgetId(id("left"), s_CaptionKey);
+    const WidgetId right = UiTestSupport::RequireWidgetId(id("right"), s_CaptionKey);
+    EXPECT_NE(left, right);
+    EXPECT_NE(state(left), nullptr);
+    EXPECT_NE(state(right), nullptr);
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.label("duplicate", "First"));
+    EXPECT_FALSE(m_builder.label("duplicate", "Second"));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_FALSE(m_context.finishFrame());
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(first.generation(), 1u);
+}
+
+TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
+    WidgetOptions fixed;
+    fixed.width = { LayoutSizePolicy::Fixed, 20.0f };
+    fixed.height = { LayoutSizePolicy::Fixed, 20.0f };
+    ASSERT_TRUE(begin(1u, { 0.0f, 0.0f, 100.0f, 100.0f }));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "", fixed));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_TRUE(begin(2u, { 150.0f, 50.0f, 100.0f, 100.0f }));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "", fixed));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot prepared = m_paint.freeze();
+    EXPECT_EQ(first.generation(), 1u);
+    EXPECT_EQ(prepared.generation(), 2u);
+    EXPECT_TRUE(m_context.ready());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
+    EXPECT_FALSE(m_context.input().hitTest({ 160.0f, 60.0f }).valid());
+    EXPECT_FALSE(send({ .position = { 160.0f, 60.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 160.0f, 60.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_TRUE(m_context.input().actions().empty());
+    EXPECT_FALSE(m_context.beginFrame(3u));
+    EXPECT_FALSE(m_context.commitFrame(1u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().hitTest({ 160.0f, 60.0f }), id(s_ApplyKey));
+    EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 15.0f }).valid());
+}
+
+TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmission){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    const Rect rectangle = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey))->rectangle;
+    const Point point = UiWidgetTests::Center(rectangle);
+    u64 generation = 1u;
+    for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){
+        if(!m_context.input().focus().valid()){
+            EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+            EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
+        }
+        ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
+        const b8 pointer = key == Core::Key::Unknown;
+        const InputEvent down{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown};
+        const InputEvent up{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp};
+        const InputRoutingResult held = send(down);
+        EXPECT_TRUE(pointer ? held.pointerConsumed : held.commandConsumed);
+        ASSERT_TRUE(begin(++generation));
+        EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+        ASSERT_TRUE(finish());
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        EXPECT_TRUE(send({ .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+        EXPECT_TRUE(send({ .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
+        const InputRoutingResult released = send(up);
+        EXPECT_TRUE(pointer ? released.pointerConsumed : released.commandConsumed);
+        ASSERT_TRUE(begin(++generation));
+        EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
+        ASSERT_TRUE(finish());
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        EXPECT_TRUE(m_context.input().actions().empty());
+    }
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
+    ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp}).commandConsumed);
+    ASSERT_TRUE(begin(++generation));
+    EXPECT_TRUE(m_builder.button(s_ApplyKey, "Apply"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(generation));
+}
+
+TEST_F(UiBuilderTests, FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherButton){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_FALSE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_EQ(m_context.input().focus(), id("first"));
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_EQ(m_context.input().focus(), id("second"));
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_TRUE(begin(2u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_FALSE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_TRUE(begin(3u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    EXPECT_TRUE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+}
+
+TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse){
+    b8 checked = true;
+    AString<Core::Alloc::GlobalArena> caption("A", m_arena);
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, { caption.data(), caption.size() }));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot first = m_paint.freeze();
+    const auto originalMarker = regionQuad(first, 9u);
+    ASSERT_TRUE(originalMarker);
+    EXPECT_FLOAT_EQ(originalMarker->width, 20.4f);
+    ASSERT_FALSE(first.glyphPages().empty());
+    const SharedGlyphPage page = first.glyphPages().front();
+    const Sha256Digest pixelHash = ComputeSha256({ page->pixels().data(), page->pixels().size() });
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilderFrozen)};
+    Vector<Vertex, Core::Alloc::ScratchArena> saved(scratch);
+    saved.assign(first.vertices().begin(), first.vertices().end());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    checked = false;
+    caption.assign("A longer changed model caption");
+    ASSERT_TRUE(begin(2u));
+    EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, { caption.data(), caption.size() }));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot second = m_paint.freeze();
+    EXPECT_FALSE(regionQuad(second, 9u));
+    const auto retainedMarker = regionQuad(first, 9u);
+    ASSERT_TRUE(retainedMarker);
+    EXPECT_FLOAT_EQ(retainedMarker->width, originalMarker->width);
+    ASSERT_EQ(first.vertices().size(), saved.size());
+    EXPECT_EQ(NWB_MEMCMP(first.vertices().data(), saved.data(), saved.size() * sizeof(Vertex)), 0);
+    EXPECT_EQ(ComputeSha256({ page->pixels().data(), page->pixels().size() }), pixelHash);
+    EXPECT_EQ(page->binding().fontGeneration, 1u);
+    EXPECT_EQ(first.generation(), 1u);
+    EXPECT_EQ(second.generation(), 2u);
+    ASSERT_TRUE(m_context.commitFrame(2u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_builder_text_shaping_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiWidgetTests;
+
+static constexpr StringView s_Jamo = "\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiBuilderTextShapingTests : public WidgetFixture{
+protected:
+    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot)noexcept{
+        u32 count = 0u;
+        for(const DrawCommand& command : snapshot.commands()){
+            if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+                count += command.indexCount / 6u;
+        }
+        return count;
+    }
+
+
+protected:
+    void addEditRegion(){
+        UiSkin::RegionVector regions(m_arena);
+        for(const UiSkinRegion& region : m_skin.regions())
+            regions.push_back(region);
+        UiSkinRegion edit;
+        edit.name = Name(NWB::Tests::UiCases::s_UiCaseEditNormal);
+        edit.rectangle = { 88u, 0u, 8u, 8u };
+        regions.push_back(edit);
+        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+        m_builder.setSkin(m_skin);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenScopeMutationFails){
+    ASSERT_TRUE(installKoreanFallback());
+    addEditRegion();
+    ASSERT_TRUE(m_skin.validatePayload());
+    ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('H', 'a', 'n', 'g'), "ko"));
+    EXPECT_FALSE(m_builder.setTextShaping(0u, "ko"));
+    EXPECT_FALSE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko!"));
+    ASSERT_FALSE(m_builder.failed());
+    EditModel model(m_arena);
+    ASSERT_TRUE(model.setText(s_Jamo));
+    EditBoxState state;
+
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 0.0f, 0.0f, 400.0f, 180.0f }));
+    ASSERT_TRUE(m_builder.label("label", s_Jamo));
+    ASSERT_TRUE(m_builder.editBox("edit", model, state).valid);
+    ASSERT_TRUE(finishPanel());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    EXPECT_EQ(GlyphQuads(snapshot), 2u);
+    ASSERT_TRUE(m_context.commitFrame(1u));
+
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 0.0f, 0.0f, 400.0f, 100.0f }));
+    EXPECT_FALSE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
+    EXPECT_TRUE(m_builder.failed());
+    EXPECT_FALSE(m_builder.endPanel());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_caret_clock_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiCaretClockTests, FiniteLongDeltaPreservesWholeCycleRemainder){
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.25, 1000000.75), 0.0);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, Limit<f64>::s_Max), 0.375);
+}
+
+TEST(UiCaretClockTests, InvalidAndNonpositiveDeltasKeepCurrentPhase){
+    const Array<f64, 5> invalid = { 0.0, -0.25, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
+    for(const f64 delta : invalid)
+        EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, delta), 0.375);
+}
+
+TEST(UiCaretClockTests, InvalidPhaseStartsAtZeroAndFinitePhaseIsNormalized){
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(Limit<f64>::s_QuietNaN, 2.25), 0.25);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(-1.0, 0.25), 0.25);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(1.25, 2.5), 0.75);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
+
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_combo_behavior_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+namespace CallbackStage{
+    enum Enum : u8{ None, Generation, Revision, Count, Lookup, Key, Enabled };
+};
+
+namespace CallbackMutation{
+    enum Enum : u8{ Select, Open, Close, Generation, Revision, Count };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComboSource final : public IListDataSource{
+public:
+    explicit ComboSource(ComboState* state = nullptr)noexcept
+        : m_state(state)
+    {}
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
+        mutate(CallbackStage::Generation);
+        return generation;
+    }
+
+    [[nodiscard]] virtual u64 revision()const noexcept override{
+        mutate(CallbackStage::Revision);
+        return revisionValue;
+    }
+
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
+        mutate(CallbackStage::Count);
+        return count;
+    }
+
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
+        mutate(CallbackStage::Key);
+        return index < count ? UiWidgetTests::ArithmeticFixtureRowKey(count, 0u, reversed, index) : 0u;
+    }
+
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
+        mutate(CallbackStage::Lookup);
+        const auto index = UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, reversed, keyValue);
+        if(!index)
+            return index;
+        return badLookup ? count : wrongLookup ? 0u : *index;
+    }
+
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, disabledKey);
+    }
+
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        mutate(CallbackStage::Enabled);
+        const u64 keyValue = reversed ? count - index : index + 1u;
+        return index < count && keyValue != disabledKey;
+    }
+
+    void arm(const CallbackStage::Enum stage, const CallbackMutation::Enum mutation, const u64 selected = 8u)noexcept{
+        m_stage = stage;
+        m_mutation = mutation;
+        m_selected = selected;
+    }
+
+
+private:
+    void mutate(const CallbackStage::Enum stage)const noexcept{
+        if(m_stage != stage)
+            return;
+        m_stage = CallbackStage::None;
+        switch(m_mutation){
+        case CallbackMutation::Select:
+            if(m_state)
+                m_state->select(m_selected);
+            break;
+        case CallbackMutation::Open:
+            if(m_state)
+                m_state->open();
+            break;
+        case CallbackMutation::Close:
+            if(m_state)
+                m_state->close();
+            break;
+        case CallbackMutation::Generation:
+            ++generation;
+            break;
+        case CallbackMutation::Revision:
+            ++revisionValue;
+            break;
+        case CallbackMutation::Count:
+            if(count != 0u)
+                --count;
+            break;
+        }
+    }
+
+
+public:
+    mutable u64 generation = 51u;
+    mutable u64 revisionValue = 1u;
+    mutable u64 count = 10u;
+    u64 disabledKey = 0u;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
+
+
+private:
+    ComboState* m_state = nullptr;
+    u64 m_selected = 8u;
+    mutable CallbackStage::Enum m_stage = CallbackStage::None;
+    CallbackMutation::Enum m_mutation = CallbackMutation::Select;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
+    ListState& preview = ComboBehavior::Preview(state);
+    if(!ListBehavior::Reconcile(preview, source))
+        return false;
+    ListOptions options;
+    options.selectOnNavigate = false;
+    ControlAction action;
+    action.kind = kind;
+    action.control = { preview.inputGeneration(), source.instanceGeneration(), source.revision() };
+    ListResult result;
+    return ListBehavior::Apply(source, options, action, preview, result);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiComboBehaviorTests, FirstBindingPreservesAnExplicitlyOpenStateAndSameBindingIsStable){
+    ComboState state;
+    state.select(4u);
+    state.open();
+    const u64 inputGeneration = state.inputGeneration();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    EXPECT_TRUE(state.isOpen());
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    EXPECT_TRUE(state.isOpen());
+    EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
+}
+
+TEST(UiComboBehaviorTests, ARecreatedDeclarationCancelsPreviewAndPreservesTheCommittedSelection){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    const u64 inputGeneration = state.inputGeneration();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 18u));
+    EXPECT_FALSE(state.isOpen());
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().cursorKey(), 4u);
+    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
+    EXPECT_EQ(state.inputGeneration(), inputGeneration);
+}
+
+TEST(UiComboBehaviorTests, MovingStateToAnotherOwnerClosesAndEachOwnerSwitchRetiresThePreviewLifetime){
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    state.open();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 202u }, 17u));
+    EXPECT_FALSE(state.isOpen());
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
+    state.open();
+    const u64 returnedPreview = state.listState().inputGeneration();
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    EXPECT_FALSE(state.isOpen());
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_NE(state.listState().inputGeneration(), returnedPreview);
+}
+
+TEST(UiComboBehaviorTests, InvalidBindingFailsAtomicallyAndDoesNotReplaceTheExistingOwner){
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    state.open();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    EXPECT_FALSE(ComboBehavior::Bind(state, {}, 18u));
+    EXPECT_FALSE(ComboBehavior::Bind(state, WidgetId{ 202u }, 0u));
+    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    EXPECT_TRUE(state.isOpen());
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
+}
+
+TEST(UiComboBehaviorTests, MissingAndDisabledInitialSelectionClearWithoutChoosingAnotherRow){
+    ComboSource source;
+    ComboState missing;
+    missing.select(99u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(missing, source));
+    EXPECT_EQ(missing.selectedKey(), 0u);
+    ComboState disabled;
+    disabled.select(5u);
+    source.disabledKey = 5u;
+    ASSERT_TRUE(ComboBehavior::Reconcile(disabled, source));
+    EXPECT_EQ(disabled.selectedKey(), 0u);
+}
+
+TEST(UiComboBehaviorTests, ReorderPreservesCommittedSelectionAndOpenPreviewCursor){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    ASSERT_EQ(state.listState().cursorKey(), 5u);
+    source.reversed = true;
+    ++source.revisionValue;
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().cursorKey(), 5u);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, CommittingTheCurrentSelectionIsStillAnActivationAndCloses){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    EXPECT_TRUE(ComboBehavior::Commit(state, source, 4u));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_FALSE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, ZeroMissingAndDisabledCommitFailWithoutClosingOrChangingSelection){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    source.disabledKey = 5u;
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 0u));
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 99u));
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().cursorKey(), 4u);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, ClosedAndUnboundStateRejectCommit){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    ComboBehavior::Open(state);
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Close(state);
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_EQ(state.selectedKey(), 4u);
+}
+
+TEST(UiComboBehaviorTests, ExplicitSelectRenewsInputEvenWhenUnchangedAndCancelsPreview){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    const u64 inputGeneration = state.inputGeneration();
+    state.select(4u);
+    EXPECT_NE(state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().cursorKey(), 4u);
+    EXPECT_FALSE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, ExplicitOpenRenewsFieldAndPreviewLifetimesOnEveryCall){
+    ComboState state;
+    const u64 inputGeneration = state.inputGeneration();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    state.open();
+    EXPECT_NE(state.inputGeneration(), inputGeneration);
+    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
+    const u64 reopenedInput = state.inputGeneration();
+    const u64 reopenedPreview = state.listState().inputGeneration();
+    state.open();
+    EXPECT_NE(state.inputGeneration(), reopenedInput);
+    EXPECT_NE(state.listState().inputGeneration(), reopenedPreview);
+}
+
+TEST(UiComboBehaviorTests, ExplicitCloseRenewsFieldAndPreviewEvenWhenAlreadyClosed){
+    ComboState state;
+    const u64 inputGeneration = state.inputGeneration();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    state.close();
+    EXPECT_NE(state.inputGeneration(), inputGeneration);
+    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
+}
+
+TEST(UiComboBehaviorTests, ReopenRestoresCommittedCursorAndRetiresPreviousPreviewAction){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    const u64 inputGeneration = state.inputGeneration();
+    const u64 previewGeneration = state.listState().inputGeneration();
+    ComboBehavior::Open(state);
+    EXPECT_EQ(state.listState().cursorKey(), 4u);
+    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
+    EXPECT_EQ(state.inputGeneration(), inputGeneration);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, RemovedOrDisabledCommittedKeyClearsOnRevisionWithoutCommittingPreview){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    source.disabledKey = 4u;
+    ++source.revisionValue;
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.listState().cursorKey(), 5u);
+    EXPECT_TRUE(state.isOpen());
+    ComboBehavior::Close(state);
+    EXPECT_EQ(state.listState().cursorKey(), 0u);
+    state.select(5u);
+    source.count = 4u;
+    ++source.revisionValue;
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    EXPECT_EQ(state.selectedKey(), 0u);
+}
+
+TEST(UiComboBehaviorTests, ReplacingEstablishedSourceClosesAndClearsSelectionPreviewAndScroll){
+    ComboSource source;
+    ComboState state;
+    state.select(10u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
+    ASSERT_TRUE(ComboBehavior::Preview(state).scrollTo(120.0));
+    ASSERT_GT(state.listState().scrollOffset(), 0.0);
+    const u64 inputGeneration = state.inputGeneration();
+    ++source.generation;
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.listState().selectedKey(), 0u);
+    EXPECT_EQ(state.listState().cursorKey(), 0u);
+    EXPECT_DOUBLE_EQ(state.listState().scrollOffset(), 0.0);
+    EXPECT_EQ(state.inputGeneration(), inputGeneration);
+    EXPECT_FALSE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, EmptyDatasetClearsSelectionAndDoesNotInventACommit){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    source.count = 0u;
+    ++source.revisionValue;
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.listState().cursorKey(), 0u);
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 0u));
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, InvalidIdentitiesAndMalformedLookupLeaveExistingStateUnchanged){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    source.generation = 0u;
+    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    source.generation = 51u;
+    source.revisionValue = 0u;
+    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    source.revisionValue = 1u;
+    source.badLookup = true;
+    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    source.badLookup = false;
+    source.wrongLookup = true;
+    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_EQ(state.listState().cursorKey(), 4u);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, CommitRequiresReconciledRevisionAndRejectsSourceReplacement){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    ++source.revisionValue;
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ++source.generation;
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, RevisionAndGenerationChangingDuringReconcileFailWithoutPartialMutation){
+    for(const CallbackMutation::Enum mutation : { CallbackMutation::Revision, CallbackMutation::Generation }){
+        ComboSource source;
+        ComboState state;
+        state.select(4u);
+        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+        ComboBehavior::Open(state);
+        source.arm(CallbackStage::Lookup, mutation);
+        EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+        EXPECT_EQ(state.selectedKey(), 4u);
+        EXPECT_TRUE(state.isOpen());
+    }
+}
+
+TEST(UiComboBehaviorTests, RowCountChangingWithoutRevisionDuringReconcileFailsWithoutPartialMutation){
+    ComboSource source;
+    ComboState state;
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    source.arm(CallbackStage::Lookup, CallbackMutation::Count);
+    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_TRUE(state.isOpen());
+}
+
+TEST(UiComboBehaviorTests, SourceChangesDuringCommitLeaveThePopupAndCommittedKeyUnchanged){
+    for(const CallbackMutation::Enum mutation : { CallbackMutation::Revision, CallbackMutation::Generation, CallbackMutation::Count }){
+        ComboSource source;
+        ComboState state;
+        state.select(4u);
+        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+        ComboBehavior::Open(state);
+        source.arm(CallbackStage::Lookup, mutation);
+        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_EQ(state.selectedKey(), 4u);
+        EXPECT_EQ(state.listState().cursorKey(), 4u);
+        EXPECT_TRUE(state.isOpen());
+    }
+}
+
+TEST(UiComboBehaviorTests, ReconcileCannotOverwriteAnExplicitSelectionFromAnySourceLoan){
+    for(const CallbackStage::Enum stage : { CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count, CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled }){
+        ComboState state;
+        ComboSource source(&state);
+        state.select(4u);
+        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+        ComboBehavior::Open(state);
+        source.arm(stage, CallbackMutation::Select, 8u);
+        EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+        EXPECT_EQ(state.selectedKey(), 8u);
+        EXPECT_EQ(state.listState().cursorKey(), 8u);
+        EXPECT_FALSE(state.isOpen());
+    }
+}
+
+TEST(UiComboBehaviorTests, CommitCannotOverwriteAnExplicitSelectionFromAnySourceLoan){
+    for(const CallbackStage::Enum stage : { CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count, CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled }){
+        ComboState state;
+        ComboSource source(&state);
+        state.select(4u);
+        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+        ComboBehavior::Open(state);
+        source.arm(stage, CallbackMutation::Select, 8u);
+        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_EQ(state.selectedKey(), 8u);
+        EXPECT_EQ(state.listState().cursorKey(), 8u);
+        EXPECT_FALSE(state.isOpen());
+    }
+}
+
+TEST(UiComboBehaviorTests, CallbackCloseAndReopenPreserveTheExplicitPopupLifetime){
+    for(const CallbackMutation::Enum mutation : { CallbackMutation::Open, CallbackMutation::Close }){
+        ComboState state;
+        ComboSource source(&state);
+        state.select(4u);
+        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+        ComboBehavior::Open(state);
+        const u64 inputGeneration = state.inputGeneration();
+        source.arm(CallbackStage::Enabled, mutation);
+        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_NE(state.inputGeneration(), inputGeneration);
+        EXPECT_EQ(state.selectedKey(), 4u);
+        EXPECT_EQ(state.listState().cursorKey(), 4u);
+        EXPECT_EQ(state.isOpen(), mutation == CallbackMutation::Open);
+    }
+}
+
+TEST(UiComboBehaviorTests, SameValueCallbackSelectionStillRejectsTheOutstandingCommit){
+    ComboState state;
+    ComboSource source(&state);
+    state.select(4u);
+    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ComboBehavior::Open(state);
+    const u64 inputGeneration = state.inputGeneration();
+    source.arm(CallbackStage::Key, CallbackMutation::Select, 4u);
+    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_NE(state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(state.selectedKey(), 4u);
+    EXPECT_FALSE(state.isOpen());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_combo_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiComboTests;
+
+class UiComboBuilderTests : public ComboFixture{};
+
+// Source fixture that breaks stable-key lookup on the post-selection label read.
+class LabelLookupSource final : public ComboSource{
+public:
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
+        auto found = ComboSource::indexOf(key);
+        if(found && lookupCalls >= 4u)
+            *found = (*found + 1u) % count;
+        return found;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiComboBuilderTests, SiblingComboFieldsPaintTheirOwnDeclarationStyles){
+    m_source.count = 0u;
+    ComboState secondState;
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    m_builder.comboStyle().normal = Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal);
+    ASSERT_TRUE(m_builder.comboBox("first", m_source, m_state, Options()).valid);
+    m_builder.comboStyle().normal = Name(NWB::Tests::UiCases::s_UiCaseButtonHover);
+    ASSERT_TRUE(m_builder.comboBox("second", m_source, secondState, Options()).valid);
+    ASSERT_TRUE(finishPanel());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    const auto first = skinQuad(snapshot, 6u);
+    ASSERT_TRUE(first);
+    const auto second = skinQuad(snapshot, 7u);
+    ASSERT_TRUE(second);
+    EXPECT_LT(first->y, second->y);
+}
+
+TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWithoutCommittingPreview){
+    m_source.count = 4u;
+    m_state.select(1u);
+    const auto acceptNeighbors = [this](const u64 generation){
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
+            return false;
+        if(m_builder.button("before", "Before"))
+            return false;
+        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, Options());
+        if(m_builder.button("after", "After"))
+            return false;
+        return m_result.valid && finishPanel() && m_context.commitFrame(generation);
+    };
+    m_state.open();
+    ASSERT_TRUE(acceptNeighbors(1u));
+    ASSERT_EQ(m_context.input().focus(), list());
+    press(Core::Key::Down);
+    ASSERT_TRUE(acceptNeighbors(2u));
+    ASSERT_EQ(m_state.listState().cursorKey(), 2u);
+    press(Core::Key::Tab);
+    ASSERT_TRUE(acceptNeighbors(3u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
+    EXPECT_EQ(m_context.input().focus(), id("after", s_ComboPanelKey));
+    m_state.open();
+    ASSERT_TRUE(acceptNeighbors(4u));
+    ASSERT_EQ(m_context.input().focus(), list());
+    const InputEvent reverseDown{ .position = {}, .key = Core::Key::Tab, .type = InputEventType::KeyDown, .shift = true };
+    const InputEvent reverseUp{ .position = {}, .key = Core::Key::Tab, .type = InputEventType::KeyUp, .shift = true };
+    EXPECT_TRUE(send(reverseDown).commandConsumed);
+    EXPECT_TRUE(send(reverseUp).commandConsumed);
+    ASSERT_TRUE(acceptNeighbors(5u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_context.input().focus(), id("before", s_ComboPanelKey));
+}
+
+TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
+    m_source.count = 0u;
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    ASSERT_EQ(m_state.selectedKey(), 0u);
+    press(Core::Key::Tab);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_result.selectionChanged);
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 0u);
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
+}
+
+TEST_F(UiComboBuilderTests, OutsideDismissalConsumesTheWholePointerSequence){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    EXPECT_TRUE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_TRUE(m_context.input().actions().empty());
+    ASSERT_TRUE(accept(3u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_result.selectionChanged);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_state.isOpen());
+}
+
+TEST_F(UiComboBuilderTests, HeldOpeningSubmitWaitsForReleaseBeforeTransferringFocus){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    press(Core::Key::Tab);
+    InputEvent event;
+    event.type = InputEventType::KeyDown;
+    event.key = Core::Key::Enter;
+    EXPECT_TRUE(send(event).commandConsumed);
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
+    event.repeat = true;
+    EXPECT_TRUE(send(event).commandConsumed);
+    ASSERT_TRUE(prepare(3u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    event.type = InputEventType::KeyUp;
+    event.repeat = false;
+    EXPECT_TRUE(send(event).commandConsumed);
+    ASSERT_TRUE(accept(4u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_TRUE(m_result.opened);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_context.input().focus(), list());
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_TRUE(m_result.committed);
+    EXPECT_FALSE(m_result.selectionChanged);
+    EXPECT_FALSE(m_state.isOpen());
+}
+
+TEST_F(UiComboBuilderTests, EscapeBeforeReleaseCancelsFieldOpeningAndPopupSubmission){
+    m_source.count = 4u;
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    press(Core::Key::Tab);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    ASSERT_TRUE(accept(2u));
+    EXPECT_FALSE(m_state.isOpen());
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    press(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(4u));
+    ASSERT_TRUE(m_state.isOpen());
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(5u));
+    ASSERT_EQ(m_state.listState().cursorKey(), 2u);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    ASSERT_TRUE(accept(6u));
+    EXPECT_FALSE(m_result.committed);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
+    ASSERT_TRUE(accept(7u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(8u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+}
+
+TEST_F(UiComboBuilderTests, DisabledFieldFencesQueuedOpeningAndHasNoTabStop){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    click(Center(target(id(s_ComboKey, s_ComboPanelKey))->rectangle));
+    ComboOptions options = Options();
+    options.enabled = false;
+    ASSERT_TRUE(accept(2u, options));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_result.focused);
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_ComboKey, s_ComboPanelKey))->enabled);
+    EXPECT_FALSE(target(id(s_ComboKey, s_ComboPanelKey))->focusable);
+    EXPECT_EQ(target(list()), nullptr);
+}
+
+TEST_F(UiComboBuilderTests, EmptySourceShowsPlaceholderAndSubmitCannotCommitAKey){
+    m_source.count = 0u;
+    ASSERT_TRUE(accept(1u));
+    EXPECT_EQ(m_source.textCalls, 0u);
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+    ASSERT_TRUE(openByPointer(2u));
+    EXPECT_EQ(m_source.textCalls, 0u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 0u);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_result.selectionChanged);
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+}
+
+TEST_F(UiComboBuilderTests, NavigationSkipsDisabledRowsAndCannotWrapTheBoundary){
+    m_source.count = 3u;
+    m_source.disabled = 2u;
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.listState().cursorKey(), 3u);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(4u));
+    EXPECT_EQ(m_state.listState().cursorKey(), 3u);
+    press(Core::Key::Up);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
+    press(Core::Key::Up);
+    ASSERT_TRUE(accept(6u));
+    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
+}
+
+TEST_F(UiComboBuilderTests, ReorderPreservesCommittedKeyAndRemovalClearsIt){
+    m_state.select(50000u);
+    ASSERT_TRUE(accept(1u));
+    m_source.reverse = true;
+    ++m_source.contentRevision;
+    ASSERT_TRUE(accept(2u));
+    EXPECT_EQ(m_state.selectedKey(), 50000u);
+    EXPECT_FALSE(m_result.selectionChanged);
+    m_source.removed = 50000u;
+    --m_source.count;
+    ++m_source.contentRevision;
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+    EXPECT_TRUE(m_result.selectionChanged);
+    EXPECT_EQ(m_source.textCalls, 2u);
+}
+
+TEST_F(UiComboBuilderTests, SourceRevisionFencesAcceptedRowActivationBeforeTheNewLayout){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    click(Center(target(row(2u))->rectangle));
+    m_source.reverse = true;
+    ++m_source.contentRevision;
+    ASSERT_TRUE(accept(3u));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+}
+
+TEST_F(UiComboBuilderTests, ReplacementSourceCannotBorrowThePreviousSelectionOrPopup){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    click(Center(target(row(2u))->rectangle));
+    ComboSource replacement;
+    replacement.generation = m_source.generation + 1u;
+    ASSERT_TRUE(declareSource(3u, replacement, m_state));
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_TRUE(m_result.selectionChanged);
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_EQ(target(id(s_ComboKey, s_ComboPanelKey))->control.contentGeneration, replacement.generation);
+    EXPECT_EQ(target(popup()), nullptr);
+}
+
+TEST_F(UiComboBuilderTests, APreparedMoveKeepsAcceptedFieldAndPopupGeometryUntilCommit){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    const Rect acceptedField = target(id(s_ComboKey, s_ComboPanelKey))->rectangle;
+    const Rect acceptedPopup = target(popup())->rectangle;
+    ASSERT_TRUE(prepare(3u, Options(), { 300.0f, 300.0f, 320.0f, 240.0f }));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
+    UiPaintAssertions::ExpectRect(target(id(s_ComboKey, s_ComboPanelKey))->rectangle, acceptedField);
+    UiPaintAssertions::ExpectRect(target(popup())->rectangle, acceptedPopup);
+    EXPECT_NE(m_state.bounds().x, acceptedField.x);
+    EXPECT_FALSE(m_context.commitFrame(4u));
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    UiPaintAssertions::ExpectRect(target(id(s_ComboKey, s_ComboPanelKey))->rectangle, m_state.bounds());
+    UiPaintAssertions::ExpectRect(target(popup())->rectangle, m_state.placement().bounds);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 3u);
+}
+
+TEST_F(UiComboBuilderTests, MultipleFieldsHaveIndependentStableInternalIdsAndState){
+    ComboState other;
+    m_state.select(1u);
+    other.select(2u);
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
+    ASSERT_TRUE(m_builder.comboBox(s_SecondComboKey, m_source, other, Options()).valid);
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    ASSERT_NE(target(id(s_SecondComboKey, s_ComboPanelKey)), nullptr);
+    click(Center(target(id(s_SecondComboKey, s_ComboPanelKey))->rectangle));
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
+    const ComboResult result = m_builder.comboBox(s_SecondComboKey, m_source, other, Options());
+    EXPECT_TRUE(result.valid);
+    EXPECT_TRUE(result.opened);
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_TRUE(other.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(other.selectedKey(), 2u);
+    EXPECT_EQ(target(popup()), nullptr);
+    EXPECT_NE(target(popup(s_SecondComboKey)), nullptr);
+    EXPECT_EQ(m_context.input().focus(), list(s_SecondComboKey));
+}
+
+TEST_F(UiComboBuilderTests, NativeFocusLossCancelsPreviewAndDoesNotRestoreFocusOnCommit){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(3u));
+    InputEvent focusLost;
+    focusLost.type = InputEventType::FocusLost;
+    EXPECT_FALSE(send(focusLost).focus.valid());
+    ASSERT_TRUE(accept(4u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_FALSE(m_context.input().focus().valid());
+}
+
+TEST_F(UiComboBuilderTests, FullyClippedFieldCannotPublishItsPopupAboveTheParent){
+    m_state.select(1u);
+    m_state.open();
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 40.0f }));
+    WidgetOptions filler;
+    filler.height = { LayoutSizePolicy::Fixed, 100.0f };
+    ASSERT_TRUE(m_builder.label("filler", "Clipped combo below", filler));
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_GE(target(id(s_ComboKey, s_ComboPanelKey))->rectangle.y, target(id(s_ComboKey, s_ComboPanelKey))->clip.y + target(id(s_ComboKey, s_ComboPanelKey))->clip.height);
+    EXPECT_FLOAT_EQ(target(id(s_ComboKey, s_ComboPanelKey))->clip.height, 0.0f);
+    EXPECT_EQ(target(popup()), nullptr);
+    EXPECT_EQ(target(list()), nullptr);
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+}
+
+TEST_F(UiComboBuilderTests, SharingOneStateAcrossSequentialPanelsRejectsTheSecondDeclaration){
+    m_state.select(1u);
+    ASSERT_TRUE(declareCombo(1u));
+    ASSERT_TRUE(m_builder.endPanel());
+    const u64 inputGeneration = m_state.inputGeneration();
+    m_source.resetCounters();
+    ASSERT_TRUE(m_builder.beginPanel("later", { 400.0f, 10.0f, 300.0f, 200.0f }));
+    const ComboResult result = m_builder.comboBox(s_SecondComboKey, m_source, m_state, Options());
+    EXPECT_FALSE(result.valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(m_source.textCalls, 0u);
+    EXPECT_EQ(m_source.keyCalls, 0u);
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+TEST_F(UiComboBuilderTests, SharingOneStateAcrossRootsRejectsBeforeLendingTheSecondSource){
+    m_state.select(1u);
+    ASSERT_TRUE(declareCombo(1u));
+    ASSERT_TRUE(m_builder.endPanel());
+    ASSERT_TRUE(m_context.endRoot());
+    const WidgetRoot later{ 87u, 2u };
+    ASSERT_TRUE(m_context.beginRoot(later));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 400.0f, 10.0f, 300.0f, 200.0f }));
+    ComboSource replacement;
+    replacement.generation = 703u;
+    const ComboResult result = m_builder.comboBox(s_ComboKey, replacement, m_state, Options());
+    EXPECT_FALSE(result.valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(replacement.textCalls, 0u);
+    EXPECT_EQ(replacement.keyCalls, 0u);
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenItsReplacement){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    const u64 oldDeclaration = target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration;
+    InputEvent held;
+    held.type = InputEventType::KeyDown;
+    held.key = Core::Key::Down;
+    EXPECT_TRUE(send(held).commandConsumed);
+    ASSERT_TRUE(begin(3u));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.label("label", "Combo hidden"));
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_EQ(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_EQ(target(list()), nullptr);
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+    ASSERT_TRUE(accept(4u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_NE(target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration, oldDeclaration);
+    press(Core::Key::Tab);
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
+    held.repeat = true;
+    EXPECT_TRUE(send(held).commandConsumed);
+    ASSERT_TRUE(accept(5u));
+    EXPECT_FALSE(m_state.isOpen());
+    EXPECT_FALSE(m_result.opened);
+    held.type = InputEventType::KeyUp;
+    held.repeat = false;
+    EXPECT_TRUE(send(held).commandConsumed);
+    press(Core::Key::Down);
+    ASSERT_TRUE(accept(6u));
+    EXPECT_TRUE(m_state.isOpen());
+    EXPECT_TRUE(m_result.opened);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 2u);
+}
+
+TEST_F(UiComboBuilderTests, ReplacementStateDiscardsAcceptedRowsAndItsQueuedActivation){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    click(Center(target(row(2u))->rectangle));
+    ComboState replacement;
+    ASSERT_TRUE(declareSource(3u, m_source, replacement));
+    EXPECT_TRUE(m_result.valid);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(replacement.selectedKey(), 0u);
+    EXPECT_FALSE(replacement.isOpen());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_TRUE(m_state.isOpen());
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_EQ(target(popup()), nullptr);
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+}
+
+TEST_F(UiComboBuilderTests, SelectedLabelLookupMustRoundTripItsStableKeyBeforeReadingText){
+    m_state.select(1u);
+    LabelLookupSource source;
+    EXPECT_FALSE(declareSource(1u, source, m_state));
+    EXPECT_FALSE(m_result.valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(source.textCalls, 0u);
+    EXPECT_FALSE(m_context.commitFrame(1u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1439,7 +1439,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
+inline Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
     const AvboitPassUploadInputs& inputs,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,

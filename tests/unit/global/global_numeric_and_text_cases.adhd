@@ -1,0 +1,1143 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 GlobalNumericAndTextCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+
+#include <gtest/gtest.h>
+
+#include <global/algorithm.h>
+#include <global/containers.h>
+#include <global/limit.h>
+#include <global/overflow.h>
+#include <global/text_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_global_numeric_boundary_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOverrun){
+    struct Storage{
+        char first = 'a';
+        Array<char, s_UsizeDecimalDigitCount> buffer{};
+        char last = 'z';
+    };
+    struct Case{
+        usize value;
+        AStringView expected;
+    };
+    static_assert(sizeof(usize) == sizeof(u32) || sizeof(usize) == sizeof(u64));
+    constexpr AStringView s_MaxValueText = sizeof(usize) == sizeof(u64) ? "18446744073709551615" : "4294967295";
+    const Array<Case, 7u> cases = {
+        Case{ 0u, "0" },
+        Case{ 1u, "1" },
+        Case{ 9u, "9" },
+        Case{ 10u, "10" },
+        Case{ 99u, "99" },
+        Case{ 100u, "100" },
+        Case{ Limit<usize>::s_Max, s_MaxValueText },
+    };
+    for(const auto& testCase : cases){
+        SCOPED_TRACE(testCase.value);
+        Storage storage;
+        static_assert(noexcept(FormatDecimal(usize{}, storage.buffer)));
+        const AStringView text = FormatDecimal(testCase.value, storage.buffer);
+        EXPECT_EQ(text, testCase.expected);
+        EXPECT_EQ(text.data(), storage.buffer.data());
+        EXPECT_FALSE(text.empty());
+        EXPECT_EQ(storage.first, 'a');
+        EXPECT_EQ(storage.last, 'z');
+    }
+}
+
+TEST(Global, MultiplicationDistinguishesOverflowSignedBoundariesAndSuccessfulZero){
+    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, 2u));
+    EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Min, -1));
+    EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Max, 2));
+    constexpr auto s_Zero = ::TryMultiply<u64>(0u, Limit<u64>::s_Max);
+    static_assert(s_Zero && *s_Zero == 0u);
+    constexpr auto s_Minimum = ::TryMultiply<i64>(Limit<i64>::s_Min, 1);
+    static_assert(s_Minimum && *s_Minimum == Limit<i64>::s_Min);
+    EXPECT_EQ(*s_Zero, 0u);
+    EXPECT_EQ(*s_Minimum, Limit<i64>::s_Min);
+}
+
+TEST(Global, CheckedAdditionDistinguishesSignedLimitsAndSuccessfulZero){
+    EXPECT_FALSE(AddNoOverflow<i64>(Limit<i64>::s_Max, 1));
+    EXPECT_FALSE(AddNoOverflow<i64>(Limit<i64>::s_Min, -1));
+    const auto lower = AddNoOverflow<i64>(Limit<i64>::s_Min, 1);
+    ASSERT_TRUE(lower);
+    EXPECT_EQ(*lower, Limit<i64>::s_Min + 1);
+    const auto upper = AddNoOverflow<i64>(Limit<i64>::s_Max, -1);
+    ASSERT_TRUE(upper);
+    EXPECT_EQ(*upper, Limit<i64>::s_Max - 1);
+    const auto zero = AddNoOverflow<i64>(Limit<i64>::s_Max, -Limit<i64>::s_Max);
+    ASSERT_TRUE(zero);
+    EXPECT_EQ(*zero, 0);
+    EXPECT_FALSE(AddNoOverflow<u64>(Limit<u64>::s_Max, 1u));
+}
+
+TEST(Global, NumericParsersRespectViewBoundsAndRejectEmptyInput){
+    const auto signedValue = ParseI64(AStringView("-42trailing").substr(0u, 3u));
+    ASSERT_TRUE(signedValue);
+    EXPECT_EQ(*signedValue, -42);
+    EXPECT_FALSE(ParseI64("42x"));
+    const auto unsignedValue = ParseU64(AStringView("42trailing").substr(0u, 2u));
+    ASSERT_TRUE(unsignedValue);
+    EXPECT_EQ(*unsignedValue, 42u);
+    EXPECT_FALSE(ParseU64("-1"));
+    EXPECT_FALSE(ParseI64({}));
+    EXPECT_FALSE(ParseU64({}));
+    EXPECT_FALSE(ParseF64FromChars({}));
+    EXPECT_FALSE(ParseF32FromChars({}));
+    const auto doubleValue = ParseF64FromChars(AStringView("1.25trailing").substr(0u, 4u));
+    const auto floatValue = ParseF32FromChars(AStringView("1.25trailing").substr(0u, 4u));
+    ASSERT_TRUE(doubleValue);
+    ASSERT_TRUE(floatValue);
+    EXPECT_EQ(*doubleValue, 1.25);
+    EXPECT_EQ(*floatValue, 1.25f);
+}
+
+TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
+    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
+}
+
+TEST(Global, CheckedDivideUpRejectsZeroDivisor){
+    EXPECT_FALSE(::DivideUpChecked(17u, 0u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/cpu_topology.h>
+#include <global/not_null.h>
+#include <global/platform.h>
+#include <global/thread.h>
+
+#include <gtest/gtest.h>
+
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#endif
+#if defined(NWB_PLATFORM_LINUX)
+#include <sched.h>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
+    EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{}));
+    EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{ 0u, Limit<u32>::s_Max, 0u, CpuAffinity::Any }));
+}
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
+    ASSERT_EXIT({
+        auto placements = QueryCpuWorkerPlacements();
+        GROUP_AFFINITY original{};
+        if(!placements || !GetThreadGroupAffinity(GetCurrentThread(), &original))
+            ExitProcess(1u);
+        const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement)noexcept{
+            return placement.processorGroup == original.Group;
+        });
+        if(selected == placements->end())
+            ExitProcess(2u);
+        const u32 processorIndex = selected->logicalProcessorIndex;
+        const DWORD_PTR mask = static_cast<DWORD_PTR>(1u) << processorIndex;
+        if(!SetProcessAffinityMask(GetCurrentProcess(), mask))
+            ExitProcess(3u);
+        placements = QueryCpuWorkerPlacements();
+        if(!placements)
+            ExitProcess(3u);
+        if(placements->size() != 1u || placements->front().processorGroup != original.Group || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
+            ExitProcess(4u);
+        ExitProcess(0u);
+    }, testing::ExitedWithCode(0), ""
+    );
+}
+
+
+TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
+    ASSERT_EXIT({
+        auto placements = QueryCpuWorkerPlacements();
+        if(!placements || placements->empty())
+            ExitProcess(1u);
+        const CpuWorkerPlacement selected = placements->back();
+        ULONG byteCount = 0u;
+        if(!GetSystemCpuSetInformation(nullptr, 0u, &byteCount, GetCurrentProcess(), 0u) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+            ExitProcess(2u);
+        if(byteCount == 0u)
+            ExitProcess(3u);
+        InteropVector<u64> storage((static_cast<usize>(byteCount) + sizeof(u64) - 1u) / sizeof(u64));
+        auto information = MakeNotNull(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(storage.data()));
+        if(!GetSystemCpuSetInformation(information.get(), byteCount, &byteCount, GetCurrentProcess(), 0u))
+            ExitProcess(4u);
+        ULONG selectedId = Limit<ULONG>::s_Max;
+        for(usize offset = 0u; offset < byteCount; offset += information->Size){
+            information = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(reinterpret_cast<u8*>(storage.data()) + offset);
+            if(information->Type == CpuSetInformation && information->CpuSet.Group == selected.processorGroup && information->CpuSet.LogicalProcessorIndex == selected.logicalProcessorIndex){
+                selectedId = information->CpuSet.Id;
+                break;
+            }
+        }
+        if(selectedId == Limit<ULONG>::s_Max || !SetProcessDefaultCpuSets(GetCurrentProcess(), &selectedId, 1u))
+            ExitProcess(5u);
+        placements = QueryCpuWorkerPlacements();
+        if(!placements || placements->size() != 1u || placements->front().processorGroup != selected.processorGroup || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
+            ExitProcess(6u);
+        ExitProcess(0u);
+    }, testing::ExitedWithCode(0), ""
+    );
+}
+#endif
+
+
+#if defined(NWB_PLATFORM_LINUX)
+TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
+    auto placements = QueryCpuWorkerPlacements();
+    ASSERT_TRUE(placements);
+    ASSERT_FALSE(placements->empty());
+    const CpuWorkerPlacement placement = placements->back();
+    b8 applied = false;
+    u32 usableCount = 0u;
+    Expected<InteropVector<CpuWorkerPlacement>> restrictedPlacements = MakeUnexpected(Failure{});
+    JoiningThread worker([&](){
+        applied = SetCurrentThreadCpuPlacement(placement);
+        if(!applied)
+            return;
+        restrictedPlacements = QueryCpuWorkerPlacements();
+        usableCount = QueryCpuCoreCount(CpuAffinity::Any);
+    });
+    worker.join();
+    ASSERT_TRUE(applied);
+    ASSERT_TRUE(restrictedPlacements);
+    ASSERT_EQ(restrictedPlacements->size(), 1u);
+    EXPECT_EQ(restrictedPlacements->front().logicalProcessorIndex, placement.logicalProcessorIndex);
+    EXPECT_EQ(usableCount, 1u);
+    EXPECT_EQ(restrictedPlacements->front().affinity, CpuAffinity::Any);
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/global/scope_case_types.adhd.h>
+
+#include <global/scope_exit.h>
+#include <global/type.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scope_exit_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MoveOnlyCleanup : NoCopy{
+    CleanupState* state;
+
+
+public:
+    explicit MoveOnlyCleanup(CleanupState& cleanupState)noexcept
+        : state(&cleanupState)
+    {}
+    MoveOnlyCleanup(MoveOnlyCleanup&& other)noexcept
+        : state(other.state)
+    {
+        other.state = nullptr;
+    }
+    ~MoveOnlyCleanup()noexcept{
+        if(state)
+            ++state->destructions;
+    }
+
+
+public:
+    void operator()()noexcept{ ++state->calls; }
+};
+
+
+TEST(ScopeExit, ReleaseIsIdempotentAndDestroysTheOwnedCallable){
+    CleanupState state;
+    {
+        ScopeExit cleanup{ MoveOnlyCleanup(state) };
+        cleanup.release();
+        cleanup.release();
+        EXPECT_EQ(state.calls, 0u);
+        EXPECT_EQ(state.destructions, 0u);
+    }
+    EXPECT_EQ(state.calls, 0u);
+    EXPECT_EQ(state.destructions, 1u);
+}
+
+
+TEST(ScopeExit, UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure){
+    Array<u32, 3u> order = {};
+    u32 count = 0u;
+    const auto operation = [&](){
+        ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
+        ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
+        ScopeExit released([&]()noexcept{ order[count] = 3u; ++count; });
+        released.release();
+
+        throw ScopeExitFailure{};
+    };
+    EXPECT_THROW(operation(), ScopeExitFailure);
+    EXPECT_EQ(count, 2u);
+    EXPECT_EQ(order[0u], 2u);
+    EXPECT_EQ(order[1u], 1u);
+    EXPECT_EQ(order[2u], 0u);
+}
+
+TEST(ScopeExit, ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind){
+    b8 published = false;
+    const auto operation = [&](const b8 fails){
+        b8 completed = false;
+        ScopeExit publish([&]()noexcept{ published = completed; });
+
+        if(fails)
+            throw ScopeExitFailure{};
+        completed = true;
+        return completed;
+    };
+    EXPECT_TRUE(operation(false));
+    EXPECT_TRUE(published);
+    EXPECT_THROW(operation(true), ScopeExitFailure);
+    EXPECT_FALSE(published);
+}
+
+TEST(ScopeExit, CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction){
+    b8 alive = false;
+    b8 observedAlive = false;
+    struct Lifetime{
+        b8& alive;
+
+
+    public:
+        explicit Lifetime(b8& lifetime)noexcept
+            : alive(lifetime)
+        {
+            alive = true;
+        }
+        ~Lifetime()noexcept{ alive = false; }
+    };
+    const auto operation = [&](){
+        Lifetime lifetime(alive);
+        ScopeExit cleanup([&]()noexcept{ observedAlive = alive; });
+
+        throw ScopeExitFailure{};
+    };
+    EXPECT_THROW(operation(), ScopeExitFailure);
+    EXPECT_TRUE(observedAlive);
+    EXPECT_FALSE(alive);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <global/sync.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_sync_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(GlobalSync, BoundedBackoffStopsAtItsPauseBudget){
+    AtomicBackOff backoff;
+    EXPECT_TRUE(backoff.boundedPause());
+    EXPECT_TRUE(backoff.boundedPause());
+    EXPECT_TRUE(backoff.boundedPause());
+    EXPECT_TRUE(backoff.boundedPause());
+    EXPECT_FALSE(backoff.boundedPause());
+}
+
+TEST(GlobalSync, FutexPreservesEveryIncrementUnderContention){
+    constexpr u32 s_ThreadCount = 4u;
+    constexpr u32 s_IncrementsPerThread = 8192u;
+    Futex mutex;
+    Latch startGate(s_ThreadCount + 1u);
+    u32 value = 0u;
+    Array<Thread, s_ThreadCount> workers;
+    for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
+        workers[threadIndex] = Thread([&mutex, &startGate, &value]()noexcept{
+            startGate.arrive_and_wait();
+            for(u32 incrementIndex = 0u; incrementIndex < s_IncrementsPerThread; ++incrementIndex){
+                ScopedLock lock(mutex);
+                ++value;
+            }
+        });
+    }
+
+    startGate.arrive_and_wait();
+    for(Thread& worker : workers)
+        worker.join();
+
+    EXPECT_EQ(value, s_ThreadCount * s_IncrementsPerThread);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/global/terminal_case_types.adhd.h>
+
+#include <global/terminal_entry.h>
+#include <global/scope_exit.h>
+#include <global/type.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_terminal_entry_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive){
+    u32 cleanupCount = 0u;
+    u32 handled = 0u;
+    b8 reportingContextAlive = true;
+    int result = 0;
+    {
+        ScopeExit reportingContext([&]()noexcept{ reportingContextAlive = false; });
+
+        result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
+            ScopeExit inner([&]()noexcept{ ++cleanupCount; });
+
+            throw TerminalTestError{ .result = 17 };
+        }, [&](const TerminalTestError& error){
+            EXPECT_EQ(cleanupCount, 1u);
+            EXPECT_TRUE(reportingContextAlive);
+            ++handled;
+            return error.result;
+        }, []()noexcept{ return -1; });
+        EXPECT_TRUE(reportingContextAlive);
+    }
+    EXPECT_EQ(result, 17);
+    EXPECT_EQ(handled, 1u);
+    EXPECT_EQ(cleanupCount, 1u);
+    EXPECT_FALSE(reportingContextAlive);
+}
+
+TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup){
+    Array<u32, 3u> order = {};
+    u32 count = 0u;
+    b8 typedHandled = false;
+    const int result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
+        ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
+        ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
+
+        throw 42;
+    }, [&](const TerminalTestError&)noexcept{ typedHandled = true; return 0; }, [&]()noexcept{
+        order[count] = 3u;
+        ++count;
+        return -1;
+    });
+    EXPECT_EQ(result, -1);
+    EXPECT_FALSE(typedHandled);
+    EXPECT_EQ(count, 3u);
+    EXPECT_EQ(order[0u], 2u);
+    EXPECT_EQ(order[1u], 1u);
+    EXPECT_EQ(order[2u], 3u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/global/name_case_types.adhd.h>
+
+#include <gtest/gtest.h>
+
+#include <global/basic_string.h>
+#include <global/compact_string.h>
+#include <global/containers.h>
+#include <global/fixed_buffer.h>
+#include <global/limit.h>
+#include <global/text_utils.h>
+#include <global/utf8_text.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_global_text_boundary_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_Alpha = NWB::Tests::GlobalCases::s_GlobalTestTableAlpha;
+
+template<typename T>
+concept CanTrimView = requires{ TrimView(DeclVal<T>()); TrimLeftView(DeclVal<T>()); };
+
+static_assert(CanTrimView<ACompactString&>);
+static_assert(CanTrimView<const ACompactString&>);
+static_assert(!CanTrimView<ACompactString>);
+static_assert(!CanTrimView<const ACompactString>);
+static_assert(CanTrimView<AStringView>);
+static_assert(CanTrimView<AStringView&>);
+static_assert(CanTrimView<AString<>&>);
+static_assert(!CanTrimView<AString<>>);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
+    constexpr Array<char, 6u> s_Text = { 'a', 'b', 'c', 'd', 'e', 'f' };
+    Array<char, 5u> text = {};
+    CopyFixedBuffer(text, AStringView(s_Text.data(), 3u));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abc"));
+    AppendFixedBuffer(text, AStringView(s_Text.data() + 3u, 2u));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abcd"));
+    CopyFixedBuffer(text, AStringView(s_Text.data(), sizeof(s_Text)));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abcd"));
+    CopyFixedBuffer(text, {});
+    EXPECT_TRUE(AStringView(text.data()).empty());
+}
+
+TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
+    const Array<char, 4u> bytes = { static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
+    const AStringView text(bytes.data(), bytes.size());
+    const auto decoded = DecodeUtf8CodePoint(text);
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->byteCount, 4);
+    EXPECT_EQ(decoded->codePoint, 0x1F600u);
+    for(usize size = 0u; size < text.size(); ++size)
+        EXPECT_FALSE(DecodeUtf8CodePoint(text.substr(0u, size)));
+    const Array<char, 2u> overlong = { static_cast<char>(0xC0), static_cast<char>(0x80) };
+    EXPECT_FALSE(DecodeUtf8CodePoint(AStringView(overlong.data(), overlong.size())));
+}
+
+TEST(Global, CompactStringSearchUsesStoredCanonicalTextAndViewBoundaries){
+    const ACompactString compact("Folder\\Example");
+    EXPECT_EQ(compact.front(), 'f');
+    EXPECT_EQ(compact.back(), 'e');
+    EXPECT_EQ(compact.find(AStringView("/example")), 6u);
+    EXPECT_EQ(compact.find('e', 8u), 13u);
+    EXPECT_EQ(compact.find(AStringView{}, compact.size()), compact.size());
+    EXPECT_EQ(compact.find(AStringView("EXAMPLE")), ACompactString::s_NPos);
+    EXPECT_EQ(compact.find('z'), ACompactString::s_NPos);
+}
+
+TEST(Global, RejectedACompactStringAssignResetsText){
+    ACompactString compact("seed");
+    const Array<char, 3u> textWithNull = { 'a', '\0', 'b' };
+
+    EXPECT_FALSE(compact.assign(AStringView(textWithNull.data(), textWithNull.size())));
+    EXPECT_TRUE(compact.empty());
+    EXPECT_TRUE(compact.view().empty());
+    EXPECT_EQ(compact.c_str()[0], '\0');
+}
+
+TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
+    Array<wchar, WCompactString::s_MaxLength + 2u> oversized = {};
+    for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
+        oversized[i] = L'a';
+
+    WCompactString rejected(L"unchanged");
+    EXPECT_FALSE(rejected.assign(WStringView(oversized.data(), WCompactString::s_MaxLength + 1u)));
+    EXPECT_TRUE(rejected.empty());
+}
+
+TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
+    EXPECT_TRUE(SafeStringView(static_cast<const char*>(nullptr)).empty());
+    EXPECT_TRUE(FitsU32(static_cast<usize>(Limit<u32>::s_Max)));
+    EXPECT_FALSE(FitsU32(static_cast<u64>(Limit<u32>::s_Max) + 1u));
+    EXPECT_FALSE(FitsU32(-1));
+    EXPECT_TRUE(CanRepresentU64<u32>(Limit<u32>::s_Max));
+    EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
+    EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
+    EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
+    EXPECT_FALSE(StartsWith(AStringView("al"), s_Alpha));
+
+    const auto value = ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"));
+    ASSERT_TRUE(value);
+    EXPECT_EQ(*value, Limit<u64>::s_Max);
+    EXPECT_FALSE(ParseVariableHexU64(AStringView()));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("0x")));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("10000000000000000")));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("xyz")));
+
+    constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
+    const auto textValue = FindLineKeyValue(s_KeyValueText, "empty");
+    ASSERT_TRUE(textValue);
+    EXPECT_TRUE(textValue->empty());
+    EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+
+#include <core/alloc/scratch.h>
+
+#include <gtest/gtest.h>
+
+#include <global/basic_string.h>
+#include <global/binary.h>
+#include <global/call_text.h>
+#include <global/containers.h>
+#include <global/csv_text.h>
+#include <global/latin1_text.h>
+#include <global/limit.h>
+#include <global/source_text.h>
+#include <global/string_hash.h>
+#include <global/text_replacements.h>
+#include <global/text_utils.h>
+#include <global/unicode/grapheme.h>
+#include <global/utf8_text.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_text_utility_edge_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ThrowingReplacementComparison{
+    b8 value;
+    explicit ThrowingReplacementComparison(const b8 inValue)noexcept : value(inValue){}
+    ThrowingReplacementComparison(const ThrowingReplacementComparison&){ throw RuntimeException("comparison copy failure"); }
+    explicit operator b8()const noexcept{ return value; }
+};
+struct ReplacementOffset{
+    usize value;
+    operator usize()const noexcept{ return value; }
+};
+[[nodiscard]] inline const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
+    static const ThrowingReplacementComparison s_True(true);
+    static const ThrowingReplacementComparison s_False(false);
+    return lhs.value > rhs.value ? s_True : s_False;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Global, CallAndOptionTextRejectInvalidBoundaries){
+    static_assert(LiteralView("a\0b").size() == 3u);
+    const auto nestedCall = SplitNonemptyCallText("  item ( a(b) ) ");
+    ASSERT_TRUE(nestedCall);
+    EXPECT_EQ(nestedCall->name, "item");
+    EXPECT_EQ(nestedCall->arguments, "a(b)");
+    const auto permissiveCall = SplitNonemptyCallText("f(a)b)");
+    ASSERT_TRUE(permissiveCall);
+    EXPECT_EQ(permissiveCall->arguments, "a)b");
+    EXPECT_FALSE(SplitNonemptyCallText("item( \t )"));
+    EXPECT_FALSE(SplitNonemptyCallText("item()"));
+    EXPECT_FALSE(SplitNonemptyCallText("(value)"));
+    EXPECT_FALSE(SplitNonemptyCallText("item(value)tail"));
+    const char callWithNull[]{ 'f', '(', '\0', 'x', ')' };
+    const auto nullCall = SplitNonemptyCallText(AStringView(callWithNull, sizeof(callWithNull)));
+    ASSERT_TRUE(nullCall);
+    EXPECT_EQ(nullCall->arguments.size(), 2u);
+    EXPECT_EQ(nullCall->arguments[0u], '\0');
+    EXPECT_EQ(SkipNumericSign(""), 0u);
+    EXPECT_EQ(SkipNumericSign("-"), 1u);
+    EXPECT_EQ(SkipNumericSign("+x"), 1u);
+    EXPECT_EQ(ExtractLeadingIdentifier("9a-"), "9a");
+    EXPECT_TRUE(IsEscapedQuoteAt("\\", 1u));
+    EXPECT_FALSE(IsEscapedQuoteAt("\\\\", 2u));
+    const Array<u32, 3> choices{ 0u, 1u, 2u };
+    const auto optionText = [](const u32 value)noexcept -> AStringView{ return value == 2u ? "other" : "mixed"; };
+    const auto parsed = ParseOptionText(AStringView("  MiXeD\t"), Span<const u32>(choices), optionText);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(*parsed, 0u);
+    EXPECT_FALSE(ParseOptionText(AStringView("missing"), Span<const u32>(choices), optionText));
+    EXPECT_FALSE(ParseOptionText(AStringView("mixed"), Span<const u32>{}, optionText));
+}
+
+TEST(Global, TextReplacementsAndIdentifiersPreserveInputBoundaries){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    struct TestTextReplacement{ usize begin; usize end; AStringView text; };
+    Array<TestTextReplacement, 4u> textEdits{ TestTextReplacement{ 1u, 3u, "" }, TestTextReplacement{ 6u, 6u, ">" }, TestTextReplacement{ 4u, 6u, "XYZ" }, TestTextReplacement{ 0u, 0u, "<" } };
+    AString<NWB::Core::Alloc::ScratchArena> editableText("abcdef", scratchArena);
+    ApplyTextReplacements(Span<TestTextReplacement>(textEdits), editableText);
+    EXPECT_EQ(editableText, "<adXYZ>");
+    struct ProxyTextReplacement{ ReplacementOffset begin; ReplacementOffset end; AStringView text; };
+    Array<ProxyTextReplacement, 2u> proxyEdits{ ProxyTextReplacement{ {4u}, {6u}, "Z" }, ProxyTextReplacement{ {1u}, {3u}, "X" } };
+    AString<NWB::Core::Alloc::ScratchArena> proxyText("abcdef", scratchArena);
+    EXPECT_NO_THROW(ApplyTextReplacements(Span<ProxyTextReplacement>(proxyEdits), proxyText));
+    EXPECT_EQ(proxyText, "aXdZ");
+    const char identifierBytes[]{ 'a', '-', '\0', static_cast<char>(0x80), 'b' };
+    AString<NWB::Core::Alloc::ScratchArena> upperIdentifier("prefix:", scratchArena);
+    AppendAsciiUpperIdentifier(AStringView(identifierBytes, sizeof(identifierBytes)), "VALUE", upperIdentifier);
+    EXPECT_EQ(upperIdentifier, "prefix:A___B");
+    AppendAsciiUpperIdentifier("___", "VALUE", upperIdentifier);
+    AppendAsciiUpperIdentifier("", "VALUE", upperIdentifier);
+    EXPECT_EQ(upperIdentifier, "prefix:A___B___VALUE");
+    AString<NWB::Core::Alloc::ScratchArena> pascalIdentifier("prefix:", scratchArena);
+    AppendUnderscoreSeparatedPascalIdentifier("_9-a_b", "Value", pascalIdentifier);
+    AppendUnderscoreSeparatedPascalIdentifier("____", "Value", pascalIdentifier);
+    EXPECT_EQ(pascalIdentifier, "prefix:9-aBValue");
+    struct PointerFallbackProbe{
+        usize length = 0u;
+        u32 selected = 0u;
+        [[nodiscard]] usize size()const noexcept{ return length; }
+        PointerFallbackProbe& operator+=(char)noexcept{ ++length; return *this; }
+        PointerFallbackProbe& operator+=(const char*&&)noexcept{ selected = 1u; ++length; return *this; }
+        PointerFallbackProbe& operator+=(const char* const&){ selected = 2u; ++length; return *this; }
+    };
+    PointerFallbackProbe upperProbe;
+    static_assert(noexcept(AppendAsciiUpperIdentifier({}, "VALUE", upperProbe)));
+    AppendAsciiUpperIdentifier({}, "VALUE", upperProbe);
+    EXPECT_EQ(upperProbe.selected, 1u);
+    PointerFallbackProbe pascalProbe;
+    static_assert(noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", pascalProbe)));
+    AppendUnderscoreSeparatedPascalIdentifier({}, "Value", pascalProbe);
+    EXPECT_EQ(pascalProbe.selected, 1u);
+}
+
+TEST(Global, Latin1RejectsInvalidTextAndCapacity){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    AString<NWB::Core::Alloc::ScratchArena> latinText(scratchArena);
+    EXPECT_TRUE(DecodeLatin1Text("\x80", 2u, latinText));
+    EXPECT_EQ(AStringView(latinText), AStringView("\xC2\x80"));
+    const auto tooSmall = DecodeLatin1Text("\x80", 1u, latinText);
+    ASSERT_FALSE(tooSmall);
+    EXPECT_EQ(tooSmall.error(), Latin1TextError::TooLarge);
+    EXPECT_TRUE(latinText.empty());
+    const auto embeddedNul = DecodeLatin1Text(AStringView("\x80\0", 2u), 2u, latinText);
+    ASSERT_FALSE(embeddedNul);
+    EXPECT_EQ(embeddedNul.error(), Latin1TextError::InvalidText);
+    const auto invalidUtf8 = EncodeLatin1Text(AStringView("\xC4\x80\xFF", 3u), 3u, latinText);
+    ASSERT_FALSE(invalidUtf8);
+    EXPECT_EQ(invalidUtf8.error(), Latin1TextError::InvalidText);
+}
+
+TEST(Global, SourceAndNewlineTextPreserveBoundaries){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    EXPECT_EQ(ReadFirstIdentifierAfterCComments(" \t/*one*/ //two\r\n123_name!"), "123_name");
+    EXPECT_TRUE(ReadFirstIdentifierAfterCComments("/*unterminated*").empty());
+    EXPECT_TRUE(ReadFirstIdentifierAfterCComments("//comment without newline").empty());
+    EXPECT_TRUE(ReadFirstIdentifierAfterCComments(" @name").empty());
+    EXPECT_TRUE(HasMatchingOuterParens("((x))"));
+    EXPECT_FALSE(HasMatchingOuterParens("(x)(y)"));
+    EXPECT_FALSE(HasMatchingOuterParens("(()"));
+    EXPECT_FALSE(HasMatchingOuterParens("(x))"));
+    AString<NWB::Core::Alloc::ScratchArena> quoted(scratchArena);
+    EXPECT_EQ(SkipQuotedLiteral("\"a\\\"b\"x", 0u), 6u);
+    EXPECT_EQ(AppendQuotedLiteral("\"a\\\"b\"x", 0u, quoted), 6u);
+    EXPECT_EQ(AStringView(quoted), AStringView("\"a\\\"b\""));
+    EXPECT_EQ(SkipQuotedLiteral("\"a\\", 0u), 3u);
+    AString<NWB::Core::Alloc::ScratchArena> source("a\\\r\nb\\\nc\\\rd", scratchArena);
+    SpliceSourceLines(source);
+    EXPECT_EQ(AStringView(source), AStringView("abc\\\rd"));
+    source = "\"//\"/*a\nb*/x//c\n";
+    MaskCStyleSourceComments(source);
+    EXPECT_EQ(AStringView(source), AStringView("\"//\"   \n   x   \n"));
+    const auto joinedSlashes = JoinWithSingleSlash(scratchArena, "a/", "/b");
+    const auto joinedPlain = JoinWithSingleSlash(scratchArena, "a", "b");
+    const auto emptyBase = JoinWithSingleSlash(scratchArena, "", "b");
+    const auto emptySuffix = JoinWithSingleSlash(scratchArena, "a/", "");
+    EXPECT_EQ(AStringView(joinedSlashes), "a/b");
+    EXPECT_EQ(AStringView(joinedPlain), "a/b");
+    EXPECT_EQ(AStringView(emptyBase), "");
+    EXPECT_EQ(AStringView(emptySuffix), "a/");
+    AString<NWB::Core::Alloc::ScratchArena> lineText("\r\nx\n\r", scratchArena);
+    CollapseCrLfInPlace(lineText);
+    EXPECT_EQ(AStringView(lineText), AStringView("\nx\n\r"));
+    constexpr WStringView s_MixedLines = L"a\r\nb\n\rc";
+    EXPECT_EQ(CountBareLineFeeds(s_MixedLines), 1u);
+    Array<wchar, 16u> expandedLines{};
+    const usize expandedLength = CopyWithCrBeforeBareLf(s_MixedLines, expandedLines.data());
+    EXPECT_EQ(WStringView(expandedLines.data(), expandedLength), WStringView(L"a\r\nb\r\n\rc"));
+    EXPECT_EQ(CountUtf8ScalarsAssumingValid(AStringView("a\xC3\xA9", 3u)), 2u);
+}
+
+TEST(Global, UnsignedTextAndBytesAgreeAtMaximum){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    AString<NWB::Core::Alloc::ScratchArena> u64Text(scratchArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> u64Bytes(scratchArena);
+    AppendUnsignedU64Text(u64Text, Limit<u64>::s_Max);
+    AppendUnsignedU64Bytes(u64Bytes, Limit<u64>::s_Max);
+    EXPECT_EQ(AStringView(u64Text), AStringView("18446744073709551615"));
+    ASSERT_EQ(u64Bytes.size(), u64Text.size());
+    EXPECT_TRUE(BytesMatch(Span<const u8>(u64Bytes.data(), u64Bytes.size()), Span<const u8>(reinterpret_cast<const u8*>(u64Text.data()), u64Text.size())));
+}
+
+TEST(Global, GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    const auto emptyBoundaries = BuildGraphemeBoundaries(scratchArena, AStringView{});
+    ASSERT_TRUE(emptyBoundaries);
+    ASSERT_EQ(emptyBoundaries->size(), 1u);
+    EXPECT_EQ((*emptyBoundaries)[0u], 0u);
+    EXPECT_FALSE(BuildGraphemeBoundaries(scratchArena, AStringView("\xED\xA0\x80", 3u)));
+
+    using ScratchText = AString<NWB::Core::Alloc::ScratchArena>;
+    const ScratchText key("a\0b", 3u, scratchArena);
+    const AStringView borrowed("a\0b", 3u);
+    EXPECT_EQ(TransparentStringHash<ScratchText>{}(key), TransparentStringHash<ScratchText>{}(borrowed));
+    EXPECT_TRUE(TransparentStringEqual<ScratchText>{}(key, borrowed));
+    EXPECT_FALSE(TransparentStringEqual<ScratchText>{}(key, AStringView("a", 1u)));
+}
+
+TEST(Global, CsvAndCaseFormattingPreserveEscapes){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    AString<NWB::Core::Alloc::ScratchArena> csv(scratchArena);
+    AppendTextDiscardCrAndExpandLf(csv, "a\rb\n");
+    EXPECT_EQ(AStringView(csv), "ab\r\n");
+    csv.clear();
+    AppendCamelToSnakeCase(csv, "HTTPServerRGB8Value");
+    EXPECT_EQ(AStringView(csv), "http_server_rgb8_value");
+    csv.clear();
+    AppendCsvCell("a,\"b\"\r\nc", csv);
+    EXPECT_EQ(AStringView(csv), "\"a,\"\"b\"\"\r\nc\"");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/simd_memory_guard_fixture.adhd.h>
+#include <tests/common/test_context.adhd.h>
+
+#include <global/containers.h>
+#include <global/generic.h>
+#include <global/limit.h>
+#include <global/process.h>
+#include <global/simd/memory.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_simd_memory_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NWB::Tests::ExitOnAbort;
+using NWB::Tests::GuardAddress;
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+using NWB::Tests::GuardedBytes;
+#endif
+using NWB::Tests::PatternByte;
+using NWB::Tests::s_SIMDMemoryAbortExitCode;
+using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
+using NWB::Tests::s_SIMDMemoryReturnedExitCode;
+
+inline constexpr usize s_BufferBytes = 9216u;
+inline constexpr usize s_GuardBytes = 64u;
+inline constexpr u8 s_Poison = 0xA5u;
+inline constexpr Array<usize, 34> s_Lengths = {
+    0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u,
+    65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 8191u, 8192u, 8193u,
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct alignas(16) AlignedPacket{
+    Array<u64, 4> raw = {};
+};
+
+struct AlignedPacketView{
+    using value_type = AlignedPacket;
+
+
+public:
+    const AlignedPacket* values = nullptr;
+    usize valueCount = 0u;
+
+
+public:
+    [[nodiscard]] b8 empty()const noexcept{ return valueCount == 0u; }
+
+    [[nodiscard]] usize size()const noexcept{ return valueCount; }
+
+    [[nodiscard]] const AlignedPacket* data()const noexcept{ return values; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] constexpr u64 PacketLaneBits(const usize packetIndex, const usize laneIndex)noexcept{
+    return 0xDEADBEEF80000000ull ^ (static_cast<u64>(packetIndex + 1u) << 32u) ^ (static_cast<u64>(laneIndex + 1u) * 0x01020304ull);
+}
+
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
+    // An access violation cannot satisfy this predicate, so rejection must happen before either range is accessed.
+    EXPECT_EXIT({
+        if(signal(SIGABRT, ExitOnAbort) == SIG_ERR)
+            _exit(s_SIMDMemoryHandlerFailureExitCode);
+        SIMDMemoryCopy(destination, capacity, source, count);
+        _exit(s_SIMDMemoryReturnedExitCode);
+    }, testing::ExitedWithCode(s_SIMDMemoryAbortExitCode), ""
+    );
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(SIMDMemory, AlignedCacheLineOffsetsAndVectorBoundaryTailsPreserveExactRanges){
+    using namespace __hidden_simd_memory_tests;
+    alignas(64) Array<u8, s_BufferBytes> source = {};
+    alignas(64) Array<u8, s_BufferBytes> destination = {};
+    Array<u8, s_BufferBytes> expected = {};
+    Array<u8, s_BufferBytes> original = {};
+    for(usize index = 0u; index < s_BufferBytes; ++index)
+        source[index] = original[index] = PatternByte(index);
+
+    for(const usize count : s_Lengths){
+        for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += s_SIMDMemoryCopyAlignment){
+            for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += s_SIMDMemoryCopyAlignment){
+                NWB_MEMSET(destination.data(), s_Poison, destination.size());
+                NWB_MEMSET(expected.data(), s_Poison, expected.size());
+                const usize sourceStart = s_GuardBytes + sourceOffset;
+                const usize destinationStart = s_GuardBytes + destinationOffset;
+                for(usize index = 0u; index < count; ++index)
+                    expected[destinationStart + index] = original[sourceStart + index];
+                volatile usize runtimeCount = count;
+                NWB_SIMD_MEMCPY(destination.data() + destinationStart, count, source.data() + sourceStart, runtimeCount);
+                EXPECT_EQ(NWB_MEMCMP(destination.data(), expected.data(), destination.size()), 0) << count << ':' << sourceOffset << ':' << destinationOffset;
+            }
+        }
+    }
+    EXPECT_EQ(NWB_MEMCMP(source.data(), original.data(), source.size()), 0);
+}
+
+TEST(SIMDMemory, AlignedVectorAliasedAppendReallocationAndOverlappingAssignmentPreserveRawPackets){
+    using namespace __hidden_simd_memory_tests;
+    using PacketVector = NWB::Tests::TestVector<AlignedPacket>;
+    NWB::Tests::TestArena<AlignedPacket> owner;
+    PacketVector packets{ PacketVector::allocator_type(owner.arena) };
+    packets.reserve(32u);
+    const usize initialSize = packets.capacity();
+    packets.resize(initialSize);
+    for(usize packetIndex = 0u; packetIndex < initialSize; ++packetIndex){
+        for(usize laneIndex = 0u; laneIndex < packets[packetIndex].raw.size(); ++laneIndex)
+            packets[packetIndex].raw[laneIndex] = PacketLaneBits(packetIndex, laneIndex);
+    }
+
+    const usize oldAddress = reinterpret_cast<usize>(packets.data());
+    const AlignedPacketView appended{ packets.data() + 3u, 16u };
+    AppendTriviallyCopyableVector(packets, appended);
+    ASSERT_EQ(packets.size(), initialSize + appended.valueCount);
+    EXPECT_GT(packets.capacity(), initialSize);
+    EXPECT_NE(reinterpret_cast<usize>(packets.data()), oldAddress);
+    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
+        const usize originalIndex = packetIndex < initialSize ? packetIndex : 3u + packetIndex - initialSize;
+        for(usize laneIndex = 0u; laneIndex < packets[packetIndex].raw.size(); ++laneIndex)
+            EXPECT_EQ(packets[packetIndex].raw[laneIndex], PacketLaneBits(originalIndex, laneIndex)) << packetIndex << ':' << laneIndex;
+    }
+
+    const usize middleOffset = initialSize - 8u;
+    const AlignedPacketView assignedMiddle{ packets.data() + middleOffset, 16u };
+    AssignTriviallyCopyableVector(packets, assignedMiddle);
+    ASSERT_EQ(packets.size(), assignedMiddle.valueCount);
+    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
+        const usize priorIndex = middleOffset + packetIndex;
+        const usize originalIndex = priorIndex < initialSize ? priorIndex : 3u + priorIndex - initialSize;
+        for(usize laneIndex = 0u; laneIndex < packets[packetIndex].raw.size(); ++laneIndex)
+            EXPECT_EQ(packets[packetIndex].raw[laneIndex], PacketLaneBits(originalIndex, laneIndex)) << packetIndex << ':' << laneIndex;
+    }
+}
+
+
+TEST(SIMDMemory, AdjacentRangesInOneLiveByteArrayAreAcceptedWithoutClobberingGuards){
+    using namespace __hidden_simd_memory_tests;
+    alignas(64) Array<u8, s_BufferBytes> bytes = {};
+    Array<u8, s_BufferBytes> expected = {};
+    constexpr Array<usize, 7> s_AdjacentLengths = { 16u, 32u, 48u, 64u, 128u, 256u, 4096u };
+    for(const usize count : s_AdjacentLengths){
+        for(const b8 destinationFirst : { false, true }){
+            for(usize index = 0u; index < s_BufferBytes; ++index)
+                bytes[index] = expected[index] = PatternByte(index);
+            const usize destinationStart = s_GuardBytes + (destinationFirst ? 0u : count);
+            const usize sourceStart = s_GuardBytes + (destinationFirst ? count : 0u);
+            for(usize index = 0u; index < count; ++index)
+                expected[destinationStart + index] = PatternByte(sourceStart + index);
+            volatile usize runtimeCount = count;
+            SIMDMemoryCopy(bytes.data() + destinationStart, count, bytes.data() + sourceStart, runtimeCount);
+            EXPECT_EQ(NWB_MEMCMP(bytes.data(), expected.data(), bytes.size()), 0) << count << ':' << destinationFirst;
+        }
+    }
+}
+
+TEST(SIMDMemory, ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores){
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+    using namespace __hidden_simd_memory_tests;
+    GuardedBytes source;
+    GuardedBytes destination;
+    ASSERT_NE(source.data, nullptr);
+    ASSERT_NE(destination.data, nullptr);
+    ASSERT_EQ(source.accessibleBytes, destination.accessibleBytes);
+    ASSERT_GE(source.accessibleBytes, s_Lengths[s_Lengths.size() - 1u]);
+    for(usize index = 0u; index < source.accessibleBytes; ++index)
+        source.data[index] = PatternByte(index);
+
+    for(usize lengthIndex = 1u; lengthIndex <= s_Lengths.size(); ++lengthIndex){
+        const usize count = lengthIndex == s_Lengths.size() ? source.accessibleBytes : s_Lengths[lengthIndex];
+        for(const b8 sourceAtEnd : { false, true }){
+            for(const b8 destinationAtEnd : { false, true }){
+                NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
+                // Nonmultiple tails leave less than one vector of poison before the upper guard to keep both starts aligned.
+                const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
+                const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
+                volatile usize runtimeCount = count;
+                SIMDMemoryCopy(destination.data + destinationStart, count, source.data + sourceStart, runtimeCount);
+                for(usize index = 0u; index < destination.accessibleBytes; ++index){
+                    const u8 expected = index >= destinationStart && index - destinationStart < count ? PatternByte(sourceStart + index - destinationStart) : s_Poison;
+                    EXPECT_EQ(destination.data[index], expected) << count << ':' << sourceAtEnd << ':' << destinationAtEnd << ':' << index;
+                }
+            }
+        }
+    }
+    for(usize index = 0u; index < source.accessibleBytes; ++index)
+        EXPECT_EQ(source.data[index], PatternByte(index)) << index;
+#else
+    GTEST_SKIP() << "Protected-page fixtures require Windows or Linux virtual memory APIs.";
+#endif
+}
+
+TEST(SIMDMemory, ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutAccess){
+    using namespace __hidden_simd_memory_tests;
+    alignas(16) Array<u8, 3> bytes = { 0x12u, 0x34u, 0x56u };
+    volatile usize zero = 0u;
+    SIMDMemoryCopy(nullptr, 0u, nullptr, zero);
+    NWB_SIMD_MEMCPY(bytes.data() + bytes.size(), 0u, nullptr, zero);
+    SIMDMemoryCopy(nullptr, Limit<usize>::s_Max, bytes.data() + bytes.size(), zero);
+    SIMDMemoryCopy(bytes.data(), 0u, bytes.data(), zero);
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+    GuardedBytes guarded;
+    ASSERT_NE(guarded.data, nullptr);
+    NWB_SIMD_MEMCPY(guarded.mapping, 0u, guarded.data + guarded.accessibleBytes, zero);
+    SIMDMemoryCopy(guarded.data + guarded.accessibleBytes, Limit<usize>::s_Max, guarded.mapping, zero);
+    SIMDMemoryCopy(GuardAddress(guarded.mapping, 1u), 0u, GuardAddress(guarded.data, guarded.accessibleBytes + 8u), zero);
+#endif
+    EXPECT_EQ(bytes[0], 0x12u);
+    EXPECT_EQ(bytes[1], 0x34u);
+    EXPECT_EQ(bytes[2], 0x56u);
+}
+
+TEST(SIMDMemory, InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess){
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+    using namespace __hidden_simd_memory_tests;
+    GuardedBytes guarded;
+    ASSERT_NE(guarded.data, nullptr);
+    u8* const inaccessible = guarded.lowerGuard;
+    u8* const upperGuard = guarded.upperGuard;
+    ExpectRejectedCopy(inaccessible, 0u, upperGuard, 1u);
+    ExpectRejectedCopy(inaccessible, 15u, upperGuard, 16u);
+    ExpectRejectedCopy(inaccessible, 1u, upperGuard, Limit<usize>::s_Max);
+    ExpectRejectedCopy(inaccessible, Limit<usize>::s_Max, upperGuard, Limit<usize>::s_Max);
+    ExpectRejectedCopy(nullptr, 1u, upperGuard, 1u);
+    ExpectRejectedCopy(inaccessible, 1u, nullptr, 1u);
+    ExpectRejectedCopy(inaccessible, 32u, inaccessible, 32u);
+    ExpectRejectedCopy(GuardAddress(inaccessible, 16u), 32u, inaccessible, 32u);
+    ExpectRejectedCopy(inaccessible, 32u, GuardAddress(inaccessible, 16u), 32u);
+    for(usize offset = 1u; offset < 32u; ++offset){
+        if(offset % s_SIMDMemoryCopyAlignment == 0u)
+            continue;
+        ExpectRejectedCopy(GuardAddress(inaccessible, offset), 16u, upperGuard, 16u);
+        ExpectRejectedCopy(inaccessible, 16u, GuardAddress(upperGuard, offset), 16u);
+    }
+    ExpectRejectedCopy(GuardAddress(inaccessible, 8u), 16u, GuardAddress(upperGuard, 8u), 16u);
+#else
+    GTEST_SKIP() << "Abort-before-access fixtures require Windows or Linux virtual memory APIs.";
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/global/name_case_types.adhd.h>
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

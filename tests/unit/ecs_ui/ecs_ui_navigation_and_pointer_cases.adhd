@@ -1,0 +1,1604 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 EcsUiNavigationAndPointerCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ecs_ui/suite.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_navigation_geometry_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+
+TEST_F(UiEditNavigationHostTests, CandidateGeometryCannotReplacePublishedYHitsBeforeAcceptance){
+    ASSERT_TRUE(m_navigationModel.setText("ab\ncd\nxy"));
+    ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
+    ASSERT_TRUE(activateNavigation());
+    const u64 displayed = m_context.input().layoutGeneration();
+    const TextInputRect native = m_textInput.caretRect();
+    ASSERT_TRUE(prepareNavigation({}, { 10.0f, 80.0f, 180.0f, 48.0f }));
+    EXPECT_EQ(m_context.input().layoutGeneration(), displayed);
+    m_host.commitFrame(m_generation);
+    EXPECT_EQ(m_textInput.caretRect().y, native.y);
+    ASSERT_TRUE(click({ 20.0f, 38.0f }));
+    ASSERT_TRUE(commit());
+    ASSERT_TRUE(navigationFrame({}, { 10.0f, 80.0f, 180.0f, 48.0f }));
+    EXPECT_EQ(m_navigationModel.caret(), 4u);
+    EXPECT_EQ(m_navigationModel.anchor(), 4u);
+    EXPECT_FLOAT_EQ(m_placement.caret.y, 92.0f);
+    EXPECT_EQ(m_textInput.caretRect().y, 92);
+    EXPECT_TRUE(m_resolver.records.empty());
+}
+
+TEST_F(UiEditNavigationHostTests, EmptyAndTrailingHardLinesPublishDistinctEndpoints){
+    ASSERT_TRUE(m_navigationModel.setText("a\n\n"));
+    ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(click({ 20.0f, 38.0f }));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.caret(), 2u);
+    ASSERT_TRUE(click({ 20.0f, 50.0f }));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.caret(), 3u);
+    EXPECT_EQ(m_navigationModel.anchor(), 3u);
+    EXPECT_EQ(m_navigationModel.text(), "a\n\n");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, EarlierCommittedTextRetiresQueuedPublishedPointerPositions){
+    ASSERT_TRUE(m_navigationModel.setText("ab\ncd\nxy"));
+    ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(commitNative("Q"));
+    ASSERT_TRUE(click({ 20.0f, 38.0f }));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.text(), "Qab\ncd\nxy");
+    EXPECT_EQ(m_navigationModel.anchor(), 1u);
+    EXPECT_EQ(m_navigationModel.caret(), 1u);
+    EXPECT_TRUE(m_resolver.records.empty());
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "ab\ncd\nxy");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/multiline_fixture.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_navigation_guard_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+
+namespace CallbackMutation{
+    enum Enum : u8{ IdenticalSelection, SelectionRoundTrip, CompositionRoundTrip, IdenticalText, IdenticalColumn, ColumnRoundTrip, ResetHost, ReenterHost, FailContext };
+};
+
+class UiEditNavigationGuardTests : public UiEditNavigationHostTests{
+protected:
+    void rejectTarget(const Expected<Ui::EditNavigationResult>& target){
+        ASSERT_TRUE(m_navigationModel.setText("e\xcc\x81\nxy"));
+        ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
+        ASSERT_TRUE(activateNavigation());
+        ASSERT_TRUE(m_navigation.setPreferredX(70.0f));
+        const UiMultilineTests::MultilineSnapshot model(m_arena, m_navigationModel);
+        const Ui::EditNavigationSnapshot navigation = m_navigation.snapshot();
+        const u64 displayed = m_context.input().layoutGeneration();
+        const usize targets = m_context.input().targets().size();
+        m_resolver.forceResult = true;
+        m_resolver.forcedResult = target;
+        ASSERT_TRUE(key(Core::Key::Down));
+        ASSERT_TRUE(commitNative("!"));
+        ASSERT_FALSE(prepareNavigation());
+        EXPECT_FALSE(m_result.valid);
+        ASSERT_EQ(m_resolver.records.size(), 1u);
+        model.expectUnchanged(m_navigationModel);
+        EXPECT_TRUE(m_navigation.matches(navigation));
+        EXPECT_EQ(m_context.input().layoutGeneration(), displayed);
+        EXPECT_EQ(m_context.input().targets().size(), targets);
+    }
+
+    void rejectMutation(const CallbackMutation::Enum mutation){
+        ASSERT_TRUE(m_navigationModel.setText("ab\ncdef"));
+        ASSERT_TRUE(m_navigationModel.setSelection(1u, 1u));
+        ASSERT_TRUE(activateNavigation());
+        ASSERT_TRUE(m_navigation.setPreferredX(50.0f));
+        const u64 displayed = m_context.input().layoutGeneration();
+        const usize targets = m_context.input().targets().size();
+        Ui::EditModelSnapshot callbackModel(m_arena);
+        Ui::EditNavigationSnapshot callbackNavigation;
+        usize callbacks = 0u;
+        b8 mutationAccepted = false;
+        b8 innerRejected = false;
+        m_resolver.hook = [this, mutation, &callbackModel, &callbackNavigation, &callbacks, &mutationAccepted, &innerRejected](){
+            ++callbacks;
+            switch(mutation){
+            case CallbackMutation::IdenticalSelection:
+                mutationAccepted = m_navigationModel.setSelection(1u, 1u);
+                break;
+            case CallbackMutation::SelectionRoundTrip:
+                mutationAccepted = m_navigationModel.setSelection(0u, 0u) && m_navigationModel.setSelection(1u, 1u);
+                break;
+            case CallbackMutation::CompositionRoundTrip:
+                mutationAccepted = m_navigationModel.beginComposition() && m_navigationModel.updateComposition("IME", 0u, 3u);
+                m_navigationModel.cancelComposition();
+                break;
+            case CallbackMutation::IdenticalText:
+                mutationAccepted = m_navigationModel.setText("ab\ncdef") && m_navigationModel.setSelection(1u, 1u);
+                break;
+            case CallbackMutation::IdenticalColumn:
+                mutationAccepted = m_navigation.setPreferredX(50.0f);
+                break;
+            case CallbackMutation::ColumnRoundTrip:
+                m_navigation.reset();
+                mutationAccepted = m_navigation.setPreferredX(50.0f);
+                break;
+            case CallbackMutation::ResetHost:
+                m_host.reset();
+                mutationAccepted = true;
+                break;
+            case CallbackMutation::ReenterHost:
+                innerRejected = !m_host.editNavigated(m_widget, {}, {}, m_navigationModel, m_navigation, m_resolver, m_actions).valid;
+                mutationAccepted = true;
+                break;
+            case CallbackMutation::FailContext:
+                m_context.fail();
+                mutationAccepted = true;
+                break;
+            }
+            callbackModel.capture(m_navigationModel);
+            callbackNavigation = m_navigation.snapshot();
+        };
+        ASSERT_TRUE(key(Core::Key::Down));
+        ASSERT_TRUE(commitNative("!"));
+        ASSERT_FALSE(prepareNavigation());
+        EXPECT_FALSE(m_result.valid);
+        EXPECT_EQ(callbacks, 1u);
+        EXPECT_TRUE(mutationAccepted);
+        if(mutation == CallbackMutation::ReenterHost)
+            EXPECT_TRUE(innerRejected);
+        ASSERT_EQ(m_resolver.records.size(), 1u);
+        EXPECT_TRUE(callbackModel.matches(m_navigationModel));
+        EXPECT_TRUE(m_navigation.matches(callbackNavigation));
+        EXPECT_EQ(m_navigationModel.text(), "ab\ncdef");
+        EXPECT_EQ(m_navigationModel.anchor(), 1u);
+        EXPECT_EQ(m_navigationModel.caret(), 1u);
+        EXPECT_FALSE(m_navigationModel.canUndo());
+        EXPECT_EQ(m_context.input().layoutGeneration(), displayed);
+        EXPECT_EQ(m_context.input().targets().size(), targets);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditNavigationGuardTests, UnresolvedCallbackDoesNotApplyItsPlausibleTargetOrLaterText){
+    rejectTarget(MakeUnexpected(Failure{}));
+}
+
+TEST_F(UiEditNavigationGuardTests, OutOfRangeCallbackTargetRejectsWithoutPartialColumnPublication){
+    rejectTarget(Ui::EditNavigationResult{ 8u, 20.0f });
+}
+
+TEST_F(UiEditNavigationGuardTests, ScalarEdgeInsideGraphemeCannotBecomeACommittedCaret){
+    rejectTarget(Ui::EditNavigationResult{ 1u, 20.0f });
+}
+
+TEST_F(UiEditNavigationGuardTests, ByteInsideUtf8ScalarCannotBecomeACommittedCaret){
+    rejectTarget(Ui::EditNavigationResult{ 2u, 20.0f });
+}
+
+TEST_F(UiEditNavigationGuardTests, NonfinitePreferredColumnRejectsBeforeApplyingTheTarget){
+    rejectTarget(Ui::EditNavigationResult{ 4u, Limit<f32>::s_QuietNaN });
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverIdenticalSelectionIntentRejectsTheOuterMovement){
+    rejectMutation(CallbackMutation::IdenticalSelection);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverSelectionAwayAndBackPreservesApplicationState){
+    rejectMutation(CallbackMutation::SelectionRoundTrip);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverCompositionRoundTripRejectsTheOuterMovement){
+    rejectMutation(CallbackMutation::CompositionRoundTrip);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverExternalSameTextAssignmentRetiresTheOuterIntention){
+    rejectMutation(CallbackMutation::IdenticalText);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverAcceptedIdenticalColumnSetterRejectsTheOuterMovement){
+    rejectMutation(CallbackMutation::IdenticalColumn);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverColumnResetAndRestorePreservesItsOwnEpoch){
+    rejectMutation(CallbackMutation::ColumnRoundTrip);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverHostResetCannotDestroyBorrowedEntryStorage){
+    rejectMutation(CallbackMutation::ResetHost);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverNestedEditRejectsBeforeBorrowingTheSameEntryAgain){
+    rejectMutation(CallbackMutation::ReenterHost);
+}
+
+TEST_F(UiEditNavigationGuardTests, ResolverContextFailureRejectsItsTargetAndLaterCopiedText){
+    rejectMutation(CallbackMutation::FailContext);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_navigation_lifetime_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+
+class UiEditNavigationLifetimeTests : public UiEditNavigationHostTests{
+protected:
+    [[nodiscard]] b8 seedPreferredColumn(const Ui::EditBoxOptions& options = {}){
+        if(!m_navigationModel.setText("abcdef\nx\nabcdef") || !m_navigationModel.setSelection(5u, 5u) || !activateNavigation(options) || !key(Core::Key::Down) || !navigationFrame(options))
+            return false;
+        m_resolver.records.clear();
+        m_actions.records.clear();
+        return m_navigationModel.caret() == 8u && m_navigation.hasPreferredX() && m_navigation.preferredX() == 50.0f;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirstEscapeAllowsFreshNavigation){
+    ASSERT_TRUE(seedPreferredColumn());
+    ASSERT_EQ(m_textInput.preedit("IME", 0u, 3u), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_TRUE(m_navigationModel.composition().active);
+    Ui::EditModelSnapshot preedit(m_arena);
+    preedit.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    m_resolver.records.clear();
+    m_actions.records.clear();
+
+    const Array<Core::Key::Enum, 4u> keys = { Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown };
+    for(const auto value : keys)
+        ASSERT_TRUE(key(value));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_TRUE(preedit.matches(m_navigationModel));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(m_actions.records.empty());
+
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_FALSE(m_navigationModel.composition().active);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_EQ(m_navigationModel.revision(), preedit.m_expectedRevision);
+    EXPECT_EQ(m_navigationModel.externalRevision(), preedit.m_expectedExternalRevision);
+    EXPECT_EQ(m_navigationModel.anchor(), 10u);
+    EXPECT_EQ(m_navigationModel.caret(), 10u);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_FALSE(m_result.cancelled);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_FALSE(m_resolver.records[0u].navigation.valid);
+    EXPECT_EQ(m_resolver.records[0u].caret, 8u);
+    EXPECT_FLOAT_EQ(m_navigation.preferredX(), 10.0f);
+}
+
+TEST_F(UiEditNavigationLifetimeTests, DisableDiscardsQueuedNavigationAndResetsOnlyTheLentState){
+    ASSERT_TRUE(seedPreferredColumn());
+    Ui::EditModelSnapshot before(m_arena);
+    before.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(commitNative("late"));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(before.matches(m_navigationModel));
+
+    Ui::EditBoxOptions disabled;
+    disabled.enabled = false;
+    ASSERT_TRUE(navigationFrame(disabled));
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_FALSE(m_result.focused);
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_FALSE(m_navigation.hasPreferredX());
+    EXPECT_FALSE(m_navigation.matches(preferred));
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(navigationFrame(disabled));
+    EXPECT_FALSE(m_result.abandoned);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+    EXPECT_TRUE(m_resolver.records.empty());
+}
+
+TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPositionBetweenVerticalKeys){
+    ASSERT_TRUE(seedPreferredColumn());
+    ASSERT_TRUE(m_navigation.setPreferredX(40.0f));
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    Ui::EditModelSnapshot before(m_arena);
+    before.capture(m_navigationModel);
+    ASSERT_TRUE(key(Core::Key::Up));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.blurred);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_EQ(m_navigationModel.revision(), before.m_expectedRevision);
+    EXPECT_EQ(m_navigationModel.externalRevision(), before.m_expectedExternalRevision);
+    EXPECT_EQ(m_navigationModel.anchor(), 8u);
+    EXPECT_EQ(m_navigationModel.caret(), 8u);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Blur), 1u);
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_EQ(m_resolver.records[0u].caret, 8u);
+    EXPECT_TRUE(m_resolver.records[0u].navigation.valid);
+    EXPECT_FLOAT_EQ(m_resolver.records[0u].navigation.preferredX, 40.0f);
+    ASSERT_TRUE(m_resolver.records[0u].result);
+    EXPECT_EQ(m_resolver.records[0u].result->committedByte, 4u);
+    EXPECT_EQ(m_resolver.records[1u].caret, 4u);
+    EXPECT_FALSE(m_resolver.records[1u].navigation.valid);
+    ASSERT_TRUE(m_resolver.records[1u].result);
+    EXPECT_EQ(m_resolver.records[1u].result->committedByte, 8u);
+    EXPECT_FLOAT_EQ(m_navigation.preferredX(), 40.0f);
+}
+
+
+TEST_F(UiEditNavigationLifetimeTests, BlurPreservesDraftBeforeFreshFocusEpochNavigation){
+    ASSERT_TRUE(seedPreferredColumn());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    ASSERT_TRUE(commitNative("!"));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(m_actions.records.empty());
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.blurred);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx!\nabcdef");
+    EXPECT_EQ(m_navigationModel.anchor(), 12u);
+    EXPECT_EQ(m_navigationModel.caret(), 12u);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Blur), 1u);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Cancel), 0u);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 0u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx!\nabcdef");
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_EQ(m_resolver.records[0u].text, "abcdef\nx!\nabcdef");
+    EXPECT_EQ(m_resolver.records[0u].caret, 9u);
+    EXPECT_FALSE(m_resolver.records[0u].navigation.valid);
+    EXPECT_FLOAT_EQ(m_navigation.preferredX(), 20.0f);
+    EXPECT_TRUE(m_textInput.activeSession().valid());
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_EQ(m_navigationModel.caret(), 8u);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationLifetimeTests, OrdinaryCancelRetiresPreferredColumnWhilePreservingTheDraft){
+    ASSERT_TRUE(seedPreferredColumn());
+    Ui::EditModelSnapshot before(m_arena);
+    before.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(key(Core::Key::Escape));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(before.matches(m_navigationModel));
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_FALSE(m_result.focused);
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_FALSE(m_navigation.snapshot().valid);
+    EXPECT_FALSE(m_navigation.matches(preferred));
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Cancel), 1u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+
+TEST_F(UiEditNavigationLifetimeTests, OldEpochCancelPreservesDraftAndLaterRefocusNavigation){
+    ASSERT_TRUE(seedPreferredColumn());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    const u64 revision = m_navigationModel.revision();
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(commitNative("late"));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusNavigation());
+    ASSERT_TRUE(key(Core::Key::Up));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_EQ(m_navigationModel.caret(), 8u);
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_EQ(m_navigationModel.revision(), revision);
+    EXPECT_EQ(m_navigationModel.anchor(), 1u);
+    EXPECT_EQ(m_navigationModel.caret(), 1u);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Cancel), 1u);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Blur), 0u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_FALSE(m_resolver.records[0u].navigation.valid);
+    EXPECT_EQ(m_resolver.records[0u].caret, 8u);
+    EXPECT_FLOAT_EQ(m_navigation.preferredX(), 10.0f);
+    EXPECT_TRUE(m_textInput.activeSession().valid());
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditNavigationLifetimeTests, OmissionLeavesCallerStateExactUntilRedeclarationAbandonsOwnership){
+    ASSERT_TRUE(seedPreferredColumn());
+    Ui::EditModelSnapshot before(m_arena);
+    before.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    const u64 declaration = m_widget.declarationGeneration;
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(commitNative("late"));
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_TRUE(m_actions.records.empty());
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_NE(m_widget.declarationGeneration, declaration);
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_FALSE(m_navigation.hasPreferredX());
+    EXPECT_FALSE(m_navigation.matches(preferred));
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_FALSE(m_result.abandoned);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+}
+
+TEST_F(UiEditNavigationLifetimeTests, HostResetCannotTouchUnlentDraftOrPreferredColumn){
+    ASSERT_TRUE(seedPreferredColumn());
+    Ui::EditModelSnapshot before(m_arena);
+    before.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    m_host.reset();
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_TRUE(m_navigation.matches(preferred));
+    EXPECT_TRUE(m_actions.records.empty());
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_TRUE(before.matches(m_navigationModel));
+    EXPECT_FALSE(m_navigation.hasPreferredX());
+    EXPECT_FALSE(m_navigation.matches(preferred));
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNavigationOwnership){
+    ASSERT_TRUE(seedPreferredColumn());
+    Ui::EditModelSnapshot original(m_arena);
+    original.capture(m_navigationModel);
+    const Ui::EditNavigationSnapshot originalPreferred = m_navigation.snapshot();
+    Ui::EditModel replacement(m_arena, {}, Ui::EditTextMode::Multiline);
+    ASSERT_TRUE(replacement.setText("zz\nabc"));
+    ASSERT_TRUE(replacement.setSelection(1u, 1u));
+    Ui::EditNavigationState replacementNavigation;
+    ASSERT_TRUE(replacementNavigation.setPreferredX(70.0f));
+    const Ui::EditNavigationSnapshot replacementPreferred = replacementNavigation.snapshot();
+    Ui::EditModelSnapshot replacementBefore(m_arena);
+    replacementBefore.capture(replacement);
+    ASSERT_TRUE(key(Core::Key::Down));
+    EXPECT_TRUE(m_navigation.matches(originalPreferred));
+    EXPECT_TRUE(replacementNavigation.matches(replacementPreferred));
+
+    ASSERT_TRUE(prepareNavigationModel(replacement, replacementNavigation));
+    ASSERT_TRUE(commit());
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_TRUE(original.matches(m_navigationModel));
+    EXPECT_TRUE(replacementBefore.matches(replacement));
+    EXPECT_TRUE(m_navigation.matches(originalPreferred));
+    EXPECT_FALSE(replacementNavigation.hasPreferredX());
+    EXPECT_FALSE(replacementNavigation.matches(replacementPreferred));
+    EXPECT_TRUE(m_resolver.records.empty());
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(prepareNavigationModel(replacement, replacementNavigation));
+    ASSERT_TRUE(commit());
+    EXPECT_EQ(replacement.caret(), 4u);
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_EQ(m_resolver.records[0u].text, "zz\nabc");
+    EXPECT_FALSE(m_resolver.records[0u].navigation.valid);
+    EXPECT_FLOAT_EQ(replacementNavigation.preferredX(), 10.0f);
+    EXPECT_TRUE(m_navigation.matches(originalPreferred));
+
+    const Ui::EditNavigationSnapshot replacementAccepted = replacementNavigation.snapshot();
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_TRUE(original.matches(m_navigationModel));
+    EXPECT_FALSE(m_navigation.hasPreferredX());
+    EXPECT_TRUE(replacementNavigation.matches(replacementAccepted));
+    EXPECT_EQ(replacement.text(), "zz\nabc");
+    EXPECT_EQ(replacement.caret(), 4u);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 2u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_navigation_order_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+
+TEST_F(UiEditNavigationHostTests, CopiedCommitDownAndCommitResolveTheCurrentEventPosition){
+    ASSERT_TRUE(m_navigationModel.setText("ab\ncdef\nxy"));
+    ASSERT_TRUE(m_navigationModel.setSelection(1u, 1u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(commitNative("Q"));
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(commitNative("!"));
+    EXPECT_EQ(m_navigationModel.text(), "ab\ncdef\nxy");
+    EXPECT_EQ(m_navigationModel.caret(), 1u);
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    const auto& record = m_resolver.records.front();
+    EXPECT_EQ(record.text, "aQb\ncdef\nxy");
+    EXPECT_EQ(record.caret, 2u);
+    ASSERT_TRUE(record.result);
+    EXPECT_FLOAT_EQ(record.result->preferredX, 20.0f);
+    EXPECT_EQ(record.result->committedByte, 6u);
+    EXPECT_EQ(m_navigationModel.text(), "aQb\ncd!ef\nxy");
+    EXPECT_EQ(m_navigationModel.caret(), 7u);
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "aQb\ncdef\nxy");
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "ab\ncdef\nxy");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, RepeatedVerticalMovementPreservesTheColumnAcrossShortLines){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
+    ASSERT_TRUE(activateNavigation());
+    const u64 revision = m_navigationModel.revision();
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyDown, .shift = true  }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyDown, .shift = true, .repeat = true  }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyUp, .shift = true  }));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    ASSERT_TRUE(m_resolver.records[0u].result);
+    EXPECT_EQ(m_resolver.records[0u].result->committedByte, 8u);
+    ASSERT_TRUE(m_resolver.records[1u].result);
+    EXPECT_EQ(m_resolver.records[1u].result->committedByte, 14u);
+    EXPECT_TRUE(m_resolver.records[1u].navigation.valid);
+    EXPECT_FLOAT_EQ(m_resolver.records[1u].navigation.preferredX, 50.0f);
+    EXPECT_EQ(m_navigationModel.anchor(), 5u);
+    EXPECT_EQ(m_navigationModel.caret(), 14u);
+    ASSERT_TRUE(key(Core::Key::Up));
+    ASSERT_TRUE(key(Core::Key::Up));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 4u);
+    ASSERT_TRUE(m_resolver.records[2u].result);
+    EXPECT_EQ(m_resolver.records[2u].result->committedByte, 8u);
+    ASSERT_TRUE(m_resolver.records[3u].result);
+    EXPECT_EQ(m_resolver.records[3u].result->committedByte, 5u);
+    EXPECT_FLOAT_EQ(m_resolver.records[3u].navigation.preferredX, 50.0f);
+    EXPECT_EQ(m_navigationModel.anchor(), 5u);
+    EXPECT_EQ(m_navigationModel.caret(), 5u);
+    EXPECT_EQ(m_navigationModel.revision(), revision);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, AcceptedEndpointNoOpResetsThePreferredColumn){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_navigationModel.caret(), 8u);
+    const u64 selectionGeneration = m_navigationModel.selectionGeneration();
+    ASSERT_TRUE(key(Core::Key::End));
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_GT(m_resolver.records.back().selectionGeneration, selectionGeneration);
+    EXPECT_FALSE(m_resolver.records.back().navigation.valid);
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 10.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 10u);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, AcceptedNativeInsertionReseedsTheNextVerticalMove){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_TRUE(commitNative("z"));
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_FALSE(m_resolver.records.back().navigation.valid);
+    EXPECT_EQ(m_resolver.records.back().text, "abcdef\nxz\nabcdef");
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 20.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 12u);
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, AppliedDelayedPasteResetsTheColumnAtItsCompletionLoan){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_navigation.snapshot().valid);
+    EXPECT_FLOAT_EQ(m_navigation.snapshot().preferredX, 50.0f);
+    ASSERT_TRUE(m_clipboard.pump());
+    const ClipboardRequestToken token = m_clipboard.startedToken;
+    ASSERT_TRUE(token.valid());
+    ASSERT_TRUE(m_clipboard.deliver(token, ClipboardStatus::Success, "zz"));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nxzz\nabcdef");
+    EXPECT_FALSE(m_navigation.snapshot().valid);
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_FALSE(m_resolver.records.back().navigation.valid);
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 30.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 14u);
+}
+
+TEST_F(UiEditNavigationHostTests, FailedAndCancelledPastePreserveTheAcceptedColumn){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::NativeFailure));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_TRUE(m_navigation.snapshot().valid);
+    EXPECT_FLOAT_EQ(m_navigation.snapshot().preferredX, 50.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 8u);
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_TRUE(m_clipboard.pump());
+    const ClipboardRequestToken cancelled = m_clipboard.startedToken;
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_TRUE(m_resolver.records.back().navigation.valid);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().navigation.preferredX, 50.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 14u);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
+    EXPECT_FALSE(m_clipboard.deliver(cancelled, ClipboardStatus::Success, "late"));
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+TEST_F(UiEditNavigationHostTests, PageMovementCarriesTheViewportAcceptedAtInputAdmission){
+    ASSERT_TRUE(m_navigationModel.setText("a\nb\nc\nd\ne\nf\ng"));
+    ASSERT_TRUE(m_navigationModel.setSelection(1u, 1u));
+    ASSERT_TRUE(activateNavigation({}, { 10.0f, 20.0f, 180.0f, 24.0f }));
+    const u64 displayed = m_context.input().layoutGeneration();
+    ASSERT_TRUE(prepareNavigation({}, { 10.0f, 20.0f, 180.0f, 36.0f }));
+    EXPECT_EQ(m_context.input().layoutGeneration(), displayed);
+    ASSERT_TRUE(key(Core::Key::PageDown));
+    ASSERT_TRUE(commit());
+    ASSERT_TRUE(navigationFrame({}, { 10.0f, 20.0f, 180.0f, 36.0f }));
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_FLOAT_EQ(m_resolver.records.front().viewportHeight, 24.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 5u);
+    ASSERT_TRUE(key(Core::Key::PageDown));
+    ASSERT_TRUE(navigationFrame({}, { 10.0f, 20.0f, 180.0f, 36.0f }));
+    ASSERT_EQ(m_resolver.records.size(), 2u);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().viewportHeight, 36.0f);
+    EXPECT_EQ(m_navigationModel.caret(), 11u);
+}
+
+TEST_F(UiEditNavigationHostTests, NewlineThenDownShapesTheNewHardLineBeforeLaterText){
+    ASSERT_TRUE(m_navigationModel.setText("ab\ncdef"));
+    ASSERT_TRUE(m_navigationModel.setSelection(1u, 1u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(key(Core::Key::Down));
+    ASSERT_TRUE(commitNative("!"));
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_EQ(m_resolver.records.size(), 1u);
+    EXPECT_EQ(m_resolver.records.front().text, "a\nb\ncdef");
+    EXPECT_EQ(m_resolver.records.front().caret, 2u);
+    ASSERT_TRUE(m_resolver.records.front().result);
+    EXPECT_EQ(m_resolver.records.front().result->committedByte, 4u);
+    EXPECT_EQ(m_navigationModel.text(), "a\nb\n!cdef");
+    EXPECT_EQ(m_navigationModel.caret(), 5u);
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(m_actions.count(Ui::EditAction::Submit), 0u);
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "a\nb\ncdef");
+    ASSERT_TRUE(m_navigationModel.undo());
+    EXPECT_EQ(m_navigationModel.text(), "ab\ncdef");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ecs_ui_edit_pointer_capture_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiEditPointerCaptureTests : public UiEditNavigationHostTests{
+protected:
+    [[nodiscard]] b8 publishPart(const b8 gesture){
+        const Ui::HitTarget* target = UiTestSupport::FindHitTarget(m_context.input().targets(), m_widget.id);
+        if(!target)
+            return false;
+        Array<Ui::HitTarget, 2u> targets;
+        targets[0u] = *target;
+        Ui::HitTarget& editor = targets[0u];
+        editor.control = { 91u, 1u, 1u };
+        Ui::HitTarget& part = targets[1u];
+        part.id = m_otherWidget.id;
+        part.declarationGeneration = m_otherWidget.declarationGeneration;
+        part.rectangle = { 180.0f, 20.0f, 10.0f, 48.0f };
+        part.clip = editor.clip;
+        part.paintOrder = 1u;
+        part.owner = editor.id;
+        part.ownerDeclarationGeneration = editor.declarationGeneration;
+        part.control = editor.control;
+        part.pointerGesture = gesture;
+        part.activatable = !gesture;
+        if(gesture)
+            part.gestureReference = part.rectangle;
+        // The copied router publication leaves the already accepted text geometry owned by the host.
+        ++m_generation;
+        if(!m_context.input().commitTargets(targets, m_generation))
+            return false;
+        m_host.synchronizeFocus();
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditPointerCaptureTests, ScrollbarGestureFocusCannotCollapseCrossLineSelection){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nuvwxyz"));
+    ASSERT_TRUE(m_navigationModel.setSelection(2u, 9u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(publishPart(true));
+    ASSERT_TRUE(m_navigation.setPreferredX(40.0f));
+    const auto navigation = m_navigation.snapshot();
+    const u64 revision = m_navigationModel.revision();
+    const u64 selection = m_navigationModel.selectionGeneration();
+    ASSERT_TRUE(dispatch({ .position = { 185.0f, 62.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    EXPECT_EQ(m_context.input().focus(), m_widget.id);
+    EXPECT_EQ(m_context.input().capture(), m_otherWidget.id);
+    ASSERT_TRUE(dispatch({ .position = { 450.0f, 180.0f } , .type = Ui::InputEventType::PointerMove}));
+    ASSERT_TRUE(dispatch({ .position = { 450.0f, 180.0f } , .type = Ui::InputEventType::PrimaryUp}));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.anchor(), 2u);
+    EXPECT_EQ(m_navigationModel.caret(), 9u);
+    EXPECT_EQ(m_navigationModel.revision(), revision);
+    EXPECT_EQ(m_navigationModel.selectionGeneration(), selection);
+    EXPECT_TRUE(m_navigation.matches(navigation));
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_TRUE(m_result.focused);
+}
+
+TEST_F(UiEditPointerCaptureTests, UnfocusedTrackActivationCannotShiftExtendCrossLineSelection){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nuvwxyz"));
+    ASSERT_TRUE(m_navigationModel.setSelection(2u, 9u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(navigationFrame());
+    ASSERT_TRUE(publishPart(false));
+    EXPECT_FALSE(m_context.input().focus().valid());
+    const u64 selection = m_navigationModel.selectionGeneration();
+    ASSERT_TRUE(click({ 185.0f, 62.0f }, true));
+    EXPECT_EQ(m_context.input().focus(), m_widget.id);
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.anchor(), 2u);
+    EXPECT_EQ(m_navigationModel.caret(), 9u);
+    EXPECT_EQ(m_navigationModel.selectionGeneration(), selection);
+    EXPECT_EQ(m_navigationModel.text(), "abcdef\nuvwxyz");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_TRUE(m_result.focused);
+}
+
+TEST_F(UiEditPointerCaptureTests, ReadOnlyScrollbarFocusCannotChangeTextSelection){
+    ASSERT_TRUE(m_navigationModel.setText("abcdef\nuvwxyz"));
+    ASSERT_TRUE(m_navigationModel.setSelection(2u, 9u));
+    Ui::EditBoxOptions options;
+    options.readOnly = true;
+    ASSERT_TRUE(activateNavigation(options));
+    ASSERT_TRUE(publishPart(true));
+    const u64 selection = m_navigationModel.selectionGeneration();
+    ASSERT_TRUE(click({ 185.0f, 62.0f }));
+    ASSERT_TRUE(navigationFrame(options));
+    EXPECT_EQ(m_navigationModel.anchor(), 2u);
+    EXPECT_EQ(m_navigationModel.caret(), 9u);
+    EXPECT_EQ(m_navigationModel.selectionGeneration(), selection);
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_TRUE(m_result.focused);
+}
+
+TEST_F(UiEditPointerCaptureTests, MainEditorCaptureStillClampsAnOutOfBoundsCrossLineDrag){
+    ASSERT_TRUE(m_navigationModel.setText("ab\ncd\nxy"));
+    ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
+    ASSERT_TRUE(activateNavigation());
+    ASSERT_TRUE(publishPart(true));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 26.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    EXPECT_EQ(m_context.input().capture(), m_widget.id);
+    ASSERT_TRUE(dispatch({ .position = { 30.0f, 120.0f } , .type = Ui::InputEventType::PointerMove}));
+    ASSERT_TRUE(dispatch({ .position = { 30.0f, 120.0f } , .type = Ui::InputEventType::PrimaryUp}));
+    ASSERT_TRUE(navigationFrame());
+    EXPECT_EQ(m_navigationModel.anchor(), 1u);
+    EXPECT_EQ(m_navigationModel.caret(), 8u);
+    EXPECT_EQ(m_navigationModel.selectedText(), "b\ncd\nxy");
+    EXPECT_FALSE(m_navigationModel.canUndo());
+    EXPECT_FALSE(m_context.input().capture().valid());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ecs_ui_edit_pointer_source_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditBoxTestSupport;
+
+using UiEditPointerSourceTests = UiEditBoxHostTests;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditPointerSourceTests, ForeignContactCannotMoveOrEndTheAcceptedEditorSelection){
+    ASSERT_TRUE(m_model.setText("abcdef"));
+    ASSERT_TRUE(activate());
+    const Ui::InputSource first{ 17u, 1u };
+    const Ui::InputSource second{ 17u, 2u };
+    ASSERT_TRUE(dispatchPointer({ .source = first, .position = atByte(1u) , .phase = Ui::PointerPhase::Press }));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.caret(), 1u);
+    ASSERT_TRUE(dispatchPointer({ .source = second, .position = atByte(5u) , .phase = Ui::PointerPhase::Press }));
+    ASSERT_TRUE(dispatchPointer({ .source = second, .position = atByte(6u) , .phase = Ui::PointerPhase::Move }));
+    ASSERT_TRUE(dispatchPointer({ .source = second, .position = atByte(6u) , .phase = Ui::PointerPhase::Release }));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.caret(), 1u);
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_context.input().activePointerSource(), first);
+    ASSERT_TRUE(dispatchPointer({ .source = first, .position = atByte(4u) , .phase = Ui::PointerPhase::Move }));
+    ASSERT_TRUE(dispatchPointer({ .source = first, .position = atByte(4u) , .phase = Ui::PointerPhase::Release }));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.selectedText(), "bcd");
+    EXPECT_FALSE(m_context.input().activePointerSource().valid());
+}
+
+TEST_F(UiEditPointerSourceTests, TouchTimestampsCannotManufactureNativeDoubleClickWordSelection){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(activate());
+    const Ui::InputSource touch{ 21u, 9u };
+    for(const u64 timestamp : { 1000u, 1200u }){
+        ASSERT_TRUE(dispatchPointer({ .source = touch, .timestampMs = timestamp , .position = atByte(1u), .phase = Ui::PointerPhase::Press }));
+        ASSERT_TRUE(dispatchPointer({ .source = touch, .position = atByte(1u) , .phase = Ui::PointerPhase::Release }));
+        ASSERT_TRUE(frame(m_model));
+        EXPECT_EQ(m_model.caret(), 1u);
+        EXPECT_EQ(m_model.anchor(), 1u);
+        EXPECT_TRUE(m_model.selectedText().empty());
+    }
+}
+
+TEST_F(UiEditPointerSourceTests, CancelledContactCannotEraseAnEarlierCompletedSelection){
+    ASSERT_TRUE(m_model.setText("abcdef"));
+    ASSERT_TRUE(activate());
+    const Ui::InputSource completed{ 31u, 1u };
+    const Ui::InputSource next{ 31u, 2u };
+    for(const Ui::InputSource cancelled : { completed, next }){
+        ASSERT_TRUE(m_model.setSelection(0u, 0u));
+        ASSERT_TRUE(frame(m_model));
+        ASSERT_TRUE(dispatchPointer({ .source = completed, .position = atByte(1u) , .phase = Ui::PointerPhase::Press }));
+        ASSERT_TRUE(dispatchPointer({ .source = completed, .position = atByte(1u) , .phase = Ui::PointerPhase::Release }));
+        ASSERT_TRUE(dispatchPointer({ .source = cancelled, .position = atByte(5u) , .phase = Ui::PointerPhase::Press }));
+        ASSERT_TRUE(dispatchPointer({ .source = cancelled, .position = atByte(5u) , .phase = Ui::PointerPhase::Cancel }));
+        EXPECT_EQ(m_model.caret(), 0u);
+        EXPECT_FALSE(m_context.input().activePointerSource().valid());
+        ASSERT_TRUE(frame(m_model));
+        EXPECT_EQ(m_model.caret(), 1u);
+        EXPECT_EQ(m_model.anchor(), 1u);
+        EXPECT_TRUE(m_model.selectedText().empty());
+        ASSERT_TRUE(dispatchPointer({ .source = cancelled, .position = atByte(2u) , .phase = Ui::PointerPhase::Press }));
+        ASSERT_TRUE(dispatchPointer({ .source = cancelled, .position = atByte(2u) , .phase = Ui::PointerPhase::Release }));
+        ASSERT_TRUE(frame(m_model));
+        EXPECT_EQ(m_model.caret(), 2u);
+        EXPECT_EQ(m_model.anchor(), 2u);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_submit_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditActionTestSupport;
+
+TEST_F(UiEditActionHostTests, HeldSubmitObservesReleaseAfterDraftEventsWithoutRepeating){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    const Ui::InputEvent down{ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown };
+    ASSERT_TRUE(dispatch(down));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_TRUE(m_actions.records.empty());
+    EXPECT_EQ(m_model.text(), "42");
+    ASSERT_TRUE(dispatch(down));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(commitNative("7"));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(commitNative("9"));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.submitted);
+    ASSERT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "427");
+    EXPECT_EQ(m_actions.committed, "427");
+    EXPECT_EQ(m_model.text(), "4279");
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+}
+
+TEST_F(UiEditActionHostTests, EscapeCancelsConcurrentKeyboardAndControllerSubmitsBeforeRelease){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    const Ui::InputSource controller{ 7u, 3u };
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_TRUE(dispatch({ .source = controller , .type = Ui::InputEventType::CommandDown, .command = Ui::InputCommand::Submit }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter, .type = Ui::InputEventType::KeyDown, .repeat = true  }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(dispatch({ .source = controller , .type = Ui::InputEventType::CommandUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    EXPECT_EQ(actionCount(Ui::EditAction::Cancel), 1u);
+    EXPECT_EQ(m_actions.committed, "0");
+    EXPECT_EQ(m_model.text(), "0");
+    ASSERT_TRUE(focusEditor());
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+}
+
+TEST_F(UiEditActionHostTests, FocusDepartureAndReturnCannotRestoreHeldEditorSubmit){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusEditor());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+}
+
+TEST_F(UiEditActionHostTests, ReboundEditorModelCannotReceiveAnEarlierHeldSubmit){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    Ui::EditModel replacement(m_arena);
+    ASSERT_TRUE(replacement.setText("replacement"));
+    ASSERT_TRUE(prepare(replacement, {}, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions));
+    ASSERT_TRUE(commit());
+    m_actions.clear();
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(prepare(replacement, {}, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions));
+    ASSERT_TRUE(commit());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(prepare(replacement, {}, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions));
+    ASSERT_TRUE(commit());
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+}
+
+TEST_F(UiEditActionHostTests, ExternalDraftReplacementRetiresThePendingSubmit){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_TRUE(m_model.setText("external"));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_actions.committed, "external");
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+}
+
+TEST_F(UiEditBoxHostTests, PlainEditorPolicyChangesFenceHeldSubmitEvenAfterRestoration){
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    Ui::EditBoxOptions options;
+    options.readOnly = true;
+    ASSERT_TRUE(frame(m_model, options));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_result.submitted);
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_result.submitted);
+}
+
+TEST_F(UiEditActionHostTests, CompositionOwnedEnterRemainsCancelledAfterNativeCommitBeforeRelease){
+    ASSERT_TRUE(activateActions());
+    ASSERT_EQ(m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(m_model.composition().active);
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_TRUE(commitNative("X"));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    EXPECT_EQ(m_model.text(), "0X");
+    EXPECT_FALSE(m_model.composition().active);
+}
+
+TEST_F(UiEditActionHostTests, PreeditBeginningAndEndingDuringHeldEnterRetiresItsSubmit){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_EQ(m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
+    ASSERT_TRUE(commitNative("X"));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 0u);
+    EXPECT_EQ(m_model.text(), "0X");
+}
+
+TEST_F(UiEditBoxHostTests, MultilineAcceptEditsOnPressWhileExplicitSubmitWaitsForRelease){
+    Ui::EditModel multiline(m_arena, {}, Ui::EditTextMode::Multiline);
+    ASSERT_TRUE(frame(multiline));
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(multiline));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyDown }));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_EQ(multiline.text(), "\n");
+    EXPECT_FALSE(m_result.submitted);
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter, .type = Ui::InputEventType::KeyDown, .repeat = true  }));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_EQ(multiline.text(), "\n\n");
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_EQ(multiline.text(), "\n\n");
+    EXPECT_FALSE(m_result.submitted);
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter, .type = Ui::InputEventType::KeyDown, .control = true  }));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_FALSE(m_result.submitted);
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Enter , .type = Ui::InputEventType::KeyUp }));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_TRUE(m_result.submitted);
+    EXPECT_EQ(multiline.text(), "\n\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_word_selection_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace UiEditBoxTestSupport;
+
+class UiEditWordSelectionTests : public UiEditBoxHostTests{
+protected:
+    [[nodiscard]] b8 down(const usize byte, const u64 timestampMs, const b8 shift = false){
+        return dispatch({ .timestampMs = timestampMs , .position = atByte(byte), .type = Ui::InputEventType::PrimaryDown, .shift = shift });
+    }
+
+    [[nodiscard]] b8 move(const usize byte){
+        return dispatch({ .position = atByte(byte) , .type = Ui::InputEventType::PointerMove });
+    }
+
+    [[nodiscard]] b8 up(const usize byte){
+        return dispatch({ .position = atByte(byte) , .type = Ui::InputEventType::PrimaryUp });
+    }
+
+    [[nodiscard]] b8 click(const usize byte, const u64 timestampMs, const b8 shift = false){
+        return down(byte, timestampMs, shift) && up(byte);
+    }
+
+    [[nodiscard]] b8 clickAt(const Ui::Point point, const u64 timestampMs){
+        return dispatch({ .timestampMs = timestampMs , .position = point, .type = Ui::InputEventType::PrimaryDown }) && dispatch({ .position = point , .type = Ui::InputEventType::PrimaryUp });
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditWordSelectionTests, RightHalfOfFinalWordGlyphSelectsItsWordRatherThanFollowingSpace){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(activate());
+    const SIMDVectorSingle shifted = VectorAdd(VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f), VectorSet(29.0f, 5.0f, 0.0f, 0.0f));
+    const Ui::Point point{ VectorGetX(shifted), VectorGetY(shifted) };
+    ASSERT_TRUE(clickAt(point, 1000u));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(clickAt(point, 1200u));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.selectedText(), "one");
+}
+
+TEST_F(UiEditWordSelectionTests, UncapturedPointerMoveBetweenNativeClicksPreservesWordSelection){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(down(1u, 1000u));
+    ASSERT_TRUE(up(1u));
+    EXPECT_FALSE(m_context.input().capture().valid());
+    ASSERT_TRUE(move(1u));
+    ASSERT_TRUE(down(1u, 1200u));
+    ASSERT_TRUE(up(1u));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.selectedText(), "one");
+}
+
+TEST_F(UiEditWordSelectionTests, RightHalfAtHardLineEndDoesNotSelectNewline){
+    Ui::EditModel multiline(m_arena, {}, Ui::EditTextMode::Multiline);
+    ASSERT_TRUE(multiline.setText("one\ntwo"));
+    ASSERT_TRUE(frame(multiline));
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(multiline));
+    const SIMDVectorSingle shifted = VectorAdd(VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f), VectorSet(29.0f, 5.0f, 0.0f, 0.0f));
+    const Ui::Point point{ VectorGetX(shifted), VectorGetY(shifted) };
+    ASSERT_TRUE(clickAt(point, 1000u));
+    ASSERT_TRUE(frame(multiline));
+    ASSERT_TRUE(clickAt(point, 1200u));
+    ASSERT_TRUE(frame(multiline));
+    EXPECT_EQ(multiline.selectedText(), "one");
+}
+
+TEST_F(UiEditWordSelectionTests, DoubleClickDragReversesDirectionWithoutSplittingRuns){
+    ASSERT_TRUE(m_model.setText("one two three"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(click(5u, 1000u));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(down(5u, 1200u));
+    ASSERT_TRUE(move(1u));
+    ASSERT_TRUE(move(9u));
+    ASSERT_TRUE(up(9u));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.anchor(), 4u);
+    EXPECT_EQ(m_model.caret(), 13u);
+    EXPECT_EQ(m_model.selectedText(), "two three");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditWordSelectionTests, MovedFirstPressCannotTurnTheNextClickIntoWordSelection){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(down(1u, 1000u));
+    ASSERT_TRUE(move(3u));
+    ASSERT_TRUE(up(3u));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(click(1u, 1100u));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 1u);
+}
+
+TEST_F(UiEditWordSelectionTests, ExternalReplacementFencesASecondClickAgainstStaleGeometry){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(click(1u, 1000u));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_model.setText("replacement"));
+    ASSERT_TRUE(click(1u, 1100u));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "replacement");
+    EXPECT_EQ(m_model.caret(), m_model.text().size());
+    EXPECT_FALSE(m_model.hasSelection());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/layer_types.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_frame_delta_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiFrameDeltaTests, InvalidUpdatesDoNotEraseRetainedTime){
+    UiFrameDelta delta;
+    delta.add(0.25f);
+    delta.add(-3.0f);
+    delta.add(Limit<f32>::s_QuietNaN);
+    delta.add(Limit<f32>::s_Infinity);
+    delta.add(-Limit<f32>::s_Infinity);
+    EXPECT_FLOAT_EQ(delta.consume(), 0.25f);
+}
+
+TEST(UiFrameDeltaTests, LongStallSaturatesAtPaintDeltaLimit){
+    UiFrameDelta delta;
+    delta.add(Limit<f32>::s_Max);
+    delta.add(Limit<f32>::s_Max);
+    EXPECT_EQ(delta.consume(), Limit<f32>::s_Max);
+    EXPECT_FLOAT_EQ(delta.consume(), 0.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_multiline_clipboard_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditBoxTestSupport;
+
+class UiMultilineClipboardTests : public UiEditBoxHostTests{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiMultilineClipboardTests, NormalizedCapacityFailurePreservesSelectionAndHistory){
+    Ui::EditModel model(m_arena, { 6u }, Ui::EditTextMode::Multiline);
+    UiEditClipboardController controller(m_arena, m_clipboard);
+    const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_TRUE(model.setSelection(1u, 2u));
+    const u64 revision = model.revision();
+    const u64 selection = model.selectionGeneration();
+    m_clipboard.delayed = true;
+    ASSERT_EQ(controller.request(owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_TRUE(m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\r\nz"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.anchor(), 1u);
+    EXPECT_EQ(model.caret(), 2u);
+    EXPECT_EQ(model.revision(), revision);
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.canUndo());
+}
+
+TEST_F(UiMultilineClipboardTests, UnsupportedControlsRejectBeforeReplacement){
+    Ui::EditModel model(m_arena, {}, Ui::EditTextMode::Multiline);
+    UiEditClipboardController controller(m_arena, m_clipboard);
+    const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_TRUE(model.selectAll());
+    const u64 selection = model.selectionGeneration();
+    m_clipboard.delayed = true;
+    ASSERT_EQ(controller.request(owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_TRUE(m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\x01y"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.anchor(), 0u);
+    EXPECT_EQ(model.caret(), 3u);
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_multiline_native_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditBoxTestSupport;
+
+class UiMultilineNativeTests : public UiEditBoxHostTests{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiMultilineNativeTests, NoncanonicalPreeditRejectsRatherThanChangingNativeOffsets){
+    Ui::EditModel model(m_arena, {}, Ui::EditTextMode::Multiline);
+    UiTextEditSession session(m_arena, m_textInput);
+    const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
+    ASSERT_TRUE(model.setText("a\nb"));
+    const u64 selection = model.selectionGeneration();
+    ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.preedit("x\r\ny", 1u, 4u), TextInputAdmission::Accepted);
+    EXPECT_EQ(session.drain(owner, model).status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.composition().active);
+    EXPECT_FALSE(session.token().valid());
+}
+
+TEST_F(UiMultilineNativeTests, LaterOversizedCommitPreservesEarlierAcceptedNativeEdit){
+    Ui::EditModel model(m_arena, { 6u }, Ui::EditTextMode::Multiline);
+    UiTextEditSession session(m_arena, m_textInput);
+    const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.commit("y\r\nzz"), TextInputAdmission::Accepted);
+    const auto result = session.drain(owner, model);
+    EXPECT_EQ(result.status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(result.eventsApplied, 1u);
+    EXPECT_EQ(model.text(), "a\nbx");
+    EXPECT_FALSE(session.token().valid());
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_FALSE(model.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

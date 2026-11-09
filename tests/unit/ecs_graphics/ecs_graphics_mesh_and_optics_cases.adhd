@@ -1,0 +1,1303 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 EcsGraphicsMeshAndOpticsCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ecs_graphics/suite.adhd.h>
+
+
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_mesh_acceleration_update_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using NWB::Tests::EcsGraphicsCases::AcceptedRuntimeGeometry;
+
+TEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration){
+    auto mesh = AcceptedRuntimeGeometry();
+    mesh.runtimeGeometryContentRevision = 0u;
+    mesh.blasGeometryContentRevision = 0u;
+    mesh.swBvhGeometryContentRevision = 0u;
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+}
+
+TEST(MeshAccelerationUpdateTests, EachBackendTracksItsOwnAcceptedContentRevision){
+    auto mesh = AcceptedRuntimeGeometry();
+    ++mesh.runtimeGeometryContentRevision;
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    mesh.blasGeometryContentRevision = mesh.runtimeGeometryContentRevision;
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    mesh.swBvhGeometryContentRevision = mesh.runtimeGeometryContentRevision;
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+}
+
+TEST(MeshAccelerationUpdateTests, DirtyStorageAndMissingTopologyOverrideMatchingContents){
+    auto mesh = AcceptedRuntimeGeometry();
+    mesh.blasBuildPending = true;
+    mesh.swBvhBuildPending = true;
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    mesh.swBvhBuildPending = false;
+    mesh.swBvhTopologyBuilt = false;
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+}
+
+TEST(MeshAccelerationUpdateTests, ImmutableStaticGeometryNeedsAcceptanceButNoRuntimeRevision){
+    auto mesh = AcceptedRuntimeGeometry();
+    mesh.runtimeMesh = false;
+    mesh.runtimeGeometryContentRevision = 0u;
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_FALSE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+    mesh.blasBuildAccepted = false;
+    mesh.swBvhBuildAccepted = false;
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision));
+    EXPECT_TRUE(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_mesh_raytracing_snapshot_policy_tests{
+
+using namespace NWB::Impl;
+
+TEST(MeshRayTracingSnapshotPolicyTests, MissingMeshletBoundsDoNotPublishPartialSnapshot){
+    MeshResources mesh;
+    mesh.runtimeMesh = true;
+    mesh.runtimeGeometryContentRevision = 7u;
+    mesh.meshletCount = 1u;
+    auto snapshot = MeshRayTracingSnapshotPolicy::Capture(mesh);
+    EXPECT_EQ(snapshot.meshletCount, 0u);
+    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
+    snapshot.meshletCount = 1u;
+    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
+}
+
+TEST(MeshRayTracingSnapshotPolicyTests, IdentityIgnoresBuildStateButTracksGeometryRevision){
+    MeshResources mesh;
+    mesh.runtimeMesh = true;
+    mesh.runtimeGeometryContentRevision = 7u;
+    const auto current = MeshRayTracingSnapshotPolicy::Capture(mesh);
+    auto other = current;
+    other.blasBuildPending = !current.blasBuildPending;
+    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
+    ++other.runtimeGeometryContentRevision;
+    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
+}
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/mesh/mesh_view_state_policy.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_mesh_view_state_policy_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(MeshViewStatePolicyTests, MissingTruncatedAndChangedSnapshotsRequireUpload){
+    const MeshViewStatePolicy policy;
+    MeshViewGpuData view;
+    Array<u8, s_MeshViewGpuDataBytes> bytes{};
+    b8 valid = false;
+    const Span<const u8> full(bytes.data(), bytes.size());
+    const Span<const u8> truncated(bytes.data(), bytes.size() - 1u);
+
+    EXPECT_FALSE(policy.readAccepted(valid, full));
+    EXPECT_TRUE(policy.uploadRequired(valid, full, view));
+    policy.storeConfirmed(view, bytes, valid);
+    ASSERT_TRUE(valid);
+    ASSERT_TRUE(policy.readAccepted(valid, full));
+    EXPECT_FALSE(policy.uploadRequired(valid, full, view));
+    EXPECT_FALSE(policy.readAccepted(valid, truncated));
+    EXPECT_TRUE(policy.uploadRequired(valid, truncated, view));
+    bytes[0] ^= 1u;
+    EXPECT_TRUE(policy.uploadRequired(valid, full, view));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/mesh/object_geometry_constants.h>
+#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_object_geometry_cache_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::ECSRenderDetail;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesInDisjointRegions){
+    const Expected<ObjectGeometryCacheLayout> layout = MeshGeometryBufferPolicy().resolveObjectCacheLayout(3u * sizeof(MeshletLocalVertexRef), 3u);
+    ASSERT_TRUE(layout);
+    EXPECT_EQ(layout->indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    EXPECT_EQ(layout->bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+}
+
+TEST(ObjectGeometryCacheTests, LayoutRejectsEmptyMisalignedAndOverflowingInputs){
+    const Array<u64, 4> sizes = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
+    for(const u64 size : sizes){
+        EXPECT_FALSE(MeshGeometryBufferPolicy().resolveObjectCacheLayout(size, 3u));
+    }
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveObjectCacheLayout(sizeof(MeshletLocalVertexRef), 0u));
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveObjectCacheLayout(sizeof(MeshletLocalVertexRef), Limit<u32>::s_Max));
+}
+
+TEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteAddressing){
+    constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
+    constexpr u64 s_MaximumRecords = s_AddressableBytes / NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    // Reserve a full final structured record for the index region, including its view-alignment padding.
+    constexpr u64 s_LastValidRefBytes = (s_MaximumRecords - 2u) * sizeof(MeshletLocalVertexRef);
+    const Expected<ObjectGeometryCacheLayout> layout = MeshGeometryBufferPolicy().resolveObjectCacheLayout(s_LastValidRefBytes, 3u);
+    ASSERT_TRUE(layout);
+    EXPECT_LE(layout->bufferByteSize, s_AddressableBytes);
+    EXPECT_EQ(layout->bufferByteSize % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
+    EXPECT_EQ(layout->indexByteOffset + 3u * sizeof(u32), layout->bufferByteSize - 36u);
+    // Structured alignment padding pushes this index span past uint32 addressing.
+    EXPECT_LE(s_MaximumRecords * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE + 3u * sizeof(u32), s_AddressableBytes);
+    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveObjectCacheLayout(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), 3u));
+}
+
+TEST(ObjectGeometryCacheTests, RuntimeReuseRequiresAcceptedNonzeroCurrentContent){
+    MeshResources mesh;
+    mesh.runtimeMesh = true;
+    mesh.runtimeGeometryContentRevision = 7u;
+    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    mesh.objectGeometryCache.initialized = true;
+    mesh.objectGeometryCache.acceptedContent = true;
+    mesh.objectGeometryCache.acceptedContentRevision = 7u;
+    EXPECT_FALSE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    mesh.runtimeGeometryContentRevision = 8u;
+    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    mesh.runtimeGeometryContentRevision = 0u;
+    mesh.objectGeometryCache.acceptedContentRevision = 0u;
+    const ObjectGeometryCacheSnapshot pending = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+    EXPECT_TRUE(pending.requiresDecode);
+    mesh.runtimeGeometryContentRevision = 7u;
+    mesh.objectGeometryCache.acceptedContentRevision = 7u;
+    mesh.objectGeometryCache.acceptedContent = false;
+    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+}
+
+TEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfterAcceptance){
+    MeshResources mesh;
+    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    mesh.objectGeometryCache.acceptedContent = true;
+    mesh.objectGeometryCache.initialized = true;
+    const ObjectGeometryCacheSnapshot accepted = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+    EXPECT_FALSE(accepted.requiresDecode);
+    EXPECT_EQ(accepted.sourceRevision, 0u);
+    // A content decision never substitutes for the required retained resource and decoder bindings.
+    EXPECT_FALSE(accepted.valid());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
+
+#include <core/task/gpu/task_graph.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_opaque_csg_interval_clear_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Core = NWB::Core;
+namespace Impl = NWB::Impl;
+using TestArena = NWB::Tests::TestArena<>;
+
+
+TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear){
+    TestArena testArena;
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskDesc dependencyDesc;
+    dependencyDesc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("Incoming CSG Dependency");
+    const auto dependencyResult = graph.addTask(dependencyDesc);
+    ASSERT_TRUE(dependencyResult);
+    const Core::GpuTaskId dependency = *dependencyResult;
+    ASSERT_TRUE(dependency.valid());
+
+    usize initialTaskCount = 0u;
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        initialTaskCount = declarations.taskCount();
+        ASSERT_EQ(initialTaskCount, 1u);
+        ASSERT_TRUE(declarations.validTask(dependency));
+    }
+
+    Impl::DeferredFrameTargets targets;
+    Impl::GraphClearTimingRecordState clearTimingState;
+    const Impl::OpaqueCsgIntervalClearInputs inputs{
+        .targets = targets,
+        .csgFrameData = {},
+        .csgIntervalId = {},
+        .csgReceiverEventCount = {},
+        .csgPeelSubresources = {},
+        .csgReceiverEventCountSubresources = {},
+        .dependencyTask = dependency,
+        .hasOpaqueCsgFrameWork = false,
+    };
+    Impl::OpaqueCsgIntervalClearBuilder builder(graph);
+    const auto result = builder.declare(inputs, clearTimingState);
+    ASSERT_TRUE(result);
+    EXPECT_FALSE(result->clearTask.valid());
+    EXPECT_FALSE(result->clearFirstTask.valid());
+
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+    ASSERT_EQ(declarations.taskCount(), initialTaskCount);
+    EXPECT_TRUE(declarations.validTask(dependency));
+    EXPECT_EQ(declarations.taskAt(0u).id, dependency);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
+#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_opaque_gbuffer_resource_uses_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(OpaqueGbufferResourceUses, CsgSparseValidityKeepsReadWriteRangesWithoutOpaqueDraws){
+    Core::Alloc::ScratchArena scratch(Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueGbufferCsgSparse);
+    DeferredGraphResourceImportResult resources;
+    resources.csgCapBackNormal = { .generation = 1u, .index = 1u };
+    resources.csgIntervalDepth = { .generation = 1u, .index = 2u };
+    resources.csgIntervalId = { .generation = 1u, .index = 3u };
+    resources.csgReceiverEventData = { .generation = 1u, .index = 4u };
+    resources.csgReceiverEventCount = { .generation = 1u, .index = 5u };
+    const Core::TextureSubresourceSet peel(0u, 1u, 0u, 4u);
+    const Core::TextureSubresourceSet events(0u, 1u, 0u, 8u);
+    const Core::TextureSubresourceSet counts(0u, 1u, 0u, 1u);
+    const OpaqueGbufferResourceUseInputs inputs{
+        .resources = resources,
+        .materialInstanceRange = {},
+        .materialTypedRange = {},
+        .csgReceiverRange = {},
+        .csgCutterRange = {},
+        .csgPeelSubresources = peel,
+        .csgReceiverEventDataSubresources = events,
+        .csgReceiverEventCountSubresources = counts,
+        .hasOpaqueDrawItems = false,
+        .hasCsgFrameGpuWork = false,
+        .hasOpaqueCsgFrameWork = true,
+    };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ scratch };
+    OpaqueGbufferResourceUseBuilder::Append(inputs, uses);
+    ASSERT_EQ(uses.size(), 11u);
+    EXPECT_EQ(uses[1].resource, resources.csgCapBackNormal);
+    EXPECT_EQ(uses[1].access, Core::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[2].resource, resources.csgIntervalDepth);
+    EXPECT_EQ(uses[2].access, Core::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[3].resource, resources.csgIntervalId);
+    EXPECT_EQ(uses[3].access, Core::GpuTaskResourceAccess::ReadWrite);
+    EXPECT_EQ(uses[3].range.textureSubresources, peel);
+    EXPECT_EQ(uses[4].resource, resources.csgReceiverEventData);
+    EXPECT_EQ(uses[4].access, Core::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[4].range.textureSubresources, events);
+    EXPECT_EQ(uses[5].resource, resources.csgReceiverEventCount);
+    EXPECT_EQ(uses[5].access, Core::GpuTaskResourceAccess::ReadWrite);
+    EXPECT_EQ(uses[5].range.textureSubresources, counts);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/optics/graph_types.adhd.h>
+#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_optical_runtime_bounds_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(OpticalRuntimeBounds, UploadByteSizeRejectsEmptyMisalignedAndOutOfCapacity){
+    EXPECT_FALSE(OpticalUploadByteSizeFits(0u, 4u, sizeof(u32)));
+    EXPECT_FALSE(OpticalUploadByteSizeFits(4u, 3u, sizeof(u32)));
+    EXPECT_FALSE(OpticalUploadByteSizeFits(3u, 4u, sizeof(u32)));
+    EXPECT_FALSE(OpticalUploadByteSizeFits(4u, 4u, 0u));
+    EXPECT_TRUE(OpticalUploadByteSizeFits(4u, 4u, sizeof(u32)));
+}
+
+TEST(OpticalRuntimeBounds, FinalizeCountsRespectShaderAddressLimits){
+    constexpr usize s_MaxInputs = Limit<u32>::s_Max / sizeof(RayTracingOpticalRuntimeInputGpu);
+    constexpr usize s_MaxInstances = (Limit<u32>::s_Max - NWB_RT_OPTICAL_SCENE_HEADER_BYTES) / NWB_RT_OPTICAL_INSTANCE_BYTES;
+    EXPECT_FALSE(OpticalRuntimeInputCountFits(0u, 0u));
+    EXPECT_TRUE(OpticalRuntimeInputCountFits(s_MaxInputs, sizeof(RayTracingOpticalRuntimeInputGpu)));
+    EXPECT_FALSE(OpticalRuntimeInputCountFits(s_MaxInputs + 1u, sizeof(RayTracingOpticalRuntimeInputGpu)));
+    EXPECT_TRUE(OpticalSceneInstanceCountFits(s_MaxInstances));
+    EXPECT_FALSE(OpticalSceneInstanceCountFits(s_MaxInstances + 1u));
+}
+
+TEST(OpticalRuntimeBounds, GraphBufferRequiresResourceAndAcceptedUploadOrReuse){
+    RayTracingOpticalSceneGraphBuffer result;
+    EXPECT_FALSE(result.valid());
+    result.resource = { .generation = 1u, .index = 0u };
+    EXPECT_FALSE(result.valid());
+    result.reused = true;
+    EXPECT_TRUE(result.valid());
+    result.reused = false;
+    result.uploadTask = { .generation = 1u, .index = 0u };
+    EXPECT_TRUE(result.valid());
+    result.resource.generation = 0u;
+    EXPECT_FALSE(result.valid());
+}
+
+TEST(OpticalRuntimeBounds, MissingRuntimeBoundsPoisonsUnionWithoutDroppingInstance){
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalRuntimeBoundsGather) };
+    RayTracingOpticalSceneGather gather{ scratch, 8u };
+    RendererComponent renderer;
+    const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 5u);
+    gather.appendRuntime(Core::ECS::EntityID(1u, 0u), renderer, Core::BufferHandle{}, descriptor, {});
+    EXPECT_EQ(gather.instances.size(), 1u);
+    EXPECT_EQ(gather.header.transparentCount, 1u);
+    EXPECT_TRUE(gather.runtimeBounds.empty());
+    EXPECT_FALSE(gather.boundsCompleteExceptRuntime);
+    EXPECT_EQ(gather.header.flags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID, 0u);
+}
+
+TEST(OpticalRuntimeBounds, RejectedUploadControlDoesNotAllocateOrPublish){
+    Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalRuntimeBoundsRejectedUploadControl) };
+    const auto before = arena.memoryStats();
+    const auto rejected = CreateRayTracingOpticalUploadControl(arena, Core::BufferHandle{}, Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u });
+    ASSERT_FALSE(rejected.has_value());
+    const auto after = arena.memoryStats();
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/floating_point_environment_guard.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
+
+#include <core/alloc/general.h>
+
+#include <global/floating_point_environment.h>
+#include <global/simd/vector.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_optical_scene_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+struct OpticalSceneContext{
+    Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneUpload) };
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneGather) };
+    RayTracingOpticalSceneGather gather{ scratch, 4u };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, false, VectorZero(), VectorZero(), false);
+    renderer.opticalBoundaryMode = static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max);
+    context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, false, VectorZero(), VectorZero(), false);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
+    context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
+}
+
+TEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport){
+    const Array<OpticalBoundaryMode::Enum, 3> modes = { OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority, static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max), };
+    for(const auto mode : modes){
+        for(const b8 boundsValid : {false, true}){
+            OpticalSceneContext context;
+            RendererComponent renderer;
+            context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
+            renderer.opticalBoundaryMode = mode;
+            context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), boundsValid);
+            renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
+            context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
+            EXPECT_FALSE(context.gather.unspecifiedBoundariesOnly);
+            EXPECT_EQ(context.gather.header.flags, boundsValid ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
+        }
+    }
+}
+
+TEST(OpticalScene, IncompleteBoundsRemainRejectedWithUnspecifiedPolicySpecialization){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.markIncomplete();
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), false);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    EXPECT_EQ(context.gather.header.flags, 0u);
+    EXPECT_EQ(context.gather.instances[0].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
+}
+
+TEST(OpticalScene, OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.append(Core::ECS::EntityID(10u, 0u), renderer, false, VectorSet(-100.f, -100.f, -100.f, 0.f), VectorZero(), false);
+    context.gather.append(Core::ECS::EntityID(20u, 0u), renderer, true, VectorSet(-1.f, -2.f, -3.f, 0.f), VectorSet(1.f, 2.f, 3.f, 0.f), true);
+
+    ASSERT_EQ(context.gather.instances.size(), 2u);
+    EXPECT_EQ(context.gather.instances[0].entityId, Core::ECS::EntityID(10u, 0u).id);
+    EXPECT_EQ(context.gather.instances[0].flags, 0u);
+    EXPECT_EQ(context.gather.header.transparentCount, 1u);
+    EXPECT_EQ(context.gather.header.boundsMin.x, -1.f);
+    EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
+}
+
+
+TEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), false);
+    context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, true, VectorSet(-2.f, -2.f, -2.f, 0.f), VectorSet(2.f, 2.f, 2.f, 0.f), true);
+
+    EXPECT_EQ(context.gather.header.transparentCount, 2u);
+    EXPECT_EQ(context.gather.header.flags, 0u);
+    EXPECT_EQ(context.gather.instances[0].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
+}
+
+TEST(OpticalScene, NonfiniteAndInvertedBoundsRejectTheProof){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    const Array<Float3U, 2> invalidMins = {{ { Limit<f32>::s_Infinity, 0.f, 0.f }, { 2.f, 0.f, 0.f }, }};
+    for(const auto& boundsMin : invalidMins){
+        RayTracingOpticalSceneGather gather(context.scratch, 1u);
+        gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, LoadFloat(boundsMin), VectorSet(1.f, 1.f, 1.f, 0.f), true);
+        EXPECT_EQ(gather.header.flags, 0u);
+        EXPECT_EQ(gather.instances[0].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
+    }
+}
+
+TEST(OpticalScene, MissingGeometryInvalidatesEvenAnOtherwiseEmptyScene){
+    OpticalSceneContext context;
+    EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
+    context.gather.markIncomplete();
+    EXPECT_EQ(context.gather.header.transparentCount, 0u);
+    EXPECT_EQ(context.gather.header.flags, 0u);
+}
+
+TEST(OpticalScene, IncompleteBoundsHaveDistinctContentIdentity){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
+    const u64 initial = context.gather.contentHash();
+    context.gather.markIncomplete();
+    EXPECT_NE(initial, context.gather.contentHash());
+}
+
+TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.append(Core::ECS::EntityID(7u, 2u), renderer, true, VectorZero(), VectorSet(1.f, 2.f, 3.f, 0.f), true);
+    const RayTracingOpticalSceneUpload upload(context.arena, context.gather);
+    context.gather.instances.clear();
+    context.gather.header.transparentCount = 0u;
+
+    ASSERT_EQ(upload.bytes.size(), NWB_RT_OPTICAL_SCENE_HEADER_BYTES + NWB_RT_OPTICAL_INSTANCE_BYTES);
+    EXPECT_EQ(upload.instanceCount, 1u);
+    u32 storedCount = 0u;
+    u32 storedEntity = 0u;
+    NWB_MEMCPY(&storedCount, sizeof(storedCount), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET, sizeof(u32));
+    NWB_MEMCPY(&storedEntity, sizeof(storedEntity), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES, sizeof(u32));
+    EXPECT_EQ(storedCount, 1u);
+    EXPECT_EQ(storedEntity, Core::ECS::EntityID(7u, 2u).id);
+}
+
+TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation){
+    Float34U transform{};
+    transform._11 = -2.f;
+    transform._12 = 0.25f;
+    transform._14 = 100000.f;
+    transform._22 = 3.f;
+    transform._24 = -40000.f;
+    transform._33 = 0.5f;
+    const Float3U localMin(-3.f, -2.f, -1.f);
+    const Float3U localMax(1.f, 4.f, 5.f);
+    const auto bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(localMin), LoadFloat(localMax));
+    ASSERT_TRUE(bounds);
+    Float3U minimum{};
+    Float3U maximum{};
+    StoreFloat(bounds->minimum, minimum);
+    StoreFloat(bounds->maximum, maximum);
+    for(u32 corner = 0u; corner < 8u; ++corner){
+        const Array<f64, 3> coordinates = { (corner & 1u) ? localMax.x : localMin.x, (corner & 2u) ? localMax.y : localMin.y, (corner & 4u) ? localMax.z : localMin.z, };
+        for(usize row = 0u; row < 3u; ++row){
+            f64 exact = static_cast<f64>(transform.m[row][3u]);
+            for(usize column = 0u; column < 3u; ++column)
+                exact += static_cast<f64>(transform.m[row][column]) * coordinates[column];
+            EXPECT_LT(static_cast<f64>(minimum.raw[row]), exact);
+            EXPECT_GT(static_cast<f64>(maximum.raw[row]), exact);
+        }
+    }
+}
+
+TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
+    Array<volatile f32, 5> inputs = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
+    Float34U transform{};
+    transform._11 = inputs[0u];
+    transform._12 = inputs[1u];
+    transform._21 = inputs[0u];
+    transform._22 = inputs[2u];
+    transform._23 = inputs[3u];
+    transform._31 = inputs[2u];
+    transform._32 = inputs[0u];
+    transform._33 = inputs[2u];
+    transform._34 = inputs[0u];
+    const Float3U point(inputs[3u], inputs[4u], inputs[3u]);
+    const auto bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(point), LoadFloat(point));
+    ASSERT_TRUE(bounds);
+    Float3U minimum{};
+    Float3U maximum{};
+    StoreFloat(bounds->minimum, minimum);
+    StoreFloat(bounds->maximum, maximum);
+
+    // Probe point where reassociation or fused multiply-add changes containment.
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+    constexpr f64 s_ExpectedX = 0x1.fffffcp-1;
+#else
+    constexpr f64 s_ExpectedX = 0.0;
+#endif
+    EXPECT_LT(static_cast<f64>(minimum.x), s_ExpectedX);
+    EXPECT_GT(static_cast<f64>(maximum.x), s_ExpectedX);
+    for(usize lane = 1u; lane < 3u; ++lane){
+        EXPECT_LT(minimum.raw[lane], 0.0f);
+        EXPECT_GT(maximum.raw[lane], 0.0f);
+        const SIMDVectorSingle magnitude = VectorAbs(VectorSet(minimum.raw[lane], maximum.raw[lane], 0.0f, 0.0f));
+        EXPECT_LT(VectorGetX(magnitude), 0x1p-16f);
+        EXPECT_LT(VectorGetY(magnitude), 0x1p-16f);
+    }
+    EXPECT_LT(maximum.x - minimum.x, 0x1p-16f);
+}
+
+TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    const NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+    Float34U transform{};
+    transform._11 = -2.f;
+    transform._12 = 0.25f;
+    transform._14 = 100000.f;
+    transform._22 = 3.f;
+    transform._24 = -40000.f;
+    transform._33 = 0.5f;
+    SIMDMatrix objectToWorld = LoadFloat(transform);
+    const SIMDVectorSingle localMin = VectorSet(-3.f, -2.f, -1.f, 0.f);
+    const SIMDVectorSingle localMax = VectorSet(1.f, 4.f, 5.f, 0.f);
+    Array<volatile u32, 2> inactiveBits = { 0x7f800123u, 0xff800456u };
+    const SIMDVectorSingle poisonedMin = VectorSelect(localMin, VectorReplicateInt(inactiveBits[0]), s_SIMDMaskW);
+    const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
+    objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);
+    for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const auto reference = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
+        const i32 referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+        ASSERT_TRUE(reference);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const auto bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
+        const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+        ASSERT_TRUE(bounds);
+        EXPECT_EQ(actualFlags, referenceFlags);
+        EXPECT_EQ(actualFlags & FE_INVALID, 0);
+        EXPECT_EQ(VectorGetIntW(bounds->minimum), 0u);
+        EXPECT_EQ(VectorGetIntW(bounds->maximum), 0u);
+        EXPECT_TRUE(Vector4EqualInt(bounds->minimum, reference->minimum));
+        EXPECT_TRUE(Vector4EqualInt(bounds->maximum, reference->maximum));
+    }
+}
+
+TEST(OpticalScene, NonfiniteAffineBoundsNeverPublishAPartialResult){
+    Float34U transform{};
+    transform._11 = 1.f;
+    transform._22 = 1.f;
+    transform._33 = 1.f;
+    transform._34 = Limit<f32>::s_Infinity;
+    const auto bounds = ComputeOpticalWorldBounds(LoadFloat(transform), VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f));
+    EXPECT_FALSE(bounds);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_output_layer_color_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Compile the production Slang color helpers against C++ vector types.
+struct ShaderFloat3{
+    f64 x;
+    f64 y;
+    f64 z;
+
+
+public:
+    ShaderFloat3(const f64 scalar)noexcept
+        : x(scalar)
+        , y(scalar)
+        , z(scalar){}
+    ShaderFloat3(const f64 red, const f64 green, const f64 blue)noexcept
+        : x(red)
+        , y(green)
+        , z(blue){}
+};
+using float3 = ShaderFloat3;
+
+[[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble sum = VectorDoubleAdd(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(sum), VectorDoubleGetY(sum), VectorDoubleGetZ(sum) };
+}
+
+[[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(product), VectorDoubleGetY(product), VectorDoubleGetZ(product) };
+}
+
+[[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble quotient = VectorDoubleDivide(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 1.));
+    return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
+}
+
+// Sum lanes in scalar left-to-right order.
+[[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    return (a.x * b.x + a.y * b.y) + a.z * b.z;
+}
+
+[[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble larger = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(larger), VectorDoubleGetY(larger), VectorDoubleGetZ(larger) };
+}
+
+[[nodiscard]] f32 saturate(const f32 a)noexcept{
+    return a > 0.0f ? Min(1.0f, a) : 0.0f;
+}
+
+[[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
+    // Max then min in this operand order maps NaN and -0 to +0.
+    const SIMDVectorDouble lower = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleZero());
+    const SIMDVectorDouble saturated = VectorDoubleMin(VectorDoubleSplatOne(), lower);
+    return { VectorDoubleGetX(saturated), VectorDoubleGetY(saturated), VectorDoubleGetZ(saturated) };
+}
+
+[[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
+    // VectorDoublePow calls Pow per lane, so the bits match.
+    const SIMDVectorDouble power = VectorDoublePow(VectorDoubleSet(a.x, a.y, a.z, 1.), VectorDoubleReplicate(b));
+    return { VectorDoubleGetX(power), VectorDoubleGetY(power), VectorDoubleGetZ(power) };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/common/hdr10.slangi>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectColorNear(const ShaderFloat3 actual, const ShaderFloat3 expected, const f64 tolerance = 0.000001){
+    EXPECT_NEAR(actual.x, expected.x, tolerance);
+    EXPECT_NEAR(actual.y, expected.y, tolerance);
+    EXPECT_NEAR(actual.z, expected.z, tolerance);
+}
+
+
+TEST(OutputLayerColor, TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresSceneExposure){
+    const float3 scene(0.1, 3., 100.);
+    ExpectColorNear(nwbHdr10EncodeSceneWithUi(scene, float3(0.), 0.f), nwbHdr10EncodeScene(scene));
+    const float3 ui(0.2, 0.5, 0.9);
+    const float3 expected = nwbHdr10EncodeUiLinear(ui);
+    ExpectColorNear(nwbHdr10EncodeSceneWithUi(scene, ui, 1.f), expected);
+    ExpectColorNear(nwbHdr10EncodeSceneWithUi(scene * 64., ui, 1.f), expected);
+}
+
+TEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding){
+    // Half-opacity paper white over black is 101.5 nits, not half of the encoded paper-white signal.
+    const float3 actual = nwbHdr10EncodeSceneWithUi(float3(0.), float3(0.5), 0.5f);
+    ExpectColorNear(actual, nwbHdr10PqEncodeNits(float3(101.5)));
+    const float3 encodedBlend = nwbHdr10EncodeUiLinear(float3(1.)) * 0.5;
+    EXPECT_GT(actual.x - encodedBlend.x, 0.1);
+}
+
+TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound){
+    EXPECT_LT(nwbHdr10SceneToNits(float3(100.)).x, 1000.);
+    ExpectColorNear(nwbHdr10EncodeUiLinear(float3(-1.)), nwbHdr10EncodeUiLinear(float3(0.)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+#include <impl/ecs_render/deferred/task_graph_present_task.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_output_layer_contract_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+
+class RecordingLayerContributor final : public Core::IGpuTaskGraphOutputLayerContributor{
+public:
+    virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame&)noexcept override{
+        return true;
+    }
+
+    virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph&)noexcept override{
+        return Core::GpuTaskGraphOutputLayer{};
+    }
+
+    virtual void acceptTaskGraphOutputLayer(const u64, const Core::QueueSubmissionToken&)noexcept override{
+        ++acceptanceCount;
+    }
+
+
+public:
+    u32 acceptanceCount = 0u;
+};
+
+TEST(OutputLayer, MissingContributorInvalidTokenAndZeroGenerationCannotPublishAcceptance){
+    RecordingLayerContributor contributor;
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, 17u, {});
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, {});
+    EXPECT_EQ(contributor.acceptanceCount, 0u);
+    const Core::QueueSubmissionToken consumerToken{ .value = 101u, .physicalQueueIndex = 0u, .deviceGeneration = 3u, .queue = Core::CommandQueue::Graphics, };
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, consumerToken);
+    EXPECT_EQ(contributor.acceptanceCount, 1u);
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 0u, consumerToken);
+    EXPECT_EQ(contributor.acceptanceCount, 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_prepared_software_bvh_graph_resources_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using TestArena = Tests::TestArena<struct PreparedSoftwareBvhGraphResourcesTestsTag>;
+
+struct BuildContext{
+    TestArena testArena;
+    Core::GpuTaskGraph graph{ testArena.arena };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(PreparedSoftwareBvhGraphResources, MissingImportedBuildBuffersCannotPublishResources){
+    BuildContext context;
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsPreparedSwBvhMissing)};
+    const auto emptyResources = ResolvePreparedSoftwareBvhGraphResources(context.graph, {}, scratch);
+    ASSERT_TRUE(emptyResources);
+    EXPECT_TRUE(emptyResources->empty());
+    const PreparedMeshSwBvhBuild missingBuild{};
+    EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(context.graph, Span<const PreparedMeshSwBvhBuild>(&missingBuild, 1u), scratch));
+    const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
+    ASSERT_TRUE(view.valid());
+    EXPECT_EQ(view.resourceCount(), 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_presentation_settings_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Impl;
+
+TEST(PresentationSettings, AcceptsZeroExposureAtTheLowerBoundary){
+    PresentationSettings settings;
+    settings.toneMap = PresentationToneMap::LinearClamp;
+    settings.exposure = 0.f;
+    EXPECT_TRUE(ValidatePresentationSettings(settings));
+}
+
+TEST(PresentationSettings, RejectsNonFiniteOrNegativeExposure){
+    PresentationSettings settings;
+    settings.exposure = -1.f;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings.exposure = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings.exposure = Limit<f32>::s_Infinity;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+}
+
+TEST(PresentationSettings, RejectsInvalidToneMapAndNonPositiveOrNonFiniteShoulder){
+    PresentationSettings settings;
+    settings.toneMap = static_cast<PresentationToneMap::Enum>(255u);
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings = PresentationSettings{};
+    settings.shoulder = 0.f;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings.shoulder = -0.65f;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings.shoulder = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+    settings.shoulder = Limit<f32>::s_Infinity;
+    EXPECT_FALSE(ValidatePresentationSettings(settings));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ray_surface_lighting_contract_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(EcsGraphics, RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAvailability){
+    NWB::Impl::RayTracingSceneGraphResources resources;
+    resources.hardwareAvailable = true;
+    EXPECT_FALSE(resources.valid());
+}
+
+TEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena){
+    NWB::Tests::TestArena<struct RaySceneGraphReadsTestsTag> testArena;
+    NWB::Core::GpuTaskGraph graph(testArena.arena);
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRaySceneGraphReadsScratch)};
+    NWB::Impl::RayTracingSceneGraphResources resources;
+    const auto scratchBefore = scratchArena.memoryStats();
+    const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(resources, NWB::Core::ResourceStates::Common, {}, graph, scratchArena);
+    const auto scratchAfter = scratchArena.memoryStats();
+
+    EXPECT_FALSE(reads.has_value());
+    EXPECT_EQ(scratchAfter.usedBytes, scratchBefore.usedBytes);
+    EXPECT_EQ(scratchAfter.reservedBytes, scratchBefore.reservedBytes);
+    EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
+    EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
+    EXPECT_EQ(scratchAfter.deallocationCount, scratchBefore.deallocationCount);
+    const NWB::Core::GpuTaskGraph::DeclarationReadView view(graph);
+    ASSERT_TRUE(view.valid());
+    EXPECT_EQ(view.resourceCount(), 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
+#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd.h>
+#include <impl/ecs_render/raytrace/scene_bvh_upload_policy.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_raytracing_scene_identity_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(RayTracingSceneIdentityTests, UntrustedScenesNeverPublishTrustedContentAndAbsentCsgIsIgnored){
+    const RayTracingSceneIdentityBuilder builder;
+    const RayTracingSceneContentStamp complete = builder.buildSoftwareContentStamp(7u, 11u, 13u, false, 17u, true, true);
+    const RayTracingSceneContentStamp ignored = builder.buildSoftwareContentStamp(7u, 11u, 13u, false, 19u, true, true);
+    const RayTracingSceneContentStamp incomplete = builder.buildSoftwareContentStamp(7u, 11u, 13u, false, 17u, true, false);
+    const RayTracingSceneContentStamp dynamic = builder.buildSoftwareContentStamp(7u, 11u, 13u, false, 17u, false, true);
+    const RayTracingSceneContentStamp csg = builder.buildSoftwareContentStamp(7u, 11u, 13u, true, 17u, true, true);
+
+    EXPECT_TRUE(complete.trusted);
+    EXPECT_EQ(complete.geometry, 7u);
+    EXPECT_EQ(complete.material, ignored.material);
+    EXPECT_FALSE(incomplete.trusted);
+    EXPECT_FALSE(dynamic.trusted);
+    EXPECT_NE(complete.material, csg.material);
+}
+
+
+TEST(SceneBvhUploadPolicy, StaleReuseAndUnacceptedUploadCannotPublishCacheIdentity){
+    const SceneBvhUploadPolicy policy;
+    u64 acceptedHash = 41u;
+    b8 acceptedValid = true;
+    EXPECT_FALSE(policy.publishAcceptedUpload(false, true, true, 99u, acceptedHash, acceptedValid));
+    EXPECT_EQ(acceptedHash, 41u);
+    EXPECT_TRUE(acceptedValid);
+    EXPECT_FALSE(policy.publishAcceptedUpload(true, false, true, 99u, acceptedHash, acceptedValid));
+    EXPECT_EQ(acceptedHash, 41u);
+    EXPECT_TRUE(acceptedValid);
+    EXPECT_FALSE(policy.snapshotAccepted(false, true, false, 41u, 41u, 3u, 3u));
+    EXPECT_FALSE(policy.snapshotAccepted(false, true, true, 41u, 42u, 3u, 3u));
+    EXPECT_FALSE(policy.snapshotAccepted(false, true, true, 41u, 41u, 3u, 4u));
+    EXPECT_FALSE(policy.snapshotAccepted(false, false, true, 41u, 41u, 3u, 3u));
+    EXPECT_TRUE(policy.snapshotAccepted(false, true, true, 41u, 41u, 3u, 3u));
+    EXPECT_TRUE(policy.snapshotAccepted(true, false, false, 41u, 42u, 3u, 4u));
+    EXPECT_TRUE(policy.publishAcceptedUpload(true, true, false, 99u, acceptedHash, acceptedValid));
+    EXPECT_EQ(acceptedHash, 41u);
+    EXPECT_FALSE(acceptedValid);
+}
+
+
+TEST(RayTracingBuildPolicy, StaleTlasCompletionCannotPublishTheOldSceneOrClearFreshBacking){
+    const RayTracingBuildPolicy policy;
+    u64 cachedHash = 41u;
+    b8 cacheValid = true;
+    b8 backingFresh = true;
+    policy.publishConfirmedSceneTlasBuild(false, true, 99u, cachedHash, cacheValid, backingFresh);
+    EXPECT_EQ(cachedHash, 41u);
+    EXPECT_FALSE(cacheValid);
+    EXPECT_TRUE(backingFresh);
+    policy.publishConfirmedSceneTlasBuild(true, true, 99u, cachedHash, cacheValid, backingFresh);
+    EXPECT_EQ(cachedHash, 99u);
+    EXPECT_TRUE(cacheValid);
+    EXPECT_FALSE(backingFresh);
+    policy.publishConfirmedSceneTlasBuild(true, false, 111u, cachedHash, cacheValid, backingFresh);
+    EXPECT_EQ(cachedHash, 99u);
+    EXPECT_FALSE(cacheValid);
+    EXPECT_FALSE(backingFresh);
+}
+
+
+TEST(RefractiveBoundsIsolation, TouchingTheCertifiedMarginIsNotIsolated){
+    const RefractiveBoundsIsolation policy;
+    Array<RayTracingInstanceWorldBounds, 2> bounds{};
+    bounds[0].minimum = Float3U(0.0f, 0.0f, 0.0f);
+    bounds[0].maximum = Float3U(1.0f, 1.0f, 1.0f);
+    bounds[1].minimum = Float3U(1.0f + s_RefractionCertifiedBoundsMargin, 0.0f, 0.0f);
+    bounds[1].maximum = Float3U(2.0f, 1.0f, 1.0f);
+    EXPECT_FALSE(policy.isIsolated(bounds, 0u));
+    EXPECT_FALSE(policy.isIsolated(bounds, 2u));
+    bounds[1].minimum.x = 1.0f + s_RefractionCertifiedBoundsMargin * 2.0f;
+    EXPECT_TRUE(policy.isIsolated(bounds, 0u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

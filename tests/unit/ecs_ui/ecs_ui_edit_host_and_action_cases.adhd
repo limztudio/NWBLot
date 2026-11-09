@@ -1,0 +1,1474 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 EcsUiEditHostAndActionCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ecs_ui/suite.adhd.h>
+
+
+#include <impl/ecs_ui/clipboard_publications.adhd.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_clipboard_publication_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core;
+using namespace NWB::Impl;
+using UiEditHostFixtureSupport::FakeClipboard;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    UiClipboardPublications publications(arena.arena, service);
+    AString<Alloc::GlobalArena> source("copied", arena.arena);
+    ASSERT_EQ(publications.request(source), UiClipboardPublicationStatus::Pending);
+    source.assign("changed");
+    const auto read = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(read);
+    ASSERT_TRUE(service.pump());
+    EXPECT_EQ(service.startedOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(service.startedText, "copied");
+    EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Pending);
+    ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(service.pump());
+    EXPECT_EQ(service.startedOperation, ClipboardOperation::ReadText);
+    EXPECT_EQ(service.startedToken, *read);
+    ASSERT_TRUE(service.deliver(*read, ClipboardStatus::Success, "copied"));
+    const auto result = publications.drain();
+    EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
+    EXPECT_EQ(result.published, 1u);
+    EXPECT_EQ(publications.pending(), 0u);
+    ClipboardCompletion completion(arena.arena);
+    ASSERT_EQ(service.poll(*read, completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(completion.text, "copied");
+}
+
+TEST(UiClipboardPublications, BoundedQueueAndExplicitResetReleaseAllPendingNativeTokens){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    UiClipboardPublications publications(arena.arena, service);
+    for(usize index = 0u; index < s_UiClipboardMaxPublications; ++index)
+        ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+    EXPECT_EQ(publications.pending(), s_UiClipboardMaxPublications);
+    EXPECT_EQ(publications.request("overflow"), UiClipboardPublicationStatus::QueueFull);
+    ASSERT_TRUE(service.pump());
+    const auto old = service.startedToken;
+    ASSERT_TRUE(publications.cancel());
+    EXPECT_EQ(publications.pending(), 0u);
+    EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
+    EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Idle);
+    EXPECT_EQ(publications.request("new"), UiClipboardPublicationStatus::Pending);
+}
+
+TEST(UiClipboardPublications, CompletionFailuresAreReportedAndConsumedWithoutLosingSuccessfulPublications){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    UiClipboardPublications publications(arena.arena, service);
+    ASSERT_EQ(publications.request("success"), UiClipboardPublicationStatus::Pending);
+    ASSERT_EQ(publications.request("failure"), UiClipboardPublicationStatus::Pending);
+    ASSERT_EQ(publications.request("unsupported"), UiClipboardPublicationStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::NativeFailure));
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Unsupported));
+    const auto result = publications.drain();
+    EXPECT_EQ(result.published, 1u);
+    EXPECT_EQ(result.failed, 2u);
+    EXPECT_EQ(result.status, UiClipboardPublicationStatus::Unsupported);
+    EXPECT_EQ(publications.pending(), 0u);
+    EXPECT_EQ(publications.drain().failed, 0u);
+}
+
+TEST(UiClipboardPublications, InvalidInputAndUnsupportedChannelNeverAdmitNativeWork){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    UiClipboardPublications publications(arena.arena, service);
+    EXPECT_EQ(publications.request("\xC0\xAF"), UiClipboardPublicationStatus::InvalidText);
+    EXPECT_EQ(publications.request(AStringView("a\0b", 3u)), UiClipboardPublicationStatus::InvalidText);
+    EXPECT_EQ(publications.request("primary", ClipboardChannel::PrimarySelection), UiClipboardPublicationStatus::Unsupported);
+    EXPECT_EQ(publications.pending(), 0u);
+    ASSERT_TRUE(service.pump());
+    EXPECT_FALSE(service.startedToken.valid());
+}
+
+TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublication){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    UiClipboardPublications publications(arena.arena, service);
+    ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+    UiClipboardPublicationStatus::Enum requested = UiClipboardPublicationStatus::Idle;
+    UiClipboardPublicationStatus::Enum drained = UiClipboardPublicationStatus::Idle;
+    b8 cancelled = true;
+    Thread other([&]()noexcept{
+        requested = publications.request("other");
+        drained = publications.drain().status;
+        cancelled = publications.cancel();
+    });
+    other.join();
+    EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
+    EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);
+    EXPECT_FALSE(cancelled);
+    EXPECT_EQ(publications.pending(), 1u);
+    EXPECT_TRUE(publications.cancel());
+}
+
+TEST(UiClipboardPublications, DestructionCancelsUndeliveredWorkBeforeServiceRetirement){
+    Tests::TestArena arena;
+    FakeClipboard service(arena.arena, true);
+    ClipboardRequestToken old;
+    {
+        UiClipboardPublications publications(arena.arena, service);
+        ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+        ASSERT_TRUE(service.pump());
+        old = service.startedToken;
+    }
+    EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
+    ClipboardCompletion completion(arena.arena);
+    EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_configurable_edit_input_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditNavigationTestSupport;
+using UiEditActionTestSupport::UiEditActionHostTests;
+
+class UiConfigurableEditInputTests : public UiEditNavigationHostTests{
+protected:
+    [[nodiscard]] b8 command(const Ui::InputCommand::Enum command, const b8 extend = false, const Ui::InputSource source = { 7u, 3u }){
+        Ui::InputEvent event;
+        event.type = Ui::InputEventType::CommandDown;
+        event.source = source;
+        event.command = command;
+        event.extend = extend;
+        event.edit = true;
+        if(!dispatch(event))
+            return false;
+        event.type = Ui::InputEventType::CommandUp;
+        return dispatch(event);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiConfigurableEditInputTests, EmptyKeyboardProfileLeavesNativeTextAndExplicitCommandsAvailable){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(m_context.input().setBindings({}));
+    ASSERT_TRUE(key(Core::Key::Left));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_TRUE(command(Ui::InputCommand::Left));
+    ASSERT_EQ(m_textInput.commit("X"), TextInputAdmission::Accepted);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "abXc");
+    EXPECT_EQ(m_model.caret(), 3u);
+}
+
+TEST_F(UiConfigurableEditInputTests, CopiedCommandRetainsItsMeaningAfterTheBindingProfileChanges){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(activate());
+    const Ui::InputKeyBinding left{ .key = Core::Key::F8, .command = Ui::InputCommand::Left };
+    const Ui::InputKeyBinding erase{ .key = Core::Key::F8, .command = Ui::InputCommand::Backspace };
+    ASSERT_TRUE(m_context.input().setBindings(Span(&left, 1u)));
+    ASSERT_TRUE(key(Core::Key::F8));
+    ASSERT_TRUE(m_context.input().setBindings(Span(&erase, 1u)));
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "abc");
+    EXPECT_EQ(m_model.caret(), 2u);
+    ASSERT_TRUE(key(Core::Key::F8));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "ac");
+    EXPECT_EQ(m_model.caret(), 1u);
+}
+
+TEST_F(UiConfigurableEditInputTests, SemanticCancelFirstCancelsCompositionThenCancelsTheEditor){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    ASSERT_EQ(m_textInput.preedit("x", 1u, 1u), TextInputAdmission::Accepted);
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_model.composition().active);
+    ASSERT_TRUE(command(Ui::InputCommand::Cancel));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_FALSE(m_result.cancelled);
+    EXPECT_EQ(m_model.text(), "base");
+    ASSERT_TRUE(command(Ui::InputCommand::Cancel));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_FALSE(m_context.input().focus().valid());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditActionHostTests, DuplicateSemanticAcceptDownSubmitsOncePerHeldSource){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_EQ(m_model.text(), "42");
+    Ui::InputEvent event;
+    event.type = Ui::InputEventType::CommandDown;
+    event.source = { 7u, 3u };
+    event.command = Ui::InputCommand::Accept;
+    ASSERT_TRUE(dispatch(event));
+    ASSERT_TRUE(dispatch(event));
+    event.type = Ui::InputEventType::CommandUp;
+    ASSERT_TRUE(dispatch(event));
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.submitted);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    event.type = Ui::InputEventType::CommandDown;
+    ASSERT_TRUE(dispatch(event));
+    event.type = Ui::InputEventType::CommandUp;
+    ASSERT_TRUE(dispatch(event));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 2u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_action_lifetime_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditActionTestSupport;
+
+TEST_F(UiEditActionHostTests, FreshActionBindingAbandonsOnlyWhileTheModelIsLent){
+    ASSERT_TRUE(m_model.setText("orphan"));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_result.abandoned);
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+}
+
+TEST_F(UiEditActionHostTests, ExternalDraftReplacementRemainsAuthoritativeWhileOldNativeTextIsDiscarded){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(commitNative("old"));
+    m_host.collectNative();
+    ASSERT_TRUE(m_model.setText("fresh"));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "fresh");
+    EXPECT_EQ(m_actions.committed, "0");
+    EXPECT_TRUE(m_actions.records.empty());
+    EXPECT_FALSE(m_result.abandoned);
+}
+
+TEST_F(UiEditActionHostTests, OmissionRetiresNativeOwnershipAndRestoresOnlyOnRedeclaration){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "42");
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    const u64 declaration = m_widget.declarationGeneration;
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_TRUE(m_actions.records.empty());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(actionFrame());
+    EXPECT_NE(m_widget.declarationGeneration, declaration);
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+}
+
+TEST_F(UiEditActionHostTests, HostResetCannotTouchUnlentDraftButTheNextBindingAbandonsIt){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    m_host.reset();
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+}
+
+TEST_F(UiEditActionHostTests, DisableAbandonsDirtyDraftAndRejectsCollectedOldSessionText){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(commitNative("late"));
+    m_host.collectNative();
+    Ui::EditBoxOptions disabled;
+    disabled.enabled = false;
+    ASSERT_TRUE(actionFrame(disabled));
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_FALSE(m_result.focused);
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+    ASSERT_TRUE(actionFrame(disabled));
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+}
+
+TEST_F(UiEditActionHostTests, ReadOnlyTransitionRestoresBeforeSnapshotAndKeepsSelectionCopyAvailable){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    Ui::EditBoxOptions readOnly;
+    readOnly.readOnly = true;
+    ASSERT_TRUE(actionFrame(readOnly));
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_TRUE(m_result.abandoned);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    ASSERT_TRUE(key(Core::Key::A, false, true));
+    ASSERT_TRUE(key(Core::Key::C, false, true));
+    ASSERT_TRUE(actionFrame(readOnly));
+    EXPECT_EQ(m_model.selectedText(), "0");
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_TRUE(actionFrame(readOnly));
+    EXPECT_EQ(m_clipboard.document, "0");
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_EQ(m_actions.committed, "0");
+}
+
+TEST_F(UiEditActionHostTests, NativeFocusLossAndGainAbandonsRatherThanCommittingOrdinaryBlur){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(commitNative("late"));
+    m_host.collectNative();
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost }));
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusGained }));
+    EXPECT_EQ(m_model.text(), "42");
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_EQ(actionCount(Ui::EditAction::Blur), 0u);
+    EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
+    EXPECT_FALSE(m_result.focused);
+}
+
+TEST_F(UiEditActionHostTests, FocusTransferCancelsPendingPasteBeforeOrderedBlurCanCommit){
+    ASSERT_TRUE(activateActions());
+    m_clipboard.document.assign("old paste");
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(m_clipboard.pump());
+    const ClipboardRequestToken request = m_clipboard.startedToken;
+    ASSERT_TRUE(request.valid());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(focusOther());
+    EXPECT_FALSE(m_clipboard.deliver(request, ClipboardStatus::Success, "old paste"));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(actionCount(Ui::EditAction::Blur), 1u);
+    ASSERT_TRUE(focusEditor());
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "42");
+}
+
+TEST_F(UiEditActionHostTests, CancelRestorationFencesNativeSessionAndDelayedClipboardCompletion){
+    ASSERT_TRUE(activateActions());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_TRUE(m_clipboard.pump());
+    const ClipboardRequestToken request = m_clipboard.startedToken;
+    ASSERT_TRUE(request.valid());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_FALSE(m_clipboard.deliver(request, ClipboardStatus::Success, "late"));
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_action_order_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiEditActionTestSupport;
+
+TEST_F(UiEditActionHostTests, SubmitObservesItsExactPositionBeforeLaterCopiedNativeText){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    m_host.collectNative();
+    EXPECT_EQ(m_model.text(), "0");
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.submitted);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(m_model.text(), "427");
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "42");
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "42");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "0");
+}
+
+TEST_F(UiEditActionHostTests, CanonicalizingSubmitPreservesLaterCopiedCommitWhileRetiringItsNativeSession){
+    ASSERT_TRUE(activateActions());
+    m_actions.canonicalizeSubmit = true;
+    const u64 external = m_model.externalRevision();
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    m_host.collectNative();
+    EXPECT_EQ(m_model.text(), "0");
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.submitted);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(m_model.text(), "427");
+    EXPECT_EQ(m_model.externalRevision(), external + 1u);
+    EXPECT_EQ(m_model.anchor(), 3u);
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "42");
+    ASSERT_TRUE(m_textInput.activeSession().valid());
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditActionHostTests, SeveralSubmitsInOneBatchEachObserveTheirOwnDraft){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("12"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("3"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("4"));
+    ASSERT_TRUE(actionFrame());
+    ASSERT_EQ(m_actions.records.size(), 2u);
+    EXPECT_EQ(m_actions.records[0u].text, "12");
+    EXPECT_EQ(m_actions.records[1u].text, "123");
+    EXPECT_EQ(m_actions.committed, "123");
+    EXPECT_EQ(m_model.text(), "1234");
+}
+
+TEST_F(UiEditActionHostTests, CancelRestoresLastSubmittedDraftAndFencesRemainingOldOwnerText){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(commitNative("9"));
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.submitted);
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_FALSE(m_result.focused);
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(m_model.text(), "42");
+    ASSERT_EQ(m_actions.records.size(), 2u);
+    EXPECT_EQ(m_actions.records[1u].action, Ui::EditAction::Cancel);
+    EXPECT_EQ(m_actions.records[1u].text, "427");
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditActionHostTests, TextBeforeTabIsLentBeforeItsOrderedBlurBoundary){
+    ASSERT_TRUE(activateActions());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(focusOther());
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.blurred);
+    EXPECT_FALSE(m_result.focused);
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_EQ(m_actions.committed, "42");
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].action, Ui::EditAction::Blur);
+    EXPECT_EQ(m_actions.records[0u].text, "42");
+    EXPECT_FALSE(m_model.canUndo());
+    ASSERT_TRUE(actionFrame());
+    EXPECT_EQ(actionCount(Ui::EditAction::Blur), 1u);
+}
+
+TEST_F(UiEditActionHostTests, BlurRestorationOccursBeforeTheCurrentPaintSnapshot){
+    ASSERT_TRUE(activateActions());
+    m_actions.rejectBlur = true;
+    ASSERT_TRUE(replaceNative("-"));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(actionFrame());
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "-");
+    EXPECT_EQ(m_actions.committed, "0");
+    EXPECT_EQ(m_model.text(), "0");
+    EXPECT_EQ(m_model.caret(), 1u);
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_TRUE(m_result.blurred);
+    EXPECT_TRUE(m_result.textChanged);
+}
+
+TEST_F(UiEditActionHostTests, BlurThenRefocusSameWidgetRetainsNewEpochCharacterAfterRestoration){
+    ASSERT_TRUE(activateActions());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusEditor());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    ASSERT_TRUE(m_host.character('7'));
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "old"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.blurred);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(m_model.text(), "427");
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].text, "42");
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+}
+
+TEST_F(UiEditActionHostTests, OldEpochCancelDoesNotClearLaterRefocusOrApplyItsRetiredBlur){
+    ASSERT_TRUE(activateActions());
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(focusOther());
+    ASSERT_TRUE(focusEditor());
+    ASSERT_TRUE(m_host.character('8'));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(m_model.text(), "428");
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+    EXPECT_EQ(actionCount(Ui::EditAction::Cancel), 1u);
+    EXPECT_EQ(actionCount(Ui::EditAction::Blur), 0u);
+}
+
+TEST_F(UiEditActionHostTests, ActivePreeditOwnsEnterAndFirstEscapeBeforeNumericCancel){
+    ASSERT_TRUE(activateActions());
+    ASSERT_EQ(m_textInput.preedit("\xEA\xB0\x80", 3u, 3u), TextInputAdmission::Accepted);
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_model.composition().active);
+    EXPECT_FALSE(m_result.submitted);
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_FALSE(m_result.cancelled);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_TRUE(m_actions.records.empty());
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(actionFrame());
+    EXPECT_TRUE(m_result.cancelled);
+    EXPECT_FALSE(m_result.focused);
+    ASSERT_EQ(m_actions.records.size(), 1u);
+    EXPECT_EQ(m_actions.records[0u].action, Ui::EditAction::Cancel);
+}
+
+TEST_F(UiEditActionHostTests, FailedSubmitStopsLaterEventsAndKeepsPreviouslyAcceptedTargets){
+    ASSERT_TRUE(activateActions());
+    const u64 accepted = m_context.input().layoutGeneration();
+    const usize targets = m_context.input().targets().size();
+    m_actions.failSubmit = true;
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    EXPECT_FALSE(actionFrame());
+    EXPECT_FALSE(m_result.valid);
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_EQ(m_actions.committed, "0");
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+    EXPECT_EQ(m_context.input().layoutGeneration(), accepted);
+    EXPECT_EQ(m_context.input().targets().size(), targets);
+}
+
+TEST_F(UiEditActionHostTests, HostResetReentryRejectsBeforeDestroyingBorrowedEntryStorage){
+    ASSERT_TRUE(activateActions());
+    const u64 accepted = m_context.input().layoutGeneration();
+    const usize targets = m_context.input().targets().size();
+    m_actions.resetHost = &m_host;
+    ASSERT_TRUE(replaceNative("42"));
+    ASSERT_TRUE(key(Core::Key::Enter));
+    ASSERT_TRUE(commitNative("7"));
+    EXPECT_FALSE(actionFrame());
+    EXPECT_FALSE(m_result.valid);
+    EXPECT_EQ(m_model.text(), "42");
+    EXPECT_EQ(m_actions.committed, "42");
+    EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
+    EXPECT_EQ(m_context.input().layoutGeneration(), accepted);
+    EXPECT_EQ(m_context.input().targets().size(), targets);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_box_host_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core;
+using namespace NWB::Impl;
+
+using namespace UiEditBoxTestSupport;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditBoxHostTests, NativeCommitLocalLeftAndNativeCommitRetainTheirEventOrder){
+    ASSERT_TRUE(activate());
+    ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    ASSERT_TRUE(key(Core::Key::Left));
+    ASSERT_EQ(m_textInput.commit("y"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    EXPECT_EQ(m_model.text(), "");
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "yx");
+    EXPECT_EQ(m_model.caret(), 1u);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_result.textChanged);
+    EXPECT_EQ(m_model.text(), "yx");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "x");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "");
+}
+
+TEST_F(UiEditBoxHostTests, QueuedCommitCannotReachAReplacementModelAtTheSameWidget){
+    ASSERT_TRUE(m_model.setText("old"));
+    ASSERT_TRUE(activate());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    Ui::EditModel replacement(m_arena);
+    ASSERT_TRUE(replacement.setText("replacement"));
+    ASSERT_TRUE(frame(replacement));
+    EXPECT_EQ(m_model.text(), "old");
+    EXPECT_EQ(replacement.text(), "replacement");
+    EXPECT_FALSE(replacement.canUndo());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditBoxHostTests, RemovingThenRedeclaringTheWidgetFencesItsOldNativeQueue){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    const Ui::WidgetState oldWidget = m_widget;
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_FALSE(m_host.hasTextFocus());
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_widget.id, oldWidget.id);
+    EXPECT_NE(m_widget.declarationGeneration, oldWidget.declarationGeneration);
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditBoxHostTests, ExternalSameTextResetFencesAnAlreadyCollectedCommit){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    const u64 revision = m_model.revision();
+    const u64 externalRevision = m_model.externalRevision();
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(m_model.setText("base"));
+    EXPECT_EQ(m_model.revision(), revision);
+    EXPECT_GT(m_model.externalRevision(), externalRevision);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+}
+
+TEST_F(UiEditBoxHostTests, FocusLossAndImmediateRefocusCannotReviveAnOwnedOldCommit){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    m_context.input().clearFocus();
+    m_host.synchronizeFocus();
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+    ASSERT_EQ(m_textInput.commit("fresh"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "basefresh");
+}
+
+TEST_F(UiEditBoxHostTests, LosingFocusCancelsPreeditAtTheNextModelLoanAndRefocusStartsFresh){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    const TextInputSessionToken oldSession = m_textInput.activeSession();
+    ASSERT_EQ(m_textInput.preedit("IME", 0u, 3u, false), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_model.composition().active);
+    m_context.input().clearFocus();
+    m_host.synchronizeFocus();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_FALSE(m_host.hasTextFocus());
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_NE(m_textInput.activeSession(), oldSession);
+    ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "basex");
+}
+
+TEST_F(UiEditBoxHostTests, ReadOnlyPolicyChangeDiscardsQueuedMutationAndNativeSession){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    ASSERT_EQ(m_textInput.commit("late"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    Ui::EditBoxOptions options;
+    options.readOnly = true;
+    ASSERT_TRUE(frame(m_model, options));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_TRUE(m_host.character('x'));
+    ASSERT_TRUE(frame(m_model, options));
+    EXPECT_EQ(m_model.text(), "base");
+    options.readOnly = false;
+    ASSERT_TRUE(frame(m_model, options));
+    ASSERT_TRUE(m_textInput.activeSession().valid());
+    ASSERT_EQ(m_textInput.commit("fresh"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model, options));
+    EXPECT_EQ(m_model.text(), "basefresh");
+}
+
+TEST_F(UiEditBoxHostTests, TextInputCaptureUsesTheCommittedEditableFrame){
+    ASSERT_TRUE(activate());
+    EXPECT_TRUE(m_host.wantsTextInput());
+
+    Ui::EditBoxOptions readOnly;
+    readOnly.readOnly = true;
+    ASSERT_TRUE(prepare(m_model, readOnly));
+    EXPECT_TRUE(m_host.wantsTextInput());
+    ASSERT_TRUE(commit());
+    EXPECT_TRUE(m_host.hasTextFocus());
+    EXPECT_FALSE(m_host.wantsTextInput());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+
+    ASSERT_TRUE(prepare(m_model));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(commit());
+    EXPECT_TRUE(m_host.wantsTextInput());
+
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost }));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusGained }));
+    EXPECT_FALSE(m_host.wantsTextInput());
+}
+
+TEST_F(UiEditBoxHostTests, TextInputCaptureRetiresWithTheWidgetAndHostReset){
+    ASSERT_TRUE(activate());
+    EXPECT_TRUE(m_host.wantsTextInput());
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_FALSE(m_host.wantsTextInput());
+
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_host.wantsTextInput());
+    m_host.reset();
+    EXPECT_FALSE(m_host.wantsTextInput());
+}
+
+TEST_F(UiEditBoxHostTests, SurroundingDeletionCannotFollowALocalMoveAgainstOldNativeCaret){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(key(Core::Key::Left));
+    ASSERT_EQ(m_textInput.erase(1u, 0u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, CandidateGeometryCannotMoveTheNativeCaretBeforeContextAcceptance){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(activate());
+    const TextInputRect displayed = m_textInput.caretRect();
+    ASSERT_TRUE(prepare(m_model, {}, { 200.0f, 20.0f, 180.0f, 30.0f }));
+    EXPECT_EQ(m_context.input().layoutGeneration(), m_generation - 1u);
+    m_host.commitFrame(m_generation);
+    EXPECT_EQ(m_textInput.caretRect().x, displayed.x);
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
+    ASSERT_TRUE(commit());
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.caret(), 1u);
+    EXPECT_EQ(m_model.anchor(), 1u);
+}
+
+TEST_F(UiEditBoxHostTests, RepeatedCandidatePublicationAcceptsOnlyTheLastGeometryAndPreservesDisplayedHits){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(activate());
+    const TextInputRect displayed = m_textInput.caretRect();
+    const Ui::Rect bounds{ 200.0f, 20.0f, 180.0f, 30.0f };
+    ASSERT_TRUE(prepare(m_model, {}, bounds));
+    Ui::EditBoxView replacement(m_arena);
+    ASSERT_TRUE(replacement.snapshot(m_model));
+    auto layout = m_layoutBuilder.layout({ replacement.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(replacement.adoptLayout(Move(*layout)));
+    const auto placement = replacement.arrange(bounds, { 10.0f, 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 500.0f, 200.0f }, {});
+    ASSERT_TRUE(placement);
+    ASSERT_TRUE(m_host.publish(m_widget, replacement, *placement, {}));
+    Ui::EditBoxView rejected(m_arena);
+    EXPECT_FALSE(m_host.publish(m_widget, rejected, *placement, {}));
+    m_host.commitFrame(m_generation);
+    EXPECT_EQ(m_textInput.caretRect().x, displayed.x);
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
+    ASSERT_TRUE(commit());
+    EXPECT_EQ(m_textInput.caretRect().x, 240);
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 1u);
+}
+
+TEST_F(UiEditBoxHostTests, GeometryPublicationShrinksAndGrowsCaretStopsWithoutRetainingOldEndPositions){
+    const Array<AStringView, 5u> values = { "abcdefghi", "ab", "abcdefghijklmnopqrstuvwxyzabcdef", "", "abcdefghijklmnopqrstuvwxyzabcdef" };
+    ASSERT_TRUE(activate());
+    for(const AStringView value : values){
+        ASSERT_TRUE(m_model.setText(value));
+        ASSERT_TRUE(prepare(m_model, {}, { 10.0f, 20.0f, 600.0f, 30.0f }));
+        ASSERT_TRUE(commit());
+        ASSERT_TRUE(dispatch({ .position = { 181.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+        ASSERT_TRUE(dispatch({ .position = { 181.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
+        ASSERT_TRUE(frame(m_model));
+        const usize expected = Min<usize>(value.size(), 17u);
+        EXPECT_EQ(m_model.anchor(), expected);
+        EXPECT_EQ(m_model.caret(), expected);
+        EXPECT_EQ(m_model.text(), value);
+    }
+}
+
+TEST_F(UiEditBoxHostTests, HostEventOverflowDiscardsTheBoundedBatchBeforeAnyModelMutation){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    usize accepted = 0u;
+    for(usize index = 0u; index < Ui::s_InputMaxEvents + 2u; ++index){
+        if(!m_textInput.activeSession().valid())
+            break;
+        ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+        ++accepted;
+        m_host.collectNative();
+    }
+    EXPECT_LE(accepted, Ui::s_InputMaxEvents + 1u);
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_model.text(), "base");
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, NativeEventOverflowCancelsTheBatchAndCanRecoverOnANewDeclaration){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    for(usize index = 0u; index < s_TextInputMaxEvents; ++index)
+        ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    EXPECT_EQ(m_textInput.commit("overflow"), TextInputAdmission::QueueFull);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+    ASSERT_TRUE(m_textInput.activeSession().valid());
+    ASSERT_EQ(m_textInput.commit("ok"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "baseok");
+}
+
+TEST_F(UiEditBoxHostTests, NativeCommitPathConsumesCharacterFallbackWithoutDuplicatingIt){
+    ASSERT_TRUE(activate());
+    EXPECT_TRUE(m_host.character('x'));
+    ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "x");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, QueuedNativeEditFencesACompletedPasteBeforeModelMutation){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
+    m_host.collectNative();
+    ASSERT_TRUE(m_clipboard.deliver(old, ClipboardStatus::Success, "old"));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "basex");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, QueuedLocalSelectionFencesCompletedCutWithoutDeletingOldSelection){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(key(Core::Key::A, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_EQ(m_model.selectedText(), "base");
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::X, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    ASSERT_TRUE(key(Core::Key::Left));
+    ASSERT_TRUE(m_clipboard.deliver(old, ClipboardStatus::Success));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_EQ(m_model.caret(), 0u);
+    EXPECT_FALSE(m_model.hasSelection());
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_EQ(m_clipboard.document, "base");
+}
+
+TEST_F(UiEditBoxHostTests, ClipboardCompletionCannotSurviveFocusLossAndImmediateRefocus){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    m_context.input().clearFocus();
+    m_host.synchronizeFocus();
+    ASSERT_TRUE(key(Core::Key::Tab));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_clipboard.deliver(old, ClipboardStatus::Success, "old"));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, RemovingReadOnlyCopyOwnerPreservesCopiedNativePublication){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    Ui::EditBoxOptions options;
+    options.readOnly = true;
+    ASSERT_TRUE(frame(m_model, options));
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    ASSERT_TRUE(key(Core::Key::A, false, true));
+    ASSERT_TRUE(frame(m_model, options));
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::C, false, true));
+    ASSERT_TRUE(frame(m_model, options));
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_TRUE(m_clipboard.deliver(old, ClipboardStatus::Success));
+    EXPECT_EQ(m_clipboard.document, "base");
+    EXPECT_EQ(m_model.text(), "base");
+}
+
+TEST_F(UiEditBoxHostTests, ClipboardCompletionCannotReachIdenticalExternallyResetModel){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_clipboard.deliver(old, ClipboardStatus::Success, "old"));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditBoxHostTests, QueuedCopyThenPastePreservesAsynchronousNativePublicationOrder){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(key(Core::Key::A, false, true));
+    ASSERT_TRUE(frame(m_model));
+    m_clipboard.document.assign("old");
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Core::Key::C, false, true));
+    ASSERT_TRUE(key(Core::Key::V, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_EQ(m_clipboard.startedOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(m_clipboard.startedText, "base");
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(m_clipboard.pump());
+    ASSERT_EQ(m_clipboard.startedOperation, ClipboardOperation::ReadText);
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::Success, m_clipboard.document));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_types.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_click_tracker_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+constexpr UiTextEditOwner s_Owner{ { 11u }, 2u, 3u };
+constexpr UiTextEditOwner s_OtherOwner{ { 12u }, 2u, 3u };
+constexpr Ui::PopupToken s_Popup{ { 21u }, 1u, 1u, 1u };
+constexpr Ui::PopupToken s_ReopenedPopup{ { 21u }, 1u, 1u, 2u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiEditClickTracker, ExactTimeAndDistanceBoundsRequireAReleasedFirstPress){
+    UiEditClickTracker tracker;
+    EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 10.0f, 20.0f }, 1000u, false), UiEditClickKind::Caret);
+    EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 14.0f, 20.0f }, 1500u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 18.0f, 20.0f }, 2000u, false), UiEditClickKind::Word);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 18.0f, 20.0f }, 2001u, false), UiEditClickKind::Caret);
+}
+
+TEST(UiEditClickTracker, ClockReversalAndMovementCannotManufactureASecondClick){
+    UiEditClickTracker tracker;
+    EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, Limit<u64>::s_Max - 1u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 2u, false), UiEditClickKind::Caret);
+    tracker.move({ 4.1f, 0.0f });
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 3u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 504u, false), UiEditClickKind::Caret);
+}
+
+TEST(UiEditClickTracker, PopupReopenModelReplacementFocusLossAndShiftFenceTheSequence){
+    UiEditClickTracker tracker;
+    EXPECT_EQ(tracker.press(s_Owner, s_Popup, 1u, 1u, {}, 100u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 1u, {}, 120u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 140u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    tracker.retainFocus(s_OtherOwner);
+    EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 160u, false), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 180u, true), UiEditClickKind::Caret);
+    tracker.release(s_Owner);
+    EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 200u, false), UiEditClickKind::Caret);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
+
+#include <core/os/clipboard_service.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_clipboard_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Core;
+using namespace NWB::Impl;
+
+class DelayedClipboard final : public QueuedClipboardService{
+public:
+    using QueuedClipboardService::completeNativeRequest;
+
+
+public:
+    explicit DelayedClipboard(Alloc::GlobalArena& arena)
+        : QueuedClipboardService(arena)
+    {}
+
+
+public:
+    [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
+        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
+    }
+
+
+protected:
+    virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{}
+};
+
+inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiEditClipboard, InvalidActionAndChannelTakePrecedenceOverModelState){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    const auto invalidChannel = static_cast<ClipboardChannel::Enum>(255u);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::None, invalidChannel, true).status, UiEditClipboardStatus::InvalidAction);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, invalidChannel, true).status, UiEditClipboardStatus::Unsupported);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, invalidChannel).status, UiEditClipboardStatus::Unsupported);
+}
+
+TEST(UiEditClipboard, CutWaitsForSuccessfulNativePublicationBeforeDeleting){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.setSelection(1u, 3u));
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
+    EXPECT_EQ(model.text(), "abcd");
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::NativeFailure));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::NativeFailure);
+    EXPECT_EQ(model.selectedText(), "bc");
+    EXPECT_FALSE(model.canUndo());
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
+    EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
+    EXPECT_EQ(model.text(), "ad");
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "bc");
+}
+
+TEST(UiEditClipboard, CopiedOwnerGenerationsRejectReplacedWidgetDeclarationAndModel){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    const Array<UiTextEditOwner, 3u> replacements = { UiTextEditOwner{ { 52u }, 2u, 3u }, UiTextEditOwner{ { 51u }, 4u, 3u }, UiTextEditOwner{ { 51u }, 2u, 5u } };
+    for(const auto& owner : replacements){
+        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+        ASSERT_TRUE(service.pump());
+        const auto old = controller.token();
+        ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
+        EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleOwner);
+        EXPECT_EQ(model.text(), "base");
+        EXPECT_FALSE(controller.pending());
+        EXPECT_FALSE(service.completeNativeRequest(old, ClipboardStatus::Success, "late"));
+    }
+}
+
+TEST(UiEditClipboard, TextRevisionSelectionAndPreeditChangesFencePendingTransfer){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(model.setSelection(0u, 0u));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_EQ(model.text(), "base");
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(model.replaceSelection("changed"));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(model.beginComposition());
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_TRUE(model.composition().active);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::CompositionActive);
+}
+
+TEST(UiEditClipboard, ExplicitCancellationInvalidatesDeliveryAndNewRequestSupersedesOld){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    const auto first = controller.token();
+    ASSERT_TRUE(controller.cancel());
+    EXPECT_FALSE(service.completeNativeRequest(first, ClipboardStatus::Success, "old"));
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    const auto second = controller.token();
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    EXPECT_NE(controller.token(), second);
+    EXPECT_FALSE(service.completeNativeRequest(second, ClipboardStatus::Success, "old"));
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
+    EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
+    EXPECT_EQ(model.text(), "new");
+}
+
+TEST(UiEditClipboard, IdenticalExternalResetInvalidatesCopiedPasteDespiteUnchangedTextRevision){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    const auto old = controller.token();
+    const u64 revision = model.revision();
+    const u64 externalRevision = model.externalRevision();
+    ASSERT_TRUE(model.setText("base"));
+    EXPECT_EQ(model.revision(), revision);
+    EXPECT_GT(model.externalRevision(), externalRevision);
+    ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_EQ(model.text(), "base");
+    EXPECT_FALSE(controller.pending());
+}
+
+TEST(UiEditClipboard, TextLimitAndMalformedClipboardPreserveSelectionHistoryAndCommittedText){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena, { 4u });
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.setSelection(1u, 3u));
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "xyz"));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::TooLarge);
+    EXPECT_EQ(model.selectedText(), "bc");
+    EXPECT_FALSE(model.canUndo());
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "\xC0\xAF"));
+    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::InvalidText);
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "bc");
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, ""));
+    EXPECT_FALSE(controller.drain(s_Owner, model).textChanged);
+    EXPECT_EQ(model.selectedText(), "bc");
+}
+
+TEST(UiEditClipboard, ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesDuringTransfer){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.selectAll());
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
+    EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::Published);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(service.pump());
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
+    EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::ReadOnly);
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "abcd");
+}
+
+TEST(UiEditClipboard, UnsupportedPrimarySelectionRejectsBeforeTransferAdmission){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status, UiEditClipboardStatus::Unsupported);
+}
+
+TEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    UiEditClipboardStatus::Enum requestStatus = UiEditClipboardStatus::Idle;
+    UiEditClipboardStatus::Enum drainStatus = UiEditClipboardStatus::Idle;
+    b8 cancelled = true;
+    Thread other([&]()noexcept{
+        requestStatus = controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status;
+        drainStatus = controller.drain(s_Owner, model).status;
+        cancelled = controller.cancel();
+    });
+    other.join();
+    EXPECT_EQ(requestStatus, UiEditClipboardStatus::WrongThread);
+    EXPECT_EQ(drainStatus, UiEditClipboardStatus::WrongThread);
+    EXPECT_FALSE(cancelled);
+    EXPECT_TRUE(controller.pending());
+    EXPECT_TRUE(controller.cancel());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,1713 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiInputAndListBehaviorCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_input_bindings_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiInputBindingsTests : public testing::Test{
+public:
+    UiInputBindingsTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiInputBindings))
+        , m_bindings(m_arena)
+    {}
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiInputBindingsTests, OverlappingIgnoredModifierChordsRejectAtomicallyRegardlessOfCommand){
+    const InputKeyBinding accepted{ Core::Key::W, 0, 0, InputCommand::Left };
+    ASSERT_TRUE(m_bindings.set(Span(&accepted, 1u)));
+    const InputKeyBinding* previous = m_bindings.bindings().data();
+    const Array<InputKeyBinding, 2> overlap{
+        InputKeyBinding{ Core::Key::W, Core::InputModifier::Control, Core::InputModifier::Shift, InputCommand::Right },
+        InputKeyBinding{ Core::Key::W, Core::InputModifier::Shift, Core::InputModifier::Control, InputCommand::Up },
+    };
+    EXPECT_FALSE(m_bindings.set(Span(overlap.data(), 2u)));
+    EXPECT_EQ(m_bindings.bindings().data(), previous);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::W, 0).command, InputCommand::Left);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::W, Core::InputModifier::Control | Core::InputModifier::Shift).command, InputCommand::None);
+    const Array<InputKeyBinding, 2> duplicate{ accepted, accepted };
+    EXPECT_FALSE(m_bindings.set(Span(duplicate.data(), 2u)));
+    EXPECT_EQ(m_bindings.bindings().data(), previous);
+}
+
+TEST_F(UiInputBindingsTests, MalformedKeysEnumsAndModifiersPreserveAcceptedProfile){
+    const InputKeyBinding accepted{ Core::Key::W, 0, 0, InputCommand::Left };
+    ASSERT_TRUE(m_bindings.set(Span(&accepted, 1u)));
+    const InputKeyBinding* previous = m_bindings.bindings().data();
+    const Array<i32, 5> invalidKeys{ Core::Key::Unknown, Core::Key::Space - 1, Core::Key::Menu + 1, Core::Key::Apostrophe + 1, Core::Key::GraveAccent + 1 };
+    for(const i32 key : invalidKeys){
+        InputKeyBinding invalid = accepted;
+        invalid.key = key;
+        EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+        EXPECT_EQ(m_bindings.bindings().data(), previous);
+        EXPECT_EQ(m_bindings.resolve(key, 0).command, InputCommand::None);
+    }
+    InputKeyBinding invalid = accepted;
+    invalid.command = InputCommand::None;
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    invalid.command = static_cast<InputCommand::Enum>(255u);
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    invalid = accepted;
+    invalid.selection = static_cast<InputSelectionPolicy::Enum>(255u);
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    invalid = accepted;
+    invalid.modifiers = Core::InputModifier::CapsLock;
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    invalid = accepted;
+    invalid.ignoredModifiers = Core::InputModifier::NumLock;
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    invalid.modifiers = invalid.ignoredModifiers = Core::InputModifier::Shift;
+    EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+    EXPECT_EQ(m_bindings.resolve(Core::Key::W, 0x0040).command, InputCommand::None);
+    EXPECT_EQ(m_bindings.bindings().data(), previous);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::W, 0).command, InputCommand::Left);
+}
+
+TEST_F(UiInputBindingsTests, WorldKeyCodesRejectSparseNeighborsWithoutReplacingTheAcceptedProfile){
+    const Array<InputKeyBinding, 2> accepted{
+        InputKeyBinding{ Core::Key::World1, 0, 0, InputCommand::Left },
+        InputKeyBinding{ Core::Key::World2, 0, 0, InputCommand::Right },
+    };
+    ASSERT_TRUE(m_bindings.set(Span(accepted.data(), 2u)));
+    const InputKeyBinding* previous = m_bindings.bindings().data();
+    const Array<i32, 3> invalidKeys{ Core::Key::GraveAccent + 1, Core::Key::World1 - 1, Core::Key::World2 + 1 };
+    for(const i32 key : invalidKeys){
+        InputKeyBinding invalid = accepted[0u];
+        invalid.key = key;
+        EXPECT_FALSE(m_bindings.set(Span(&invalid, 1u)));
+        EXPECT_EQ(m_bindings.bindings().data(), previous);
+        EXPECT_EQ(m_bindings.resolve(key, 0).command, InputCommand::None);
+        EXPECT_EQ(m_bindings.resolve(161, 0).command, InputCommand::Left);
+        EXPECT_EQ(m_bindings.resolve(162, 0).command, InputCommand::Right);
+    }
+}
+
+TEST_F(UiInputBindingsTests, ExactCapacitySucceedsAndOverflowPreservesTheProfile){
+    Array<InputKeyBinding, s_InputMaxBindings + 1u> custom{};
+    for(usize index = 0u; index < s_InputMaxBindings; ++index){
+        custom[index].key = Core::Key::F1 + static_cast<i32>(index / 16u);
+        custom[index].modifiers = static_cast<i32>(index % 16u);
+        custom[index].command = InputCommand::Right;
+    }
+    ASSERT_TRUE(m_bindings.set(Span(custom.data(), s_InputMaxBindings)));
+    const InputKeyBinding* previous = m_bindings.bindings().data();
+    EXPECT_FALSE(m_bindings.set(custom));
+    EXPECT_EQ(m_bindings.bindings().data(), previous);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::F16, s_InputBindingModifierMask).command, InputCommand::Right);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::F17, 0).command, InputCommand::None);
+}
+
+TEST_F(UiInputBindingsTests, EmptyAndAliasedProfileReplacementCanRecoverToDefaults){
+    const Array<InputKeyBinding, 2> custom{
+        InputKeyBinding{ Core::Key::W, 0, 0, InputCommand::Up },
+        InputKeyBinding{ Core::Key::F, 0, 0, InputCommand::Activate },
+    };
+    ASSERT_TRUE(m_bindings.set(Span(custom.data(), 2u)));
+    ASSERT_TRUE(m_bindings.set(Span(m_bindings.bindings().data() + 1u, 1u)));
+    EXPECT_EQ(m_bindings.resolve(Core::Key::W, 0).command, InputCommand::None);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::F, 0).command, InputCommand::Activate);
+    ASSERT_TRUE(m_bindings.set({}));
+    EXPECT_EQ(m_bindings.resolve(Core::Key::F, 0).command, InputCommand::None);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::Tab, 0).command, InputCommand::None);
+    m_bindings.restoreDefaults();
+    EXPECT_EQ(m_bindings.resolve(Core::Key::F, 0).command, InputCommand::None);
+    EXPECT_EQ(m_bindings.resolve(Core::Key::Tab, Core::InputModifier::Shift).command, InputCommand::FocusPrevious);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_input_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f, 20.0f })noexcept{
+    HitTarget target;
+    target.id = { value };
+    target.rectangle = rectangle;
+    target.clip = { 0.0f, 0.0f, 100.0f, 100.0f };
+    target.focusable = true;
+    target.activatable = true;
+    return target;
+}
+
+using UiTestSupport::Key;
+using UiTestSupport::Pointer;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiInputTests : public UiTestSupport::RouterTestFixture{
+public:
+    UiInputTests()
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiInput))
+    {}
+
+
+protected:
+    void tab(const b8 reverse = false){
+        key(Core::Key::Tab, reverse);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiInputTests, AcceptedTargetLookupPreservesCommittedGeometryAcrossFailureRetirementAndReset){
+    const Array<HitTarget, 3> initial{ Target(50u), Target(10u), Target(90u) };
+    ASSERT_TRUE(m_router.commitTargets(Span(initial.data(), 3u), 1u));
+    EXPECT_EQ(m_router.findTarget({}), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 20u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 10u }, initial[1u].declarationGeneration + 1u), nullptr);
+    const HitTarget* accepted = m_router.findTarget({ 10u }, initial[1u].declarationGeneration);
+    ASSERT_NE(accepted, nullptr);
+    EXPECT_EQ(accepted, &m_router.targets()[1u]);
+
+    Array<HitTarget, 2> duplicate{ Target(70u), Target(70u) };
+    duplicate[0u].rectangle.x = 40.0f;
+    EXPECT_FALSE(m_router.commitTargets(Span(duplicate.data(), 2u), 2u));
+    EXPECT_EQ(m_router.findTarget({ 10u }), accepted);
+    EXPECT_EQ(m_router.findTarget({ 70u }), nullptr);
+    EXPECT_FLOAT_EQ(accepted->rectangle.x, initial[1u].rectangle.x);
+
+    m_router.invalidateTarget({ 50u });
+    EXPECT_EQ(m_router.findTarget({ 50u }), nullptr);
+    ASSERT_NE(m_router.findTarget({ 10u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 10u }), &m_router.targets()[0u]);
+    ASSERT_NE(m_router.findTarget({ 90u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 90u }), &m_router.targets()[1u]);
+
+    HitTarget replacement = Target(10u);
+    replacement.declarationGeneration = initial[1u].declarationGeneration + 1u;
+    replacement.rectangle.x = 60.0f;
+    ASSERT_TRUE(m_router.commitTargets(Span(&replacement, 1u), 2u));
+    EXPECT_EQ(m_router.findTarget({ 10u }, initial[1u].declarationGeneration), nullptr);
+    ASSERT_NE(m_router.findTarget({ 10u }, replacement.declarationGeneration), nullptr);
+    EXPECT_FLOAT_EQ(m_router.findTarget({ 10u })->rectangle.x, 60.0f);
+    EXPECT_EQ(m_router.findTarget({ 90u }), nullptr);
+    m_router.reset();
+    EXPECT_EQ(m_router.findTarget({ 10u }), nullptr);
+}
+
+TEST_F(UiInputTests, AbsentTargetInvalidationPreservesLiveFocusCaptureHoverAndQueuedActions){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    const u64 actionSequence = m_router.actions()[0u].id.sequence;
+    ASSERT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    const u64 hoverActivity = m_router.hoverActivityGeneration();
+    m_router.invalidateTarget({ 999u });
+    m_router.invalidateTarget({});
+    EXPECT_EQ(m_router.layoutGeneration(), 7u);
+    EXPECT_EQ(m_router.targets().size(), 1u);
+    EXPECT_EQ(m_router.focus(), target.id);
+    EXPECT_EQ(m_router.capture(), target.id);
+    EXPECT_EQ(m_router.hover(), target.id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), hoverActivity);
+    EXPECT_TRUE(m_router.primaryDown());
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].id.sequence, actionSequence);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiInputTests, FirstClickConsumesBeforeFocusExistsAndActivationIsNotReplayed){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
+    EXPECT_FALSE(m_router.focus().valid());
+    const InputRoutingResult pressed = send(Pointer(InputEventType::PrimaryDown));
+    EXPECT_TRUE(pressed.pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    const InputRoutingResult released = send(Pointer(InputEventType::PrimaryUp));
+    EXPECT_TRUE(released.pointerConsumed);
+    EXPECT_FALSE(released.capture.valid());
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    const InputAction action = m_router.actions()[0];
+    EXPECT_FALSE(m_router.process().pointerConsumed);
+    EXPECT_EQ(m_router.actions()[0].id.sequence, action.id.sequence);
+    EXPECT_FALSE(m_router.commitTargets(Span(&target, 1u), 7u));
+    EXPECT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(m_router.actions().empty());
+}
+
+TEST_F(UiInputTests, HitTestRespectsPaintOrderClippingDisabledTargetsAndHalfOpenBounds){
+    Array<HitTarget, 4> targets{ Target(1u), Target(2u), Target(3u), Target(4u) };
+    for(HitTarget& target : targets)
+        target.rectangle = { 0.0f, 0.0f, 100.0f, 100.0f };
+    targets[0].paintOrder = 20u;
+    targets[0].clip = { 40.0f, 40.0f, 20.0f, 20.0f };
+    targets[1].paintOrder = 1u;
+    targets[2].paintOrder = 100u;
+    targets[2].enabled = false;
+    targets[3].paintOrder = 20u;
+    targets[3].clip = { 45.0f, 45.0f, 5.0f, 5.0f };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 4u), 1u));
+    EXPECT_EQ(m_router.hitTest({ 40.0f, 40.0f }).value, 1u);
+    EXPECT_EQ(m_router.hitTest({ 45.0f, 45.0f }).value, 4u);
+    EXPECT_EQ(m_router.hitTest({ 50.0f, 50.0f }).value, 1u);
+    EXPECT_EQ(m_router.hitTest({ 60.0f, 60.0f }).value, 2u);
+    EXPECT_EQ(m_router.hitTest({ 10.0f, 10.0f }).value, 2u);
+    EXPECT_FALSE(m_router.hitTest({ 100.0f, 10.0f }).valid());
+    EXPECT_FALSE(m_router.hitTest({ Limit<f32>::s_QuietNaN, 0.0f }).valid());
+    EXPECT_TRUE(m_router.wouldConsumePointer({ 45.0f, 45.0f }));
+    EXPECT_FALSE(m_router.wouldConsumePointer({ -1.0f, -1.0f }));
+}
+
+TEST_F(UiInputTests, TransientHoverDepartureAndReentryAdvanceActivityBeforeTheNextPaint){
+    Array<HitTarget, 2> targets{ Target(1u), Target(2u, { 40.0f, 10.0f, 20.0f, 20.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    ASSERT_EQ(send(Pointer(InputEventType::PointerMove)).hover, targets[0].id);
+    const u64 stable = m_router.hoverActivityGeneration();
+    ASSERT_EQ(send(Pointer(InputEventType::PointerMove, { 16.0f, 16.0f })).hover, targets[0].id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 2u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+    EXPECT_FALSE(m_router.commitTargets(Span(targets.data(), 2u), 2u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove, { 45.0f, 15.0f }))));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove))));
+    EXPECT_EQ(m_router.process().hover, targets[0].id);
+    const u64 returned = m_router.hoverActivityGeneration();
+    EXPECT_GT(returned, stable);
+
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = {} , .type = InputEventType::PointerLeave})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove))));
+    EXPECT_EQ(m_router.process().hover, targets[0].id);
+    EXPECT_GT(m_router.hoverActivityGeneration(), returned);
+}
+
+TEST_F(UiInputTests, HoverActivityUsesTheControlHostLifetimeAcrossOwnedParts){
+    Array<HitTarget, 3> targets{ Target(1u, { 10.0f, 10.0f, 80.0f, 20.0f }), Target(2u, { 20.0f, 10.0f, 10.0f, 20.0f }), Target(3u, { 40.0f, 10.0f, 10.0f, 20.0f }) };
+    targets[0].control = { 11u, 12u, 13u };
+    for(usize index = 1u; index < 3u; ++index){
+        targets[index].owner = targets[0].id;
+        targets[index].ownerDeclarationGeneration = targets[0].declarationGeneration;
+        targets[index].control = targets[0].control;
+        targets[index].focusable = false;
+        targets[index].paintOrder = static_cast<u32>(index);
+    }
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 3u), 1u));
+    ASSERT_EQ(send(Pointer(InputEventType::PointerMove, { 15.0f, 15.0f })).hover, targets[0].id);
+    const u64 ownerGeneration = m_router.hoverActivityGeneration();
+    EXPECT_EQ(send(Pointer(InputEventType::PointerMove, { 25.0f, 15.0f })).hover, targets[1].id);
+    EXPECT_EQ(send(Pointer(InputEventType::PointerMove, { 45.0f, 15.0f })).hover, targets[2].id);
+    EXPECT_EQ(send(Pointer(InputEventType::PointerMove, { 80.0f, 15.0f })).hover, targets[0].id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), ownerGeneration);
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 3u), 2u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), ownerGeneration);
+
+    targets[0].control.contentRevision = 14u;
+    targets[1].control = targets[0].control;
+    targets[2].control = targets[0].control;
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 3u), 3u));
+    const u64 changedControl = m_router.hoverActivityGeneration();
+    EXPECT_GT(changedControl, ownerGeneration);
+    targets[0].declarationGeneration = 2u;
+    targets[1].ownerDeclarationGeneration = 2u;
+    targets[2].ownerDeclarationGeneration = 2u;
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 3u), 4u));
+    EXPECT_GT(m_router.hoverActivityGeneration(), changedControl);
+}
+
+TEST_F(UiInputTests, PressCaptureLossFocusLossAndResetFenceHoverActivity){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    ASSERT_EQ(send(Pointer(InputEventType::PointerMove)).hover, target.id);
+    u64 previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), previous);
+
+    ASSERT_TRUE(send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), previous);
+
+    ASSERT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    send({ .position = {} , .type = InputEventType::PointerCaptureLost});
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    send({ .position = {} , .type = InputEventType::FocusLost});
+    m_router.cancelDeviceInput(0u);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    m_router.reset();
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    send({ .position = {} , .type = InputEventType::FocusGained});
+    EXPECT_EQ(send(Pointer(InputEventType::PointerMove)).hover, target.id);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+}
+
+TEST_F(UiInputTests, DragOutsideDoesNotActivateAndRemovalKeepsReleaseConsumption){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    const InputRoutingResult moved = send(Pointer(InputEventType::PointerMove, { 90.0f, 90.0f }));
+    EXPECT_TRUE(moved.pointerConsumed);
+    EXPECT_FALSE(moved.hover.valid());
+    EXPECT_EQ(moved.capture.value, 1u);
+    EXPECT_TRUE(m_router.wouldConsumePointer({ 90.0f, 90.0f }));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(m_router.commitTargets({}, 2u));
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_FALSE(m_router.focus().valid());
+    const InputRoutingResult afterRemoval = send(Pointer(InputEventType::PointerMove, { 90.0f, 90.0f }));
+    EXPECT_TRUE(afterRemoval.pointerConsumed);
+    EXPECT_TRUE(afterRemoval.wantsPointer);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(send(Pointer(InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_FALSE(m_router.wouldConsumePointer({ 15.0f, 15.0f }));
+}
+
+TEST_F(UiInputTests, PointerLeaveClearsHoverButPreservesLogicalCaptureAndReleaseOwnership){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PointerMove)).pointerConsumed);
+    const InputRoutingResult hoveredLeave = send({ .position = {} , .type = InputEventType::PointerLeave});
+    EXPECT_FALSE(hoveredLeave.hover.valid());
+    EXPECT_FALSE(hoveredLeave.wantsPointer);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    const InputRoutingResult capturedLeave = send({ .position = {} , .type = InputEventType::PointerLeave});
+    EXPECT_TRUE(capturedLeave.pointerConsumed);
+    EXPECT_TRUE(capturedLeave.wantsPointer);
+    EXPECT_FALSE(capturedLeave.hover.valid());
+    EXPECT_EQ(capturedLeave.capture.value, 1u);
+    EXPECT_EQ(capturedLeave.focus.value, 1u);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.capture().valid());
+}
+
+TEST_F(UiInputTests, NewDeclarationAndDisabledTargetsCancelPendingStateAndActions){
+    HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    target.declarationGeneration = 2u;
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    target.enabled = false;
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 3u));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.hitTest({ 15.0f, 15.0f }).valid());
+}
+
+TEST_F(UiInputTests, InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdvancingLayout){
+    const Array<HitTarget, 2> targets{ Target(1u), Target(2u, { 40.0f, 10.0f, 20.0f, 20.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 7u));
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    m_router.invalidateTarget(targets[0].id);
+    EXPECT_EQ(m_router.layoutGeneration(), 7u);
+    ASSERT_EQ(m_router.targets().size(), 1u);
+    EXPECT_EQ(m_router.targets()[0].id.value, 2u);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_FALSE(m_router.hitTest({ 15.0f, 15.0f }).valid());
+    EXPECT_EQ(m_router.hitTest({ 45.0f, 15.0f }).value, 2u);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+}
+
+TEST_F(UiInputTests, PanelBlocksPointerAndClearsKeyboardFocusWithoutActivating){
+    Array<HitTarget, 2> targets{ Target(1u), Target(2u, { 40.0f, 10.0f, 20.0f, 20.0f }) };
+    targets[1].focusable = false;
+    targets[1].activatable = false;
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
+    click();
+    ASSERT_EQ(m_router.focus().value, 1u);
+    ASSERT_TRUE(m_router.consumeActivation(targets[0].id));
+    const InputRoutingResult panel = send(Pointer(InputEventType::PrimaryDown, { 45.0f, 15.0f }));
+    EXPECT_TRUE(panel.pointerConsumed);
+    EXPECT_FALSE(panel.focus.valid());
+    EXPECT_EQ(panel.capture.value, 2u);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 45.0f, 15.0f })).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_FALSE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+}
+
+TEST_F(UiInputTests, TabOrderWrapsInBothDirectionsAndSkipsDisabledOrInvisibleTargets){
+    Array<HitTarget, 5> targets{ Target(1u), Target(2u), Target(3u), Target(4u), Target(5u) };
+    targets[1].enabled = false;
+    targets[2].focusable = false;
+    targets[3].clip = { 90.0f, 90.0f, 10.0f, 10.0f };
+    targets[0].paintOrder = 100u;
+    targets[4].paintOrder = 0u;
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 5u), 1u));
+    tab();
+    EXPECT_EQ(m_router.focus().value, 1u);
+    tab();
+    EXPECT_EQ(m_router.focus().value, 5u);
+    tab();
+    EXPECT_EQ(m_router.focus().value, 1u);
+    tab(true);
+    EXPECT_EQ(m_router.focus().value, 5u);
+    tab(true);
+    EXPECT_EQ(m_router.focus().value, 1u);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Escape)).commandConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Escape)).commandConsumed);
+    tab(true);
+    EXPECT_EQ(m_router.focus().value, 5u);
+    ASSERT_TRUE(m_router.commitTargets({}, 2u));
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Tab)).commandConsumed);
+    EXPECT_FALSE(send(Key(InputEventType::KeyUp, Core::Key::Tab)).commandConsumed);
+}
+
+TEST_F(UiInputTests, KeyboardActivationIgnoresNativeRepeatsAndDuplicateDowns){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    tab();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(m_router.pressed(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).commandConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.process().commandConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0].origin, InputActionSource::Command);
+    EXPECT_FALSE(m_router.pressed(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
+    EXPECT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_EQ(m_router.actions().size(), 3u);
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Space, true)).commandConsumed);
+    EXPECT_EQ(m_router.actions().size(), 3u);
+    EXPECT_FALSE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    ASSERT_TRUE(m_router.commitTargets({}, 2u));
+    EXPECT_TRUE(m_router.actions().empty());
+}
+
+TEST_F(UiInputTests, HeldUiKeysKeepReleaseOwnershipAfterFocusedTargetRemoval){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    tab();
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    ASSERT_TRUE(m_router.commitTargets({}, 2u));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(m_router.actions().empty());
+    const InputRoutingResult repeated = send(Key(InputEventType::KeyDown, Core::Key::Space, true));
+    EXPECT_TRUE(repeated.commandConsumed);
+    EXPECT_TRUE(repeated.wantsCommands);
+    EXPECT_TRUE(m_router.actions().empty());
+    const InputRoutingResult released = send(Key(InputEventType::KeyUp, Core::Key::Space));
+    EXPECT_TRUE(released.commandConsumed);
+    EXPECT_FALSE(released.wantsCommands);
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+}
+
+TEST_F(UiInputTests, ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeldReleaseOwnership){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    click();
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Unknown));
+    EXPECT_FALSE(m_router.ownsKey(static_cast<Core::Key::Enum>(static_cast<i32>(Core::Key::Menu) + 1)));
+    m_router.clearFocus();
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_EQ(m_router.capture().value, 1u);
+    EXPECT_TRUE(m_router.primaryDown());
+    EXPECT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_EQ(m_router.actions().size(), 2u);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiInputTests, NativeFocusTerminationAndResetDoNotReuseActionSequences){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    const u64 firstSequence = m_router.actions()[0].id.sequence;
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    const InputRoutingResult lost = send({ .position = {} , .type = InputEventType::FocusLost});
+    EXPECT_TRUE(lost.pointerConsumed);
+    EXPECT_TRUE(lost.commandConsumed);
+    EXPECT_TRUE(lost.wantsPointer);
+    EXPECT_TRUE(lost.wantsCommands);
+    EXPECT_FALSE(lost.hover.valid());
+    EXPECT_FALSE(lost.focus.valid());
+    EXPECT_FALSE(lost.capture.valid());
+    EXPECT_TRUE(m_router.primaryDown());
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_TRUE(m_router.actions().empty());
+    m_router.cancelDeviceInput(0u);
+    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_FALSE(m_router.wantsPointer());
+    EXPECT_FALSE(m_router.wantsCommands());
+    EXPECT_FALSE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PrimaryDown))));
+    m_router.reset();
+    EXPECT_EQ(m_router.layoutGeneration(), 0u);
+    EXPECT_TRUE(m_router.targets().empty());
+    EXPECT_FALSE(m_router.process().pointerConsumed);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
+    send({ .position = {} , .type = InputEventType::FocusGained});
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_GT(m_router.actions()[0].id.sequence, firstSequence);
+}
+
+TEST_F(UiInputTests, EventsUseCommittedTargetsAndScenePressCannotTransferToNewLayout){
+    const HitTarget oldTarget = Target(1u);
+    HitTarget nextTarget = Target(2u, { 40.0f, 10.0f, 20.0f, 20.0f });
+    ASSERT_TRUE(m_router.commitTargets(Span(&oldTarget, 1u), 1u));
+    EXPECT_FALSE(m_router.hitTest({ 45.0f, 15.0f }).valid());
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryDown, { 45.0f, 15.0f })).pointerConsumed);
+    ASSERT_TRUE(m_router.commitTargets(Span(&nextTarget, 1u), 2u));
+    EXPECT_EQ(m_router.hitTest({ 45.0f, 15.0f }).value, 2u);
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryUp, { 45.0f, 15.0f })).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    click({ 45.0f, 15.0f });
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0].id.target.value, 2u);
+    EXPECT_EQ(m_router.actions()[0].id.layoutGeneration, 2u);
+    nextTarget.rectangle.x = 60.0f;
+    ASSERT_TRUE(m_router.commitTargets(Span(&nextTarget, 1u), 3u));
+    EXPECT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(m_router.consumeActivation(nextTarget.id));
+}
+
+TEST_F(UiInputTests, InvalidTargetPublicationPreservesAcceptedLayoutCaptureAndFocus){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    Array<HitTarget, 2> invalid{ Target(2u), Target(2u) };
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 2u));
+    invalid[1].id.value = 3u;
+    invalid[1].rectangle.width = -1.0f;
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 2u));
+    invalid[1].rectangle.width = Limit<f32>::s_Infinity;
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 2u));
+    invalid[1].rectangle = { 0.0f, 0.0f, 1.0f, 1.0f };
+    invalid[1].declarationGeneration = 0u;
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 2u));
+    invalid[1].declarationGeneration = 1u;
+    invalid[1].id.value = 0u;
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 2u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&target, s_InputMaxTargets + 1u), 2u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&target, 1u), 0u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_EQ(m_router.layoutGeneration(), 1u);
+    ASSERT_EQ(m_router.targets().size(), 1u);
+    EXPECT_EQ(m_router.focus().value, 1u);
+    EXPECT_EQ(m_router.capture().value, 1u);
+    EXPECT_EQ(m_router.hitTest({ 15.0f, 15.0f }).value, 1u);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiInputTests, TargetAndEventLimitsRejectOverflowAndAllowSubsequentProcessing){
+    InputVector<HitTarget> targets(m_arena);
+    targets.reserve(s_InputMaxTargets);
+    for(usize index = 0u; index < s_InputMaxTargets; ++index)
+        targets.push_back(Target(static_cast<u64>(index) + 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u));
+    EXPECT_FALSE(m_router.commitTargets(Span(targets.data(), targets.size() + 1u), 2u));
+    EXPECT_EQ(m_router.targets().size(), s_InputMaxTargets);
+    for(usize index = 0u; index < s_InputMaxEvents; ++index)
+        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove))));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove))));
+    EXPECT_TRUE(m_router.process().pointerConsumed);
+    EXPECT_EQ(m_router.hover().value, s_InputMaxTargets);
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Pointer(InputEventType::PointerMove, { Limit<f32>::s_QuietNaN, 1.0f }))));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput({ .position = {} , .type = static_cast<InputEventType::Enum>(255u)})));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyDown, Core::Key::Unknown))));
+    EXPECT_TRUE(send(Pointer(InputEventType::PointerMove)).pointerConsumed);
+}
+
+TEST_F(UiInputTests, ActionLimitReportsOverflowWithoutReplayingDroppedInput){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    tab();
+    for(usize index = 0u; index < s_InputMaxActions; ++index){
+        const InputRoutingResult activated = send(Key(InputEventType::KeyDown, Core::Key::Enter));
+        EXPECT_TRUE(activated.commandConsumed);
+        EXPECT_FALSE(activated.activationOverflow);
+        EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    }
+    ASSERT_EQ(m_router.actions().size(), s_InputMaxActions);
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).activationOverflow);
+    const InputRoutingResult overflow = send(Key(InputEventType::KeyUp, Core::Key::Enter));
+    EXPECT_TRUE(overflow.commandConsumed);
+    EXPECT_TRUE(overflow.activationOverflow);
+    EXPECT_EQ(m_router.actions().size(), s_InputMaxActions);
+    EXPECT_FALSE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.process().activationOverflow);
+    EXPECT_EQ(m_router.actions().size(), s_InputMaxActions - 1u);
+    EXPECT_FALSE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).activationOverflow);
+    EXPECT_EQ(m_router.actions().size(), s_InputMaxActions - 1u);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
+    EXPECT_EQ(m_router.actions().size(), s_InputMaxActions);
+}
+
+TEST_F(UiInputTests, EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus){
+    HitTarget target = Target(1u);
+    target.textEditable = true;
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(m_router.pressed(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Escape)).commandConsumed);
+    EXPECT_EQ(m_router.focus(), target.id);
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_FALSE(m_router.pressed(target.id));
+    EXPECT_TRUE(m_router.primaryDown());
+    EXPECT_TRUE(send(Pointer(InputEventType::PointerMove, { 90.0f, 90.0f })).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Escape)).commandConsumed);
+    click();
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiInputTests, NativeCaptureLossTerminatesPointerOwnershipWithoutSubmitting){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_FALSE(m_router.wantsPointer());
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryUp, { 150.0f, 150.0f })).pointerConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(send(Pointer(InputEventType::PrimaryUp, { 150.0f, 150.0f })).pointerConsumed);
+}
+
+TEST_F(UiInputTests, NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingCompletedActionsOrKeys){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    click();
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
+    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_FALSE(m_router.secondaryDown());
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    click();
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
+TEST_F(UiInputTests, NativeFocusTerminationDropsMissingNativeReleasesButPreservesControllerOwnership){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
+    EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    InputEvent controller;
+    controller.type = InputEventType::CommandDown;
+    controller.source = { 7u, 3u };
+    controller.command = InputCommand::Activate;
+    EXPECT_TRUE(send(controller).commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).commandConsumed);
+    m_router.cancelDeviceInput(0u);
+    EXPECT_FALSE(m_router.primaryDown());
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
+    EXPECT_TRUE(m_router.ownsSource(controller.source));
+    EXPECT_TRUE(m_router.actions().empty());
+    send({ .type = InputEventType::FocusGained });
+    click();
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    controller.type = InputEventType::CommandUp;
+    controller.command = InputCommand::None;
+    EXPECT_TRUE(send(controller).commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.ownsSource(controller.source));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_integer_model_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::UiNumericTests;
+using IntegerModelTests = NumericModelFixture<IntegerEditModel>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(IntegerModelTests, SubmitCommitsExactLargeIntegerAndCancellationCannotRoundIt){
+    ASSERT_TRUE(m_model.setDraft("9007199254740993"));
+    const NumericEditResult committed = m_model.submit();
+    ASSERT_TRUE(committed.valid);
+    EXPECT_TRUE(committed.committed);
+    EXPECT_TRUE(committed.valueChanged);
+    EXPECT_EQ(m_model.value(), 9007199254740993ll);
+    EXPECT_EQ(m_model.draft().text(), "9007199254740993");
+    ASSERT_TRUE(m_model.setDraft("42"));
+    const NumericEditResult cancelled = m_model.cancel();
+    ASSERT_TRUE(cancelled.valid);
+    EXPECT_TRUE(cancelled.cancelled);
+    EXPECT_TRUE(cancelled.restored);
+    EXPECT_FALSE(cancelled.committed);
+    EXPECT_EQ(m_model.value(), 9007199254740993ll);
+    EXPECT_EQ(m_model.draft().text(), "9007199254740993");
+}
+
+TEST_F(IntegerModelTests, InvalidIncompleteAndOverflowSubmitPreserveThePendingDraft){
+    ASSERT_TRUE(m_model.setValue(7));
+    const Array<AStringView, 4> drafts{ "-", "x", "9223372036854775808", "-9223372036854775809" };
+    for(const AStringView text : drafts){
+        SCOPED_TRACE(text);
+        ASSERT_TRUE(m_model.setDraft(text));
+        ASSERT_TRUE(m_model.lendDraft().setSelection(0u, text.size()));
+        const DraftSnapshot before(m_arena, m_model.draft());
+        const u64 epoch = m_model.revision();
+        const NumericEditResult result = m_model.submit();
+        ExpectRejected(result);
+        EXPECT_EQ(m_model.value(), 7);
+        EXPECT_TRUE(m_model.dirty());
+        EXPECT_GT(m_model.revision(), epoch);
+        before.expectUnchanged(m_model.draft());
+    }
+}
+
+TEST_F(IntegerModelTests, InvalidBlurRestoresCanonicalTypedValueInsteadOfNoncanonicalAcceptedBytes){
+    ASSERT_TRUE(m_model.setDraft("+0007"));
+    ASSERT_TRUE(m_model.submit().committed);
+    ASSERT_TRUE(m_model.setDraft("-"));
+    const NumericEditResult result = m_model.blur();
+    ExpectRejected(result, true);
+    EXPECT_EQ(m_model.value(), 7);
+    EXPECT_EQ(m_model.draft().text(), "7");
+    EXPECT_FALSE(m_model.dirty());
+}
+
+TEST_F(IntegerModelTests, BoundsAreInclusiveAndRejectRepresentableValuesOutsideThem){
+    const IntegerBounds bounds{ -10, 10 };
+    for(const i64 value : { -10ll, 10ll }){
+        ASSERT_TRUE(m_model.setValue(value));
+        EXPECT_EQ(m_model.status(bounds), NumericParseStatus::Complete);
+        EXPECT_TRUE(m_model.submit(bounds).committed);
+    }
+    ASSERT_TRUE(m_model.setDraft("11"));
+    const DraftSnapshot before(m_arena, m_model.draft());
+    EXPECT_EQ(m_model.status(bounds), NumericParseStatus::OutOfRange);
+    const NumericEditResult result = m_model.submit(bounds);
+    ExpectRejected(result);
+    EXPECT_EQ(m_model.value(), 10);
+    before.expectUnchanged(m_model.draft());
+}
+
+TEST_F(IntegerModelTests, ClampingCanonicalizesBothSidesButNeverRepresentationOverflow){
+    const IntegerBounds bounds{ -10, 10, NumericBoundsPolicy::Clamp };
+    const Array<AStringView, 2> drafts{ "-11", "+00011" };
+    const Array<i64, 2> expected{ -10, 10 };
+    for(usize index = 0u; index < 2u; ++index){
+        ASSERT_TRUE(m_model.setDraft(drafts[index]));
+        const u64 external = m_model.draft().externalRevision();
+        const NumericEditResult result = m_model.submit(bounds);
+        ASSERT_TRUE(result.valid);
+        EXPECT_TRUE(result.committed);
+        EXPECT_TRUE(result.clamped);
+        EXPECT_FALSE(result.rejected);
+        EXPECT_FALSE(result.restored);
+        EXPECT_EQ(m_model.value(), expected[index]);
+        EXPECT_EQ(m_model.draft().text(), index == 0u ? "-10" : "10");
+        EXPECT_GT(m_model.draft().externalRevision(), external);
+        EXPECT_FALSE(m_model.dirty());
+    }
+    ASSERT_TRUE(m_model.setDraft("9223372036854775808"));
+    const NumericEditResult overflow = m_model.submit(bounds);
+    ExpectRejected(overflow);
+    EXPECT_EQ(m_model.value(), 10);
+    EXPECT_EQ(m_model.draft().text(), "9223372036854775808");
+}
+
+TEST_F(IntegerModelTests, ExternalValueRemainsAuthoritativeOutsideUserBounds){
+    ASSERT_TRUE(m_model.setValue(100));
+    const IntegerBounds bounds{ -10, 10 };
+    EXPECT_EQ(m_model.status(bounds), NumericParseStatus::OutOfRange);
+    ExpectRejected(m_model.submit(bounds));
+    const NumericEditResult blurred = m_model.blur(bounds);
+    ExpectRejected(blurred);
+    EXPECT_EQ(m_model.value(), 100);
+    EXPECT_EQ(m_model.draft().text(), "100");
+}
+
+TEST_F(IntegerModelTests, MalformedDraftAbandonRestoresTheAuthoritativeCommittedValue){
+    ASSERT_TRUE(m_model.setValue(7));
+    ASSERT_TRUE(m_model.setDraft("x"));
+    const NumericEditResult abandoned = m_model.abandon();
+    ASSERT_TRUE(abandoned.valid);
+    EXPECT_TRUE(abandoned.restored);
+    EXPECT_EQ(m_model.draft().text(), "7");
+    EXPECT_EQ(m_model.value(), 7);
+    EXPECT_FALSE(m_model.dirty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/layout/tree.adhd.h>
+
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_layout_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+static LayoutNodeDesc StretchContainer(const LayoutDirection::Enum direction)noexcept{
+    LayoutNodeDesc description;
+    description.direction = direction;
+    description.width = { LayoutSizePolicy::Stretch, 1.0f };
+    description.height = { LayoutSizePolicy::Stretch, 1.0f };
+    return description;
+}
+
+static LayoutNodeDesc FixedLeaf(const f32 width, const f32 height)noexcept{
+    LayoutNodeDesc description;
+    description.width = { LayoutSizePolicy::Fixed, width };
+    description.height = { LayoutSizePolicy::Fixed, height };
+    return description;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiLayoutTests : public testing::Test{
+public:
+    UiLayoutTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiLayout))
+        , m_tree(m_arena)
+    {}
+
+
+protected:
+    [[nodiscard]] Expected<u32> add(const u32 parent, const LayoutNodeDesc& description){
+        return m_tree.addNode(parent, description);
+    }
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    LayoutTree m_tree;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiLayoutTests, ExhaustedColumnSpaceCollapsesStretchAndClipsFixedOverflow){
+    LayoutNodeDesc rootDescription = StretchContainer(LayoutDirection::Column);
+    rootDescription.gap = 3.0f;
+    const auto rootResult = add(s_LayoutNoParent, rootDescription);
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    const auto fixedResult = add(root, FixedLeaf(12.0f, 30.0f));
+    ASSERT_TRUE(fixedResult);
+    const u32 fixed = *fixedResult;
+    const auto stretchedResult = add(root, StretchContainer(LayoutDirection::Leaf));
+    ASSERT_TRUE(stretchedResult);
+    const u32 stretched = *stretchedResult;
+    ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, 20.0f, 17.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), 3u);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->rectangle, { 0.0f, 0.0f, 12.0f, 30.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->hit, { 0.0f, 0.0f, 12.0f, 17.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(stretched)->rectangle, { 0.0f, 33.0f, 20.0f, 0.0f });
+    EXPECT_FLOAT_EQ(m_tree.box(stretched)->hit.height, 0.0f);
+}
+
+TEST_F(UiLayoutTests, OverlaySizesChildrenIndependentlyAndClipsToPaddedContent){
+    LayoutNodeDesc rootDescription = StretchContainer(LayoutDirection::Overlay);
+    rootDescription.padding = { 2.0f, 3.0f, 4.0f, 5.0f };
+    const auto rootResult = add(s_LayoutNoParent, rootDescription);
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    const auto fixedResult = add(root, FixedLeaf(70.0f, 80.0f));
+    ASSERT_TRUE(fixedResult);
+    const u32 fixed = *fixedResult;
+    const auto stretchedResult = add(root, StretchContainer(LayoutDirection::Leaf));
+    ASSERT_TRUE(stretchedResult);
+    const u32 stretched = *stretchedResult;
+    ASSERT_TRUE(m_tree.arrange({ 10.0f, 20.0f, 41.0f, 31.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), 3u);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->rectangle, { 12.0f, 23.0f, 70.0f, 80.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->clip, { 12.0f, 23.0f, 35.0f, 23.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(stretched)->rectangle, { 12.0f, 23.0f, 35.0f, 23.0f });
+}
+
+TEST_F(UiLayoutTests, UnclippedContainerOverflowStillHonorsViewportAndOuterAncestors){
+    const auto rootResult = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    LayoutNodeDesc containerDescription = FixedLeaf(20.0f, 15.0f);
+    containerDescription.direction = LayoutDirection::Overlay;
+    containerDescription.clipChildren = false;
+    const auto containerResult = add(root, containerDescription);
+    ASSERT_TRUE(containerResult);
+    const u32 container = *containerResult;
+    const auto leafResult = add(container, FixedLeaf(80.0f, 70.0f));
+    ASSERT_TRUE(leafResult);
+    const u32 leaf = *leafResult;
+    ASSERT_TRUE(m_tree.arrange({ 5.0f, 7.0f, 43.0f, 31.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), 3u);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(container)->hit, { 5.0f, 7.0f, 20.0f, 15.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(leaf)->hit, { 5.0f, 7.0f, 43.0f, 31.0f });
+}
+
+TEST_F(UiLayoutTests, FixedAndContentRootSizingRespectsViewportClipping){
+    LayoutNodeDesc rootDescription;
+    rootDescription.direction = LayoutDirection::Overlay;
+    rootDescription.width = { LayoutSizePolicy::Fixed, 40.0f };
+    rootDescription.padding = { 2.0f, 3.0f, 2.0f, 3.0f };
+    const auto rootResult = add(s_LayoutNoParent, rootDescription);
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    ASSERT_TRUE(add(root, FixedLeaf(20.0f, 18.0f)));
+    ASSERT_TRUE(m_tree.arrange({ 3.0f, 4.0f, 31.0f, 17.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), 2u);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->rectangle, { 3.0f, 4.0f, 40.0f, 24.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->clip, { 3.0f, 4.0f, 31.0f, 17.0f });
+}
+
+TEST_F(UiLayoutTests, OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretch){
+    const auto rootResult = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Row));
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    const auto firstResult = add(root, StretchContainer(LayoutDirection::Leaf));
+    ASSERT_TRUE(firstResult);
+    const u32 first = *firstResult;
+    const auto secondResult = add(root, StretchContainer(LayoutDirection::Leaf));
+    ASSERT_TRUE(secondResult);
+    const u32 second = *secondResult;
+    const DisplayMetrics firstMetrics{ 901.0f / 1.5f, 607.0f / 1.5f, 1.5f, 1.5f };
+    ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, firstMetrics.logicalWidth, firstMetrics.logicalHeight }));
+    ASSERT_EQ(m_tree.boxes().size(), 3u);
+    const Rect firstBefore = m_tree.box(first)->rectangle;
+    const Rect secondBefore = m_tree.box(second)->rectangle;
+    EXPECT_FLOAT_EQ(firstBefore.width, firstMetrics.logicalWidth * 0.5f);
+    EXPECT_FLOAT_EQ(secondBefore.x + secondBefore.width, firstMetrics.logicalWidth);
+    const DisplayMetrics secondMetrics{ firstMetrics.logicalWidth, firstMetrics.logicalHeight, 2.0f, 1.25f };
+    ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, secondMetrics.logicalWidth, secondMetrics.logicalHeight }));
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(first)->rectangle, firstBefore);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(second)->rectangle, secondBefore);
+}
+
+TEST_F(UiLayoutTests, OversizedPaddingAndEmptyViewportProduceFiniteEmptyContentAndHit){
+    LayoutNodeDesc description = StretchContainer(LayoutDirection::Overlay);
+    description.padding = { 100.0f, 100.0f, 100.0f, 100.0f };
+    const auto rootResult = add(s_LayoutNoParent, description);
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    const auto leafResult = add(root, StretchContainer(LayoutDirection::Leaf));
+    ASSERT_TRUE(leafResult);
+    const u32 leaf = *leafResult;
+    ASSERT_TRUE(m_tree.arrange({ 7.0f, 11.0f, 5.0f, 3.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), 2u);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->content, { 12.0f, 14.0f, 0.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(leaf)->hit, { 12.0f, 14.0f, 0.0f, 0.0f });
+    ASSERT_TRUE(m_tree.arrange({ 7.0f, 11.0f, 0.0f, 0.0f }));
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->hit, { 7.0f, 11.0f, 0.0f, 0.0f });
+}
+
+TEST_F(UiLayoutTests, InvalidViewportOrOverflowCannotPublishPartialBoxes){
+    ASSERT_TRUE(add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay)));
+    ASSERT_TRUE(m_tree.arrange({ 1.0f, 2.0f, 31.0f, 17.0f }));
+    const LayoutBox* published = m_tree.box(0u);
+    ASSERT_NE(published, nullptr);
+    const Rect before = published->rectangle;
+    EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, -1.0f, 10.0f }));
+    EXPECT_FALSE(m_tree.arrange({ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f }));
+    EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, Limit<f32>::s_Infinity, 1.0f }));
+    EXPECT_EQ(m_tree.box(0u), published);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, before);
+    m_tree.reset();
+    const auto rootResult = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Row));
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    ASSERT_TRUE(add(root, FixedLeaf(Limit<f32>::s_Max * 0.75f, 1.0f)));
+    ASSERT_TRUE(add(root, FixedLeaf(Limit<f32>::s_Max * 0.75f, 1.0f)));
+    EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
+    EXPECT_EQ(m_tree.boxes().size(), 1u);
+    EXPECT_EQ(m_tree.box(0u), published);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, before);
+    m_tree.reset();
+    ASSERT_TRUE(add(s_LayoutNoParent, FixedLeaf(Limit<f32>::s_Max * 0.75f, 10.0f)));
+    EXPECT_FALSE(m_tree.arrange({ Limit<f32>::s_Max, 0.0f, 0.0f, 0.0f }));
+    EXPECT_EQ(m_tree.box(0u), published);
+}
+
+TEST_F(UiLayoutTests, InvalidConstructionPoisonsTheBuildUntilResetAndPreservesPublishedOutput){
+    ASSERT_TRUE(add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay)));
+    ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, 21.0f, 13.0f }));
+    const LayoutBox* published = m_tree.box(0u);
+    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 41.0f, 37.0f }));
+    EXPECT_EQ(m_tree.box(0u), published);
+    m_tree.reset();
+    EXPECT_FALSE(m_tree.addNode(0u, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f)));
+    m_tree.reset();
+    const auto leafResult = add(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f));
+    ASSERT_TRUE(leafResult);
+    const u32 leaf = *leafResult;
+    EXPECT_FALSE(m_tree.addNode(leaf, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 1.0f, 1.0f }));
+    m_tree.reset();
+    const auto rootResult = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
+    ASSERT_TRUE(rootResult);
+    const u32 root = *rootResult;
+    EXPECT_FALSE(m_tree.addNode(root + 1u, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_EQ(m_tree.box(0u), published);
+    m_tree.reset();
+    ASSERT_TRUE(add(s_LayoutNoParent, FixedLeaf(7.0f, 9.0f)));
+    ASSERT_TRUE(m_tree.arrange({ 3.0f, 4.0f, 21.0f, 13.0f }));
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, { 3.0f, 4.0f, 7.0f, 9.0f });
+}
+
+TEST_F(UiLayoutTests, InvalidDescriptionsAndBoundedCapacityRejectNodeAdmission){
+    LayoutNodeDesc invalid;
+    Array<LayoutNodeDesc, 7u> invalidDescriptions;
+    invalidDescriptions[0u].width = { LayoutSizePolicy::Stretch, 0.0f };
+    invalidDescriptions[1u].width = { LayoutSizePolicy::Fixed, -1.0f };
+    invalidDescriptions[2u].height = { LayoutSizePolicy::Content, Limit<f32>::s_QuietNaN };
+    invalidDescriptions[3u].padding = { 0.0f, -1.0f, 0.0f, 0.0f };
+    invalidDescriptions[4u].gap = Limit<f32>::s_Infinity;
+    invalidDescriptions[5u].intrinsicSize = { 0.0f, -1.0f };
+    invalidDescriptions[6u].direction = static_cast<LayoutDirection::Enum>(255u);
+    for(const LayoutNodeDesc& description : invalidDescriptions){
+        m_tree.reset();
+        EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, description));
+        EXPECT_EQ(m_tree.nodeCount(), 0u);
+        EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
+    }
+    LayoutTree bounded(m_arena, 2u);
+    u32 root = s_LayoutNoParent;
+    {
+        const auto admittedNode = bounded.addNode(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
+        ASSERT_TRUE(admittedNode);
+        root = *admittedNode;
+    }
+    ASSERT_TRUE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f)));
+    ASSERT_TRUE(bounded.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
+    const LayoutBox* published = bounded.box(root);
+    EXPECT_FALSE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_FALSE(bounded.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
+    EXPECT_EQ(bounded.box(root), published);
+    LayoutTree empty(m_arena, 0u);
+    EXPECT_FALSE(empty.addNode(s_LayoutNoParent, invalid));
+}
+
+TEST_F(UiLayoutTests, MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNodes){
+    u32 parent = s_LayoutNoParent;
+    for(u32 index = 0u; index < s_LayoutMaxNodes; ++index){
+        const auto next = add(parent, StretchContainer(LayoutDirection::Overlay));
+        ASSERT_TRUE(next);
+        parent = *next;
+    }
+    ASSERT_EQ(m_tree.nodeCount(), s_LayoutMaxNodes);
+    ASSERT_TRUE(m_tree.arrange({ 3.0f, 5.0f, 101.0f, 79.0f }));
+    ASSERT_EQ(m_tree.boxes().size(), s_LayoutMaxNodes);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(parent)->rectangle, { 3.0f, 5.0f, 101.0f, 79.0f });
+    EXPECT_FALSE(m_tree.addNode(parent, FixedLeaf(1.0f, 1.0f)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_list_behavior_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiListBehaviorTestSupport;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiListBehaviorTests, EmptySourceClearsKeysAndNavigationAndSubmitAreValidNoOps){
+    RangeSource source;
+    source.count = 0u;
+    ListState state;
+    state.select(5u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.cursorKey(), 0u);
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Submit), state, result));
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(result.selectionChanged);
+    EXPECT_FALSE(result.activated);
+    EXPECT_EQ(source.findCalls, 0u);
+    EXPECT_EQ(source.lookupCalls, 0u);
+}
+
+TEST(UiListBehaviorTests, HundredThousandRowsSkipALargeDisabledRangeWithBoundedSourceCalls){
+    RangeSource source;
+    source.count = 100000u;
+    source.disabledBegin = 49999u;
+    source.disabledEnd = 99999u;
+    ListState state;
+    state.select(49999u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    source.clearCalls();
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    EXPECT_EQ(state.selectedKey(), 100000u);
+    EXPECT_EQ(state.cursorKey(), 100000u);
+    EXPECT_EQ(source.findCalls, 1u);
+    EXPECT_LE(source.lookupCalls, 2u);
+    EXPECT_LE(source.keyCalls, 3u);
+    EXPECT_LE(source.enabledCalls, 2u);
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Up), state, result));
+    EXPECT_EQ(state.cursorKey(), 49999u);
+    EXPECT_TRUE(result.selectionChanged);
+    EXPECT_FALSE(result.activated);
+}
+
+TEST(UiListBehaviorTests, HomeEndAndBoundaryNavigationNeverWrap){
+    RangeSource source;
+    ListState state;
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Up), state, result));
+    EXPECT_EQ(state.cursorKey(), 1u);
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::End), state, result));
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    EXPECT_EQ(state.cursorKey(), 10u);
+    EXPECT_FALSE(result.activated);
+}
+
+TEST(UiListBehaviorTests, PageNavigationUsesAcceptedRowsAndSaturatesWithoutIntegerOverflow){
+    RangeSource source;
+    ListState state;
+    state.select(3u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ListResult result;
+    ControlAction action = Action(state, source, ControlActionKind::PageDown);
+    action.pageRows = Limit<u64>::s_Max;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.cursorKey(), 10u);
+    action.kind = ControlActionKind::PageUp;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.cursorKey(), 1u);
+}
+
+TEST(UiListBehaviorTests, PageNavigationSkipsDisabledRowsBeyondTheRequestedBoundary){
+    RangeSource source;
+    source.disabledBegin = 4u;
+    source.disabledEnd = 7u;
+    ListState state;
+    state.select(2u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ListResult result;
+    ControlAction action = Action(state, source, ControlActionKind::PageDown);
+    action.pageRows = 3u;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.cursorKey(), 8u);
+    action.kind = ControlActionKind::PageUp;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.cursorKey(), 4u);
+}
+
+TEST(UiListBehaviorTests, AllDisabledNavigationAndUnselectedSubmitAreValidNoOps){
+    RangeSource source;
+    source.disabledBegin = 0u;
+    source.disabledEnd = source.count;
+    ListState state;
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Submit), state, result));
+    EXPECT_EQ(state.cursorKey(), 0u);
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_FALSE(result.activated);
+}
+
+TEST(UiListBehaviorTests, MissingDisabledOrMalformedActivationDoesNotModifyStateOrResult){
+    RangeSource source;
+    source.disabledBegin = 3u;
+    source.disabledEnd = 4u;
+    ListState state;
+    state.select(2u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    const ListResult previous{ true, true, false, true };
+    ListResult result = previous;
+    ControlAction action = Action(state, source, ControlActionKind::Activate);
+    action.value = 99u;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action.value = 4u;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action.value = 5u;
+    source.badLookup = true;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_EQ(state.cursorKey(), 2u);
+    ExpectResult(result, previous);
+}
+
+TEST(UiListBehaviorTests, MalformedEnabledSearchFailsAtomically){
+    RangeSource source;
+    ListState state;
+    state.select(2u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    source.badFind = true;
+    ListResult result;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    EXPECT_EQ(state.cursorKey(), 2u);
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_FALSE(result.valid);
+}
+
+TEST(UiListBehaviorTests, HugeWheelDeltasClampWithoutMultiplicationOverflow){
+    RangeSource source;
+    ListState state;
+    ASSERT_TRUE(state.scrollTo(500.0));
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ControlAction action = Action(state, source, ControlActionKind::Wheel);
+    action.delta = Limit<f64>::s_Max;
+    action.step = Limit<f64>::s_Max;
+    action.maximum = 1000.0;
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
+    action.delta = -Limit<f64>::s_Max;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_DOUBLE_EQ(state.scrollOffset(), 1000.0);
+    action.delta = 0.0;
+    action.maximum = 20.0;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_DOUBLE_EQ(state.scrollOffset(), 20.0);
+}
+
+TEST(UiListBehaviorTests, InvalidWheelMetricsFailWithoutChangingOffsetOrResult){
+    RangeSource source;
+    ListState state;
+    ASSERT_TRUE(state.scrollTo(50.0));
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ControlAction valid = Action(state, source, ControlActionKind::Wheel);
+    valid.delta = -1.0;
+    valid.step = 32.0;
+    valid.maximum = 300.0;
+    ListResult result;
+    ControlAction action = valid;
+    action.delta = Limit<f64>::s_QuietNaN;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action = valid;
+    action.step = 0.0;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action = valid;
+    action.maximum = -1.0;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action = valid;
+    action.maximum = Limit<f64>::s_Infinity;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_DOUBLE_EQ(state.scrollOffset(), 50.0);
+    EXPECT_FALSE(result.valid);
+}
+
+TEST(UiListBehaviorTests, InvalidOptionsKindsAndZeroPageSizeRejectWithoutChangingCursor){
+    RangeSource source;
+    ListState state;
+    state.select(2u);
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    const ControlAction valid = Action(state, source, ControlActionKind::Down);
+    ListOptions options;
+    options.enabled = false;
+    ListResult result;
+    EXPECT_FALSE(ListBehavior::Apply(source, options, valid, state, result));
+    options = {};
+    options.wheelRows = 0.0f;
+    EXPECT_FALSE(ListBehavior::Apply(source, options, valid, state, result));
+    options = {};
+    options.wheelRows = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(ListBehavior::Apply(source, options, valid, state, result));
+    ControlAction action = valid;
+    action.kind = static_cast<ControlActionKind::Enum>(255u);
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    action.kind = ControlActionKind::PageDown;
+    action.pageRows = 0u;
+    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_EQ(state.cursorKey(), 2u);
+    EXPECT_EQ(state.selectedKey(), 2u);
+}
+
+TEST(UiListBehaviorTests, RepeatedHomeNoopPreservesEarlierSelectionChange){
+    RangeSource source;
+    ListState state;
+    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ListResult result;
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Home), state, result));
+    EXPECT_TRUE(result.selectionChanged);
+    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Home), state, result));
+    EXPECT_TRUE(result.selectionChanged);
+    EXPECT_FALSE(result.activated);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_list_builder_scrollbar_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiWidgetTests;
+using namespace NWB::UiListTests;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges){
+    ASSERT_TRUE(accept(1u));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
+    ASSERT_NE(target(thumb), nullptr);
+    const HitTarget accepted = *target(thumb);
+    const Point origin = Center(accepted.rectangle);
+    const Point destination{ origin.x, origin.y + 10.0f };
+    drag(origin, destination);
+    ListOptions resized = Options();
+    resized.height.value = 200.0f;
+    ASSERT_TRUE(prepare(2u, resized));
+    const f64 travel = static_cast<f64>(accepted.gestureReference.height) - static_cast<f64>(accepted.rectangle.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), (10.0 / travel) * accepted.gestureMaximum);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(target(thumb)->gestureReference.height, 190.0f);
+}
+
+TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder){
+    ASSERT_TRUE(accept(1u));
+    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey));
+    const Point origin = Center(accepted.rectangle);
+    const f32 trackEnd = accepted.gestureReference.y + accepted.gestureReference.height;
+    const Point destination{ origin.x, trackEnd - accepted.rectangle.height * 0.5f };
+    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    InputEvent event;
+    event.type = InputEventType::PointerWheel;
+    event.position = origin;
+    event.scrollY = 1.0;
+    EXPECT_TRUE(send(event).pointerConsumed);
+    EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PrimaryUp }).pointerConsumed);
+    ASSERT_TRUE(prepare(2u));
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), accepted.gestureMaximum);
+    EXPECT_EQ(m_state.placement().endRow, 100000u);
+}
+
+TEST_F(UiListBuilderTests, EmptyDatasetKeepsABoundedPageCountWithoutReadingText){
+    m_source.count = 0u;
+    ListOptions options = Options();
+    ASSERT_TRUE(accept(1u, options));
+    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->pageRows, 1u);
+    EXPECT_EQ(m_source.textCalls, 0u);
+}
+
+TEST_F(UiListBuilderTests, SmallDatasetBoundsPageSizeByRows){
+    m_source.count = 2u;
+    ListOptions options = Options();
+    ASSERT_TRUE(accept(1u, options));
+    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->pageRows, 2u);
+    EXPECT_EQ(m_source.textCalls, 2u);
+    EXPECT_EQ(m_state.placement().endRow, 2u);
+}
+
+TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
+    m_state.select(1u);
+    ASSERT_TRUE(accept(1u));
+    press(Core::Key::Tab);
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
+    PopupState lowerPopup;
+    PopupState upperPopup;
+    ListState lowerState;
+    ListState upperState;
+    lowerState.select(2u);
+    upperState.select(3u);
+    lowerPopup.open();
+    ASSERT_TRUE(preparePopups(2u, lowerPopup, lowerState));
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    const WidgetId lowerHost = id(s_ListKey, s_PopupKey);
+    EXPECT_EQ(m_context.input().focus(), lowerHost);
+    upperPopup.open();
+    ASSERT_TRUE(preparePopups(3u, lowerPopup, lowerState, &upperPopup, &upperState));
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_UpperPopupKey));
+    press(Core::Key::Down);
+    ASSERT_TRUE(preparePopups(4u, lowerPopup, lowerState, &upperPopup, &upperState));
+    EXPECT_EQ(upperState.selectedKey(), 4u);
+    EXPECT_EQ(lowerState.selectedKey(), 2u);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    ASSERT_TRUE(m_context.commitFrame(4u));
+    upperPopup.close();
+    ASSERT_TRUE(preparePopups(5u, lowerPopup, lowerState, &upperPopup, &upperState));
+    ASSERT_TRUE(m_context.commitFrame(5u));
+    EXPECT_EQ(m_context.input().focus(), lowerHost);
+    press(Core::Key::Down);
+    ASSERT_TRUE(preparePopups(6u, lowerPopup, lowerState, &upperPopup, &upperState));
+    EXPECT_EQ(lowerState.selectedKey(), 3u);
+    ASSERT_TRUE(m_context.commitFrame(6u));
+    lowerPopup.close();
+    ASSERT_TRUE(preparePopups(7u, lowerPopup, lowerState));
+    ASSERT_TRUE(m_context.commitFrame(7u));
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
+    press(Core::Key::Down);
+    ASSERT_TRUE(prepare(8u));
+    EXPECT_EQ(m_state.selectedKey(), 2u);
+}
+
+TEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline){
+    ASSERT_TRUE(accept(1u));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
+    ASSERT_NE(target(thumb), nullptr);
+    const HitTarget accepted = *target(thumb);
+    const Point origin = Center(accepted.rectangle);
+    drag(origin, { origin.x, origin.y + 10.0f });
+    drag(origin, { origin.x, origin.y + 20.0f });
+    ASSERT_TRUE(prepare(2u));
+    const f64 travel = static_cast<f64>(accepted.gestureReference.height) - static_cast<f64>(accepted.rectangle.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), (20.0 / travel) * accepted.gestureMaximum);
+    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
+}
+
+TEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAnUnusableGesture){
+    ListOptions options = Options();
+    options.height.value = 20.0f;
+    ASSERT_TRUE(accept(1u, options));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
+    ASSERT_NE(target(thumb), nullptr);
+    const HitTarget accepted = *target(thumb);
+    EXPECT_FLOAT_EQ(m_state.placement().track.height, m_state.placement().thumb.height);
+    EXPECT_FALSE(accepted.pointerGesture);
+    click(Center(accepted.rectangle));
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
+    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
+    ASSERT_TRUE(prepare(2u, options));
+    EXPECT_TRUE(m_result.valid);
+    EXPECT_TRUE(m_result.focused);
+    EXPECT_FALSE(m_result.activated);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 0.0);
+    EXPECT_FALSE(m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

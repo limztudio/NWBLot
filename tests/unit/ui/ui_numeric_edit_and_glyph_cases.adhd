@@ -1,0 +1,1557 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiNumericEditAndGlyphCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_edit_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiNumericEditTests;
+
+
+class PlainHost final : public IEditBoxHost{
+public:
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
+        ++edits;
+        EditBoxResult result;
+        result.valid = true;
+        return result;
+    }
+
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
+
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
+
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{ return true; }
+
+
+public:
+    usize edits = 0u;
+};
+
+class UiNumericEditBuilderTests : public NumericFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNumericEditBuilderTests, AHostWithoutOrderedActionsRejectsTypedEditors){
+    PlainHost host;
+    m_builder.setEditHost(&host);
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    EXPECT_FALSE(result.edit.valid);
+    EXPECT_FALSE(result.numeric.valid);
+    EXPECT_EQ(host.edits, 0u);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditBuilderTests, SubmitCommitsAtItsPositionBeforeLaterText){
+    useHost();
+    m_host.replace("42");
+    m_host.key(Core::Key::Enter);
+    m_host.text("7");
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.edit.submitted && result.edit.textChanged);
+    EXPECT_TRUE(result.numeric.committed && result.numeric.valueChanged);
+    EXPECT_FALSE(result.numeric.cancelled || result.numeric.rejected);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("427"));
+    EXPECT_TRUE(m_integer.dirty());
+    ASSERT_TRUE(acceptNumeric());
+    EXPECT_EQ(AStringView(m_host.displayed), AStringView("427"));
+    EXPECT_EQ(m_host.loans, 1u);
+    EXPECT_EQ(m_host.ordinaryLoans, 0u);
+}
+
+TEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetiredText){
+    useHost();
+    m_host.replace("42");
+    m_host.key(Core::Key::Enter);
+    m_host.text("7");
+    m_host.key(Core::Key::Escape);
+    m_host.text("9");
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.edit.submitted && result.edit.cancelled);
+    EXPECT_TRUE(result.numeric.committed && result.numeric.cancelled && result.numeric.restored);
+    EXPECT_FALSE(result.edit.focused);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    EXPECT_FALSE(m_integer.dirty());
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejection){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    m_host.replace("-");
+    m_host.key(Core::Key::Enter);
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.edit.submitted && result.numeric.rejected);
+    EXPECT_FALSE(result.numeric.committed || result.numeric.restored);
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.status(), NumericParseStatus::Incomplete);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("-"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, InvalidBlurRestoresCurrentCommittedValueBeforeSnapshot){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    m_host.replace("invalid");
+    m_host.action(EditAction::Blur);
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.numeric.rejected && result.numeric.restored);
+    EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled);
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
+    ASSERT_TRUE(acceptNumeric());
+    EXPECT_EQ(AStringView(m_host.displayed), AStringView("12"));
+}
+
+TEST_F(UiNumericEditBuilderTests, FloatClampUsesTheBoundsOfTheOrderedAction){
+    useHost();
+    m_host.replace("12.5");
+    m_host.key(Core::Key::Enter);
+    FloatEditOptions options;
+    options.bounds = { -10.0, 10.0, NumericBoundsPolicy::Clamp };
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState, options);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.numeric.committed && result.numeric.valueChanged && result.numeric.clamped);
+    EXPECT_FALSE(result.numeric.rejected || result.numeric.restored);
+    EXPECT_DOUBLE_EQ(m_float.value(), 10.0);
+    EXPECT_EQ(m_float.draft().text(), AStringView("10"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAction){
+    useHost();
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(acceptNumeric());
+    IntegerEditOptions options;
+    options.bounds = { -10, 10, NumericBoundsPolicy::Clamp };
+    ASSERT_TRUE(beginNumeric(2u));
+    const auto unchanged = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    ASSERT_TRUE(unchanged.edit.valid && unchanged.numeric.valid);
+    EXPECT_FALSE(unchanged.numeric.committed || unchanged.numeric.restored || unchanged.numeric.clamped);
+    EXPECT_EQ(m_integer.value(), 0);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    ASSERT_TRUE(acceptNumeric());
+    m_host.key(Core::Key::Enter);
+    ASSERT_TRUE(beginNumeric(3u));
+    const auto committed = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    ASSERT_TRUE(committed.edit.valid && committed.numeric.valid);
+    EXPECT_TRUE(committed.numeric.committed && committed.numeric.clamped);
+    EXPECT_EQ(m_integer.value(), 10);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("10"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, ReadOnlySubmitDoesNotCommitOrAdvanceNumericRevision){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    const u64 revision = m_integer.revision();
+    m_host.key(Core::Key::Enter);
+    IntegerEditOptions options;
+    options.edit.readOnly = true;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.edit.submitted);
+    EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled || result.numeric.restored);
+    EXPECT_EQ(m_integer.revision(), revision);
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, ReadOnlyBlurRestoresWithoutACommitOrUserCancel){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    m_host.action(EditAction::Blur);
+    IntegerEditOptions options;
+    options.edit.readOnly = true;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.numeric.restored);
+    EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled || result.numeric.rejected);
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, DisabledAbandonRestoresBeforeIgnoredInput){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    m_host.action(EditAction::Abandon);
+    m_host.text("7");
+    IntegerEditOptions options;
+    options.edit.enabled = false;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
+    EXPECT_TRUE(result.edit.abandoned && result.numeric.restored);
+    EXPECT_FALSE(result.edit.focused || result.numeric.committed || result.numeric.cancelled);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
+    ASSERT_TRUE(acceptNumeric());
+    const HitTarget* field = target(id(s_IntegerEditKey, s_NumericPanelKey));
+    ASSERT_TRUE(field);
+    EXPECT_FALSE(field->enabled || field->focusable);
+}
+
+TEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(12));
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    m_host.preedit("7");
+    m_host.key(Core::Key::Enter);
+    m_host.key(Core::Key::Escape);
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto first = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(first.edit.valid && first.numeric.valid);
+    EXPECT_FALSE(first.edit.submitted || first.edit.cancelled);
+    EXPECT_FALSE(first.numeric.committed || first.numeric.cancelled);
+    EXPECT_FALSE(m_integer.draft().composition().active);
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    ASSERT_TRUE(acceptNumeric());
+    m_host.key(Core::Key::Escape);
+    ASSERT_TRUE(beginNumeric(2u));
+    const auto second = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    ASSERT_TRUE(second.edit.valid && second.numeric.valid);
+    EXPECT_TRUE(second.edit.cancelled && second.numeric.cancelled && second.numeric.restored);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
+    ASSERT_TRUE(acceptNumeric());
+}
+
+TEST_F(UiNumericEditBuilderTests, NumericSetterDuringTheHostLoanPreservesApplicationMutationAndRejects){
+    useHost();
+    m_host.onLoanInteger = &m_integer;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    EXPECT_TRUE(m_host.mutationApplied);
+    EXPECT_FALSE(result.edit.valid || result.numeric.valid);
+    EXPECT_EQ(m_integer.value(), 99);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("99"));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditBuilderTests, BuilderResetReentryDuringTheHostLoanRejects){
+    useHost();
+    m_host.resetBuilder = &m_builder;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
+    EXPECT_FALSE(result.edit.valid || result.numeric.valid);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_host.loans, 1u);
+}
+
+TEST_F(UiNumericEditBuilderTests, SharedTypedModelIsRejectedBeforeTheSecondHostLoan){
+    useHost();
+    EditBoxState another;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const auto duplicate = m_builder.integerEdit("duplicate", m_integer, another);
+    EXPECT_FALSE(duplicate.edit.valid || duplicate.numeric.valid);
+    EXPECT_EQ(m_host.loans, 1u);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditBuilderTests, SharedEditorStateIsRejectedBeforeTheSecondHostLoan){
+    useHost();
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const auto duplicate = m_builder.floatEdit(s_DecimalEditKey, m_float, m_integerState);
+    EXPECT_FALSE(duplicate.edit.valid || duplicate.numeric.valid);
+    EXPECT_EQ(m_host.loans, 1u);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditBuilderTests, InvalidBoundsRejectBeforeBorrowingTheHost){
+    useHost();
+    IntegerEditOptions options;
+    options.bounds.minimum = 20;
+    options.bounds.maximum = 10;
+    ASSERT_TRUE(beginNumeric(1u));
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
+    EXPECT_FALSE(result.edit.valid || result.numeric.valid);
+    EXPECT_EQ(m_host.loans, 0u);
+    EXPECT_TRUE(m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_edit_loan_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiNumericEditTests;
+
+
+class NumericMutationSource final : public ComboSource{
+public:
+    NumericMutationSource()noexcept{ count = 5u; }
+
+
+public:
+    [[nodiscard]] virtual u64 revision()const override{
+        if(onRevision){
+            IntegerEditModel& model = *MakeNotNull(Exchange(onRevision, nullptr));
+            mutationApplied = model.setValue(99);
+        }
+        return contentRevision;
+    }
+
+    [[nodiscard]] virtual StringView text(const u64 index)const override{
+        const StringView result = ComboSource::text(index);
+        if(onText){
+            IntegerEditModel& model = *MakeNotNull(Exchange(onText, nullptr));
+            mutationApplied = model.setValue(99);
+        }
+        if(armSource){
+            armSource->onRevision = armModel;
+            armSource = nullptr;
+        }
+        return result;
+    }
+
+
+public:
+    mutable IntegerEditModel* onText = nullptr;
+    mutable IntegerEditModel* onRevision = nullptr;
+    mutable NumericMutationSource* armSource = nullptr;
+    IntegerEditModel* armModel = nullptr;
+    mutable b8 mutationApplied = false;
+};
+
+using UiNumericEditLoanTests = NumericFixture;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNumericEditLoanTests, SameValueExternalReplacementRetiresThePreparedLoan){
+    ASSERT_TRUE(m_integer.setValue(12));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_integer.setValue(12));
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_integer.value(), 12);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditLoanTests, SameBytesExternalDraftReplacementRetiresThePreparedLoan){
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_integer.value(), 0);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditLoanTests, DirectDraftReplacementIsFencedWithoutANumericAction){
+    ASSERT_TRUE(m_integer.setDraft("42"));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const u64 numericRevision = m_integer.revision();
+    ASSERT_TRUE(m_integer.lendDraft().setText("42"));
+    EXPECT_EQ(m_integer.revision(), numericRevision);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+}
+
+TEST_F(UiNumericEditLoanTests, SelectionChangeWithoutADraftRevisionRetiresThePreparedLoan){
+    ASSERT_TRUE(m_integer.setValue(42));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const u64 revision = m_integer.draft().revision();
+    ASSERT_TRUE(m_integer.lendDraft().setSelection(0u, 1u));
+    EXPECT_EQ(m_integer.draft().revision(), revision);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_integer.draft().anchor(), 0u);
+    EXPECT_EQ(m_integer.draft().caret(), 1u);
+}
+
+TEST_F(UiNumericEditLoanTests, BeginAndCancelCompositionStillRetireThePreparedLoan){
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const u64 revision = m_integer.draft().revision();
+    ASSERT_TRUE(m_integer.lendDraft().beginComposition());
+    ASSERT_TRUE(m_integer.lendDraft().updateComposition("7", 1u, 1u));
+    m_integer.lendDraft().cancelComposition();
+    EXPECT_EQ(m_integer.draft().revision(), revision);
+    EXPECT_FALSE(m_integer.draft().composition().active);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_integer.value(), 0);
+}
+
+TEST_F(UiNumericEditLoanTests, PublishMutationRejectsAndStopsLaterEditorPublication){
+    useHost();
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
+    m_host.onPublishInteger = &m_integer;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_host.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 99);
+    EXPECT_EQ(m_float.value(), 0.0);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericEditLoanTests, FloatPublishMutationRejectsAndPreservesTheNewTypedValue){
+    useHost();
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
+    m_host.onPublishFloat = &m_float;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_host.mutationApplied);
+    EXPECT_DOUBLE_EQ(m_float.value(), 99.0);
+    EXPECT_EQ(m_float.draft().text(), AStringView("99"));
+}
+
+TEST_F(UiNumericEditLoanTests, LaterVirtualListCallbackRejectsAnAlreadyPaintedNumericEditor){
+    useHost();
+    NumericMutationSource source;
+    ListState list;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    source.onText = &m_integer;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_GT(source.textCalls, 0u);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, NumericLoanRemainsLiveAfterItsChildPopupEnds){
+    useHost();
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_EQ(m_host.publishes, 0u);
+    ASSERT_TRUE(m_integer.setValue(99));
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_EQ(m_host.publishes, 0u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, ChildSourceCallbackRejectsAnAlreadyPaintedParentNumericEditor){
+    useHost();
+    NumericMutationSource source;
+    ListState list;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_integer;
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, ParentSourceCallbackRejectsTheEndedChildNumericLoanBeforePublication){
+    useHost();
+    NumericMutationSource source;
+    ListState list;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_integer;
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 0u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, FinalSourceValidationCannotMutateAParentNumericLoanAfterChildPaint){
+    useHost();
+    NumericMutationSource parentSource;
+    NumericMutationSource childSource;
+    ListState parentList;
+    ListState childList;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    childSource.armSource = &parentSource;
+    childSource.armModel = &m_integer;
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(parentSource.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_GT(childSource.textCalls, 0u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, LaterSiblingSourceRejectsAnAlreadyPaintedEndedChildNumericLoan){
+    useHost();
+    NumericMutationSource source;
+    ListState list;
+    PopupState sibling;
+    m_parent.open();
+    m_child.open();
+    sibling.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_integer;
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 99);
+}
+
+TEST_F(UiNumericEditLoanTests, ClosedAncestorSuppressesNumericPublicationAndHiddenSources){
+    useHost();
+    NumericMutationSource source;
+    ListState list;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    const usize loans = m_host.loans;
+    source.resetCounters();
+    source.onText = &m_integer;
+    m_parent.close();
+    ASSERT_TRUE(m_integer.setValue(42));
+    ASSERT_TRUE(m_builder.endPopup());
+    ASSERT_TRUE(finishRoot());
+    EXPECT_EQ(m_host.loans, loans);
+    EXPECT_EQ(m_host.publishes, 0u);
+    EXPECT_EQ(source.textCalls, 0u);
+    EXPECT_FALSE(source.mutationApplied);
+    EXPECT_EQ(m_integer.value(), 42);
+}
+
+TEST_F(UiNumericEditLoanTests, SuccessfulEndReleasesNumericLoansBeforeApplicationMutation){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(acceptNumeric());
+    EXPECT_EQ(AStringView(m_host.displayed), AStringView("42"));
+    ASSERT_TRUE(m_integer.setValue(99));
+    EXPECT_EQ(AStringView(m_host.displayed), AStringView("42"));
+    ASSERT_TRUE(beginNumeric(2u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(acceptNumeric());
+    EXPECT_EQ(AStringView(m_host.displayed), AStringView("99"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+#include <global/bit.h>
+#include <global/numeric_text.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_format_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion){
+    const Array<i64, 4> values{ 9007199254740993ll, -9007199254740993ll, Limit<i64>::s_Min, Limit<i64>::s_Max };
+    for(const i64 value : values){
+        SCOPED_TRACE(value);
+        Array<char, s_NumericEditMaxBytes> buffer{};
+        const auto formatted = FormatI64(value, buffer);
+        ASSERT_TRUE(formatted);
+        const AStringView text = *formatted;
+        const auto parsed = ParseIntegerDraft(text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(*parsed, value);
+        if(value == 9007199254740993ll)
+            EXPECT_EQ(text, "9007199254740993");
+        if(value == Limit<i64>::s_Min)
+            EXPECT_EQ(text, "-9223372036854775808");
+    }
+}
+
+TEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtripWithExactBits){
+    const Array<u64, 10> patterns{
+        0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull, 0x000fffffffffffffull, 0x0010000000000000ull,
+        0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull, 0x7fefffffffffffffull, 0xffefffffffffffffull,
+    };
+    for(const u64 bits : patterns){
+        SCOPED_TRACE(bits);
+        Array<char, s_NumericEditMaxBytes> buffer{};
+        const auto formatted = FormatF64(BitCast<f64>(bits), buffer);
+        ASSERT_TRUE(formatted);
+        const AStringView text = *formatted;
+        const auto parsed = ParseFloatDraft(text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), bits);
+    }
+}
+
+TEST(UiNumericFormatTests, InsufficientCallerStorageReportsSizeErrorWithoutWritingOutsideTheBuffer){
+    struct Storage{
+        char first = 'a';
+        Array<char, 1u> buffer{ 'x' };
+        char last = 'z';
+    };
+    Storage integer;
+    const auto integerText = FormatI64(Limit<i64>::s_Min, integer.buffer);
+    ASSERT_FALSE(integerText);
+    EXPECT_EQ(integerText.error(), MakeErrorCode(ErrorCondition::value_too_large));
+    EXPECT_EQ(integer.first, 'a');
+    EXPECT_EQ(integer.last, 'z');
+    Storage floating;
+    const auto floatingText = FormatF64(123.25, floating.buffer);
+    ASSERT_FALSE(floatingText);
+    EXPECT_EQ(floatingText.error(), MakeErrorCode(ErrorCondition::value_too_large));
+    EXPECT_EQ(floating.first, 'a');
+    EXPECT_EQ(floating.last, 'z');
+}
+
+TEST(UiNumericFormatTests, NonfiniteFloatFormattingIsRejected){
+    Array<char, s_NumericEditMaxBytes> buffer{};
+    const Array<f64, 3> values{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
+    for(const f64 value : values){
+        const auto formatted = FormatF64(value, buffer);
+        ASSERT_FALSE(formatted);
+        EXPECT_EQ(formatted.error(), MakeErrorCode(ErrorCondition::invalid_argument));
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_model_lifetime_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::UiNumericTests;
+
+template<typename Model>
+class NumericLifetimeTests : public NumericModelFixture<Model>{};
+
+using ModelTypes = testing::Types<IntegerEditModel, FloatEditModel>;
+TYPED_TEST_SUITE(NumericLifetimeTests, ModelTypes);
+
+using IntegerLifetimeTests = NumericModelFixture<IntegerEditModel>;
+using FloatLifetimeTests = NumericModelFixture<FloatEditModel>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TYPED_TEST(NumericLifetimeTests, SameValueExternalReplacementFencesHistorySelectionAndComposition){
+    auto& model = this->m_model;
+    ASSERT_TRUE(model.setValue(7));
+    ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
+    ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
+    ASSERT_TRUE(model.lendDraft().beginComposition());
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    const u64 generation = model.draft().instanceGeneration();
+    const u64 external = model.draft().externalRevision();
+    const u64 epoch = model.revision();
+    ASSERT_TRUE(model.setValue(7));
+    EXPECT_GT(model.revision(), epoch);
+    EXPECT_GT(model.draft().externalRevision(), external);
+    EXPECT_EQ(model.draft().instanceGeneration(), generation);
+    EXPECT_EQ(model.draft().text(), "7");
+    EXPECT_EQ(model.draft().anchor(), 1u);
+    EXPECT_EQ(model.draft().caret(), 1u);
+    EXPECT_FALSE(model.draft().composition().active);
+    EXPECT_FALSE(model.draft().canUndo());
+    EXPECT_FALSE(model.dirty());
+    const u64 sameTextRevision = model.draft().revision();
+    const u64 sameExternal = model.draft().externalRevision();
+    const u64 sameEpoch = model.revision();
+    ASSERT_TRUE(model.setValue(7));
+    EXPECT_EQ(model.draft().revision(), sameTextRevision);
+    EXPECT_GT(model.draft().externalRevision(), sameExternal);
+    EXPECT_GT(model.revision(), sameEpoch);
+}
+
+TYPED_TEST(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTheCommittedValue){
+    auto& model = this->m_model;
+    ASSERT_TRUE(model.setValue(7));
+    ASSERT_TRUE(model.lendDraft().selectAll());
+    ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
+    ASSERT_TRUE(model.lendDraft().beginComposition());
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    const u64 revision = model.draft().revision();
+    const u64 external = model.draft().externalRevision();
+    const u64 epoch = model.revision();
+    ASSERT_TRUE(model.setDraft(model.draft().text()));
+    EXPECT_EQ(model.draft().revision(), revision);
+    EXPECT_GT(model.draft().externalRevision(), external);
+    EXPECT_GT(model.revision(), epoch);
+    EXPECT_EQ(model.value(), 7);
+    EXPECT_EQ(model.draft().text(), "8");
+    EXPECT_TRUE(model.dirty());
+    EXPECT_FALSE(model.draft().canUndo());
+    EXPECT_FALSE(model.draft().composition().active);
+}
+
+TYPED_TEST(NumericLifetimeTests, RejectedIncompleteSubmitStillRetiresLoanEpoch){
+    auto& model = this->m_model;
+    ASSERT_TRUE(model.setDraft("-"));
+    const u64 epoch = model.revision();
+    ExpectRejected(model.submit());
+    EXPECT_GT(model.revision(), epoch);
+}
+
+TYPED_TEST(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue){
+    auto& model = this->m_model;
+    for(const u32 action : { 0u, 1u, 2u }){
+        ASSERT_TRUE(model.setDraft("  +0007 "));
+        ASSERT_TRUE(model.submit().committed);
+        ASSERT_TRUE(model.lendDraft().selectAll());
+        ASSERT_TRUE(model.lendDraft().replaceSelection("-"));
+        ASSERT_TRUE(model.lendDraft().beginComposition());
+        ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+        const u64 external = model.draft().externalRevision();
+        const NumericEditResult result = action == 0u ? model.cancel() : action == 1u ? model.abandon() : model.blur();
+        ASSERT_TRUE(result.valid);
+        EXPECT_EQ(result.cancelled, action == 0u);
+        EXPECT_EQ(result.rejected, action == 2u);
+        EXPECT_TRUE(result.restored);
+        EXPECT_FALSE(result.committed);
+        EXPECT_FALSE(result.valueChanged);
+        EXPECT_EQ(model.value(), 7);
+        EXPECT_EQ(model.draft().text(), "7");
+        EXPECT_FALSE(model.dirty());
+        EXPECT_FALSE(model.draft().composition().active);
+        EXPECT_FALSE(model.draft().canUndo());
+        EXPECT_FALSE(model.draft().canRedo());
+        EXPECT_EQ(model.draft().anchor(), 1u);
+        EXPECT_EQ(model.draft().caret(), 1u);
+        EXPECT_GT(model.draft().externalRevision(), external);
+    }
+}
+
+TYPED_TEST(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration){
+    auto& model = this->m_model;
+    ASSERT_TRUE(model.setDraft("19"));
+    ASSERT_TRUE(model.setValue(9));
+    ASSERT_TRUE(model.setDraft("15"));
+    ASSERT_TRUE(model.abandon().valid);
+    EXPECT_EQ(model.value(), 9);
+    EXPECT_EQ(model.draft().text(), "9");
+}
+
+TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField){
+    auto& model = this->m_model;
+    Array<char, s_NumericEditMaxBytes> maximum{};
+    for(char& digit : maximum)
+        digit = '0';
+    maximum[s_NumericEditMaxBytes - 1u] = '7';
+    ASSERT_TRUE(model.setDraft({ maximum.data(), s_NumericEditMaxBytes }));
+    ASSERT_TRUE(model.submit().committed);
+    EXPECT_EQ(model.value(), 7);
+    EXPECT_FALSE(model.dirty());
+    ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
+    ASSERT_TRUE(model.lendDraft().beginComposition());
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    const DraftSnapshot before(this->m_arena, model.draft());
+    const u64 epoch = model.revision();
+    Array<char, s_NumericEditMaxBytes + 1u> excessive{};
+    for(char& digit : excessive)
+        digit = '0';
+    EXPECT_FALSE(model.setDraft({ excessive.data(), s_NumericEditMaxBytes + 1u }));
+    EXPECT_FALSE(model.setDraft("\xC0\xAF"));
+    EXPECT_FALSE(model.setDraft("1\n2"));
+    EXPECT_FALSE(model.lendDraft().replaceSelection({ excessive.data(), s_NumericEditMaxBytes + 1u }));
+    EXPECT_EQ(model.revision(), epoch);
+    EXPECT_EQ(model.value(), 7);
+    EXPECT_FALSE(model.dirty());
+    before.expectUnchanged(model.draft());
+}
+
+template<typename Model, typename Bounds>
+void ExpectAtomicBadBounds(const Bounds& bounds, Core::Alloc::GlobalArena& arena, Model& model){
+    ASSERT_TRUE(model.setValue(7));
+    ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
+    ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
+    ASSERT_TRUE(model.lendDraft().beginComposition());
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    const DraftSnapshot before(arena, model.draft());
+    const u64 epoch = model.revision();
+    const u64 value = BitCast<u64>(model.value());
+    EXPECT_FALSE(model.submit(bounds).valid);
+    EXPECT_FALSE(model.blur(bounds).valid);
+    EXPECT_EQ(model.status(bounds), NumericParseStatus::Invalid);
+    EXPECT_EQ(model.revision(), epoch);
+    EXPECT_EQ(BitCast<u64>(model.value()), value);
+    EXPECT_TRUE(model.dirty());
+    before.expectUnchanged(model.draft());
+}
+
+TEST_F(IntegerLifetimeTests, ReversedAndUnknownIntegerBoundsAreAtomic){
+    ExpectAtomicBadBounds(IntegerBounds{ 10, 1 }, m_arena, m_model);
+    const auto unknown = static_cast<NumericBoundsPolicy::Enum>(3u);
+    ExpectAtomicBadBounds(IntegerBounds{ -10, 10, unknown }, m_arena, m_model);
+}
+
+TEST_F(FloatLifetimeTests, ReversedNonfiniteAndUnknownFloatBoundsAreAtomic){
+    ExpectAtomicBadBounds(FloatBounds{ 10.0, 1.0 }, m_arena, m_model);
+    ExpectAtomicBadBounds(FloatBounds{ Limit<f64>::s_QuietNaN, 10.0 }, m_arena, m_model);
+    ExpectAtomicBadBounds(FloatBounds{ -10.0, Limit<f64>::s_Infinity }, m_arena, m_model);
+    const auto unknown = static_cast<NumericBoundsPolicy::Enum>(3u);
+    ExpectAtomicBadBounds(FloatBounds{ -10.0, 10.0, unknown }, m_arena, m_model);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+#include <global/bit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_parse_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+struct ParseCase{
+    AStringView text;
+    NumericParseStatus::Enum status = NumericParseStatus::Invalid;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxRetainErrorClassification){
+    const Array<ParseCase, 23> cases{
+        ParseCase{ "", NumericParseStatus::Incomplete }, ParseCase{ "  ", NumericParseStatus::Incomplete },
+        ParseCase{ "+", NumericParseStatus::Incomplete }, ParseCase{ "-", NumericParseStatus::Incomplete },
+        ParseCase{ " + ", NumericParseStatus::Incomplete }, ParseCase{ "--1" }, ParseCase{ "+-1" }, ParseCase{ "1 2" }, ParseCase{ "1,000" },
+        ParseCase{ "1_000" }, ParseCase{ "0x10" }, ParseCase{ "1.0" }, ParseCase{ "1e2" }, ParseCase{ "12x" }, ParseCase{ "nan" }, ParseCase{ "inf" },
+        ParseCase{ "\xE2\x88\x92" "1" }, ParseCase{ "\xD9\xA1" }, ParseCase{ "\xC2\xA0" "1" },
+        ParseCase{ AStringView("1\0", 2u) }, ParseCase{ "999999999999999999999999x" },
+        ParseCase{ "9223372036854775808", NumericParseStatus::OutOfRange },
+        ParseCase{ "-9223372036854775809", NumericParseStatus::OutOfRange }
+    };
+    for(const ParseCase& test : cases){
+        SCOPED_TRACE(test.text);
+        const auto parsed = ParseIntegerDraft(test.text);
+        ASSERT_FALSE(parsed);
+        EXPECT_EQ(parsed.error(), test.status);
+    }
+}
+
+TEST(UiNumericParseTests, IntegerConversionPreservesSignedBoundsAndLargeExactValues){
+    struct CompleteCase{
+        AStringView text;
+        i64 value = 0;
+    };
+    const Array<CompleteCase, 3> cases{
+        CompleteCase{ "9007199254740993", 9007199254740993ll },
+        CompleteCase{ "-9223372036854775808", Limit<i64>::s_Min },
+        CompleteCase{ "+9223372036854775807", Limit<i64>::s_Max }
+    };
+    for(const CompleteCase& test : cases){
+        SCOPED_TRACE(test.text);
+        const auto parsed = ParseIntegerDraft(test.text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(*parsed, test.value);
+    }
+}
+
+TEST(UiNumericParseTests, FloatPrefixesAndMalformedSyntaxAreClassifiedBeforeConversion){
+    const Array<ParseCase, 30> cases{
+        ParseCase{ "", NumericParseStatus::Incomplete }, ParseCase{ "  ", NumericParseStatus::Incomplete },
+        ParseCase{ "+", NumericParseStatus::Incomplete }, ParseCase{ "-", NumericParseStatus::Incomplete },
+        ParseCase{ ".", NumericParseStatus::Incomplete }, ParseCase{ "+.", NumericParseStatus::Incomplete },
+        ParseCase{ "-.", NumericParseStatus::Incomplete }, ParseCase{ "1e", NumericParseStatus::Incomplete },
+        ParseCase{ "1e+", NumericParseStatus::Incomplete }, ParseCase{ "1.e-", NumericParseStatus::Incomplete },
+        ParseCase{ "e" }, ParseCase{ ".e1" }, ParseCase{ "1..0" }, ParseCase{ "1e--2" }, ParseCase{ "1e+x" }, ParseCase{ "1e2x" },
+        ParseCase{ "1 2" }, ParseCase{ "1,2" }, ParseCase{ "1_2" }, ParseCase{ "0x1p2" }, ParseCase{ "nan" }, ParseCase{ "NaN" },
+        ParseCase{ "inf" }, ParseCase{ "-infinity" }, ParseCase{ "\xC2\xA0" "1" }, ParseCase{ AStringView("1\0", 2u) },
+        ParseCase{ "1e99999x" }, ParseCase{ "1e309", NumericParseStatus::OutOfRange },
+        ParseCase{ "1e-9999", NumericParseStatus::OutOfRange }, ParseCase{ "2e308", NumericParseStatus::OutOfRange }
+    };
+    for(const ParseCase& test : cases){
+        SCOPED_TRACE(test.text);
+        const auto parsed = ParseFloatDraft(test.text);
+        ASSERT_FALSE(parsed);
+        EXPECT_EQ(parsed.error(), test.status);
+    }
+}
+
+TEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit){
+    struct CompleteCase{
+        AStringView text;
+        f64 value = 0.0;
+    };
+    const Array<CompleteCase, 3> cases{ CompleteCase{ "-0", -0.0 }, CompleteCase{ "-0.0", -0.0 }, CompleteCase{ "-0e100", -0.0 } };
+    for(const CompleteCase& test : cases){
+        SCOPED_TRACE(test.text);
+        const auto parsed = ParseFloatDraft(test.text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), BitCast<u64>(test.value));
+    }
+}
+
+TEST(UiNumericParseTests, EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhitespaceIsInvalid){
+    const Array<char, 6> whitespace{ ' ', '\t', '\n', '\r', '\f', '\v' };
+    for(const char edge : whitespace){
+        const Array<char, 4> trimmed{ edge, '+', '7', edge };
+        const auto integer = ParseIntegerDraft({ trimmed.data(), 4u });
+        const auto floating = ParseFloatDraft({ trimmed.data(), 4u });
+        ASSERT_TRUE(integer);
+        ASSERT_TRUE(floating);
+        EXPECT_EQ(*integer, 7);
+        EXPECT_EQ(*floating, 7.0);
+        const Array<char, 3> interior{ '1', edge, '2' };
+        const auto invalidInteger = ParseIntegerDraft({ interior.data(), 3u });
+        const auto invalidFloat = ParseFloatDraft({ interior.data(), 3u });
+        ASSERT_FALSE(invalidInteger);
+        ASSERT_FALSE(invalidFloat);
+        EXPECT_EQ(invalidInteger.error(), NumericParseStatus::Invalid);
+        EXPECT_EQ(invalidFloat.error(), NumericParseStatus::Invalid);
+    }
+}
+
+TEST(UiNumericParseTests, BoundsValidationRejectsReversalNonfiniteEndpointsAndUnknownPolicy){
+    EXPECT_TRUE(ValidateIntegerBounds({ 4, 4, NumericBoundsPolicy::Clamp }));
+    EXPECT_TRUE(ValidateFloatBounds({ -0.0, 0.0, NumericBoundsPolicy::Reject }));
+    EXPECT_FALSE(ValidateIntegerBounds({ 8, 3 }));
+    EXPECT_FALSE(ValidateFloatBounds({ 8.0, 3.0 }));
+    EXPECT_FALSE(ValidateFloatBounds({ Limit<f64>::s_QuietNaN, 1.0 }));
+    EXPECT_FALSE(ValidateFloatBounds({ -1.0, Limit<f64>::s_Infinity }));
+    const auto unknown = static_cast<NumericBoundsPolicy::Enum>(2u);
+    EXPECT_FALSE(ValidateIntegerBounds({ -1, 1, unknown }));
+    EXPECT_FALSE(ValidateFloatBounds({ -1.0, 1.0, unknown }));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_numeric_selection_epoch_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiNumericEditTests;
+
+namespace EpochMutation{
+    enum Enum : u8{ SelectionRoundTrip, SameSelection, CompositionRoundTrip };
+};
+
+class SelectionEpochSource final : public ComboSource{
+public:
+    SelectionEpochSource()noexcept{ count = 5u; }
+
+
+public:
+    [[nodiscard]] virtual u64 revision()const override{
+        if(onRevision){
+            EditModel& draft = *MakeNotNull(Exchange(onRevision, nullptr));
+            mutationApplied = mutate(draft);
+        }
+        return contentRevision;
+    }
+
+    [[nodiscard]] virtual StringView text(const u64 index)const override{
+        const StringView result = ComboSource::text(index);
+        if(onText){
+            EditModel& draft = *MakeNotNull(Exchange(onText, nullptr));
+            mutationApplied = mutate(draft);
+        }
+        if(armSource){
+            armSource->onRevision = armDraft;
+            armSource = nullptr;
+        }
+        return result;
+    }
+
+
+private:
+    [[nodiscard]] b8 mutate(EditModel& draft)const{
+        const usize anchor = draft.anchor();
+        const usize caret = draft.caret();
+        if(mutation == EpochMutation::SelectionRoundTrip)
+            return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
+        if(mutation == EpochMutation::SameSelection)
+            return draft.setSelection(anchor, caret);
+        if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
+            return false;
+        draft.cancelComposition();
+        return true;
+    }
+
+
+public:
+    mutable EditModel* onText = nullptr;
+    mutable EditModel* onRevision = nullptr;
+    mutable SelectionEpochSource* armSource = nullptr;
+    EditModel* armDraft = nullptr;
+    EpochMutation::Enum mutation = EpochMutation::SelectionRoundTrip;
+    mutable b8 mutationApplied = false;
+};
+
+using UiNumericSelectionEpochTests = NumericFixture;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsIntegerSelectionRoundTripWithUnchangedDraftAndTypedValue){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource source;
+    ListState list;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    const u64 numericRevision = m_integer.revision();
+    const u64 draftRevision = m_integer.draft().revision();
+    const u64 externalRevision = m_integer.draft().externalRevision();
+    const u64 selectionGeneration = m_integer.draft().selectionGeneration();
+    source.onText = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_GT(source.textCalls, 0u);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.revision(), numericRevision);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    EXPECT_EQ(m_integer.draft().revision(), draftRevision);
+    EXPECT_EQ(m_integer.draft().externalRevision(), externalRevision);
+    EXPECT_EQ(m_integer.draft().anchor(), 2u);
+    EXPECT_EQ(m_integer.draft().caret(), 2u);
+    EXPECT_GT(m_integer.draft().selectionGeneration(), selectionGeneration);
+}
+
+TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsFloatSelectionRoundTripWithUnchangedDraftAndTypedValue){
+    useHost();
+    ASSERT_TRUE(m_float.setValue(1.25));
+    SelectionEpochSource source;
+    ListState list;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    const u64 numericRevision = m_float.revision();
+    const u64 draftRevision = m_float.draft().revision();
+    const u64 selectionGeneration = m_float.draft().selectionGeneration();
+    source.onText = &m_float.lendDraft();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_DOUBLE_EQ(m_float.value(), 1.25);
+    EXPECT_EQ(m_float.revision(), numericRevision);
+    EXPECT_EQ(m_float.draft().text(), AStringView("1.25"));
+    EXPECT_EQ(m_float.draft().revision(), draftRevision);
+    EXPECT_EQ(m_float.draft().anchor(), 4u);
+    EXPECT_EQ(m_float.draft().caret(), 4u);
+    EXPECT_GT(m_float.draft().selectionGeneration(), selectionGeneration);
+}
+
+TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsAcceptedIdenticalSelection){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource source;
+    source.mutation = EpochMutation::SameSelection;
+    ListState list;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    const u64 selectionGeneration = m_integer.draft().selectionGeneration();
+    source.onText = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().anchor(), 2u);
+    EXPECT_EQ(m_integer.draft().caret(), 2u);
+    EXPECT_GT(m_integer.draft().selectionGeneration(), selectionGeneration);
+}
+
+TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsCompositionRoundTripWithNoActivePreedit){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource source;
+    source.mutation = EpochMutation::CompositionRoundTrip;
+    ListState list;
+    ASSERT_TRUE(beginNumeric(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    const u64 compositionGeneration = m_integer.draft().compositionGeneration();
+    source.onText = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
+    EXPECT_FALSE(m_integer.draft().composition().active);
+    EXPECT_GT(m_integer.draft().compositionGeneration(), compositionGeneration);
+}
+
+TEST_F(UiNumericSelectionEpochTests, ChildSourceRejectsAnAlreadyPaintedParentSelectionRoundTrip){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource source;
+    ListState list;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().anchor(), 2u);
+    EXPECT_EQ(m_integer.draft().caret(), 2u);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiNumericSelectionEpochTests, ParentSourceRejectsTheEndedChildSelectionRoundTripBeforePublication){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource source;
+    ListState list;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 0u);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().anchor(), 2u);
+    EXPECT_EQ(m_integer.draft().caret(), 2u);
+}
+
+TEST_F(UiNumericSelectionEpochTests, LaterSiblingSourceRejectsAnAlreadyPaintedFloatSelectionRoundTrip){
+    useHost();
+    ASSERT_TRUE(m_float.setValue(1.25));
+    SelectionEpochSource source;
+    ListState list;
+    PopupState sibling;
+    m_parent.open();
+    m_child.open();
+    sibling.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    source.onText = &m_float.lendDraft();
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_DOUBLE_EQ(m_float.value(), 1.25);
+    EXPECT_EQ(m_float.draft().anchor(), 4u);
+    EXPECT_EQ(m_float.draft().caret(), 4u);
+}
+
+TEST_F(UiNumericSelectionEpochTests, FinalSourceValidationRejectsTheParentSelectionRoundTripAfterChildPaint){
+    useHost();
+    ASSERT_TRUE(m_integer.setValue(42));
+    SelectionEpochSource parentSource;
+    SelectionEpochSource childSource;
+    ListState parentList;
+    ListState childList;
+    m_parent.open();
+    m_child.open();
+    ASSERT_TRUE(beginParent(1u));
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, UiWidgetTests::LargeLoanListOptions()).valid);
+    ASSERT_TRUE(m_builder.endPopup());
+    childSource.armSource = &parentSource;
+    childSource.armDraft = &m_integer.lendDraft();
+    EXPECT_FALSE(m_builder.endPopup());
+    EXPECT_TRUE(parentSource.mutationApplied);
+    EXPECT_EQ(m_host.publishes, 1u);
+    EXPECT_GT(childSource.textCalls, 0u);
+    EXPECT_EQ(m_integer.value(), 42);
+    EXPECT_EQ(m_integer.draft().anchor(), 2u);
+    EXPECT_EQ(m_integer.draft().caret(), 2u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_paint_glyph_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+
+class UiPaintGlyphTests : public NWB::UiPaintTextTests::PaintTextFixture{
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPaintGlyphTests, ClipTrimsGlyphGeometryAndUv){
+    auto pageCreationResult = makeGlyphPage();
+    ASSERT_TRUE(pageCreationResult);
+    const SharedGlyphPage page = Move(*pageCreationResult);
+    ASSERT_TRUE(page);
+    m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
+    ASSERT_TRUE(m_builder.drawGlyph(page, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
+    ASSERT_TRUE(m_builder.popClip());
+    ExpectClippedQuad(m_builder.freeze());
+}
+
+TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndClip){
+    auto firstCreationResult = makeGlyphPage();
+    ASSERT_TRUE(firstCreationResult);
+    const SharedGlyphPage first = Move(*firstCreationResult);
+    auto secondCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 1u, 1u);
+    ASSERT_TRUE(secondCreationResult);
+    const SharedGlyphPage second = Move(*secondCreationResult);
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(second);
+    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
+    const Rect uv{ 0.0f, 0.0f, 0.5f, 0.5f };
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv, { 0.5f, 0.25f, 1.0f, 0.5f }));
+    ASSERT_TRUE(m_builder.drawGlyph(second, rectangle, uv));
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), 2u);
+    ASSERT_EQ(snapshot.commands().size(), 9u);
+    ASSERT_EQ(snapshot.vertices().size(), 40u);
+    ASSERT_EQ(snapshot.indices().size(), 60u);
+    EXPECT_EQ(snapshot.commands()[0].indexCount, 12u);
+    EXPECT_EQ(snapshot.commands()[1].glyphPageIndex, 1u);
+    EXPECT_EQ(snapshot.commands()[2].glyphPageIndex, 0u);
+    EXPECT_EQ(snapshot.commands()[3].material, PaintMaterial::Solid);
+    EXPECT_EQ(snapshot.commands()[3].glyphPageIndex, Limit<u32>::s_Max);
+    EXPECT_EQ(snapshot.commands()[5].material, PaintMaterial::Skin);
+    EXPECT_EQ(snapshot.commands()[5].glyphPageIndex, Limit<u32>::s_Max);
+    for(usize index = 1u; index < snapshot.commands().size(); ++index){
+        EXPECT_EQ(snapshot.commands()[index].firstIndex, static_cast<u32>((index + 1u) * 6u));
+        EXPECT_EQ(snapshot.commands()[index].indexCount, 6u);
+    }
+    EXPECT_FLOAT_EQ(snapshot.commands()[6].clip.width, 100.0f);
+    EXPECT_FLOAT_EQ(snapshot.commands()[7].clip.width, 20.0f);
+    EXPECT_FLOAT_EQ(snapshot.commands()[8].clip.width, 100.0f);
+}
+
+TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlierGlyphUvs){
+    auto originalCreationResult = makeGlyphPage();
+    ASSERT_TRUE(originalCreationResult);
+    const SharedGlyphPage original = Move(*originalCreationResult);
+    auto appendedCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 2u);
+    ASSERT_TRUE(appendedCreationResult);
+    const SharedGlyphPage appended = Move(*appendedCreationResult);
+    ASSERT_TRUE(original);
+    ASSERT_TRUE(appended);
+    const Rect earlierUv{ 0.0f, 0.0f, 0.25f, 0.25f };
+    ASSERT_TRUE(m_builder.drawGlyph(original, { 1.0f, 1.0f, 4.0f, 4.0f }, earlierUv));
+    ASSERT_TRUE(m_builder.prepareGlyphPages(Span(&appended, 1u)));
+    ASSERT_TRUE(m_builder.drawGlyph(appended, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
+    // A later caller retaining the old page must neither downgrade the binding nor split the compatible batch.
+    ASSERT_TRUE(m_builder.drawGlyph(original, { 11.0f, 1.0f, 4.0f, 4.0f }, earlierUv));
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+    ASSERT_EQ(snapshot.vertices().size(), 12u);
+    EXPECT_EQ(snapshot.commands()[0].indexCount, 18u);
+    EXPECT_EQ(snapshot.commands()[0].glyphPageIndex, 0u);
+    EXPECT_EQ(snapshot.glyphPages()[0].get(), appended.get());
+    EXPECT_EQ(snapshot.glyphPages()[0]->binding().generation, 2u);
+    EXPECT_EQ(snapshot.glyphPages()[0]->pixels()[0], original->pixels()[0]);
+    EXPECT_EQ(snapshot.glyphPages()[0]->pixels()[32], 192u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.x, 0.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.y, 0.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.x, 0.25f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.y, 0.25f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4].texCoord.x, 0.5f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4].texCoord.y, 0.5f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[8].texCoord.x, 0.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[10].texCoord.x, 0.25f);
+}
+
+TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPageRelease){
+    auto originalCreationResult = makeGlyphPage();
+    ASSERT_TRUE(originalCreationResult);
+    SharedGlyphPage original = Move(*originalCreationResult);
+    ASSERT_TRUE(original);
+    ASSERT_TRUE(m_builder.drawGlyph(original, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
+    const DrawSnapshot first = m_builder.freeze();
+    original.reset();
+    begin(8u);
+    auto appendedCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 2u);
+    ASSERT_TRUE(appendedCreationResult);
+    SharedGlyphPage appended = Move(*appendedCreationResult);
+    ASSERT_TRUE(appended);
+    ASSERT_TRUE(m_builder.drawGlyph(appended, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
+    const DrawSnapshot second = m_builder.freeze();
+    appended.reset();
+    begin(9u);
+    ASSERT_EQ(first.glyphPages().size(), 1u);
+    ASSERT_EQ(second.glyphPages().size(), 1u);
+    EXPECT_EQ(first.glyphPages()[0]->binding().generation, 1u);
+    EXPECT_EQ(second.glyphPages()[0]->binding().generation, 2u);
+    EXPECT_NE(first.glyphPages()[0].get(), second.glyphPages()[0].get());
+    EXPECT_EQ(first.glyphPages()[0]->pixels()[0], 64u);
+    EXPECT_EQ(first.glyphPages()[0]->pixels()[32], 0u);
+    EXPECT_EQ(second.glyphPages()[0]->pixels()[0], 64u);
+    EXPECT_EQ(second.glyphPages()[0]->pixels()[32], 192u);
+    EXPECT_FLOAT_EQ(first.vertices()[0].texCoord.x, 0.0f);
+    EXPECT_FLOAT_EQ(second.vertices()[0].texCoord.x, 0.5f);
+}
+
+TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry){
+    FixedVector<SharedGlyphPage, s_PaintMaxImages> pages;
+    for(usize index = 0u; index < s_PaintMaxImages; ++index){
+        auto pageCreationResult = makeGlyphPage(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
+        ASSERT_TRUE(page);
+        pages.push_back(Move(page));
+    }
+    ASSERT_TRUE(m_builder.drawGlyph(pages[0], { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
+    ASSERT_TRUE(m_builder.prepareGlyphPages(pages));
+    auto upgradeCreationResult = makeGlyphPage(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult);
+    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
+    auto overflowCreationResult = makeGlyphPage(1000u);
+    ASSERT_TRUE(overflowCreationResult);
+    const SharedGlyphPage overflow = Move(*overflowCreationResult);
+    ASSERT_TRUE(upgrade);
+    ASSERT_TRUE(overflow);
+    const Array<SharedGlyphPage, 2u> candidates{ upgrade, overflow };
+    EXPECT_FALSE(m_builder.prepareGlyphPages(candidates));
+    EXPECT_FALSE(m_builder.drawGlyph(overflow, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
+    for(usize index = 0u; index < pages.size(); ++index)
+        EXPECT_EQ(snapshot.glyphPages()[index].get(), pages[index].get());
+    EXPECT_EQ(snapshot.glyphPages()[0]->binding().generation, 1u);
+    EXPECT_EQ(snapshot.glyphPages()[0]->pixels()[32], 0u);
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    ASSERT_EQ(snapshot.indices().size(), 6u);
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+    EXPECT_EQ(snapshot.commands()[0].firstIndex, 0u);
+    EXPECT_EQ(snapshot.commands()[0].indexCount, 6u);
+    EXPECT_EQ(snapshot.commands()[0].glyphPageIndex, 0u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0].position.x, 2.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0].position.y, 3.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, 6.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, 8.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.x, 0.125f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.y, 0.75f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

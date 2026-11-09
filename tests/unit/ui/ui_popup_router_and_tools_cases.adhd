@@ -1,0 +1,1543 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiPopupRouterAndToolsCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_router_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+HitTarget Button(const u64 id, const Rect& rectangle, const u32 paintOrder = 0u)noexcept{
+    HitTarget target;
+    target.id = { id };
+    target.rectangle = rectangle;
+    target.clip = { 0.0f, 0.0f, 200.0f, 120.0f };
+    target.paintOrder = paintOrder;
+    target.focusable = true;
+    target.activatable = true;
+    return target;
+}
+
+PopupScope Scope(const u64 widget = 100u, const u32 layer = 3u, const u64 openGeneration = 1u)noexcept{
+    PopupScope scope;
+    scope.token = { { widget }, 10u, 20u, openGeneration };
+    scope.bounds = { 40.0f, 40.0f, 100.0f, 70.0f };
+    scope.viewport = { 0.0f, 0.0f, 200.0f, 120.0f };
+    scope.layer = layer;
+    return scope;
+}
+
+Array<HitTarget, 2u> BaseTargets()noexcept{
+    return { Button(1u, { 10.0f, 10.0f, 30.0f, 20.0f }), Button(2u, { 60.0f, 10.0f, 30.0f, 20.0f }) };
+}
+
+HitTarget Barrier(const PopupScope& scope)noexcept{
+    HitTarget target;
+    target.id = scope.token.widget;
+    target.declarationGeneration = scope.token.declarationGeneration;
+    target.rectangle = scope.bounds;
+    target.clip = scope.viewport;
+    target.paintOrder = 10u;
+    target.popup = scope.token;
+    target.layer = scope.layer;
+    return target;
+}
+
+HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, const u32 paintOrder)noexcept{
+    HitTarget target = Button(id, rectangle, paintOrder);
+    target.clip = scope.bounds;
+    target.popup = scope.token;
+    target.layer = scope.layer;
+    return target;
+}
+
+Array<HitTarget, 5u> Targets(const PopupScope& scope)noexcept{
+    const auto base = BaseTargets();
+    return { base[0u], base[1u], Barrier(scope), Child(scope, scope.token.widget.value + 1u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(scope, scope.token.widget.value + 2u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPopupRouterTests : public UiTestSupport::RouterTestFixture{
+public:
+    UiPopupRouterTests()
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPopupRouter))
+    {}
+
+
+protected:
+    [[nodiscard]] b8 install(const PopupScope& scope, const u64 generation){
+        const auto targets = Targets(scope);
+        return m_router.commitTargets(targets, generation, Span(&scope, 1u));
+    }
+
+    void focusBase(){
+        const auto targets = BaseTargets();
+        ASSERT_TRUE(m_router.commitTargets(targets, 1u));
+        key(Core::Key::Tab);
+        ASSERT_EQ(m_router.focus().value, 1u);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPopupRouterTests, AcceptedPopupBlocksUnderlyingHitTargetsDespiteTheirLaterPaintOrder){
+    const PopupScope scope = Scope();
+    auto targets = Targets(scope);
+    targets[0u].rectangle = scope.viewport;
+    targets[0u].paintOrder = Limit<u32>::s_Max;
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u, Span(&scope, 1u)));
+    EXPECT_TRUE(m_router.hasPopup());
+    EXPECT_TRUE(m_router.wantsCommands());
+    EXPECT_TRUE(m_router.wantsPointer());
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 101u);
+    EXPECT_EQ(m_router.hitTest({ 45.0f, 45.0f }).value, 100u);
+    EXPECT_FALSE(m_router.hitTest({ 15.0f, 15.0f }).valid());
+    EXPECT_TRUE(m_router.wouldConsumePointer({ 15.0f, 15.0f }));
+    click({ 55.0f, 55.0f });
+    EXPECT_TRUE(m_router.consumeActivation({ 101u }));
+    EXPECT_FALSE(m_router.consumeActivation({ 1u }));
+}
+
+TEST_F(UiPopupRouterTests, TabAndReverseTabWrapOnlyWithinTheAcceptedTopScope){
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 1u));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    key(Core::Key::Tab);
+    EXPECT_EQ(m_router.focus().value, 102u);
+    key(Core::Key::Tab);
+    EXPECT_EQ(m_router.focus().value, 101u);
+    key(Core::Key::Tab, true);
+    EXPECT_EQ(m_router.focus().value, 102u);
+    key(Core::Key::Enter);
+    EXPECT_TRUE(m_router.consumeActivation({ 102u }));
+    EXPECT_FALSE(m_router.consumeActivation({ 1u }));
+    EXPECT_FALSE(m_router.consumeActivation({ 2u }));
+}
+
+TEST_F(UiPopupRouterTests, OptedInSingleStopPopupTabsToTheNextParentStopAfterAcceptance){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissFocusTraversal = true;
+    scope.focusAnchor = { 1u };
+    scope.focusAnchorDeclarationGeneration = 1u;
+    auto targets = Targets(scope);
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 4u), 2u, Span(&scope, 1u)));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_EQ(m_router.focus().value, 2u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Tab));
+}
+
+TEST_F(UiPopupRouterTests, OptedInPopupReverseTabsToThePreviousParentStop){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissFocusTraversal = true;
+    scope.focusAnchor = { 1u };
+    scope.focusAnchorDeclarationGeneration = 1u;
+    auto targets = Targets(scope);
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 4u), 2u, Span(&scope, 1u)));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    key(Core::Key::Tab, true);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_EQ(m_router.focus().value, 2u);
+}
+
+TEST_F(UiPopupRouterTests, OptedInTwoStopPopupMovesInsideBeforeLeaving){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissFocusTraversal = true;
+    scope.focusAnchor = { 1u };
+    scope.focusAnchorDeclarationGeneration = 1u;
+    ASSERT_TRUE(install(scope, 2u));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    key(Core::Key::Tab);
+    EXPECT_EQ(m_router.focus().value, 102u);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    key(Core::Key::Tab, true);
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    key(Core::Key::Tab);
+    key(Core::Key::Tab);
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
+}
+
+TEST_F(UiPopupRouterTests, EmptyPopupStillOwnsKeysAndOutsidePointerInput){
+    const PopupScope scope = Scope();
+    const auto base = BaseTargets();
+    const Array<HitTarget, 3> targets{ base[0u], base[1u], Barrier(scope) };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 3u), 1u, Span(&scope, 1u)));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(m_router.wantsCommands());
+    key(Core::Key::Tab);
+    EXPECT_FALSE(m_router.focus().valid());
+    key(Core::Key::Enter);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(send({ .position = { 15.0f, 15.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+    key(Core::Key::Escape);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+}
+
+TEST_F(UiPopupRouterTests, AutofocusFalseClearsUnderlyingFocusAndWaitsForExplicitTab){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.autofocus = false;
+    ASSERT_TRUE(install(scope, 2u));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(m_router.wantsCommands());
+    key(Core::Key::Enter);
+    EXPECT_TRUE(m_router.actions().empty());
+    key(Core::Key::Tab);
+    EXPECT_EQ(m_router.focus().value, 101u);
+}
+
+TEST_F(UiPopupRouterTests, OutsideDismissalConsumesItsEntirePressAcrossAcceptedRemoval){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    EXPECT_TRUE(send({ .position = { 15.0f, 15.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_TRUE(m_router.hasPopup());
+    EXPECT_TRUE(m_router.wantsPointer());
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_EQ(m_router.focus().value, 1u);
+    EXPECT_TRUE(send({ .position = { 15.0f, 15.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 15.0f, 15.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_FALSE(m_router.consumeActivation({ 1u }));
+    click({ 15.0f, 15.0f });
+    EXPECT_TRUE(m_router.consumeActivation({ 1u }));
+}
+
+TEST_F(UiPopupRouterTests, EscapeDismissalPreservesHeldKeyOwnershipAcrossAcceptedRemoval){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Escape));
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_EQ(m_router.focus().value, 1u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
+    EXPECT_FALSE(m_router.ownsKey(Core::Key::Escape));
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, NonDismissibleModalBlocksOutsideAndEscapeWithoutPublishingDismissals){
+    PopupScope scope = Scope();
+    scope.dismissOutside = false;
+    scope.dismissCancel = false;
+    ASSERT_TRUE(install(scope, 1u));
+    click({ 15.0f, 15.0f });
+    key(Core::Key::Escape);
+    EXPECT_TRUE(m_router.hasPopup());
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::OutsideClick));
+    EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::Cancel));
+    EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::None));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    EXPECT_TRUE(m_router.actions().empty());
+}
+
+TEST_F(UiPopupRouterTests, ClosingTokenSuppressesActionsUntilItsAcceptedRemovalAndPublishesNoDismissal){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    click({ 55.0f, 55.0f });
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    m_router.closePopup(scope.token);
+    EXPECT_TRUE(m_router.hasPopup());
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.hitTest({ 55.0f, 55.0f }).valid());
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_TRUE(m_router.wantsCommands());
+    EXPECT_TRUE(send({ .position = { 15.0f, 15.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+    key(Core::Key::Enter);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, SameOpenEpochRetainsChosenChildFocusAcrossAcceptedGeometryUpdates){
+    focusBase();
+    PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 102u);
+    scope.bounds = { 60.0f, 30.0f, 100.0f, 70.0f };
+    auto targets = Targets(scope);
+    targets[3u].rectangle = { 70.0f, 40.0f, 30.0f, 20.0f };
+    targets[4u].rectangle = { 110.0f, 40.0f, 30.0f, 20.0f };
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, Span(&scope, 1u)));
+    EXPECT_EQ(m_router.focus().value, 102u);
+    EXPECT_EQ(m_router.hitTest({ 115.0f, 45.0f }).value, 102u);
+    EXPECT_FALSE(m_router.hitTest({ 55.0f, 55.0f }).valid());
+    m_router.closePopup(scope.token);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 4u));
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, ReopenedEpochFencesOldCloseAndDismissalTokens){
+    focusBase();
+    const PopupScope original = Scope();
+    ASSERT_TRUE(install(original, 2u));
+    key(Core::Key::Escape);
+    const PopupScope reopened = Scope(100u, 3u, 2u);
+    ASSERT_TRUE(install(reopened, 3u));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    m_router.closePopup(original.token);
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 101u);
+    EXPECT_FALSE(m_router.consumePopupDismissal(reopened.token));
+    m_router.closePopup(reopened.token);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 4u));
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, ReopenedEpochCannotReplayQueuedActivationWithTheSameChildIdAndDeclaration){
+    const PopupScope original = Scope();
+    ASSERT_TRUE(install(original, 1u));
+    click({ 55.0f, 55.0f });
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    const u64 originalSequence = m_router.actions()[0u].id.sequence;
+    const PopupScope reopened = Scope(100u, 3u, 2u);
+    ASSERT_TRUE(install(reopened, 2u));
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
+    click({ 55.0f, 55.0f });
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_GT(m_router.actions()[0u].id.sequence, originalSequence);
+    EXPECT_TRUE(m_router.consumeActivation({ 101u }));
+    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
+}
+
+TEST_F(UiPopupRouterTests, ReopenedEpochCancelsOldCaptureWithoutTransferringItsReleaseToTheNewChild){
+    const PopupScope original = Scope();
+    ASSERT_TRUE(install(original, 1u));
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    ASSERT_EQ(m_router.capture().value, 101u);
+    const PopupScope reopened = Scope(100u, 3u, 2u);
+    ASSERT_TRUE(install(reopened, 2u));
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
+    click({ 55.0f, 55.0f });
+    EXPECT_TRUE(m_router.consumeActivation({ 101u }));
+}
+
+TEST_F(UiPopupRouterTests, HeldEscapeDoesNotDismissTheNewlyAcceptedLowerScopeOnRepeatOrDuplicateDown){
+    const PopupScope lower = Scope();
+    ASSERT_TRUE(install(lower, 1u));
+    const PopupScope higher = Scope(200u, 5u);
+    const auto lowerTargets = Targets(lower);
+    const Array<HitTarget, 7> targets{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const Array<PopupScope, 2> scopes{ lower, higher };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 7u), 2u, Span(scopes.data(), 2u)));
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult1 = m_router.consumePopupDismissal(higher.token);
+    ASSERT_TRUE(reasonResult1);
+    reason = *reasonResult1;
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+    ASSERT_TRUE(install(lower, 3u));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
+    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+    const auto reasonResult2 = m_router.consumePopupDismissal(lower.token);
+    ASSERT_TRUE(reasonResult2);
+    reason = *reasonResult2;
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
+}
+
+TEST_F(UiPopupRouterTests, RemovalNeverRestoresDisabledOrRecreatedUnderlyingFocus){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    auto base = BaseTargets();
+    base[0u].enabled = false;
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_FALSE(m_router.focus().valid());
+    base[0u].enabled = true;
+    ASSERT_TRUE(m_router.commitTargets(base, 4u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 1u);
+    const PopupScope reopened = Scope(100u, 3u, 2u);
+    ASSERT_TRUE(install(reopened, 5u));
+    base[0u].declarationGeneration = 2u;
+    ASSERT_TRUE(m_router.commitTargets(base, 6u));
+    EXPECT_FALSE(m_router.focus().valid());
+}
+
+TEST_F(UiPopupRouterTests, RemovalNeverRestoresRemovedOrFullyClippedUnderlyingFocus){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(Span(&base[1u], 1u), 3u));
+    EXPECT_FALSE(m_router.focus().valid());
+    ASSERT_TRUE(m_router.commitTargets(base, 4u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 1u);
+    const PopupScope reopened = Scope(100u, 3u, 2u);
+    ASSERT_TRUE(install(reopened, 5u));
+    base[0u].clip.width = 0.0f;
+    ASSERT_TRUE(m_router.commitTargets(base, 6u));
+    EXPECT_FALSE(m_router.focus().valid());
+}
+
+TEST_F(UiPopupRouterTests, HigherLayerScopeBlocksLowerChildrenAndRestoresTheirSavedFocus){
+    focusBase();
+    const PopupScope lower = Scope();
+    ASSERT_TRUE(install(lower, 2u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 102u);
+    const PopupScope higher = Scope(200u, 5u);
+    const auto lowerTargets = Targets(lower);
+    const Array<HitTarget, 7> targets{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const Array<PopupScope, 2> scopes{ lower, higher };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 7u), 3u, Span(scopes.data(), 2u)));
+    EXPECT_EQ(m_router.focus().value, 201u);
+    EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 201u);
+    key(Core::Key::Tab);
+    EXPECT_EQ(m_router.focus().value, 201u);
+    m_router.closePopup(higher.token);
+    EXPECT_FALSE(m_router.hitTest({ 55.0f, 55.0f }).valid());
+    ASSERT_TRUE(install(lower, 4u));
+    EXPECT_EQ(m_router.focus().value, 102u);
+    m_router.closePopup(lower.token);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 5u));
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, RemovingLowerWhileRetainingHigherSplicesTheSavedBaseFocusChain){
+    focusBase();
+    const PopupScope lower = Scope();
+    ASSERT_TRUE(install(lower, 2u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 102u);
+    const PopupScope higher = Scope(200u, 5u);
+    const auto lowerTargets = Targets(lower);
+    const Array<HitTarget, 7> targets{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const Array<PopupScope, 2> scopes{ lower, higher };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 7u), 3u, Span(scopes.data(), 2u)));
+    ASSERT_EQ(m_router.focus().value, 201u);
+    ASSERT_TRUE(install(higher, 4u));
+    EXPECT_EQ(m_router.focus().value, 201u);
+    m_router.closePopup(higher.token);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 5u));
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, InsertingLowerBeneathRetainedTopKeepsTopFocusAndTheOriginalBaseRestoreTarget){
+    focusBase();
+    const PopupScope higher = Scope(200u, 5u);
+    ASSERT_TRUE(install(higher, 2u));
+    key(Core::Key::Tab);
+    ASSERT_EQ(m_router.focus().value, 202u);
+    const PopupScope lower = Scope();
+    const auto lowerTargets = Targets(lower);
+    const Array<HitTarget, 8> targets{
+        lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
+        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(higher, 202u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u),
+    };
+    const Array<PopupScope, 2> scopes{ lower, higher };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 8u), 3u, Span(scopes.data(), 2u)));
+    EXPECT_EQ(m_router.focus().value, 202u);
+    m_router.closePopup(higher.token);
+    ASSERT_TRUE(install(lower, 4u));
+    EXPECT_EQ(m_router.focus().value, 101u);
+    m_router.closePopup(lower.token);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 5u));
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_EQ(m_router.focus().value, 1u);
+}
+
+TEST_F(UiPopupRouterTests, FocusLossDismissesAllScopesWithoutRestoringUnderlyingFocus){
+    focusBase();
+    const PopupScope lower = Scope();
+    ASSERT_TRUE(install(lower, 2u));
+    const PopupScope higher = Scope(200u, 5u);
+    const auto lowerTargets = Targets(lower);
+    const Array<HitTarget, 7> targets{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u) };
+    const Array<PopupScope, 2> scopes{ lower, higher };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 7u), 3u, Span(scopes.data(), 2u)));
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    const auto reasonResult1 = m_router.consumePopupDismissal(lower.token);
+    ASSERT_TRUE(reasonResult1);
+    reason = *reasonResult1;
+    EXPECT_EQ(reason, PopupDismissReason::FocusLost);
+    const auto reasonResult2 = m_router.consumePopupDismissal(higher.token);
+    ASSERT_TRUE(reasonResult2);
+    reason = *reasonResult2;
+    EXPECT_EQ(reason, PopupDismissReason::FocusLost);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 4u));
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.hasPopup());
+}
+
+TEST_F(UiPopupRouterTests, FocusLossWhileAlreadyClosingStillSuppressesSavedFocusRestoration){
+    focusBase();
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 2u));
+    key(Core::Key::Escape);
+    EXPECT_TRUE(m_router.hasPopup());
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 3u));
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_FALSE(m_router.focus().valid());
+}
+
+TEST_F(UiPopupRouterTests, InvalidatingPopupOwnerRetiresItsScopeActionsAndHeldCaptureImmediately){
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 7u));
+    click({ 55.0f, 55.0f });
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Space , .type = InputEventType::KeyDown}).commandConsumed);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    m_router.invalidateTarget(scope.token.widget);
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_EQ(m_router.layoutGeneration(), 7u);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_FALSE(m_router.hitTest({ 55.0f, 55.0f }).valid());
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Space , .type = InputEventType::KeyUp}).commandConsumed);
+    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
+}
+
+TEST_F(UiPopupRouterTests, InvalidScopeDescriptionsRejectAtomicallyWithoutChangingAcceptedInteraction){
+    const PopupScope scope = Scope();
+    const auto targets = Targets(scope);
+    ASSERT_TRUE(install(scope, 1u));
+    key(Core::Key::Enter);
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    Array<PopupScope, 10u> invalid;
+    for(PopupScope& candidate : invalid)
+        candidate = scope;
+    invalid[0u].token.widget = {};
+    invalid[1u].token.declarationGeneration = 0u;
+    invalid[2u].token.instanceGeneration = 0u;
+    invalid[3u].token.openGeneration = 0u;
+    invalid[4u].layer = 0u;
+    invalid[5u].bounds.width = 0.0f;
+    invalid[6u].viewport.height = 0.0f;
+    invalid[7u].bounds.x = Limit<f32>::s_QuietNaN;
+    invalid[8u].bounds.x = -1.0f;
+    invalid[9u].bounds.height = -1.0f;
+    for(const PopupScope& candidate : invalid){
+        EXPECT_FALSE(m_router.commitTargets(targets, 2u, Span(&candidate, 1u)));
+        EXPECT_EQ(m_router.layoutGeneration(), 1u);
+        EXPECT_TRUE(m_router.hasPopup());
+        EXPECT_EQ(m_router.focus().value, 101u);
+        EXPECT_EQ(m_router.capture().value, 101u);
+        EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 101u);
+        EXPECT_EQ(m_router.actions().size(), 1u);
+    }
+    EXPECT_TRUE(send({ .position = { 55.0f, 55.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+    EXPECT_TRUE(m_router.consumeActivation({ 101u }));
+}
+
+TEST_F(UiPopupRouterTests, MissingOwnersDuplicateScopesAndMismatchedScopedTargetsRejectAtomically){
+    const PopupScope scope = Scope();
+    const auto accepted = Targets(scope);
+    ASSERT_TRUE(install(scope, 1u));
+    const Array<PopupScope, 2> duplicate{ scope, scope };
+    EXPECT_FALSE(m_router.commitTargets(accepted, 2u, Span(duplicate.data(), 2u)));
+    EXPECT_FALSE(m_router.commitTargets(accepted, 2u));
+    for(usize mismatch = 0u; mismatch < 7u; ++mismatch){
+        auto invalid = accepted;
+        switch(mismatch){
+        case 0u: ++invalid[3u].popup.openGeneration; break;
+        case 1u: ++invalid[3u].layer; break;
+        case 2u: invalid[0u].layer = 1u; break;
+        case 3u: invalid[0u].popup.widget = scope.token.widget; break;
+        case 4u: invalid[2u].id = { 150u }; break;
+        case 5u: ++invalid[2u].declarationGeneration; break;
+        case 6u: invalid[2u].popup = {}; break;
+        }
+        EXPECT_FALSE(m_router.commitTargets(invalid, 2u, Span(&scope, 1u)));
+        EXPECT_EQ(m_router.layoutGeneration(), 1u);
+        EXPECT_EQ(m_router.focus().value, 101u);
+        EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 101u);
+    }
+    auto invalid = accepted;
+    invalid[4u] = invalid[2u];
+    EXPECT_FALSE(m_router.commitTargets(invalid, 2u, Span(&scope, 1u)));
+    EXPECT_TRUE(install(scope, 2u));
+}
+
+TEST_F(UiPopupRouterTests, PopupCountBoundRejectsWithoutReplacingTheAcceptedScope){
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 1u));
+    Array<PopupScope, s_InputMaxPopups + 1u> overflow;
+    for(usize index = 0u; index < overflow.size(); ++index)
+        overflow[index] = Scope(200u + index, static_cast<u32>(index + 1u));
+    const auto targets = Targets(scope);
+    EXPECT_FALSE(m_router.commitTargets(targets, 2u, overflow));
+    EXPECT_EQ(m_router.layoutGeneration(), 1u);
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(m_router.hasPopup());
+}
+
+TEST_F(UiPopupRouterTests, ResetDropsOwnedScopesDismissalsAndInteractionBeforeLayoutReuse){
+    const PopupScope scope = Scope();
+    ASSERT_TRUE(install(scope, 7u));
+    key(Core::Key::Escape);
+    m_router.reset();
+    EXPECT_FALSE(m_router.hasPopup());
+    EXPECT_FALSE(m_router.wantsCommands());
+    EXPECT_FALSE(m_router.wantsPointer());
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_FALSE(m_router.capture().valid());
+    EXPECT_TRUE(m_router.actions().empty());
+    EXPECT_EQ(m_router.layoutGeneration(), 0u);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base, 1u));
+    EXPECT_EQ(m_router.hitTest({ 15.0f, 15.0f }).value, 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_tools_builder_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiPopupToolsTests;
+
+class UiPopupToolsBuilderTests : public PopupToolsFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPopupToolsBuilderTests, TooltipDelayBeginsOnlyAfterTheAnchorLayoutIsAccepted){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(prepareTools(1u, true, false));
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PointerMove}).hover.valid());
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTargetsOrTakingFocus){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    const usize targetCount = m_context.input().targets().size();
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_FALSE(m_context.input().focus().valid());
+    EXPECT_EQ(m_context.input().targets().size(), targetCount);
+    EXPECT_EQ(target(id("tip", "panel")), nullptr);
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_FALSE(snapshot.commands().empty());
+    EXPECT_GT(snapshot.commands().back().layer, 0u);
+    for(const HitTarget& accepted : m_context.input().targets()){
+        EXPECT_FALSE(accepted.popup.valid());
+        EXPECT_EQ(accepted.layer, 0u);
+    }
+    press(Core::Key::Tab);
+    EXPECT_EQ(m_context.input().focus(), id(s_AnchorKey, s_PopupToolsPanelKey));
+}
+
+TEST_F(UiPopupToolsBuilderTests, VisibleTooltipPaintsItsDeclarationStyleAfterALaterStyleChange){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
+    m_builder.tooltipStyle().background = Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal);
+    ASSERT_TRUE(m_builder.tooltip("tip", "anchor", "Helpful text", m_tooltip, m_tooltipOptions));
+    m_builder.tooltipStyle().background = Name(NWB::Tests::UiCases::s_UiCaseButtonPressed);
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_tooltip.visible());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    const auto background = skinQuad(snapshot, 6u);
+    ASSERT_TRUE(background);
+    EXPECT_FLOAT_EQ(background->x, m_tooltip.placement().bounds.x);
+    EXPECT_FLOAT_EQ(background->y, m_tooltip.placement().bounds.y);
+}
+
+TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequiresAnotherDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.5f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, LeaveAndReturnBetweenDeclarationsRestartsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
+    ASSERT_TRUE(moveToAnchor());
+    EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, SameAnchorPointerMotionKeepsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    const Point pointer = m_context.input().pointerPosition();
+    EXPECT_EQ(send({ .position = { pointer.x + 5.0f, pointer.y } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
+    EXPECT_EQ(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, ClickBetweenDeclarationsRestartsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    const Point pointer = m_context.input().pointerPosition();
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryUp }).pointerConsumed);
+    EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(7u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, PrimaryCaptureAndSecondaryPressSuppressTheTooltip){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    const Point pointer = m_context.input().pointerPosition();
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryUp }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::SecondaryDown }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::SecondaryUp }).pointerConsumed);
+}
+
+TEST_F(UiPopupToolsBuilderTests, DisabledTooltipAndDisabledAnchorCannotRetainVisibleHelp){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    m_tooltipOptions.enabled = false;
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    m_tooltipOptions.enabled = true;
+    m_anchorOptions.enabled = false;
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsBuilderTests, UnknownPointerAndNativeFocusLossCannotQualifyTooltipHover){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    EXPECT_FALSE(m_context.input().pointerKnown());
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
+    EXPECT_FALSE(m_context.input().capture().valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, OmittedTooltipAttachmentCannotReuseDelayWhileTheAnchorSurvives){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    const u64 anchorDeclaration = target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration;
+    ASSERT_TRUE(acceptTools(4u, false, false));
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration, anchorDeclaration);
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(7u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, FullyClippedReplacementGeometrySuppressesPreviouslyVisibleHelp){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(3u, true, false, { 900.0f, 900.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_tooltip.visible());
+    EXPECT_FLOAT_EQ(m_tooltip.placement().bounds.width, 0.0f);
+    const DrawSnapshot snapshot = m_paint.freeze();
+    for(const DrawCommand& command : snapshot.commands())
+        EXPECT_EQ(command.layer, 0u);
+}
+
+TEST_F(UiPopupToolsBuilderTests, TooltipInsideAPlainPopupPaintsAfterItsOverlayWithoutAddingAnInputScope){
+    m_plainPopup.open();
+    ASSERT_TRUE(acceptPopupTooltip(1u));
+    const usize targetCount = m_context.input().targets().size();
+    ASSERT_TRUE(moveToAnchor("plain"));
+    ASSERT_TRUE(acceptPopupTooltip(2u));
+    EXPECT_TRUE(m_tooltip.visible());
+    EXPECT_TRUE(m_context.input().hasPopup());
+    EXPECT_EQ(m_context.input().targets().size(), targetCount);
+    EXPECT_EQ(target(id("tip", "plain")), nullptr);
+    EXPECT_EQ(m_context.input().focus(), id(s_AnchorKey, "plain"));
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_FALSE(snapshot.commands().empty());
+    EXPECT_GT(snapshot.commands().back().layer, target(id(s_AnchorKey, "plain"))->layer);
+}
+
+TEST_F(UiPopupToolsBuilderTests, TooltipRequiresAPrecedingAnchorInTheSameContainer){
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
+    ASSERT_TRUE(m_builder.beginRow("inner"));
+    EXPECT_FALSE(m_builder.tooltip("tip", "anchor", "Help", m_tooltip, m_tooltipOptions));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, MissingTooltipAnchorRejectsTheCandidate){
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_builder.tooltip("tip", "missing", "Help", m_tooltip, m_tooltipOptions));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, InvalidTooltipSizeRejectsBeforeScopeEnd){
+    m_tooltipOptions.maximumWidth = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(declareTools(1u, true, false));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, OneTooltipStateCannotOwnTwoAttachmentsInTheSameFrame){
+    ASSERT_TRUE(declareTools(1u, true, false));
+    EXPECT_FALSE(m_builder.button("second", "Second", m_anchorOptions));
+    EXPECT_FALSE(m_builder.tooltip("other", "second", "Other help", m_tooltip, m_tooltipOptions));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, ExplicitTooltipResetBeforeScopeEndRejectsItsBorrowedCandidate){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(declareTools(2u, true, false));
+    const u64 revision = m_tooltip.revision();
+    m_tooltip.reset();
+    EXPECT_GT(m_tooltip.revision(), revision);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_FALSE(m_tooltip.visible());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPopupToolsBuilderTests, SecondaryTriggerUsesOnlyTheExactlyAcceptedAnchorLayout){
+    ASSERT_TRUE(prepareTools(1u, false));
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
+    EXPECT_FALSE(m_menu.isOpen());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_TRUE(openBySecondary(2u));
+    EXPECT_TRUE(m_menuResult.opened);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_anchorActivated);
+    EXPECT_TRUE(m_context.input().hasPopup());
+    ASSERT_NE(menuHost(), nullptr);
+}
+
+TEST_F(UiPopupToolsBuilderTests, EscapeBeforeSecondaryReleaseCancelsThePendingContextMenu){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(moveToAnchor());
+    const Point point = m_context.input().pointerPosition();
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(2u, false));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.opened);
+    press(Core::Key::Escape);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.opened);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_anchorActivated);
+    secondaryClick(point);
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_TRUE(m_menu.isOpen());
+    EXPECT_TRUE(m_menuResult.opened);
+}
+
+TEST_F(UiPopupToolsBuilderTests, OrdinaryPrimaryActivationDoesNotOpenAnAttachedContextMenu){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(moveToAnchor());
+    click(m_context.input().pointerPosition());
+    ASSERT_TRUE(acceptTools(2u, false));
+    EXPECT_TRUE(m_anchorActivated);
+    EXPECT_FALSE(m_menuResult.opened);
+    EXPECT_FALSE(m_menu.isOpen());
+}
+
+TEST_F(UiPopupToolsBuilderTests, KeyboardPreviewSkipsDisabledCommandsAndEnterCommitsItsStableKey){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    press(Core::Key::Down);
+    press(Core::Key::Down);
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_EQ(m_menu.cursorKey(), 4u);
+    EXPECT_FALSE(m_menuResult.activated);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_TRUE(m_menuResult.activated);
+    EXPECT_EQ(m_menuResult.key, 4u);
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsBuilderTests, PointerReleaseCommitsOnlyAnEnabledCommand){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    const HitTarget* disabled = menuRow(3u);
+    ASSERT_NE(disabled, nullptr);
+    EXPECT_FALSE(disabled->enabled);
+    click(Center(disabled->rectangle));
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_FALSE(m_menuResult.activated);
+    ASSERT_TRUE(m_menu.isOpen());
+    const HitTarget* enabled = menuRow(5u);
+    ASSERT_NE(enabled, nullptr);
+    click(Center(enabled->rectangle));
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_TRUE(m_menuResult.activated);
+    EXPECT_EQ(m_menuResult.key, 5u);
+    EXPECT_FALSE(m_menu.isOpen());
+}
+
+TEST_F(UiPopupToolsBuilderTests, OutsideClickCancelsAndConsumesTheCompletePointerSequence){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    click({ 790.0f, 590.0f });
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_anchorActivated);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsBuilderTests, NativeFocusLossCancelsMenuEvenIfFocusReturnsBeforeDeclaration){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
+    EXPECT_FALSE(m_context.input().capture().valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().focus().valid());
+}
+
+TEST_F(UiPopupToolsBuilderTests, EmptyMenuRemainsOpenAndCannotProduceACommand){
+    m_source.count = 0u;
+    ++m_source.contentRevision;
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    EXPECT_EQ(m_menu.cursorKey(), 0u);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_EQ(m_menuResult.key, 0u);
+    EXPECT_TRUE(m_menu.isOpen());
+}
+
+TEST_F(UiPopupToolsBuilderTests, DisabledAttachmentDoesNotPublishAContextMenuTrigger){
+    m_menuOptions.enabled = false;
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_AnchorKey, s_PopupToolsPanelKey))->contextMenu);
+    ASSERT_TRUE(moveToAnchor());
+    secondaryClick(m_context.input().pointerPosition());
+    ASSERT_TRUE(acceptTools(2u, false));
+    EXPECT_FALSE(m_menuResult.opened);
+    EXPECT_FALSE(m_menu.isOpen());
+}
+
+TEST_F(UiPopupToolsBuilderTests, DisablingTheAnchorClosesItsOpenMenuAndRemovesTheTrigger){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    m_anchorOptions.enabled = false;
+    ASSERT_TRUE(acceptTools(3u, false));
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().hasPopup());
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_AnchorKey, s_PopupToolsPanelKey))->contextMenu);
+}
+
+TEST_F(UiPopupToolsBuilderTests, FullyClippedAnchorCancelsItsOpenContextMenuDuringScopeEnd){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    ASSERT_TRUE(acceptTools(3u, false, true, { 900.0f, 900.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsBuilderTests, RecreatedMenuAttachmentClosesOldPopupWhileItsAnchorSurvives){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    const u64 anchorDeclaration = target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration;
+    ASSERT_TRUE(acceptTools(3u, false, false));
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration, anchorDeclaration);
+    EXPECT_FALSE(m_context.input().hasPopup());
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsBuilderTests, OneMenuStateCannotOwnTwoAttachmentsInTheSameFrame){
+    ASSERT_TRUE(declareTools(1u, false));
+    EXPECT_FALSE(m_builder.button("second", "Second", m_anchorOptions));
+    const ContextMenuResult second = m_builder.contextMenu("other", "second", m_source, m_menu, m_menuOptions);
+    EXPECT_FALSE(second.valid);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, MissingMenuAnchorRejectsTheCandidate){
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
+    const ContextMenuResult result = m_builder.contextMenu("menu", "missing", m_source, m_menu, m_menuOptions);
+    EXPECT_FALSE(result.valid);
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, InvalidMenuWheelStepRejectsTheCandidate){
+    m_menuOptions.wheelRows = 0.0f;
+    EXPECT_FALSE(declareTools(1u, false));
+    EXPECT_TRUE(m_context.failed());
+}
+
+TEST_F(UiPopupToolsBuilderTests, ExternalMenuCloseBeforeScopeEndPreservesTheMutationAndRejectsTheLoan){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(declareTools(2u, false));
+    const u64 revision = m_menu.revision();
+    m_menu.close();
+    EXPECT_GT(m_menu.revision(), revision);
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+TEST_F(UiPopupToolsBuilderTests, SourceMutationDuringRowPaintingRejectsTheCandidateWithoutRollingBackData){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(declareTools(2u, false));
+    m_source.changeRevisionOnText = true;
+    const u64 revision = m_source.contentRevision;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_GT(m_source.contentRevision, revision);
+    EXPECT_TRUE(m_menu.isOpen());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+TEST_F(UiPopupToolsBuilderTests, ReentrantSourceClosePreservesTheClosedStateAndRejectsDeferredPainting){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(declareTools(2u, false));
+    m_source.closeOnText = &m_menu;
+    const u64 revision = m_menu.revision();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_GT(m_menu.revision(), revision);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+TEST_F(UiPopupToolsBuilderTests, MenuSourceCallbackCannotMutateAnEarlierBorrowedTooltipAndStillPublish){
+    ASSERT_TRUE(acceptTools(1u));
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(declareTools(2u));
+    const u64 revision = m_tooltip.revision();
+    m_source.resetTooltipOnText = &m_tooltip;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_GT(m_tooltip.revision(), revision);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_tools_loan_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiPopupToolsTests;
+
+class UiPopupToolsLoanTests : public PopupToolsFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RevisionArmingComboSource final : public IListDataSource{
+public:
+    RevisionArmingComboSource(PopupToolsSource& menuSource, ComboState& combo)noexcept
+        : m_menuSource(menuSource)
+        , m_combo(combo)
+    {
+        m_rows.generation = 1501u;
+    }
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_rows.instanceGeneration(); }
+
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_rows.revision(); }
+
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_rows.rowCount(); }
+
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_rows.key(index); }
+
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_rows.indexOf(key); }
+
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+        return m_rows.findEnabled(start, reverse);
+    }
+
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
+        ++textCalls;
+        if(!armed){
+            m_menuSource.closeComboOnRevision = &m_combo;
+            armed = true;
+        }
+        return m_rows.text(index);
+    }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
+
+
+public:
+    mutable u64 textCalls = 0u;
+    mutable b8 armed = false;
+
+
+private:
+    PopupToolsSource& m_menuSource;
+    ComboState& m_combo;
+    PopupToolsSource m_rows;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPopupToolsLoanTests, ClosingAUserPopupAfterTooltipDeclarationHidesHelpWithoutOrphanOverlay){
+    m_plainPopup.open();
+    ASSERT_TRUE(acceptPopupTooltip(1u));
+    ASSERT_TRUE(moveToAnchor("plain"));
+    ASSERT_TRUE(acceptPopupTooltip(2u));
+    ASSERT_TRUE(m_tooltip.visible());
+    ASSERT_TRUE(m_context.input().hasPopup());
+    ASSERT_TRUE(begin(3u));
+    PopupOptions options;
+    options.anchor = { 40.0f, 40.0f, 40.0f, 24.0f };
+    options.size = { 320.0f, 220.0f };
+    ASSERT_TRUE(m_builder.beginPopup("plain", m_plainPopup, options));
+    EXPECT_FALSE(m_builder.button("anchor", "Popup anchor", m_anchorOptions));
+    ASSERT_TRUE(m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions));
+    ASSERT_TRUE(m_tooltip.visible());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
+    m_plainPopup.close();
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_TRUE(m_builder.balanced());
+    EXPECT_FALSE(m_tooltip.visible());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    EXPECT_TRUE(snapshot.commands().empty());
+    EXPECT_TRUE(snapshot.vertices().empty());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_TRUE(m_context.input().targets().empty());
+}
+
+TEST_F(UiPopupToolsLoanTests, MenuRowCallbackCannotReplaceAnAlreadyPaintedOrdinaryListAndPublish){
+    ASSERT_TRUE(acceptTools(1u, false, false));
+    PopupToolsSource ordinarySource;
+    ordinarySource.generation = 1502u;
+    ListState ordinary;
+    ordinary.select(1u);
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 360.0f }));
+    ListOptions options;
+    options.width = { LayoutSizePolicy::Fixed, 220.0f };
+    options.height = { LayoutSizePolicy::Fixed, 168.0f };
+    ASSERT_TRUE(m_builder.virtualList("ordinary", ordinarySource, ordinary, options).valid);
+    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
+    ASSERT_TRUE(m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions).valid);
+    const u64 inputGeneration = ordinary.inputGeneration();
+    m_source.selectListOnText = &ordinary;
+    m_source.selectListKey = 4u;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_EQ(m_source.selectListOnText, nullptr);
+    EXPECT_EQ(ordinary.selectedKey(), 4u);
+    EXPECT_EQ(ordinary.cursorKey(), 4u);
+    EXPECT_NE(ordinary.inputGeneration(), inputGeneration);
+    EXPECT_GT(ordinary.placement().bounds.width, 0.0f);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+TEST_F(UiPopupToolsLoanTests, LateMenuMetadataCallbackCannotCloseAPaintedComboAndPublish){
+    ASSERT_TRUE(acceptTools(1u, false, false));
+    ComboState combo;
+    RevisionArmingComboSource comboSource(m_source, combo);
+    combo.open();
+    ASSERT_EQ(combo.selectedKey(), 0u);
+    ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 360.0f }));
+    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
+    ASSERT_TRUE(m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions).valid);
+    ComboOptions options;
+    options.width = { LayoutSizePolicy::Fixed, 220.0f };
+    options.height = { LayoutSizePolicy::Fixed, 32.0f };
+    options.popupHeight = 176.0f;
+    ASSERT_TRUE(m_builder.comboBox("combo", comboSource, combo, options).valid);
+    ASSERT_EQ(comboSource.textCalls, 0u);
+    ASSERT_EQ(m_source.closeComboOnRevision, nullptr);
+    const u64 inputGeneration = combo.inputGeneration();
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(comboSource.armed);
+    EXPECT_GT(comboSource.textCalls, 0u);
+    EXPECT_EQ(m_source.closeComboOnRevision, nullptr);
+    EXPECT_FALSE(combo.isOpen());
+    EXPECT_NE(combo.inputGeneration(), inputGeneration);
+    EXPECT_GT(combo.placement().bounds.width, 0.0f);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_popup_tools_navigation_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiPopupToolsTests;
+
+class UiPopupToolsNavigationTests : public PopupToolsFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceAndRetiresHeldInput){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    ASSERT_NE(menuHost(), nullptr);
+    const WidgetId rows = menuHost()->id;
+    ASSERT_EQ(m_context.input().focus(), rows);
+    press(Core::Key::End);
+    ASSERT_TRUE(acceptTools(3u, false));
+    ASSERT_EQ(m_menu.cursorKey(), 5u);
+    ASSERT_FALSE(m_menuResult.activated);
+    const u64 oldInputGeneration = m_menu.listState().inputGeneration();
+    const u64 oldSourceRevision = menuHost()->control.contentRevision;
+
+    press(Core::Key::Enter);
+    InputEvent heldNavigation;
+    heldNavigation.type = InputEventType::KeyDown;
+    heldNavigation.key = Core::Key::Down;
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
+    ASSERT_FALSE(m_context.input().controlActions().empty());
+    m_source.count = 4u;
+    ++m_source.contentRevision;
+
+    ASSERT_TRUE(prepareTools(4u, false));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 3u);
+    EXPECT_FALSE(m_context.input().focus().valid());
+    EXPECT_FALSE(m_context.input().capture().valid());
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+    EXPECT_NE(m_menu.listState().inputGeneration(), oldInputGeneration);
+    EXPECT_EQ(m_menu.cursorKey(), 1u);
+    EXPECT_TRUE(m_menu.isOpen());
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_EQ(m_menuResult.key, 0u);
+    EXPECT_FALSE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_context.input().focus().valid());
+
+    ASSERT_TRUE(m_context.commitFrame(4u));
+    ASSERT_NE(menuHost(), nullptr);
+    EXPECT_EQ(menuHost()->id, rows);
+    EXPECT_EQ(m_context.input().focus(), rows);
+    EXPECT_NE(menuHost()->control.contentRevision, oldSourceRevision);
+    EXPECT_EQ(menuHost()->control.contentRevision, m_source.contentRevision);
+    EXPECT_EQ(menuHost()->control.instanceGeneration, m_menu.listState().inputGeneration());
+    heldNavigation.repeat = true;
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
+    ASSERT_TRUE(acceptTools(5u, false));
+    EXPECT_EQ(m_menu.cursorKey(), 1u);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_TRUE(m_menu.isOpen());
+    heldNavigation.type = InputEventType::KeyUp;
+    heldNavigation.repeat = false;
+    EXPECT_TRUE(send(heldNavigation).commandConsumed);
+
+    press(Core::Key::End);
+    ASSERT_TRUE(acceptTools(6u, false));
+    EXPECT_EQ(m_menu.cursorKey(), 4u);
+    EXPECT_FALSE(m_menuResult.activated);
+    press(Core::Key::Enter);
+    ASSERT_TRUE(acceptTools(9u, false));
+    EXPECT_TRUE(m_menuResult.activated);
+    EXPECT_EQ(m_menuResult.key, 4u);
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().hasPopup());
+}
+
+TEST_F(UiPopupToolsNavigationTests, FocusLossAndRegainCannotRestorePreparedRowsFocus){
+    ASSERT_TRUE(acceptTools(1u, false));
+    ASSERT_TRUE(openBySecondary(2u));
+    ASSERT_NE(menuHost(), nullptr);
+    ASSERT_EQ(m_context.input().focus(), menuHost()->id);
+    m_source.count = 4u;
+    ++m_source.contentRevision;
+    ASSERT_TRUE(prepareTools(3u, false));
+    EXPECT_FALSE(m_context.input().focus().valid());
+    EXPECT_TRUE(m_menu.isOpen());
+
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_context.input().focus().valid());
+    EXPECT_FALSE(m_context.input().capture().valid());
+    EXPECT_TRUE(m_context.input().controlActions().empty());
+    ASSERT_TRUE(acceptTools(4u, false));
+    EXPECT_TRUE(m_menuResult.closed);
+    EXPECT_FALSE(m_menuResult.activated);
+    EXPECT_FALSE(m_menu.isOpen());
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_FALSE(m_context.input().focus().valid());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

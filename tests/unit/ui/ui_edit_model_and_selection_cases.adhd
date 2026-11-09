@@ -1,0 +1,1426 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiEditModelAndSelectionCasesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_command_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+
+class UiEditCommandTests : public EditFixture{
+public:
+    UiEditCommandTests()
+        : m_bindings(m_arena)
+    {}
+
+
+protected:
+    [[nodiscard]] EditCommandRequest translate(const i32 key, const b8 control = false, const b8 shift = false, const b8 alt = false, const b8 repeat = false)noexcept{
+        const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0) | (alt ? Core::InputModifier::Alt : 0);
+        return TranslateEditCommand(m_bindings.resolve(key, modifiers), repeat, EditTextMode::SingleLine);
+    }
+
+
+protected:
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditCommandTests, ShortcutTranslationPreservesWordSelectionAndLeavesAltGrWithOs){
+    ASSERT_TRUE(m_model.setText("one two"));
+    const auto left = translate(Core::Key::Left, true, true, false, true);
+    EXPECT_TRUE(ApplyEditCommand(m_model, left).selectionChanged);
+    EXPECT_EQ(m_model.selectedText(), "two");
+    const u64 revision = m_model.revision();
+    const u64 selection = m_model.selectionGeneration();
+    for(const EditCommandRequest& rejected : { translate(Core::Key::V), translate(Core::Key::V, true, false, true), translate(Core::Key::Left, true, true, true), translate(static_cast<i32>(Core::Key::Menu) + 1) }){
+        EXPECT_FALSE(ApplyEditCommand(m_model, rejected).handled);
+        EXPECT_EQ(m_model.text(), "one two");
+        EXPECT_EQ(m_model.selectedText(), "two");
+        EXPECT_EQ(m_model.revision(), revision);
+        EXPECT_EQ(m_model.selectionGeneration(), selection);
+    }
+}
+
+TEST_F(UiEditCommandTests, AlternateClipboardChordsRejectAmbiguousModifiersRepeatsAndPreedit){
+    ASSERT_TRUE(m_model.setText("selected"));
+    ASSERT_TRUE(m_model.selectAll());
+    const EditCommandRequest copy = translate(Core::Key::Insert, true);
+    const EditCommandRequest paste = translate(Core::Key::Insert, false, true);
+    const EditCommandRequest cut = translate(Core::Key::Delete, false, true);
+    EXPECT_EQ(translate(Core::Key::Insert, true, true).command, EditCommand::None);
+    EXPECT_EQ(translate(Core::Key::Insert, true, false, true).command, EditCommand::None);
+    EXPECT_EQ(translate(Core::Key::Delete, false, true, true).command, EditCommand::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, copy, true).clipboard, EditClipboardAction::Copy);
+    EXPECT_EQ(ApplyEditCommand(m_model, paste, true).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, cut, true).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, translate(Core::Key::Insert, true, false, false, true)).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, translate(Core::Key::Insert, false, true, false, true)).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, translate(Core::Key::Delete, false, true, false, true)).clipboard, EditClipboardAction::None);
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("draft", 0u, 5u));
+    for(const EditCommandRequest request : { copy, paste, cut })
+        EXPECT_EQ(ApplyEditCommand(m_model, request).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(m_model.text(), "selected");
+}
+
+TEST_F(UiEditCommandTests, NonEditingMalformedAndUnrelatedIntentsCannotMutateOrMoveTheModel){
+    ASSERT_TRUE(m_model.setText("one two"));
+    ASSERT_TRUE(m_model.setSelection(1u, 5u));
+    const u64 revision = m_model.revision();
+    const u64 selection = m_model.selectionGeneration();
+    const Array<InputCommandIntent, 8> rejected = {{
+        { InputCommand::Backspace, true, false }, { InputCommand::Copy, true, false },
+        { InputCommand::Accept, true, false }, { InputCommand::WordLeft, true, false },
+        { InputCommand::None }, { InputCommand::Activate }, { InputCommand::ContextMenu },
+        { static_cast<InputCommand::Enum>(255u), true }
+    }};
+    for(const InputCommandIntent& intent : rejected){
+        const EditCommandResult result = ApplyEditCommand(m_model, TranslateEditCommand(intent, false, EditTextMode::SingleLine));
+        EXPECT_FALSE(result.handled);
+        EXPECT_EQ(result.clipboard, EditClipboardAction::None);
+        EXPECT_FALSE(result.submitted);
+        EXPECT_FALSE(result.cancelled);
+        EXPECT_EQ(m_model.text(), "one two");
+        EXPECT_EQ(m_model.anchor(), 1u);
+        EXPECT_EQ(m_model.caret(), 5u);
+        EXPECT_EQ(m_model.revision(), revision);
+        EXPECT_EQ(m_model.selectionGeneration(), selection);
+    }
+    EXPECT_FALSE(ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Backspace }, false, static_cast<EditTextMode::Enum>(255u))).handled);
+    EXPECT_EQ(m_model.revision(), revision);
+    EXPECT_EQ(m_model.selectionGeneration(), selection);
+}
+
+TEST_F(UiEditCommandTests, ShiftMovementSelectsWholeGraphemesAndArrowsCollapseAtSelectionEdges){
+    ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Home }).selectionChanged);
+    const auto selected = ApplyEditCommand(m_model, { EditCommand::Right, true });
+    EXPECT_TRUE(selected.handled);
+    EXPECT_TRUE(selected.selectionChanged);
+    EXPECT_FALSE(selected.textChanged);
+    EXPECT_EQ(m_model.selectedText(), "a\xCC\x81");
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Left }).selectionChanged);
+    EXPECT_EQ(m_model.caret(), 0u);
+    ASSERT_TRUE(m_model.selectAll());
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Right }).selectionChanged);
+    EXPECT_EQ(m_model.caret(), 4u);
+    EXPECT_FALSE(m_model.hasSelection());
+}
+
+TEST_F(UiEditCommandTests, ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    const Array<EditCommand::Enum, 8> mutations = { EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
+    for(const auto command : mutations){
+        const auto result = ApplyEditCommand(m_model, { command }, true);
+        EXPECT_TRUE(result.handled);
+        EXPECT_FALSE(result.textChanged);
+        EXPECT_EQ(result.clipboard, EditClipboardAction::None);
+        EXPECT_EQ(m_model.text(), "abcd");
+    }
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::SelectAll }, true).selectionChanged);
+    EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Copy }, true).clipboard, EditClipboardAction::Copy);
+}
+
+TEST_F(UiEditCommandTests, RepeatsEditTextButNeverDuplicateClipboardSubmitOrCancelRequests){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Backspace, false, true }).textChanged);
+    EXPECT_EQ(m_model.text(), "abc");
+    const Array<EditCommand::Enum, 6> oneShot = { EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::SelectAll, EditCommand::Submit, EditCommand::Cancel };
+    for(const auto command : oneShot){
+        const auto result = ApplyEditCommand(m_model, { command, false, true });
+        EXPECT_TRUE(result.handled);
+        EXPECT_FALSE(result.submitted);
+        EXPECT_FALSE(result.cancelled);
+        EXPECT_FALSE(result.selectionChanged);
+        EXPECT_EQ(result.clipboard, EditClipboardAction::None);
+    }
+}
+
+TEST_F(UiEditCommandTests, PreeditOwnsCommandsAndEnterWhileEscapeFirstCancelsOnlyPreedit){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("draft", 0u, 5u));
+    const Array<EditCommand::Enum, 8> nativeOwned = { EditCommand::Backspace, EditCommand::Right, EditCommand::SelectAll, EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Submit };
+    for(const auto command : nativeOwned){
+        const auto result = ApplyEditCommand(m_model, { command });
+        EXPECT_TRUE(result.handled);
+        EXPECT_FALSE(result.textChanged);
+        EXPECT_FALSE(result.submitted);
+        EXPECT_EQ(result.clipboard, EditClipboardAction::None);
+        EXPECT_EQ(m_model.composition().text, "draft");
+    }
+    const auto cancelled = ApplyEditCommand(m_model, { EditCommand::Cancel });
+    EXPECT_TRUE(cancelled.compositionChanged);
+    EXPECT_FALSE(cancelled.cancelled);
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_EQ(m_model.text(), "base");
+    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Cancel }).cancelled);
+}
+
+TEST_F(UiEditCommandTests, EmptyAndUnknownCommandsPreserveTextAndSelection){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    ASSERT_TRUE(m_model.setSelection(1u, 3u));
+    EXPECT_FALSE(ApplyEditCommand(m_model, {}).handled);
+    EXPECT_FALSE(ApplyEditCommand(m_model, { static_cast<EditCommand::Enum>(255u) }).handled);
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.selectedText(), "bc");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_composition_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+
+class UiEditCompositionTests : public EditFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditCompositionTests, PreeditOwnsTransientTextWithoutPublishingCommittedRevisionOrHistory){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    ASSERT_TRUE(m_model.setSelection(3u, 1u));
+    const u64 revision = m_model.revision();
+    ASSERT_TRUE(m_model.beginComposition());
+    AString<Core::Alloc::GlobalArena> value("xy", m_arena);
+    ASSERT_TRUE(m_model.updateComposition({ value.data(), value.size() }, 0u, 2u));
+    value.assign("zz");
+    const EditCompositionView composition = m_model.composition();
+    EXPECT_TRUE(composition.active);
+    EXPECT_EQ(composition.text, "xy");
+    EXPECT_EQ(composition.anchor, 0u);
+    EXPECT_EQ(composition.caret, 2u);
+    EXPECT_EQ(composition.replacementStart, 1u);
+    EXPECT_EQ(composition.replacementEnd, 3u);
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.revision(), revision);
+    EXPECT_EQ(m_model.anchor(), 3u);
+    EXPECT_EQ(m_model.caret(), 1u);
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditCompositionTests, NativePreeditClearBeforeCommitRetainsOriginalReplacementBaseline){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    ASSERT_TRUE(m_model.setSelection(1u, 3u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("transient", 4u, 4u));
+    ASSERT_TRUE(m_model.updateComposition({}, 0u, 0u));
+    EXPECT_TRUE(m_model.composition().active);
+    EXPECT_EQ(m_model.composition().replacementStart, 1u);
+    EXPECT_EQ(m_model.composition().replacementEnd, 3u);
+    ASSERT_TRUE(m_model.commitComposition("X"));
+    EXPECT_EQ(m_model.text(), "aXd");
+}
+
+TEST_F(UiEditCompositionTests, CancellationPreservesCommittedTextSelectionRevisionAndHistory){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(m_model.replaceSelection("d"));
+    ASSERT_TRUE(m_model.setSelection(1u, 3u));
+    const u64 revision = m_model.revision();
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x", 0u, 1u));
+    m_model.cancelComposition();
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_EQ(m_model.revision(), revision);
+    EXPECT_TRUE(m_model.canUndo());
+    EXPECT_FALSE(m_model.composition().active);
+}
+
+TEST_F(UiEditCompositionTests, InvalidUpdateAndCommitKeepPreviousCompositionAndCommittedState){
+    EditModel limited(m_arena, { 4u, 8u, 128u });
+    ASSERT_TRUE(limited.setText("abcd"));
+    ASSERT_TRUE(limited.setSelection(1u, 3u));
+    const u64 revision = limited.revision();
+    ASSERT_TRUE(limited.beginComposition());
+    ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
+    EXPECT_FALSE(limited.updateComposition("xyz", 0u, 3u));
+    EXPECT_FALSE(limited.updateComposition("\xC0\xAF", 0u, 2u));
+    EXPECT_FALSE(limited.updateComposition("\xE1\x84\x80", 1u, 1u));
+    EXPECT_FALSE(limited.commitComposition("xyz"));
+    EXPECT_FALSE(limited.commitComposition("\n"));
+    EXPECT_EQ(limited.text(), "abcd");
+    EXPECT_EQ(limited.anchor(), 1u);
+    EXPECT_EQ(limited.caret(), 3u);
+    EXPECT_EQ(limited.revision(), revision);
+    EXPECT_TRUE(limited.composition().active);
+    EXPECT_EQ(limited.composition().text, "x");
+    EXPECT_FALSE(limited.canUndo());
+}
+
+TEST_F(UiEditCompositionTests, PreeditMaySelectScalarBoundaryInsideCombiningGrapheme){
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("a\xCC\x81", 1u, 3u));
+    EXPECT_EQ(m_model.composition().anchor, 1u);
+    EXPECT_EQ(m_model.composition().caret, 3u);
+    ASSERT_TRUE(m_model.commitComposition(m_model.composition().text));
+    EXPECT_EQ(m_model.text(), "a\xCC\x81");
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_FALSE(m_model.setSelection(1u, 1u));
+}
+
+TEST_F(UiEditCompositionTests, AcceptedOrdinaryEditAndNavigationCancelPreeditWithoutPublishingIt){
+    ASSERT_TRUE(m_model.setText("ab"));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("ignored", 0u, 7u));
+    ASSERT_TRUE(m_model.replaceSelection("c"));
+    EXPECT_EQ(m_model.text(), "abc");
+    EXPECT_FALSE(m_model.composition().active);
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("ignored", 0u, 7u));
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    EXPECT_EQ(m_model.caret(), 0u);
+    EXPECT_FALSE(m_model.composition().active);
+}
+
+TEST_F(UiEditCompositionTests, InvalidSelectionPreservesActiveCompositionAndNoSessionCommitIsRejected){
+    EXPECT_FALSE(m_model.commitComposition("x"));
+    EXPECT_FALSE(m_model.updateComposition("x", 0u, 1u));
+    ASSERT_TRUE(m_model.setText("a\xCC\x81"));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x", 0u, 1u));
+    EXPECT_FALSE(m_model.setSelection(1u, 1u));
+    EXPECT_TRUE(m_model.composition().active);
+    EXPECT_EQ(m_model.composition().text, "x");
+    ASSERT_TRUE(m_model.beginComposition());
+    EXPECT_EQ(m_model.composition().text, "x");
+}
+
+TEST_F(UiEditCompositionTests, InvalidSurroundingByteRangesPreserveCompositionAndZeroDeletePreservesSelection){
+    ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
+    ASSERT_TRUE(m_model.setSelection(0u, 3u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x", 0u, 1u));
+    const u64 revision = m_model.revision();
+    EXPECT_FALSE(m_model.eraseSurrounding(1u, 0u));
+    EXPECT_FALSE(m_model.eraseSurrounding(4u, 0u));
+    EXPECT_FALSE(m_model.eraseSurrounding(0u, 2u));
+    ASSERT_TRUE(m_model.eraseSurrounding(0u, 0u));
+    EXPECT_EQ(m_model.text(), "a\xCC\x81z");
+    EXPECT_EQ(m_model.anchor(), 0u);
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_EQ(m_model.revision(), revision);
+    EXPECT_TRUE(m_model.composition().active);
+    EXPECT_EQ(m_model.composition().text, "x");
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditCompositionTests, AcceptedSurroundingDeleteCancelsPreeditWithoutPublishingTransientText){
+    ASSERT_TRUE(m_model.setText("abcd"));
+    ASSERT_TRUE(m_model.setSelection(2u, 2u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("transient", 0u, 9u));
+    ASSERT_TRUE(m_model.eraseSurrounding(1u, 1u));
+    EXPECT_EQ(m_model.text(), "ad");
+    EXPECT_FALSE(m_model.composition().active);
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.anchor(), 2u);
+    EXPECT_EQ(m_model.caret(), 2u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_grapheme_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+
+struct GraphemeCase{
+    AStringView text;
+    AStringView expectedOffsets;
+
+
+public:
+    template<usize TextSize, usize OffsetSize>
+    constexpr GraphemeCase(const char (&textValue)[TextSize], const char (&offsetValue)[OffsetSize], const usize byteCount)noexcept
+        : text(textValue, byteCount)
+        , expectedOffsets(offsetValue, OffsetSize - 1u)
+    {}
+};
+
+static constexpr Array<GraphemeCase, 766> s_ConformanceCases = {{
+#include "edit_grapheme_cases_0.inc"
+#include "edit_grapheme_cases_1.inc"
+}};
+
+class UiEditGraphemeTests : public EditFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCase){
+    static_assert(sizeof(s_ConformanceCases) / sizeof(GraphemeCase) == 766u);
+    for(usize index = 0u; index < 766u; ++index){
+        SCOPED_TRACE(index);
+        const GraphemeCase& test = s_ConformanceCases[index];
+        const auto actual = GraphemeSegmentation::Build(m_arena, test.text);
+        ASSERT_TRUE(actual);
+        const AStringView expectedOffsets = test.expectedOffsets;
+        usize cursor = 0u;
+        usize offsetIndex = 0u;
+        while(cursor < expectedOffsets.size()){
+            usize expected = 0u;
+            while(cursor < expectedOffsets.size() && IsAsciiDigit(expectedOffsets[cursor])){
+                expected = expected * 10u + static_cast<usize>(expectedOffsets[cursor] - '0');
+                ++cursor;
+            }
+            ASSERT_LT(offsetIndex, actual->size());
+            EXPECT_EQ((*actual)[offsetIndex], expected);
+            ++offsetIndex;
+            if(cursor < expectedOffsets.size() && expectedOffsets[cursor] == ',')
+                ++cursor;
+        }
+        EXPECT_EQ(offsetIndex, actual->size());
+    }
+}
+
+TEST_F(UiEditGraphemeTests, RegionalIndicatorsPairAndEmojiModifierZwjSequencesRemainWhole){
+    const AStringView flags("\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8" "\xF0\x9F\x87\xAF");
+    auto boundaries = GraphemeSegmentation::Build(m_arena, flags);
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 4u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 8u);
+    EXPECT_EQ((*boundaries)[2], 16u);
+    EXPECT_EQ((*boundaries)[3], 20u);
+    const AStringView emoji("\xF0\x9F\x91\xA9\xF0\x9F\x8F\xBD\xE2\x80\x8D\xF0\x9F\x92\xBB");
+    boundaries = GraphemeSegmentation::Build(m_arena, emoji);
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 2u);
+    EXPECT_EQ((*boundaries)[1], 15u);
+    ASSERT_TRUE(m_model.setText(emoji));
+    ASSERT_TRUE(m_model.backspace());
+    EXPECT_TRUE(m_model.text().empty());
+}
+
+TEST_F(UiEditGraphemeTests, GeneralSegmentationAcceptsCrLfButSingleLineValidationRejectsIt){
+    const auto boundaries = GraphemeSegmentation::Build(m_arena, "x\r\ny");
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 4u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 1u);
+    EXPECT_EQ((*boundaries)[2], 3u);
+    EXPECT_EQ((*boundaries)[3], 4u);
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "x\r\ny", true));
+    EXPECT_EQ((*boundaries)[2], 3u);
+    EXPECT_TRUE(GraphemeSegmentation::Validate(AStringView("\0", 1u)));
+    EXPECT_FALSE(GraphemeSegmentation::Validate(AStringView("\0", 1u), true));
+}
+
+TEST_F(UiEditGraphemeTests, InvalidUtf8FailsBeforeAllocatingBoundaries){
+    const auto boundaries = GraphemeSegmentation::Build(m_arena, "ok");
+    ASSERT_TRUE(boundaries);
+    const auto before = m_arena.memoryStats();
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\xED\xA0\x80"));
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\xF5\x80\x80\x80"));
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\x80"));
+    EXPECT_EQ(m_arena.memoryStats().allocationCount, before.allocationCount);
+    ASSERT_EQ(boundaries->size(), 3u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 1u);
+    EXPECT_EQ((*boundaries)[2], 2u);
+}
+
+TEST_F(UiEditGraphemeTests, ScalarPositionsDifferFromGraphemePositionsWithoutSplittingUtf8){
+    const AStringView text("a\xCC\x81");
+    ASSERT_TRUE(GraphemeSegmentation::Validate(text));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 0u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 1u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(text, 2u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 3u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(text, 4u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary({}, 0u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_history_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+
+class UiEditHistoryTests : public EditFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditHistoryTests, BranchingAfterUndoDiscardsOnlyFutureHistory){
+    ASSERT_TRUE(m_model.replaceSelection("a"));
+    ASSERT_TRUE(m_model.replaceSelection("b"));
+    ASSERT_TRUE(m_model.undo());
+    ASSERT_TRUE(m_model.replaceSelection("c"));
+    EXPECT_EQ(m_model.text(), "ac");
+    EXPECT_FALSE(m_model.canRedo());
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "a");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_TRUE(m_model.text().empty());
+}
+
+TEST_F(UiEditHistoryTests, SelectionNavigationAndValidNoopPreserveRedo){
+    ASSERT_TRUE(m_model.replaceSelection("a"));
+    ASSERT_TRUE(m_model.replaceSelection("b"));
+    ASSERT_TRUE(m_model.undo());
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    ASSERT_TRUE(m_model.replaceSelection({}));
+    EXPECT_TRUE(m_model.canRedo());
+    ASSERT_TRUE(m_model.redo());
+    EXPECT_EQ(m_model.text(), "ab");
+}
+
+TEST_F(UiEditHistoryTests, RecordBoundEvictsOldestCompleteRecords){
+    EditModel limited(m_arena, { 16u, 2u, 128u });
+    ASSERT_TRUE(limited.replaceSelection("a"));
+    ASSERT_TRUE(limited.replaceSelection("b"));
+    ASSERT_TRUE(limited.replaceSelection("c"));
+    ASSERT_TRUE(limited.undo());
+    EXPECT_EQ(limited.text(), "ab");
+    ASSERT_TRUE(limited.undo());
+    EXPECT_EQ(limited.text(), "a");
+    EXPECT_FALSE(limited.undo());
+    ASSERT_TRUE(limited.redo());
+    ASSERT_TRUE(limited.redo());
+    EXPECT_EQ(limited.text(), "abc");
+}
+
+TEST_F(UiEditHistoryTests, ByteBoundAdmitsCompleteNewestRecord){
+    EditModel limited(m_arena, { 16u, 8u, 6u });
+    ASSERT_TRUE(limited.replaceSelection("a"));
+    ASSERT_TRUE(limited.replaceSelection("b"));
+    ASSERT_TRUE(limited.replaceSelection("c"));
+    ASSERT_TRUE(limited.undo());
+    EXPECT_EQ(limited.text(), "ab");
+    EXPECT_FALSE(limited.undo());
+    ASSERT_TRUE(limited.redo());
+    EXPECT_EQ(limited.text(), "abc");
+}
+
+TEST_F(UiEditHistoryTests, OversizedHistoryRecordClearsEarlierUndoToPreventSkippingLatestEdit){
+    EditModel limited(m_arena, { 32u, 8u, 4u });
+    ASSERT_TRUE(limited.replaceSelection("a"));
+    ASSERT_TRUE(limited.replaceSelection("b"));
+    EXPECT_TRUE(limited.canUndo());
+    ASSERT_TRUE(limited.replaceSelection("c"));
+    EXPECT_EQ(limited.text(), "abc");
+    EXPECT_FALSE(limited.canUndo());
+    EXPECT_FALSE(limited.canRedo());
+}
+
+TEST_F(UiEditHistoryTests, DisabledHistoryAndCopiedReplacementHaveBoundedOwnership){
+    EditModel limited(m_arena, { 32u, 0u, 0u });
+    AString<Core::Alloc::GlobalArena> replacement("owned", m_arena);
+    ASSERT_TRUE(limited.replaceSelection({ replacement.data(), replacement.size() }));
+    replacement.assign("other");
+    EXPECT_EQ(limited.text(), "owned");
+    EXPECT_FALSE(limited.undo());
+    EXPECT_FALSE(limited.redo());
+}
+
+TEST_F(UiEditHistoryTests, NormalizedMultilinePasteUndoRestoresPriorDocument){
+    EditModel multiline(m_arena, {}, EditTextMode::Multiline);
+    ASSERT_TRUE(multiline.setText("abcdef\nx\nabcdef\n???"));
+    ASSERT_TRUE(multiline.selectAll());
+    auto canonical = Impl::Ui::NormalizeMultilineText(m_arena, "ab\r\ncdef\r\nxy", multiline.limits().maxBytes);
+    ASSERT_TRUE(canonical);
+    ASSERT_TRUE(multiline.replaceSelection(*canonical));
+    EXPECT_EQ(multiline.text(), "ab\ncdef\nxy");
+    ASSERT_TRUE(multiline.undo());
+    EXPECT_EQ(multiline.text(), "abcdef\nx\nabcdef\n???");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_model_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+
+class UiEditModelTests : public EditFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditModelTests, SelectionRejectsInteriorScalarAndGraphemeOffsets){
+    ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
+    ASSERT_TRUE(m_model.setSelection(0u, 3u));
+    EXPECT_EQ(m_model.selectedText(), "a\xCC\x81");
+    EXPECT_FALSE(m_model.setSelection(1u, 3u));
+    EXPECT_FALSE(m_model.setSelection(2u, 3u));
+    EXPECT_FALSE(m_model.setSelection(0u, 5u));
+    EXPECT_EQ(m_model.anchor(), 0u);
+    EXPECT_EQ(m_model.caret(), 3u);
+}
+
+TEST_F(UiEditModelTests, MovementAndDeletionPreserveWholeCombiningGraphemes){
+    ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    ASSERT_TRUE(m_model.move(EditMove::Right));
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_TRUE(m_model.backspace());
+    EXPECT_EQ(m_model.text(), "z");
+    EXPECT_EQ(m_model.caret(), 0u);
+    ASSERT_TRUE(m_model.eraseForward());
+    EXPECT_TRUE(m_model.text().empty());
+    const u64 revision = m_model.revision();
+    ASSERT_TRUE(m_model.backspace());
+    ASSERT_TRUE(m_model.eraseForward());
+    EXPECT_EQ(m_model.revision(), revision);
+}
+
+TEST_F(UiEditModelTests, DevanagariConjunctAndKoreanJamoAreSingleEditableGraphemes){
+    const AStringView conjunct("\xE0\xA4\x95\xE0\xA5\x8D\xE0\xA4\xB7");
+    ASSERT_TRUE(m_model.setText(conjunct));
+    ASSERT_EQ(m_model.graphemeBoundaries().size(), 2u);
+    ASSERT_TRUE(m_model.backspace());
+    EXPECT_TRUE(m_model.text().empty());
+    const AStringView jamo("\xE1\x84\x80\xE1\x85\xA1\xE1\x86\xA8");
+    ASSERT_TRUE(m_model.setText(jamo));
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    ASSERT_TRUE(m_model.eraseForward());
+    EXPECT_TRUE(m_model.text().empty());
+}
+
+TEST_F(UiEditModelTests, ReplacementCopiesAliasedCommittedText){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(m_model.setSelection(1u, 2u));
+    ASSERT_TRUE(m_model.replaceSelection(m_model.text()));
+    EXPECT_EQ(m_model.text(), "aabcc");
+    EXPECT_EQ(m_model.caret(), 4u);
+}
+
+TEST_F(UiEditModelTests, InsertionMayMergeClustersAndCaretUsesFollowingValidBoundary){
+    ASSERT_TRUE(m_model.setText("a"));
+    ASSERT_TRUE(m_model.replaceSelection("\xCC\x81"));
+    EXPECT_EQ(m_model.text(), "a\xCC\x81");
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_EQ(m_model.graphemeBoundaries().size(), 2u);
+    ASSERT_TRUE(m_model.setText("\xCC\x81"));
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    ASSERT_TRUE(m_model.replaceSelection("a"));
+    EXPECT_EQ(m_model.caret(), 3u);
+    ASSERT_TRUE(m_model.backspace());
+    EXPECT_TRUE(m_model.text().empty());
+}
+
+TEST_F(UiEditModelTests, InvalidUtf8AndMultilineValuesPreserveAllCommittedState){
+    ASSERT_TRUE(m_model.setText("ab"));
+    ASSERT_TRUE(m_model.replaceSelection("c"));
+    ASSERT_TRUE(m_model.setSelection(1u, 2u));
+    const u64 revision = m_model.revision();
+    const Array<AStringView, 9> invalid = { "\xED\xA0\x80", "\xC0\xAF", "\xF4\x90\x80\x80", "\xE2\x82", "x\ny", "x\ry", "\xE2\x80\xA8", "\xE2\x80\xA9", AStringView("a\0b", 3u) };
+    for(const AStringView value : invalid){
+        EXPECT_FALSE(m_model.setText(value));
+        EXPECT_FALSE(m_model.replaceSelection(value));
+        EXPECT_EQ(m_model.text(), "abc");
+        EXPECT_EQ(m_model.anchor(), 1u);
+        EXPECT_EQ(m_model.caret(), 2u);
+        EXPECT_EQ(m_model.revision(), revision);
+        EXPECT_TRUE(m_model.canUndo());
+    }
+}
+
+TEST_F(UiEditModelTests, ByteLimitFailureIsAtomicAndEmptyLimitAcceptsOnlyEmptyText){
+    EditModel limited(m_arena, { 3u, 2u, 12u });
+    ASSERT_TRUE(limited.setText("ab"));
+    const u64 revision = limited.revision();
+    EXPECT_FALSE(limited.replaceSelection("cd"));
+    EXPECT_FALSE(limited.setText("abcd"));
+    EXPECT_EQ(limited.text(), "ab");
+    EXPECT_EQ(limited.caret(), 2u);
+    EXPECT_EQ(limited.revision(), revision);
+    EXPECT_FALSE(limited.canUndo());
+    EditModel empty(m_arena, { 0u, 0u, 0u });
+    EXPECT_TRUE(empty.setText({}));
+    EXPECT_TRUE(empty.replaceSelection({}));
+    EXPECT_FALSE(empty.replaceSelection("a"));
+}
+
+TEST_F(UiEditModelTests, WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSeparate){
+    const auto empty = m_model.wordRangeAt(0u);
+    ASSERT_TRUE(empty);
+    EXPECT_EQ(empty->begin, 0u);
+    EXPECT_EQ(empty->end, 0u);
+    ASSERT_TRUE(m_model.setText("a\xCC\x81" "b,  z"));
+    EXPECT_FALSE(m_model.wordRangeAt(1u));
+    Expected<EditWordRange> range = m_model.wordRangeAt(3u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 0u);
+    EXPECT_EQ(range->end, 4u);
+    EditModel multiline(m_arena, {}, EditTextMode::Multiline);
+    ASSERT_TRUE(multiline.setText("ab\ncd"));
+    range = multiline.wordRangeAt(2u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 2u);
+    EXPECT_EQ(range->end, 3u);
+    range = multiline.wordRangeAt(3u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 3u);
+    EXPECT_EQ(range->end, 5u);
+}
+
+TEST_F(UiEditModelTests, ExternalValueResetsSelectionHistoryAndComposition){
+    ASSERT_TRUE(m_model.setText("abc"));
+    ASSERT_TRUE(m_model.replaceSelection("d"));
+    ASSERT_TRUE(m_model.selectAll());
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("x", 0u, 1u));
+    ASSERT_TRUE(m_model.setText("reset"));
+    EXPECT_EQ(m_model.text(), "reset");
+    EXPECT_EQ(m_model.caret(), 5u);
+    EXPECT_FALSE(m_model.hasSelection());
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+#include <global/bit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_navigation_state_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiEditNavigationStateTests, IndependentOwnersCannotReviveEachOthersCopiedIntent){
+    EditNavigationState first;
+    EditNavigationState second;
+    EXPECT_FALSE(second.matches(first.snapshot()));
+    ASSERT_TRUE(first.setPreferredX(40.0f));
+    ASSERT_TRUE(second.setPreferredX(40.0f));
+    EXPECT_FALSE(second.matches(first.snapshot()));
+}
+
+TEST(UiEditNavigationStateTests, IdenticalPreferredColumnRetiresAnEarlierBorrow){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(40.0f));
+    const auto accepted = state.snapshot();
+    ASSERT_TRUE(state.setPreferredX(40.0f));
+    EXPECT_GT(state.generation(), accepted.generation);
+    EXPECT_FALSE(state.matches(accepted));
+    EXPECT_TRUE(state.hasPreferredX());
+    EXPECT_FLOAT_EQ(state.preferredX(), 40.0f);
+}
+
+TEST(UiEditNavigationStateTests, ColumnAwayAndBackCannotReviveAnEarlierBorrow){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(20.0f));
+    const auto accepted = state.snapshot();
+    ASSERT_TRUE(state.setPreferredX(30.0f));
+    ASSERT_TRUE(state.setPreferredX(20.0f));
+    EXPECT_FALSE(state.matches(accepted));
+}
+
+TEST(UiEditNavigationStateTests, ResetRetiresBothValidAndAlreadyEmptyIntent){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(60.0f));
+    const auto preferred = state.snapshot();
+    state.reset();
+    EXPECT_FALSE(state.matches(preferred));
+    EXPECT_FALSE(state.hasPreferredX());
+    const auto empty = state.snapshot();
+    state.reset();
+    EXPECT_FALSE(state.matches(empty));
+    EXPECT_GT(state.generation(), empty.generation);
+}
+
+TEST(UiEditNavigationStateTests, NonfiniteColumnsRejectWithoutRetiringAcceptedIntent){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(25.0f));
+    const auto accepted = state.snapshot();
+    const Array<f32, 3> invalid = { BitCast<f32>(0x7f800000u), BitCast<f32>(0xff800000u), BitCast<f32>(0x7fc00000u) };
+    for(const f32 value : invalid){
+        EXPECT_FALSE(state.setPreferredX(value));
+        EXPECT_TRUE(state.matches(accepted));
+    }
+}
+
+TEST(UiEditNavigationStateTests, SnapshotValueChangesAreRejectedEvenAtTheSameGeneration){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(25.0f));
+    auto copied = state.snapshot();
+    copied.preferredX = 26.0f;
+    EXPECT_FALSE(state.matches(copied));
+    copied = state.snapshot();
+    copied.valid = false;
+    EXPECT_FALSE(state.matches(copied));
+}
+
+TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIntent){
+    EditNavigationState state;
+    ASSERT_TRUE(state.setPreferredX(Limit<f32>::s_Max));
+    EXPECT_EQ(state.preferredX(), Limit<f32>::s_Max);
+    ASSERT_TRUE(state.setPreferredX(-Limit<f32>::s_Max));
+    EXPECT_EQ(state.preferredX(), -Limit<f32>::s_Max);
+    EXPECT_TRUE(state.matches(state.snapshot()));
+}
+
+TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation){
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation)};
+    InputBindings bindings(arena);
+    const Array<InputKeyBinding, 8> chords = {{
+        { Core::Key::Up, Core::InputModifier::Control }, { Core::Key::Down, Core::InputModifier::Alt },
+        { Core::Key::PageUp, Core::InputModifier::Control | Core::InputModifier::Shift },
+        { Core::Key::PageDown, Core::InputModifier::Shift | Core::InputModifier::Alt },
+        { Core::Key::Unknown }, { Core::Key::Enter }, { Core::Key::Left }, { static_cast<i32>(Core::Key::Menu) + 1 }
+    }};
+    for(const auto& chord : chords){
+        EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)).has_value());
+    }
+    const Array<InputCommandIntent, 6> rejected = {{
+        { InputCommand::Up, true, false }, { InputCommand::Down, false, false },
+        { InputCommand::PageUp, false, false }, { InputCommand::PageDown, true, false },
+        { InputCommand::FocusNext }, { static_cast<InputCommand::Enum>(255u), true }
+    }};
+    for(const InputCommandIntent& intent : rejected){
+        EXPECT_FALSE(TryTranslateEditNavigation(intent).has_value());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
+
+#include <tests/common/test_context.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_single_line_text_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiSingleLineText, NormalizedByteLimitsRejectWholeScalarsAndBreakPairs){
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output("before", arena.arena);
+    auto normalized1 = NormalizeSingleLineText(arena.arena, "a\r\nb", 3u);
+    ASSERT_TRUE(normalized1);
+    output = Move(*normalized1);
+    EXPECT_EQ(output, "a b");
+    EXPECT_EQ(NormalizeSingleLineText(arena.arena, "\xED\x95\x9C", 2u), MakeUnexpected(EditTextStatus::TooLarge));
+    EXPECT_EQ(NormalizeSingleLineText(arena.arena, "\r\n\r\n", 1u), MakeUnexpected(EditTextStatus::TooLarge));
+    auto normalized2 = NormalizeSingleLineText(arena.arena, "", 0u);
+    ASSERT_TRUE(normalized2);
+    output = Move(*normalized2);
+    EXPECT_TRUE(output.empty());
+}
+
+TEST(UiSingleLineText, RejectsMalformedUtf8NulAndUnrenderableAsciiControlsAtomically){
+    Tests::TestArena arena;
+    const Array<AStringView, 7> invalid = { "\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xE2\x82", "x\x1By", "\x7F", AStringView("a\0b", 3u) };
+    for(const auto value : invalid){
+        EXPECT_EQ(NormalizeSingleLineText(arena.arena, value, 64u), MakeUnexpected(EditTextStatus::InvalidText));
+    }
+}
+
+TEST(UiSingleLineText, CopiesAliasedInputBeforePublishingOutput){
+    Tests::TestArena arena;
+    AString<Core::Alloc::GlobalArena> output("prefix a\r\nb", arena.arena);
+    const AStringView source(output.data() + 7u, output.size() - 7u);
+    auto normalized3 = NormalizeSingleLineText(arena.arena, source, 3u);
+    ASSERT_TRUE(normalized3);
+    output = Move(*normalized3);
+    EXPECT_EQ(output, "a b");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/multiline_fixture.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_surrounding_selection_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+using namespace NWB::UiEditTests;
+using namespace NWB::UiMultilineTests;
+
+constexpr AStringView s_SelectionSampleText = "abcDEFghi";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static b8 SeedHistoryAndPreedit(const AStringView text, const usize anchor, const usize caret, EditModel& model){
+    if(text.empty())
+        return false;
+    return
+        model.setText(text.substr(0u, text.size() - 1u))
+        && model.replaceSelection(text.substr(text.size() - 1u))
+        && model.replaceSelection("!") && model.undo()
+        && model.setSelection(anchor, caret) && model.beginComposition()
+        && model.updateComposition("e\xCC\x81", 1u, 3u)
+    ;
+}
+
+static void ExpectRetainedHistory(const AStringView text, EditModel& model){
+    EXPECT_TRUE(model.canUndo());
+    EXPECT_TRUE(model.canRedo());
+    model.cancelComposition();
+    ASSERT_TRUE(model.redo());
+    ASSERT_EQ(model.text().size(), text.size() + 1u);
+    EXPECT_EQ(model.text().substr(0u, text.size()), text);
+    EXPECT_EQ(model.text().back(), '!');
+    EXPECT_FALSE(model.canRedo());
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), text);
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), text.substr(0u, text.size() - 1u));
+    EXPECT_FALSE(model.canUndo());
+    EXPECT_TRUE(model.canRedo());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiEditSurroundingSelectionTests : public EditFixture{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(UiEditSurroundingSelectionTests, OneSidedCountsAddressNormalizedSelectionEdgesForEitherDirection){
+    for(const b8 reverse : { false, true }){
+        EditModel before(m_arena);
+        ASSERT_TRUE(before.setText(s_SelectionSampleText));
+        ASSERT_TRUE(before.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u));
+        ASSERT_TRUE(before.eraseAroundSelection(2u, 0u));
+        EXPECT_EQ(before.text(), "aDEFghi");
+        EXPECT_EQ(before.selectedText(), "DEF");
+        EXPECT_EQ(before.anchor(), reverse ? 4u : 1u);
+        EXPECT_EQ(before.caret(), reverse ? 1u : 4u);
+
+        EditModel after(m_arena);
+        ASSERT_TRUE(after.setText(s_SelectionSampleText));
+        ASSERT_TRUE(after.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u));
+        ASSERT_TRUE(after.eraseAroundSelection(0u, 2u));
+        EXPECT_EQ(after.text(), "abcDEFi");
+        EXPECT_EQ(after.selectedText(), "DEF");
+        EXPECT_EQ(after.anchor(), reverse ? 6u : 3u);
+        EXPECT_EQ(after.caret(), reverse ? 3u : 6u);
+    }
+}
+
+TEST_F(UiEditSurroundingSelectionTests, CollapsedSelectionDeletesAroundTheCaretAndStaysCollapsed){
+    ASSERT_TRUE(m_model.setText("abcdef"));
+    ASSERT_TRUE(m_model.setSelection(3u, 3u));
+    ASSERT_TRUE(m_model.eraseAroundSelection(2u, 1u));
+    EXPECT_EQ(m_model.text(), "aef");
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 1u);
+    EXPECT_FALSE(m_model.hasSelection());
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), "abcdef");
+    EXPECT_EQ(m_model.anchor(), 3u);
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_FALSE(m_model.canUndo());
+}
+
+TEST_F(UiEditSurroundingSelectionTests, RemovingAllOutsideBytesLeavesTheCompleteSelection){
+    ASSERT_TRUE(m_model.setText(s_SelectionSampleText));
+    ASSERT_TRUE(m_model.setSelection(3u, 6u));
+    ASSERT_TRUE(m_model.eraseAroundSelection(3u, 3u));
+    EXPECT_EQ(m_model.text(), "DEF");
+    EXPECT_EQ(m_model.anchor(), 0u);
+    EXPECT_EQ(m_model.caret(), 3u);
+    EXPECT_EQ(m_model.selectedText(), "DEF");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), s_SelectionSampleText);
+    EXPECT_EQ(m_model.anchor(), 3u);
+    EXPECT_EQ(m_model.caret(), 6u);
+    ASSERT_TRUE(m_model.redo());
+    EXPECT_EQ(m_model.text(), "DEF");
+}
+
+TEST_F(UiEditSurroundingSelectionTests, SelectedCombiningAndZwjEmojiGraphemesRemainByteExact){
+    constexpr AStringView s_Selected = "e\xCC\x81\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB";
+    ASSERT_EQ(s_Selected.size(), 14u);
+    ASSERT_TRUE(m_model.setText("abe\xCC\x81\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB" "yz"));
+    ASSERT_TRUE(m_model.setSelection(2u, 16u));
+    ASSERT_TRUE(m_model.eraseAroundSelection(1u, 1u));
+    EXPECT_EQ(m_model.text(), "ae\xCC\x81\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB" "z");
+    EXPECT_EQ(m_model.selectedText(), s_Selected);
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 15u);
+    EXPECT_EQ(m_model.graphemeBoundaries().size(), 5u);
+}
+
+TEST_F(UiEditSurroundingSelectionTests, MultilineSelectionKeepsItsLfBytesAndReverseDirection){
+    EditModel model(m_arena, {}, EditTextMode::Multiline);
+    ASSERT_TRUE(model.setText("ab\nC\nD\nef"));
+    ASSERT_TRUE(model.setSelection(7u, 2u));
+    ASSERT_TRUE(model.eraseAroundSelection(1u, 1u));
+    EXPECT_EQ(model.text(), "a\nC\nD\nf");
+    EXPECT_EQ(model.selectedText(), "\nC\nD\n");
+    EXPECT_EQ(model.anchor(), 6u);
+    EXPECT_EQ(model.caret(), 1u);
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "ab\nC\nD\nef");
+    EXPECT_EQ(model.anchor(), 7u);
+    EXPECT_EQ(model.caret(), 2u);
+    EXPECT_FALSE(model.canUndo());
+}
+
+TEST_F(UiEditSurroundingSelectionTests, AcceptedDeletionCancelsPreeditWithoutAddingTransientHistory){
+    ASSERT_TRUE(m_model.setText(s_SelectionSampleText));
+    ASSERT_TRUE(m_model.setSelection(3u, 6u));
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("transient", 0u, 9u));
+    const u64 revision = m_model.revision();
+    const u64 selection = m_model.selectionGeneration();
+    const u64 composition = m_model.compositionGeneration();
+    const u64 external = m_model.externalRevision();
+    ASSERT_TRUE(m_model.eraseAroundSelection(2u, 1u));
+    EXPECT_EQ(m_model.text(), "aDEFhi");
+    EXPECT_EQ(m_model.anchor(), 1u);
+    EXPECT_EQ(m_model.caret(), 4u);
+    EXPECT_FALSE(m_model.composition().active);
+    EXPECT_TRUE(m_model.composition().text.empty());
+    EXPECT_EQ(m_model.revision(), revision + 1u);
+    EXPECT_EQ(m_model.selectionGeneration(), selection + 1u);
+    EXPECT_EQ(m_model.compositionGeneration(), composition + 1u);
+    EXPECT_EQ(m_model.externalRevision(), external);
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_EQ(m_model.text(), s_SelectionSampleText);
+    EXPECT_EQ(m_model.anchor(), 3u);
+    EXPECT_EQ(m_model.caret(), 6u);
+    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_FALSE(m_model.composition().active);
+}
+
+TEST_F(UiEditSurroundingSelectionTests, ZeroCountsPreserveSelectionPreeditHistoryAndAllEpochs){
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_SelectionSampleText, 6u, 3u, m_model));
+    const MultilineSnapshot before(m_arena, m_model);
+    ASSERT_TRUE(m_model.eraseAroundSelection(0u, 0u));
+    before.expectUnchanged(m_model);
+    ExpectRetainedHistory(s_SelectionSampleText, m_model);
+}
+
+TEST_F(UiEditSurroundingSelectionTests, OutOfRangeCountsPreserveTheCompleteDraftAndRedoBranch){
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_SelectionSampleText, 3u, 6u, m_model));
+    const MultilineSnapshot before(m_arena, m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(4u, 0u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(0u, 4u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(Limit<usize>::s_Max, 0u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(0u, Limit<usize>::s_Max));
+    before.expectUnchanged(m_model);
+    ExpectRetainedHistory(s_SelectionSampleText, m_model);
+}
+
+TEST_F(UiEditSurroundingSelectionTests, OriginalCutsRejectBothUtf8SplitsAndScalarValidGraphemeSplits){
+    constexpr AStringView s_Text = "ae\xCC\x81" "DEF\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB" "z";
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_Text, 4u, 7u, m_model));
+    const MultilineSnapshot before(m_arena, m_model);
+    EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, 3u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, 2u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, 8u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, 11u));
+    EXPECT_FALSE(m_model.eraseAroundSelection(1u, 0u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(2u, 0u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(0u, 1u));
+    before.expectUnchanged(m_model);
+    EXPECT_FALSE(m_model.eraseAroundSelection(0u, 4u));
+    before.expectUnchanged(m_model);
+    ExpectRetainedHistory(s_Text, m_model);
+}
+
+TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointWithoutSnappingOrCancelling){
+    struct Case{
+        AStringView text;
+        usize anchor;
+        usize caret;
+        usize before;
+        usize after;
+        AStringView merged;
+        usize lostBoundary;
+    };
+    constexpr Array<Case, 2> s_Cases = {{
+        { "\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7z", 5u, 9u, 1u, 0u, "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7z", 4u },
+        { "z\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7q", 1u, 5u, 0u, 1u, "z\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7q", 5u },
+    }};
+    for(const Case& value : s_Cases){
+        EditModel model(m_arena);
+        ASSERT_TRUE(SeedHistoryAndPreedit(value.text, value.anchor, value.caret, model));
+        const MultilineSnapshot before(m_arena, model);
+        EditModel merged(m_arena);
+        ASSERT_TRUE(merged.setText(value.merged));
+        EXPECT_TRUE(IsUtf8ScalarBoundary(value.merged, value.lostBoundary));
+        EXPECT_FALSE(merged.setSelection(value.lostBoundary, value.lostBoundary));
+        EXPECT_FALSE(model.eraseAroundSelection(value.before, value.after));
+        before.expectUnchanged(model);
+        ExpectRetainedHistory(value.text, model);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_float_model_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::UiNumericTests;
+using FloatModelTests = NumericModelFixture<FloatEditModel>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(FloatModelTests, ExponentDraftStaysUncommittedUntilCompleteSubmit){
+    ASSERT_TRUE(m_model.setValue(1.25));
+    for(const AStringView text : { AStringView("1.25e"), AStringView("1.25e-") }){
+        ASSERT_TRUE(m_model.setDraft(text));
+        EXPECT_EQ(m_model.status(), NumericParseStatus::Incomplete);
+        ExpectRejected(m_model.submit());
+        EXPECT_EQ(m_model.value(), 1.25);
+        EXPECT_EQ(m_model.draft().text(), text);
+    }
+    ASSERT_TRUE(m_model.setDraft("1.25e-1"));
+    const NumericEditResult submitted = m_model.submit();
+    ASSERT_TRUE(submitted.valid);
+    EXPECT_TRUE(submitted.committed);
+    EXPECT_TRUE(submitted.valueChanged);
+    EXPECT_EQ(BitCast<u64>(m_model.value()), BitCast<u64>(0.125));
+    EXPECT_EQ(m_model.draft().text(), "1.25e-1");
+    EXPECT_FALSE(m_model.dirty());
+}
+
+TEST_F(FloatModelTests, SignedZeroIsPreservedAndItsSignChangeIsReported){
+    ASSERT_TRUE(m_model.setDraft("-0e100"));
+    const NumericEditResult negative = m_model.submit();
+    ASSERT_TRUE(negative.valid);
+    EXPECT_TRUE(negative.committed);
+    EXPECT_TRUE(negative.valueChanged);
+    EXPECT_EQ(BitCast<u64>(m_model.value()), 0x8000000000000000ull);
+    ASSERT_TRUE(m_model.blur().committed);
+    EXPECT_EQ(m_model.draft().text(), "-0");
+    ASSERT_TRUE(m_model.setDraft("0"));
+    const NumericEditResult positive = m_model.submit();
+    ASSERT_TRUE(positive.valid);
+    EXPECT_TRUE(positive.valueChanged);
+    EXPECT_EQ(BitCast<u64>(m_model.value()), 0u);
+}
+
+TEST_F(FloatModelTests, BoundsClampFiniteRepresentableValuesAndCanonicalize){
+    const FloatBounds bounds{ -10.0, 10.0, NumericBoundsPolicy::Clamp };
+    ASSERT_TRUE(m_model.setDraft("9.9e1"));
+    EXPECT_EQ(m_model.status(bounds), NumericParseStatus::OutOfRange);
+    const NumericEditResult high = m_model.submit(bounds);
+    ASSERT_TRUE(high.valid);
+    EXPECT_TRUE(high.committed);
+    EXPECT_TRUE(high.clamped);
+    EXPECT_TRUE(high.valueChanged);
+    EXPECT_FALSE(high.restored);
+    EXPECT_EQ(m_model.value(), 10.0);
+    EXPECT_EQ(m_model.draft().text(), "10");
+    ASSERT_TRUE(m_model.setDraft("-99"));
+    const NumericEditResult low = m_model.blur(bounds);
+    ASSERT_TRUE(low.valid);
+    EXPECT_TRUE(low.clamped);
+    EXPECT_EQ(m_model.value(), -10.0);
+    EXPECT_EQ(m_model.draft().text(), "-10");
+}
+
+TEST_F(FloatModelTests, RejectionAndInvalidBlurRestoreCanonicalCurrentValue){
+    ASSERT_TRUE(m_model.setDraft("+01.250e0"));
+    ASSERT_TRUE(m_model.submit().committed);
+    const FloatBounds bounds{ -10.0, 10.0 };
+    ASSERT_TRUE(m_model.setDraft("99"));
+    const DraftSnapshot before(m_arena, m_model.draft());
+    ExpectRejected(m_model.submit(bounds));
+    before.expectUnchanged(m_model.draft());
+    ExpectRejected(m_model.blur(bounds), true);
+    EXPECT_EQ(m_model.value(), 1.25);
+    EXPECT_EQ(m_model.draft().text(), "1.25");
+    EXPECT_FALSE(m_model.dirty());
+}
+
+TEST_F(FloatModelTests, OverflowUnderflowAndNonfiniteSpellingsNeverClamp){
+    ASSERT_TRUE(m_model.setValue(1.25));
+    const FloatBounds bounds{ -10.0, 10.0, NumericBoundsPolicy::Clamp };
+    const Array<AStringView, 6> drafts = { "1e309", "1e-9999", "nan", "-inf", "x", "-" };
+    for(const AStringView text : drafts){
+        SCOPED_TRACE(text);
+        ASSERT_TRUE(m_model.setDraft(text));
+        ExpectRejected(m_model.submit(bounds));
+        EXPECT_EQ(m_model.value(), 1.25);
+        EXPECT_EQ(m_model.draft().text(), text);
+        ExpectRejected(m_model.blur(bounds), true);
+        EXPECT_EQ(m_model.draft().text(), "1.25");
+    }
+}
+
+TEST_F(FloatModelTests, NonfiniteExternalAssignmentsPreserveEveryExistingDraftField){
+    ASSERT_TRUE(m_model.setValue(1.25));
+    ASSERT_TRUE(m_model.lendDraft().replaceSelection("0"));
+    ASSERT_TRUE(m_model.lendDraft().setSelection(0u, 1u));
+    ASSERT_TRUE(m_model.lendDraft().beginComposition());
+    ASSERT_TRUE(m_model.lendDraft().updateComposition("3", 0u, 1u));
+    const DraftSnapshot before(m_arena, m_model.draft());
+    const u64 epoch = m_model.revision();
+    for(const f64 value : { Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }){
+        EXPECT_FALSE(m_model.setValue(value));
+        EXPECT_EQ(m_model.revision(), epoch);
+        EXPECT_EQ(m_model.value(), 1.25);
+        before.expectUnchanged(m_model.draft());
+    }
+}
+
+TEST_F(FloatModelTests, ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExactBits){
+    const Array<u64, 9> patterns = {
+        0x0000000000000001ull, 0x8000000000000001ull, 0x000fffffffffffffull, 0x0010000000000000ull,
+        0x3fefffffffffffffull, 0x3ff0000000000001ull,
+        0x4340000000000001ull, 0x7fefffffffffffffull, 0xffefffffffffffffull
+    };
+    for(const u64 bits : patterns){
+        SCOPED_TRACE(bits);
+        ASSERT_TRUE(m_model.setValue(BitCast<f64>(bits)));
+        ASSERT_TRUE(m_model.submit().committed);
+        EXPECT_EQ(BitCast<u64>(m_model.value()), bits);
+        ASSERT_TRUE(m_model.blur().committed);
+        EXPECT_EQ(BitCast<u64>(m_model.value()), bits);
+        ASSERT_TRUE(m_model.setDraft("-"));
+        ASSERT_TRUE(m_model.cancel().valid);
+        const auto parsed = ParseFloatDraft(m_model.draft().text());
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), bits);
+    }
+}
+
+TEST_F(FloatModelTests, ExternalFiniteValueCanRemainOutsideUserBounds){
+    ASSERT_TRUE(m_model.setValue(1000.25));
+    const FloatBounds bounds{ -10.0, 10.0 };
+    ExpectRejected(m_model.submit(bounds));
+    ExpectRejected(m_model.blur(bounds));
+    EXPECT_EQ(m_model.value(), 1000.25);
+    EXPECT_EQ(m_model.draft().text(), "1000.25");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

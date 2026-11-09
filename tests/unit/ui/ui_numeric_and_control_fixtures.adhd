@@ -1,0 +1,1832 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "ui_core_and_list_fixtures.adhd"
+
+native{
+
+
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiComboTests;
+
+inline constexpr AStringView s_NumericPanelKey = "panel";
+inline constexpr AStringView s_IntegerEditKey = "integer";
+inline constexpr AStringView s_DecimalEditKey = "decimal";
+
+namespace NumericEventKind{
+    enum Enum : u8{ Text, Key, Preedit, Action };
+};
+
+struct NumericEvent{
+    AString<Core::Alloc::GlobalArena> text;
+    InputCommandIntent intent;
+    EditAction::Enum action = EditAction::Submit;
+    NumericEventKind::Enum kind = NumericEventKind::Text;
+
+
+public:
+    explicit NumericEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+class NumericHost final : public IEditBoxHost{
+public:
+    explicit NumericHost(Core::Alloc::GlobalArena& arena);
+    virtual ~NumericHost()noexcept override = default;
+
+
+public:
+    void text(AStringView value);
+    void key(i32 key, b8 control = false);
+    void replace(AStringView value);
+    void preedit(AStringView value);
+    void action(EditAction::Enum action);
+
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& draft)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)override;
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+
+
+public:
+    AString<Core::Alloc::GlobalArena> displayed;
+    IntegerEditModel* onLoanInteger = nullptr;
+    IntegerEditModel* onPublishInteger = nullptr;
+    FloatEditModel* onPublishFloat = nullptr;
+    Builder* resetBuilder = nullptr;
+    PopupToken lastPopup;
+    i64 mutationValue = 99;
+    usize loans = 0u;
+    usize ordinaryLoans = 0u;
+    usize publishes = 0u;
+    b8 focused = true;
+    b8 mutationApplied = false;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    PaintVector<NumericEvent> m_events;
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class NumericFixture : public WidgetFixture{
+public:
+    NumericFixture();
+
+
+protected:
+    [[nodiscard]] b8 beginNumeric(const u64 generation){
+        return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
+    }
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
+    }
+    [[nodiscard]] b8 acceptNumeric(){
+        return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
+    }
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+
+
+protected:
+    IntegerEditModel m_integer;
+    FloatEditModel m_float;
+    EditBoxState m_integerState;
+    EditBoxState m_floatState;
+    PopupState m_parent;
+    PopupState m_child;
+    NumericHost m_host;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/multiline_fixture.adhd.h>
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using DraftSnapshot = UiMultilineTests::MultilineSnapshot;
+
+template<typename Model>
+class NumericModelFixture : public testing::Test{
+public:
+    NumericModelFixture()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiNumericModelsFixture))
+        , m_model(m_arena)
+    {}
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    Model m_model;
+};
+
+void ExpectRejected(const NumericEditResult& result, b8 restored = false);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintImageTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+
+inline constexpr AStringView s_DefaultImagePath = "tests/ui/image";
+
+void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PaintImageFixture : public testing::Test{
+public:
+    PaintImageFixture();
+
+
+protected:
+    void beginPaint(PaintBuilder& builder, u64 generation = 1u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeGlyph(u64 atlasIdentity = 11u, u64 generation = 1u);
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdf(u64 atlasIdentity = 22u);
+    [[nodiscard]] Expected<SharedImageSource> makeImage(StringView path = s_DefaultImagePath, u8 seed = 37u, u32 width = 8u, u32 height = 4u);
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    UiSkin m_skin;
+    PaintBuilder m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintTextTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+
+[[nodiscard]] Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, u64 atlasIdentity, u64 generation = 1u, u32 index = 0u);
+[[nodiscard]] Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, u64 atlasIdentity, u64 generation = 1u, u32 index = 0u, u8 interior = 255u);
+
+
+class PaintTextFixture : public testing::Test{
+public:
+    static constexpr u64 s_DefaultAtlasIdentity = 11u;
+
+
+public:
+    static void ExpectClippedQuad(const DrawSnapshot& snapshot);
+
+
+public:
+    PaintTextFixture();
+
+
+protected:
+    void begin(const u64 generation);
+    [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u);
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeDistance();
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    UiSkin m_skin;
+    PaintBuilder m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPopupToolsTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_PopupToolsPanelKey = "panel";
+inline constexpr AStringView s_AnchorKey = "anchor";
+inline constexpr AStringView s_TooltipKey = "tip";
+inline constexpr AStringView s_MenuKey = "menu";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PopupToolsSource final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
+
+
+public:
+    u64 generation = 1401u;
+    u64 count = 5u;
+    u64 selectListKey = 4u;
+    mutable u64 contentRevision = 1u;
+    mutable ContextMenuState* closeOnText = nullptr;
+    mutable TooltipState* resetTooltipOnText = nullptr;
+    mutable ListState* selectListOnText = nullptr;
+    mutable ComboState* closeComboOnRevision = nullptr;
+    mutable b8 changeRevisionOnText = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PopupToolsFixture : public WidgetFixture{
+protected:
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
+    [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        return declareTools(generation, tooltip, menu, bounds) && finishPanel();
+    }
+    [[nodiscard]] b8 acceptTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] b8 acceptPopupTooltip(u64 generation);
+    [[nodiscard]] const HitTarget* menuHost()const noexcept;
+    [[nodiscard]] const HitTarget* menuRow(u64 key)const noexcept;
+    [[nodiscard]] b8 moveToAnchor(AStringView parent = s_PopupToolsPanelKey);
+    void secondaryClick(const Point& point);
+    [[nodiscard]] b8 openBySecondary(u64 generation);
+
+
+protected:
+    PopupToolsSource m_source;
+    TooltipState m_tooltip;
+    ContextMenuState m_menu;
+    PopupState m_plainPopup;
+    WidgetOptions m_anchorOptions;
+    TooltipOptions m_tooltipOptions;
+    ContextMenuOptions m_menuOptions;
+    ContextMenuResult m_menuResult;
+    f32 m_deltaSeconds = 0.0f;
+    b8 m_anchorActivated = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiRadioGroupTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_RadioPanelKey = "panel";
+inline constexpr AStringView s_RadioGroupKey = "radio";
+
+namespace RadioCallbackSite{
+    enum Enum : u8{ None, Instance, Revision, Count, Key, Text, Enabled };
+};
+
+namespace RadioMutation{
+    enum Enum : u8{ None, Select, SelectAwayBack, Revision, Replacement, ResetBuilder, PanelBuilder, ClosePopup };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Radio group source with expiring label views and reentrant callback hooks.
+class RadioSource final : public IListDataSource{
+public:
+    virtual ~RadioSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const override;
+    [[nodiscard]] virtual u64 revision()const override;
+    [[nodiscard]] virtual u64 rowCount()const override;
+    [[nodiscard]] virtual u64 key(u64 index)const override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const override;
+    void resetCounters()const noexcept;
+    void armSelection(RadioGroupState& state, RadioCallbackSite::Enum site, u64 keyValue, b8 awayAndBack = false)noexcept;
+    void armSource(RadioCallbackSite::Enum site, b8 replacement = false)noexcept;
+    void armReentry(Builder& builder, RadioCallbackSite::Enum site, b8 panel = false)noexcept;
+    void armClose(PopupState& popup, RadioCallbackSite::Enum site)noexcept;
+
+
+private:
+    [[nodiscard]] u64 rawCount()const noexcept;
+    [[nodiscard]] u64 rawKey(u64 index)const noexcept;
+    void callback(RadioCallbackSite::Enum site)const;
+
+
+public:
+    mutable u64 m_generation = 1801u;
+    mutable u64 m_contentRevision = 1u;
+    u64 m_count = 5u;
+    u64 m_removed = 0u;
+    u64 m_disabled = 30u;
+    mutable u64 m_calls = 0u;
+    mutable u64 m_textCalls = 0u;
+    mutable u64 m_mutations = 0u;
+    mutable u64 m_callbacksAfterMutation = 0u;
+    b8 m_reverse = false;
+    b8 m_duplicate = false;
+    b8 m_allDisabled = false;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
+
+
+private:
+    RadioGroupState* m_state = nullptr;
+    Builder* m_builder = nullptr;
+    PopupState* m_popup = nullptr;
+    u64 m_selected = 0u;
+    mutable RadioCallbackSite::Enum m_site = RadioCallbackSite::None;
+    RadioMutation::Enum m_mutation = RadioMutation::None;
+    mutable Array<char, 4u> m_label{};
+};
+
+class RadioGroupFixture : public WidgetFixture{
+protected:
+    using WidgetFixture::press;
+
+
+protected:
+    virtual void SetUp()override;
+    void configureRadioSkin(b8 fallbackOnly = false);
+    [[nodiscard]] b8 declare(const u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] WidgetId host()const;
+    [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 keyValue, const RadioGroupState& state)const noexcept;
+    [[nodiscard]] Point choicePoint(u64 keyValue)const noexcept;
+    [[nodiscard]] AcceptedInputState<128u> accepted()const noexcept{ return CaptureAcceptedInput<128u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<128u>& saved, const b8 focus = true, const b8 popupScopes = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, focus, popupScopes, true);
+    }
+    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept;
+
+
+protected:
+    RadioSource m_source;
+    RadioGroupState m_state;
+    RadioGroupResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiSearchComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiComboTests;
+
+inline constexpr AStringView s_CallbackQuery = "callback";
+inline constexpr AStringView s_EmptyResultQuery = "None";
+inline constexpr AStringView s_SecondHalfQuery = "Second";
+inline constexpr AStringView s_PreeditText = "preedit";
+
+namespace FilterMode{
+    enum Enum : u8{ All, Second, Empty };
+};
+
+class FilterView final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const override;
+
+
+public:
+    const ComboSource* full = nullptr;
+    u64 generation = 1701u;
+    u64 contentRevision = 1u;
+    mutable EditModel* textMutation = nullptr;
+    mutable EditModel* enabledMutation = nullptr;
+    FilterMode::Enum mode = FilterMode::All;
+};
+
+class SearchSource final : public ISearchableListDataSource{
+public:
+    explicit SearchSource(Core::Alloc::GlobalArena& arena)noexcept;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return full.findEnabled(start, reverse); }
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
+    [[nodiscard]] virtual b8 enabled(u64 index)const override;
+    [[nodiscard]] virtual b8 filter(AStringView query)override;
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return alternateView ? alternate : view; }
+
+
+public:
+    ComboSource full;
+    FilterView view;
+    FilterView alternate;
+    EditModel* filterMutation = nullptr;
+    mutable EditModel* fullMutation = nullptr;
+    u64 filterCalls = 0u;
+    b8 alternateView = false;
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_query;
+};
+
+class SearchEditHost final : public IEditBoxHost{
+public:
+    explicit SearchEditHost(Context& context)noexcept : m_context(context){}
+
+
+public:
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& model)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)override;
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+    void text(AStringView value)noexcept;
+
+
+public:
+    PopupToken lastPopup;
+    PopupToken loanContextPopup;
+    PopupToken publishContextPopup;
+    EditModel* publishMutation = nullptr;
+    u64 loans = 0u;
+    u64 contextScopedLoans = 0u;
+    u64 publications = 0u;
+    b8 submitted = false;
+    b8 cancelled = false;
+    b8 preedit = false;
+    b8 publishedComposing = false;
+
+
+private:
+    Context& m_context;
+    AStringView m_nextText;
+    b8 m_changeText = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SearchFixture : public ComboFixture{
+protected:
+    [[nodiscard]] static SearchComboOptions Options()noexcept;
+
+
+public:
+    SearchFixture();
+
+
+protected:
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareSearch(u64 generation);
+    [[nodiscard]] b8 prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
+    [[nodiscard]] b8 acceptSearch(const u64 generation){ return prepareSearch(generation) && m_context.commitFrame(generation); }
+    [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "query"); }
+    [[nodiscard]] b8 openSearch(u64 generation);
+
+
+protected:
+    SearchSource m_searchSource;
+    SearchComboState m_search;
+    SearchEditHost m_host;
+    SearchComboResult m_searchResult;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiSliderTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_SliderPanelKey = "panel";
+inline constexpr AStringView s_SliderKey = "slider";
+
+namespace SliderCallbackMutation{
+    enum Enum : u8{ None, SameValue, AwayAndBack, SetValue, ResetBuilder, PanelBuilder, ClosePopup };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A later deferred list label can mutate an earlier slider loan or try to reenter its finalizing Builder.
+class SliderCallbackSource final : public UiComboTests::ComboSource{
+public:
+    SliderCallbackSource()noexcept;
+
+
+public:
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    void arm(SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr)noexcept;
+    void clearCounters()const noexcept;
+
+
+public:
+    mutable u32 m_calls = 0u;
+    mutable u32 m_mutations = 0u;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
+
+
+private:
+    SliderState* m_state = nullptr;
+    Builder* m_builder = nullptr;
+    PopupState* m_popup = nullptr;
+    mutable SliderCallbackMutation::Enum m_mutation = SliderCallbackMutation::None;
+};
+
+class SliderFixture : public WidgetFixture{
+protected:
+    using WidgetFixture::press;
+
+
+protected:
+    [[nodiscard]] static SliderOptions Options()noexcept;
+    [[nodiscard]] static ListOptions SiblingOptions()noexcept;
+
+
+protected:
+    virtual void SetUp()override;
+    void configureSliderSkin();
+    [[nodiscard]] b8 declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 sibling(AStringView key = "later");
+    [[nodiscard]] WidgetId host()const;
+    [[nodiscard]] WidgetId track()const;
+    [[nodiscard]] WidgetId thumb()const;
+    [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
+    [[nodiscard]] Point thumbPoint()const noexcept;
+    [[nodiscard]] AcceptedInputState<64u> accepted()const noexcept{ return CaptureAcceptedInput<64u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<64u>& saved, const b8 popupFocus = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, popupFocus, popupFocus, true);
+    }
+
+
+protected:
+    SliderState m_state;
+    SliderCallbackSource m_laterSource;
+    ListState m_laterState;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiTextAreaTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiComboTests;
+
+inline constexpr AStringView s_TextAreaPanelKey = "panel";
+inline constexpr AStringView s_TextAreaKey = "area";
+
+namespace AreaEventKind{
+    enum Enum : u8{ Text, Key, Action, Selection };
+};
+
+struct AreaEvent{
+    AString<Core::Alloc::GlobalArena> text;
+    usize anchor = 0u;
+    usize caret = 0u;
+    InputCommandIntent intent;
+    EditAction::Enum action = EditAction::Submit;
+    AreaEventKind::Enum kind = AreaEventKind::Text;
+
+
+public:
+    explicit AreaEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+struct AreaPublication{
+    AString<Core::Alloc::GlobalArena> text;
+    EditBoxPlacement placement;
+    PopupToken popup;
+
+
+public:
+    explicit AreaPublication(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+struct AreaResolution{
+    AString<Core::Alloc::GlobalArena> text;
+    EditNavigationSnapshot preferred;
+    Expected<EditNavigationResult> result = MakeUnexpected(Failure{});
+    usize caret = 0u;
+
+
+public:
+    explicit AreaResolution(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+class TextAreaHost final : public IEditBoxHost{
+public:
+    TextAreaHost(Core::Alloc::GlobalArena& arena, const Context& context);
+    virtual ~TextAreaHost()noexcept override = default;
+
+
+public:
+    void text(AStringView value);
+    void key(i32 value, b8 control = false, b8 shift = false);
+    void selection(usize anchor, usize caret);
+    void action(EditAction::Enum value);
+
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& model)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model, IEditActionSink& sink)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editNavigated(
+        const WidgetState& widget,
+        const EditBoxOptions& options,
+        const PopupToken& popup,
+        EditModel& model,
+        EditNavigationState& navigation,
+        IEditNavigationResolver& resolver,
+        IEditActionSink& sink)override;
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+
+
+private:
+    [[nodiscard]] b8 applyAction(EditAction::Enum action, b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result);
+
+
+public:
+    PaintVector<AreaPublication> publications;
+    PaintVector<AreaResolution> resolutions;
+    PaintVector<AString<Core::Alloc::GlobalArena>> actionTexts;
+    Function<void()> loanHook;
+    Function<void()> publishHook;
+    WidgetId loanHookWidget;
+    WidgetId publishHookWidget;
+    PopupToken lastPopup;
+    usize loans = 0u;
+    usize ordinaryLoans = 0u;
+    usize actionLoans = 0u;
+    usize publishes = 0u;
+    f32 viewportHeight = 80.0f;
+    f32 seededColumn = 0.0f;
+    b8 seedColumn = false;
+    b8 focused = true;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    const Context& m_context;
+    PaintVector<AreaEvent> m_events;
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextAreaFixture : public WidgetFixture{
+public:
+    TextAreaFixture();
+
+
+protected:
+    [[nodiscard]] b8 beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+        return begin(generation) && m_builder.beginPanel(s_TextAreaPanelKey, bounds);
+    }
+    [[nodiscard]] b8 acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
+    [[nodiscard]] b8 frameArea(u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f });
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+
+
+protected:
+    EditModel m_model;
+    TextAreaState m_state;
+    TextAreaHost m_host;
+    EditBoxResult m_result;
+};
+
+class TextAreaLoanFixture : public TextAreaFixture{
+protected:
+    [[nodiscard]] static TextAreaOptions AreaOptions()noexcept;
+
+
+protected:
+    [[nodiscard]] b8 acceptBaseline();
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
+    }
+    [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
+    [[nodiscard]] UiWidgetTests::AcceptedInputState<16u> accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
+    void expectRejected(const UiWidgetTests::AcceptedInputState<16u>& frame);
+
+
+protected:
+    PopupState m_parent;
+    PopupState m_child;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiTextVisibleTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using UiPaintAssertions::ExpectSamePaint;
+
+using UiWidgetTests::s_TestKoreanFontPath;
+using UiWidgetTests::s_TestLatinFontPath;
+using UiWidgetTests::s_TestSkinPath;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextVisibleFixture : public testing::Test{
+protected:
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, Point origin)noexcept;
+
+
+public:
+    TextVisibleFixture();
+
+
+protected:
+    virtual void SetUp()override;
+    [[nodiscard]] b8 loadFont(StringView filename, Font& font);
+    [[nodiscard]] b8 installCoverageFonts();
+    void beginPaint(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
+    [[nodiscard]] Expected<SharedGlyphPage> makePage(u64 atlasIdentity);
+
+
+protected:
+    Core::Alloc::GlobalArena m_arena;
+    Font m_latin;
+    Font m_korean;
+    TextService m_text;
+    TextLayout m_layout;
+    UiSkin m_skin;
+    PaintBuilder m_paint;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+b8 UiNumericAndControlFixturesReady(in u64 value){
+    return value != 0u;
+}
+
+native{
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NumericHost::NumericHost(Core::Alloc::GlobalArena& arena)
+    : displayed(arena)
+    , m_arena(arena)
+    , m_events(arena)
+    , m_bindings(arena)
+{}
+
+void NumericHost::text(const AStringView value){
+    NumericEvent event(m_arena);
+    event.text.assign(value.data(), value.size());
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::key(const i32 key, const b8 control){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Key;
+    event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::replace(const AStringView value){
+    key(Core::Key::A, true);
+    text(value);
+}
+
+void NumericHost::preedit(const AStringView value){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Preedit;
+    event.text.assign(value.data(), value.size());
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::action(const EditAction::Enum action){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Action;
+    event.action = action;
+    m_events.push_back(Move(event));
+}
+
+EditBoxResult NumericHost::edit([[maybe_unused]] const WidgetState& widget, [[maybe_unused]] const EditBoxOptions& options, [[maybe_unused]] EditModel& draft)noexcept{
+    ++ordinaryLoans;
+    EditBoxResult result;
+    result.valid = true;
+    return result;
+}
+
+EditBoxResult NumericHost::editActions([[maybe_unused]] const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
+    ++loans;
+    lastPopup = popup;
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && focused;
+    const u64 revision = draft.revision();
+    const usize anchor = draft.anchor();
+    const usize caret = draft.caret();
+    for(const auto& event : m_events){
+        if(event.kind == NumericEventKind::Action){
+            if(!sink.apply(draft, event.action, options.readOnly)){
+                result.valid = false;
+                break;
+            }
+            result.blurred |= event.action == EditAction::Blur;
+            result.abandoned |= event.action == EditAction::Abandon;
+            if(event.action == EditAction::Blur)
+                result.focused = false;
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Text && !options.readOnly){
+            if(!draft.replaceSelection(event.text)){
+                result.valid = false;
+                break;
+            }
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Preedit && !options.readOnly){
+            if(!draft.beginComposition() || !draft.updateComposition(event.text, event.text.size(), event.text.size())){
+                result.valid = false;
+                break;
+            }
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Key){
+            const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false, EditTextMode::SingleLine), options.readOnly);
+            result.submitted |= command.submitted;
+            result.cancelled |= command.cancelled;
+            if(command.submitted || command.cancelled){
+                if(!sink.apply(draft, command.submitted ? EditAction::Submit : EditAction::Cancel, options.readOnly)){
+                    result.valid = false;
+                    break;
+                }
+                if(command.cancelled){
+                    result.focused = false;
+                    break;
+                }
+            }
+        }
+    }
+    m_events.clear();
+    if(onLoanInteger)
+        mutationApplied = onLoanInteger->setValue(mutationValue);
+    if(resetBuilder)
+        resetBuilder->reset();
+    result.textChanged = revision != draft.revision();
+    result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
+    return result;
+}
+
+b8 NumericHost::publish([[maybe_unused]] const WidgetState& widget, const EditBoxView& view, [[maybe_unused]] const EditBoxPlacement& placement, [[maybe_unused]] const EditBoxOptions& options){
+    ++publishes;
+    displayed.assign(view.displayText().data(), view.displayText().size());
+    if(onPublishInteger)
+        mutationApplied = onPublishInteger->setValue(mutationValue);
+    if(onPublishFloat)
+        mutationApplied = onPublishFloat->setValue(static_cast<f64>(mutationValue));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NumericFixture::NumericFixture()
+    : m_integer(m_arena)
+    , m_float(m_arena)
+    , m_host(m_arena)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectRejected(const NumericEditResult& result, const b8 restored){
+    EXPECT_TRUE(result.valid);
+    EXPECT_TRUE(result.rejected);
+    EXPECT_FALSE(result.committed);
+    EXPECT_FALSE(result.valueChanged);
+    EXPECT_FALSE(result.cancelled);
+    EXPECT_FALSE(result.clamped);
+    EXPECT_EQ(result.restored, restored);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintAssertions{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected){
+    EXPECT_FLOAT_EQ(actual.x, expected.x);
+    EXPECT_FLOAT_EQ(actual.y, expected.y);
+    EXPECT_FLOAT_EQ(actual.width, expected.width);
+    EXPECT_FLOAT_EQ(actual.height, expected.height);
+}
+
+void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
+    for(usize index = 0u; index < actual.vertices().size(); ++index){
+        const Impl::Ui::Vertex& a = actual.vertices()[index];
+        const Impl::Ui::Vertex& e = expected.vertices()[index];
+        EXPECT_FLOAT_EQ(a.position.x, e.position.x);
+        EXPECT_FLOAT_EQ(a.position.y, e.position.y);
+        EXPECT_FLOAT_EQ(a.texCoord.x, e.texCoord.x);
+        EXPECT_FLOAT_EQ(a.texCoord.y, e.texCoord.y);
+        EXPECT_FLOAT_EQ(a.color.r, e.color.r);
+        EXPECT_FLOAT_EQ(a.color.g, e.color.g);
+        EXPECT_FLOAT_EQ(a.color.b, e.color.b);
+        EXPECT_FLOAT_EQ(a.color.a, e.color.a);
+    }
+}
+
+void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected){
+    EXPECT_EQ(actual.firstIndex, expected.firstIndex);
+    EXPECT_EQ(actual.indexCount, expected.indexCount);
+    EXPECT_EQ(actual.material, expected.material);
+    EXPECT_EQ(actual.glyphPageIndex, expected.glyphPageIndex);
+    EXPECT_EQ(actual.sdfPageIndex, expected.sdfPageIndex);
+    EXPECT_EQ(actual.textureImageIndex, expected.textureImageIndex);
+    EXPECT_EQ(actual.sdfChannel, expected.sdfChannel);
+    EXPECT_EQ(actual.layer, expected.layer);
+}
+
+void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
+    ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
+    ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
+    ASSERT_EQ(actual.vertices().size(), expected.vertices().size());
+    ASSERT_EQ(actual.commands().size(), expected.commands().size());
+    EXPECT_EQ(actual.indices(), expected.indices());
+    for(usize index = 0u; index < actual.glyphPages().size(); ++index){
+        ASSERT_TRUE(actual.glyphPages()[index]);
+        ASSERT_TRUE(expected.glyphPages()[index]);
+        EXPECT_EQ(actual.glyphPages()[index].get(), expected.glyphPages()[index].get());
+        EXPECT_EQ(actual.glyphPages()[index]->binding(), expected.glyphPages()[index]->binding());
+        EXPECT_EQ(actual.glyphPages()[index]->pixels(), expected.glyphPages()[index]->pixels());
+    }
+    for(usize index = 0u; index < actual.sdfPages().size(); ++index){
+        ASSERT_TRUE(actual.sdfPages()[index]);
+        ASSERT_TRUE(expected.sdfPages()[index]);
+        EXPECT_EQ(actual.sdfPages()[index].get(), expected.sdfPages()[index].get());
+        EXPECT_EQ(actual.sdfPages()[index]->binding(), expected.sdfPages()[index]->binding());
+        EXPECT_EQ(actual.sdfPages()[index]->pixels(), expected.sdfPages()[index]->pixels());
+    }
+    ExpectSameVertices(actual, expected);
+    for(usize index = 0u; index < actual.commands().size(); ++index){
+        const Impl::Ui::DrawCommand& a = actual.commands()[index];
+        const Impl::Ui::DrawCommand& e = expected.commands()[index];
+        ExpectSameCommandFields(a, e);
+        ExpectRect(a.clip, e.clip);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintImageTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiWidgetTests;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
+    EXPECT_FLOAT_EQ(actual.displayMetrics().logicalWidth, expected.displayMetrics().logicalWidth);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().logicalHeight, expected.displayMetrics().logicalHeight);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().pixelScaleX, expected.displayMetrics().pixelScaleX);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().pixelScaleY, expected.displayMetrics().pixelScaleY);
+    EXPECT_EQ(actual.skinBinding().skin, expected.skinBinding().skin);
+    EXPECT_EQ(actual.skinBinding().texture, expected.skinBinding().texture);
+    EXPECT_EQ(actual.skinBinding().generation, expected.skinBinding().generation);
+    EXPECT_EQ(actual.skinBinding().atlasWidth, expected.skinBinding().atlasWidth);
+    EXPECT_EQ(actual.skinBinding().atlasHeight, expected.skinBinding().atlasHeight);
+    EXPECT_FLOAT_EQ(actual.skinBinding().referenceDensity, expected.skinBinding().referenceDensity);
+    ASSERT_EQ(actual.textureImages().size(), expected.textureImages().size());
+    for(usize index = 0u; index < actual.textureImages().size(); ++index){
+        ASSERT_TRUE(actual.textureImages()[index]);
+        ASSERT_TRUE(expected.textureImages()[index]);
+        const ImageSource& a = *actual.textureImages()[index];
+        const ImageSource& e = *expected.textureImages()[index];
+        EXPECT_EQ(actual.textureImages()[index].get(), expected.textureImages()[index].get());
+        EXPECT_EQ(a.identity(), e.identity());
+        EXPECT_EQ(a.generation(), e.generation());
+        EXPECT_EQ(a.texture().virtualPath(), e.texture().virtualPath());
+        EXPECT_EQ(a.texture().width(), e.texture().width());
+        EXPECT_EQ(a.texture().height(), e.texture().height());
+        EXPECT_EQ(a.texture().dimension(), e.texture().dimension());
+        EXPECT_EQ(a.texture().depth(), e.texture().depth());
+        EXPECT_EQ(a.texture().payloadFormat(), e.texture().payloadFormat());
+        EXPECT_EQ(a.texture().alphaMode(), e.texture().alphaMode());
+        EXPECT_EQ(a.texture().alphaConstantUnorm8(), e.texture().alphaConstantUnorm8());
+        EXPECT_EQ(a.texture().payloadBytes(), e.texture().payloadBytes());
+        ASSERT_EQ(a.texture().mipLevels().size(), e.texture().mipLevels().size());
+        for(usize mipIndex = 0u; mipIndex < a.texture().mipLevels().size(); ++mipIndex){
+            const TextureMipLevel& am = a.texture().mipLevels()[mipIndex];
+            const TextureMipLevel& em = e.texture().mipLevels()[mipIndex];
+            EXPECT_EQ(am.width, em.width);
+            EXPECT_EQ(am.height, em.height);
+            EXPECT_EQ(am.blockCountX, em.blockCountX);
+            EXPECT_EQ(am.blockCountY, em.blockCountY);
+            EXPECT_EQ(am.offsetBytes, em.offsetBytes);
+            EXPECT_EQ(am.sizeBytes, em.sizeBytes);
+            EXPECT_EQ(am.sliceCount, em.sliceCount);
+        }
+    }
+    UiPaintAssertions::ExpectSamePaint(actual, expected);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+PaintImageFixture::PaintImageFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintImage))
+    , m_skin(m_arena, Name(s_TestSkinPath))
+    , m_builder(m_arena)
+{
+    UiSkin::RegionVector regions(m_arena);
+    regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseSprite), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/skin_texture"), 16u, 16u, 1.0f, Move(regions));
+    beginPaint(m_builder);
+}
+
+void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
+    builder.begin({ 200.0f, 100.0f, 1.25f, 1.5f }, generation, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+    builder.reserve(16u);
+}
+
+Expected<SharedGlyphPage> PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 generation){
+    return UiPaintTextTests::MakeTestGlyphPage(m_arena, atlasIdentity, generation);
+}
+
+Expected<SharedSdfAtlasPage> PaintImageFixture::makeSdf(const u64 atlasIdentity){
+    return UiPaintTextTests::MakeTestSdfAtlasPage(m_arena, atlasIdentity);
+}
+
+Expected<SharedImageSource> PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
+    if(path.empty() || width == 0u || height == 0u)
+        return MakeUnexpected(Failure{});
+    return UiFixtureSupport::MakeSeededImage(path, seed, width, height, m_arena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPaintTextTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_PaintTextSkinPath = "tests/ui/skin";
+constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
+
+void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    const Vertex& first = snapshot.vertices()[0];
+    const Vertex& opposite = snapshot.vertices()[2];
+    EXPECT_FLOAT_EQ(first.position.x, 10.0f);
+    EXPECT_FLOAT_EQ(first.position.y, 5.0f);
+    EXPECT_FLOAT_EQ(opposite.position.x, 30.0f);
+    EXPECT_FLOAT_EQ(opposite.position.y, 15.0f);
+    EXPECT_FLOAT_EQ(first.texCoord.x, 0.25f);
+    EXPECT_FLOAT_EQ(first.texCoord.y, 0.375f);
+    EXPECT_FLOAT_EQ(opposite.texCoord.x, 0.5f);
+    EXPECT_FLOAT_EQ(opposite.texCoord.y, 0.625f);
+}
+
+
+PaintTextFixture::PaintTextFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintText))
+    , m_skin(m_arena, Name(s_PaintTextSkinPath))
+    , m_builder(m_arena)
+{
+    UiSkin::RegionVector regions(m_arena);
+    regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseSprite), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
+    begin(7u);
+}
+
+void PaintTextFixture::begin(const u64 generation){
+    m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>(s_PaintTextSkinPath), m_skin);
+    m_builder.reserve(16u);
+}
+
+Expected<SharedGlyphPage> PaintTextFixture::makeCoverage(const u64 atlasIdentity, const u64 generation){
+    GlyphPage::Pixels pixels(m_arena);
+    pixels.resize(4u, 128u);
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u, };
+    return CreateGlyphPage(m_arena, binding, Move(pixels));
+}
+
+Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation, const u32 index){
+    GlyphPage::Pixels pixels(arena);
+    pixels.resize(64u, 0u);
+    pixels[0] = 64u;
+    if(generation > 1u)
+        pixels[32] = 192u;
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u, };
+    return CreateGlyphPage(arena, binding, Move(pixels));
+}
+
+Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation, const u32 index, const u8 interior){
+    SdfAtlasPage::Pixels pixels(arena);
+    pixels.resize(8u * 8u * 4u, 0u);
+    pixels[0u] = 32u;
+    pixels[1u] = 128u;
+    pixels[2u] = interior;
+    pixels[3u] = 192u;
+    const SdfAtlasPageBinding binding{
+        .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath),
+        .fontSha256 = {},
+        .pixelsSha256 = {},
+        .fontGeneration = 9u,
+        .atlasIdentity = atlasIdentity,
+        .generation = generation,
+        .index = index,
+        .width = 8u,
+        .height = 8u,
+        .spreadPixels = 8u,
+    };
+    return CreateSdfAtlasPage(arena, binding, Move(pixels));
+}
+
+Expected<SharedGlyphPage> PaintTextFixture::makeGlyphPage(const u64 atlasIdentity, const u64 generation, const u32 index){
+    return MakeTestGlyphPage(m_arena, atlasIdentity, generation, index);
+}
+
+Expected<SharedSdfAtlasPage> PaintTextFixture::makeDistance(){
+    SdfAtlasPage::Pixels pixels(m_arena);
+    pixels.resize(4u * 4u * 4u, 128u);
+    const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontSha256 = {}, .pixelsSha256 = {}, .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u, };
+    return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+}
+
+Expected<SharedSdfAtlasPage> PaintTextFixture::makeSdfPage(const u64 atlasIdentity, const u64 generation, const u32 index, const u8 interior){
+    return MakeTestSdfAtlasPage(m_arena, atlasIdentity, generation, index, interior);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPopupToolsTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 PopupToolsSource::revision()const noexcept{
+    if(closeComboOnRevision){
+        ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
+        state.close();
+    }
+    return contentRevision;
+}
+
+Expected<u64> PopupToolsSource::indexOf(const u64 value)const noexcept{
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
+}
+
+Expected<u64> PopupToolsSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, 3u);
+}
+
+StringView PopupToolsSource::text(const u64 index)const noexcept{
+    if(changeRevisionOnText){
+        changeRevisionOnText = false;
+        ++contentRevision;
+    }
+    if(closeOnText){
+        ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
+        state.close();
+    }
+    if(resetTooltipOnText){
+        TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
+        state.reset();
+    }
+    if(selectListOnText){
+        ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
+        state.select(selectListKey);
+    }
+    constexpr Array<StringView, 5u> s_Labels = { "One", "Two", "Three", "Four", "Five" };
+    return index < count && index < s_Labels.size() ? s_Labels[index] : StringView{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopupToolsFixture::SetUp(){
+    WidgetFixture::SetUp();
+    m_anchorOptions.width = { LayoutSizePolicy::Fixed, 220.0f };
+    m_anchorOptions.height = { LayoutSizePolicy::Fixed, 32.0f };
+    m_tooltipOptions.delaySeconds = 0.0f;
+    m_menuOptions.size = { 240.0f, 220.0f };
+}
+
+b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
+    if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
+        return false;
+    m_builder.setDeltaSeconds(m_deltaSeconds);
+    m_anchorActivated = m_builder.button(s_AnchorKey, "Anchor", m_anchorOptions);
+    m_menuResult = {};
+    if(tooltip && !m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", m_tooltip, m_tooltipOptions))
+        return false;
+    if(menu){
+        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_source, m_menu, m_menuOptions);
+        if(!m_menuResult.valid)
+            return false;
+    }
+    return true;
+}
+
+b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){
+    if(!begin(generation))
+        return false;
+    PopupOptions options;
+    options.anchor = { 40.0f, 40.0f, 40.0f, 24.0f };
+    options.size = { 320.0f, 220.0f };
+    m_builder.setDeltaSeconds(m_deltaSeconds);
+    if(!m_builder.beginPopup("plain", m_plainPopup, options))
+        return false;
+    m_anchorActivated = m_builder.button(s_AnchorKey, "Popup anchor", m_anchorOptions);
+    return m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+}
+
+const HitTarget* PopupToolsFixture::menuHost()const noexcept{
+    for(const HitTarget& entry : m_context.input().targets()){
+        if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+            return &entry;
+    }
+    return nullptr;
+}
+
+const HitTarget* PopupToolsFixture::menuRow(const u64 key)const noexcept{
+    for(const HitTarget& entry : m_context.input().targets()){
+        if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+            return &entry;
+    }
+    return nullptr;
+}
+
+b8 PopupToolsFixture::moveToAnchor(const AStringView parent){
+    const HitTarget* accepted = target(id(s_AnchorKey, parent));
+    if(!accepted)
+        return false;
+    const Point point = Center(accepted->rectangle);
+    return send({ .position = point , .type = InputEventType::PointerMove }).hover == id(s_AnchorKey, parent);
+}
+
+void PopupToolsFixture::secondaryClick(const Point& point){
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
+}
+
+b8 PopupToolsFixture::openBySecondary(const u64 generation){
+    const HitTarget* accepted = target(id(s_AnchorKey, s_PopupToolsPanelKey));
+    if(!accepted)
+        return false;
+    const Point point = Center(accepted->rectangle);
+    secondaryClick(point);
+    return acceptTools(generation, false) && m_menu.isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

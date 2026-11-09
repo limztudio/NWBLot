@@ -1053,7 +1053,7 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u32> LightSpaceShadowDrawCount(in Span<LightSpaceShadowCaster> casters){
+Expected<u32> ImplEcsRenderShadowRtShadowInternalTypesDrawCount(in Span<LightSpaceShadowCaster> casters){
     u64 drawCount = 0u;
     for(usize i = 0u; i < casters.size(); ++i){
         drawCount += LightSpaceCasterDrawCount(casters[i].meshletCount);

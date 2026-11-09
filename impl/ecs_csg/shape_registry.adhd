@@ -171,13 +171,13 @@ public:
         const auto found = m_shapeTypeIds.find(desc.name);
         if(found != m_shapeTypeIds.end()){
             if(!replaceExisting){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), ConvertString(desc.name.resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), ConvertString(desc.name.resolvedText()));
                 return MakeUnexpected(Failure{});
             }
 
             const CsgShapeTypeId existingId = found.value();
             const auto foundIndex = m_shapeTypeIndices.find(existingId);
-            NWB_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
+            FOUNDATION_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
 
             CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
             shapeType.desc = desc;
@@ -199,12 +199,12 @@ public:
         ScopeExit discardShapeType([&]()noexcept{ m_shapeTypes.pop_back(); });
         const auto [nameEntry, nameInserted] = m_shapeTypeIds.emplace(desc.name, id);
         if(!nameInserted){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         ScopeExit discardNameEntry([&]()noexcept{ m_shapeTypeIds.erase(nameEntry); });
         if(!m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         discardNameEntry.release();

@@ -15,7 +15,7 @@ NWB_CORE_BEGIN
 
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const noexcept{
-    NWB_ASSERT(mipLevel < desc.mipLevels);
+    FOUNDATION_ASSERT(mipLevel < desc.mipLevels);
     const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
 
     const u32 mipWidth = Max(desc.width >> resolvedMipLevel, static_cast<u32>(1));

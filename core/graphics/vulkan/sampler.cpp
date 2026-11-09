@@ -85,7 +85,7 @@ Sampler::~Sampler()noexcept{
 
 Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
     if(d.reductionType != SamplerReductionType::Standard && d.reductionType != SamplerReductionType::Comparison){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
         return MakeUnexpected(Failure{});
     }
 
@@ -101,8 +101,8 @@ Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
 
     const VkResult res = m_context.deviceDispatch.vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     if(res != VK_SUCCESS){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create sampler"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 

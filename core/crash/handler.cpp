@@ -8,13 +8,13 @@
 #include <global/basic_string.h>
 #include <global/numeric_text.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <global/blocking_io.h>
 #if defined(_MSC_VER) && defined(NWB_DEBUG)
 #include <crtdbg.h>
 #endif
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 #include <global/blocking_io.h>
 #endif
 
@@ -49,7 +49,7 @@ static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, c
 }
 
 [[nodiscard]] static b8 SilenceProcess()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #if defined(_MSC_VER) && defined(NWB_DEBUG)
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
@@ -59,7 +59,7 @@ static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, c
 #endif
     if(HWND consoleWindow = GetConsoleWindow())
         ShowWindow(consoleWindow, SW_HIDE);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     if(signal(SIGPIPE, SIG_IGN) == SIG_ERR)
         return false;
 #endif
@@ -81,7 +81,7 @@ int RunCrashHandlerProcess([[maybe_unused]] const isize argc, [[maybe_unused]] t
         return __hidden_crash_handler::s_ProcessFailureExitCode;
     CrashDetail::InitializeDumpArena();
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
     HANDLE ackWriteHandle = INVALID_HANDLE_VALUE;
     HANDLE ackEvent = nullptr;
@@ -121,7 +121,7 @@ int RunCrashHandlerProcess([[maybe_unused]] const isize argc, [[maybe_unused]] t
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     int requestReadFd = -1;
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){

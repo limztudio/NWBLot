@@ -35,12 +35,12 @@ inline void AppendLowerHexU64(TString<ArenaT>& outText, u64 value){
     Array<tchar, sizeof(u64) * 2u> digits = {};
     usize count = 0u;
     if(value == 0u){
-        outText.push_back(NWB_TEXT('0'));
+        outText.push_back(FOUNDATION_TEXT('0'));
         return;
     }
     while(value != 0u && count < digits.size()){
         const u32 nibble = static_cast<u32>(value & ::s_HexNibbleMask);
-        digits[count++] = static_cast<tchar>(nibble < s_DecimalDigitCount ? (NWB_TEXT('0') + nibble) : (NWB_TEXT('a') + (nibble - s_DecimalDigitCount)));
+        digits[count++] = static_cast<tchar>(nibble < s_DecimalDigitCount ? (FOUNDATION_TEXT('0') + nibble) : (FOUNDATION_TEXT('a') + (nibble - s_DecimalDigitCount)));
         value >>= ::s_HexNibbleBits;
     }
     while(count > 0u)
@@ -53,7 +53,7 @@ inline void AppendLowerHexU64(TString<ArenaT>& outText, u64 value){
 }
 
 [[nodiscard]] inline u64 CurrentStageProcessId()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return static_cast<u64>(GetCurrentProcessId());
 #else
     return static_cast<u64>(getpid());
@@ -61,7 +61,7 @@ inline void AppendLowerHexU64(TString<ArenaT>& outText, u64 value){
 }
 
 [[nodiscard]] inline b8 IsFileExistsError(const ErrorCode& error)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return error.category() == SystemCategory() && (error.value() == ERROR_FILE_EXISTS || error.value() == ERROR_ALREADY_EXISTS);
 #else
     return error == ErrorCondition::file_exists;
@@ -80,13 +80,13 @@ template<typename ArenaT>
     ArenaT& arena = targetPath.arena();
     TString<ArenaT> candidateName(arena);
     candidateName.reserve(boundedLeaf.size() + suffixTag.size() + s_StageNameExtraReserveBytes);
-    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.push_back(FOUNDATION_TEXT('.'));
     candidateName.append(boundedLeaf.data(), boundedLeaf.size());
-    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.push_back(FOUNDATION_TEXT('.'));
     AppendLowerHexU64(candidateName, CurrentStageProcessId());
-    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.push_back(FOUNDATION_TEXT('.'));
     AppendLowerHexU64(candidateName, NextUniqueStageSequence());
-    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.push_back(FOUNDATION_TEXT('.'));
     candidateName.append(suffixTag.data(), suffixTag.size());
 
     const Path<ArenaT> parentDir = targetPath.parentPath();
@@ -114,7 +114,7 @@ public:
 
     [[nodiscard]] Expected<void, ErrorCode> create(const void* const data, const usize count, b8& outCreated)const noexcept{
         outCreated = false;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
             return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         const HANDLE handle = CreateFile(m_path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -182,7 +182,7 @@ public:
     [[nodiscard]] Expected<Path<ArenaT>, ErrorCode> stageUnique(
         const void* const data,
         const usize count,
-        const TStringView suffixTag = NWB_TEXT("stage")
+        const TStringView suffixTag = FOUNDATION_TEXT("stage")
     )const{
         static_assert(IsNothrowMoveConstructible_V<Path<ArenaT>>);
         static_assert(noexcept(Expected<Path<ArenaT>, ErrorCode>(DeclVal<Path<ArenaT>&&>())));

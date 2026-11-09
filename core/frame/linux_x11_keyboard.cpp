@@ -18,7 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,8 +68,8 @@ b8 X11KeyboardInput::isRetiredDuplicate(const XKeyEvent& event)const noexcept{
 void X11KeyboardInput::synchronize(::Display* const display){
     Array<char, s_KeyStateCount / s_BitsPerByte> keymap;
     if(XQueryKeymap(display, keymap.data()) == 0){
-        NWB_MEMSET(m_keyStates.data(), 0, sizeof(m_keyStates));
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 physical key-state query failed"));
+        FOUNDATION_MEMSET(m_keyStates.data(), 0, sizeof(m_keyStates));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 physical key-state query failed"));
         return;
     }
     // Keys held while focus returns must remain repeats until their physical release.

@@ -518,7 +518,7 @@ b8 GpuRenderer::validateResources(const u32 width, const u32 height){
         return false;
     m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
     if(!m_state->m_frameTimingScopePrepared)
-        NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
     if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
         return true;
     if(m_state->m_pending)
@@ -665,7 +665,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRenderer::declareTaskGraphOutputLayer
 void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept{
     if(!m_state->m_pending || m_state->m_pending->m_snapshot.generation() != frameGeneration)
         return;
-    NWB_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
+    FOUNDATION_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
     m_state->m_pending->m_finalConsumer = submissionToken;
     m_state->m_lastAcceptedAcquired = m_state->m_pending->m_acquired;
     m_state->m_lastAcceptedGeneration = frameGeneration;
@@ -957,7 +957,7 @@ b8 GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame){
         else if(m_state->m_graphics.isDeviceRecreationRequested())
             return false;
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: presentation contributor preparation failed; presenting UI output without its contribution"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("GpuRenderer: presentation contributor preparation failed; presenting UI output without its contribution"));
     }
     const Core::GpuPhysicalQueueId queue = m_state->m_graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(!queue.valid())

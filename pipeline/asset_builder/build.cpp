@@ -47,7 +47,7 @@ b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCoo
     // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
     const auto selectionResult = Assets::CookInputSelector::Select(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
     if(!selectionResult){
-        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("AssetBuilder"));
+        LogCookInputSelectionFailure(selectionResult.error(), FOUNDATION_TEXT("AssetBuilder"));
         return false;
     }
 
@@ -110,7 +110,7 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), PathToString<tchar>(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), PathToString<tchar>(options.outputDirectory));
     return true;
 }
 

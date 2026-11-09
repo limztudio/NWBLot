@@ -78,7 +78,7 @@ function(nwb_apply_codegen target)
     nwb_apply_debug_symbols(${target})
 
     nwb_apply_engine_runtime(${target})
-    target_compile_definitions(${target} PRIVATE $<$<CONFIG:dbg>:NWB_DEBUG> $<$<CONFIG:opt>:NWB_OPTIMIZE> $<$<CONFIG:fin>:NWB_FINAL>)
+    target_compile_definitions(${target} PRIVATE $<$<CONFIG:dbg>:NWB_DEBUG> $<$<CONFIG:opt>:NWB_OPTIMIZE> $<$<CONFIG:fin>:NWB_FINAL> $<$<CONFIG:dbg>:FOUNDATION_DEBUG> $<$<CONFIG:opt>:FOUNDATION_OPTIMIZE> $<$<CONFIG:fin>:FOUNDATION_FINAL>)
 
     if(WIN32)
         target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

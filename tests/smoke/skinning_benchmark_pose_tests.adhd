@@ -22,7 +22,7 @@ native{
 b8 JointMatricesEqual(in Span<f32x3x4> lhs, in Span<f32x3x4> rhs, in usize index){
     b8 equal = false;
     native(in lhs, in rhs, in index, mut equal){
-        equal = NWB_MEMCMP(&lhs[index], &rhs[index], sizeof(lhs[index])) == 0;
+        equal = FOUNDATION_MEMCMP(&lhs[index], &rhs[index], sizeof(lhs[index])) == 0;
     }
     return equal;
 }

@@ -29,7 +29,7 @@ native{
 #include <global/simd/frame.h>
 
 namespace NWB::Tests::Smoke{
-inline constexpr TStringView s_FlickerProjectName = NWB_TEXT("FlickerTestSmokeProject");
+inline constexpr TStringView s_FlickerProjectName = FOUNDATION_TEXT("FlickerTestSmokeProject");
 
 using FlickerModelRef = Core::Assets::AssetRef<Impl::Model>;
 using FlickerMaterialRef = Core::Assets::AssetRef<Impl::Material>;
@@ -127,19 +127,19 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
             );
             this->m_transparentOwner = transparentModel.entity;
             if(!opaqueModel.tintApplied || !transparentModel.tintApplied)
-                NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
 
             SyncSmokeModelRuntimes(*this->m_world);
             const auto meshEntity = FindSpawnedModelObject(this->m_transparentOwner, Name(s_SmokeNameMesh), Impl::ModelObjectKind::SkinnedMesh, *this->m_world);
             auto* const renderer = this->m_world->tryGetComponent<Impl::RendererComponent>(meshEntity);
             if(!renderer){
-                NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));
                 ok = false;
             }
             else{
                 renderer->opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-                NWB_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_opaqueOwner.valid() && this->m_transparentOwner.valid(), NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities"));
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"));
+                FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_opaqueOwner.valid() && this->m_transparentOwner.valid(), FOUNDATION_TEXT("FlickerTestSmokeProject failed to create all scene entities"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"));
             }
         }
         return ok;
@@ -201,7 +201,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Flicker Test");
+    return FOUNDATION_TEXT("NWB Flicker Test");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

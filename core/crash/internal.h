@@ -44,15 +44,15 @@ inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 #define NWB_CRASH_HANDLER_EXECUTABLE_NAME "crash_handler"
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+inline constexpr TStringView s_HandlerExecutableFileName = FOUNDATION_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) FOUNDATION_TEXT(".exe");
 #else
-inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
+inline constexpr TStringView s_HandlerExecutableFileName = FOUNDATION_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
 #endif
 
-inline constexpr TStringView s_RequestHandleArgument = NWB_TEXT("--request-handle");
-inline constexpr TStringView s_AckHandleArgument = NWB_TEXT("--ack-handle");
-inline constexpr TStringView s_AckEventArgument = NWB_TEXT("--ack-event");
+inline constexpr TStringView s_RequestHandleArgument = FOUNDATION_TEXT("--request-handle");
+inline constexpr TStringView s_AckHandleArgument = FOUNDATION_TEXT("--ack-handle");
+inline constexpr TStringView s_AckEventArgument = FOUNDATION_TEXT("--ack-event");
 inline constexpr StringView s_RequestFdArgument = "--request-fd";
 inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
@@ -177,13 +177,13 @@ struct CrashDumpRequestOptions{
     u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const ManualDumpContextStorage* manualContext = nullptr;
 #endif
 };
 
 struct ManualDumpContextStorage final : NoCopy{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     CONTEXT context = {};
     EXCEPTION_RECORD exceptionRecord = {};
     EXCEPTION_POINTERS exceptionPointers = {};
@@ -194,7 +194,7 @@ public:
     ManualDumpContextStorage()noexcept = default;
     ManualDumpContextStorage(const ManualDumpContextStorage&) = delete;
     ManualDumpContextStorage(ManualDumpContextStorage&&) = delete;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     explicit ManualDumpContextStorage(const CrashRequest& request)noexcept
         : context(request.manualContext)
         , exceptionRecord(request.manualExceptionRecord)
@@ -236,20 +236,20 @@ struct CrashState{
     Atomic<u64> crashSequence{ 1u };
     Array<CrashSnapshotImage, s_SnapshotImageCount> snapshotImages;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
     HANDLE ackReadHandle = INVALID_HANDLE_VALUE;
     HANDLE crashHandledEvent = nullptr;
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
-#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
     Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
     Array<int, s_MaxCrashSignals> installedSignals = {};
     Array<b8, s_MaxCrashSignals> signalActionInstalled = {};
     b8 signalStackInstalled = false;
     ThreadId signalStackOwner{};
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
     Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
     Array<int, s_MaxCrashSignals> installedSignals = {};
@@ -269,11 +269,11 @@ struct CrashState{
     // Distinct from `mutex` (the assert path may hold it), and atomic (not Futex) so it stays signal/SEH-safe.
     Atomic<u32> transportInFlight{ 0u };
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     int requestWriteFd = -1;
     int ackReadFd = -1;
     pid_t handlerPid = -1;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_ANDROID)
     int emergencyWriteFd = -1;
 #endif
 
@@ -291,7 +291,7 @@ struct CrashState{
     b8 platformRestorePending = false;
     b8 terminateHandlerInstalled = false;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     b8 exceptionFilterInstalled = false;
 #endif
 };
@@ -351,7 +351,7 @@ template<typename ArenaT>
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
 void InitializeDumpArena();
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 template<typename ArenaT>
 [[nodiscard]] Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations);
 #else

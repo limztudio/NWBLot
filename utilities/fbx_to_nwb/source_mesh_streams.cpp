@@ -27,7 +27,7 @@ template<typename Value, typename Lookup>
         return found.value();
 
     if(!HasSourceMeshStreamValueCapacity(inOutStream.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
 
@@ -35,7 +35,7 @@ template<typename Value, typename Lookup>
     inOutStream.push_back(value);
     const auto inserted = inOutLookup.emplace(value, index);
     if(!inserted.second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return MakeUnexpected(Failure{});
     }
     return index;
@@ -104,16 +104,16 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
-    NWB_ASSERT(!inOutMesh.vertexRefs.empty());
-    NWB_ASSERT(!inOutMesh.indices.empty());
-    NWB_ASSERT((inOutMesh.indices.size() % Impl::s_MeshletTriangleIndexCount) == 0u);
+    FOUNDATION_ASSERT(!inOutMesh.vertexRefs.empty());
+    FOUNDATION_ASSERT(!inOutMesh.indices.empty());
+    FOUNDATION_ASSERT((inOutMesh.indices.size() % Impl::s_MeshletTriangleIndexCount) == 0u);
 
     UtilityScratchVector<RebuildVertex> rebuildVertices(scratchArena);
     rebuildVertices.reserve(inOutMesh.vertexRefs.size());
     for(const SourceVertexRef& ref : inOutMesh.vertexRefs){
-        NWB_ASSERT(ref.position < inOutMesh.positions.size());
-        NWB_ASSERT(ref.normal < inOutMesh.normals.size());
-        NWB_ASSERT(ref.uv0 < inOutMesh.uv0.size());
+        FOUNDATION_ASSERT(ref.position < inOutMesh.positions.size());
+        FOUNDATION_ASSERT(ref.normal < inOutMesh.normals.size());
+        FOUNDATION_ASSERT(ref.uv0 < inOutMesh.uv0.size());
 
         const Vec3& position = inOutMesh.positions[ref.position];
         const Vec3& normal = inOutMesh.normals[ref.normal];
@@ -126,9 +126,9 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
         const u32 i0 = inOutMesh.indices[indexBase + 0u];
         const u32 i1 = inOutMesh.indices[indexBase + 1u];
         const u32 i2 = inOutMesh.indices[indexBase + 2u];
-        NWB_ASSERT(i0 < rebuildVertices.size());
-        NWB_ASSERT(i1 < rebuildVertices.size());
-        NWB_ASSERT(i2 < rebuildVertices.size());
+        FOUNDATION_ASSERT(i0 < rebuildVertices.size());
+        FOUNDATION_ASSERT(i1 < rebuildVertices.size());
+        FOUNDATION_ASSERT(i2 < rebuildVertices.size());
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
@@ -145,13 +145,13 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
         rebuildIndices.push_back(i2);
     }
     if(rebuildIndices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
         return MakeUnexpected(Failure{});
     }
 
     const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildIndices, rebuildVertices);
     if(!rebuildResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return MakeUnexpected(Failure{});
     }
 
@@ -165,7 +165,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
         const SIMDVectorSingle normal = ::FrameNormalizeDirection(LoadFloat(storedNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(storedTangent, 0.0f), ::FrameFallbackTangent(normal));
         if(!::FrameValidDirection(tangent)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return MakeUnexpected(Failure{});
         }
 

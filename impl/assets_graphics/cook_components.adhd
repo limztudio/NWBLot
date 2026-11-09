@@ -233,12 +233,12 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         if(!groupField)
             return MakeUnexpected(Failure{});
         if(!IsUnpaddedRendererOpticalVolumeGroup(groupField->text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty or padded"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must not be empty or padded"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }
         const auto groupName = Name::FromText(groupField->text);
         if(!groupName || !*groupName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }
         entry.component.opticalVolumeGroup = *groupName;

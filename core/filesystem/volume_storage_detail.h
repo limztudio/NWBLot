@@ -109,9 +109,9 @@ static_assert(sizeof(VolumeIndexEntryDisk) == s_VolumeIndexEntryDiskBytes, "Volu
 }
 
 ACompactString LastErrnoMessage()noexcept;
-void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!NWB_OCCUR_WARNING);
-void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!NWB_OCCUR_WARNING);
-void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!NWB_OCCUR_WARNING);
+void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!FOUNDATION_OCCUR_WARNING);
+void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!FOUNDATION_OCCUR_WARNING);
+void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!FOUNDATION_OCCUR_WARNING);
 [[nodiscard]] Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(AStringView volumeName, const Path& segmentPath);
 
 

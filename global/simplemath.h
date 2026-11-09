@@ -90,10 +90,10 @@ template<typename T, typename Compare>
 }
 
 template<typename T>
-[[nodiscard]] constexpr NWB_INLINE T Abs(const T value)noexcept(IsArithmetic_V<T>){ return value < static_cast<T>(0) ? -value : value; }
+[[nodiscard]] constexpr FOUNDATION_INLINE T Abs(const T value)noexcept(IsArithmetic_V<T>){ return value < static_cast<T>(0) ? -value : value; }
 
 template<typename T>
-[[nodiscard]] constexpr NWB_INLINE T Clamp(const T value, const T minValue, const T maxValue)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr FOUNDATION_INLINE T Clamp(const T value, const T minValue, const T maxValue)noexcept(IsArithmetic_V<T>){
     if(!(value > minValue))
         return minValue;
     if(value > maxValue)
@@ -102,7 +102,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr NWB_INLINE T Saturate(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr FOUNDATION_INLINE T Saturate(const T value)noexcept(IsArithmetic_V<T>){
     if(value < static_cast<T>(0))
         return static_cast<T>(0);
     if(value > static_cast<T>(1))
@@ -111,133 +111,133 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Floor(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Floor(const T value)noexcept(IsArithmetic_V<T>){
     using std::floor;
     return static_cast<T>(floor(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Ceil(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Ceil(const T value)noexcept(IsArithmetic_V<T>){
     using std::ceil;
     return static_cast<T>(ceil(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Round(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Round(const T value)noexcept(IsArithmetic_V<T>){
     using std::round;
     return static_cast<T>(round(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Truncate(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Truncate(const T value)noexcept(IsArithmetic_V<T>){
     using std::trunc;
     return static_cast<T>(trunc(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T ModF(const T value, T& outInteger)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T ModF(const T value, T& outInteger)noexcept(IsArithmetic_V<T>){
     using std::modf;
     return static_cast<T>(modf(value, &outInteger));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T FMod(const T numerator, const T denominator)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T FMod(const T numerator, const T denominator)noexcept(IsArithmetic_V<T>){
     using std::fmod;
     return static_cast<T>(fmod(numerator, denominator));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Remainder(const T numerator, const T denominator)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Remainder(const T numerator, const T denominator)noexcept(IsArithmetic_V<T>){
     using std::remainder;
     return static_cast<T>(remainder(numerator, denominator));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Sqrt(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Sqrt(const T value)noexcept(IsArithmetic_V<T>){
     using std::sqrt;
     return static_cast<T>(sqrt(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Sin(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Sin(const T value)noexcept(IsArithmetic_V<T>){
     using std::sin;
     return static_cast<T>(sin(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Cos(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Cos(const T value)noexcept(IsArithmetic_V<T>){
     using std::cos;
     return static_cast<T>(cos(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Tan(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Tan(const T value)noexcept(IsArithmetic_V<T>){
     using std::tan;
     return static_cast<T>(tan(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T ACos(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T ACos(const T value)noexcept(IsArithmetic_V<T>){
     using std::acos;
     return static_cast<T>(acos(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T ATan2(const T y, const T x)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T ATan2(const T y, const T x)noexcept(IsArithmetic_V<T>){
     using std::atan2;
     return static_cast<T>(atan2(y, x));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Exp(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Exp(const T value)noexcept(IsArithmetic_V<T>){
     using std::exp;
     return static_cast<T>(exp(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Exp2(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Exp2(const T value)noexcept(IsArithmetic_V<T>){
     using std::exp2;
     return static_cast<T>(exp2(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Log(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Log(const T value)noexcept(IsArithmetic_V<T>){
     using std::log;
     return static_cast<T>(log(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Log2(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Log2(const T value)noexcept(IsArithmetic_V<T>){
     using std::log2;
     return static_cast<T>(log2(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Pow(const T base, const T exponent)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T Pow(const T base, const T exponent)noexcept(IsArithmetic_V<T>){
     using std::pow;
     return static_cast<T>(pow(base, exponent));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T TanH(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE T TanH(const T value)noexcept(IsArithmetic_V<T>){
     using std::tanh;
     return static_cast<T>(tanh(value));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 IsFinite(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE b8 IsFinite(const T value)noexcept(IsArithmetic_V<T>){
     using std::isfinite;
     return isfinite(value);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 IsNaN(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE b8 IsNaN(const T value)noexcept(IsArithmetic_V<T>){
     using std::isnan;
     return isnan(value);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 SignBit(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] FOUNDATION_INLINE b8 SignBit(const T value)noexcept(IsArithmetic_V<T>){
     using std::signbit;
     return signbit(value);
 }

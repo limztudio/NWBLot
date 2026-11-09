@@ -52,7 +52,7 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
         return;
 
     const b8 ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationReading;
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
+    FOUNDATION_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
     m_commandList.m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
 
@@ -104,7 +104,7 @@ b8 CommandList::GraphRecordingOwnership::finish(const b8 semanticSuccess, Comman
 }
 
 void CommandList::GraphRecordingOwnership::publish()noexcept{
-    NWB_FATAL_ASSERT_MSG(m_acquired, "task-graph command recording publication requires its exact capability");
+    FOUNDATION_FATAL_ASSERT_MSG(m_acquired, "task-graph command recording publication requires its exact capability");
     m_commandList.publishGraphRecordingOwnership(m_recordingLeaseSerial);
     detachCapability();
     m_acquired = false;
@@ -120,7 +120,7 @@ void CommandList::GraphRecordingOwnership::release()noexcept{
 }
 
 void CommandList::GraphRecordingOwnership::attachCapability()noexcept{
-    NWB_FATAL_ASSERT_MSG(!m_capabilityAttached, "task-graph recording capability cannot be attached twice");
+    FOUNDATION_FATAL_ASSERT_MSG(!m_capabilityAttached, "task-graph recording capability cannot be attached twice");
 
     Capability*& capability = CurrentCapability();
     m_capability.commandList = &m_commandList;
@@ -138,7 +138,7 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
     while(*capability && *capability != &m_capability)
         capability = MakeNotNull(&(*capability)->previous);
     const b8 capabilityFound = *capability == &m_capability;
-    NWB_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
+    FOUNDATION_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
     *capability = m_capability.previous;
 
     m_capability = {};

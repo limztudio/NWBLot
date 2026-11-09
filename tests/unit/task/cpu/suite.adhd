@@ -111,9 +111,9 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -128,9 +128,9 @@ namespace CpuTaskSchedulerTestSupport{
 
 
 [[noreturn]] void ExitTestProcess([[maybe_unused]] const u32 code)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     ExitProcess(code);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     ::_exit(static_cast<int>(code));
 #else
     TerminateInvariant();

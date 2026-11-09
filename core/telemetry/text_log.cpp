@@ -64,7 +64,7 @@ b8 TextLogPayloadBuilder::BuildUnaliased(const Common::LogType::Enum type, const
     __hidden_telemetry_text_log::AppendUtf8Text(message, outPayload);
 
     header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
-    NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
+    FOUNDATION_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
     return true;
 }
 

@@ -26,13 +26,13 @@ namespace GlobalFilesystemDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
 [[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllAt(const int parentDescriptor, const NotNull<const char*> entryName)noexcept;
 #endif
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllImpl(const Path<ArenaT>& path){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(FileRemovalFailure{ attributes.error(), 0u });
@@ -50,7 +50,7 @@ template<typename ArenaT>
         return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
     }
     u64 removedCount = 0u;
-    const Path<ArenaT> pattern = path / NWB_TEXT("*");
+    const Path<ArenaT> pattern = path / FOUNDATION_TEXT("*");
     WIN32_FIND_DATA data = {};
     const HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
     if(findHandle != INVALID_HANDLE_VALUE){
@@ -58,7 +58,7 @@ template<typename ArenaT>
         ScopeExit close([&]()noexcept{ CloseDirectory(findHandle, iterationError); });
         for(;;){
             const TStringView fileName(data.cFileName);
-            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT("..")){
+            if(fileName != FOUNDATION_TEXT(".") && fileName != FOUNDATION_TEXT("..")){
                 const auto removed = RemoveAllImpl(path / fileName);
                 if(!removed)
                     return MakeUnexpected(FileRemovalFailure{ removed.error().code, removedCount + removed.error().removedCount });
@@ -84,7 +84,7 @@ template<typename ArenaT>
 #endif
 }
 
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
 [[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllAt(const int parentDescriptor, const NotNull<const char*> entryName)noexcept{
     struct stat entryStat = {};
     if(fstatat(parentDescriptor, entryName.get(), &entryStat, AT_SYMLINK_NOFOLLOW) != 0){

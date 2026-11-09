@@ -31,7 +31,7 @@ namespace __hidden_sampler_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_SamplerValidatePayloadContext = NWB_TEXT("Sampler::validatePayload");
+inline constexpr TStringView s_SamplerValidatePayloadContext = FOUNDATION_TEXT("Sampler::validatePayload");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetCodec);
 

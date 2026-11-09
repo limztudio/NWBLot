@@ -65,13 +65,13 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         materialTypedBytes
     );
     if(!uploadResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT pass resources were unavailable during graph declaration"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: prepared AVBOIT pass resources were unavailable during graph declaration"));
         return MakeUnexpected(Failure{});
     }
 
     const b8 hasCsgDrawItems = uploadResult->hasCsgDrawItems;
     if(hasCsgDrawItems && !inputs.intervalOutputsGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT draws require prepared interval outputs"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: clipped AVBOIT draws require prepared interval outputs"));
         return MakeUnexpected(Failure{});
     }
     if(!uploadResult->hasDrawItems){
@@ -100,10 +100,10 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
         Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
         return MakeUnexpected(Failure{});
     }
-    NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
+    FOUNDATION_ASSERT(instanceData.size() == materialTypedRanges.size());
     ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
 #endif
 
@@ -128,7 +128,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         result.uploadTask
     );
     if(!csgStreamsUploadedResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material upload"));
         return MakeUnexpected(Failure{});
     }
     result.csgStreamsUploaded = *csgStreamsUploadedResult;
@@ -189,7 +189,7 @@ Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::decl
     if(materialGeometrySetResult)
         result.materialGeometrySet = *materialGeometrySetResult;
     if(!result.geometryOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
         return MakeUnexpected(Failure{});
     }
     const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(m_materialSystem, inputs.drawItemSets, identities.sampledIdentity, identities.sampledLabel, m_graph, m_scratchArena);
@@ -197,7 +197,7 @@ Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::decl
     if(materialSampledTextureSetResult)
         result.materialSampledTextureSet = *materialSampledTextureSetResult;
     if(!result.sampledTexturesCollected){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
         return MakeUnexpected(Failure{});
     }
     return result;
@@ -225,7 +225,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
         Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
         Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
         return MakeUnexpected(Failure{});
     }
 
@@ -233,7 +233,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
     const auto materialTypedBlobResult = m_graph.copyUploadData(materialTypedBytes.data(), materialTypedBytes.size(), alignof(u32));
     if(!instanceBlobResult || !materialTypedBlobResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuUploadBlobId instanceBlob = *instanceBlobResult;
@@ -250,7 +250,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto inOutUploadTaskResult = m_graph.addUploadBufferTask(instanceUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = instanceBlob, .destination = inputs.materialInstances, .finalState = Core::ResourceStates::Common, });
     if(!inOutUploadTaskResult){
         inOutUploadTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
         return MakeUnexpected(Failure{});
     }
     inOutUploadTask = *inOutUploadTaskResult;
@@ -260,7 +260,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto inOutUploadTaskResult2 = m_graph.addUploadBufferTask(materialTypedUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = materialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, });
     if(!inOutUploadTaskResult2){
         inOutUploadTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
         return MakeUnexpected(Failure{});
     }
     inOutUploadTask = *inOutUploadTaskResult2;
@@ -270,14 +270,14 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
 
     const auto clipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
     if(!clipContextSlotData){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
         return MakeUnexpected(Failure{});
     }
     const auto receiverRangesBlobResult = m_graph.copyUploadData(csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
     const auto cuttersBlobResult = m_graph.copyUploadData(csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
     const auto clipContextSlotsBlobResult = m_graph.copyUploadData(&*clipContextSlotData, sizeof(*clipContextSlotData), alignof(CsgClipContextSlots));
     if(!receiverRangesBlobResult || !cuttersBlobResult || !clipContextSlotsBlobResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuUploadBlobId receiverRangesBlob = *receiverRangesBlobResult;
@@ -289,7 +289,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto inOutUploadTaskResult3 = m_graph.addUploadBufferTask(receiverRangesUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = receiverRangesBlob, .destination = inputs.csgReceiverRanges, .finalState = Core::ResourceStates::Common, });
     if(!inOutUploadTaskResult3){
         inOutUploadTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
         return MakeUnexpected(Failure{});
     }
     inOutUploadTask = *inOutUploadTaskResult3;
@@ -299,7 +299,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto inOutUploadTaskResult4 = m_graph.addUploadBufferTask(cuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = cuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
     if(!inOutUploadTaskResult4){
         inOutUploadTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
         return MakeUnexpected(Failure{});
     }
     inOutUploadTask = *inOutUploadTaskResult4;
@@ -309,7 +309,7 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
     const auto inOutUploadTaskResult5 = m_graph.addUploadBufferTask(clipContextSlotsUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = clipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, });
     if(!inOutUploadTaskResult5){
         inOutUploadTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
         return MakeUnexpected(Failure{});
     }
     inOutUploadTask = *inOutUploadTaskResult5;
@@ -349,8 +349,8 @@ Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::cap
         && result.sharedPlan.capture(drawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
         && IsSupportedSharedComputeEmulationDrawCount(result.sharedPlan.drawCount)
     ;
-    NWB_ASSERT(!(result.regularCaptured && result.csgCaptured));
-    NWB_ASSERT(!result.sharedCaptured || (!result.regularCaptured && !result.csgCaptured));
+    FOUNDATION_ASSERT(!(result.regularCaptured && result.csgCaptured));
+    FOUNDATION_ASSERT(!result.sharedCaptured || (!result.regularCaptured && !result.csgCaptured));
     if(result.sharedCaptured){
         result.sharedInstanceCount = instanceCount;
         result.sharedMaterialTypedByteCount = materialTypedByteCount;
@@ -403,7 +403,7 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
             computeEmulationOutputSet = *outputSetResult;
     }
     if(computeEmulationPlanCaptured && !computeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT compute-emulation output states"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT compute-emulation output states"));
     if(generatedGeometryReused && !computeEmulationOutputStatesGraphOwned)
         return false;
     rasterPayload.computeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && computeEmulationOutputStatesGraphOwned;
@@ -419,7 +419,7 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
             sharedComputeEmulationOutput = *sharedOutputResult;
     }
     if(inputs.sharedComputeEmulationPlanCaptured && !sharedComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT shared compute-emulation output state"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT shared compute-emulation output state"));
 
     return true;
 }

@@ -35,7 +35,7 @@ template<typename ArenaT>
     if(!staged)
         return { false, created, staged.error() };
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(!MoveFileEx(staging.c_str(), destination.c_str(), 0u))
         return { false, true, LastSystemError() };
 #else
@@ -61,7 +61,7 @@ template<typename ArenaT>
         for(u32 attempt = 1u; !result && attempt < s_MaxReadAttempts; ++attempt){
             const ErrorCode readError = result.error();
             b8 retryable = readError == ErrorCondition::io_error || (retryMissing && IsMissingPathError(readError));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             retryable = retryable || (readError.category() == SystemCategory() && (readError.value() == ERROR_SHARING_VIOLATION || readError.value() == ERROR_LOCK_VIOLATION || readError.value() == ERROR_ACCESS_DENIED));
 #endif
             if(!retryable)
@@ -110,7 +110,7 @@ template<typename ArenaT>
     if(!BytesMatch(Span<const u8>(scratch.data(), scratch.size()), bytes))
         return finish(MakeUnexpected(MakeErrorCode(ErrorCondition::io_error)));
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(MoveFileEx(temporary.c_str(), destination.c_str(), 0u)){
         owned = false;
         return true;
@@ -121,7 +121,7 @@ template<typename ArenaT>
 #endif
     const ErrorCode publicationError = LastSystemError();
     const b8 collision = GlobalFilesystemDetail::IsFileExistsError(publicationError);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const b8 mayHaveWinner = collision || (publicationError.category() == SystemCategory() && publicationError.value() == ERROR_ACCESS_DENIED);
 #else
     const b8 mayHaveWinner = collision;

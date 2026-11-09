@@ -19,7 +19,7 @@ struct Sha1Digest{
 };
 
 [[nodiscard]] inline b8 operator==(const Sha1Digest& lhs, const Sha1Digest& rhs)noexcept{
-    return NWB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
+    return FOUNDATION_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
 }
 
 [[nodiscard]] inline b8 operator!=(const Sha1Digest& lhs, const Sha1Digest& rhs)noexcept{

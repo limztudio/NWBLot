@@ -38,9 +38,9 @@ struct MinidumpRecords{
 public:
     [[nodiscard]] T record(const usize index)const noexcept{
         static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
-        NWB_ASSERT(index < count);
+        FOUNDATION_ASSERT(index < count);
         T value;
-        NWB_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
+        FOUNDATION_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
         return value;
     }
 };
@@ -64,7 +64,7 @@ public:
         if(!source)
             return MakeUnexpected(Failure{});
         T value;
-        NWB_MEMCPY(&value, sizeof(value), source, sizeof(value));
+        FOUNDATION_MEMCPY(&value, sizeof(value), source, sizeof(value));
         return value;
     }
 

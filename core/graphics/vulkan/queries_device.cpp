@@ -44,7 +44,7 @@ b8 TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const Queue
 Expected<TimerQueryHandle> Device::createTimerQuery(){
     const auto priorIncarnation = TryNextAtomicIdentityAllowZero(m_nextTimerQueryIncarnation);
     if(!priorIncarnation){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Timer-query identity space is exhausted"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Timer-query identity space is exhausted"));
         return MakeUnexpected(Failure{});
     }
     const u64 incarnation = *priorIncarnation + 1u;
@@ -92,7 +92,7 @@ Expected<b8> Device::pollTimerQuery(TimerQuery& query){
     if(res == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("timer query poll");
     if(res != VK_SUCCESS && res != VK_NOT_READY){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to poll timer query results: {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to poll timer query results: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
     return res == VK_SUCCESS;
@@ -145,7 +145,7 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
         if(res == VK_ERROR_DEVICE_LOST)
             captureDeviceLoss("timer query results");
         if(res != VK_NOT_READY)
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 

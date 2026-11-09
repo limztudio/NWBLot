@@ -21,7 +21,7 @@ public:
     FloatingPointEnvironmentGuard(FloatingPointEnvironmentGuard&&) = delete;
     ~FloatingPointEnvironmentGuard()noexcept{
         if(m_active && !SetFloatingPointEnvironment(m_environment))
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
     }
 
 

@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 
 class Texture;
 
-inline constexpr TStringView s_UiSkinAssetKindLabel = NWB_TEXT("UI skin");
-inline constexpr TStringView s_UiSkinLoadBinaryContext = NWB_TEXT("UiSkin::loadBinary");
+inline constexpr TStringView s_UiSkinAssetKindLabel = FOUNDATION_TEXT("UI skin");
+inline constexpr TStringView s_UiSkinLoadBinaryContext = FOUNDATION_TEXT("UiSkin::loadBinary");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

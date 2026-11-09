@@ -292,7 +292,7 @@ static Expected<Core::Metascript::Document> ParseMaterialBindDocument(const Path
 static Expected<AStringView> ParseMaterialBindStringField(const Path& bindFilePath, const Core::Metascript::Value& map, const AStringView fieldName, const AStringView contextLabel){
     const Core::Metascript::Value* value = map.findField(fieldName);
     if(!value || !value->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -310,7 +310,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
         return attributes;
 
     if(!attributesValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
         return MakeUnexpected(Failure{});
     }
 
@@ -318,7 +318,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
     attributes.reserve(attributeList.size());
     for(const Core::Metascript::Value& attributeValue : attributeList){
         if(!attributeValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
@@ -328,14 +328,14 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             return MakeUnexpected(Failure{});
         attribute.name.assign(*parsedName);
         if(!IsAsciiIdentifier(attribute.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name), ConvertString(contextLabel));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
         const Core::Metascript::Value* argumentsValue = attributeValue.findField(s_MaterialBindArgumentsKey);
         if(argumentsValue){
             if(!argumentsValue->isList()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                 return MakeUnexpected(Failure{});
             }
 
@@ -343,7 +343,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             attribute.arguments.reserve(argumentList.size());
             for(const Core::Metascript::Value& argumentValue : argumentList){
                 if(!argumentValue.isString()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                     return MakeUnexpected(Failure{});
                 }
 
@@ -366,7 +366,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     MaterialBindField field;
     MaterialBindSchemaValidator validator{};
     if(!fieldValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -398,13 +398,13 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
     MaterialBindStruct bindStruct;
     MaterialBindSchemaValidator validator{};
     if(!structValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
         return MakeUnexpected(Failure{});
     }
 
     bindStruct.name.assign(structName.data(), structName.size());
     if(!IsAsciiIdentifier(bindStruct.name)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField(s_MaterialBindAttributesKey), bindStruct.name, arena);
@@ -416,11 +416,11 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
 
     const Core::Metascript::Value* fieldsValue = structValue.findField(s_MaterialBindFieldsKey);
     if(!fieldsValue || !fieldsValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     if(fieldsValue->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -431,7 +431,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
             return MakeUnexpected(Failure{});
 
         if(bindStruct.hasField(AStringView(field->name))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field->name));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field->name));
             return MakeUnexpected(Failure{});
         }
 
@@ -450,7 +450,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 
     const auto& structsMap = doc.structs();
     if(structsMap.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct declarations must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -476,7 +476,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
     outEntry.instances.clear();
 
     if(doc.declarations().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance declarations must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': instance declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
@@ -487,7 +487,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
         const AStringView instanceName(declaration.variable.data(), declaration.variable.size());
         const Core::Metascript::Value* instanceValue = doc.findVariable(instanceName);
         if(!instanceValue || !instanceValue->isNull()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), ConvertString(instanceName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), ConvertString(instanceName));
             return false;
         }
 
@@ -569,7 +569,7 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
     const auto cacheIt = inOutCache.lookup.find(materialInterface);
     if(cacheIt != inOutCache.lookup.end()){
         const usize cacheIndex = cacheIt.value();
-        NWB_ASSERT(cacheIndex < inOutCache.entries.size());
+        FOUNDATION_ASSERT(cacheIndex < inOutCache.entries.size());
         return MakeNotNull(&inOutCache.entries[cacheIndex]);
     }
 
@@ -580,7 +580,7 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
 
     inOutCache.entries.reserve(cacheIndex + 1u);
     if(!inOutCache.lookup.emplace(materialInterface, cacheIndex).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate cache entry for interface '{}'"), ConvertString(materialInterface.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind typed layout: duplicate cache entry for interface '{}'"), ConvertString(materialInterface.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 

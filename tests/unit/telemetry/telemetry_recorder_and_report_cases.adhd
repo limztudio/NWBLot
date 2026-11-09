@@ -301,7 +301,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
         ASSERT_TRUE(readHeader);
         Telemetry::EncodedPerfTimingPayloadHeader header = *readHeader;
         header.version = version;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        FOUNDATION_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
         ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(current.data(), current.size())));
         EXPECT_EQ(parsed->scopeName, scopeName);
@@ -324,7 +324,7 @@ TEST(Telemetry, PerfPayloadBuildersPreserveAliasedScopeText){
         payload.clear();
         payload.reserve(512u);
         payload.resize(s_Text.size());
-        NWB_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
+        FOUNDATION_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
         return AStringView(reinterpret_cast<const char*>(payload.data()), payload.size());
     };
 
@@ -390,7 +390,7 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
             ASSERT_TRUE(readHeader);
             auto header = *readHeader;
             header.*s_WireFields[field] = BitCast<f64>(bits);
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+            FOUNDATION_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
             EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()));
             const auto recovered = Telemetry::ParsePerfTimingPayload(current.data(), current.size());
             ASSERT_TRUE(recovered);
@@ -551,7 +551,7 @@ TEST(Telemetry, EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSubrange
             event.header.kind = Telemetry::EventKind::PerfFrame;
             event.header.payloadBytes = sizeof(s_Expected);
             event.payload.resize(prefix + sizeof(s_Expected));
-            NWB_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected.data(), sizeof(s_Expected));
+            FOUNDATION_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected.data(), sizeof(s_Expected));
             if(spareCapacity)
                 event.payload.reserve(event.payload.size() + sizeof(Telemetry::EncodedEventHeader));
             if(prefix == 0u){
@@ -565,7 +565,7 @@ TEST(Telemetry, EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSubrange
             const auto decoded = Telemetry::DecodeEvent(testArena.arena, event.payload.data(), event.payload.size());
             ASSERT_TRUE(decoded);
             ASSERT_EQ(decoded->event.payload.size(), sizeof(s_Expected));
-            EXPECT_EQ(NWB_MEMCMP(decoded->event.payload.data(), s_Expected.data(), sizeof(s_Expected)), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(decoded->event.payload.data(), s_Expected.data(), sizeof(s_Expected)), 0);
         }
     }
 }
@@ -598,7 +598,7 @@ TEST(Telemetry, EventStreamCanDecodeBytesBorrowedFromDestinationRecorder){
 
     Telemetry::TelemetryBytes wrapped(testArena.arena);
     wrapped.resize(encoded.size() + 3u);
-    NWB_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
+    FOUNDATION_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
     for(const b8 captureEnabled : { false, true }){
         SCOPED_TRACE(captureEnabled);
         Telemetry::Recorder destination(testArena.arena);
@@ -649,9 +649,9 @@ TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
 
     corrupted = encoded;
     Telemetry::EncodedStreamHeader streamHeader;
-    NWB_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
+    FOUNDATION_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
     streamHeader.eventCount = 0u;
-    NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
+    FOUNDATION_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
     result = Telemetry::DecodeEventStream(corrupted.data(), corrupted.size(), testArena.arena, decoded);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::InvalidHeader);
@@ -683,7 +683,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
         ASSERT_TRUE(readEncodedHeader);
         Telemetry::EncodedEventHeader encodedHeader = *readEncodedHeader;
         encodedHeader.version = version;
-        NWB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
+        FOUNDATION_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
         decoded = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size());
         ASSERT_FALSE(decoded);
         EXPECT_EQ(decoded.error().status, Telemetry::DecodeStatus::InvalidHeader);
@@ -716,7 +716,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
         ASSERT_TRUE(readStreamHeader);
         Telemetry::EncodedStreamHeader streamHeader = *readStreamHeader;
         streamHeader.version = version;
-        NWB_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
+        FOUNDATION_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
         const auto invalidStream = Telemetry::DecodeEventStream(encoded.data(), encoded.size(), testArena.arena, decoded);
         ASSERT_FALSE(invalidStream);
         EXPECT_EQ(invalidStream.error().status, Telemetry::DecodeStatus::InvalidHeader);
@@ -727,7 +727,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
         ASSERT_TRUE(readEventHeader);
         Telemetry::EncodedEventHeader eventHeader = *readEventHeader;
         eventHeader.version = version;
-        NWB_MEMCPY(encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader));
+        FOUNDATION_MEMCPY(encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader));
         const auto invalidEvent = Telemetry::DecodeEventStream(encoded.data(), encoded.size(), testArena.arena, decoded);
         ASSERT_FALSE(invalidEvent);
         EXPECT_EQ(invalidEvent.error().status, Telemetry::DecodeStatus::InvalidHeader);
@@ -759,7 +759,7 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
         ASSERT_TRUE(readHeader);
         Telemetry::EncodedDiagnosticPayloadHeader header = *readHeader;
         header.version = version;
-        NWB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
+        FOUNDATION_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
         EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(encoded.data(), encoded.size())));
         ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(current.data(), current.size())));
         EXPECT_EQ(AStringView(parsed->message), record.message);
@@ -777,7 +777,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         threads[threadIndex] = Thread([&recorder, threadIndex](){
             for(u32 eventIndex = 0u; eventIndex < s_EventsPerThread; ++eventIndex){
-                if(!Telemetry::RecordTextLog(recorder, NWB::Core::Common::LogType::Info, NWB_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
+                if(!Telemetry::RecordTextLog(recorder, NWB::Core::Common::LogType::Info, FOUNDATION_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
                     return;
             }
         });
@@ -952,7 +952,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
     EXPECT_NE(nested->payload.data(), outer->payload.data());
     ASSERT_EQ(nested->payload.size(), 128u);
     ASSERT_EQ(outer->payload.size(), 128u);
-    EXPECT_EQ(NWB_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
 }
 
 TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
@@ -1048,7 +1048,7 @@ TEST(Telemetry, RecorderActiveEventAliasesRemainStableAcrossStorageGrowth){
         const auto* event = recorder.view().eventAt(index);
         ASSERT_NE(event, nullptr);
         ASSERT_EQ(event->payload.size(), sizeof(bytes));
-        EXPECT_EQ(NWB_MEMCMP(event->payload.data(), bytes.data(), sizeof(bytes)), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(event->payload.data(), bytes.data(), sizeof(bytes)), 0);
     }
 }
 
@@ -1416,11 +1416,11 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
 
     const Array<u16, 12> unsupportedVersions = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    FOUNDATION_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         header.version = version;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        FOUNDATION_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 55u, payload.data(), payload.size(), 15u));
     }
 
@@ -1582,8 +1582,8 @@ TEST(Telemetry, TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     constexpr TStringView s_Message(
-        NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z"),
-        sizeof(NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z")) / sizeof(tchar) - 1u
+        FOUNDATION_TEXT("A\u00e9\ud55c\U0001f642\0Z"),
+        sizeof(FOUNDATION_TEXT("A\u00e9\ud55c\U0001f642\0Z")) / sizeof(tchar) - 1u
     );
     constexpr Array<u8, 12> s_Expected = { 0x41u, 0xc3u, 0xa9u, 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u, 0u, 0x5au };
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Warning, s_Message, testArena.scratchArena, payload));
@@ -1593,7 +1593,7 @@ TEST(Telemetry, TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes){
 TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 #if WCHAR_MAX <= 0xffffu
     constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0xd800u), static_cast<tchar>('X'), static_cast<tchar>(0xdc00u) };
 #else
@@ -1612,12 +1612,12 @@ TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
 TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    constexpr TStringView s_Message = NWB_TEXT("captured \ud55c\U0001f642");
+    constexpr TStringView s_Message = FOUNDATION_TEXT("captured \ud55c\U0001f642");
     constexpr Array<u8, 16> s_Expected = { 'c', 'a', 'p', 't', 'u', 'r', 'e', 'd', ' ', 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u };
     constexpr usize s_Offset = sizeof(tchar);
     constexpr usize s_MessageBytes = s_Message.size() * sizeof(tchar);
     payload.resize(s_Offset + s_MessageBytes);
-    NWB_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message.data(), s_MessageBytes);
+    FOUNDATION_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message.data(), s_MessageBytes);
     const TStringView aliased(reinterpret_cast<const tchar*>(payload.data() + s_Offset), s_Message.size());
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Error, aliased, testArena.scratchArena, payload));
     CheckPayload(payload, s_Expected);
@@ -1626,7 +1626,7 @@ TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
 TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Warning, NWB_TEXT("retained log"), testArena.scratchArena, payload));
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Warning, FOUNDATION_TEXT("retained log"), testArena.scratchArena, payload));
     const Telemetry::TelemetryBytes current = payload;
     const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Telemetry::s_TextLogPayloadVersion + 1u), Limit<u16>::s_Max, };
     Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
@@ -1638,7 +1638,7 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
         ASSERT_TRUE(readHeader);
         Telemetry::EncodedTextLogPayloadHeader header = *readHeader;
         header.version = version;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        FOUNDATION_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
         ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(current.data(), current.size())));
         EXPECT_EQ(AStringView(parsed->messageUtf8), AStringView("retained log"));
@@ -1648,7 +1648,7 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Info, NWB_TEXT("old payload"), testArena.scratchArena, payload));
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::Info, FOUNDATION_TEXT("old payload"), testArena.scratchArena, payload));
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(LogType::EssentialInfo, {}, testArena.scratchArena, payload));
     CheckPayload(payload);
     EXPECT_FALSE(Telemetry::BuildTextLogPayload(static_cast<LogType::Enum>(0xffu), {}, testArena.scratchArena, payload));

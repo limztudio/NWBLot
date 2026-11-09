@@ -52,7 +52,7 @@ namespace Metascript = Core::Metascript;
     const usize itemIndex
 ){
     if(!item.isReference()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item {} must be a declared asset reference"), PathToString<tchar>(nwbFilePath), itemIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': item {} must be a declared asset reference"), PathToString<tchar>(nwbFilePath), itemIndex);
         return MakeUnexpected(Failure{});
     }
 
@@ -60,7 +60,7 @@ namespace Metascript = Core::Metascript;
     if(const Metascript::Document::Declaration* declaration = declarations.find(itemReference))
         return MakeNotNull(declaration);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'"), PathToString<tchar>(nwbFilePath), itemIndex, ConvertString(itemReference));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'"), PathToString<tchar>(nwbFilePath), itemIndex, ConvertString(itemReference));
     return MakeUnexpected(Failure{});
 }
 
@@ -124,31 +124,31 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
     for(const Metascript::Document::Declaration& declaration : doc.declarations()){
         const auto isBunch = IsAssetBunchType(declaration.type);
         if(!isBunch){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         if(!*isBunch)
             continue;
         if(bunchDeclaration){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': multiple asset_bunch declarations are not allowed"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': multiple asset_bunch declarations are not allowed"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         bunchDeclaration = &declaration;
     }
     if(!bunchDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': missing asset_bunch declaration"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': missing asset_bunch declaration"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
     const Metascript::Value* bunchValue = doc.findVariable(bunchDeclaration->variable);
     if(!bunchValue || !bunchValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': declaration must be initialized with a list"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': declaration must be initialized with a list"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
     const auto& list = bunchValue->asList();
     if(list.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': list must contain at least one asset"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': list must contain at least one asset"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -175,11 +175,11 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
             const AStringView variableName = (*itemDeclaration)->variable;
             const auto variableHash = ComputeNameHash(variableName);
             if(!variableHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item variable contains an embedded null"), PathToString<tchar>(nwbFilePath));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': item variable contains an embedded null"), PathToString<tchar>(nwbFilePath));
                 return MakeUnexpected(Failure{});
             }
             if(!usedVariables.insert(*variableHash).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': variable '{}' is listed more than once"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Asset bunch '{}': variable '{}' is listed more than once"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});
             }
 
@@ -219,22 +219,22 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
 
     const auto hasComposite = HasCompositeAssetDeclarations(doc);
     if(!hasComposite){
-        NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!*hasComposite){
-        NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': missing composite root declaration"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': missing composite root declaration"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
     const Metascript::Document::Declaration* const rootDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
     if(!rootDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': missing 'asset' declaration"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': missing 'asset' declaration"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     const Metascript::Value* const rootValue = doc.findVariable(rootDeclaration->variable);
     if(!rootValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': missing 'asset' variable value"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': missing 'asset' variable value"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -260,7 +260,7 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
                 continue;
             const auto typeName = ToName(declaration.type);
             if(!typeName || !*typeName){
-                NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': declaration type contains an embedded null"), PathToString<tchar>(nwbFilePath));
                 return MakeUnexpected(Failure{});
             }
             if(**typeName == s_MetadataDeclarationTypeName)
@@ -268,12 +268,12 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
 
             const auto variableHash = ComputeNameHash(AStringView(declaration.variable));
             if(!variableHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': declaration variable contains an embedded null"), PathToString<tchar>(nwbFilePath));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Composite asset '{}': declaration variable contains an embedded null"), PathToString<tchar>(nwbFilePath));
                 return MakeUnexpected(Failure{});
             }
             if(!assetVariableHashes.insert(*variableHash).second){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("Composite asset '{}': duplicate declaration variable '{}'")
+                    FOUNDATION_TEXT("Composite asset '{}': duplicate declaration variable '{}'")
                     , PathToString<tchar>(nwbFilePath)
                     , ConvertString(declaration.variable)
                 );
@@ -302,7 +302,7 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
             const auto variableHash = ComputeNameHash(variableName);
             if(!variableHash || referencedAssetVariableHashes.find(*variableHash) == referencedAssetVariableHashes.end()){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("Composite asset '{}': declaration '{}' is not referenced by 'asset'")
+                    FOUNDATION_TEXT("Composite asset '{}': declaration '{}' is not referenced by 'asset'")
                     , PathToString<tchar>(nwbFilePath)
                     , ConvertString(variableName)
                 );

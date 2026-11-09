@@ -82,35 +82,35 @@ constexpr const auto& Get(const Tuple<Args...>& t)noexcept{ return std::get<I>(t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
 using ParallelHashMap = tbb::concurrent_unordered_map< T, V, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT> >;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using ParallelQueue = tbb::concurrent_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using List = std::list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using Vector = std::vector<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T>
@@ -119,16 +119,16 @@ using InteropVector = std::vector<T>;
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultVector = std::vector<T, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using Set = std::set<T, std::less<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename V, typename ArenaT>
 using Map = std::map<T, V, std::less<T>, ContainerDetail::ArenaAllocator<typename std::map<T, V>::value_type, ArenaT>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using Queue = std::queue<T, std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>>;
 
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using Deque = std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 
@@ -250,7 +250,7 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     const auto aliasOffset = ContainerDetail::SourceAliasesDestination(destination, source);
     if(aliasOffset){
         const usize sourceOffset = *aliasOffset;
-        NWB_ASSERT(sourceSize <= destination.size() - sourceOffset);
+        FOUNDATION_ASSERT(sourceSize <= destination.size() - sourceOffset);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             const usize byteCount = sourceSize * sizeof(DestinationValue);
             if(sourceOffset > 0u)
@@ -269,9 +269,9 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(sourceSize);
         if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
-            NWB_SIMD_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+            FOUNDATION_SIMD_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
         else
-            NWB_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+            FOUNDATION_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else{
         ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
@@ -291,19 +291,19 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
 
     const usize destinationSize = destination.size();
     const usize sourceSize = source.size();
-    NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
+    FOUNDATION_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
     const auto aliasOffset = ContainerDetail::SourceAliasesDestination(destination, source);
     if(aliasOffset){
         const usize sourceOffset = *aliasOffset;
-        NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
+        FOUNDATION_ASSERT(sourceSize <= destinationSize - sourceOffset);
         const usize requiredSize = destinationSize + sourceSize;
         ContainerDetail::ReserveGrowingCapacity(destination, requiredSize);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             destination.resize(requiredSize);
             if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
-                NWB_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
+                FOUNDATION_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
             else
-                NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
+                FOUNDATION_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), destination.data() + sourceOffset, sourceSize * sizeof(DestinationValue));
         }
         else{
             for(usize i = 0u; i < sourceSize; ++i)
@@ -316,9 +316,9 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(destinationSize + sourceSize);
         if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
-            NWB_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+            FOUNDATION_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
         else
-            NWB_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+            FOUNDATION_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
         destination.insert(destination.end(), source.begin(), source.end());

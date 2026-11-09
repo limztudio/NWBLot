@@ -93,7 +93,7 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
                 const CpuTaskProfileEvent& event = events[index + lane];
                 const auto scope = timing.registerScope(*scopeNames[lane]);
                 if(!scope){
-                    NWB_LOGGER_WARNING(NWB_TEXT("CPU task timing scope registration failed"));
+                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("CPU task timing scope registration failed"));
                     continue;
                 }
                 timing.recordSample(*scope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);

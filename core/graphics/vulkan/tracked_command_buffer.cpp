@@ -48,12 +48,12 @@ Expected<void, VkResult> TrackedCommandBuffer::initialize(const u32 queueFamilyI
         const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
         if(createResult != VK_SUCCESS){
             m_cmdPool = VK_NULL_HANDLE;
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
             return MakeUnexpected(createResult);
         }
     }
     else if(m_cmdPool == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
     }
 
@@ -65,7 +65,7 @@ Expected<void, VkResult> TrackedCommandBuffer::initialize(const u32 queueFamilyI
     const VkResult allocateResult = m_context.deviceDispatch.vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
     if(allocateResult != VK_SUCCESS){
         m_cmdBuf = VK_NULL_HANDLE;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
         if(m_ownsCmdPool)
             m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
         m_cmdPool = VK_NULL_HANDLE;

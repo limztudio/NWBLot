@@ -79,7 +79,7 @@ b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
 }
 
 b8 ModelComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, NWB_TEXT("ModelComponentAsset::validatePayload"), "ModelComponentAsset::validatePayload", "model_component");
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, FOUNDATION_TEXT("ModelComponentAsset::validatePayload"), "ModelComponentAsset::validatePayload", "model_component");
 }
 
 
@@ -91,7 +91,7 @@ b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
 }
 
 b8 MeshComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, NWB_TEXT("MeshComponentAsset::validatePayload"), "MeshComponentAsset::validatePayload", "mesh_component");
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, FOUNDATION_TEXT("MeshComponentAsset::validatePayload"), "MeshComponentAsset::validatePayload", "mesh_component");
 }
 
 
@@ -103,7 +103,7 @@ b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
 }
 
 b8 RendererComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("RendererComponentAsset::validatePayload")))
         return false;
     return GraphicsComponentBinaryCodec{}.validateRenderer(component, virtualPath());
 }

@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +56,7 @@ static void SignalHandler(i32)noexcept{
 void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     ScopedLock lock(FrameDetail::s_PrintMutex);
 
-    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
+    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? FOUNDATION_TCERR : FOUNDATION_TCOUT;
     stream << str << static_cast<tchar>('\n');
     stream.flush();
 }
@@ -78,7 +78,7 @@ b8 Frame::init()noexcept{
 }
 
 void Frame::showFrame(){
-    NWB_TCOUT << NWB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
+    FOUNDATION_TCOUT << FOUNDATION_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
 }
 
 b8 Frame::mainLoop()noexcept{

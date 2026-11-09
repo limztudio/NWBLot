@@ -41,7 +41,7 @@ void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, C
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
         outReport += s_GpuDetectiveSectionHeader;
         outReport += "status=inspect_failed\n";
         return;

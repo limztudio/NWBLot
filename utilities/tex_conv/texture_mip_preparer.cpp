@@ -37,20 +37,20 @@ Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> TextureMipPreparer::Bu
     if(!mipLevels){
         switch(mipLevels.error().failure){
         case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: dimensions cannot form a complete mip chain."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: dimensions cannot form a complete mip chain."));
             break;
         case TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} block grid exceeds runtime limits."), mipLevels.error().mipIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: mip {} block grid exceeds runtime limits."), mipLevels.error().mipIndex);
             break;
         case TextureFormat::MipChainLayoutFailure::SliceCountInvalid:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} has an invalid slice count."), mipLevels.error().mipIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: mip {} has an invalid slice count."), mipLevels.error().mipIndex);
             break;
         case TextureFormat::MipChainLayoutFailure::ByteSizeOverflow:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} byte size overflows."), mipLevels.error().mipIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: mip {} byte size overflows."), mipLevels.error().mipIndex);
             break;
         case TextureFormat::MipChainLayoutFailure::OffsetOverflow:
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip payload offsets overflow."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: mip payload offsets overflow."));
             break;
         }
         return MakeUnexpected(Failure{});
@@ -71,7 +71,7 @@ Expected<FloatPlanes> TextureMipPreparer::GenerateNext(const FloatPlanes& source
         basisu::imagef& target = filtered[planeIndex];
         target.resize(targetWidth, targetHeight);
         if(!basisu::image_resample(source[planeIndex], target, s_MipFilter.data(), 1.0f, false, 0u, s_ColorChannelCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to filter linear mip planes."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to filter linear mip planes."));
             return MakeUnexpected(Failure{});
         }
     }

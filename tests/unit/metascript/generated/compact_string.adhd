@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type Values<T> = Vector<T>;
+
+
+usize AliasContainerStorage(){
+    auto values = Values<i32>(3u);
+    values[0u] = 7;
+    values[2u] = 11;
+    return values.size() + cast<usize>(values[0u]) + cast<usize>(values[2u]);
+}
+
+
 usize FindCompact(in CompactString value){
     return value.find("needle");
 }

@@ -49,10 +49,10 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
 
 b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states){
     if(!states.validForDeviceGeneration(m_context.deviceGeneration)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
         return false;
     }
-    NWB_ASSERT(states.m_valid);
+    FOUNDATION_ASSERT(states.m_valid);
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(state.state))))
@@ -93,7 +93,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         if(!state.buffer)
             continue;
         if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(state.range, state.buffer->m_creationDesc)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer byte range is empty or invalid"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer byte range is empty or invalid"));
             return false;
         }
         orderedBufferStates.push_back(MakeNotNull(&state));
@@ -105,13 +105,13 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         const auto& previous = *orderedBufferStates[index - 1u];
         const auto& current = *orderedBufferStates[index];
         if(previous.buffer == current.buffer && previous.range.overlaps(current.range)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
             return false;
         }
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
         if(state.buffer && !state.range.isEntireBuffer(state.buffer->m_creationDesc)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent buffer state must cover the entire buffer"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Permanent buffer state must cover the entire buffer"));
             return false;
         }
     }
@@ -128,38 +128,38 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         const GpuPhysicalQueueId releaseDestinationQueue
     ) -> b8 {
         if(sharing != texture.m_creationDesc.queueSharing){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
             return false;
         }
 
         if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             if(ownerQueue.valid() || releaseDestinationQueue.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
                 return false;
             }
             return true;
         }
 
         if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid owner queue"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Texture state handoff has an invalid owner queue"));
             return false;
         }
         if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid ownership destination"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Texture state handoff has an invalid ownership destination"));
             return false;
         }
 
         const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
             return false;
         }
 
         if(!releaseDestinationQueue.valid()){
             // Ownership belongs to a family, not one queue. Same-family handoff is valid once its token waits; reject only a true crossing without the pair.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;
             }
             return true;
@@ -167,7 +167,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
         if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination family"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination family"));
             return false;
         }
 
@@ -178,38 +178,38 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
     };
     const auto appendBufferAcquire = [&](Buffer& buffer, const BufferRange range, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> b8 {
         if(sharing != buffer.m_creationDesc.queueSharing){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
             return false;
         }
 
         if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             if(ownerQueue.valid() || releaseDestinationQueue.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
                 return false;
             }
             return true;
         }
 
         if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid owner queue"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Buffer state handoff has an invalid owner queue"));
             return false;
         }
         if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid ownership destination"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Buffer state handoff has an invalid ownership destination"));
             return false;
         }
 
         const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
             return false;
         }
 
         if(!releaseDestinationQueue.valid()){
             // A timeline wait is sufficient within one queue family.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
                 return false;
             }
             return true;
@@ -217,7 +217,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
         if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination family"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination family"));
             return false;
         }
 
@@ -235,7 +235,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentTextureState(state.texture);
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported texture state conflicts with an existing permanent state"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported texture state conflicts with an existing permanent state"));
             return false;
         }
 
@@ -249,7 +249,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentBufferState(state.buffer);
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer state conflicts with an existing permanent state"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state conflicts with an existing permanent state"));
             return false;
         }
 
@@ -263,18 +263,18 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentTextureState(state.texture);
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported permanent texture state conflicts with the command-list contract"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported permanent texture state conflicts with the command-list contract"));
             return false;
         }
         for(const CommandListResourceStateHandoff::TextureState& transientState : states.m_textureStates){
             if(transientState.texture == state.texture && transientState.state != state.state){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
                 return false;
             }
         }
         for(const CommandListResourceStateHandoff::PermanentTextureState& otherState : states.m_permanentTextureStates){
             if(otherState.texture == state.texture && otherState.state != state.state){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff contains conflicting permanent texture states"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent texture states"));
                 return false;
             }
         }
@@ -289,18 +289,18 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
         const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentBufferState(state.buffer);
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported permanent buffer state conflicts with the command-list contract"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported permanent buffer state conflicts with the command-list contract"));
             return false;
         }
         for(const CommandListResourceStateHandoff::BufferState& transientState : states.m_bufferStates){
             if(transientState.buffer == state.buffer && transientState.state != state.state){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
                 return false;
             }
         }
         for(const CommandListResourceStateHandoff::BufferState& otherState : states.m_permanentBufferStates){
             if(otherState.buffer == state.buffer && otherState.state != state.state){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff contains conflicting permanent buffer states"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent buffer states"));
                 return false;
             }
         }
@@ -376,7 +376,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
-        NWB_ASSERT(key.texture);
+        FOUNDATION_ASSERT(key.texture);
 
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{ key.texture, ownerQueue, releaseDestinationQueue, it.value(), key.texture->m_creationDesc.queueSharing, key.mipLevel, key.arraySlice });
@@ -440,7 +440,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
     if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-        rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("source queue family is unavailable"));
+        rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("source queue family is unavailable"));
         return;
     }
 
@@ -448,24 +448,24 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         auto& buffer = *MakeNotNull(it->first.get());
         if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(buffer)){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("pending buffer release has an invalid resource contract"));
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("pending buffer release has an invalid resource contract"));
             return;
         }
         const auto tracked = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
         for(const BufferOwnershipRelease& release : it.value()){
             if(m_device.getQueueFamilyIndex(release.destinationQueue) == VK_QUEUE_FAMILY_IGNORED){
-                rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer destination queue family is unavailable"));
+                rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("buffer destination queue family is unavailable"));
                 return;
             }
             if(!m_stateTracker.hasExplicitBufferState(&buffer, release.range)){
-                rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer final byte range state is unknown"));
+                rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("buffer final byte range state is unknown"));
                 return;
             }
             for(const StateTracker::BufferRangeState& state : tracked.value()){
                 if(!state.range.overlaps(release.range))
                     continue;
                 if(state.state == ResourceStates::Unknown || !validateBufferForGpuState(&buffer, state.state, s_OwnershipReleaseBarriersOperation)){
-                    rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer byte range state is incompatible with its creation contract"));
+                    rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("buffer byte range state is incompatible with its creation contract"));
                     return;
                 }
             }
@@ -476,24 +476,24 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         const TextureSubresourceStateKey& key = it->first;
         auto& texture = *MakeNotNull(key.texture);
         if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("concurrent texture has a pending exclusive release"));
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("concurrent texture has a pending exclusive release"));
             return;
         }
         if(m_stateTracker.isPermanentTexture(texture)){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("permanent texture has a pending ownership release"));
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("permanent texture has a pending ownership release"));
             return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("texture destination queue family is unavailable"));
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("texture destination queue family is unavailable"));
             return;
         }
 
         const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, key.arraySlice, key.mipLevel);
         if(state == ResourceStates::Unknown){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("texture final state is unknown"));
+            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("texture final state is unknown"));
             return;
         }
         if(destinationQueueFamily == sourceQueueFamily)

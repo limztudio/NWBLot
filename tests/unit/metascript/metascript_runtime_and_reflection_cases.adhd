@@ -764,6 +764,11 @@ TEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference){
 }
 
 
+TEST(AdhdCompiler, GenericContainerAliasUsesTheInjectedArena){
+    EXPECT_EQ(NWB::Tests::AliasContainerStorage(), 21u);
+}
+
+
 TEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory){
     const LerpMoveOnly result = NWB::Tests::LerpTemporary<LerpMoveOnly>();
     EXPECT_EQ(result.value, 110);

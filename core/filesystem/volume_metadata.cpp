@@ -69,7 +69,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
         return false;
     }
     if(header.segmentSize != m_segmentSize){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}"), ConvertString(m_volumeName), header.segmentSize, m_segmentSize);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}"), ConvertString(m_volumeName), header.segmentSize, m_segmentSize);
         return false;
     }
     if(header.metadataBytes <= sizeof(header) || header.metadataBytes >= m_segmentSize){
@@ -123,7 +123,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     }
 
     if(header.indexBytes != *expectedIndexBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}"), ConvertString(m_volumeName), header.indexBytes, *expectedIndexBytes);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}"), ConvertString(m_volumeName), header.indexBytes, *expectedIndexBytes);
         return false;
     }
 
@@ -143,7 +143,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
         }
 
         FilesystemVolumeDetail::VolumeIndexEntryDisk entry;
-        NWB_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
+        FOUNDATION_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
         u64 endOffset = 0;
@@ -186,7 +186,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
 }
 
 b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name& excludedPath){
-    NWB_ASSERT(!excludedPath || m_files.find(excludedPath) != m_files.end());
+    FOUNDATION_ASSERT(!excludedPath || m_files.find(excludedPath) != m_files.end());
     if(m_segmentPaths.empty()){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
         return false;
@@ -234,7 +234,7 @@ b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, cons
     }
     totalMetaBytes = *totalMetaBytesResult;
     if(totalMetaBytes > m_metadataBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes"), ConvertString(m_volumeName), totalMetaBytes, m_metadataBytes);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes"), ConvertString(m_volumeName), totalMetaBytes, m_metadataBytes);
         return false;
     }
 

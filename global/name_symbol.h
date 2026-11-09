@@ -185,7 +185,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
     }
 }
 
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
 inline void RecordStoredNameSymbolText(const NameHash& hash, const AStringView text, const b8 hasText){
     if(!hasText || text.empty() || IsZeroHash(hash))
         return;

@@ -25,18 +25,18 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 b8 ValidateOptions(const BakeOptions& options){
     if(!ValidateBakeInitialOptions(options.ppem, options.spread, options.extent, options.maxGroups, !options.source.empty(), !options.output.empty()))
         return false;
-    if(options.output.extensionView() != NWB_TEXT(".nwb")){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
+    if(options.output.extensionView() != FOUNDATION_TEXT(".nwb")){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
     const auto stem = options.output.stemView();
     if(stem.empty() || IsDot(stem) || IsDotDot(stem)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: output must have a nonempty asset stem"));
         return false;
     }
     static constexpr Array<AStringView, 3u> s_SourceExtensions = { s_TrueTypeExtension, s_OpenTypeExtension, Impl::s_PreparedFontExtension };
     if(!PathHasListedExtension(options.source, s_SourceExtensions)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
     }
     return true;
@@ -85,7 +85,7 @@ void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& ou
 Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
     Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
     if(ComputeSha256({ sourceFontBytes.data(), sourceFontBytes.size() }) != atlas.fontSha256){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source changed during bake"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source changed during bake"));
         return MakeUnexpected(AStringView("source changed during bake"));
     }
 

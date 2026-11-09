@@ -166,7 +166,7 @@ b8 GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         auto previous = m_history.find(taskName);
         if(previous == m_history.end()){
             if(!m_history.emplace(taskName, telemetry.acceptedQueue).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return false;
             }
         }

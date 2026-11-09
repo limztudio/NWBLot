@@ -32,7 +32,7 @@ struct ViewTupleAccess{
     }
 
     static EntityID EntityAt(const Span<const EntityID> entities, const usize denseIndex)noexcept{
-        NWB_ASSERT(denseIndex < entities.size());
+        FOUNDATION_ASSERT(denseIndex < entities.size());
         return entities[denseIndex];
     }
 

@@ -21,7 +21,7 @@ struct SizedFileCreateFailure{
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<void, SizedFileCreateFailure> CreateSizedFileExclusive(const Path<ArenaT>& path, const u64 size)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
         return MakeUnexpected(SizedFileCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -62,7 +62,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<u64, ErrorCode> FileSize(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     WIN32_FILE_ATTRIBUTE_DATA data = {};
     if(!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &data))
         return MakeUnexpected(LastSystemError());
@@ -224,7 +224,7 @@ template<typename ArenaT>
     for(usize offset = 0u; offset < count;){
         const usize remaining = count - offset;
         const usize chunk = remaining < buffer.size() ? remaining : buffer.size();
-        if(!ReadStreamExact(stream, NotNull<void*>(buffer.data()), chunk) || NWB_MEMCMP(buffer.data(), expectedBytes + offset, chunk) != 0)
+        if(!ReadStreamExact(stream, NotNull<void*>(buffer.data()), chunk) || FOUNDATION_MEMCMP(buffer.data(), expectedBytes + offset, chunk) != 0)
             return false;
         offset += chunk;
     }
@@ -254,7 +254,7 @@ template<typename ArenaT, typename Container>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<void, ErrorCode> ResizeFile(const Path<ArenaT>& path, const u64 byteCount)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     const HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);

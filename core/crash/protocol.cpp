@@ -49,7 +49,7 @@ b8 CrashProtocol::IsCurrentCrashRequest(const CrashRequest& request)noexcept{
         if(!terminated(request.breadcrumbs[i].category) || !terminated(request.breadcrumbs[i].message))
             return false;
     }
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(request.manualContextSize == 0u)
         return request.manualExceptionRecordSize == 0u && request.manualContextArchitecture == 0u;
     if(request.platform != PlatformKind::Windows || request.exceptionPointers != 0u)

@@ -31,7 +31,7 @@ b8 CommandList::CollectGraphicsBufferStates(const GraphicsState& state, Graphics
             if(outTable.entries[stateIndex].buffer->m_buffer == buffer->m_buffer)
                 return false;
         }
-        NWB_ASSERT(outTable.count < LengthOf(outTable.entries));
+        FOUNDATION_ASSERT(outTable.count < LengthOf(outTable.entries));
         outTable.entries[outTable.count].buffer = buffer;
         outTable.entries[outTable.count].state = requiredState;
         ++outTable.count;
@@ -47,15 +47,15 @@ b8 CommandList::CollectGraphicsBufferStates(const GraphicsState& state, Graphics
 
 b8 CommandList::validateGraphicsState(const GraphicsState& state){
     if(state.pipeline && &state.pipeline->m_context != &m_context){
-        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline belongs to another device"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline belongs to another device"));
         return false;
     }
     if(state.shadingRateState.enabled){
-        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("variable-rate shading state is not implemented"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("variable-rate shading state is not implemented"));
         return false;
     }
     if(state.pipeline && !state.framebuffer){
-        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("a graphics pipeline requires an explicit framebuffer"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("a graphics pipeline requires an explicit framebuffer"));
         return false;
     }
     if(!FramebufferRenderingPreparation(*this).validateFramebuffer(state.framebuffer, s_SetGraphicsStateOperation))
@@ -65,16 +65,16 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
 
     if(state.pipeline){
         if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
-            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline has no native pipeline or layout"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline has no native pipeline or layout"));
             return false;
         }
         if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
-            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline and framebuffer are incompatible"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline and framebuffer are incompatible"));
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
         if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
-            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
@@ -88,12 +88,12 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
             || binding.offset >= binding.buffer->m_creationDesc.byteSize
             || binding.slot >= m_context.physicalDeviceProperties.limits.maxVertexInputBindings
         ){
-            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("vertex-buffer binding is invalid"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("vertex-buffer binding is invalid"));
             return false;
         }
         for(usize priorIndex = 0u; priorIndex < bindingIndex; ++priorIndex){
             if(state.vertexBuffers[priorIndex].slot == binding.slot){
-                rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("vertex-buffer slot is bound more than once"));
+                rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("vertex-buffer slot is bound more than once"));
                 return false;
             }
         }
@@ -109,17 +109,17 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
             || (indexBinding.offset % indexBytes) != 0u
             || indexBinding.offset >= indexBinding.buffer->m_creationDesc.byteSize
         ){
-            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("index-buffer binding is invalid"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("index-buffer binding is invalid"));
             return false;
         }
     }
     else if(indexBinding.offset != 0u || indexBinding.format != Format::UNKNOWN){
-        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("index-buffer metadata has no buffer"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("index-buffer metadata has no buffer"));
         return false;
     }
 
     if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
-        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("indirect-argument buffer is invalid"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("indirect-argument buffer is invalid"));
         return false;
     }
 
@@ -139,11 +139,11 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
 
 b8 CommandList::validateMeshletState(const MeshletState& state){
     if(state.pipeline && &state.pipeline->m_context != &m_context){
-        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline belongs to another device"));
+        rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline belongs to another device"));
         return false;
     }
     if(state.pipeline && !state.framebuffer){
-        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("a meshlet pipeline requires an explicit framebuffer"));
+        rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("a meshlet pipeline requires an explicit framebuffer"));
         return false;
     }
     if(!FramebufferRenderingPreparation(*this).validateFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
@@ -157,26 +157,26 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
             return false;
         }
         if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
-            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("task shader feature is unavailable"));
+            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("task shader feature is unavailable"));
             return false;
         }
         if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
-            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline has no native pipeline or layout"));
+            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline has no native pipeline or layout"));
             return false;
         }
         if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
-            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline and framebuffer are incompatible"));
+            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline and framebuffer are incompatible"));
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
         if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
-            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
+            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
 
     if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
-        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("mesh indirect-argument buffer is invalid"));
+        rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("mesh indirect-argument buffer is invalid"));
         return false;
     }
     if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, s_SetMeshletStateOperation))
@@ -187,11 +187,11 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
 b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const b8 indexed){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
     if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
-        rejectCommandRecording(operationName, NWB_TEXT("no compatible graphics pipeline and render pass are active"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("no compatible graphics pipeline and render pass are active"));
         return false;
     }
     if(m_currentGraphicsState.viewport.viewports.size() != 1u || m_currentGraphicsState.viewport.scissorRects.size() > 1u){
-        rejectCommandRecording(operationName, NWB_TEXT("draw requires one viewport and at most one explicit scissor"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("draw requires one viewport and at most one explicit scissor"));
         return false;
     }
 
@@ -206,13 +206,13 @@ b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const
                 }
             }
             if(!bindingFound){
-                rejectCommandRecording(operationName, NWB_TEXT("required vertex-buffer binding is missing"));
+                rejectCommandRecording(operationName, FOUNDATION_TEXT("required vertex-buffer binding is missing"));
                 return false;
             }
         }
     }
     if(indexed && !m_currentGraphicsState.indexBuffer.buffer){
-        rejectCommandRecording(operationName, NWB_TEXT("indexed draw has no index buffer"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("indexed draw has no index buffer"));
         return false;
     }
     return true;
@@ -224,13 +224,13 @@ b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, co
 
     if(indexed){
         if(arguments.startVertexLocation > static_cast<u32>(Limit<i32>::s_Max)){
-            rejectCommandRecording(operationName, NWB_TEXT("indexed base vertex exceeds signed Vulkan range"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("indexed base vertex exceeds signed Vulkan range"));
             return false;
         }
         const IndexBufferBinding& indexBinding = m_currentGraphicsState.indexBuffer;
         const u32 indexBytes = VulkanDetail::GetIndexElementByteSize(indexBinding.format);
         if(!VulkanDetail::IsIndexDrawRangeValid(indexBinding.buffer->m_creationDesc, indexBinding.offset, arguments.startIndexLocation, arguments.vertexCount, indexBytes)){
-            rejectCommandRecording(operationName, NWB_TEXT("indexed draw range exceeds the index buffer"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("indexed draw range exceeds the index buffer"));
             return false;
         }
     }
@@ -262,7 +262,7 @@ b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, co
         const u32 firstElement = instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
         const u32 elementCount = instanceRate ? arguments.instanceCount : arguments.vertexCount;
         if(!VulkanDetail::IsStridedBufferRangeValid(boundBuffer->buffer->m_creationDesc, boundBuffer->offset, firstElement, elementCount, requiredBinding.stride, requiredElementBytes)){
-            rejectCommandRecording(operationName, NWB_TEXT("draw range exceeds a vertex buffer"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("draw range exceeds a vertex buffer"));
             return false;
         }
     }
@@ -271,19 +271,19 @@ b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, co
 
 b8 CommandList::validateIndirectBuffer(Buffer* const buffer, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount, const TStringView commandName){
     if(!buffer){
-        rejectCommandRecording(commandName, NWB_TEXT("no indirect-argument buffer is bound"));
+        rejectCommandRecording(commandName, FOUNDATION_TEXT("no indirect-argument buffer is bound"));
         return false;
     }
     if(buffer->m_buffer == VK_NULL_HANDLE){
-        rejectCommandRecording(commandName, NWB_TEXT("indirect-argument buffer has no native buffer"));
+        rejectCommandRecording(commandName, FOUNDATION_TEXT("indirect-argument buffer has no native buffer"));
         return false;
     }
     if(!buffer->m_creationDesc.isDrawIndirectArgs){
-        rejectCommandRecording(commandName, NWB_TEXT("buffer lacks indirect-argument usage"));
+        rejectCommandRecording(commandName, FOUNDATION_TEXT("buffer lacks indirect-argument usage"));
         return false;
     }
     if(!VulkanDetail::IsIndirectCommandRangeValid(buffer->m_creationDesc, offsetBytes, commandSizeBytes, commandCount)){
-        rejectCommandRecording(commandName, NWB_TEXT("indirect-argument range is invalid"));
+        rejectCommandRecording(commandName, FOUNDATION_TEXT("indirect-argument range is invalid"));
         return false;
     }
     return true;
@@ -297,11 +297,11 @@ Expected<NotNull<Buffer*>> CommandList::prepareDrawIndirect(const u32 offsetByte
     if(!validateGraphicsDrawState(operationLabel, indexed))
         return MakeUnexpected(Failure{});
     if(!m_context.drawIndirectFirstInstanceFeatureEnabled){
-        rejectCommandRecording(operationLabel, NWB_TEXT("drawIndirectFirstInstance was not enabled"));
+        rejectCommandRecording(operationLabel, FOUNDATION_TEXT("drawIndirectFirstInstance was not enabled"));
         return MakeUnexpected(Failure{});
     }
     if(!VulkanDetail::IsIndirectDrawCountValid(drawCount, m_context.physicalDeviceProperties.limits.maxDrawIndirectCount, m_context.multiDrawIndirectFeatureEnabled)){
-        rejectCommandRecording(operationLabel, NWB_TEXT("indirect draw count is unsupported or exceeds the device limit"));
+        rejectCommandRecording(operationLabel, FOUNDATION_TEXT("indirect draw count is unsupported or exceeds the device limit"));
         return MakeUnexpected(Failure{});
     }
     if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))

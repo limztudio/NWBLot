@@ -191,7 +191,7 @@ static BOOL CALLBACK ReadProcessMemoryFromDump([[maybe_unused]] HANDLE process, 
         if(static_cast<u64>(size) > range.size - offset)
             return FALSE;
 
-        NWB_MEMCPY(buffer, static_cast<usize>(size), range.bytes.get() + static_cast<usize>(offset), static_cast<usize>(size));
+        FOUNDATION_MEMCPY(buffer, static_cast<usize>(size), range.bytes.get() + static_cast<usize>(offset), static_cast<usize>(size));
         if(bytesRead)
             *bytesRead = size;
         return TRUE;

@@ -46,7 +46,7 @@ EntityID EntityManager::create(){
         while(m_nextEntityIndex < m_generations.size() && (m_generations[m_nextEntityIndex] & __hidden_entity_id::s_RetiredEntityFlag) != 0u)
             ++m_nextEntityIndex;
         if(m_nextEntityIndex >= ECSDetail::s_EntityIndexMask){
-            NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("EntityManager exceeded maximum entity count"));
             return s_InvalidEntityId;
         }
         index = m_nextEntityIndex;
@@ -96,7 +96,7 @@ void EntityManager::clear()noexcept{
 
 
 void EntityManager::destroyAlive(EntityID entityId){
-    NWB_ASSERT(alive(entityId));
+    FOUNDATION_ASSERT(alive(entityId));
 
     const u32 index = entityId.index();
     if(m_generations[index] == ECSDetail::s_EntityGenerationMask){

@@ -46,7 +46,7 @@ static_assert(sizeof(SkeletonJointBinary) == s_SkeletonJointBinaryBytes, "Skelet
 
 
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("Skeleton::validatePayload")))
         return false;
 
     Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);

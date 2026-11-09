@@ -275,11 +275,11 @@ public:
         // An accepted prefix already reads the frozen context even when a later packet fails.
         payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.slice == 0u && !payload.dispatch->timing->confirmBeginSubmission(token)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
             payload.dispatch->timing->discard();
         }
         if(payload.slice + 1u == payload.sliceCount && !payload.dispatch->timing->confirmEndSubmission(token, true)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Reflection: failed to confirm accepted hardware timing end"));
             payload.dispatch->timing->discard();
         }
         if(payload.hardwareDispatchLogged)
@@ -466,7 +466,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             for(u32 slice = 0u; slice < sliceCount; ++slice){
                 const auto sliceIdentity = ReflectionCsgHardwareSliceIdentity(slice);
                 if(!sliceIdentity){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererReflectionSystem: failed to format CSG hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererReflectionSystem: failed to format CSG hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
                     return MakeUnexpected(Failure{});
                 }
                 Core::GpuTaskDesc sliceDesc = ReflectionTaskDesc(*sliceIdentity, s_ReflectionHardwareResolveTaskLabel, dependency);

@@ -77,7 +77,7 @@ public:
     )override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
             return false;
         }
 
@@ -130,14 +130,14 @@ static b8 BuildRegistryObjectBucketManifestEntries(
 
 static b8 RegisterMergedManifestVirtualPath(const Name& virtualPath, Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: registry manifest produced an empty virtual path"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: registry manifest produced an empty virtual path"));
         return false;
     }
 
     if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate registry manifest virtual path '{}'"), ConvertString(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: duplicate registry manifest virtual path '{}'"), ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
@@ -208,7 +208,7 @@ b8 BuildRegistryObjectManifestEntries(
         failed.store(true, MemoryOrder::release);
     });
     if(!parallelWork){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return false;
     }
     if(failed.load(MemoryOrder::acquire))

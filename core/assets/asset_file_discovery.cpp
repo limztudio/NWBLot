@@ -25,18 +25,18 @@ Expected<DiscoveredNwbFileVector> AssetFileDiscovery::Discover(const Span<const 
         const auto directory = IsDirectory(assetRoot.path);
         if(!directory || !*directory){
             if(!directory){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to query asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(directory.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to query asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(directory.error().message()));
                 return MakeUnexpected(Failure{});
             }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root is not a directory: '{}'"), PathToString<tchar>(assetRoot.path));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: asset root is not a directory: '{}'"), PathToString<tchar>(assetRoot.path));
             return MakeUnexpected(Failure{});
         }
 
         const ::Path<ScratchArena> scratchRoot(scratchArena, assetRoot.path);
         const auto entries = RecursiveDirectoryIterator<ScratchArena>::Create(scratchRoot);
         if(!entries){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(entries.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: error scanning asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(entries.error().message()));
             return MakeUnexpected(Failure{});
         }
         files.reserve(AddSize(files.size(), static_cast<usize>(entries->end() - entries->begin())));
@@ -44,7 +44,7 @@ Expected<DiscoveredNwbFileVector> AssetFileDiscovery::Discover(const Span<const 
         for(const auto& dirEntry : *entries){
             const auto isRegularFile = dirEntry.isRegularFile();
             if(!isRegularFile){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}"), PathToString<tchar>(dirEntry.path()), PathToString<tchar>(assetRoot.path), ConvertString(isRegularFile.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}"), PathToString<tchar>(dirEntry.path()), PathToString<tchar>(assetRoot.path), ConvertString(isRegularFile.error().message()));
                 return MakeUnexpected(Failure{});
             }
             if(!*isRegularFile)
@@ -57,13 +57,13 @@ Expected<DiscoveredNwbFileVector> AssetFileDiscovery::Discover(const Span<const 
                 continue;
 
             ScratchString normalizedPath = PathToString(scratchArena, filePath.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(normalizedPath);
 #endif
             const auto inserted = seenPaths.insert(Move(normalizedPath));
             if(!inserted.second)
                 continue;
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
             ScratchString canonicalPath(*inserted.first, scratchArena);
             CanonicalizeTextInPlace(canonicalPath);
             files.emplace_back(cookArena, assetRoot.path, filePath, canonicalPath, assetRoot.virtualRoot);

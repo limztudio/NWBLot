@@ -108,7 +108,7 @@ public:
         if(!m_allowOutlineBounds || m_coverageInkReliable)
             return {};
         if(FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP | FT_LOAD_NO_AUTOHINT) != 0){
-            NWB_LOGGER_WARNING(NWB_TEXT("UI glyph outline bounds unavailable; retaining conservative coverage candidate"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("UI glyph outline bounds unavailable; retaining conservative coverage candidate"));
             return {};
         }
         const FT_GlyphSlot slot = m_face->glyph;
@@ -126,14 +126,14 @@ public:
         if(pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
             return MakeUnexpected(Failure{});
         if(FT_Set_Pixel_Sizes(m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI glyph raster measurement failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI glyph raster measurement failed"));
             return MakeUnexpected(Failure{});
         }
         // FT_Load_Glyph presets this box through the same ft_glyphslot_preset_bitmap path as the normal renderer, without allocating coverage pixels.
         const FT_GlyphSlot slot = m_face->glyph;
         const FT_Bitmap& bitmap = slot->bitmap;
         if(slot->format != FT_GLYPH_FORMAT_OUTLINE || (bitmap.pixel_mode != FT_PIXEL_MODE_GRAY && bitmap.width != 0u && bitmap.rows != 0u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI glyph measurement requires a grayscale outline"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI glyph measurement requires a grayscale outline"));
             return MakeUnexpected(Failure{});
         }
         return MakeRasterGlyphBoundsRect(slot->bitmap_left, slot->bitmap_top, bitmap.width, bitmap.rows);
@@ -143,13 +143,13 @@ public:
         if(pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
             return false;
         if(FT_Set_Pixel_Sizes(m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0 || FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI glyph rasterization failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI glyph rasterization failed"));
             return false;
         }
         const FT_GlyphSlot slot = m_face->glyph;
         const FT_Bitmap& bitmap = slot->bitmap;
         if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY && bitmap.width != 0u && bitmap.rows != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI glyph rasterizer requires grayscale coverage"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI glyph rasterizer requires grayscale coverage"));
             return false;
         }
         output.width = bitmap.width;
@@ -163,7 +163,7 @@ public:
         for(u32 row = 0u; row < bitmap.rows; ++row){
             const u32 sourceRow = bitmap.pitch >= 0 ? row : bitmap.rows - row - 1u;
             if(bitmap.width != 0u)
-                NWB_MEMCPY(output.pixels.data() + static_cast<usize>(row) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceRow) * pitch, bitmap.width);
+                FOUNDATION_MEMCPY(output.pixels.data() + static_cast<usize>(row) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceRow) * pitch, bitmap.width);
         }
         return true;
     }
@@ -252,16 +252,16 @@ private:
         m_memory.free = &Release;
         m_memory.realloc = &Reallocate;
         if(FT_New_Library(&m_memory, &m_library) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI FreeType initialization failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI FreeType initialization failed"));
             return;
         }
         FT_Add_Default_Modules(m_library);
         if(FT_New_Memory_Face(m_library, m_bytes.data(), static_cast<FT_Long>(m_bytes.size()), source.font.faceIndex(), &m_face) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI font face initialization failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI font face initialization failed"));
             return;
         }
         if(!FT_IS_SCALABLE(m_face) || m_face->units_per_EM == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI font must have scalable horizontal metrics"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI font must have scalable horizontal metrics"));
             return;
         }
         m_blob = hb_blob_create(reinterpret_cast<const char*>(m_bytes.data()), static_cast<u32>(m_bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
@@ -271,7 +271,7 @@ private:
         m_shapeBuffer = hb_buffer_create();
         m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && m_unitsPerEm != 0u && m_scaledFont != hb_font_get_empty() && hb_buffer_allocation_successful(m_shapeBuffer);
         if(!m_ready){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz font face initialization failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI HarfBuzz font face initialization failed"));
             return;
         }
         hb_ot_font_set_funcs(m_scaledFont);
@@ -294,10 +294,10 @@ private:
                 if(atlasResult)
                     m_bakedAtlas = Move(*atlasResult);
                 else
-                    NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas could not be installed; using native coverage"));
+                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("UI baked font atlas could not be installed; using native coverage"));
             }
             else
-                NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas does not match the shaping font; using native coverage"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("UI baked font atlas does not match the shaping font; using native coverage"));
         }
     }
 
@@ -407,7 +407,7 @@ b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pain
     hb_buffer_add_utf8(&nativeBuffer, request.text.data(), static_cast<i32>(request.text.size()), byteBegin, static_cast<i32>(byteEnd - byteBegin));
     hb_shape(m_state->m_scaledFont, &nativeBuffer, nullptr, 0u);
     if(!hb_buffer_allocation_successful(&nativeBuffer)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz run allocation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UI HarfBuzz run allocation failed"));
         return false;
     }
     u32 count = 0u;
@@ -637,7 +637,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
         else{
             const AtlasGlyph* record = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
             if(!record){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must be present"));
+                FOUNDATION_FATAL_ASSERT_MSG(false, FOUNDATION_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
             const auto rectangle = TextGlyphVisibility::CoverageRectangle(glyph, *record, rasterScale, topLeft, deviceScale);
@@ -672,7 +672,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
     for(const auto& glyph : prepared){
         const b8 drawn = glyph.sdfPage ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color) : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
         if(!drawn){
-            NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
+            FOUNDATION_FATAL_ASSERT_MSG(false, FOUNDATION_TEXT("Admitted UI glyph draw must succeed"));
             return false;
         }
     }

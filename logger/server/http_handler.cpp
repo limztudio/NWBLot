@@ -19,7 +19,7 @@
 #include <global/scope_exit.h>
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
@@ -40,7 +40,7 @@ namespace LoggerServerImpl{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
+inline constexpr TStringView s_ServerName = FOUNDATION_TEXT("Server");
 inline constexpr usize s_BytesPerMebibyte = ::NWB::Log::s_LogServerValueModuleBytesPerMebibyte;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = ::NWB::Log::s_LogServerValueModuleMaxCrashPackageUploadMebibytes;
 inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = ::NWB::Log::s_LogServerValueModuleUnsupportedNameSymbolUploadPath;
@@ -71,7 +71,7 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContex
 }
 
 static void EnqueueServerMessage(Server& server, const TStringView message, const Core::Common::LogType::Enum type){
-    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, s_ServerName), type);
+    server.enqueue(StringFormat(server.arena(), FOUNDATION_TEXT("{} on {}"), message, s_ServerName), type);
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
@@ -79,7 +79,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
     if(!response){
-        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Core::Common::LogType::Fatal);
+        EnqueueServerMessage(server, FOUNDATION_TEXT("Failed to create a response"), Core::Common::LogType::Fatal);
         return MHD_NO;
     }
 
@@ -103,7 +103,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     const auto timeResult = GetLocalTime();
     if(!timeResult)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to read local time for crash package name"));
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
@@ -229,14 +229,14 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
     if(!connectionContext){
         if(isCrashUpload && !handler->crashUploadAuthorized(*connection)){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
             return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
         const auto info = LoggerServerImpl::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
             thisPtr->enqueue(
-                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
+                StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
                 Core::Common::LogType::Error
             );
             return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
@@ -254,7 +254,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             return MHD_YES;
         }
         if(!uploadData){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_BAD_REQUEST;
             uploadDataSize = 0u;
@@ -263,7 +263,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
         const usize uploadSizeLimit = LoggerServerImpl::UploadSizeLimit(info->uploadKind);
         if(uploadDataSize > static_cast<size_t>(uploadSizeLimit) || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Received an oversized message"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_CONTENT_TOO_LARGE;
             uploadDataSize = 0u;
@@ -272,7 +272,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
             uploadDataSize = 0u;
@@ -293,18 +293,18 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             const Path& storedPath = info->crashUploadPath;
             if(thisPtr->enqueueCrashUpload(storedPath, scratchArena)){
                 info->crashUploadOwned = false;
-                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
             else{
                 info->crashUploadOwned = false;
                 responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
-                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
             }
         }
         else{
             info->crashUploadOwned = false;
             responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
         }
     }
     else if(info->uploadKind == LoggerServerImpl::ConnectionUploadKind::Telemetry){
@@ -312,7 +312,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
         if(!result.storedRaw)
             responseStatus = info->size == 0u ? MHD_HTTP_BAD_REQUEST : MHD_HTTP_SERVICE_UNAVAILABLE;
         if(result.rawCleanupError){
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
         }
         thisPtr->enqueue(Move(result.message), result.type);
     }

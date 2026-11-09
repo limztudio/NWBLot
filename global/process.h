@@ -10,9 +10,9 @@
 
 #include <csignal>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -51,9 +51,9 @@ enum Enum : i32{
 
 
 [[nodiscard]] inline u32 CurrentProcessId()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return static_cast<u32>(GetCurrentProcessId());
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
     return static_cast<u32>(getpid());
 #else
     return 0u;

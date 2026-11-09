@@ -28,7 +28,7 @@ namespace __hidden_gpu_compiled_graph{
     static Atomic<u64> s_NextObjectIdentity{ 1u };
     const u64 identity = TryNextAtomicIdentity(s_NextObjectIdentity);
     if(identity == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
     return identity;
 }
 
@@ -106,7 +106,7 @@ GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
         return;
 
     if(m_graph->m_planAccessState.load(MemoryOrder::relaxed) != GpuCompiledGraph::s_PlanAccessWriterBit)
-        NWB_FATAL_ASSERT_MSG(false, "Compiled-plan construction must retain its exact writer claim");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "Compiled-plan construction must retain its exact writer claim");
     if(!m_published)
         m_graph->resetPlanStorageWithinPlanWriteScope();
     m_graph->m_planAccessState.store(0u, MemoryOrder::release);
@@ -115,7 +115,7 @@ GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
 
 void GpuCompiledGraph::CompilationScope::publish()noexcept{
     const b8 publicationValid = m_graph && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit;
-    NWB_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
+    FOUNDATION_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
 
     m_graph->m_valid = true;
     m_published = true;
@@ -147,11 +147,11 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)noexcept
 GpuCompiledGraph::~GpuCompiledGraph()noexcept{
     u32 expectedPlanAccessState = 0u;
     if(!m_planAccessState.compare_exchange_strong(expectedPlanAccessState, s_PlanAccessWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
-        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
 
     NothrowScopedLock lock(m_attemptBindingMutex);
     if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
-        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires plan readers and its active graph attempt to resolve first");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires plan readers and its active graph attempt to resolve first");
 }
 
 
@@ -176,7 +176,7 @@ void GpuCompiledGraph::reset()noexcept{
     if(tryReset())
         return;
 
-    NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
+    FOUNDATION_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
 }
 
 void GpuCompiledGraph::clearAttemptBindingWithinLock()noexcept{
@@ -263,9 +263,9 @@ const GpuCompiledTask* GpuCompiledGraph::findTask(const GpuTaskId& task)const no
         return nullptr;
     // Successful packetization maps every declaration task to its own compiled task.
     const u32 compiledTaskIndex = m_compiledTaskIndexByTask[task.index];
-    NWB_ASSERT(compiledTaskIndex < m_tasks.size());
+    FOUNDATION_ASSERT(compiledTaskIndex < m_tasks.size());
     const GpuCompiledTask& compiledTask = m_tasks[compiledTaskIndex];
-    NWB_ASSERT(compiledTask.task == task);
+    FOUNDATION_ASSERT(compiledTask.task == task);
     return &compiledTask;
 }
 
@@ -290,7 +290,7 @@ b8 GpuCompiledGraph::taskPrecedesOrSharesPacket(const GpuTaskId& first, const Gp
     const GpuCompiledTask* const secondTask = findTask(second);
     if(!firstTask || !secondTask)
         return false;
-    NWB_ASSERT(validPacket(firstTask->packet) && validPacket(secondTask->packet));
+    FOUNDATION_ASSERT(validPacket(firstTask->packet) && validPacket(secondTask->packet));
     return firstTask->packet.index <= secondTask->packet.index;
 }
 
@@ -301,14 +301,14 @@ b8 GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuT
     const GpuCompiledTask* const secondTask = findTask(second);
     if(!firstTask || !secondTask || firstTask->packet != secondTask->packet)
         return false;
-    NWB_ASSERT(validPacket(firstTask->packet));
-    NWB_ASSERT(m_packets[firstTask->packet.index].taskCount != 0u && static_cast<usize>(m_packets[firstTask->packet.index].taskOffset) + m_packets[firstTask->packet.index].taskCount <= m_packetTasks.size());
+    FOUNDATION_ASSERT(validPacket(firstTask->packet));
+    FOUNDATION_ASSERT(m_packets[firstTask->packet.index].taskCount != 0u && static_cast<usize>(m_packets[firstTask->packet.index].taskOffset) + m_packets[firstTask->packet.index].taskCount <= m_packetTasks.size());
 
     // Packetization appends compiled tasks and packet task IDs together in execution order.
     const u32 firstTaskIndex = m_compiledTaskIndexByTask[first.index];
     const u32 secondTaskIndex = m_compiledTaskIndexByTask[second.index];
-    NWB_ASSERT(m_packetTasks[firstTaskIndex] == first);
-    NWB_ASSERT(m_packetTasks[secondTaskIndex] == second);
+    FOUNDATION_ASSERT(m_packetTasks[firstTaskIndex] == first);
+    FOUNDATION_ASSERT(m_packetTasks[secondTaskIndex] == second);
     return firstTaskIndex < secondTaskIndex;
 }
 
@@ -319,14 +319,14 @@ b8 GpuCompiledGraph::tasksFormContiguousPacketSequence(const Span<const GpuTaskI
     const GpuCompiledTask* const firstTask = findTask(tasks[0u]);
     if(!firstTask)
         return false;
-    NWB_ASSERT(validPacket(firstTask->packet));
+    FOUNDATION_ASSERT(validPacket(firstTask->packet));
 
     const GpuSubmissionPacket& packetPlan = m_packets[firstTask->packet.index];
-    NWB_ASSERT(packetPlan.taskOffset <= m_packetTasks.size() && packetPlan.taskCount <= m_packetTasks.size() - packetPlan.taskOffset);
+    FOUNDATION_ASSERT(packetPlan.taskOffset <= m_packetTasks.size() && packetPlan.taskCount <= m_packetTasks.size() - packetPlan.taskOffset);
 
     const usize firstTaskIndex = m_compiledTaskIndexByTask[tasks[0u].index];
     const usize packetEnd = static_cast<usize>(packetPlan.taskOffset) + packetPlan.taskCount;
-    NWB_ASSERT(firstTaskIndex >= packetPlan.taskOffset && firstTaskIndex < packetEnd);
+    FOUNDATION_ASSERT(firstTaskIndex >= packetPlan.taskOffset && firstTaskIndex < packetEnd);
     if(taskCount > packetEnd - firstTaskIndex)
         return false;
 
@@ -341,7 +341,7 @@ b8 GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const 
     const GpuCompiledTask* const compiledTask = findTask(task);
     if(!compiledTask)
         return false;
-    NWB_ASSERT(validPacket(compiledTask->packet));
+    FOUNDATION_ASSERT(validPacket(compiledTask->packet));
     return m_packets[compiledTask->packet.index].joinsAcceptedQueueFrontier;
 }
 
@@ -369,7 +369,7 @@ const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExpor
 }
 
 const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourceExportSources(const GpuCompiledExternalResourceExport& exportInfo)const noexcept{
-    NWB_ASSERT(exportInfo.sourceCount != 0u && exportInfo.sourceOffset <= m_externalResourceExportSources.size() && exportInfo.sourceCount <= m_externalResourceExportSources.size() - exportInfo.sourceOffset);
+    FOUNDATION_ASSERT(exportInfo.sourceCount != 0u && exportInfo.sourceOffset <= m_externalResourceExportSources.size() && exportInfo.sourceCount <= m_externalResourceExportSources.size() - exportInfo.sourceOffset);
     return m_externalResourceExportSources.data() + exportInfo.sourceOffset;
 }
 
@@ -379,7 +379,7 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
 
     for(const GpuTaskGraphPhysicalQueueCompileStatistics& statistics : m_physicalQueueCompileStatistics){
         if(statistics.queue == queue){
-            NWB_ASSERT(statistics.queueClass < CommandQueue::kCount);
+            FOUNDATION_ASSERT(statistics.queueClass < CommandQueue::kCount);
             return statistics;
         }
     }

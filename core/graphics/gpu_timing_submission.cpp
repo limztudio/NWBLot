@@ -76,8 +76,8 @@ void GpuTimingSubmissionTicket::discard(){
     if(m_resolved)
         return;
 
-    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket discarded while command recording is still active"));
-    NWB_ASSERT_MSG(!m_submissionPrepared, NWB_TEXT("GPU timing submission ticket discarded while native submission is being resolved"));
+    FOUNDATION_ASSERT_MSG(m_recordingScopeCount == 0u, FOUNDATION_TEXT("GPU timing submission ticket discarded while command recording is still active"));
+    FOUNDATION_ASSERT_MSG(!m_submissionPrepared, FOUNDATION_TEXT("GPU timing submission ticket discarded while native submission is being resolved"));
     if(m_recordingScopeCount != 0u || m_submissionPrepared)
         return;
 
@@ -93,7 +93,7 @@ void GpuTimingSubmissionTicket::discard(){
 }
 
 template<class ExecutionQueue>
-NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQueue(Device& device, const Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
+FOUNDATION_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQueue(Device& device, const Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
     Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
     if(!prepareSubmission(commandLists, waitTokens))
@@ -115,7 +115,7 @@ NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQue
     const b8 resolved = resolveSubmission(token);
     submissionUnwind.release();
     if(!resolved)
-        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
     if(!submission)
         return MakeUnexpected(submission.error());
     return token;
@@ -173,8 +173,8 @@ b8 GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(const 
 
 b8 GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     ScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket submitted while command recording is still active"));
-    NWB_ASSERT_MSG(m_reservedScopePublicationCount == 0u, NWB_TEXT("GPU timing submission ticket submitted with an unfinished timing scope"));
+    FOUNDATION_ASSERT_MSG(m_recordingScopeCount == 0u, FOUNDATION_TEXT("GPU timing submission ticket submitted while command recording is still active"));
+    FOUNDATION_ASSERT_MSG(m_reservedScopePublicationCount == 0u, FOUNDATION_TEXT("GPU timing submission ticket submitted with an unfinished timing scope"));
     if(m_resolved || m_submissionPrepared || m_recordingScopeCount != 0u || m_reservedScopePublicationCount != 0u)
         return false;
     waitTokens.reserve(waitTokens.size() + m_submissionPrerequisites.size());
@@ -186,7 +186,7 @@ b8 GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionToken
 
 GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissionTicket::validateScopePublicationEndpoints(const Span<CommandList* const> commandLists)noexcept{
     NothrowScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(m_submissionPrepared && !m_resolved, NWB_TEXT("GPU timing endpoint validation requires a prepared submission"));
+    FOUNDATION_ASSERT_MSG(m_submissionPrepared && !m_resolved, FOUNDATION_TEXT("GPU timing endpoint validation requires a prepared submission"));
     if(!m_submissionPrepared || m_resolved)
         return ScopeEndpointValidationResult::InvalidEndpoint;
 
@@ -240,7 +240,7 @@ b8 GpuTimingSubmissionTicket::resetForRecordingReuse(GpuTimingRecorder& recorder
 
 void GpuTimingSubmissionTicket::rollbackPreparedSubmission()noexcept{
     NothrowScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(m_submissionPrepared && !m_resolved, NWB_TEXT("GPU timing submission preparation rolled back from an invalid state"));
+    FOUNDATION_ASSERT_MSG(m_submissionPrepared && !m_resolved, FOUNDATION_TEXT("GPU timing submission preparation rolled back from an invalid state"));
     if(!m_submissionPrepared || m_resolved)
         return;
 
@@ -249,9 +249,9 @@ void GpuTimingSubmissionTicket::rollbackPreparedSubmission()noexcept{
 
 void GpuTimingSubmissionTicket::discardPreparedSubmission()noexcept{
     NothrowScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(m_submissionPrepared && !m_resolved, NWB_TEXT("GPU timing submission preparation discarded from an invalid state"));
-    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission preparation discarded while command recording is active"));
-    NWB_ASSERT_MSG(m_reservedScopePublicationCount == 0u, NWB_TEXT("GPU timing submission preparation discarded with an unfinished timing scope"));
+    FOUNDATION_ASSERT_MSG(m_submissionPrepared && !m_resolved, FOUNDATION_TEXT("GPU timing submission preparation discarded from an invalid state"));
+    FOUNDATION_ASSERT_MSG(m_recordingScopeCount == 0u, FOUNDATION_TEXT("GPU timing submission preparation discarded while command recording is active"));
+    FOUNDATION_ASSERT_MSG(m_reservedScopePublicationCount == 0u, FOUNDATION_TEXT("GPU timing submission preparation discarded with an unfinished timing scope"));
     if(!m_submissionPrepared || m_resolved || m_recordingScopeCount != 0u || m_reservedScopePublicationCount != 0u)
         return;
 
@@ -294,7 +294,7 @@ b8 GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& toke
 
 Expected<usize> GpuTimingSubmissionTicket::reserveScopePublication(){
     ScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing scope reserved after its submission ticket stopped recording"));
+    FOUNDATION_ASSERT_MSG(!m_resolved && !m_submissionPrepared, FOUNDATION_TEXT("GPU timing scope reserved after its submission ticket stopped recording"));
     if(m_resolved || m_submissionPrepared)
         return MakeUnexpected(Failure{});
 
@@ -306,7 +306,7 @@ Expected<usize> GpuTimingSubmissionTicket::reserveScopePublication(){
 b8 GpuTimingSubmissionTicket::bindScopePublication(const usize publicationIndex, const GpuTimingScope& scope, const CommandList& commandList)noexcept{
     NothrowScopedLock lock(m_mutex);
     const b8 validPublication = publicationIndex < m_scopePublications.size() && m_scopePublications[publicationIndex].state == ScopePublicationState::Reserved && !m_scopePublications[publicationIndex].scope.valid();
-    NWB_ASSERT_MSG(validPublication, NWB_TEXT("GPU timing scope bound to an invalid submission publication"));
+    FOUNDATION_ASSERT_MSG(validPublication, FOUNDATION_TEXT("GPU timing scope bound to an invalid submission publication"));
     if(!validPublication || m_resolved || m_submissionPrepared)
         return false;
 
@@ -330,7 +330,7 @@ void GpuTimingSubmissionTicket::cancelScopePublication(const usize publicationIn
     ScopePublication& publication = m_scopePublications[publicationIndex];
     publication.scope = {};
     publication.state = ScopePublicationState::Cancelled;
-    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
+    FOUNDATION_ASSERT(m_reservedScopePublicationCount > 0u);
     --m_reservedScopePublicationCount;
 }
 
@@ -349,13 +349,13 @@ b8 GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const Co
         && publication.scope.epoch == scope.epoch
         && publication.scope.reservation == scope.reservation
     ;
-    NWB_ASSERT_MSG(matchingPublication, NWB_TEXT("GPU timing scope published through a mismatched submission reservation"));
+    FOUNDATION_ASSERT_MSG(matchingPublication, FOUNDATION_TEXT("GPU timing scope published through a mismatched submission reservation"));
     if(!matchingPublication || m_resolved || m_submissionPrepared)
         return false;
 
     publication.endEndpoint = CommandListRecordingEndpoint{ .commandList = &commandList, .recordingLeaseSerial = commandList.recordingLeaseSerial(), };
     publication.state = ScopePublicationState::Published;
-    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
+    FOUNDATION_ASSERT(m_reservedScopePublicationCount > 0u);
     --m_reservedScopePublicationCount;
     return true;
 }
@@ -365,7 +365,7 @@ b8 GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissionT
         return false;
 
     ScopedLock lock(m_mutex);
-    NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing submission prerequisite added after recording closed"));
+    FOUNDATION_ASSERT_MSG(!m_resolved && !m_submissionPrepared, FOUNDATION_TEXT("GPU timing submission prerequisite added after recording closed"));
     if(m_resolved || m_submissionPrepared)
         return false;
 
@@ -386,13 +386,13 @@ b8 GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissionT
 Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailure> GpuTimingSubmissionTicket::activateOnCurrentThread()noexcept{
     NothrowScopedLock lock(m_mutex);
     GpuTimingSubmissionTicket* const previousTicket = GpuTimingRecorder::s_ActiveSubmissionTicket;
-    NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing submission ticket activated after recording closed"));
+    FOUNDATION_ASSERT_MSG(!m_resolved && !m_submissionPrepared, FOUNDATION_TEXT("GPU timing submission ticket activated after recording closed"));
     if(m_resolved || m_submissionPrepared){
         GpuTimingRecorder::s_ActiveSubmissionTicket = nullptr;
         return MakeUnexpected(ActivationFailure{ previousTicket });
     }
     const b8 countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
-    NWB_FATAL_ASSERT_MSG(countAvailable, "GPU timing submission ticket recording-scope count exhausted");
+    FOUNDATION_FATAL_ASSERT_MSG(countAvailable, "GPU timing submission ticket recording-scope count exhausted");
 
     GpuTimingRecorder::s_ActiveSubmissionTicket = this;
     ++m_recordingScopeCount;
@@ -402,14 +402,14 @@ Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailur
 void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTicket* const previousTicket, const b8 activated)noexcept{
     GpuTimingSubmissionTicket* const expectedTicket = activated ? this : nullptr;
     const b8 tlsValid = GpuTimingRecorder::s_ActiveSubmissionTicket == expectedTicket;
-    NWB_FATAL_ASSERT_MSG(tlsValid, "GPU timing submission ticket recording scope closed out of order");
+    FOUNDATION_FATAL_ASSERT_MSG(tlsValid, "GPU timing submission ticket recording scope closed out of order");
     if(!activated){
         GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
         return;
     }
     NothrowScopedLock lock(m_mutex);
     const b8 countValid = m_recordingScopeCount != 0u;
-    NWB_FATAL_ASSERT_MSG(countValid, "GPU timing submission ticket recording-scope count underflow");
+    FOUNDATION_FATAL_ASSERT_MSG(countValid, "GPU timing submission ticket recording-scope count underflow");
     --m_recordingScopeCount;
     GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
 }
@@ -419,9 +419,9 @@ b8 GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexcept
     if(m_resolved)
         return false;
 
-    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket confirmed while command recording is still active"));
-    NWB_ASSERT_MSG(m_submissionPrepared, NWB_TEXT("GPU timing submission ticket confirmed without preparation"));
-    NWB_ASSERT_MSG(m_reservedScopePublicationCount == 0u, NWB_TEXT("GPU timing submission ticket confirmed with an unfinished timing scope"));
+    FOUNDATION_ASSERT_MSG(m_recordingScopeCount == 0u, FOUNDATION_TEXT("GPU timing submission ticket confirmed while command recording is still active"));
+    FOUNDATION_ASSERT_MSG(m_submissionPrepared, FOUNDATION_TEXT("GPU timing submission ticket confirmed without preparation"));
+    FOUNDATION_ASSERT_MSG(m_reservedScopePublicationCount == 0u, FOUNDATION_TEXT("GPU timing submission ticket confirmed with an unfinished timing scope"));
     if(m_recordingScopeCount != 0u || !m_submissionPrepared || m_reservedScopePublicationCount != 0u)
         return false;
 

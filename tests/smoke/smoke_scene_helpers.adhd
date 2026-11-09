@@ -62,7 +62,7 @@ struct SmokeRenderSystems{
     }
     if(!renderer.setCausticQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticQualitySmoke: requested photon_grid_divisor={}"), settings.photonGridDivisor);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticQualitySmoke: requested photon_grid_divisor={}"), settings.photonGridDivisor);
     return true;
 }
 
@@ -80,7 +80,7 @@ struct SmokeRenderSystems{
     }
     if(!renderer.setSurfelGiQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SurfelGiQualitySmoke: requested resolve_factor={}"), static_cast<u32>(settings.resolveResolution));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SurfelGiQualitySmoke: requested resolve_factor={}"), static_cast<u32>(settings.resolveResolution));
     return true;
 }
 
@@ -106,7 +106,7 @@ struct SmokeRenderSystems{
     }
     if(!renderer.setShadowQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}"), static_cast<u32>(settings.transparentSampling), static_cast<u32>(settings.receiverResolution));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}"), static_cast<u32>(settings.transparentSampling), static_cast<u32>(settings.receiverResolution));
     return true;
 }
 
@@ -176,7 +176,7 @@ struct SmokeRenderSystems{
     }
     if(!renderer.setSoftwareShadowSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={} capture_cadence={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={} capture_cadence={}")
         , static_cast<u32>(settings.backend)
         , settings.directionalResolution
         , settings.pointResolution
@@ -199,7 +199,7 @@ struct SmokeRenderSystems{
     }
     if(!renderer.setReflectionSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionQualitySmoke: requested screen_max_steps={}"), settings.screenMaxSteps);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionQualitySmoke: requested screen_max_steps={}"), settings.screenMaxSteps);
     return true;
 }
 
@@ -312,10 +312,10 @@ SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeC
         Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
         auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
         auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
-        NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, scratchArena, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.caustic), FOUNDATION_TEXT("Invalid caustic quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.surfelGi), FOUNDATION_TEXT("Invalid surfel GI quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, scratchArena, baseSettings.softwareShadow), FOUNDATION_TEXT("Invalid software shadow smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.shadow), FOUNDATION_TEXT("Invalid shadow quality smoke settings"));
         return SmokeRenderSystems{ meshSystem, rendererSystem };
     }
 }

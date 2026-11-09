@@ -20,7 +20,7 @@ NWB_VULKAN_BEGIN
 
 namespace __hidden_buffer_ownership_transfer{
 
-static constexpr TStringView s_ByteRangeOutsideBufferReason = NWB_TEXT("byte range is empty or outside the buffer");
+static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
 
 };
 
@@ -31,8 +31,8 @@ static constexpr TStringView s_ByteRangeOutsideBufferReason = NWB_TEXT("byte ran
 void CommandList::BufferOwnershipTransfer::release(Buffer* bufferResource, const GpuPhysicalQueueId destinationQueue, const BufferRange range){
     if(!bufferResource)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("release buffer ownership");
-    constexpr TStringView s_FinalRangeStateUnknownReason = NWB_TEXT("final byte range state is unknown");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("release buffer ownership");
+    constexpr TStringView s_FinalRangeStateUnknownReason = FOUNDATION_TEXT("final byte range state is unknown");
     if(!m_command.validateCommandRecordingScope(s_OperationName))
         return;
     Buffer& buffer = *bufferResource;
@@ -41,11 +41,11 @@ void CommandList::BufferOwnershipTransfer::release(Buffer* bufferResource, const
         return;
     }
     if(m_command.m_stateTracker.isPermanentBuffer(buffer)){
-        m_command.rejectCommandRecording(s_OperationName, NWB_TEXT("permanently tracked buffers cannot transfer ownership"));
+        m_command.rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("permanently tracked buffers cannot transfer ownership"));
         return;
     }
     if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-        m_command.rejectCommandRecording(s_OperationName, NWB_TEXT("concurrently shared buffers do not have exclusive ownership"));
+        m_command.rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("concurrently shared buffers do not have exclusive ownership"));
         return;
     }
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
@@ -62,7 +62,7 @@ void CommandList::BufferOwnershipTransfer::release(Buffer* bufferResource, const
     if(existing != m_command.m_bufferOwnershipReleaseDestinations.end()){
         for(const BufferOwnershipRelease& release : existing.value()){
             if(release.range.overlaps(resolvedRange) && release.destinationQueue != destinationQueue){
-                m_command.rejectCommandRecording(s_OperationName, NWB_TEXT("byte range already targets a conflicting destination queue"));
+                m_command.rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("byte range already targets a conflicting destination queue"));
                 return;
             }
         }

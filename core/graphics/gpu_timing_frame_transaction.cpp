@@ -71,7 +71,7 @@ b8 GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken&
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
-    NWB_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
+    FOUNDATION_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
     if((m_state != State::BeginRecorded && m_state != State::EndRecorded) || !m_recorder.validateScopeSubmission(m_scope, token)){
         m_recorder.quarantineScope(m_scope);
         m_scope = {};
@@ -178,7 +178,7 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
     // A split scope closes the marker before its producer list closes and stamps the end on the ordered consumer list.
     // Identity stays separate for aggregation; the marker keeps authored text so release builds never see a Name hash.
     if(!scopeDefinition.valid()){
-        NWB_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
+        FOUNDATION_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
     }
 

@@ -32,11 +32,11 @@ CrashState g_State;
 
 
 static PlatformKind::Enum CurrentPlatformKind()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return PlatformKind::Windows;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_ANDROID)
     return PlatformKind::Android;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     return PlatformKind::Linux;
 #else
     return PlatformKind::Unknown;
@@ -191,7 +191,7 @@ CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const
     CrashRequest request;
     SnapshotCrashState(reasonKind, reasonCode, request);
     request.exceptionPointers = options.exceptionPointers;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(options.manualContext){
         request.manualContextSize = sizeof(CONTEXT);
         request.manualExceptionRecordSize = sizeof(EXCEPTION_RECORD);

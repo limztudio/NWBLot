@@ -79,7 +79,7 @@ public:
     public:
         // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
-            NWB_ASSERT(m_path != nullptr && !m_atEnd);
+            FOUNDATION_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);
         }
 
@@ -98,7 +98,7 @@ public:
             }
 
             const native_string_view text = m_path->native();
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(text);
             if(rootDirectoryLength != 0u){
                 m_begin = 0u;
@@ -166,7 +166,7 @@ private:
         if(text.empty())
             return false;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(text);
         if(rootNameLength != 0u && GlobalFilesystemPathDetail::RootDirectoryLength(text) > rootNameLength)
             return true;
@@ -399,7 +399,7 @@ public:
     [[nodiscard]] Path lexicallyRelative(const Path& base)const{
         if(isAbsolute() != base.isAbsolute())
             return Path(arena());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         if(native().substr(0u, GlobalFilesystemPathDetail::RootNameLength(native())) != base.native().substr(0u, GlobalFilesystemPathDetail::RootNameLength(base.native())))
             return Path(arena());
 #endif
@@ -421,16 +421,16 @@ public:
 
             for(; baseIt != baseEnd; ++baseIt){
                 const native_string_view component = baseIt.nativeComponent();
-                if(component == native_string_view(NWB_TEXT("/"), 1u))
+                if(component == native_string_view(FOUNDATION_TEXT("/"), 1u))
                     continue;
-                output.appendComponent(native_string_view(NWB_TEXT(".."), GlobalFilesystemPathDetail::s_DotDotLength));
+                output.appendComponent(native_string_view(FOUNDATION_TEXT(".."), GlobalFilesystemPathDetail::s_DotDotLength));
             }
             for(; pathIt != pathEnd; ++pathIt)
                 output.appendComponent(pathIt.nativeComponent());
         }
 
         if(output.empty())
-            output.assignSource(native_string_view(NWB_TEXT("."), 1u));
+            output.assignSource(native_string_view(FOUNDATION_TEXT("."), 1u));
         return output;
     }
 
@@ -528,7 +528,7 @@ private:
         if(component.empty())
             return;
         if(!m_text.empty() && !GlobalFilesystemPathDetail::IsSeparator(m_text.back())){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             if(m_text.size() == GlobalFilesystemPathDetail::s_DriveRootNameLength && m_text[1] == static_cast<value_type>(':')){
                 m_text.append(component.data(), component.size());
                 return;
@@ -582,7 +582,7 @@ private:
 
         for(Iterator component = begin(); component != end(); ++component){
             const native_string_view text = component.nativeComponent();
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             if(rootDirectoryLength != 0u && text == native_string_view(m_text.data(), rootDirectoryLength))
                 continue;
             if(rootDirectoryLength == 0u && rootNameLength != 0u && text == native_string_view(m_text.data(), rootNameLength))

@@ -18,7 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,11 +206,11 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CREATE:
         {
-            s_Font = CreateFont(LogRowPainter::s_FontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, NWB_TEXT("Terminal"));
+            s_Font = CreateFont(LogRowPainter::s_FontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, FOUNDATION_TEXT("Terminal"));
             if(!s_Font)
                 CaptureDiagnosticEvent(s_LifecycleDiagnosticCategory, "Log server: failed to create its font; using the system font", __FILE__, __LINE__);
 
-            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
+            const HWND listHwnd = CreateWindowEx(0, FOUNDATION_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
             if(!listHwnd){
                 CaptureDiagnosticEvent(s_LifecycleDiagnosticCategory, "Log server: failed to create its message list", __FILE__, __LINE__);
                 return -1;
@@ -360,8 +360,8 @@ Frame::~Frame()noexcept{
 }
 
 b8 Frame::init(){
-    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
-    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
+    static constexpr TStringView s_WindowClassName = FOUNDATION_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = FOUNDATION_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 

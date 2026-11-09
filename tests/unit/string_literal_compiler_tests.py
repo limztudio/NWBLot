@@ -76,7 +76,7 @@ class LiteralQualification:
 
     def compiler_command(self, source: Path, output: Path, is_c: bool = False) -> list[str]:
         compiler = self.options.c_compiler if is_c else self.options.compiler
-        defines = [{LIT_DBG: "NWB_DEBUG", LIT_OPT: "NWB_OPTIMIZE", LIT_FIN: "NWB_FINAL"}[self.options.configuration]]
+        defines = [{LIT_DBG: "NWB_DEBUG", LIT_OPT: "NWB_OPTIMIZE", LIT_FIN: "NWB_FINAL"}[self.options.configuration], {LIT_DBG: "FOUNDATION_DEBUG", LIT_OPT: "FOUNDATION_OPTIMIZE", LIT_FIN: "FOUNDATION_FINAL"}[self.options.configuration]]
         defines.append("_DEBUG" if self.options.configuration == LIT_DBG else "NDEBUG")
         if self.clang_cl:
             arguments = [*self.target_flags, "/clang:" + self.optimization, LIT_DEBUG_CRT_FLAG if self.options.configuration == LIT_DBG else LIT_RELEASE_CRT_FLAG]

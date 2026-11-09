@@ -28,7 +28,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
     outFrustum.origin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     outFrustum.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -52,7 +52,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& out
     outFrustum.farPlane = VectorGetY(planeDistances);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
     outFrustum.origin = Double4(0.0, 0.0, 0.0, 0.0);
     outFrustum.orientation = Double4(0.0, 0.0, 0.0, 1.0);
 
@@ -95,7 +95,7 @@ inline BoundingDoubleFrustum::BoundingDoubleFrustum(const SIMDMatrixDouble& proj
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept{
     SIMDVectorSingle originVector{};
     SIMDVectorSingle orientationVector{};
     FrustumTests::Transform(
@@ -106,7 +106,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum
     StoreFloat(orientationVector, outFrustum.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)const noexcept{
     SIMDVectorSingle originVector{};
     SIMDVectorSingle orientationVector{};
     FrustumTests::Transform(
@@ -117,7 +117,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::transform(BoundingFrustum& outFrustum
     StoreFloat(orientationVector, outFrustum.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& matrix)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& matrix)const noexcept{
     SIMDVectorDouble originVector{};
     SIMDVectorDouble orientationVector{};
     FrustumDoubleTests::Transform(
@@ -128,7 +128,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum
     StoreDouble(orientationVector, outFrustum.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum& outFrustum, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum& outFrustum, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)const noexcept{
     SIMDVectorDouble originVector{};
     SIMDVectorDouble orientationVector{};
     FrustumDoubleTests::Transform(
@@ -162,11 +162,11 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::contains(const SIMDVectorSingle point)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingFrustum::contains(const SIMDVectorSingle point)const noexcept{
     return FrustumTests::ContainsPoint(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::contains(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingFrustum::contains(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return FrustumTests::ContainsTriangle(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, v0, v1, v2);
 }
 
@@ -189,11 +189,11 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
     );
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleFrustum::contains(const SIMDVectorDouble point)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleFrustum::contains(const SIMDVectorDouble point)const noexcept{
     return FrustumDoubleTests::ContainsPoint(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleFrustum::contains(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleFrustum::contains(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return FrustumDoubleTests::ContainsTriangle(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, v0, v1, v2);
 }
 
@@ -239,15 +239,15 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
     );
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return contains(v0, v1, v2) != ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle plane)const noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle plane)const noexcept{
     return FrustumTests::IntersectsPlane(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane);
 }
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle rayOrigin, const SIMDVectorSingle direction)const noexcept{
+[[nodiscard]] inline Expected<f32> FOUNDATION_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle rayOrigin, const SIMDVectorSingle direction)const noexcept{
     return FrustumTests::IntersectsRay(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, rayOrigin, direction);
 }
 
@@ -270,15 +270,15 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
     );
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return contains(v0, v1, v2) != ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble plane)const noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble plane)const noexcept{
     return FrustumDoubleTests::IntersectsPlane(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane);
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble rayOrigin, const SIMDVectorDouble direction)const noexcept{
+[[nodiscard]] inline Expected<f64> FOUNDATION_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble rayOrigin, const SIMDVectorDouble direction)const noexcept{
     return FrustumDoubleTests::IntersectsRay(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, rayOrigin, direction);
 }
 
@@ -286,11 +286,11 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingFrustum::containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingFrustum::containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept{
     return FrustumTests::ContainedBy(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleFrustum::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleFrustum::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return FrustumDoubleTests::ContainedBy(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane0, plane1, plane2, plane3, plane4, plane5);
 }
 

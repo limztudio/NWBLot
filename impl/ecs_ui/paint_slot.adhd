@@ -85,7 +85,7 @@ public:
     }
 
     void invoke(UiPaintContext& context){
-        NWB_ASSERT(m_callback && !m_active);
+        FOUNDATION_ASSERT(m_callback && !m_active);
         Lease lease(*this);
         lease.callback(context);
     }

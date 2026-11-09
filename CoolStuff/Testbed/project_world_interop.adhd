@@ -46,11 +46,11 @@ namespace CoreInputAction = NWB::Core::InputAction;
 namespace Key = NWB::Core::Key;
 namespace MouseButton = NWB::Core::MouseButton;
 
-inline constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+inline constexpr TStringView s_WindowTitle = FOUNDATION_TEXT("NWB Testbed");
 
 [[nodiscard]] inline Expected<UniquePtr<World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context){
-    static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
-    static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+    static constexpr TStringView s_WorldAllocFailed = FOUNDATION_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+    static constexpr TStringView s_ResolverNull = FOUNDATION_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 
     auto world = MakeUnique<World>(context.objectArena, context.cpuTasks);
     if(!world){
@@ -101,7 +101,7 @@ inline void DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNullUn
     context.graphics.removeRenderPass(uiLayerSystem);
 
     const b8 deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
+    FOUNDATION_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), FOUNDATION_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
 
     world->clear();
     world.reset();
@@ -110,7 +110,7 @@ inline void DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNullUn
 [[nodiscard]] inline NotNullUniquePtr<World> CreateInitialWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateInitialProjectWorld(context);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
         throw RuntimeException(s_InitWorldFailedNarrow.data());
     }
     return MakeNotNullUnique(Move(*world));
@@ -130,7 +130,7 @@ inline void BindActiveSceneSubsystemsToWorld(NotNullUniquePtr<World>& world, con
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth);
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*world, cameraPosition);
-    NWB_ASSERT(activeCamera.camera.valid());
+    FOUNDATION_ASSERT(activeCamera.camera.valid());
     auto& cameraTransform = *MakeNotNull(world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), cameraTransform.rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
@@ -159,7 +159,7 @@ inline void SyncWorldModelRuntimes(NotNullUniquePtr<World>& world){
 [[nodiscard]] inline b8 TickProjectWorld(NotNullUniquePtr<World>& world, const f32 safeDelta){
     const auto updated = world->tick(safeDelta);
     if(!updated){
-        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
         return false;
     }
     return true;
@@ -175,7 +175,7 @@ inline void SyncWorldModelRuntimes(NotNullUniquePtr<World>& world){
 
 inline void ApplyFlyCameraInputToMainCamera(NotNullUniquePtr<World>& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(*world);
-    NWB_ASSERT(cameraView.valid());
+    FOUNDATION_ASSERT(cameraView.valid());
 
     const SIMDVectorSingle resolvedRotation = FlyCameraMotion().resolveStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
     const SIMDVectorSingle resolvedPosition = FlyCameraMotion().resolvePosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);

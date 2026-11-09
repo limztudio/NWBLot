@@ -19,22 +19,22 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* geometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    constexpr TStringView s_BuildBottomLevelAccelStructOperation = NWB_TEXT("build bottom-level acceleration structure");
-    constexpr TStringView s_BuildBlasOperation = NWB_TEXT("build BLAS");
+    constexpr TStringView s_BuildBottomLevelAccelStructOperation = FOUNDATION_TEXT("build bottom-level acceleration structure");
+    constexpr TStringView s_BuildBlasOperation = FOUNDATION_TEXT("build BLAS");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_BuildBottomLevelAccelStructOperation))
         return;
     if(!accelStructResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
         return;
     }
     if(!geometries && numGeometries > 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry data is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: geometry data is null"));
         return;
     }
     if(numGeometries == 0)
         return;
     if(numGeometries > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: geometry count exceeds Vulkan limit"));
         return;
     }
 
@@ -43,12 +43,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     auto& as = *MakeNotNull(accelStructResource);
     if(as.m_isTopLevelAtCreation){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
     }
     Buffer* const backingBuffer = as.getBackingBuffer();
     if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
     const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, s_BuildBlasOperation);
@@ -58,11 +58,11 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     const b8 performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
     if(performUpdate && !(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: PerformUpdate requires AllowUpdate"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to update BLAS: PerformUpdate requires AllowUpdate"));
         return;
     }
     if(performUpdate && !(as.m_desc.buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: acceleration structure creation did not allow updates"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to update BLAS: acceleration structure creation did not allow updates"));
         return;
     }
 
@@ -88,7 +88,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         if(isBufferReadyForCommandQueue(buffer, VulkanDetail::s_AccelStructBuildInputUsage))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: {} buffer is foreign or not ready"), resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: {} buffer is foreign or not ready"), resourceName);
         return false;
     };
 
@@ -124,17 +124,17 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
             OpacityMicromap* const opacityMicromap = triangles.opacityMicromap;
             if(&opacityMicromap->m_context != &m_context){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap belongs to another device"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap belongs to another device"));
                 return;
             }
             if(!m_currentCmdBuf->hasPendingOpacityMicromapBuild(*opacityMicromap) && !opacityMicromap->m_acceptedConstructed.load(MemoryOrder::acquire)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap has not been constructed by an accepted or earlier same-command-buffer build"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap has not been constructed by an accepted or earlier same-command-buffer build"));
                 return;
             }
 
             Buffer* const micromapStorage = opacityMicromap->m_dataBuffer.get();
             if(!isBufferReadyForCommandQueue(micromapStorage, VulkanDetail::s_MicromapStorageUsage)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
                 return;
             }
 
@@ -144,39 +144,39 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             const VkIndexType ommIndexType = ommIndexFormat->indexType;
             const u64 ommIndexStride = ommIndexFormat->indexStride;
             if(ommIndexType == VK_INDEX_TYPE_NONE_KHR && (triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer"));
                 return;
             }
 
             VkDeviceAddress ommIndexAddress = 0u;
             if(ommIndexType != VK_INDEX_TYPE_NONE_KHR){
                 if(!triangles.ommIndexBuffer){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer is null"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer is null"));
                     return;
                 }
-                if(!validateBuildInput(triangles.ommIndexBuffer, NWB_TEXT("triangle OMM index")))
+                if(!validateBuildInput(triangles.ommIndexBuffer, FOUNDATION_TEXT("triangle OMM index")))
                     return;
 
                 const BufferDesc& ommIndexDesc = triangles.ommIndexBuffer->getCreationDescription();
                 const u64 ommIndexByteSize = static_cast<u64>(blasScratch.primitiveCounts[i]) * ommIndexStride;
                 const u64 validatedOmmIndexByteSize = ommIndexByteSize != 0u ? ommIndexByteSize : 1u;
                 if(!ommIndexDesc.isAccelStructBuildInput){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer lacks build-input provenance"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer lacks build-input provenance"));
                     return;
                 }
                 if(!VulkanDetail::IsBufferRangeInBounds(ommIndexDesc, triangles.ommIndexBufferOffset, validatedOmmIndexByteSize)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer range is outside the buffer"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer range is outside the buffer"));
                     return;
                 }
 
                 const VkDeviceAddress ommIndexBaseAddress = triangles.ommIndexBuffer->getGpuVirtualAddress();
                 if(ommIndexBaseAddress > Limit<u64>::s_Max - triangles.ommIndexBufferOffset){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer address overflows"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle OMM index buffer address overflows"));
                     return;
                 }
                 ommIndexAddress = ommIndexBaseAddress + triangles.ommIndexBufferOffset;
                 if(ommIndexAddress == 0u || ommIndexAddress % ommIndexStride != 0u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index device address is misaligned"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: triangle OMM index device address is misaligned"));
                     return;
                 }
             }
@@ -196,7 +196,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
         if(geometries[i].useTransform){
             if(geometries[i].geometryType != RayTracingGeometryType::Triangles){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: only triangle geometry supports per-geometry transforms"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: only triangle geometry supports per-geometry transforms"));
                 return;
             }
             ++transformCount;
@@ -207,7 +207,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     // OMM update details are not in the AS signature, so this path stays fail-closed: micromap geometry updates unsupported.
     if(performUpdate && hasOpacityMicromap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: opacity-micromap geometry updates are unsupported"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to update BLAS: opacity-micromap geometry updates are unsupported"));
         return;
     }
 
@@ -218,7 +218,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         geometrySignatures.data(),
         geometrySignatures.size(),
         performUpdate,
-        performUpdate ? NWB_TEXT("update BLAS") : s_BuildBlasOperation
+        performUpdate ? FOUNDATION_TEXT("update BLAS") : s_BuildBlasOperation
     );
     if(!hasPriorBuildResult)
         return;
@@ -229,13 +229,13 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     VkDeviceAddress transformBaseAddress = 0;
     if(transformCount > 0){
         if(transformCount > Limit<usize>::s_Max / sizeof(VkTransformMatrixKHR)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: transform buffer size overflows"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: transform buffer size overflows"));
             return;
         }
 
         const usize transformBufferSize = transformCount * sizeof(VkTransformMatrixKHR);
         constexpr u32 s_TransformDeviceAddressAlignment = 16u;
-        const auto transformInput = suballocateBuildInput(static_cast<u64>(transformBufferSize), s_TransformDeviceAddressAlignment, NWB_TEXT("allocate BLAS transform input"));
+        const auto transformInput = suballocateBuildInput(static_cast<u64>(transformBufferSize), s_TransformDeviceAddressAlignment, FOUNDATION_TEXT("allocate BLAS transform input"));
         if(!transformInput)
             return;
         const auto mappedTransforms = MakeNotNull(static_cast<u8*>(transformInput->cpuAddress));
@@ -246,7 +246,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 continue;
 
             const usize transformOffset = transformIndex * sizeof(VkTransformMatrixKHR);
-            NWB_MEMCPY(mappedTransforms.get() + transformOffset, sizeof(VkTransformMatrixKHR), &geometries[i].transform, sizeof(VkTransformMatrixKHR));
+            FOUNDATION_MEMCPY(mappedTransforms.get() + transformOffset, sizeof(VkTransformMatrixKHR), &geometries[i].transform, sizeof(VkTransformMatrixKHR));
             blasScratch.transformOffsets[i] = transformOffset;
             ++transformIndex;
         }
@@ -303,7 +303,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(taskScheduler().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold){
         const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
         if(!parallelWork){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: acceleration-structure preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: acceleration-structure preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
             m_commandRecordingFailed = true;
             return;
         }
@@ -327,14 +327,14 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     auto* asBuffer = as.m_buffer.get();
     if(!asBuffer || asBuffer->getCreationDescription().byteSize < sizeInfo.accelerationStructureSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
         return;
     }
 
     const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
     const u64 scratchAlignment = Max<u64>(static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment), 1u);
-    const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate BLAS scratch buffer"));
+    const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, FOUNDATION_TEXT("allocate BLAS scratch buffer"));
     if(!scratchAddressResult)
         return;
     buildInfo.scratchData.deviceAddress = *scratchAddressResult;

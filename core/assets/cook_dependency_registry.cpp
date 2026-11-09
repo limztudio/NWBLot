@@ -27,16 +27,16 @@ NWB_ASSETS_BEGIN
 
 b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType){
     if(!assetType){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook dependency type"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: tried to register an unnamed cook dependency type"));
         return false;
     }
     if(!extractDependencies){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook dependency type '{}' has no extract function"), ConvertString(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: cook dependency type '{}' has no extract function"), ConvertString(assetType.resolvedText()));
         return false;
     }
 
     if(!m_lookup.emplace(assetType, MakeNotNull(extractDependencies)).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook dependency type registration '{}'"), ConvertString(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: duplicate cook dependency type registration '{}'"), ConvertString(assetType.resolvedText()));
         return false;
     }
 
@@ -44,7 +44,7 @@ b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDepende
         const auto [it, inserted] = m_categories.emplace(assetType, categoryAssetType);
         if(!inserted && it.value() != categoryAssetType){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("AssetCook: conflicting category '{}' for cook dependency type '{}' (already '{}')")
+                FOUNDATION_TEXT("AssetCook: conflicting category '{}' for cook dependency type '{}' (already '{}')")
                 , ConvertString(categoryAssetType.resolvedText())
                 , ConvertString(assetType.resolvedText())
                 , ConvertString(it.value().resolvedText())
@@ -57,12 +57,12 @@ b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDepende
 
 b8 CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, const AStringView virtualPathText){
     if(!virtualPath || !assetType || virtualPathText.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid default cook entry asset registration"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: invalid default cook entry asset registration"));
         return false;
     }
     if(m_defaultEntryAsset.virtualPath && (m_defaultEntryAsset.virtualPath != virtualPath || m_defaultEntryAsset.assetType != assetType)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("AssetCook: duplicate default cook entry asset registration '{}' (already registered '{}')")
+            FOUNDATION_TEXT("AssetCook: duplicate default cook entry asset registration '{}' (already registered '{}')")
             , ConvertString(virtualPathText)
             , ConvertString(m_defaultEntryAsset.virtualPathText)
         );
@@ -116,8 +116,8 @@ b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, Sc
         QueryAssetAutoRegistrationQueue<NotNull<CookDependencyRegistrationFunction>, AssetsArenaScope::s_CookDependencyQueueArena>(),
         registry,
         functions,
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook dependency registration function")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook dependency type")); }
+        [](){ NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: collected null cook dependency registration function")); },
+        [](){ NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to register auto-collected cook dependency type")); }
     );
 }
 

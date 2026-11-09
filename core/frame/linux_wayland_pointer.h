@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
 
 #pragma push_macro("interface")
 #undef interface

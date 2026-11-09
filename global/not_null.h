@@ -25,13 +25,13 @@ public:
     constexpr explicit NotNull(T ptr)noexcept
         : m_ptr(ptr)
     {
-        NWB_ASSERT_MSG(m_ptr, "NotNull requires non-null pointer.");
+        FOUNDATION_ASSERT_MSG(m_ptr, "NotNull requires non-null pointer.");
     }
     template<typename U, typename = EnableIf_T<IsConvertible_V<U, T>>>
     constexpr explicit NotNull(U ptr)noexcept(noexcept(static_cast<T>(DeclVal<U&>())) && IsNothrowDestructible_V<U>)
         : m_ptr(static_cast<T>(ptr))
     {
-        NWB_ASSERT_MSG(m_ptr, "NotNull requires non-null pointer.");
+        FOUNDATION_ASSERT_MSG(m_ptr, "NotNull requires non-null pointer.");
     }
     template<typename U, typename = EnableIf_T<IsConvertible_V<U, T>>>
     constexpr NotNull(const NotNull<U>& ptr)noexcept
@@ -49,7 +49,7 @@ public:
     NotNull& operator=(Nullptr) = delete;
 
     constexpr NotNull& operator=(T ptr)noexcept{
-        NWB_ASSERT_MSG(ptr, "NotNull requires non-null pointer.");
+        FOUNDATION_ASSERT_MSG(ptr, "NotNull requires non-null pointer.");
         m_ptr = ptr;
         return *this;
     }
@@ -57,7 +57,7 @@ public:
     template<typename U, typename = EnableIf_T<IsConvertible_V<U, T>>>
     constexpr NotNull& operator=(U ptr)noexcept(noexcept(static_cast<T>(DeclVal<U&>())) && IsNothrowDestructible_V<U>){
         const T casted = static_cast<T>(ptr);
-        NWB_ASSERT_MSG(casted, "NotNull requires non-null pointer.");
+        FOUNDATION_ASSERT_MSG(casted, "NotNull requires non-null pointer.");
         m_ptr = casted;
         return *this;
     }

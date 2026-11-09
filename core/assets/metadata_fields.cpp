@@ -21,7 +21,7 @@ b8 CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourceP
     if(AStringView(extension) == expectedExtension)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(sourcePath), ConvertString(expectedExtension));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(sourcePath), ConvertString(expectedExtension));
     return false;
 }
 

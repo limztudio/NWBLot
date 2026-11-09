@@ -21,7 +21,7 @@ NWB_IMPL_UI_BEGIN
 [[nodiscard]] inline Expected<SharedImageSource> LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity){
     if(!ValidateImageSourceLoadIdentity(identity.valid(), Name{}, Name{}))
         return MakeUnexpected(Failure{});
-    auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), NWB_TEXT("LoadImageSource"));
+    auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), FOUNDATION_TEXT("LoadImageSource"));
     if(!loadedAsset)
         return MakeUnexpected(loadedAsset.error());
     const Texture* texture = loadedAsset->get();

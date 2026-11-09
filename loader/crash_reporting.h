@@ -20,7 +20,7 @@ namespace LoaderDetail{
 class CrashReporting{
 public:
     static b8 Install(Core::Alloc::PersistentArena& arena);
-    static void Configure(b8 installed, b8 useStandaloneLogger, AStringView logAddress, AStringView crashUploadToken, b8 enableGpuDebug)noexcept(!NWB_OCCUR_WARNING);
+    static void Configure(b8 installed, b8 useStandaloneLogger, AStringView logAddress, AStringView crashUploadToken, b8 enableGpuDebug)noexcept(!FOUNDATION_OCCUR_WARNING);
 };
 
 

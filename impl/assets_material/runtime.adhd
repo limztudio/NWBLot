@@ -33,7 +33,7 @@ namespace __hidden_assets_material_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_MaterialLoadBinaryContext = NWB_TEXT("Material::loadBinary");
+inline constexpr TStringView s_MaterialLoadBinaryContext = FOUNDATION_TEXT("Material::loadBinary");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAssetCodec);
 

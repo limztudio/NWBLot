@@ -163,14 +163,14 @@ b8 GraphicsRuntime::prepareFramePreamble(){
     // Per-pass preparation may submit GPU packets, so this must remain ahead of it as well as every later render packet on the same GPU timeline.
     if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
-            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
 
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
         if(!GraphicsModuleDetail::FrameTimingResetGraph::Submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
-            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }
     }
 
@@ -213,7 +213,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
             if(phaseTiming)
                 phaseTiming->stage(resourcesPrepared ? m_prepareResourcesTimingScope : m_prepareResourcesFailedTimingScope, prepareBegin);
             if(!resourcesPrepared){
-                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
             }
 
@@ -283,9 +283,9 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             phaseTiming->stage(m_beginFrameTimingScope, beginFrameBegin);
         if(!beginFrameResult.acquired()){
             if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
-                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
             else
-                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to acquire a presentation frame; requesting device recreation."));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to acquire a presentation frame; requesting device recreation."));
             requestDeviceRecreation();
             return false;
         }
@@ -293,9 +293,9 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
         if(acquiredBackBuffer.valid()){
             const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
             if(acquiredBackBufferIndex >= m_swapChainFramebuffers.size() || !m_swapChainFramebuffers[acquiredBackBufferIndex]){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
                 if(!m_backend->abandonAcquiredFrame())
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
                 requestDeviceRecreation();
                 return false;
             }
@@ -303,9 +303,9 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             const Framebuffer& acquiredFramebuffer = *m_swapChainFramebuffers[acquiredBackBufferIndex];
             const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer.getDescription();
             if(acquiredFramebufferDesc.colorAttachments.size() != 1u || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
                 if(!m_backend->abandonAcquiredFrame())
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
                 requestDeviceRecreation();
                 return false;
             }
@@ -331,9 +331,9 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
                 renderBegin = TimerNow();
             const auto rendered = renderWithPhaseTiming(phaseTiming);
             if(!rendered){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: render pass CPU task admission failed: {}"), static_cast<u32>(rendered.error()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: render pass CPU task admission failed: {}"), static_cast<u32>(rendered.error()));
                 if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame()){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the acquired frame after CPU task rejection"));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to quarantine the acquired frame after CPU task rejection"));
                     requestDeviceRecreation();
                 }
                 return false;
@@ -345,7 +345,7 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
                 if(device.requiresRecreation())
                     requestDeviceRecreation();
                 else if(!m_backend->abandonAcquiredFrame())
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the aborted acquired frame; device teardown is required."));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to quarantine the aborted acquired frame; device teardown is required."));
                 return false;
             }
 
@@ -363,7 +363,7 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
                 // A consumed presentation already cleared acquisition and makes abandonment a no-op.
                 // Every healthy unconsumed failure is drained and quarantined before recreation.
                 if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
                 requestDeviceRecreation();
                 return false;
             }
@@ -421,7 +421,7 @@ b8 GraphicsRuntime::registerCpuTimingScopes(){
             continue;
         const auto scope = m_cpuTiming->registerScope(registration.name);
         if(!scope){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU timing scope registration failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: CPU timing scope registration failed"));
             return false;
         }
         registration.id = *scope;

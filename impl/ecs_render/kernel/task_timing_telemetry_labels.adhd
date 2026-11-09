@@ -342,7 +342,7 @@ b8 RendererGraphRuntimeLabel::Append(
         if(logicalOwnershipTransfers){
             for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){
                 const Core::GpuCompiledOwnershipTransfer& transfer = logicalOwnershipTransfers[transferIndex];
-                NWB_ASSERT(transfer.valid());
+                FOUNDATION_ASSERT(transfer.valid());
 
                 StringAppendFormat(
                     label,

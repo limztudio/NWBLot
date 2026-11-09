@@ -11,7 +11,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -34,7 +34,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +140,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
     case DestroyNotify:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                NWB_FATAL_ASSERT(false);
+                FOUNDATION_FATAL_ASSERT(false);
         }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
@@ -150,7 +150,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
     case UnmapNotify:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                NWB_FATAL_ASSERT(false);
+                FOUNDATION_FATAL_ASSERT(false);
         }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
@@ -160,7 +160,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
         s_Keyboard.synchronize(static_cast<::Display*>(frameData.nativeDisplay()));
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(true))
-                NWB_FATAL_ASSERT(false);
+                FOUNDATION_FATAL_ASSERT(false);
         }
         frameData.setActive(true);
         frame.input().windowFocusUpdate(true);
@@ -169,7 +169,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
     case FocusOut:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                NWB_FATAL_ASSERT(false);
+                FOUNDATION_FATAL_ASSERT(false);
         }
         frameData.setActive(false);
         s_Keyboard.focusLost();
@@ -242,7 +242,7 @@ static Expected<X11WindowState> QueryWindowState(Frame& frame){
 
     XWindowAttributes attributes = {};
     if(XGetWindowAttributes(static_cast<::Display*>(frameData.nativeDisplay()), GetX11Window(frameData), &attributes) == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame window attribute query failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame window attribute query failed"));
         return MakeUnexpected(Failure{});
     }
 
@@ -275,7 +275,7 @@ b8 InitX11Frame(Frame& frame){
     if(!display){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display connection failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 display connection failed"));
         return false;
     }
 
@@ -289,11 +289,11 @@ b8 InitX11Frame(Frame& frame){
     if(windowWidth == 0u || windowHeight == 0u){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, displayWidth, displayHeight);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, displayWidth, displayHeight);
     }
     frameData.width() = windowWidth;
     frameData.height() = windowHeight;
@@ -307,7 +307,7 @@ b8 InitX11Frame(Frame& frame){
     if(GetX11Window(frameData) == 0){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 window creation failed"));
         return false;
     }
 
@@ -329,14 +329,14 @@ b8 InitX11Frame(Frame& frame){
     if(GetDeleteWindowMessage(frameData) == None){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window close protocol registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 window close protocol registration failed"));
         return false;
     }
     Atom deleteWindowMessage = GetDeleteWindowMessage(frameData);
     if(XSetWMProtocols(display, GetX11Window(frameData), &deleteWindowMessage, 1) == 0){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window close protocol installation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 window close protocol installation failed"));
         return false;
     }
 
@@ -346,17 +346,17 @@ b8 InitX11Frame(Frame& frame){
 
 Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame){
     Display* const display = static_cast<::Display*>(frame.data<Common::LinuxFrame>().nativeDisplay());
-    NWB_FATAL_ASSERT(display);
+    FOUNDATION_FATAL_ASSERT(display);
     return CreateX11ClipboardService(frame.projectObjectArena(), *display);
 }
 
 Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame){
     const auto& frameData = frame.data<Common::LinuxFrame>();
     Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
-    NWB_FATAL_ASSERT(display && GetX11Window(frameData));
+    FOUNDATION_FATAL_ASSERT(display && GetX11Window(frameData));
     auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
     if(service && !(*service)->setFocused(frameData.isActive()))
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
     return service;
 }
 

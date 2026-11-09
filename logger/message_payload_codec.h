@@ -24,8 +24,8 @@ namespace MessagePayloadError{
 
 class MessagePayloadCodec{
 private:
-    inline static constexpr TStringView s_TruncatedMessageError = NWB_TEXT("Received a truncated message");
-    inline static constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received a malformed message payload");
+    inline static constexpr TStringView s_TruncatedMessageError = FOUNDATION_TEXT("Received a truncated message");
+    inline static constexpr TStringView s_MalformedMessagePayloadError = FOUNDATION_TEXT("Received a malformed message payload");
 
     [[nodiscard]] static constexpr b8 IsValidType(Core::Common::LogType::Enum type)noexcept{
         switch(type){
@@ -65,7 +65,7 @@ public:
         constexpr tchar s_NullTerminator = 0;
         AppendPOD(outPayload, s_NullTerminator);
 
-        NWB_ASSERT(outPayload.size() == payloadBytes);
+        FOUNDATION_ASSERT(outPayload.size() == payloadBytes);
         return {};
     }
 
@@ -87,7 +87,7 @@ public:
         }
 
         if(!IsValidType(*type)){
-            return MakeUnexpected(TStringView(NWB_TEXT("Received a message with an invalid type")));
+            return MakeUnexpected(TStringView(FOUNDATION_TEXT("Received a message with an invalid type")));
         }
 
         const usize textBytes = totalSize - cursor;
@@ -98,7 +98,7 @@ public:
         usize terminatorCursor = totalSize - sizeof(tchar);
         const auto terminator = ReadPOD<tchar>(payload, terminatorCursor);
         if(!terminator || *terminator != 0){
-            return MakeUnexpected(TStringView(NWB_TEXT("Received a non-null-terminated message")));
+            return MakeUnexpected(TStringView(FOUNDATION_TEXT("Received a non-null-terminated message")));
         }
 
         // Serialized text can start at an unaligned byte offset; copy into aligned character storage before reading it.
@@ -106,7 +106,7 @@ public:
         const usize messageBytes = textBytes - sizeof(tchar);
         message.resize(messageBytes / sizeof(tchar));
         if(messageBytes != 0u)
-            NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
+            FOUNDATION_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
         return MakeTuple(*time, *type, Move(message));
     }
 };

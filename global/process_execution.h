@@ -22,18 +22,18 @@
 #include <cstdlib>
 #include <ctime>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <poll.h>
 #include <signal.h>
 #endif
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <unistd.h>
 #endif
 
@@ -114,7 +114,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,7 +174,7 @@ inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStrin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -226,7 +226,7 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
     const char separator =
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         ';'
 #else
         ':'
@@ -248,7 +248,7 @@ template<typename ArenaT>
 
         candidate /= executableName;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const auto regularCandidate = IsRegularFile(candidate);
         if(!regularCandidate)
             return MakeUnexpected(regularCandidate.error());
@@ -275,7 +275,7 @@ template<typename ArenaT>
 [[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile([[maybe_unused]] ArenaT& arena, const Span<const AStringView> arguments, const AStringView outputPath){
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(!ProcessExecutionDetail::AreProcessArgumentsValid(arguments))
         return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
     const AString<ArenaT> nativeExecutable(arguments.front(), arena);
@@ -287,7 +287,7 @@ template<typename ArenaT>
 #endif
     const AString<ArenaT> nativeOutputPath(outputPath, arena);
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     AString<ArenaT> commandLine{arena};
     usize commandLineCapacity = arguments.size() - 1u;
     for(const AStringView argument : arguments){
@@ -336,7 +336,7 @@ template<typename ArenaT>
     if(!outputClosed || !threadClosed || !processClosed)
         return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
     return static_cast<int>(exitCode);
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
     const int outputFileDescriptor = ::open(nativeOutputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, ProcessExecutionDetail::s_RedirectedOutputFileMode);
     if(outputFileDescriptor < 0)
         return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);

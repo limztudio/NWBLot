@@ -294,8 +294,11 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 m_emitter.emitIndent(out, indent + 2u);
             }
             m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall);
-            if(!stmt.expr->callTemplateArgs.empty())
-                m_emitter.m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
+            if(!stmt.expr->callTemplateArgs.empty()){
+                const Expr* callee = stmt.expr->lhs;
+                const BuiltinGenericTypeInfo* genericInfo = callee && callee->kind == ExprKind::Identifier ? FindBuiltinGenericType(callee->text) : nullptr;
+                m_emitter.m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs, genericInfo && genericInfo->isArenaBacked);
+            }
             out.push_back('(');
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 if(i > 0u)

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
 
 #include <core/common/log.h>
 #include <core/os/linux/wayland/clipboard.h>
@@ -84,7 +84,7 @@ b8 WaylandPointerInput::acquire(wl_seat& seat){
         return true;
     m_pointer = wl_seat_get_pointer(&seat);
     if(!m_pointer || wl_pointer_add_listener(m_pointer, &s_PointerListener, this) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland pointer listener registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland pointer listener registration failed"));
         return false;
     }
     return true;

@@ -74,7 +74,7 @@ private:
 
         public:
             T& value()noexcept{
-                NWB_ASSERT(m_value.has_value());
+                FOUNDATION_ASSERT(m_value.has_value());
                 return *m_value;
             }
 

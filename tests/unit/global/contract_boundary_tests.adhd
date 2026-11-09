@@ -32,7 +32,7 @@ native{
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <unistd.h>
 #endif
 
@@ -67,7 +67,7 @@ void VerifySignedLowerSaturation(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 [[noreturn]] void VerifyRedirectedFileWithClosedDescriptors(const u32 mask, const AStringView outputPath){
     NWB::Tests::TestArena<> testArena;
     for(int descriptor = 0; descriptor < 3; ++descriptor){
@@ -207,7 +207,7 @@ TEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePrese
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(GlobalContractBoundaries, RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors){
     using namespace __hidden_contract_boundary_tests;
     NWB::Tests::TestArena<> testArena;

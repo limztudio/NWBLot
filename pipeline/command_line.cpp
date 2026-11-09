@@ -28,7 +28,7 @@ namespace __hidden_pipeline_command_line{
 
 static b8 AssignText(const AStringView text, Core::Assets::AssetString& output){
     if(!text.empty() && !IsSingleLinePathText(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: paths must not contain nulls or newlines"));
         return false;
     }
     output.assign(text);
@@ -41,7 +41,7 @@ static b8 AssignInputs(const Span<const AInteropString> values, Core::Assets::As
     for(const AInteropString& value : values){
         Core::Assets::AssetString text(arena);
         if(value.empty() || !AssignText(value, text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: input path must not be empty"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: input path must not be empty"));
             return false;
         }
         outputs.push_back(Move(text));
@@ -87,7 +87,7 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
 
     const b8 allowImplicitProjectInput = m_tool == PipelineTool::DependencyComputer && !m_assetRoots.empty();
     if(m_inputs.empty() && m_inputList.empty() && !allowImplicitProjectInput){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});
     }
     if(
@@ -101,19 +101,19 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
     )
         return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: output path must not be empty"));
         return MakeUnexpected(Failure{});
     }
     if(m_tool == PipelineTool::AssetBuilder && m_app.count(s_PipelineAssetTypeOption.data()) != 0u)
         options.assetType.emplace();
     if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size())) || (options.assetType && !options.assetType->assign(AStringView(m_assetType.data(), m_assetType.size())))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
         return MakeUnexpected(Failure{});
     }
     if(!m_inputList.empty()){
         const AStringView listText(m_inputList.data(), m_inputList.size());
         if(!IsSingleLinePathText(listText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: paths must not contain nulls or newlines"));
             return MakeUnexpected(Failure{});
         }
         if(!Core::Assets::ReadAssetInputList(Path(arena, listText), scratchArena, options.inputs, m_tool == PipelineTool::AssetGatherer))
@@ -124,11 +124,11 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
 
 int PipelineCommandLine::exit(const CLI::ParseError& error)const{
     if(AStringView(error.get_name()) == s_PipelineCliHelpRequestName){
-        NWB_COUT << m_app.help();
+        FOUNDATION_COUT << m_app.help();
         return s_PipelineExitSuccess;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to parse command line: {}"), ConvertString(error.what()));
-    NWB_CERR << m_app.help();
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: failed to parse command line: {}"), ConvertString(error.what()));
+    FOUNDATION_CERR << m_app.help();
     return s_PipelineExitFailure;
 }
 

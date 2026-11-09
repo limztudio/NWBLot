@@ -26,7 +26,7 @@ namespace __hidden_command_list{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_GraphPublicationOwnedReason = NWB_TEXT("task-graph recorder retains exclusive publication ownership");
+static constexpr TStringView s_GraphPublicationOwnedReason = FOUNDATION_TEXT("task-graph recorder retains exclusive publication ownership");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ CommandList::~CommandList()noexcept{
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
-    constexpr TStringView s_OperationName = NWB_TEXT("open command list");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("open command list");
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     if(publicationState != s_GraphPublicationUnowned){
         if(publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire))){
@@ -72,7 +72,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
 
     AdvanceWrappingNonzero(m_recordingLeaseSerial);
 
-    NWB_ASSERT_MSG(m_markerStack.empty(), NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
+    FOUNDATION_ASSERT_MSG(m_markerStack.empty(), FOUNDATION_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
     m_stateTracker.rollbackRecordingAttempt();
     clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
@@ -86,40 +86,40 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_descriptorBuffersBound = false;
 
     if(!descriptionMatchesCreation()){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("public description differs from resolved creation identity"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("public description differs from resolved creation identity"));
         return;
     }
 
     if(initialStates && !initialStates->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
         return;
     }
     if(initialStates && !initialStates->validForDeviceGeneration(m_context.deviceGeneration)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
         return;
     }
 
     Queue* queue = m_device.getQueue(m_creationDesc.physicalQueue);
     if(!queue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested queue is not available"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Requested queue is not available"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Requested queue is not available"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Requested queue is not available"));
         m_currentCmdBuf = nullptr;
         return;
     }
 
     auto commandBuffer = queue->getOrCreateCommandBuffer(m_creationDesc.recordingWorkerDomain, m_creationDesc.recordingWorkerIndex);
     if(!commandBuffer || !*commandBuffer || (*commandBuffer)->m_cmdBuf == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire command buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to acquire command buffer"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to acquire command buffer"));
         m_currentCmdBuf = nullptr;
         return;
     }
     m_currentCmdBuf = Move(*commandBuffer);
     m_nativeRecordingID = m_currentCmdBuf->m_recordingID;
     if(!matchesNativeLeaseIdentity()){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("native lease does not match resolved creation identity"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("native lease does not match resolved creation identity"));
         m_currentCmdBuf.reset();
         m_nativeRecordingID = 0u;
         return;
@@ -130,8 +130,8 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
 
     const VkResult res = m_context.deviceDispatch.vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin command buffer recording"));
         discardUnsubmittedUploadChunks();
         m_currentCmdBuf = nullptr;
         m_nativeRecordingID = 0u;
@@ -148,7 +148,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
 
         if(!importResourceStateHandoff(scratchArena, *initialStates)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("resource-state handoff is incompatible"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("resource-state handoff is incompatible"));
             discardInvalidCommandBuffer();
         }
     }
@@ -171,7 +171,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
 void CommandList::clearState(){
     if(!publicCommandStateAccessible())
         return;
-    if(m_isRecording && !validateCommandRecordingScope(NWB_TEXT("clear command-list state")))
+    if(m_isRecording && !validateCommandRecordingScope(FOUNDATION_TEXT("clear command-list state")))
         return;
     clearStateInternal();
 }
@@ -185,7 +185,7 @@ b8 CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
     u8 expectedState = s_GraphPublicationUnowned;
     const b8 ownershipAvailable = matchesRecordingLease(recordingLeaseSerial) && m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRecording, MemoryOrder::acq_rel, MemoryOrder::acquire);
     if(!ownershipAvailable){
-        rejectCommandRecording(NWB_TEXT("begin task-graph command recording ownership"), NWB_TEXT("native recording lease is unavailable or already exclusively owned"));
+        rejectCommandRecording(FOUNDATION_TEXT("begin task-graph command recording ownership"), FOUNDATION_TEXT("native recording lease is unavailable or already exclusively owned"));
         return false;
     }
 
@@ -195,7 +195,7 @@ b8 CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
 
 void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
     const b8 ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
+    FOUNDATION_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
     m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
 
@@ -203,7 +203,7 @@ void CommandList::cancelGraphRecordingOwnership(const u64 recordingLeaseSerial)n
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
     const b8 ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
+    FOUNDATION_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
     if(publicationState != s_GraphPublicationRecording)
         return;
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
@@ -258,7 +258,7 @@ Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
 
 void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
     const b8 ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
+    FOUNDATION_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
     m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
 }
@@ -267,7 +267,7 @@ void CommandList::endGraphSubmissionOwnership(const u64 recordingLeaseSerial)noe
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
     const b8 ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
+    FOUNDATION_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
     if(publicationState == s_GraphPublicationSubmitting)
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
@@ -303,7 +303,7 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     // An ownership release has no useful consumer without the state handoff that names its destination and final layout.
     // Refuse to record an orphaned release rather than leaving an exclusive resource owned by another family while later code has no way to acquire it.
     if(!finalStates && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())){
-        rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("ownership release requires a final resource-state handoff"));
+        rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("ownership release requires a final resource-state handoff"));
         discardInvalidCommandBuffer();
         return;
     }
@@ -336,9 +336,9 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     const VkResult res = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     m_isRecording = false;
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
-        rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("native command buffer could not be ended"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to end command buffer recording"));
+        rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("native command buffer could not be ended"));
         discardInvalidCommandBuffer();
         return;
     }
@@ -372,7 +372,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
 }
 
 void CommandList::clearStateInternal(){
-    NWB_ASSERT_MSG(m_markerStack.empty(), NWB_TEXT("Vulkan: Command-list logical state cleared with unterminated marker scopes"));
+    FOUNDATION_ASSERT_MSG(m_markerStack.empty(), FOUNDATION_TEXT("Vulkan: Command-list logical state cleared with unterminated marker scopes"));
     if(m_currentCmdBuf && m_renderPassActive)
         endActiveRenderPass();
     resetMarkerState();
@@ -464,35 +464,35 @@ b8 CommandList::isBufferReadyForCommandQueue(Buffer* const buffer, const VkBuffe
 b8 CommandList::validateTrackedTexturesReadyForClose(){
     for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture.get())){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         Texture* const texture = it->first.texture;
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("tracked texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("tracked texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
         auto& texture = *MakeNotNull(it.value().texture.get());
         if(!isTextureReadyForCommandQueue(&texture)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("permanent texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         Texture* const texture = it->first.texture;
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("released texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("released texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(const auto heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
 
         if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("descriptor heap contains a resource unavailable to this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
         }
     }
@@ -503,28 +503,28 @@ b8 CommandList::validateTrackedTexturesReadyForClose(){
 b8 CommandList::validateTrackedBuffersReadyForClose(){
     for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer.get())){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         auto& buffer = *MakeNotNull(it->first.get());
         if(!isBufferReadyForCommandQueue(&buffer)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("tracked buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("tracked buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         auto& buffer = *MakeNotNull(it.value().buffer.get());
         if(!isBufferReadyForCommandQueue(&buffer)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("permanent buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         auto& buffer = *MakeNotNull(it->first.get());
         if(!isBufferReadyForCommandQueue(&buffer)){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("released buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("released buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -534,7 +534,7 @@ b8 CommandList::validateTrackedBuffersReadyForClose(){
 
 void CommandList::resetMarkerState(){
     if(!m_markerStack.empty())
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Recovering {} unterminated command-list marker scope(s)"), m_markerStack.size());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Recovering {} unterminated command-list marker scope(s)"), m_markerStack.size());
 
     resetMarkerStateWithoutCallbacks();
 }

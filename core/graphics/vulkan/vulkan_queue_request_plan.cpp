@@ -22,7 +22,7 @@ VulkanQueueRequestPlan::VulkanQueueRequestPlan(Alloc::ScratchArena& scratchArena
     const auto appendSameClassQueue = [&sameClassQueueRequests](const CommandQueue::Enum queueClass, const i32 family, const u32 queueIndex){
         for(const SameClassQueueRequest& existing : sameClassQueueRequests){
             if(existing.family == family && existing.queueIndex == queueIndex){
-                NWB_ASSERT(existing.queueClass == queueClass);
+                FOUNDATION_ASSERT(existing.queueClass == queueClass);
                 return;
             }
         }

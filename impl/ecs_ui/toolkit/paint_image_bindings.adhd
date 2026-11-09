@@ -183,7 +183,7 @@ public:
                 return true;
             }
         }
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return false;
     }
 

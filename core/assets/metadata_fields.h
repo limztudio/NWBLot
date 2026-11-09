@@ -28,7 +28,7 @@ template<typename PathArenaT, typename MetadataValue, typename IsAllowedField>
         if(isAllowedField(fieldNameText))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unsupported asset field '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldNameText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': unsupported asset field '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldNameText));
         return false;
     }
     return true;
@@ -60,19 +60,19 @@ template<typename MetadataValue>
         if(!required)
             return result;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
     result.present = true;
     if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a string"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
     const auto text = fieldValue->asString();
     result.text = AStringView(text.data(), text.size());
     if(required && result.text.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
     return result;
@@ -93,11 +93,11 @@ template<typename MetadataValue>
         return decoded;
 
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be numeric"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be numeric"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported float range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is outside the supported float range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
     return MakeUnexpected(Failure{});
 }
 
@@ -108,7 +108,7 @@ template<typename MetadataValue>
         if(!required)
             return 0.0f;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
     return ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldName);
@@ -125,7 +125,7 @@ template<typename MetadataValue>
 
     const auto name = Name::FromText(text->text);
     if(!name){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
     return *name;
@@ -147,14 +147,14 @@ template<typename AssetT, typename MetadataValue>
 template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
 [[nodiscard]] inline b8 ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
     if(!ReadTextFile(filePath, ioText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': failed to read source text"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath));
         return false;
     }
     StripUtf8Bom(ioText);
 
     if(!parseDoc(AStringView(ioText))){
         for(const auto& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath), err.line, err.column, ConvertString(err.message));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}' parse error at {}:{}: {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath), err.line, err.column, ConvertString(err.message));
         }
         return false;
     }
@@ -169,7 +169,7 @@ template<typename MetadataValue>
     if(fieldValue && fieldValue->isList())
         return MakeNotNull(fieldValue);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
     return MakeUnexpected(Failure{});
 }
 
@@ -179,7 +179,7 @@ template<typename CookEntryT>
     if(outEntry.virtualPath)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': virtual path must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': virtual path must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
     return false;
 }
 
@@ -188,7 +188,7 @@ template<typename MetadataValue>
     if(asset.isMap())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
     return false;
 }
 
@@ -196,7 +196,7 @@ template<typename MetadataDocument, typename MetadataValue>
 [[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
     const auto* asset = doc.findVariable(s_MetadataAssetVariable);
     if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': missing asset declaration '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_MetadataAssetVariable));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': missing asset declaration '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_MetadataAssetVariable));
         return MakeUnexpected(Failure{});
     }
     return MakeNotNull(asset);
@@ -228,7 +228,7 @@ template<typename NamedEnumT, typename MetadataValue>
     if(value)
         return value;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(errorDetailText));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(errorDetailText));
     return MakeUnexpected(Failure{});
 }
 

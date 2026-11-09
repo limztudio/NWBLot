@@ -187,48 +187,48 @@ b8 IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc,
 
 Expected<BufferHandle> Device::createHandleForNativeBuffer(const ObjectType objectType, const Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance){
     if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits"));
         return MakeUnexpected(Failure{});
     }
     if(objectType != ObjectTypes::s_Buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return MakeUnexpected(Failure{});
     }
 
     auto* nativeBuffer = static_cast<VkBuffer_T*>(nativeBufferHandle);
     if(nativeBuffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
         return MakeUnexpected(Failure{});
     }
     if(desc.byteSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
         return MakeUnexpected(Failure{});
     }
     if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(desc.initialState)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: initial state is invalid for a buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: initial state is invalid for a buffer"));
         return MakeUnexpected(Failure{});
     }
 
     if(nativeProvenance.usage == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is zero"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is zero"));
         return MakeUnexpected(Failure{});
     }
     if(nativeProvenance.flags & VK_BUFFER_CREATE_PROTECTED_BIT){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: protected buffers are unsupported"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: protected buffers are unsupported"));
         return MakeUnexpected(Failure{});
     }
     if(!VulkanNativeSharingDetail::ValidateNativeResourceSharing(*this, m_context.instanceDispatch, m_context.physicalDevice, desc.queueSharing, nativeProvenance, "buffer handle for native buffer"))
         return MakeUnexpected(Failure{});
     if(!VulkanBufferDetail::IsBufferUsageCompatibleWithDescription(desc, nativeProvenance.usage)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the logical description"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the logical description"));
         return MakeUnexpected(Failure{});
     }
     if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(desc, nativeProvenance.usage, desc.initialState)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the declared initial state"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the declared initial state"));
         return MakeUnexpected(Failure{});
     }
     if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, nativeProvenance.usage)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is unsupported by the device"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is unsupported by the device"));
         return MakeUnexpected(Failure{});
     }
 
@@ -239,7 +239,7 @@ Expected<BufferHandle> Device::createHandleForNativeBuffer(const ObjectType obje
         addressInfo.buffer = nativeBuffer;
         deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         if(deviceAddress == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: device address is zero"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: device address is zero"));
             return MakeUnexpected(Failure{});
         }
     }
@@ -261,7 +261,7 @@ Expected<BufferHandle> Device::createHandleForNativeBuffer(const ObjectType obje
     buffer->m_managed = false;
 
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists"));
         return MakeUnexpected(Failure{});
     }
 

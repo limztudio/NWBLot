@@ -100,15 +100,15 @@ Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture
     const b8 usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
         if(assertFailure)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
         return MakeUnexpected(Failure{});
     }
 
     if(!VulkanTextureDetail::TextureImagePolicy::ValidateTextureViewShape(dimension, resolvedSubresources)){
         if(assertFailure)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -150,13 +150,13 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     if(imageInfo.queueFamilyIndexCount == 0u)
         return result;
 
-    NWB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
+    FOUNDATION_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
     result.assign(imageInfo.pQueueFamilyIndices, imageInfo.pQueueFamilyIndices + imageInfo.queueFamilyIndexCount);
     return result;
 }
 
 [[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const Span<const u32> queueFamilyIndices)noexcept{
-    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    FOUNDATION_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkImageCreateInfo result = imageInfo;
     result.pNext = nullptr;
     result.queueFamilyIndexCount = static_cast<u32>(queueFamilyIndices.size());
@@ -239,10 +239,10 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept
     }
 
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
-    NWB_ASSERT(subresourceCount != 0u);
+    FOUNDATION_ASSERT(subresourceCount != 0u);
 
     ScopedLock lock(m_retainedSubresourceStatesMutex);
-    NWB_ASSERT(subresourceCount == m_retainedSubresourceStates.size());
+    FOUNDATION_ASSERT(subresourceCount == m_retainedSubresourceStates.size());
     b8 hasKnownState = false;
     b8 hasUnknownState = false;
     for(usize subresourceIndex = 0u; subresourceIndex < subresourceCount; ++subresourceIndex){
@@ -283,8 +283,8 @@ Expected<VkImageView> Texture::getView(const TextureSubresourceSet& subresources
 
     TextureSubresourceSet resolvedSubresources = subresources.resolve(m_creationDesc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
         return MakeUnexpected(Failure{});
     }
 
@@ -297,21 +297,21 @@ Expected<VkImageView> Texture::getView(const TextureSubresourceSet& subresources
     if(it != m_views.end())
         return it.value();
 
-    const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*this, resolvedSubresources, dimension, format, NWB_TEXT("image view"), true);
+    const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*this, resolvedSubresources, dimension, format, FOUNDATION_TEXT("image view"), true);
     if(!viewInfo)
         return MakeUnexpected(Failure{});
 
     VkImageView view = VK_NULL_HANDLE;
     const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &*viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create image view"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
     ScopeExit destroyView([&]()noexcept{ m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks); });
     if(!m_views.emplace(key, view).second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return MakeUnexpected(Failure{});
     }
     destroyView.release();
@@ -361,7 +361,7 @@ void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage
 void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
     const b8 identityMatches = expectedNativeImage != VK_NULL_HANDLE && !m_managed && m_image == VK_NULL_HANDLE && m_preparedRevokedNativeImage == expectedNativeImage;
-    NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
+    FOUNDATION_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
 
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
     m_preparedRevokedNativeImage = VK_NULL_HANDLE;
@@ -373,7 +373,7 @@ b8 Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const M
 
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    NWB_ASSERT(index < m_retainedSubresourceStates.size());
+    FOUNDATION_ASSERT(index < m_retainedSubresourceStates.size());
     return m_retainedSubresourceStates[index] != 0u;
 }
 
@@ -383,7 +383,7 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
 
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    NWB_ASSERT(index < m_retainedSubresourceStates.size());
+    FOUNDATION_ASSERT(index < m_retainedSubresourceStates.size());
     m_retainedSubresourceStates[index] = known ? 1u : 0u;
 }
 

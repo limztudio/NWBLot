@@ -46,7 +46,7 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
     , m_commandBuffersPool(context.objectArena)
     , m_workerCommandArenas(context.objectArena)
 {
-    NWB_ASSERT(m_nativeQueue.familyIndex == info.familyIndex && m_nativeQueue.queueIndex == info.queueIndex);
+    FOUNDATION_ASSERT(m_nativeQueue.familyIndex == info.familyIndex && m_nativeQueue.queueIndex == info.queueIndex);
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
@@ -57,7 +57,7 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
     const VkResult res = m_context.deviceDispatch.vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
     if(res != VK_SUCCESS){
         m_trackingSemaphore = VK_NULL_HANDLE;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
     }
 }
 
@@ -118,35 +118,35 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
 
 b8 Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot submit a command buffer through a foreign queue or context"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Cannot submit a command buffer through a foreign queue or context"));
         return false;
     }
     if(commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Leased){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission requires a leased command buffer"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission requires a leased command buffer"));
         return false;
     }
     if(m_leasedCommandBufferCount.load(MemoryOrder::relaxed) == 0u){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission observed an empty leased command-buffer count"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission observed an empty leased command-buffer count"));
         return false;
     }
     if(commandBuffer.m_recordingWorkerIndex == 0u){
         if(m_directLeasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
             return true;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission observed an empty direct leased command-buffer count"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission observed an empty direct leased command-buffer count"));
         return false;
     }
 
     const WorkerCommandArena* const workerArena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
     if(workerArena && workerArena->leasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
         return true;
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
+    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
     return false;
 }
 
 void Queue::transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, const TrackedCommandBufferArenaState::Enum nextState){
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer arena transition owner mismatch"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Command buffer arena transition owner mismatch"));
         return;
     }
 
@@ -261,13 +261,13 @@ void Queue::collectCompletedCommandBuffers(){
 Expected<TrackedCommandBufferPtr, VkResult> Queue::createCommandBuffer(const VkCommandPool commandPool, Futex* const sharedCommandPoolMutex, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     const b8 ownsCommandPool = recordingWorkerIndex == 0u;
     if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
     }
 
     auto* const allocatedCommandBuffer = NewArenaObject<TrackedCommandBuffer>(m_context.objectArena, *this, m_context, commandPool, ownsCommandPool, nullptr);
     if(!allocatedCommandBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
         return MakeUnexpected(VK_ERROR_OUT_OF_HOST_MEMORY);
     }
     TrackedCommandBufferPtr cmdBuf(allocatedCommandBuffer, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), s_AdoptRef);
@@ -311,7 +311,7 @@ Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorker
 
     auto* const arena = NewArenaObject<WorkerCommandArena>(m_context.objectArena, m_context.objectArena, recordingWorkerDomain, recordingWorkerIndex);
     if(!arena){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}:{}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}:{}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex);
         return MakeUnexpected(VK_ERROR_OUT_OF_HOST_MEMORY);
     }
 
@@ -328,7 +328,7 @@ Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorker
     const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &arena->commandPool);
     if(createResult != VK_SUCCESS){
         arena->commandPool = VK_NULL_HANDLE;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex, ResultToString(createResult));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"), m_physicalQueue.index, recordingWorkerDomain, recordingWorkerIndex, ResultToString(createResult));
         return MakeUnexpected(createResult);
     }
 
@@ -349,14 +349,14 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
         lock.unlock();
         if(completionResult == VK_ERROR_DEVICE_LOST)
             m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
         return MakeUnexpected(completionResult);
     }
     collectCompletedCommandBuffers();
 
     auto available = m_commandBuffersPool.end();
     for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
-        NWB_ASSERT(*it);
+        FOUNDATION_ASSERT(*it);
         if((*it)->m_recordingWorkerIndex == 0u){
             available = it;
             break;
@@ -365,11 +365,11 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
     if(available != m_commandBuffersPool.end()){
         TrackedCommandBufferPtr cmdBuf = Move(*available);
         m_commandBuffersPool.erase(available);
-        NWB_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
+        FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
             return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
         }
 
@@ -400,13 +400,13 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
     if(!arena->commandBuffersPool.empty()){
         auto available = arena->commandBuffersPool.begin();
         TrackedCommandBufferPtr cmdBuf = Move(*available);
-        NWB_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
+        FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
         cmdBuf->m_sharedCommandPoolMutex = nullptr;
         arena->commandBuffersPool.erase(available);
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset worker command buffer, creating a new one: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to reset worker command buffer, creating a new one: {}"), ResultToString(res));
             m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, arena->commandPool, 1u, &cmdBuf->m_cmdBuf);
             cmdBuf->m_cmdBuf = VK_NULL_HANDLE;
             cmdBuf.reset();
@@ -436,7 +436,7 @@ void Queue::destroyWorkerCommandArenas()noexcept{
         {
             NothrowScopedLock arenaLock(arena->mutex);
             for(TrackedCommandBufferPtr& commandBuffer : arena->commandBuffersPool){
-                NWB_ASSERT(commandBuffer);
+                FOUNDATION_ASSERT(commandBuffer);
                 commandBuffer->m_cmdBuf = VK_NULL_HANDLE;
                 commandBuffer->m_cmdPool = VK_NULL_HANDLE;
                 commandBuffer->m_sharedCommandPoolMutex = nullptr;

@@ -42,7 +42,7 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type)noex
     case CooperativeVectorDataType::Float64:
         return 8;
     }
-    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
+    FOUNDATION_FATAL_ASSERT_MSG(false, FOUNDATION_TEXT("Unknown CooperativeVectorDataType::Enum value"));
     return 0;
 }
 

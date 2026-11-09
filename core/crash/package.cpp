@@ -10,7 +10,7 @@
 #include <global/fixed_buffer.h>
 #include <global/json_text.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <dbghelp.h>
 #include <windows.h>
 #endif
@@ -43,7 +43,7 @@ inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 template<typename ArenaT>
 static b8 WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     constexpr AStringView s_CloseDumpProcessOperation = "close_dump_process";
@@ -99,7 +99,7 @@ static b8 WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 template<typename ArenaT>
 static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const AStringView sourcePath, const AStringView outputName){
     constexpr StringView s_OptionalArtifactCategory = "crash_package";
@@ -167,7 +167,7 @@ b8 WriteCrashPackage(const CrashRequest& request){
     if(!CrashPackageReport::Write(arena, request))
         return false;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
         const b8 dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteTextFile(
@@ -176,7 +176,7 @@ b8 WriteCrashPackage(const CrashRequest& request){
         ))
             return false;
     }
-#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     if(request.platform == PlatformKind::Linux){
         CopyProcFile(arena, request, PackageNames::s_ProcAuxvName, PackageNames::s_ProcAuxvFileName);
         CopyProcFile(arena, request, PackageNames::s_ProcCmdlineName, PackageNames::s_ProcCmdlineFileName);

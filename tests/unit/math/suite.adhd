@@ -35,7 +35,7 @@ namespace __hidden_box_normal_tests{
 
 
 // Keep production floating-point expressions in their normal optimization context while observing their flags at the caller.
-NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL EvaluateSingleBoxNormal(SIMDVectorSingle position, SIMDVectorSingle extents, SIMDVectorSingle fallback, const f32 threshold)noexcept{
+FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL EvaluateSingleBoxNormal(SIMDVectorSingle position, SIMDVectorSingle extents, SIMDVectorSingle fallback, const f32 threshold)noexcept{
     return SdfTests::BoxNormal(position, extents, fallback, threshold);
 }
 
@@ -494,7 +494,7 @@ TEST(MathGeometryBoundaries, TriangleAreaPreservesSquaredSumOrderAtThreshold){
     const SIMDVectorSingle b = VectorSet(1.0f, 0.0f, -1.0f, 0.0f);
     const SIMDVectorSingle c = VectorSet(0.0f, 1.25f, -134217728.0f, 0.0f);
     constexpr f64 s_LargeSquaredComponent = 18014398509481984.0;
-#if defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_HAS_AVX2)
     EXPECT_TRUE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent));
     EXPECT_FALSE(::TriangleHasArea(a, b, c, s_LargeSquaredComponent + 4.0));
 #else
@@ -1314,10 +1314,10 @@ namespace __hidden_native_mask_tests{
 
 
 // This preserved mask formula qualifies discarded-lane flags in the same compiler and optimization context as the candidate.
-NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+FOUNDATION_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
-#if defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_NEON64)
     const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(comparison), 63u);
     const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(comparison), 63u);
     const u32 mask = static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
@@ -1328,7 +1328,7 @@ NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble r
 }
 
 template<b8 Integer, u32 Dimension>
-NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+FOUNDATION_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer){
         if constexpr(Dimension == 3u)
@@ -1345,7 +1345,7 @@ NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noex
 }
 
 template<b8 Integer>
-NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
+FOUNDATION_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer)
         return Vector4EqualInt(left, right);
@@ -1353,7 +1353,7 @@ NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noex
         return Vector4Equal(left, right);
 }
 
-NWB_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     return VectorDoubleMoveMask(value);
 }
@@ -1460,7 +1460,7 @@ TEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions){
 #include <gtest/gtest.h>
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -1486,7 +1486,7 @@ enum Enum : u32{
 
 // Instantiate each frozen formula separately so runtime dispatch does not alter the legacy SSE NaN operand selection.
 template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Reduction::Dot2){
         lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY);
@@ -1507,7 +1507,7 @@ NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVector
 }
 
 template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Reduction::Dot2)
         return VectorDouble2Dot(lhs, rhs);
@@ -1565,7 +1565,7 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
 }
 
 template<u32 Dimension>
-NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u)
         return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
@@ -1576,7 +1576,7 @@ NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)no
 }
 
 template<u32 Dimension, b8 Estimate>
-NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u){
         if constexpr(Estimate)
@@ -1643,7 +1643,7 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
     }
 }
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 static void TrapPriorityHandler(const i32, siginfo_t* information, void*)noexcept{
     _exit(information != nullptr && information->si_code == FPE_FLTINV ? 0 : 1);
 }

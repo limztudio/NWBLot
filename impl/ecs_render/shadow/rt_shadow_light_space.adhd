@@ -141,7 +141,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
         return;
     const LightSpacePlan& plan = *planResult;
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
-    NWB_ASSERT(drawCount);
+    FOUNDATION_ASSERT(drawCount);
     const LightSpaceShadowStorageCapacity capacity{
         snapshot.counts->getCreationDescription().byteSize, snapshot.events->getCreationDescription().byteSize,
         snapshot.views->getCreationDescription().byteSize, snapshot.drawArguments->getCreationDescription().byteSize,
@@ -220,7 +220,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const Span<const u8> materialBytes,
     const Span<const Core::TextureHandle> textures
 )noexcept{
-    NWB_ASSERT(materials.size() == instances.size());
+    FOUNDATION_ASSERT(materials.size() == instances.size());
     u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
         state.captureGeometryIdentity,
         state.snapshot.contentIdentity,
@@ -631,7 +631,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
     auto& heap = device.getDescriptorHeap();
     const Array<u64, 4u> sizes = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
     const u64 maximumRange = device.getMaxStorageBufferRange();
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(
         sizes[0] != 0u && sizes[0] <= maximumRange && sizes[0] <= Limit<u32>::s_Max
         && sizes[1] != 0u && sizes[1] <= maximumRange && sizes[1] <= Limit<u32>::s_Max
         && sizes[2] != 0u && sizes[2] <= maximumRange && sizes[2] <= Limit<u32>::s_Max
@@ -1030,8 +1030,8 @@ namespace __hidden_task_graph_light_space_shadow{
     outUses.reserve(capacity);
     const auto appendRead = [&](const Core::GpuTaskResourceUse& use){
         // The light-space scene inputs are whole-resource reads, including material texture sets.
-        NWB_ASSERT(use.access == Core::GpuTaskResourceAccess::Read);
-        NWB_ASSERT(use.range.bufferRange == Core::s_EntireBuffer && use.range.textureSubresources == Core::s_AllSubresources);
+        FOUNDATION_ASSERT(use.access == Core::GpuTaskResourceAccess::Read);
+        FOUNDATION_ASSERT(use.range.bufferRange == Core::s_EntireBuffer && use.range.textureSubresources == Core::s_AllSubresources);
         for(auto& previous : outUses){
             if(previous.resource == use.resource){
                 previous.requiredState |= use.requiredState;

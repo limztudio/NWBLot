@@ -44,16 +44,16 @@ Expected<FramebufferHandle> Device::createFramebuffer(const FramebufferDesc& des
     for(u32 i = 0u; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
         Texture* const texture = desc.colorAttachments[i].texture;
         if(texture && &texture->m_context != &m_context){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."), i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."), i);
             return MakeUnexpected(Failure{});
         }
     }
     if(desc.depthAttachment.texture && &desc.depthAttachment.texture->m_context != &m_context){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
         return MakeUnexpected(Failure{});
     }
     if(desc.shadingRateAttachment.texture && &desc.shadingRateAttachment.texture->m_context != &m_context){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device."));
         return MakeUnexpected(Failure{});
     }
 
@@ -65,7 +65,7 @@ Expected<FramebufferHandle> Device::createFramebuffer(const FramebufferDesc& des
 
     const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), s_MaxRenderTargets);
     if(desc.colorAttachments.size() > s_MaxRenderTargets)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxRenderTargets, s_MaxRenderTargets);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxRenderTargets, s_MaxRenderTargets);
 
     fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u) + (desc.shadingRateAttachment.texture ? 1u : 0u));
     for(u32 i = 0u; i < colorAttachmentCount; ++i){

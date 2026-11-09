@@ -114,7 +114,7 @@ Expected<ClusterOperationInput> ClusterOperationInput::Build(const RayTracingClu
     case RayTracingClusterOperationType::ClasInstantiateTemplates:{
         const VkFormat vertexFormat = ConvertFormat(params.clas.vertexFormat);
         if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: vertex format is unsupported"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: vertex format is unsupported"), operationName);
             return MakeUnexpected(Failure{});
         }
         input.cluster.vertexFormat = vertexFormat;
@@ -158,7 +158,7 @@ Expected<RayTracingClusterOperationSizeInfo> ClusterOperationQuery::Query(const 
     if((params.flags & RayTracingClusterOperationFlags::AllowOMM) && (!context.extensions.extOpacityMicromap || !context.opacityMicromapFeatureEnabled))
         return MakeUnexpected(Failure{});
 
-    auto input = ClusterOperationInput::Build(params, NWB_TEXT("query cluster operation sizes"));
+    auto input = ClusterOperationInput::Build(params, FOUNDATION_TEXT("query cluster operation sizes"));
     if(!input)
         return MakeUnexpected(Failure{});
     const auto inputInfo = input->nativeInfo();

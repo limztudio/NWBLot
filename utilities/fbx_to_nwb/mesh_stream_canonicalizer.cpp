@@ -47,7 +47,7 @@ template<typename Value>
     };
     const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), inOutStream.size(), s_DeduplicateParallelGrainSize, fillEntry);
     if(!parallelWork){
-        NWB_LOGGER_ERROR(NWB_TEXT("FBX: stream deduplication preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FBX: stream deduplication preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return MakeUnexpected(Failure{});
     }
 
@@ -72,7 +72,7 @@ template<typename Value>
     }
 
     if(uniqueCount >= static_cast<usize>(Impl::s_MeshMissingStreamIndex)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), ConvertString(streamName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
 
@@ -82,7 +82,7 @@ template<typename Value>
     u32 compactIndex = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
         if(sortedIndex == 0u || !SameEmittedStreamValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
-            NWB_ASSERT(compact.size() < static_cast<usize>(Impl::s_MeshMissingStreamIndex));
+            FOUNDATION_ASSERT(compact.size() < static_cast<usize>(Impl::s_MeshMissingStreamIndex));
             compactIndex = static_cast<u32>(compact.size());
             compact.push_back(sortedEntries[sortedIndex].value);
         }
@@ -103,7 +103,7 @@ template<typename Value>
 
 Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::CanonicalizeSkinned(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     if(inOutMesh.positions.size() != skinInfluences.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return MakeUnexpected(Failure{});
     }
 

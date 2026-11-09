@@ -120,7 +120,7 @@ inline void SymmetrizeCompactBitMatrix(const Span<u64> words, const Span<const u
         if(bits == 0u)
             return;
         const auto& range = ranges[task];
-        NWB_ASSERT(word >= range.begin && word < range.end);
+        FOUNDATION_ASSERT(word >= range.begin && word < range.end);
         words[offsets[task] + word - range.begin] |= bits;
     };
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){

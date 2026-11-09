@@ -16,7 +16,7 @@
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveComparisonPath(const Path<ArenaT>& path){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     Vector<tchar, ArenaT> buffer(path.arena());
     buffer.reserve(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
     DWORD capacity = static_cast<DWORD>(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
@@ -38,7 +38,7 @@ template<typename ArenaT>
 
 
 [[nodiscard]] inline Expected<b8, ErrorCode> SamePathComponentText(const TStringView lhs, const TStringView rhs)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const int comparison = CompareStringOrdinal(lhs.data(), static_cast<int>(lhs.size()), rhs.data(), static_cast<int>(rhs.size()), TRUE);
     if(comparison == 0)
         return MakeUnexpected(LastSystemError());
@@ -51,7 +51,7 @@ template<typename ArenaT>
 [[nodiscard]] inline constexpr b8 SameGenericPrefixText(const AStringView lhs, const AStringView rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     for(usize i = 0u; i < lhs.size(); ++i){
         if(Canonicalize(lhs[i]) != Canonicalize(rhs[i]))
             return false;
@@ -75,7 +75,7 @@ public:
     [[nodiscard]] Expected<b8, ErrorCode> sameExisting()const noexcept{
         if(m_lhs.empty() || m_rhs.empty())
             return false;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const HANDLE lhsHandle = CreateFile(
             m_lhs.c_str(),
             0u,
@@ -121,7 +121,7 @@ public:
             && GetFileInformationByHandleEx(rhsHandle, FileIdInfo, &rhsId, sizeof(rhsId))
         ){
             same = lhsId.VolumeSerialNumber == rhsId.VolumeSerialNumber
-                && NWB_MEMCMP(&lhsId.FileId, &rhsId.FileId, sizeof(lhsId.FileId)) == 0;
+                && FOUNDATION_MEMCMP(&lhsId.FileId, &rhsId.FileId, sizeof(lhsId.FileId)) == 0;
         }
         else{
             BY_HANDLE_FILE_INFORMATION lhsInfo = {};

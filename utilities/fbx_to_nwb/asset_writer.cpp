@@ -101,7 +101,7 @@ b8 WriteNwbAsset(
 ){
     const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
     if(!assetTypeResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), ConvertString(OutputAssetTypeErrorText(scratchArena)));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB asset: {}"), ConvertString(OutputAssetTypeErrorText(scratchArena)));
         return false;
     }
 

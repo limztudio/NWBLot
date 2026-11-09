@@ -436,7 +436,7 @@ static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
 static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, const b8 allowUnaliasedPath, Core::Alloc::ScratchArena& scratchArena){
     const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
     if(!normalizedDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     const ScratchPath normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -450,7 +450,7 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     }
     if(!bestRootAlias){
         if(!allowUnaliasedPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
             return MakeUnexpected(Failure{});
         }
         const ScratchString absolutePathText = PathToString(scratchArena, normalizedDependency);
@@ -576,13 +576,13 @@ static constexpr Array<AStringView, s_CommonCompilerArgumentCount> s_CommonCompi
     if(!includeName.empty() && includePath.isAbsolute()){
         const auto absoluteIncludePath = AbsolutePath(includePath);
         if(!absoluteIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
             return MakeUnexpected(Failure{});
         }
         const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
         overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
         if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
             return MakeUnexpected(Failure{});
         }
         const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
@@ -671,7 +671,7 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
         return defines;
 
     if(!definesVal->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -682,17 +682,17 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
         CookString defineName(key.data(), key.size(), arena);
         const ShaderDefineNameStatus::Enum nameStatus = ClassifyShaderDefineName(AStringView(defineName));
         if(nameStatus == ShaderDefineNameStatus::Reserved){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
         if(nameStatus == ShaderDefineNameStatus::Invalid){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
 
         ShaderCook::CookVector<CookString> defineValues(arena);
         if(!val.copyStringList(defineValues)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
         if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValues))
@@ -726,7 +726,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
     result.checksum = s_Fnv64OffsetBasis;
 
     if(dependencyRootAliases.size() == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum requires at least one dependency root alias"));
         return MakeUnexpected(Failure{});
     }
 
@@ -734,14 +734,14 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root aliases"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum requires non-empty dependency root aliases"));
             return MakeUnexpected(Failure{});
         }
 
         __hidden_shader_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
         const auto rootPath = AbsolutePath(__hidden_shader_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
         if(!rootPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), ConvertString(rootPath.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), ConvertString(rootPath.error().message()));
             return MakeUnexpected(Failure{});
         }
 
@@ -749,7 +749,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
         if(normalizedAlias.key.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
             return MakeUnexpected(Failure{});
         }
         normalizedAlias.depth = PathDepth(normalizedAlias.root);
@@ -785,10 +785,10 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
         auto readBinaryFileResult = ReadBinaryFile(*item.path, dependencyBytes);
         if(!readBinaryFileResult){
             if(readBinaryFileResult.error()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), ConvertString(readBinaryFileResult.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), ConvertString(readBinaryFileResult.error().message()));
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));
             }
             return MakeUnexpected(Failure{});
         }
@@ -840,7 +840,7 @@ void ShaderDefinePlanner::mergeInheritedDefines(const Span<const Path> dependenc
     b8 canReserveDefineValues = true;
     for(const Path& dep : dependencies){
         Core::Assets::ScratchString depKey = PathToString(scratchArena, dep);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(depKey);
 #endif
         const auto found = includeMetadata.find(AStringView(depKey));
@@ -877,12 +877,12 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
         copy.reserve(defineValues.size());
         for(const auto& [sourceName, sourceValue] : source){
             if(!copy.try_emplace(sourceName, sourceValue).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return MakeUnexpected(Failure{});
             }
         }
         if(!copy.try_emplace(defineName, defineValue).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         return copy;
@@ -901,7 +901,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
             for(DefineCombo& combo : outCombinations){
                 combo.reserve(defineValues.size());
                 if(!combo.try_emplace(defineName, value).second){
-                    NWB_ASSERT(false);
+                    FOUNDATION_ASSERT(false);
                     outCombinations.clear();
                     return false;
                 }
@@ -931,7 +931,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
 
             combo.reserve(defineValues.size());
             if(!combo.try_emplace(defineName, AStringView(values.back())).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 outCombinations.clear();
                 return false;
             }

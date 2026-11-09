@@ -58,7 +58,7 @@ static b8 ForEachSegmentChunk(const AStringView volumeName, const AStringView op
     }
     const u64 capacityBytes = static_cast<u64>(segmentPaths.size()) * segmentSize;
     if(endOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), ConvertString(volumeName), ConvertString(operation), offset, endOffset, capacityBytes);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), ConvertString(volumeName), ConvertString(operation), offset, endOffset, capacityBytes);
         return false;
     }
 
@@ -161,7 +161,7 @@ static b8 ReadSegmentBytes(
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}")
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}")
                     , ConvertString(volumeName)
                     , ConvertString(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)
@@ -199,7 +199,7 @@ static b8 WriteSegmentBytes(
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}")
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}")
                     , ConvertString(volumeName)
                     , ConvertString(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)

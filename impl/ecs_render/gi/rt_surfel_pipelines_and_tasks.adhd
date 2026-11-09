@@ -354,12 +354,12 @@ namespace __hidden_surfel_pipelines{
 
     const Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || (includeAccelStruct && !heap.hasAccelStructLayout())){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel {} requires the initialized global descriptor heap"), passLabel);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel {} requires the initialized global descriptor heap"), passLabel);
         inOutFailed = true;
         return false;
     }
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(arena, device, sizeof(SurfelHeapPushConstants), Core::ShaderType::Compute, inOutLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel {} binding layout"), passLabel);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create surfel {} binding layout"), passLabel);
         inOutFailed = true;
         return false;
     }
@@ -368,11 +368,11 @@ namespace __hidden_surfel_pipelines{
         return false;
     }
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel {} compute pipeline"), passLabel);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create surfel {} compute pipeline"), passLabel);
         inOutFailed = true;
         return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel {} compute pipeline"), passLabel);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererSystem: created surfel {} compute pipeline"), passLabel);
     return true;
 }
 
@@ -395,7 +395,7 @@ b8 SurfelGiPipelineSet::ensureSurfelSpawnPipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelSpawn",
         false,
-        NWB_TEXT("spawn"),
+        FOUNDATION_TEXT("spawn"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelSpawnShader,
         m_rayTracingState.m_surfelSpawnPipeline,
@@ -412,7 +412,7 @@ b8 SurfelGiPipelineSet::ensureSurfelAgeFreePipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelAgeFree",
         false,
-        NWB_TEXT("age-free"),
+        FOUNDATION_TEXT("age-free"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelAgeFreeShader,
         m_rayTracingState.m_surfelAgeFreePipeline,
@@ -429,7 +429,7 @@ b8 SurfelGiPipelineSet::ensureSurfelHashBuildPipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelHashBuild",
         false,
-        NWB_TEXT("hash-build"),
+        FOUNDATION_TEXT("hash-build"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelHashBuildShader,
         m_rayTracingState.m_surfelHashBuildPipeline,
@@ -447,7 +447,7 @@ b8 SurfelGiPipelineSet::ensureSurfelTracePipeline(){
         ResolveGiCsgVariant(csg),
         "ECSRender_SurfelTrace",
         false,
-        NWB_TEXT("trace"),
+        FOUNDATION_TEXT("trace"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         csg ? m_rayTracingState.m_surfelTraceCsgShader : m_rayTracingState.m_surfelTraceShader,
         csg ? m_rayTracingState.m_surfelTraceCsgPipeline : m_rayTracingState.m_surfelTracePipeline,
@@ -479,7 +479,7 @@ b8 SurfelGiPipelineSet::ensureSurfelTraceHwPipeline(){
         ResolveGiCsgVariant(csg),
         "ECSRender_SurfelTraceHw",
         true,
-        NWB_TEXT("HW trace"),
+        FOUNDATION_TEXT("HW trace"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         shader,
         pipeline,
@@ -496,7 +496,7 @@ b8 SurfelGiPipelineSet::ensureSurfelResolvePipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelResolve",
         false,
-        NWB_TEXT("resolve"),
+        FOUNDATION_TEXT("resolve"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelResolveShader,
         m_rayTracingState.m_surfelResolvePipeline,
@@ -513,7 +513,7 @@ b8 SurfelGiPipelineSet::ensureSurfelUpsamplePipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelUpsample",
         false,
-        NWB_TEXT("upsample"),
+        FOUNDATION_TEXT("upsample"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelUpsampleShader,
         m_rayTracingState.m_surfelUpsamplePipeline,
@@ -530,7 +530,7 @@ b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_SurfelTraceBuildArgs",
         false,
-        NWB_TEXT("trace build-args"),
+        FOUNDATION_TEXT("trace build-args"),
         m_rayTracingState.m_surfelHeapBindingLayout,
         m_rayTracingState.m_surfelTraceBuildArgsShader,
         m_rayTracingState.m_surfelTraceBuildArgsPipeline,
@@ -557,7 +557,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!hasSurfelWork())
         return true;
 
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -579,7 +579,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         || !m_rayTracingState.m_surfelUpsamplePipeline
         || !m_rayTracingState.m_surfelTraceBuildArgsPipeline
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
         return false;
     }
 
@@ -605,7 +605,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
         || (useHwTrace && (!m_rayTracingState.m_tlas || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;
     }
 
@@ -709,7 +709,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.setComputeState(state);
         // Hardware trace additionally selects the TLAS generation at set 2.
         if(m_rayTracingState.m_surfelUseHwTrace && !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();

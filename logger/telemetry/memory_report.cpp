@@ -93,7 +93,7 @@ inline constexpr char s_JsonRecordClose = '}';
 
 void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept{
     const usize sourceIndex = static_cast<usize>(payload.snapshot.source);
-    NWB_ASSERT(sourceIndex < s_TelemetryMemorySourceCount);
+    FOUNDATION_ASSERT(sourceIndex < s_TelemetryMemorySourceCount);
 
     ++summary.memoryEventCount;
     TelemetryMemorySummary& source = summary.memorySources[sourceIndex];

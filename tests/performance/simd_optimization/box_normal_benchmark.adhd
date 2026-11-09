@@ -42,7 +42,7 @@ static volatile u64 s_Checksum = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
     const SIMDVectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
@@ -62,7 +62,7 @@ static volatile u64 s_Checksum = 0u;
     return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
     const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
     const SIMDVectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
@@ -82,11 +82,11 @@ static volatile u64 s_Checksum = 0u;
     return VectorDoubleSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     return SdfTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     return SdfDoubleTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
@@ -121,7 +121,7 @@ template<typename Scalar>
 }
 
 template<typename Scalar, b8 Candidate>
-[[nodiscard]] NWB_NOINLINE auto Run(const Case<Scalar>& input)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE auto Run(const Case<Scalar>& input)noexcept{
     if constexpr(IsSame_V<Scalar, f64>){
         const SIMDVectorDouble position = LoadDouble(input.position);
         const SIMDVectorDouble extents = LoadDouble(input.extents);
@@ -170,14 +170,14 @@ template<typename Scalar>
             for(usize lane = 0u; lane < 4u; ++lane)
                 equal &= BitCast<Bits>(static_cast<Scalar>(original[lane])) == BitCast<Bits>(static_cast<Scalar>(candidate[lane]));
             if(!equal && ++failures <= 8u)
-                NWB_COUT << "mismatch precision=" << sizeof(Scalar) << " mode=" << mode << " index=" << index << " flags=" << originalFlags << '/' << candidateFlags << " errno=" << originalErrno << '/' << candidateErrno << '\n';
+                FOUNDATION_COUT << "mismatch precision=" << sizeof(Scalar) << " mode=" << mode << " index=" << index << " flags=" << originalFlags << '/' << candidateFlags << " errno=" << originalErrno << '/' << candidateErrno << '\n';
         }
     }
     return failures;
 }
 
 template<typename Scalar, b8 Candidate, b8 Latency>
-[[nodiscard]] NWB_NOINLINE u64 Workload(const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE u64 Workload(const usize iterations)noexcept{
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
     Array<Case<Scalar>, s_DataCount> data = {};
     for(usize index = 0u; index < s_DataCount; ++index){
@@ -238,8 +238,8 @@ template<typename Scalar>
     const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
     constexpr f64 s_NanosecondsPerSecond = 1.0e9;
     const f64 seconds = DurationInNS<f64>(TimerNow(), begin) / s_NanosecondsPerSecond;
-    NWB_COUT.precision(17);
-    NWB_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
+    FOUNDATION_COUT.precision(17);
+    FOUNDATION_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
     return 0;
 }
 
@@ -272,7 +272,7 @@ int main(const int argc, const char* const* argv){
         });
         const u32 singleFailures = Verify<f32>();
         const u32 doubleFailures = Verify<f64>();
-        NWB_COUT << "verification single=" << singleFailures << " double=" << doubleFailures << " cases=262144\n";
+        FOUNDATION_COUT << "verification single=" << singleFailures << " double=" << doubleFailures << " cases=262144\n";
         return singleFailures || doubleFailures ? 1 : 0;
     }
     if(argc == 6 && StringView(argv[1]) == "measure"){
@@ -287,7 +287,7 @@ int main(const int argc, const char* const* argv){
         const usize iterations = static_cast<usize>(*parsedIterations);
         return single ? Measure<f32>(candidate, latency, iterations) : Measure<f64>(candidate, latency, iterations);
     }
-    NWB_CERR << "usage: simd_box_normal_benchmark verify | measure single|double original|candidate throughput|latency iterations\n";
+    FOUNDATION_CERR << "usage: simd_box_normal_benchmark verify | measure single|double original|candidate throughput|latency iterations\n";
     return 2;
 }
 

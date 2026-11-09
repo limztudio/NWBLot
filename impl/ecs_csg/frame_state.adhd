@@ -114,7 +114,7 @@ public:
                 return;
 
             const auto foundRange = m_cutterRanges.find(cutter.receiverGroup);
-            NWB_ASSERT(foundRange != m_cutterRanges.end());
+            FOUNDATION_ASSERT(foundRange != m_cutterRanges.end());
 
             CsgFrameCutterRangeEntry& entry = foundRange.value();
             u32& writtenCount = entry.writtenCount;
@@ -123,7 +123,7 @@ public:
                 return;
 
             const usize cutterIndex = static_cast<usize>(range.firstCutter + writtenCount);
-            NWB_ASSERT(cutterIndex < m_cutterRefs.size());
+            FOUNDATION_ASSERT(cutterIndex < m_cutterRefs.size());
             m_cutterRefs[cutterIndex] = CsgFrameCutterRef{ entity, &cutter };
             ++writtenCount;
         });
@@ -153,7 +153,7 @@ public:
         const usize firstCutter = static_cast<usize>(drawState.firstCutter);
         const usize cutterCount = static_cast<usize>(drawState.cutterCount);
         if(firstCutter > m_cutterRefs.size() || cutterCount > m_cutterRefs.size() - firstCutter){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return;
         }
 
@@ -161,7 +161,7 @@ public:
         for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
             const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
             if(!cutterRef.cutter){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 continue;
             }
             const CsgCutterComponent& cutter = *cutterRef.cutter;

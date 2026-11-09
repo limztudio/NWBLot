@@ -53,7 +53,7 @@ namespace BuiltAssetDetail{
 
 b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena){
     if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;
     }
 
@@ -73,11 +73,11 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
         const u8* const payloadData = entry.payloadBytes.data();
         const usize payloadSize = entry.payloadBytes.size();
         if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: invalid payload identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: built asset payload is too large"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: built asset payload is too large"));
             return false;
         }
 
@@ -93,7 +93,7 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
         // Preserve files referenced by the previous manifest if a later entry fails during this publication.
         for(;;){
             if(artifactIndex == Limit<u64>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: built asset filename slots are exhausted"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: built asset filename slots are exhausted"));
                 return false;
             }
             filename.clear();
@@ -110,7 +110,7 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
                 continue;
             }
             if(!IsMissingPathError(read.error())){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to inspect built asset '{}'"), PathToString<tchar>(path));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to inspect built asset '{}'"), PathToString<tchar>(path));
                 return false;
             }
             if(!AssetFilePublisher::Write(path, artifactBytes, false, existingBytes))
@@ -128,7 +128,7 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){
     if(!ReadBinaryFile(path, inOutBytes) || inOutBytes.size() < __hidden_built_asset::s_HeaderSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
 
@@ -139,7 +139,7 @@ Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBy
     const u64 payloadSize = *ReadPOD<u64>(inOutBytes, cursor);
     const u64 payloadHash = *ReadPOD<u64>(inOutBytes, cursor);
     if(magic != __hidden_built_asset::s_Magic || version != __hidden_built_asset::s_Version || payloadSize != inOutBytes.size() - cursor || payloadHash != ComputeFnv64Bytes(inOutBytes.data() + cursor, inOutBytes.size() - cursor) || !Name(virtualPathHash)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     return BuiltAssetPayload{ .virtualPath = Name(virtualPathHash), .payloadOffset = cursor };

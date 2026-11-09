@@ -417,13 +417,13 @@ TEST(SceneSubsystemAssets, RejectsInvalidLightFlagsAndTrailingComponentBytes){
     payload.enableCaustics = 2u;
     const auto invalidFlags = MakeComponentBinary<LightComponentAsset>(payload, arena);
     EXPECT_FALSE(codec.deserialize(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesInvalidLight, invalidFlags, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid light flags")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("invalid light flags")));
 
     payload.enableCaustics = 1u;
     auto trailing = MakeComponentBinary<LightComponentAsset>(payload, arena);
     trailing.push_back(0u);
     EXPECT_FALSE(codec.deserialize(NWB::Tests::SceneAssetCases::s_SceneCaseProjectEntitiesTrailingLight, trailing, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("trailing bytes detected")));
 }
 
 
@@ -454,7 +454,7 @@ TEST(SceneSubsystemAssets, RejectsMissingSharedOpticalGroupAndDuplicateEntityCom
     invalidRendererPayload.opticalBoundaryMode = static_cast<u8>(OpticalBoundaryMode::ClosedPriority);
     ComponentAssetCodec componentCodec;
     EXPECT_FALSE(componentCodec.deserialize(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer), MakeComponentBinary<RendererComponentAsset>(invalidRendererPayload, arena), arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("shared_group optical volume requires optical_volume_group")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("shared_group optical volume requires optical_volume_group")));
 
     TransformComponentPayloadBinary transformPayload;
     transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
@@ -477,7 +477,7 @@ TEST(SceneSubsystemAssets, RejectsMissingSharedOpticalGroupAndDuplicateEntityCom
 
     ActiveSceneSubsystems active(globalArena);
     EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_comp_scene"), assets));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate component type")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate component type")));
 }
 
 
@@ -645,17 +645,17 @@ TEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorrupt
 
     TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec;
     EXPECT_FALSE(rendererCodec.deserialize(s_SkinningSubsystemPath, skinningBinary, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("subsystem binary type does not match")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("subsystem binary type does not match")));
 
     AssetBytes trailing = skinningBinary;
     trailing.push_back(0u);
     EXPECT_FALSE(codec.deserialize(s_SkinningSubsystemPath, trailing, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("trailing bytes detected")));
 
     AssetBytes badMagic = skinningBinary;
     badMagic[0] ^= 0xFFu;
     EXPECT_FALSE(codec.deserialize(s_SkinningSubsystemPath, badMagic, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid subsystem asset format")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("invalid subsystem asset format")));
 }
 
 TEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems){
@@ -667,14 +667,14 @@ TEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
 
     const AssetBytes invalidProjectBinary = MakeProjectBinary(s_NameNone, arena);
     EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("start_scene must not be empty")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("start_scene must not be empty")));
 
     SceneAssetCodec sceneCodec;
     SceneAsset::SubsystemRefVector emptySubsystems(arena);
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     const AssetBytes emptySceneBinary = MakeSceneBinary(emptySubsystems, sceneAssets, {}, arena);
     EXPECT_FALSE(sceneCodec.deserialize(Name(NWB::Tests::SceneAssetCases::s_SceneFixtureNameProjectScenesEmpty), emptySceneBinary, arena).has_value());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("scene must declare at least one subsystem")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("scene must declare at least one subsystem")));
 }
 
 TEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure){
@@ -740,7 +740,7 @@ TEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnL
     duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/renderer_override"));
     source.setBinary(Name(NWB::Tests::SceneAssetCases::s_SceneCaseProjectScenesDuplicateType), MakeSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, {}, arena));
     EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_type"), assets));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate subsystem type")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate subsystem type")));
 
     SceneAsset::SubsystemRefVector brokenSceneSubsystems(arena);
     brokenSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/missing_subsystem"));

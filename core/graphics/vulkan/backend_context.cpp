@@ -132,12 +132,12 @@ void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhysicalDe
     outAdapter.deviceID = properties.deviceID;
     outAdapter.dedicatedVideoMemory = GetDeviceLocalMemoryBytes(instanceDispatch, physicalDevice);
 
-    NWB_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
+    FOUNDATION_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
     outAdapter.hasUUID = true;
     outAdapter.luid = {};
     outAdapter.hasLUID = false;
     if(idProperties.deviceLUIDValid){
-        NWB_MEMCPY(outAdapter.luid.data(), outAdapter.luid.size(), idProperties.deviceLUID, outAdapter.luid.size());
+        FOUNDATION_MEMCPY(outAdapter.luid.data(), outAdapter.luid.size(), idProperties.deviceLUID, outAdapter.luid.size());
         outAdapter.hasLUID = true;
     }
 }
@@ -166,7 +166,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(VkDebugUtilsMessageSeverityFl
 
     const AStringView messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
     const AStringView message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"), ConvertString(DebugUtilsSeverityToString(severity)), static_cast<u32>(types), messageId, ConvertString(messageIdName), ConvertString(message));
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"), ConvertString(DebugUtilsSeverityToString(severity)), static_cast<u32>(types), messageId, ConvertString(messageIdName), ConvertString(message));
 
     return VK_FALSE;
 }

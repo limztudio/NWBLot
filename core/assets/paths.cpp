@@ -51,7 +51,7 @@ Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, const AString
 
     const auto virtualPath = Name::FromText(AStringView(*virtualPathText));
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
         return MakeUnexpected(Failure{});
     }
 
@@ -90,7 +90,7 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
             AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, subIt.nativeComponent());
             CanonicalizeTextInPlace(componentText);
             if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
-                NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
                 return MakeUnexpected(Failure{});
             }
 
@@ -99,7 +99,7 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
         resolvedPath = resolvedPath.lexicallyNormal();
         const auto fileExists = FileExists(resolvedPath);
         if(!fileExists && !IsMissingPathError(fileExists.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to inspect resolved path '{}': {}"), PathToString<tchar>(resolvedPath), ConvertString(fileExists.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: failed to inspect resolved path '{}': {}"), PathToString<tchar>(resolvedPath), ConvertString(fileExists.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(fileExists && *fileExists)
@@ -116,14 +116,14 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
 Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> parentDirectory(scratchArena, nwbFilePath.parentPathView());
     if(parentDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
     auto nwbStem = PathToString(scratchArena, nwbFilePath.stemView());
     CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -131,13 +131,13 @@ Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePat
     usize matchCount = 0;
     const auto entries = DirectoryIterator<Alloc::ScratchArena>::Create(parentDirectory);
     if(!entries){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(parentDirectory), ConvertString(entries.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(parentDirectory), ConvertString(entries.error().message()));
         return MakeUnexpected(Failure{});
     }
     for(const auto& dirEntry : *entries){
         const auto isRegularFile = dirEntry.isRegularFile();
         if(!isRegularFile){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dirEntry.path()), ConvertString(isRegularFile.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dirEntry.path()), ConvertString(isRegularFile.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(!*isRegularFile)
@@ -156,13 +156,13 @@ Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePat
         matchedSourcePath = &candidatePath;
         ++matchCount;
         if(matchCount > 1){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
             return MakeUnexpected(Failure{});
         }
     }
 
     if(matchCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to find a paired source file with stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to find a paired source file with stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
         return MakeUnexpected(Failure{});
     }
 

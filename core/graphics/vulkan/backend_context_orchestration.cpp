@@ -45,7 +45,7 @@ b8 BackendContext::createInstance(){
 
 b8 BackendContext::createDevice(){
     if(!IsValidHardwareRayTracingPolicy(m_deviceParams.hardwareRayTracingPolicy)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
         return false;
     }
 
@@ -54,7 +54,7 @@ b8 BackendContext::createDevice(){
 
     m_maxFramesInFlight = m_deviceParams.maxFramesInFlight;
     if(m_maxFramesInFlight == 0){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
         m_maxFramesInFlight = 1;
     }
 
@@ -85,7 +85,7 @@ b8 BackendContext::createDevice(){
 
     for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions){
         if(ResolveDeviceExtensionRequest(m_deviceParams.hardwareRayTracingPolicy, name, true) == DeviceExtensionRequestAction::Reject){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), ConvertString(name));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), ConvertString(name));
             return false;
         }
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
@@ -155,18 +155,18 @@ b8 BackendContext::createDevice(){
     const GpuQueueCapability::Mask requiredGraphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Transfer));
     const GpuQueueCapability::Mask requiredComputeQueueCapabilitiesMask = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
     if((static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities)) != static_cast<u8>(requiredGraphicsQueueCapabilities)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
         return false;
     }
     if((static_cast<u8>(requiredComputeQueueCapabilities) & static_cast<u8>(requiredComputeQueueCapabilitiesMask)) != static_cast<u8>(requiredComputeQueueCapabilitiesMask)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
         return false;
     }
     const u32 graphicsNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_graphicsQueueFamily), s_GraphicsQueueIndex);
     const u32 computeNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex);
     const u32 transferNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex);
     if(graphicsNativeQueueIndex == Limit<u32>::s_Max || (m_computeQueueEnabled && computeNativeQueueIndex == Limit<u32>::s_Max) || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
         return false;
     }
     constexpr u32 s_ComputeAndTransferQueueCount = 2u;
@@ -249,12 +249,12 @@ b8 BackendContext::createDevice(){
     auto deviceResult = CreateDevice(deviceDesc);
     if(!deviceResult){
         m_rhiDevice = nullptr;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create RHI device wrapper."));
         return false;
     }
     m_rhiDevice = Move(*deviceResult);
     if(!m_rhiDevice->getDescriptorHeap().isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
         m_rhiDevice = nullptr;
         return false;
     }
@@ -266,11 +266,11 @@ b8 BackendContext::createDevice(){
         const GpuDescriptorHeapLifecycleStatistics heap = m_rhiDevice->getDescriptorHeap().lifecycleStatistics();
         const b8 accelerationStructureLayout = m_rhiDevice->getDescriptorHeap().hasAccelStructLayout();
         if(rayQuery || rayTracingPipeline || accelerationStructure || heap.accelStructCapacity != 0u || accelerationStructureLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
             m_rhiDevice = nullptr;
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: hardware ray tracing policy=disabled; RayQuery={} RayTracingPipeline={} RayTracingAccelStruct={} AccelStructDescriptors={} AccelStructLayout={}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Vulkan: hardware ray tracing policy=disabled; RayQuery={} RayTracingPipeline={} RayTracingAccelStruct={} AccelStructDescriptors={} AccelStructLayout={}")
             , static_cast<u32>(rayQuery)
             , static_cast<u32>(rayTracingPipeline)
             , static_cast<u32>(accelerationStructure)

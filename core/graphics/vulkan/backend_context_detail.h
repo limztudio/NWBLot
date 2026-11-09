@@ -14,7 +14,7 @@
 
 #include <global/text_utils.h>
 
-#ifdef NWB_PLATFORM_WINDOWS
+#ifdef FOUNDATION_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
 

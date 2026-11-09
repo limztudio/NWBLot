@@ -143,7 +143,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Sp
             }
 
             const u64 idleTicks = range.beginTicks - mergedEnd;
-            NWB_ASSERT(!AddOverflows<u64>(queueMetrics.internalIdleTicks, idleTicks));
+            FOUNDATION_ASSERT(!AddOverflows<u64>(queueMetrics.internalIdleTicks, idleTicks));
             queueMetrics.internalIdleTicks += idleTicks;
             events.push_back(TimestampEvent{ .ticks = mergedBegin, .begins = true });
             events.push_back(TimestampEvent{ .ticks = mergedEnd, .begins = false });
@@ -167,7 +167,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Sp
         const u64 eventTicks = events[eventIndex].ticks;
         if(activeQueueCount >= s_MinOverlappingQueueCount){
             const u64 intervalTicks = eventTicks - previousTicks;
-            NWB_ASSERT(!AddOverflows<u64>(overlapTicks, intervalTicks));
+            FOUNDATION_ASSERT(!AddOverflows<u64>(overlapTicks, intervalTicks));
             overlapTicks += intervalTicks;
         }
 
@@ -175,23 +175,23 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Sp
         usize endCount = 0u;
         while(eventIndex < events.size() && events[eventIndex].ticks == eventTicks){
             if(events[eventIndex].begins){
-                NWB_ASSERT(!AddOverflows<usize>(beginCount, usize{ 1u }));
+                FOUNDATION_ASSERT(!AddOverflows<usize>(beginCount, usize{ 1u }));
                 ++beginCount;
             }
             else{
-                NWB_ASSERT(!AddOverflows<usize>(endCount, usize{ 1u }));
+                FOUNDATION_ASSERT(!AddOverflows<usize>(endCount, usize{ 1u }));
                 ++endCount;
             }
             ++eventIndex;
         }
 
-        NWB_ASSERT(endCount <= activeQueueCount);
+        FOUNDATION_ASSERT(endCount <= activeQueueCount);
         activeQueueCount -= endCount;
-        NWB_ASSERT(!AddOverflows<usize>(activeQueueCount, beginCount));
+        FOUNDATION_ASSERT(!AddOverflows<usize>(activeQueueCount, beginCount));
         activeQueueCount += beginCount;
         previousTicks = eventTicks;
     }
-    NWB_ASSERT(activeQueueCount == 0u);
+    FOUNDATION_ASSERT(activeQueueCount == 0u);
 
     metrics.secondsPerTick = secondsPerTick;
     metrics.queueOverlapTicks = overlapTicks;

@@ -943,11 +943,11 @@ inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestAre
 }
 
 template<typename T>
-b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
+b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(FOUNDATION_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
     if(offset > binary.size() || sizeof(value) > binary.size() - offset)
         return false;
 
-    NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
+    FOUNDATION_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
     return true;
 }
 

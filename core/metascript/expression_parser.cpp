@@ -282,7 +282,7 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
 
 
 Value ExpressionParser::makeReference(const ScratchPath& path){
-    NWB_ASSERT(!path.empty());
+    FOUNDATION_ASSERT(!path.empty());
 
     if(m_variables.find(path[0]) == m_variables.end()){
         m_cursor.error("references must target a declared variable");

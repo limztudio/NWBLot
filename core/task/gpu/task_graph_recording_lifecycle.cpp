@@ -96,7 +96,7 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     const b8 previousPlanWasActive = m_activeRecordingPlanGeneration != 0u;
     const u64 nextRecordingAttemptGeneration = AllocateGeneration();
     const u64 preparationSerial = AllocateGeneration();
-    NWB_ASSERT(nextRecordingAttemptGeneration != 0u && preparationSerial != 0u);
+    FOUNDATION_ASSERT(nextRecordingAttemptGeneration != 0u && preparationSerial != 0u);
     const u64 previousRecordingAttemptGeneration = samePlan && m_submissionBindingState == SubmissionBindingState::None ? m_activeRecordingAttemptGeneration : 0u;
     if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, nextRecordingAttemptGeneration, previousRecordingAttemptGeneration, planAccess))
         return false;
@@ -105,7 +105,7 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
         const b8 previousAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
         if(!previousAttemptResolved){
             const b8 candidateResolved = compiledGraph.resolveRecordingAttempt(*this, requestedPlanGeneration, nextRecordingAttemptGeneration);
-            NWB_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
+            FOUNDATION_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
             return false;
         }
     }
@@ -152,10 +152,10 @@ void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)cons
             && !task.recordThunkCompleted
         ;
     }
-    NWB_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
+    FOUNDATION_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
 
     const b8 candidateResolved = attempt.m_compiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, attempt.m_recordingAttemptGeneration);
-    NWB_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
+    FOUNDATION_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
 
     const b8 restoreDiscardedTasks = attempt.m_previousPlanWasActive;
     m_activeCompiledGraph = nullptr;
@@ -180,7 +180,7 @@ void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)cons
 void GpuTaskGraph::completeRecordingPreparation(GpuRecordingAttemptScope& attempt)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
     const b8 preparationValid = attempt.m_compiledGraph && attempt.validPreparationWithinLock(*this, *attempt.m_compiledGraph, m_activeRecordingAttemptGeneration, m_activeRecordingPreparationSerial);
-    NWB_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
+    FOUNDATION_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
 
     m_activeRecordingPreparationSerial = 0u;
     attempt.completeWithinLock();

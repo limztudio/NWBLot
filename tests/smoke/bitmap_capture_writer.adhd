@@ -134,17 +134,17 @@ public:
         }
 
         ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, outputPath);
-        partialPath += NWB_TEXT(".partial");
+        partialPath += FOUNDATION_TEXT(".partial");
         if(!WriteBinaryFile(partialPath, bitmapBytes)){
             const auto removed = RemoveFile(partialPath);
             if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
             return false;
         }
         if(!RenamePath(partialPath, outputPath)){
             const auto removed = RemoveFile(partialPath);
             if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
             return false;
         }
         return true;

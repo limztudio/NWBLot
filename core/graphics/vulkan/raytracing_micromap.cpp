@@ -38,11 +38,11 @@ VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFor
 Expected<VkBuildMicromapFlagsEXT> ConvertOpacityMicromapBuildFlags(const RayTracingOpacityMicromapBuildFlags::Mask flags, TStringView operation){
     constexpr u8 s_KnownFlags = RayTracingOpacityMicromapBuildFlags::FastTrace | RayTracingOpacityMicromapBuildFlags::FastBuild | RayTracingOpacityMicromapBuildFlags::AllowCompaction;
     if((static_cast<u8>(flags) & static_cast<u8>(~s_KnownFlags)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap build flags contain unknown bits"), operation);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: opacity micromap build flags contain unknown bits"), operation);
         return MakeUnexpected(Failure{});
     }
     if((flags & RayTracingOpacityMicromapBuildFlags::FastTrace) && (flags & RayTracingOpacityMicromapBuildFlags::FastBuild)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operation);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operation);
         return MakeUnexpected(Failure{});
     }
 
@@ -70,12 +70,12 @@ Expected<MicromapUsageVector> BuildOpacityMicromapUsageCounts(
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
         const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
         if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}"), operation, i, static_cast<u32>(count.format));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}"), operation, i, static_cast<u32>(count.format));
             return MakeUnexpected(Failure{});
         }
         const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT ? maxOpacity2StateSubdivisionLevel : maxOpacity4StateSubdivisionLevel;
         if(count.subdivisionLevel > maxSubdivisionLevel){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} subdivision level {} exceeds device limit {}"), operation, i, count.subdivisionLevel, maxSubdivisionLevel);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} subdivision level {} exceeds device limit {}"), operation, i, count.subdivisionLevel, maxSubdivisionLevel);
             return MakeUnexpected(Failure{});
         }
 
@@ -93,17 +93,17 @@ Expected<VkDeviceAddress> ResolveOpacityMicromapBuildInputAddress(Buffer& buffer
     constexpr u64 s_DeviceAddressAlignment = 256u;
     const u64 validatedByteSize = byteSize != 0u ? byteSize : 1u;
     if(!IsBufferRangeInBounds(buffer.getCreationDescription(), offset, validatedByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} range is outside the buffer"), resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: {} range is outside the buffer"), resourceName);
         return MakeUnexpected(Failure{});
     }
 
     const VkDeviceAddress address = GetBufferDeviceAddress(&buffer, offset);
     if(address == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} device address is null or overflows"), resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: {} device address is null or overflows"), resourceName);
         return MakeUnexpected(Failure{});
     }
     if((address % s_DeviceAddressAlignment) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} device address is not 256-byte aligned"), resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: {} device address is not 256-byte aligned"), resourceName);
         return MakeUnexpected(Failure{});
     }
 
@@ -148,15 +148,15 @@ OpacityMicromap::~OpacityMicromap()noexcept{
 
 
 Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
-    constexpr TStringView s_CreateOperation = NWB_TEXT("create opacity micromap");
+    constexpr TStringView s_CreateOperation = FOUNDATION_TEXT("create opacity micromap");
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Enabled opacity micromap feature support is required to create opacity micromaps."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Enabled opacity micromap feature support is required to create opacity micromaps."));
         return MakeUnexpected(Failure{});
     }
     if(desc.counts.size() > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: usage-count count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create opacity micromap: usage-count count exceeds Vulkan limit"));
         return MakeUnexpected(Failure{});
     }
 
@@ -201,14 +201,14 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
 
     auto bufferResult = createBuffer(bufferDesc);
     if(!bufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
         return MakeUnexpected(Failure{});
     }
     om->m_dataBuffer = Move(*bufferResult);
 
     auto& buffer = *MakeNotNull(om->m_dataBuffer.get());
     if(!isBufferReadyForGpuUse(&buffer, VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: storage buffer is not ready for device-address access"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create opacity micromap: storage buffer is not ready for device-address access"));
         return MakeUnexpected(Failure{});
     }
 
@@ -219,7 +219,7 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
 
     res = m_context.deviceDispatch.vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -231,26 +231,26 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
 
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
-    constexpr TStringView s_OperationName = NWB_TEXT("build opacity micromap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("build opacity micromap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: enabled opacity micromap feature support is unavailable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: enabled opacity micromap feature support is unavailable"));
         return;
     }
 
     if(!opacityMicromapResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: micromap is null"));
         return;
     }
 
     auto& omm = *MakeNotNull(opacityMicromapResource);
     if(&omm.m_context != &m_context || omm.m_micromap == VK_NULL_HANDLE || !omm.m_dataBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is foreign or invalid"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: micromap is foreign or invalid"));
         return;
     }
     if(ommDesc.counts.size() > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: usage-count count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: usage-count count exceeds Vulkan limit"));
         return;
     }
 
@@ -258,7 +258,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     for(const RayTracingOpacityMicromapUsageCount& count : ommDesc.counts){
         const auto countBytes = TryMultiply<u64>(static_cast<u64>(count.count), sizeof(VkMicromapTriangleEXT));
         if(!countBytes || triangleDescBytes > Limit<u64>::s_Max - *countBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor size overflows"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor size overflows"));
             return;
         }
         triangleDescBytes += *countBytes;
@@ -275,7 +275,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 
     auto* inputBuffer = ommDesc.inputBuffer;
     if(!inputBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
         return;
     }
     auto& dataBuffer = *MakeNotNull(omm.m_dataBuffer.get());
@@ -286,16 +286,16 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 
     auto* perOmmDescs = ommDesc.perOmmDescs;
     if(!perOmmDescs){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
         return;
     }
     if(!validateBufferForGpuState(perOmmDescs, ResourceStates::OpacityMicromapBuildInput, s_OperationName, s_BuildInputUsage))
         return;
 
-    const auto inputAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*inputBuffer, ommDesc.inputBufferOffset, 1u, NWB_TEXT("input data"));
+    const auto inputAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*inputBuffer, ommDesc.inputBufferOffset, 1u, FOUNDATION_TEXT("input data"));
     if(!inputAddress)
         return;
-    const auto triangleDescAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*perOmmDescs, ommDesc.perOmmDescsOffset, triangleDescBytes, NWB_TEXT("per-OMM descriptor"));
+    const auto triangleDescAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*perOmmDescs, ommDesc.perOmmDescsOffset, triangleDescBytes, FOUNDATION_TEXT("per-OMM descriptor"));
     if(!triangleDescAddress)
         return;
 
@@ -314,7 +314,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     m_context.deviceDispatch.vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     if(dataBuffer.getCreationDescription().byteSize < buildSize.micromapSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
         return;
     }
 

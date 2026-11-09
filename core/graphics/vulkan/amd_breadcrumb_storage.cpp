@@ -46,11 +46,11 @@ b8 AmdBreadcrumbStorage::initializeMetadata(const VulkanDetail::AmdBreadcrumbRin
 b8 AmdBreadcrumbStorage::initialize(VulkanAllocator& allocator, const GpuPhysicalQueueTopology& topology){
     const auto breadcrumbLayout = VulkanDetail::AmdBreadcrumbRing::BuildLayout(topology, s_MaxAmdBreadcrumbSlots);
     if(!breadcrumbLayout){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Invalid AMD breadcrumb ring layout; AMD GPU breadcrumbs disabled."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Invalid AMD breadcrumb ring layout; AMD GPU breadcrumbs disabled."));
         return false;
     }
     if(!initializeMetadata(*breadcrumbLayout, VulkanArenaScope::s_AmdBreadcrumbMetadataArena)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reserve AMD breadcrumb metadata; AMD GPU breadcrumbs disabled."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to reserve AMD breadcrumb metadata; AMD GPU breadcrumbs disabled."));
         return false;
     }
 
@@ -73,12 +73,12 @@ b8 AmdBreadcrumbStorage::initialize(VulkanAllocator& allocator, const GpuPhysica
         mappedMemory = breadcrumb->mappedMemory;
     }
     if(breadcrumb && mappedMemory){
-        NWB_MEMSET(mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
+        FOUNDATION_MEMSET(mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
         return true;
     }
     if(breadcrumb)
         allocator.destroyHostMappedBuffer(buffer, allocation, mappedMemory);
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); breadcrumbs disabled."), ResultToString(breadcrumb ? VK_SUCCESS : breadcrumb.error()));
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); breadcrumbs disabled."), ResultToString(breadcrumb ? VK_SUCCESS : breadcrumb.error()));
     return false;
 }
 

@@ -7,7 +7,7 @@
 
 #include "internal.h"
 
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
 #include <signal.h>
 
 
@@ -25,7 +25,7 @@ public:
     static void CaptureCurrent(CrashDetail::CrashDumpRequestOptions& options, const void* stackPointer, const void* framePointer, const void* instructionPointer)noexcept;
     static void SignalHandler(int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept;
     [[noreturn]] static void Terminate()noexcept;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     [[nodiscard]] static b8 CaptureEhFrame(CrashDetail::CrashDumpRequestOptions& options, u64 alignmentInstructionPointer)noexcept;
     static void WarmUp()noexcept;
 #endif

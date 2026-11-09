@@ -21,7 +21,7 @@ public:
 
 public:
     [[nodiscard]] Expected<Path<ArenaT>, ErrorCode> path()const{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         constexpr usize s_MaxPathLength = 4096;
         Array<tchar, s_MaxPathLength> executablePathBuffer = {};
         const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer.data(), static_cast<DWORD>(s_MaxPathLength));
@@ -30,7 +30,7 @@ public:
         if(copiedLength >= static_cast<DWORD>(s_MaxPathLength))
             return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         return Path<ArenaT>(m_arena, TStringView(executablePathBuffer.data(), static_cast<usize>(copiedLength)));
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
         const auto path = ReadSymlink(Path<ArenaT>(m_arena, "/proc/self/exe"));
         if(!path)
             return MakeUnexpected(path.error());

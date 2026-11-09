@@ -180,7 +180,7 @@ class RenderReadyCaptureTests(unittest.TestCase):
 class ApplicationCaptureLifecycleTests(unittest.TestCase):
     @staticmethod
     def make_args(directory):
-        return SimpleNamespace(application_capture_frame_count=12, executable=sys.executable, expect_log_message=[], expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, output=directory / LIT_CAPTURE_BMP,
+        return SimpleNamespace(graceful_exit_timeout=10.0, application_capture_frame_count=12, executable=sys.executable, expect_log_message=[], expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, output=directory / LIT_CAPTURE_BMP,
             reject_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES), skip_blocking_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES), skip_log_message=[], timeout=1.0,)
 
     def test_normal_capture_collects_shutdown_logs_before_marker_and_pixel_validation(self):

@@ -2,7 +2,7 @@ nwb_declare_static_library(nwb_logserver_crash_test_names)
 nwb_target_adhd_sources(nwb_logserver_crash_test_names NAMESPACE "NWB::Tests::LoggerCrashCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_cases.adhd")
 
 nwb_declare_gtest_executable(nwb_logserver_crash_tests)
-nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Log" SOURCES "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.adhd" "${PROJECT_SOURCE_DIR}/logger/server/crash_retention.adhd" "${PROJECT_SOURCE_DIR}/logger/server/arena_names.adhd")
+nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Log" SOURCES "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.adhd" "${PROJECT_SOURCE_DIR}/logger/server/crash_retention.adhd" "${PROJECT_SOURCE_DIR}/logger/server/arena_names.adhd" "${PROJECT_SOURCE_DIR}/logger/server/server_values.adhd")
 nwb_target_adhd_sources(nwb_logserver_crash_tests NAMESPACE "NWB::Tests::LoggerCrashCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/suite.adhd" "${CMAKE_CURRENT_LIST_DIR}/logger_server_protocol_and_telemetry_cases.adhd")
 target_sources(nwb_logserver_crash_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"

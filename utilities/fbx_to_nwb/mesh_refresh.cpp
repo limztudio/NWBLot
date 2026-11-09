@@ -46,7 +46,7 @@ namespace __hidden_mesh_refresh{
         return outDoc;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, ConvertString(error.message));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, ConvertString(error.message));
     }
     return MakeUnexpected(Failure{});
 }
@@ -66,7 +66,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
 
     auto sourceResult = __hidden_mesh_refresh::ReadMetascriptSource(inputPath, scratchArena);
     if(!sourceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), ConvertString(sourceResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), ConvertString(sourceResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     ScratchString& source = *sourceResult;
@@ -94,7 +94,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         const AStringView meshVariableName(declaration.variable);
         const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableName);
         if(!meshValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), ConvertString(meshVariableName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), ConvertString(meshVariableName));
             return MakeUnexpected(Failure{});
         }
 
@@ -133,7 +133,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
     }
 
     if(!sawMesh){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
         return MakeUnexpected(Failure{});
     }
 
@@ -142,7 +142,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
 
     const auto written = WriteTextFile(outputPath, source);
     if(!written){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to write output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: failed to write output file '{}'"), PathToString<tchar>(outputPath));
         return MakeUnexpected(Failure{});
     }
     return outReport;

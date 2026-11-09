@@ -80,7 +80,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB UI Layer Smoke");
+    return FOUNDATION_TEXT("NWB UI Layer Smoke");
 }
 
 b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{

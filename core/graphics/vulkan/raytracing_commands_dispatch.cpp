@@ -57,13 +57,13 @@ b8 ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& argument
 
 
 void CommandList::setRayTracingState(const RayTracingState& state){
-    constexpr TStringView s_SetRayTracingStateOperation = NWB_TEXT("set ray-tracing state");
+    constexpr TStringView s_SetRayTracingStateOperation = FOUNDATION_TEXT("set ray-tracing state");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_SetRayTracingStateOperation))
         return;
 
     ShaderTable* const shaderTable = state.shaderTable;
     RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
-    NWB_ASSERT(!shaderTable || (pipeline && &pipeline->m_context == &shaderTable->m_context && &pipeline->m_device == &shaderTable->m_device));
+    FOUNDATION_ASSERT(!shaderTable || (pipeline && &pipeline->m_context == &shaderTable->m_context && &pipeline->m_device == &shaderTable->m_device));
     if(
         shaderTable
         && (
@@ -76,7 +76,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
             || !m_context.deviceDispatch.vkCmdTraceRaysKHR
         )
     ){
-        rejectCommandRecording(s_SetRayTracingStateOperation, NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
+        rejectCommandRecording(s_SetRayTracingStateOperation, FOUNDATION_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
         return;
     }
 
@@ -114,26 +114,26 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !m_context.rayTracingPipelineFeatureEnabled
         || !m_context.deviceDispatch.vkCmdTraceRaysKHR
     ){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("ray-tracing dispatch is unavailable on this device generation"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("ray-tracing dispatch is unavailable on this device generation"));
         return;
     }
 
     ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
     if(!shaderTable){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("no shader table is bound"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("no shader table is bound"));
         return;
     }
     if(&shaderTable->m_context != &m_context || &shaderTable->m_device != &m_device){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table belongs to another device generation"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("shader table belongs to another device generation"));
         return;
     }
 
     const auto snapshot = shaderTable->captureDispatchSnapshot();
 
     auto& pipeline = *MakeNotNull(snapshot.pipeline.get());
-    NWB_ASSERT(&pipeline.m_context == &m_context && &pipeline.m_device == &m_device);
+    FOUNDATION_ASSERT(&pipeline.m_context == &m_context && &pipeline.m_device == &m_device);
     if(pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("shader table pipeline is not ready"));
         return;
     }
 
@@ -144,20 +144,20 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         dispatchLimits.maxAxisSizes[axis] = m_context.physicalDeviceProperties.limits.maxComputeWorkGroupSize[axis];
     }
     if(!VulkanDetail::ValidateRayDispatchDimensions(args, dispatchLimits)){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("dispatch dimensions exceed device limits"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("dispatch dimensions exceed device limits"));
         return;
     }
 
     const auto handleLayout = VulkanDetail::ComputeRayTracingHandleLayout(m_context, s_DispatchRaysOperation);
     if(!handleLayout){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader group handle layout is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("shader group handle layout is invalid"));
         return;
     }
     const u32 handleSizeAligned = handleLayout->handleSizeAligned;
     const u32 baseAlignment = handleLayout->baseAlignment;
     const u32 maxShaderGroupStride = m_context.rayTracingPipelineProperties.maxShaderGroupStride;
     if(maxShaderGroupStride == 0u || handleSizeAligned > maxShaderGroupStride){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table stride is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("shader table stride is invalid"));
         return;
     }
 
@@ -207,7 +207,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     const auto hitRegion = buildRegion(snapshot.hit, false);
     const auto callableRegion = buildRegion(snapshot.callable, false);
     if(!raygenRegion || !missRegion || !hitRegion || !callableRegion){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table regions are incoherent or not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, FOUNDATION_TEXT("shader table regions are incoherent or not ready"));
         return;
     }
 

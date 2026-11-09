@@ -26,7 +26,7 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 namespace __hidden_linux_frame_symbol_resolver{
 
 
@@ -96,7 +96,7 @@ inline constexpr usize s_SymbolizerResultReserveMultiplier = ::NWB::Log::CrashVa
     const auto captured = CaptureProcessOutput(output, arena, arguments);
     if(!captured){
         const ProcessCaptureFailure& failure = captured.error();
-        NWB_LOGGER_INFO(NWB_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
+        NWB_LOGGER_INFO(FOUNDATION_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
             , static_cast<u32>(failure.kind)
             , static_cast<i32>(failure.nativeError)
             , static_cast<i32>(failure.completionError)
@@ -143,7 +143,7 @@ inline constexpr usize s_SymbolizerResultReserveMultiplier = ::NWB::Log::CrashVa
     CrashScratchPath modulePath(arena, modulePathText);
     const auto regularModule = IsRegularFile(modulePath);
     if(!regularModule){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularModule)
@@ -160,7 +160,7 @@ inline constexpr usize s_SymbolizerResultReserveMultiplier = ::NWB::Log::CrashVa
     CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
     const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
     if(!regularCandidate){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularCandidate)

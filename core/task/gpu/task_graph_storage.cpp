@@ -48,7 +48,7 @@ private:
 
 struct GpuAppendRollbackFailure final{
     void operator()()const noexcept{
-        NWB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
     }
 };
 
@@ -73,7 +73,7 @@ GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope()noexcept{
 
 void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
     if(m_active)
-        NWB_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
     m_active = true;
 }
 
@@ -597,18 +597,18 @@ const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUpl
 
 GpuTaskGraph::MarkerLabelRange GpuTaskGraph::appendMarkerLabel(const AStringView text){
     // Callers admit a nonempty label that fits the u32 marker storage.
-    NWB_ASSERT(!text.empty() && text.size() <= Limit<u32>::s_Max - m_markerText.size());
+    FOUNDATION_ASSERT(!text.empty() && text.size() <= Limit<u32>::s_Max - m_markerText.size());
 
     const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
     const usize nextSize = m_markerText.size() + text.size();
     m_markerText.resize(nextSize);
-    NWB_MEMCPY(m_markerText.data() + range.offset, range.size, text.data(), text.size());
+    FOUNDATION_MEMCPY(m_markerText.data() + range.offset, range.size, text.data(), text.size());
     return range;
 }
 
 AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const noexcept{
-    NWB_ASSERT(offset <= m_markerText.size());
-    NWB_ASSERT(size <= m_markerText.size() - offset);
+    FOUNDATION_ASSERT(offset <= m_markerText.size());
+    FOUNDATION_ASSERT(size <= m_markerText.size() - offset);
     return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);
 }
 

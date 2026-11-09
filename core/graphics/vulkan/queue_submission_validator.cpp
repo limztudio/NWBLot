@@ -17,28 +17,28 @@ b8 Queue::SubmissionValidator::validate(CommandList* const* ppCmd, const usize n
         const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
         for(usize previous = 0u; previous < i; ++previous){
             if(ppCmd[previous] == cmdList){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
                 return false;
             }
         }
         if(!cmdList || &cmdList->m_device != &m_queue.m_device){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
             return false;
         }
         if(!cmdList->matchesSubmissionLease(m_queue.m_physicalQueue, m_queue.m_queueID, expected.graphSubmissionAuthorized)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
             return false;
         }
         if(!cmdList->m_currentCmdBuf || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
             return false;
         }
         if(cmdList->m_commandRecordingFailed){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
             return false;
         }
         if(cmdList->m_isRecording){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
             return false;
         }
         if(
@@ -56,7 +56,7 @@ b8 Queue::SubmissionValidator::validate(CommandList* const* ppCmd, const usize n
             || expected.recordingWorkerIndex != cmdList->m_creationDesc.recordingWorkerIndex
             || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
         ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
             return false;
         }
         if(!cmdList->validateTrackedResourcesReadyForSubmission())

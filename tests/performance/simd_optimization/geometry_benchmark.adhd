@@ -23,7 +23,7 @@ native{
 #include <global/string_view.h>
 #include <global/timer.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/wait.h>
 #endif
 
@@ -45,7 +45,7 @@ constexpr AStringView s_ValidateMode = "validate";
 constexpr AStringView s_AbsoluteMode = "abs";
 constexpr AStringView s_GuardMode = "guard";
 
-using Intersection = b8 (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
+using Intersection = b8 (FOUNDATION_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
 struct TrianglePair{
     Array<Double4, 3> first{};
@@ -66,7 +66,7 @@ static volatile u64 s_Checksum = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -137,7 +137,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVect
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -203,7 +203,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, con
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -271,7 +271,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVect
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -346,7 +346,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE u64 Run(const NotNull<Intersection> implementation, const Span<const TrianglePair> pairs, const u32 passes)noexcept{
+FOUNDATION_NOINLINE u64 Run(const NotNull<Intersection> implementation, const Span<const TrianglePair> pairs, const u32 passes)noexcept{
     u64 result = 0u;
     for(u32 pass = 0u; pass < passes; ++pass){
         for(const TrianglePair& pair : pairs)
@@ -456,7 +456,7 @@ static void Fill(const u32 kind, const Span<TrianglePair> pairs)noexcept{
     return original == reference && reference == hoisted && hoisted == production && originalFlags == referenceFlags && referenceFlags == hoistedFlags && hoistedFlags == productionFlags;
 }
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 static void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
     _exit(32 + information->si_code);
 }
@@ -487,7 +487,7 @@ static void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* info
 #endif
 
 [[nodiscard]] static b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
     const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
         const auto original = TrapResult(MakeNotNull<Intersection>(Baseline), pair, mask);
@@ -629,15 +629,15 @@ static void PrintSummary(const StringView workload, const Span<const f64> values
         }
         sorted[destination] = value;
     }
-    NWB_COUT << "summary," << workload << ',' << sorted[s_Rounds / 2u] << ',' << sorted[0] << ',' << sorted[s_Rounds - 1u] << '\n';
+    FOUNDATION_COUT << "summary," << workload << ',' << sorted[s_Rounds / 2u] << ',' << sorted[0] << ',' << sorted[s_Rounds - 1u] << '\n';
 }
 
 static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guardOnly){
     if(!Validate()){
-        NWB_CERR << "validation failed\n";
+        FOUNDATION_CERR << "validation failed\n";
         return 1;
     }
-    NWB_COUT << "validation,400000 exact containment probes, winding, finite/nonfinite FENV and trap-order equivalence,passed\n";
+    FOUNDATION_COUT << "validation,400000 exact containment probes, winding, finite/nonfinite FENV and trap-order equivalence,passed\n";
     if(validationOnly)
         return 0;
     static constexpr Array<StringView, 7> s_Names = { "coplanar", "point_hull", "segment_hull", "noncoplanar", "noncoplanar_miss", "aabb_miss", "point_point" };
@@ -646,8 +646,8 @@ static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guar
     const auto selected = measureAbs ? MakeNotNull<Intersection>(AbsHoisted) : (guardOnly ? MakeNotNull<Intersection>(ZeroAxis) : production);
     const StringView referenceName = measureAbs ? s_ZeroAxisLabel : (guardOnly ? "current_dot3_baseline" : "baseline");
     const StringView selectedName = measureAbs ? "abs_hoisted" : (guardOnly ? s_ZeroAxisLabel : "production");
-    NWB_COUT << "timer,TimerNow/DurationInNS\n";
-    NWB_COUT << "mode," << (measureAbs ? "abs_hoisted_vs_zero_axis" : (guardOnly ? "zero_axis_vs_current_dot3" : "production_vs_original_baseline")) << '\n';
+    FOUNDATION_COUT << "timer,TimerNow/DurationInNS\n";
+    FOUNDATION_COUT << "mode," << (measureAbs ? "abs_hoisted_vs_zero_axis" : (guardOnly ? "zero_axis_vs_current_dot3" : "production_vs_original_baseline")) << '\n';
     Array<TrianglePair, s_FixtureCount> pairs{};
     for(u32 kind = 0u; kind < 7u; ++kind){
         Fill(kind, pairs);
@@ -666,15 +666,15 @@ static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guar
                     return 3;
                 const f64 nanoseconds = DurationInNS<f64>(end, begin) / static_cast<f64>(s_Passes * s_FixtureCount);
                 (candidate ? candidateValues : baselineValues)[round] = nanoseconds;
-                NWB_COUT << "sample," << s_Names[kind] << ',' << (candidate ? selectedName : referenceName) << ',' << round << ',' << nanoseconds << ',' << checksum << '\n';
+                FOUNDATION_COUT << "sample," << s_Names[kind] << ',' << (candidate ? selectedName : referenceName) << ',' << round << ',' << nanoseconds << ',' << checksum << '\n';
             }
             ratios[round] = candidateValues[round] / baselineValues[round];
         }
-        NWB_COUT << referenceName << '_';
+        FOUNDATION_COUT << referenceName << '_';
         PrintSummary(s_Names[kind], baselineValues);
-        NWB_COUT << selectedName << '_';
+        FOUNDATION_COUT << selectedName << '_';
         PrintSummary(s_Names[kind], candidateValues);
-        NWB_COUT << "ratio_";
+        FOUNDATION_COUT << "ratio_";
         PrintSummary(s_Names[kind], ratios);
     }
     return 0;

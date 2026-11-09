@@ -11,7 +11,7 @@
 
 #include <cerrno>
 #include <cfenv>
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <cfloat>
 #endif
 

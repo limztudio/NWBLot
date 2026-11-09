@@ -21,7 +21,7 @@ Expected<UniquePtr<IFilesystem>> CreateFilesystem(Alloc::GlobalArena& arena, con
         return MakeUnexpected(created.error());
     UniquePtr<IFilesystem> filesystem = Move(*created);
     if(!filesystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: project factory did not create a filesystem"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem: project factory did not create a filesystem"));
         return MakeUnexpected(Failure{});
     }
     if(!filesystem->mount(desc))

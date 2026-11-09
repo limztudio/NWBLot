@@ -100,11 +100,11 @@ b8 ValidateBufferSetupUpload(const GraphicsStandaloneService::BufferSetupDesc& d
     if(desc.dataSize == 0)
         return true;
     if(!desc.data){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload data is null"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload data is null"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
     if(desc.destOffsetBytes > desc.bufferDesc.byteSize || static_cast<u64>(desc.dataSize) > desc.bufferDesc.byteSize - desc.destOffsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
             , ConvertString(desc.bufferDesc.debugName.resolvedText())
             , desc.destOffsetBytes
             , static_cast<u64>(desc.dataSize)
@@ -115,12 +115,12 @@ b8 ValidateBufferSetupUpload(const GraphicsStandaloneService::BufferSetupDesc& d
     // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy.
     // Fail before creating a list or packet: the API cannot report success for a region Vulkan rejects.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
     // A retained buffer needs a concrete state; Unknown restores at close with no graph-visible contract for the next consumer.
     if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
 
@@ -157,7 +157,7 @@ Expected<BufferHandle> GraphicsStandaloneService::setupBuffer(const BufferSetupD
     uploadDesc.queueSharing = GraphicsModuleDetail::SetupUploadGraph::ResolveConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
     auto bufferResult = device.createBuffer(uploadDesc);
     if(!bufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 
@@ -182,7 +182,7 @@ Expected<BufferHandle> GraphicsStandaloneService::setupBuffer(const BufferSetupD
         uploadToken
     );
     if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     if(desc.acceptedToken)

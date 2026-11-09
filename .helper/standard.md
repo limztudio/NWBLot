@@ -64,7 +64,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks.
 - Exception: keep `checked_cast` in `snake_case` to align with the C++ cast names.
 - Global and class static variables start with `s_Uppercase`; function-local static variables retain the `s_` prefix.
-- NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use the `NWB_` prefix, including those under `global/`. The prefix identifies ownership; the defining header and directory identify the domain.
+- Neutral utility, configuration, and diagnostic macros defined under `global/` use the `FOUNDATION_` prefix. Engine-specific namespace, configuration, and shader macros use the `NWB_` prefix.
 - Application-owned macro APIs use that application's prefix, such as `TESTBED_`; preserve required external API, compiler interoperability, toolchain, and third-party macro spellings. Consuming an engine-owned shader or runtime contract from a project does not change that contract's prefix.
 - Existing shader resource-view aliases follow the shader symbol contract in section 15, including `g_*` resource aliases. Preserve those resource names; a utility/configuration macro-prefix migration does not rename shader resources or rewrite their authored contracts.
 - Maintain the lowercase `interface` keyword for project interface definitions and forward declarations. `global/compile.h` provides the canonical portable `interface` -> `struct` annotation under `#ifndef interface`, preserving an existing SDK/compiler definition. This language-like annotation is an intentional exception to the `NWB_` macro-prefix rule and is a current authoring convention; do not remove it as backward compatibility, replace interface declarations with plain `struct`, or rename it to a prefixed wrapper. Preserve existing access, inheritance, destructor, virtual, and exception contracts. Do not reclassify deliberate abstract implementation/base classes solely from an `I` name prefix.
@@ -121,7 +121,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
 - Prefer single-line logger macro and `.adhd` diagnostic calls (`error`, `warning`, `info`, `assert`) when they contain a single message and a small number of short formatting arguments.
 - For multiline logger macro or `.adhd` diagnostic calls with formatting arguments, never use trailing commas after the message or between formatting arguments; put every subsequent formatting argument on its own continuation line with a leading comma (whether the message is on the opener line or on the first indented line):
-  - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`
+  - `NWB_LOGGER_WARNING(FOUNDATION_TEXT("message {}")`
   - `    , arg0`
   - `    , arg1`
   - `);`
@@ -317,9 +317,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Keep genuine in/out state, reusable caller-owned buffers, required external SDK output signatures, and callback contracts explicit when their mutation, ownership, or capacity reuse is intentional. A fallible mutator can return `Expected<void, E>`; an independently produced count, offset, handle, or other value still belongs in the expected result.
   - Preserve the owning arena, move-only ownership, borrowed lifetimes, failure-atomic publication, and complete conditional `noexcept` contract. Borrowed results must outlive their use; never return a view or reference into a local owning container. Unexpected exceptions continue to unwind to the application-entry boundary.
   - When repeatedly replacing arena-owned results, preserve the arena's reclamation order. Destroy a prior scratch/stack-arena result before producing its replacement when the prior value is no longer needed; clearing its container retains storage. Moving a fresh result over a still-live allocation can retain non-LIFO storage. Keep explicit reusable-buffer state when production needs capacity reuse.
-- Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
-- Use `NWB_SIMD_MEMCPY` from `global/simd/memory.h` for audited contiguous copies between non-overlapping existing byte buffers or live trivially copyable object representations in ordinary host memory when both addresses have proven 16-byte alignment. Both sizes are bytes; the byte count may include a partial vector tail, and zero length performs no access or alignment checks. Preserve the CRT path for arbitrary alignment or typed-object lifetime creation, and preserve overlap-aware moves and device-specific memory operations at their owning boundaries. Large copies may delegate to the tuned CRT after admission. Shared SIMD capability detection, intrinsic includes, and math-specific calling and storage macros belong in `global/simd/macro.h`.
-- For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
+- Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`FOUNDATION_MEMCPY`, `FOUNDATION_MEMSET`, `FOUNDATION_MEMCMP`, `FOUNDATION_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
+- Use `FOUNDATION_SIMD_MEMCPY` from `global/simd/memory.h` for audited contiguous copies between non-overlapping existing byte buffers or live trivially copyable object representations in ordinary host memory when both addresses have proven 16-byte alignment. Both sizes are bytes; the byte count may include a partial vector tail, and zero length performs no access or alignment checks. Preserve the CRT path for arbitrary alignment or typed-object lifetime creation, and preserve overlap-aware moves and device-specific memory operations at their owning boundaries. Large copies may delegate to the tuned CRT after admission. Shared SIMD capability detection, intrinsic includes, and math-specific calling and storage macros belong in `global/simd/macro.h`.
+- For console I/O, prefer project stream macros from `global/compile.h` (`FOUNDATION_COUT`, `FOUNDATION_CERR`, `FOUNDATION_TCOUT`, `FOUNDATION_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
 - Do not use raw/fixed-buffer environment-variable probes for production, runtime, or cooker feature/configuration control.
   - Test suites and smoke-test diagnostics may use test-local environment helpers under `tests/`.
@@ -395,8 +395,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Do not hide a function return with `static_cast<void>(call())`, a C-style void cast, `std::ignore`, or a `[[maybe_unused]]` local initialized from the call â€” handle it. This includes templated calls and locals wrapped only to convert or test the return before discarding it, regardless of assignment, brace, or direct initialization. Check and act: `if(!result){ log / propagate / early-return }`, then consume the admitted value. For expected failures, use `.error()` only in the failed branch.
   - If a result genuinely conveys no actionable information to any caller, make that operation a `void` command instead of suppressing its return at individual call sites. Keep `[[maybe_unused]]` for non-call values such as unused callback parameters or compile-time expressions only.
   - `static_cast<void>(param)` to silence an unused parameter is unrelated to this rule and remains fine.
-- Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
-- Handle container-insertion failures with an explicit branch (`if(!insert...){ NWB_ASSERT(false); continue/return; }`); do not leave a bare `NWB_ASSERT(added)` after the insert with no failure path.
+- Use assertions (`FOUNDATION_ASSERT`, `FOUNDATION_ASSERT_MSG`) for invariant checking.
+- Handle container-insertion failures with an explicit branch (`if(!insert...){ FOUNDATION_ASSERT(false); continue/return; }`); do not leave a bare `FOUNDATION_ASSERT(added)` after the insert with no failure path.
 - For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
   - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.
 
@@ -416,7 +416,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Data captured by asynchronous tasks/callbacks submitted to `CpuTaskScheduler`/`CpuTaskScope` can outlive the submitting scope; do not back escaping captures with `ScratchArena`. Synchronous task batches may reference local scratch storage only when their complete task subtree joins before that storage is released.
 - Do not repeat structural validation in hot paths that run every frame or for many draw/dispatch items.
   - Move asset/payload/layout validation to cook, load, resource creation, or cache insertion time whenever possible.
-  - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(NWB_DEBUG)` / `NWB_ASSERT` for invariant checks that are useful while debugging.
+  - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(NWB_DEBUG)` / `FOUNDATION_ASSERT` for invariant checks that are useful while debugging.
   - Keep external API failure handling and resource creation failures in all configurations; those are not redundant validation.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena instead of default allocators when arena ownership exists.
 - SIMD math helpers should accept and return SIMD-domain values such as `SIMDVectorSingle`, `SIMDVectorDouble`, `SIMDMatrix`, or `SIMDMatrixDouble`.
@@ -444,7 +444,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Use CMake target commands such as `add_library`, `add_executable`, and `target_sources`; generated IDE projects are build artifacts, not authored source manifests.
 - Do not add or maintain `.vcxitems` or `.vcxproj` files for source registration.
 - Express platform, architecture, and configuration variants through CMake target conditions and checked-in configure/build presets.
-- CMake emits the canonical `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` configuration macros directly for `dbg`, `opt`, and `fin`, respectively. Do not introduce intermediate configuration aliases that merely rename those macros.
+- CMake emits `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` for engine code and `FOUNDATION_DEBUG`, `FOUNDATION_OPTIMIZE`, and `FOUNDATION_FINAL` for neutral foundation code in `dbg`, `opt`, and `fin`, respectively.
 
 ## 12. Class/Struct Layout and Order
 - `struct` layout rule: declare member variables first, then member functions.

@@ -10,6 +10,10 @@ from window_capture_smoke import SmokeFailure
 from window_capture_x11_input import LinuxXEvent
 
 
+CAPTURE_PHASE_TIMEOUT_SECONDS = 2.0
+CAPTURE_POLL_SECONDS = 0.01
+
+
 class PopupToolsNativeInput(ComboNativeInput):
     def __init__(self, backend, handle):
         super().__init__(backend, handle)
@@ -51,6 +55,38 @@ class PopupToolsNativeInput(ComboNativeInput):
             self.pointer(*self.requested_pointer)
         elif self.backend.user32.WindowFromPoint(observed) == self.handle:
             super().pointer(*self.requested_pointer)
+
+    def _wait_for_capture(self, expected_owner, deadline, phase):
+        while True:
+            self.maintain_pointer()
+            observed_owner = self.capture_owner()
+            if observed_owner == expected_owner:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                raise SmokeFailure(f"popup tools {phase} did not acknowledge capture: expected {expected_owner!r}, observed {observed_owner!r}")
+            time.sleep(min(CAPTURE_POLL_SECONDS, remaining))
+
+    def confirmed_button(self, down, x, y, *, deadline, secondary=False):
+        send = self.right_button if secondary else self.button
+        phase_deadline = min(deadline, time.monotonic() + CAPTURE_PHASE_TIMEOUT_SECONDS)
+        if self.windows and down:
+            self._wait_for_capture(None, phase_deadline, "before press")
+        send(down, x, y)
+        if self.windows:
+            try:
+                self._wait_for_capture(self.handle if down else None, phase_deadline, "press" if down else "release")
+            except BaseException:
+                if down:
+                    send(False, x, y)
+                raise
+
+    def confirmed_click(self, x, y, *, deadline, secondary=False):
+        self.confirmed_button(True, x, y, deadline=deadline, secondary=secondary)
+        try:
+            time.sleep(PRESS_HOLD_SECONDS)
+        finally:
+            self.confirmed_button(False, x, y, deadline=deadline, secondary=secondary)
 
     def restore_pointer(self):
         if self.windows and self.original_cursor is not None:

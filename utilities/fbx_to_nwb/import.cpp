@@ -36,7 +36,7 @@ Expected<MeshBuildResult> BuildMesh(
 
     const auto normalMode = ParseNormalModeText(options.normalMode);
     if(!normalMode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), ConvertString(NormalModeErrorText(scratchArena)));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: {}"), ConvertString(NormalModeErrorText(scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -56,7 +56,7 @@ Expected<MeshBuildResult> BuildMesh(
     usize jointCapacity = 0u;
     if(wantsSkinning){
         for(const usize instanceIndex : selection){
-            NWB_ASSERT(instanceIndex < instances.size());
+            FOUNDATION_ASSERT(instanceIndex < instances.size());
             const ufbx_mesh* mesh = instances[instanceIndex].mesh;
             if(mesh && mesh->skin_deformers.count == 1u && mesh->skin_deformers.data[0u]){
                 const usize clusterCount = mesh->skin_deformers.data[0u]->clusters.count;
@@ -66,14 +66,14 @@ Expected<MeshBuildResult> BuildMesh(
     }
     skinContext.jointLookup.reserve(jointCapacity);
     for(const usize instanceIndex : selection){
-        NWB_ASSERT(instanceIndex < instances.size());
+        FOUNDATION_ASSERT(instanceIndex < instances.size());
         if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, scratchArena, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs)){
             return MakeUnexpected(Failure{});
         }
     }
 
     if(result.mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return MakeUnexpected(Failure{});
     }
     if(*normalMode != NormalMode::Imported || !SourceVertexRefsHaveCompleteTangents(result.mesh.vertexRefs, result.mesh.tangents.size())){
@@ -86,7 +86,7 @@ Expected<MeshBuildResult> BuildMesh(
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
             return MakeUnexpected(Failure{});
         }
         result.skeletonJoints = Move(skinContext.joints);

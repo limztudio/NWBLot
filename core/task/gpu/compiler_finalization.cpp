@@ -98,7 +98,7 @@ namespace GpuTaskGraphCompilerDetail{
 
         // Graph storage admits a known external final state only for texture, buffer and acceleration structure resources.
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
-        NWB_ASSERT(exportType < GpuCompiledBarrierType::Count);
+        FOUNDATION_ASSERT(exportType < GpuCompiledBarrierType::Count);
 
         b8 hasTerminalDeclaredRange = false;
         GpuTaskId externalExportTask;
@@ -111,7 +111,7 @@ namespace GpuTaskGraphCompilerDetail{
         const u32 externalExportSourceOffset = static_cast<u32>(compiledPlan.externalResourceExportSources.size());
         u32 externalExportSourceCount = 0u;
         const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const usize terminalStateIndex, const GpuTaskResourceRange& terminalRange){
-            NWB_ASSERT(terminalStateIndex < trackedResourceStates.size() && &trackedResourceStates[terminalStateIndex] == &state);
+            FOUNDATION_ASSERT(terminalStateIndex < trackedResourceStates.size() && &trackedResourceStates[terminalStateIndex] == &state);
 
             const GpuSubmissionPacketId terminalPacket = FindCompiledPacketForTask(compiledPlan, state.task);
             if(!terminalPacket.valid() || terminalPacket.generation != compiledPlan.planGeneration || terminalPacket.index >= compiledPlan.packets.size())
@@ -163,7 +163,7 @@ namespace GpuTaskGraphCompilerDetail{
             });
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                NWB_ASSERT(releaseType < GpuCompiledBarrierType::Count);
+                FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count);
                 // Export the exact final state before ownership moves.
                 // Native lowering therefore captures the same state in the released snapshot and the paired Vulkan queue-family release barrier.
                 if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport))
@@ -190,7 +190,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(!CollectTerminalResourceStateFragments(trackedResourceStates, resourceHistory, resource, scratchArena, stateFragments))
                 return false;
             for(const TrackedResourceStateFragment& fragment : stateFragments){
-                NWB_ASSERT(fragment.state);
+                FOUNDATION_ASSERT(fragment.state);
                 if(!appendTerminalState(*fragment.state, fragment.stateIndex, fragment.range))
                     return false;
             }

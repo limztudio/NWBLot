@@ -123,7 +123,7 @@ private:
                 return MakeUnexpected(Failure{});
             // Verify stored text first; insert after the census releases its lock.
             if(snapshot.ownerName == Name(*hash))
-                NWB_FATAL_ASSERT(insert(*hash, text));
+                FOUNDATION_FATAL_ASSERT(insert(*hash, text));
         }
         return {};
     }

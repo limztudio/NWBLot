@@ -209,7 +209,7 @@ NWB_COMMON_END
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
         ::NWB::Core::Common::LoggerDetail::LoggerRegistrationLease loggerLease;                                                \
-        NWB_FATAL_ASSERT(loggerLease.valid());                                                                                 \
+        FOUNDATION_FATAL_ASSERT(loggerLease.valid());                                                                                 \
         auto& logger = loggerLease.logger();                                                                                   \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
     }while(false)
@@ -217,7 +217,7 @@ NWB_COMMON_END
 #define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
     do{                                                                                                                        \
         ::NWB::Core::Common::LoggerDetail::LoggerRegistrationLease loggerLease;                                                \
-        NWB_FATAL_ASSERT(loggerLease.valid());                                                                                 \
+        FOUNDATION_FATAL_ASSERT(loggerLease.valid());                                                                                 \
         auto& logger = loggerLease.logger();                                                                                   \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(                                                           \
             logger,                                                                                                            \
@@ -235,33 +235,33 @@ NWB_COMMON_END
         }                                                                                                                      \
     }while(false)
 
-#if NWB_OCCUR_INFO
+#if FOUNDATION_OCCUR_INFO
 #define NWB_LOGGER_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(Info, __VA_ARGS__)
 #else
 #define NWB_LOGGER_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if NWB_OCCUR_ESSENTIAL_INFO
+#if FOUNDATION_OCCUR_ESSENTIAL_INFO
 #define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(EssentialInfo, __VA_ARGS__)
 #else
 #define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if NWB_OCCUR_WARNING
+#if FOUNDATION_OCCUR_WARNING
 #define NWB_LOGGER_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(Warning, __VA_ARGS__)
 #else
 #define NWB_LOGGER_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if NWB_OCCUR_CRITICAL_WARNING
+#if FOUNDATION_OCCUR_CRITICAL_WARNING
 #define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(CriticalWarning, __VA_ARGS__)
 #else
 #define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if NWB_OCCUR_ERROR
-#define NWB_LOGGER_ERROR(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Error, NWB_SOFTBREAK, __VA_ARGS__)
-#define NWB_LOGGER_FATAL(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Fatal, NWB_HARDBREAK, __VA_ARGS__)
+#if FOUNDATION_OCCUR_ERROR
+#define NWB_LOGGER_ERROR(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Error, FOUNDATION_SOFTBREAK, __VA_ARGS__)
+#define NWB_LOGGER_FATAL(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Fatal, FOUNDATION_HARDBREAK, __VA_ARGS__)
 #else
 #define NWB_LOGGER_ERROR(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #define NWB_LOGGER_FATAL(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)

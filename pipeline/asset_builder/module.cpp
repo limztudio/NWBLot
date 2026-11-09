@@ -30,7 +30,7 @@ namespace __hidden_asset_builder{
 static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena& scratchArena, AssetBuilder::AssetBuildOptions& options){
     namespace Assets = Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
-    auto repoRoot = ResolvePipelineRepoRoot(AStringView(parsed.repoRoot), NWB_TEXT("AssetBuilder"), arena);
+    auto repoRoot = ResolvePipelineRepoRoot(AStringView(parsed.repoRoot), FOUNDATION_TEXT("AssetBuilder"), arena);
     if(!repoRoot)
         return false;
     options.repoRoot = Move(*repoRoot);
@@ -39,8 +39,8 @@ static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena
         parsed.inputs,
         parsed.assetRoots,
         Assets::AssetRootDuplicatePolicy::ExactText,
-        NWB_TEXT("AssetBuilder"),
-        NWB_TEXT("an empty input list requires --asset-root"),
+        FOUNDATION_TEXT("AssetBuilder"),
+        FOUNDATION_TEXT("an empty input list requires --asset-root"),
         scratchArena
     );
     if(!roots)

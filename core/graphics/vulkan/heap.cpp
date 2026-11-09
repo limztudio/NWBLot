@@ -173,7 +173,7 @@ Heap::~Heap()noexcept{
                 .file = __FILE__,
                 .line = __LINE__,
             });
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
             return;
         }
     }
@@ -202,7 +202,7 @@ void Heap::eraseBindingReservationLocked(const NotNull<const void*> owner)noexce
         .file = __FILE__,
         .line = __LINE__,
     });
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Missing placed-resource heap binding"));
+    FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Missing placed-resource heap binding"));
 }
 
 
@@ -213,8 +213,8 @@ Expected<HeapHandle> Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
     if(d.capacity == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create heap: capacity is zero"));
         return MakeUnexpected(Failure{});
     }
 
@@ -224,8 +224,8 @@ Expected<HeapHandle> Device::createHeap(const HeapDesc& d){
     case HeapType::Readback:
         break;
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create heap: invalid heap type"));
         return MakeUnexpected(Failure{});
     }
 
@@ -236,7 +236,7 @@ Expected<HeapHandle> Device::createHeap(const HeapDesc& d){
 
     res = m_allocator.allocateHeap(*heap);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 

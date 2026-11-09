@@ -36,7 +36,7 @@ namespace __hidden_cook_metadata{
     Core::Metascript::Document doc(cookArena);
     if(!doc.parse(metaText)){
         for(const Core::Metascript::ParseError& err : doc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
         }
         return MakeUnexpected(Failure{});
     }
@@ -86,13 +86,13 @@ namespace __hidden_cook_metadata{
 ){
     const auto* assetDeclaration = doc.findDeclaration(s_MetadataAssetVariable);
     if(!assetDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), ConvertString(s_MetadataAssetVariable));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), ConvertString(s_MetadataAssetVariable));
         return false;
     }
     const AStringView rawAssetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
     const auto assetTypeResult = ToName(rawAssetTypeText);
     if(!assetTypeResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type contains an embedded null in meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: asset type contains an embedded null in meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
         return false;
     }
     const Name assetType = *assetTypeResult ? **assetTypeResult : s_NameNone;
@@ -113,7 +113,7 @@ namespace __hidden_cook_metadata{
         return outMetadata.entryRegistry.parseDocument(assetType, discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, parseContext);
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(rawAssetTypeText), PathToString<tchar>(discoveredNwbFile.filePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(rawAssetTypeText), PathToString<tchar>(discoveredNwbFile.filePath));
     return false;
 }
 
@@ -129,7 +129,7 @@ namespace __hidden_cook_metadata{
 
 b8 AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
     if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: planned file count overflow"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: planned file count overflow"));
         return false;
     }
 
@@ -170,7 +170,7 @@ b8 ParseAssetMetadata(
         const DiscoveredNwbFile& discoveredNwbFile = nwbFiles[fileIndex];
         metaText.clear();
         if(!ReadTextFile(discoveredNwbFile.filePath, metaText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
             return false;
         }
         StripUtf8Bom(metaText);
@@ -252,7 +252,7 @@ b8 ParseAssetMetadata(
         }
 
         if(doc.declarations().size() > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' declares multiple asset objects without an asset_bunch object"), PathToString<tchar>(discoveredNwbFile.filePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' declares multiple asset objects without an asset_bunch object"), PathToString<tchar>(discoveredNwbFile.filePath));
             return false;
         }
 
@@ -264,7 +264,7 @@ b8 ParseAssetMetadata(
     }
 
     if(!parsedAnyMetadata){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: no asset metadata found in asset roots"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: no asset metadata found in asset roots"));
         return false;
     }
 

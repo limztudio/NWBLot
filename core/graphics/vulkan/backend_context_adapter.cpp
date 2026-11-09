@@ -50,14 +50,14 @@ Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
         return MakeUnexpected(Failure{});
     }
 
     uint32_t deviceCount = 0;
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -70,7 +70,7 @@ Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -87,7 +87,7 @@ Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
     if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold){
         const auto parallelWork = m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
         if(!parallelWork){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: adapter enumeration rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: adapter enumeration rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -115,7 +115,7 @@ Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
 b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice && VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
         return false;
     }
     const b8 hdr10Allowed = m_deviceParams.enableHDR10Output && m_hdr10ColorSpaceExtensionEnabled;
@@ -126,19 +126,19 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     uint32_t deviceCount = 0;
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
         return false;
     }
 
     if(deviceCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No devices were found. Install a compatible hardware driver or software Vulkan ICD; software fallback requires an installed driver."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: No devices were found. Install a compatible hardware driver or software Vulkan ICD; software fallback requires an installed driver."));
         return false;
     }
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
         return false;
     }
 
@@ -149,7 +149,7 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     i32 lastDevice = static_cast<i32>(devices.size()) - 1;
     if(adapterIndex >= 0){
         if(adapterIndex > lastDevice){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: The specified physical device {} does not exist."), adapterIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: The specified physical device {} does not exist."), adapterIndex);
             return false;
         }
         firstDevice = adapterIndex;
@@ -211,7 +211,7 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
             continue;
         }
         for(const auto& ext : deviceExtensions)
-            requiredExtensions.erase(AStringView(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE)));
+            requiredExtensions.erase(AStringView(ext.extensionName, FOUNDATION_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE)));
 
         b8 deviceIsGood = true;
 
@@ -319,13 +319,13 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         VkPhysicalDeviceProperties properties{};
         m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &properties);
         if(adapterIndex >= 0)
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Using explicitly selected software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
+            NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: Using explicitly selected software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
         else
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No compatible hardware device found; falling back to software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
+            NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: No compatible hardware device found; falling back to software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(errorStream.str()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {}"), ConvertString(errorStream.str()));
     return false;
 }
 

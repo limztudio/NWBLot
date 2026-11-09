@@ -127,12 +127,12 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
 
 
 GpuRecordedGraph::~GpuRecordedGraph()noexcept{
-    NWB_FATAL_ASSERT_MSG(!ArtifactOperation::ActiveFor(*this), "GpuRecordedGraph destruction requires active artifact operations to finish first");
+    FOUNDATION_FATAL_ASSERT_MSG(!ArtifactOperation::ActiveFor(*this), "GpuRecordedGraph destruction requires active artifact operations to finish first");
 
     // Destruction joins readers. A callback holding another artifact/transaction must not wait here; symmetric deadlock.
     if(ArtifactOperation::Active() || GpuGraphSubmissionTransaction::SubmissionOperation::Active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
-        NWB_FATAL_ASSERT_MSG(artifactOperation.valid(), "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
+        FOUNDATION_FATAL_ASSERT_MSG(artifactOperation.valid(), "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
 
         if(m_activeStorage)
             revokeCommandListPublicationsWithoutCallbacks(*m_activeStorage);
@@ -155,7 +155,7 @@ GpuRecordedGraph::~GpuRecordedGraph()noexcept{
         m_operationState.wait(operationState, MemoryOrder::acquire);
         operationState = m_operationState.load(MemoryOrder::acquire);
     }
-    NWB_ASSERT(operationState == s_ArtifactOperationWriterBit);
+    FOUNDATION_ASSERT(operationState == s_ArtifactOperationWriterBit);
 
     if(m_activeStorage)
         revokeCommandListPublicationsWithoutCallbacks(*m_activeStorage);
@@ -194,7 +194,7 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     if(tryReset(compiledGraph))
         return;
 
-    NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
+    FOUNDATION_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
 }
 
 b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
@@ -281,7 +281,7 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
 
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
-        NWB_ASSERT(planAccess.validPacket(packetID));
+        FOUNDATION_ASSERT(planAccess.validPacket(packetID));
 
         candidate.packets[packetIndex].packet = packetID;
         candidate.packetRecordingOverlaps[packetIndex] = 0u;
@@ -365,7 +365,7 @@ void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphId
         && m_candidateStorage->planGeneration == planAccess.planGeneration()
         && m_candidateStorage->deviceGeneration == planAccess.deviceGeneration()
     ;
-    NWB_FATAL_ASSERT_MSG(candidateValid, "recorded artifact publication requires one complete exact-plan candidate");
+    FOUNDATION_FATAL_ASSERT_MSG(candidateValid, "recorded artifact publication requires one complete exact-plan candidate");
 
     m_candidateStorage->graphIdentity = graphIdentity;
     m_candidateStorage->recordingAttemptGeneration = recordingAttemptGeneration;
@@ -477,7 +477,7 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissio
     GpuRecordedPacket* const recordedPacket = packetStorage(packet, artifactAccess);
     CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactAccess);
     const b8 publicationValid = recordedPacket && stateSeed && artifactAccess.exclusiveFor(*this);
-    NWB_FATAL_ASSERT_MSG(publicationValid, "recorded packet rollback requires its exact artifact writer");
+    FOUNDATION_FATAL_ASSERT_MSG(publicationValid, "recorded packet rollback requires its exact artifact writer");
 
     for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){
         CommandList* const commandList = recordedPacket->ownedCommandLists[commandListIndex].get();

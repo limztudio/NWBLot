@@ -41,7 +41,7 @@ namespace __hidden_gpu_task_graph_builtin_clears{
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
         break;
     default:
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         break;
     }
     return commands;
@@ -74,7 +74,7 @@ struct ClearBufferPayload{
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
     [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        NWB_ASSERT(payload.destination);
+        FOUNDATION_ASSERT(payload.destination);
         if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.destinationResource, payload.clearValue))
             return false;
         commandList.endRenderPass();
@@ -122,7 +122,7 @@ struct HookedTextureClearTaskBase{
 
 struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
     [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        NWB_ASSERT(payload.destination && payload.clearDesc.valueType < GpuClearTextureTaskValueType::Count);
+        FOUNDATION_ASSERT(payload.destination && payload.clearDesc.valueType < GpuClearTextureTaskValueType::Count);
         return RecordHookedClear(
             payload,
             commandList,
@@ -145,7 +145,7 @@ struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
                     commandList.clearDepthStencilTexture(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.clearDepth, payload.clearDesc.depthValue, payload.clearDesc.clearStencil, payload.clearDesc.stencilValue);
                     break;
                 default:
-                    NWB_ASSERT(false);
+                    FOUNDATION_ASSERT(false);
                     break;
                 }
             }
@@ -155,7 +155,7 @@ struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
 
 struct ClearTextureRectUIntTask : HookedTextureClearTaskBase<GpuClearTextureRectUIntTaskDesc>{
     [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        NWB_ASSERT(payload.destination);
+        FOUNDATION_ASSERT(payload.destination);
         return RecordHookedClear(
             payload,
             commandList,
@@ -241,7 +241,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     )
         return MakeUnexpected(Failure{});
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType);
-    NWB_ASSERT(valueKind);
+    FOUNDATION_ASSERT(valueKind);
     const Expected<GraphicsBackend::TextureClearContract> clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, *valueKind, clearDesc.clearDepth, clearDesc.clearStencil);
     if(!clearContract)
         return MakeUnexpected(Failure{});

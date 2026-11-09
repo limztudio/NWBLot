@@ -113,7 +113,7 @@ template<typename CharT = char, typename ArenaT, typename PathT>
 template<typename CharT = char, typename ArenaT, GlobalFilesystemPathDetail::PathChar SourceCharT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> PathToGenericString(ArenaT& arena, const BasicStringView<SourceCharT> path){
     BasicString<CharT, ArenaT> output = PathToString<CharT>(arena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     for(CharT& ch : output){
         if(ch == static_cast<CharT>('\\'))
             ch = static_cast<CharT>('/');

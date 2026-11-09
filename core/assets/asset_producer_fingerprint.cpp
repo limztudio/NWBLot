@@ -21,12 +21,12 @@ NWB_ASSETS_BEGIN
 
 void AssetProducerFingerprint::Resolve(ScratchArena& scratchArena, b8& useAssetCache, Sha256Digest& producerDigest){
     ::Path<ScratchArena> executablePath(scratchArena);
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
     executablePath = ::Path<ScratchArena>(scratchArena, "/proc/self/exe");
 #else
     auto resolvedExecutablePath = ExecutablePaths(scratchArena).path();
     if(!resolvedExecutablePath){
-        NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because the producer executable path is unavailable: {}"), ConvertString(resolvedExecutablePath.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("AssetCook: disabling asset cache because the producer executable path is unavailable: {}"), ConvertString(resolvedExecutablePath.error().message()));
         useAssetCache = false;
     }
     else
@@ -36,11 +36,11 @@ void AssetProducerFingerprint::Resolve(ScratchArena& scratchArena, b8& useAssetC
         Vector<u8, ScratchArena> executableBytes(scratchArena);
         const auto read = ReadBinaryFile(executablePath, executableBytes);
         if(!read){
-            NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because producer executable '{}' could not be read: {}"), PathToString<tchar>(executablePath), ConvertString(read.error().message()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("AssetCook: disabling asset cache because producer executable '{}' could not be read: {}"), PathToString<tchar>(executablePath), ConvertString(read.error().message()));
             useAssetCache = false;
         }
         else if(executableBytes.empty()){
-            NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because producer executable '{}' is empty"), PathToString<tchar>(executablePath));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("AssetCook: disabling asset cache because producer executable '{}' is empty"), PathToString<tchar>(executablePath));
             useAssetCache = false;
         }
         else

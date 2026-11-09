@@ -44,7 +44,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
     const u64 identity = TryNextAtomicIdentity(s_NextCompiledPlanGeneration);
     if(identity == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
     return identity;
 }
 

@@ -48,7 +48,7 @@ using SimdOptimizationBenchmark::s_DataCount;
 
 
 template<b8 Candidate>
-NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoubleRotationX(angle);
     SIMDVectorDouble sine{}, cosine{};
@@ -62,7 +62,7 @@ NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoublePerspectiveFovLH(angle, 1.75, 0.125, 100.0);
     SIMDVectorDouble sine{}, cosine{};
@@ -80,7 +80,7 @@ NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
     if constexpr(Candidate)
         return QuaternionDoubleRotationNormal(normal, angle);
     const SIMDVectorDouble n = VectorDoubleSelect(s_DoubleSIMDIdentityR3, normal, s_DoubleSIMDSelect1110);
@@ -94,7 +94,7 @@ NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDo
 
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Kind == Operation::Dot2){
         if constexpr(Candidate)
             return VectorDouble2Dot(lhs, rhs);
@@ -122,7 +122,7 @@ NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorD
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return Reduce<Kind, Candidate>(lhs, rhs);
 }
@@ -140,7 +140,7 @@ u32 VerifyReduction(u64& seed){
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
+FOUNDATION_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Operation::RotationX)
         return RotationX<Candidate>(angle);
@@ -178,14 +178,14 @@ u32 VerifyFactory(){
             equal = equal && EqualBits(expected.v[row], actual.v[row]);
         if(!equal || expectedFlags != actualFlags || expectedErrno != actualErrno){
             if(++failures <= 3u)
-                NWB_COUT << "factory mismatch operation=" << s_OperationNames[Kind] << " case=" << index << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedErrno << '/' << actualErrno << '\n';
+                FOUNDATION_COUT << "factory mismatch operation=" << s_OperationNames[Kind] << " case=" << index << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedErrno << '/' << actualErrno << '\n';
         }
     }
     return failures;
 }
 
 template<b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     return QuaternionNormal<Candidate>(angle, axis);
 }
@@ -216,7 +216,7 @@ u32 VerifyQuaternionAxes(){
             const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT), actualErrno = errno;
             if(!EqualBits(expected, actual) || expectedFlags != actualFlags || expectedErrno != actualErrno){
                 if(++failures <= 3u)
-                    NWB_COUT << "axis mismatch angle_bits=" << bits << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedErrno << '/' << actualErrno << '\n';
+                    FOUNDATION_COUT << "axis mismatch angle_bits=" << bits << " flags=" << expectedFlags << '/' << actualFlags << " errno=" << expectedErrno << '/' << actualErrno << '\n';
             }
         }
     }
@@ -240,7 +240,7 @@ u32 Verify(){
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;
-    NWB_COUT << "verification failures=" << failures << " reduction_cases=262144 factory_cases=180 axis_cases=112\n";
+    FOUNDATION_COUT << "verification failures=" << failures << " reduction_cases=262144 factory_cases=180 axis_cases=112\n";
     return failures;
 }
 
@@ -249,7 +249,7 @@ u32 Verify(){
 
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
     if constexpr(Kind <= Operation::Sum){
         if(!latency){
             return SimdOptimizationBenchmark::ThroughputWorkload<8u>(
@@ -310,11 +310,11 @@ b8 VectorBenchmarkSupported(){
 native{
 int main(const int argc, const char* const* argv){
     using namespace __hidden_vector_benchmark;
-    NWB_COUT.precision(17);
+    FOUNDATION_COUT.precision(17);
     if(argc == 2 && StringView(argv[1]) == "--verify")
         return Verify() == 0u ? 0 : 1;
     if(argc != 6 || StringView(argv[1]) != "--measure"){
-        NWB_CERR << "usage: vector_benchmark --verify\n" << "  --measure dot2|dot3|dot4|sum baseline|candidate iterations throughput|latency\n" << "  --measure rotation_x|perspective_fov|quaternion_normal baseline|candidate iterations throughput\n";
+        FOUNDATION_CERR << "usage: vector_benchmark --verify\n" << "  --measure dot2|dot3|dot4|sum baseline|candidate iterations throughput|latency\n" << "  --measure rotation_x|perspective_fov|quaternion_normal baseline|candidate iterations throughput\n";
         return 2;
     }
     const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max, true);

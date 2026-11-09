@@ -36,7 +36,7 @@ namespace __hidden_vulkan_shader{
 
     const usize wordCount = binarySize / sizeof(u32);
     words.resize(wordCount);
-    NWB_MEMCPY(words.data(), binarySize, binary, binarySize);
+    FOUNDATION_MEMCPY(words.data(), binarySize, binary, binarySize);
 
     if(!IsValidSpirvModuleWords(words)){
         return MakeUnexpected(Failure{});
@@ -57,11 +57,11 @@ inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveShaderEnt
     switch(lookupResult.error()){
 
     case SpirvEntryPointLookupResult::NotFound:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
         return MakeUnexpected(lookupResult.error());
 
     case SpirvEntryPointLookupResult::InvalidSpirv:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
         return MakeUnexpected(lookupResult.error());
 
     }
@@ -133,7 +133,7 @@ Expected<ShaderHandle> ShaderLibrary::getShader(const AStringView entryName, Sha
         return MakeUnexpected(Failure{});
     shader->m_desc.shaderType = shaderType;
     shader->m_desc.entryName = entryName;
-    NWB_ASSERT(!m_spirvWords.empty());
+    FOUNDATION_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
 
     const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords, entryName, shaderType, "shader library");
@@ -149,14 +149,14 @@ Expected<ShaderHandle> ShaderLibrary::getShader(const AStringView entryName, Sha
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), ConvertString(shader->m_entryPointName), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), ConvertString(shader->m_entryPointName), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
     shader->m_desc.entryName = shader->m_entryPointName;
     key.entryName = shader->m_entryPointName;
     if(!m_shaders.emplace(Move(key), shader).second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return MakeUnexpected(Failure{});
     }
     return shader;
@@ -173,7 +173,7 @@ Expected<ShaderHandle> Device::createShader(const ShaderDesc& d, const void* bin
     shader->m_desc = d;
     auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
     if(!words){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Invalid shader bytecode payload"));
         return MakeUnexpected(Failure{});
     }
     shader->m_spirvWords = Move(*words);
@@ -193,7 +193,7 @@ Expected<ShaderHandle> Device::createShader(const ShaderDesc& d, const void* bin
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
     return shader;
@@ -201,11 +201,11 @@ Expected<ShaderHandle> Device::createShader(const ShaderDesc& d, const void* bin
 
 Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants){
     if(numConstants > 0 && !constants){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
         return MakeUnexpected(Failure{});
     }
     if(numConstants > Limit<u32>::s_Max / sizeof(u32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
         return MakeUnexpected(Failure{});
     }
 
@@ -214,16 +214,16 @@ Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, co
     if(!shader)
         return MakeUnexpected(Failure{});
     shader->m_desc = base.m_desc;
-    NWB_ASSERT(!base.m_spirvWords.empty());
+    FOUNDATION_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
     // The validated name starts at a SPIR-V word and keeps its offset in the byte-for-byte module copy.
     const auto entryPointWords = MakeNotNull(reinterpret_cast<const u32*>(base.m_entryPointName.data()));
-    NWB_ASSERT(entryPointWords.get() >= base.m_spirvWords.data() && entryPointWords.get() < base.m_spirvWords.data() + base.m_spirvWords.size());
+    FOUNDATION_ASSERT(entryPointWords.get() >= base.m_spirvWords.data() && entryPointWords.get() < base.m_spirvWords.data() + base.m_spirvWords.size());
     const usize entryPointWordOffset = static_cast<usize>(entryPointWords.get() - base.m_spirvWords.data());
-    NWB_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
-    NWB_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
+    FOUNDATION_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
+    FOUNDATION_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
     shader->m_entryPointName = AStringView(reinterpret_cast<const char*>(shader->m_spirvWords.data() + entryPointWordOffset), base.m_entryPointName.size());
-    NWB_ASSERT(shader->m_entryPointName.data()[shader->m_entryPointName.size()] == '\0');
+    FOUNDATION_ASSERT(shader->m_entryPointName.data()[shader->m_entryPointName.size()] == '\0');
     shader->m_desc.entryName = shader->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
@@ -233,7 +233,7 @@ Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, co
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -247,13 +247,13 @@ Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, co
             entry.offset = static_cast<u32>(i * sizeof(u32));
             entry.size = sizeof(u32);
 
-            NWB_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
+            FOUNDATION_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
         };
 
         if(taskScheduler().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold){
             const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), numConstants, fillConstant);
             if(!parallelWork){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: shader specialization rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: shader specialization rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -272,7 +272,7 @@ Expected<ShaderLibraryHandle> Device::createShaderLibrary(const void* binary, us
         return MakeUnexpected(Failure{});
     auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
     if(!words){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Invalid shader library bytecode payload"));
         return MakeUnexpected(Failure{});
     }
     lib->m_spirvWords = Move(*words);

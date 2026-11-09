@@ -77,7 +77,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     u32& inOutPreviousTaskOrder,
     b8& inOutHasPreviousTask
 )noexcept{
-    NWB_ASSERT(record.packet == packet);
+    FOUNDATION_ASSERT(record.packet == packet);
     if(record.queue != queue.id)
         return GpuCommandIrReplayError::RecordQueueMismatch;
     if(!graph.validTask(record.task))
@@ -87,7 +87,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!compiledTask.valid() || compiledTask.plan->packet != packet || compiledTask.plan->queue != queue.id)
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 
-    NWB_ASSERT(packetView.valid());
+    FOUNDATION_ASSERT(packetView.valid());
     if(packetView.plan->taskCount == 0u)
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 

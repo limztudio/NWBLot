@@ -90,16 +90,16 @@ template<typename Operation, typename Checksum>
     }
     auto sorted = samples;
     Sort(sorted.begin(), sorted.end());
-    const auto oldPrecision = NWB_COUT.precision(17);
-    NWB_COUT << "{\"type\":\"ui_input_benchmark\",\"name\":\"" << name << "\",\"iterationsPerSample\":" << iterations
+    const auto oldPrecision = FOUNDATION_COUT.precision(17);
+    FOUNDATION_COUT << "{\"type\":\"ui_input_benchmark\",\"name\":\"" << name << "\",\"iterationsPerSample\":" << iterations
         << ",\"setupChecksum\":" << setupChecksum << ",\"behaviorChecksum\":" << *behaviorChecksum << ",\"medianNsPerOperation\":" << sorted[s_Samples / 2u] << ",\"samplesNsPerOperation\":[";
     for(usize index = 0u; index < samples.size(); ++index){
         if(index != 0u)
-            NWB_COUT << ',';
-        NWB_COUT << samples[index];
+            FOUNDATION_COUT << ',';
+        FOUNDATION_COUT << samples[index];
     }
-    NWB_COUT << "]}\n";
-    NWB_COUT.precision(oldPrecision);
+    FOUNDATION_COUT << "]}\n";
+    FOUNDATION_COUT.precision(oldPrecision);
     return true;
 }
 
@@ -185,7 +185,7 @@ public:
 protected:
     virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
         const b8 completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
-        NWB_FATAL_ASSERT(completed);
+        FOUNDATION_FATAL_ASSERT(completed);
     }
 };
 
@@ -747,11 +747,11 @@ UI_INPUT_BENCHMARK_BEGIN
 static int EntryPoint(const isize, tchar**, void*){
     NWB::Core::Common::InitializerGuard initializer;
     if(!initializer.initialize()){
-        NWB_CERR << "UI input benchmark common initialization failed\n";
+        FOUNDATION_CERR << "UI input benchmark common initialization failed\n";
         return 1;
     }
     if(!NWB::Tests::UiInputBenchmarkCases::RunAllUiInputBenchmarks()){
-        NWB_CERR << "UI input benchmark workload validation failed\n";
+        FOUNDATION_CERR << "UI input benchmark workload validation failed\n";
         return 1;
     }
     return 0;

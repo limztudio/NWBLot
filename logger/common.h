@@ -70,7 +70,7 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
+inline constexpr TStringView s_UnknownLogLevelName = FOUNDATION_TEXT("UNKNOWN");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,19 +79,19 @@ inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
 [[nodiscard]] constexpr TStringView MessageTypeToString(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::Info:
-        return NWB_TEXT("INFO");
+        return FOUNDATION_TEXT("INFO");
     case Core::Common::LogType::EssentialInfo:
-        return NWB_TEXT("ESSENTIAL INFO");
+        return FOUNDATION_TEXT("ESSENTIAL INFO");
     case Core::Common::LogType::Warning:
-        return NWB_TEXT("WARNING");
+        return FOUNDATION_TEXT("WARNING");
     case Core::Common::LogType::CriticalWarning:
-        return NWB_TEXT("CRITICAL WARNING");
+        return FOUNDATION_TEXT("CRITICAL WARNING");
     case Core::Common::LogType::Assert:
-        return NWB_TEXT("ASSERT");
+        return FOUNDATION_TEXT("ASSERT");
     case Core::Common::LogType::Error:
-        return NWB_TEXT("ERROR");
+        return FOUNDATION_TEXT("ERROR");
     case Core::Common::LogType::Fatal:
-        return NWB_TEXT("FATAL");
+        return FOUNDATION_TEXT("FATAL");
     }
     return s_UnknownLogLevelName;
 }
@@ -110,7 +110,7 @@ inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
 
 [[nodiscard]] inline LogString FormatMessageForProcessing(LogArena& arena, const MessageType& msg){
     const auto& [time, type, str] = msg;
-    return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+    return StringFormat(arena, FOUNDATION_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
 

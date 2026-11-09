@@ -309,7 +309,7 @@ TEST(AssetsFont, OversizedCountIsRejectedBeforeSourceAllocation){
     Font font(testArena.arena, Name(NWB::Tests::FontCases::s_FontCaseProjectFontsTest));
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("source size must be 1..33554432 bytes")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("source size must be 1..33554432 bytes")));
     header.byteCount = Limit<u64>::s_Max;
     binary.clear();
     AppendPOD(binary, header);
@@ -401,7 +401,7 @@ TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocat
     const u64 baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
     EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("native_operation=FT_New_Memory_Face native_domain=FreeType")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("native_operation=FT_New_Memory_Face native_domain=FreeType")));
     constexpr usize s_ExpectedCodeCapacity = 64u;
     Array<char, s_ExpectedCodeCapacity> expectedCode = {};
     CopyFixedBuffer(expectedCode, "native_code=");
@@ -592,7 +592,7 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
             imageOffset += fixture.groups[index].pixels.size();
     }
     EXPECT_EQ(logger.errorCount(), s_Filenames.size());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("image content hash differs")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("image content hash differs")));
 }
 
 TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
@@ -620,7 +620,7 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
             EXPECT_FALSE(ReadPreparedFontSource(path, includePixels, testArena.arena));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("SFNT content hash differs")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("SFNT content hash differs")));
 }
 
 TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadAllocation){

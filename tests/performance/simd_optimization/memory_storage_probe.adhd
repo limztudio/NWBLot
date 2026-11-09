@@ -21,7 +21,7 @@ native{
 #include <global/text_utils.h>
 #include <global/timer.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/wait.h>
 #endif
 
@@ -36,7 +36,7 @@ namespace __hidden_memory_storage_probe{
 
 
 using NWB::Tests::ExitOnAbort;
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 using NWB::Tests::GuardedBytes;
 #endif
 using NWB::Tests::PatternByte;
@@ -82,8 +82,8 @@ public:
 
 
 // Candidate changes only the internal AVX alignment choice.
-NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
-#if defined(NWB_HAS_AVX)
+FOUNDATION_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
+#if defined(FOUNDATION_HAS_AVX)
     if(count == 0u)
         return;
     if(count > capacity || destination == nullptr || source == nullptr)
@@ -151,8 +151,8 @@ NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capac
 #endif
 }
 
-NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
-#if defined(NWB_HAS_AVX)
+FOUNDATION_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+#if defined(FOUNDATION_HAS_AVX)
     const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
     const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
     const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
@@ -165,7 +165,7 @@ NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const 
 }
 
 // Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+FOUNDATION_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
     if(lhs.get()[0] != rhs.get()[0])
         return false;
     return CandidateEqual(lhs, rhs);
@@ -192,7 +192,7 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
     for(const usize count : s_QualifyLengths){
         for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += 16u){
             for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += 16u){
-                NWB_MEMSET(destination.data.get(), s_Poison, s_Bytes);
+                FOUNDATION_MEMSET(destination.data.get(), s_Poison, s_Bytes);
                 CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
                 if(!CheckRange(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset))
                     return false;
@@ -220,7 +220,7 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
     return true;
 }
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 [[nodiscard]] b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
     const pid_t child = fork();
     if(child < 0)
@@ -246,7 +246,7 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
     for(const usize count : s_QualifyLengths){
         for(const b8 sourceAtEnd : { false, true }){
             for(const b8 destinationAtEnd : { false, true }){
-                NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
+                FOUNDATION_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                 const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
                 const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
                 CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
@@ -337,7 +337,7 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
 
 // Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
 template<b8 Candidate, usize FixedCount = 0u>
-NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
+FOUNDATION_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
     usize slot = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         AtomicSignalFence(MemoryOrder::seq_cst);
@@ -352,7 +352,7 @@ NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize str
 }
 
 template<b8 Candidate, b8 FirstWord = false>
-NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
+FOUNDATION_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     usize slot = 0u;
     u64 total = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
@@ -391,7 +391,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
 }
 
 void BenchCopy(const usize samples){
-    NWB_COUT << "kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
+    FOUNDATION_COUT << "kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
     for(const b8 streaming : { false, true }){
         for(const usize bytes : s_BenchLengths){
             const usize stride = (bytes + 127u) & ~usize{ 63u };
@@ -399,7 +399,7 @@ void BenchCopy(const usize samples){
             AlignedBytes source(slots * stride + 128u), destination(slots * stride + 128u);
             for(usize index = 0u; index < slots * stride + 128u; ++index)
                 source.data.get()[index] = PatternByte(index);
-            NWB_MEMSET(destination.data.get(), s_Poison, slots * stride + 128u);
+            FOUNDATION_MEMSET(destination.data.get(), s_Poison, slots * stride + 128u);
             usize iterations = s_StreamingBytes / bytes;
             if(iterations < 65536u)
                 iterations = 65536u;
@@ -420,9 +420,9 @@ void BenchCopy(const usize samples){
                             baselineNs = TimeCopy(baseline, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
                         }
                         const f64 candidateOverBaseline = candidateNs / baselineNs;
-                        NWB_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
-                        NWB_COUT << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
-                        NWB_COUT.flush();
+                        FOUNDATION_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
+                        FOUNDATION_COUT << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
+                        FOUNDATION_COUT.flush();
                     }
                 }
             }
@@ -432,7 +432,7 @@ void BenchCopy(const usize samples){
 
 void BenchEquality(const usize samples, const b8 firstWord){
     const auto candidate = MakeNotNull<EqualityBatchFunction>(firstWord ? EqualityBatch<true, true> : EqualityBatch<true>);
-    NWB_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
+    FOUNDATION_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
     for(const b8 streaming : { false, true }){
         const usize slots = streaming ? s_StreamingBytes / 64u : 1u;
         AlignedBytes left(slots * 64u + 64u), right(slots * 64u + 64u);
@@ -452,7 +452,7 @@ void BenchEquality(const usize samples, const b8 firstWord){
                 const u64 candidateWarmup = candidate.get()(lhs.get() + offset, rhs.get() + offset, slots, 8u, s_EqualityWarmupIterations);
                 const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
                 if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
-                    NWB_CERR << "equality warm-up produced an incorrect result\n";
+                    FOUNDATION_CERR << "equality warm-up produced an incorrect result\n";
                     ::abort();
                 }
                 g_Checksum = g_Checksum + baselineWarmup + candidateWarmup;
@@ -469,8 +469,8 @@ void BenchEquality(const usize samples, const b8 firstWord){
                     constexpr Array<StringView, 5> s_FirstWordCases = { "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
                     const StringView caseName = firstWord ? s_FirstWordCases[comparisonCase] : comparisonCase == 0u ? "equal" : comparisonCase == 1u ? "early_mismatch" : "late_mismatch";
                     const f64 candidateOverBaseline = candidateNs / baselineNs;
-                    NWB_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
-                    NWB_COUT.flush();
+                    FOUNDATION_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
+                    FOUNDATION_COUT.flush();
                 }
             }
         }
@@ -498,21 +498,21 @@ int main(int argc, char** argv){
     using namespace __hidden_memory_storage_probe;
     const StringView option = argc >= 2 ? StringView(argv[1]) : StringView{};
     if(option != s_QualifyOption && option != s_BenchCopyOption && option != "--bench-equality" && option != s_BenchEqualityFirstWordOption){
-        NWB_CERR << "usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n";
+        FOUNDATION_CERR << "usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n";
         return 2;
     }
     if(!QualifyCopyBytes() || !QualifyEquality()){
-        NWB_CERR << "byte/equality qualification failed\n";
+        FOUNDATION_CERR << "byte/equality qualification failed\n";
         return 1;
     }
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
     if(!QualifyProtectedRanges()){
-        NWB_CERR << "protected-range qualification failed\n";
+        FOUNDATION_CERR << "protected-range qualification failed\n";
         return 1;
     }
 #endif
     if(option == s_QualifyOption){
-        NWB_COUT << "qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n";
+        FOUNDATION_COUT << "qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n";
         return 0;
     }
     usize samples = 7u;

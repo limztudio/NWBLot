@@ -26,9 +26,9 @@ namespace __hidden_state_tracking_ownership{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_PermanentStateUnknownReason = NWB_TEXT("permanent state cannot be unknown");
-static constexpr TStringView s_PermanentStateConflictsInitialReason = NWB_TEXT("permanent state conflicts with the retained initial state");
-static constexpr TStringView s_PermanentStateAlreadyTrackedReason = NWB_TEXT("a different permanent state is already tracked");
+static constexpr TStringView s_PermanentStateUnknownReason = FOUNDATION_TEXT("permanent state cannot be unknown");
+static constexpr TStringView s_PermanentStateConflictsInitialReason = FOUNDATION_TEXT("permanent state conflicts with the retained initial state");
+static constexpr TStringView s_PermanentStateAlreadyTrackedReason = FOUNDATION_TEXT("a different permanent state is already tracked");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,11 +142,11 @@ void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubre
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("permanently tracked textures cannot transfer ownership"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, FOUNDATION_TEXT("permanently tracked textures cannot transfer ownership"));
         return;
     }
     if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("concurrently shared textures do not have exclusive ownership"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, FOUNDATION_TEXT("concurrently shared textures do not have exclusive ownership"));
         return;
     }
 
@@ -170,13 +170,13 @@ void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubre
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
             if(state == ResourceStates::Unknown){
-                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("final resource state is unknown"));
+                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, FOUNDATION_TEXT("final resource state is unknown"));
                 return;
             }
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("subresource already targets a conflicting destination queue"));
+                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, FOUNDATION_TEXT("subresource already targets a conflicting destination queue"));
                 return;
             }
         }
@@ -217,7 +217,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     }
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         if(it->first.texture == texture){
-            rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("texture already has a pending ownership release"));
+            rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, FOUNDATION_TEXT("texture already has a pending ownership release"));
             return;
         }
     }
@@ -232,7 +232,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set permanent buffer state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set permanent buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
@@ -252,7 +252,7 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(MakeNotNull(buffer)) != m_bufferOwnershipReleaseDestinations.end()){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer already has a pending ownership release"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("buffer already has a pending ownership release"));
         return;
     }
 

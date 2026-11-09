@@ -166,7 +166,7 @@ inline Timer g_VeryBegining = TimerNow();
         return MakeUnexpected(Failure{});
 
     LocalTime local = {};
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(localtime_s(&local, &now) != 0)
 #else
     if(localtime_r(&now, &local) == nullptr)

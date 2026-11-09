@@ -95,7 +95,7 @@ class MeshViewStatePolicy{
             return true;
         b8 matches = false;
         native(in storedBytes, in viewState, mut matches){
-            matches = NWB_MEMCMP(storedBytes.data(), &viewState, sizeof(viewState)) == 0;
+            matches = FOUNDATION_MEMCMP(storedBytes.data(), &viewState, sizeof(viewState)) == 0;
         }
         return !matches;
     }
@@ -106,7 +106,7 @@ class MeshViewStatePolicy{
         mut b8 outValid
     )const{
         native(in viewState, mut outStoredBytes){
-            NWB_MEMCPY(outStoredBytes.data(), outStoredBytes.size(), &viewState, sizeof(viewState));
+            FOUNDATION_MEMCPY(outStoredBytes.data(), outStoredBytes.size(), &viewState, sizeof(viewState));
         }
         outValid = true;
     }

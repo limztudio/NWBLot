@@ -61,7 +61,7 @@ namespace SubsystemAssetRuntime{
 
 
 b8 ValidatePayload(const ISubsystem& subsystem){
-    if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
+    if(!subsystem.checkVirtualPath(FOUNDATION_TEXT("ISubsystem::validatePayload")))
         return false;
 
     for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
@@ -72,7 +72,7 @@ b8 ValidatePayload(const ISubsystem& subsystem){
 
     const usize count = subsystem.fieldCount();
     if(count == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
         return false;
     }
 
@@ -125,7 +125,7 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
         for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
             const Name assetName(assetHashes[hashOffset++]);
             if(!assetName){
-                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
                 return false;
             }
             outSubsystem.appendFieldValue(i, assetName);
@@ -152,7 +152,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const
         s_SubsystemMagic,
         s_SubsystemLoadBinaryContext,
         s_SubsystemAssetKindLabel,
-        NWB_TEXT("SubsystemAssetCodec::deserialize"),
+        FOUNDATION_TEXT("SubsystemAssetCodec::deserialize"),
         arena
     );
 }

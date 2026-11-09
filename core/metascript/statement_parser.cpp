@@ -339,7 +339,7 @@ Value StatementParser::parseStructField(Value&& attributes, ScratchNameList& fie
 }
 
 Expected<NotNull<Value*>> StatementParser::resolveTarget(const ExpressionParser::ScratchPath& path, const u32 errorLine, const u32 errorColumn){
-    NWB_ASSERT(!path.empty());
+    FOUNDATION_ASSERT(!path.empty());
 
     const auto rootName = path[0];
     const auto rootIt = m_variables.find(rootName);

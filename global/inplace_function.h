@@ -99,7 +99,7 @@ public:
     inline explicit operator b8()const noexcept{ return m_invoke != nullptr; }
 
     inline Ret operator()(Args... args)const{
-        NWB_ASSERT_MSG(m_invoke != nullptr, NWB_TEXT("InplaceFunction invoked without target"));
+        FOUNDATION_ASSERT_MSG(m_invoke != nullptr, FOUNDATION_TEXT("InplaceFunction invoked without target"));
         return m_invoke(m_storage, Forward<Args>(args)...);
     }
 
@@ -157,7 +157,7 @@ private:
         if(!rhs.m_invoke)
             return;
 
-        NWB_ASSERT_MSG(rhs.m_copy != nullptr, NWB_TEXT("InplaceFunction target is not copy constructible"));
+        FOUNDATION_ASSERT_MSG(rhs.m_copy != nullptr, FOUNDATION_TEXT("InplaceFunction target is not copy constructible"));
         rhs.m_copy(m_storage, rhs.m_storage);
         m_invoke = rhs.m_invoke;
         m_destroy = rhs.m_destroy;
@@ -236,7 +236,7 @@ public:
     constexpr operator RawFunction()const noexcept{ return m_function; }
 
     inline Ret operator()(Args... args)const{
-        NWB_ASSERT_MSG(m_function != nullptr, NWB_TEXT("InplaceFunction<0> invoked without target"));
+        FOUNDATION_ASSERT_MSG(m_function != nullptr, FOUNDATION_TEXT("InplaceFunction<0> invoked without target"));
         return m_function(Forward<Args>(args)...);
     }
 

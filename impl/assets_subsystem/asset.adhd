@@ -23,14 +23,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_SubsystemAssetKindLabel = NWB_TEXT("subsystem");
-inline constexpr TStringView s_SubsystemLoadBinaryContext = NWB_TEXT("ISubsystem::loadBinary");
+inline constexpr TStringView s_SubsystemAssetKindLabel = FOUNDATION_TEXT("subsystem");
+inline constexpr TStringView s_SubsystemLoadBinaryContext = FOUNDATION_TEXT("ISubsystem::loadBinary");
 #if defined(NWB_COOK)
-inline constexpr TStringView s_SubsystemSerializeContext = NWB_TEXT("SubsystemAssetCodec::serialize");
+inline constexpr TStringView s_SubsystemSerializeContext = FOUNDATION_TEXT("SubsystemAssetCodec::serialize");
 #endif
-inline constexpr TStringView s_SubsystemDepsPayloadLabel = NWB_TEXT("subsystems");
-inline constexpr TStringView s_SubsystemFieldCountsPayloadLabel = NWB_TEXT("field_counts");
-inline constexpr TStringView s_SubsystemAssetsPayloadLabel = NWB_TEXT("assets");
+inline constexpr TStringView s_SubsystemDepsPayloadLabel = FOUNDATION_TEXT("subsystems");
+inline constexpr TStringView s_SubsystemFieldCountsPayloadLabel = FOUNDATION_TEXT("field_counts");
+inline constexpr TStringView s_SubsystemAssetsPayloadLabel = FOUNDATION_TEXT("assets");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +107,7 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
             return 1u;
         },
         [](const SubsystemT& subsystem, [[maybe_unused]] const usize elementIndex)noexcept -> Name{
-            NWB_ASSERT(elementIndex == 0u);
+            FOUNDATION_ASSERT(elementIndex == 0u);
             return (subsystem.*Member).name();
         },
         [](SubsystemT& subsystem)noexcept{
@@ -129,7 +129,7 @@ template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> S
             return (subsystem.*Member).size();
         },
         [](const SubsystemT& subsystem, const usize elementIndex)noexcept -> Name{
-            NWB_ASSERT(elementIndex < (subsystem.*Member).size());
+            FOUNDATION_ASSERT(elementIndex < (subsystem.*Member).size());
             return (subsystem.*Member)[elementIndex].name();
         },
         [](SubsystemT& subsystem)noexcept{
@@ -205,31 +205,31 @@ public:
 
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
-        NWB_ASSERT(index < descriptors.size());
+        FOUNDATION_ASSERT(index < descriptors.size());
         return SubsystemFieldValueDescriptor(descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray);
     }
 
     [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
-        NWB_ASSERT(index < descriptors.size());
+        FOUNDATION_ASSERT(index < descriptors.size());
         return descriptors[index].count(static_cast<const SubsystemT&>(*this));
     }
 
     [[nodiscard]] virtual Name fieldValue(const usize index, const usize elementIndex = 0u)const noexcept override{
         const auto descriptors = FieldDescriptors();
-        NWB_ASSERT(index < descriptors.size());
+        FOUNDATION_ASSERT(index < descriptors.size());
         return descriptors[index].get(static_cast<const SubsystemT&>(*this), elementIndex);
     }
 
     virtual void clearFieldValues(const usize index)noexcept override{
         const auto descriptors = FieldDescriptors();
-        NWB_ASSERT(index < descriptors.size());
+        FOUNDATION_ASSERT(index < descriptors.size());
         descriptors[index].clear(static_cast<SubsystemT&>(*this));
     }
 
     virtual void appendFieldValue(const usize index, const Name& value)override{
         const auto descriptors = FieldDescriptors();
-        NWB_ASSERT(index < descriptors.size());
+        FOUNDATION_ASSERT(index < descriptors.size());
         descriptors[index].append(static_cast<SubsystemT&>(*this), value);
     }
 };
@@ -276,7 +276,7 @@ public:
 #if defined(NWB_COOK)
 public:
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
-        if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedSubsystemAssetCodec::serialize")))
+        if(!this->checkSerializeAssetType(asset, FOUNDATION_TEXT("TypedSubsystemAssetCodec::serialize")))
             return false;
 
         return SubsystemAssetSerialization::Serialize(*MakeNotNull(checked_cast<const SubsystemT*>(&asset)), outBinary);

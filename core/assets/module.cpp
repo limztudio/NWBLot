@@ -19,7 +19,7 @@ b8 IAsset::checkVirtualPath(const TStringView failureContext)const{
     if(virtualPath())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: virtual path is empty"), failureContext);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: virtual path is empty"), failureContext);
     return false;
 }
 #else
@@ -27,7 +27,7 @@ b8 IAssetCodec::checkSerializeAssetType(const IAsset& asset, const TStringView f
     if(asset.assetType() == assetType())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, ConvertString(asset.assetType().resolvedText()), ConvertString(assetType().resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, ConvertString(asset.assetType().resolvedText()), ConvertString(assetType().resolvedText()));
     return false;
 }
 #endif

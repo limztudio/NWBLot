@@ -228,7 +228,7 @@ b8 UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
 
 void UiTextAreaSmokeScene::resetModel(){
     const b8 initialized = m_model.setText("abcdef\nx\nabcdef\n한국어") && m_model.setSelection(5u, 5u);
-    NWB_FATAL_ASSERT(initialized);
+    FOUNDATION_FATAL_ASSERT(initialized);
     m_state.reset();
     m_enabled = true;
     m_readOnly = false;
@@ -238,7 +238,7 @@ void UiTextAreaSmokeScene::resetModel(){
 
 void UiTextAreaSmokeScene::longDocument(){
     const b8 replaced = m_model.setText(m_longText) && m_model.setSelection(1039u, 1039u);
-    NWB_FATAL_ASSERT(replaced);
+    FOUNDATION_FATAL_ASSERT(replaced);
     m_longDocument = true;
 }
 
@@ -288,10 +288,10 @@ namespace __hidden_ui_text_area_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<TStringView, 16> s_RectNames = { NWB_TEXT("bounds"), NWB_TEXT("content"), NWB_TEXT("clip"), NWB_TEXT("caret"),
-    NWB_TEXT("reset"), NWB_TEXT("long"), NWB_TEXT("readonly"), NWB_TEXT("enabled"), NWB_TEXT("viewport"),
-    NWB_TEXT("clipboard"), NWB_TEXT("outside"), NWB_TEXT("x_track"), NWB_TEXT("x_thumb"), NWB_TEXT("y_track"),
-    NWB_TEXT("y_thumb"), NWB_TEXT("corner") };
+static constexpr Array<TStringView, 16> s_RectNames = { FOUNDATION_TEXT("bounds"), FOUNDATION_TEXT("content"), FOUNDATION_TEXT("clip"), FOUNDATION_TEXT("caret"),
+    FOUNDATION_TEXT("reset"), FOUNDATION_TEXT("long"), FOUNDATION_TEXT("readonly"), FOUNDATION_TEXT("enabled"), FOUNDATION_TEXT("viewport"),
+    FOUNDATION_TEXT("clipboard"), FOUNDATION_TEXT("outside"), FOUNDATION_TEXT("x_track"), FOUNDATION_TEXT("x_thumb"), FOUNDATION_TEXT("y_track"),
+    FOUNDATION_TEXT("y_thumb"), FOUNDATION_TEXT("corner") };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -380,23 +380,23 @@ b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
         , value[10], value[11], value[12], value[13], value[14], value[15], value[16], value[17], value[18], value[19]
         , value[20], value[21], value[22], value[23], value[24]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
         , current.sequence, current.scroll.x, current.scroll.y, current.measure.x, current.measure.y
         , current.lineHeight, current.selectionCount, current.maximum.x, current.maximum.y
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(NWB_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(FOUNDATION_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
     for(u32 index = 0u; index < current.selectionCount; ++index){
         const Rect& rectangle = current.selections[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}"), current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}"), current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
     }
     return true;
 }
@@ -502,9 +502,9 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
     }
     const b8 configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
         && m_korean.setText({ .text = __hidden_ui_text_samples::s_Korean, .language = "ko", .fontSize = 22.0f, .scriptTag = ::PackFourCharTag('H', 'a', 'n', 'g') }) == Impl::Ui::TextLayoutStatus::Success;
-    NWB_FATAL_ASSERT_MSG(configured && m_coverage, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
+    FOUNDATION_FATAL_ASSERT_MSG(configured && m_coverage, FOUNDATION_TEXT("UI smoke text and coverage fixture must be valid"));
     for(const Impl::Ui::SharedSdfAtlasPage& page : m_sdf)
-        NWB_FATAL_ASSERT_MSG(page, NWB_TEXT("UI smoke compact SDF fixtures must be valid"));
+        FOUNDATION_FATAL_ASSERT_MSG(page, FOUNDATION_TEXT("UI smoke compact SDF fixtures must be valid"));
 }
 
 b8 UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
@@ -553,7 +553,7 @@ namespace __hidden_ui_texture_image_scene{
 
 
 inline constexpr Name s_AlternateSkinNickname = NWB::Tests::Smoke::s_SmokeNameAlternateSkin;
-inline constexpr TStringView s_OwnerName = NWB_TEXT("UiTextureImageSmokeScene");
+inline constexpr TStringView s_OwnerName = FOUNDATION_TEXT("UiTextureImageSmokeScene");
 static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
 
@@ -848,10 +848,10 @@ namespace __hidden_ui_texture_image_snapshot{
 
 
 static constexpr Array<TStringView, 17u> s_RectNames{
-    NWB_TEXT("before"), NWB_TEXT("after"), NWB_TEXT("default_tile"), NWB_TEXT("alternate_tile"), NWB_TEXT("tinted"),
-    NWB_TEXT("zero_alpha"), NWB_TEXT("frozen"), NWB_TEXT("external"), NWB_TEXT("external_clip"),
-    NWB_TEXT("default_atlas"), NWB_TEXT("alternate_atlas"), NWB_TEXT("skin_fill"), NWB_TEXT("parent_image"),
-    NWB_TEXT("child_image"), NWB_TEXT("parent"), NWB_TEXT("child"), NWB_TEXT("builder_image")
+    FOUNDATION_TEXT("before"), FOUNDATION_TEXT("after"), FOUNDATION_TEXT("default_tile"), FOUNDATION_TEXT("alternate_tile"), FOUNDATION_TEXT("tinted"),
+    FOUNDATION_TEXT("zero_alpha"), FOUNDATION_TEXT("frozen"), FOUNDATION_TEXT("external"), FOUNDATION_TEXT("external_clip"),
+    FOUNDATION_TEXT("default_atlas"), FOUNDATION_TEXT("alternate_atlas"), FOUNDATION_TEXT("skin_fill"), FOUNDATION_TEXT("parent_image"),
+    FOUNDATION_TEXT("child_image"), FOUNDATION_TEXT("parent"), FOUNDATION_TEXT("child"), FOUNDATION_TEXT("builder_image")
 };
 
 
@@ -893,19 +893,19 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     if(!update.published)
         return;
     if(update.displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},") NWB_TEXT("{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},") FOUNDATION_TEXT("{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5]
         , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
         , current.sequence, current.generations[0], current.generations[1], current.generations[2]
         , static_cast<u32>(m_replacement->identity().name() == m_default->identity().name())
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(NWB_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(FOUNDATION_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -922,9 +922,9 @@ namespace __hidden_ui_window_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr TStringView s_IncreaseLabel = NWB_TEXT("increase");
+constexpr TStringView s_IncreaseLabel = FOUNDATION_TEXT("increase");
 constexpr AStringView s_IncreaseKey = "increase";
-constexpr TStringView s_LockedLabel = NWB_TEXT("locked");
+constexpr TStringView s_LockedLabel = FOUNDATION_TEXT("locked");
 constexpr AStringView s_LockedKey = "locked";
 static constexpr Impl::Ui::Color s_TitleAnchor{ 0.70f, 0.02f, 0.35f, 1.0f };
 static constexpr Impl::Ui::Color s_ContentAnchor{ 0.02f, 0.30f, 0.75f, 1.0f };
@@ -958,7 +958,7 @@ static constexpr f32 s_Gap = 4.0f;
 
 b8 UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    ObserveSmokeDisplay(NWB_TEXT("UiWindowSmoke"), context.display, m_lastDisplay, m_displayChanged);
+    ObserveSmokeDisplay(FOUNDATION_TEXT("UiWindowSmoke"), context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
     ui.style().gap = __hidden_ui_window_smoke::s_Gap;
     ui.style().fontSize = 12.0f;
@@ -1014,7 +1014,7 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
     m_lastCount = m_count;
     m_lastLocked = m_locked;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}")
         , m_sequence, bounds.x, bounds.y, bounds.width, bounds.height
         , static_cast<u32>(m_window.collapsed), static_cast<u32>(m_locked), m_count
     );
@@ -1023,12 +1023,12 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
     const Rect resize = ResolveWindowResizeBounds(m_window, metrics);
     const Rect button = __hidden_ui_window_smoke::Button(m_window, metrics);
     const Rect content = ResolveWindowContentBounds(m_window, metrics);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
         , m_sequence, title.x, title.y, title.width, title.height
         , collapse.x, collapse.y, collapse.width, collapse.height
         , resize.x, resize.y, resize.width, resize.height
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
         , m_sequence, button.x, button.y, button.width, button.height
         , button.x + button.width + __hidden_ui_window_smoke::s_Gap, button.y, button.width, button.height
         , content.x, content.y, content.width, content.height, metrics.minimumSize.x, metrics.minimumSize.y
@@ -1037,7 +1037,7 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
 
 void UiWindowSmokeScene::logAction(const TStringView action){
     ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}"), action, m_count, static_cast<u32>(m_locked), m_actions);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}"), action, m_count, static_cast<u32>(m_locked), m_actions);
 }
 
 void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const{
@@ -1054,7 +1054,7 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     if(!m_window.collapsed)
         context.paint.fillRect({ VectorGetX(anchors), VectorGetZ(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
     const b8 popped = context.paint.popClip();
-    NWB_FATAL_ASSERT(popped);
+    FOUNDATION_FATAL_ASSERT(popped);
 }
 
 

@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +68,7 @@ struct LinuxBackendOrder final{
 
 
 static void AppendBackend(LinuxBackendOrder& inOutOrder, const Common::LinuxFrameBackend::Enum backend)noexcept{
-    NWB_ASSERT(inOutOrder.count < LengthOf(inOutOrder.backends));
+    FOUNDATION_ASSERT(inOutOrder.count < LengthOf(inOutOrder.backends));
     inOutOrder.backends[inOutOrder.count] = backend;
     ++inOutOrder.count;
 }
@@ -78,7 +78,7 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
 
     const auto requestedBackend = ReadEnvironmentVariable(scratchArena, s_LinuxBackendEnvName);
     if(!requestedBackend){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Linux backend environment: {}"), ConvertString(requestedBackend.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: Failed to read Linux backend environment: {}"), ConvertString(requestedBackend.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*requestedBackend){
@@ -98,21 +98,21 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
         }
 #endif
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Unsupported NWB_LINUX_BACKEND='{}'."), ConvertString(**requestedBackend));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: Unsupported NWB_LINUX_BACKEND='{}'."), ConvertString(**requestedBackend));
         return MakeUnexpected(Failure{});
     }
 
 #if defined(NWB_WITH_WAYLAND)
     const auto sessionIsWayland = EnvironmentVariableEquals(scratchArena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest);
     if(!sessionIsWayland){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read session environment: {}"), ConvertString(sessionIsWayland.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: Failed to read session environment: {}"), ConvertString(sessionIsWayland.error().message()));
         return MakeUnexpected(Failure{});
     }
     b8 preferWayland = *sessionIsWayland;
     if(!preferWayland){
         const auto hasWaylandDisplay = HasEnvironmentValue(scratchArena, s_WaylandDisplayEnvName);
         if(!hasWaylandDisplay){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Wayland display environment: {}"), ConvertString(hasWaylandDisplay.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: Failed to read Wayland display environment: {}"), ConvertString(hasWaylandDisplay.error().message()));
             return MakeUnexpected(Failure{});
         }
         preferWayland = *hasWaylandDisplay;
@@ -167,7 +167,7 @@ b8 Frame::init(){
         }
         if(initialized){
             frameData.setBackend(backend);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Frame: Using Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
 
             if(!startup())
                 return false;
@@ -175,10 +175,10 @@ b8 Frame::init(){
             return true;
         }
 
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Failed to initialize Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Frame: Failed to initialize Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
     }
 
-    NWB_LOGGER_FATAL(NWB_TEXT("Frame: Failed to initialize any Linux window backend."));
+    NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame: Failed to initialize any Linux window backend."));
     return false;
 }
 
@@ -193,7 +193,7 @@ b8 Frame::showFrame(){
 #endif
     case Common::LinuxFrameBackend::None:
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend has been initialized."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: No Linux window backend has been initialized."));
         return false;
     }
 }
@@ -208,7 +208,7 @@ b8 Frame::mainLoop(){
 #endif
     case Common::LinuxFrameBackend::None:
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend is available for the main loop."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: No Linux window backend is available for the main loop."));
         return false;
     }
 }

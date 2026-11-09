@@ -28,10 +28,10 @@ void CommandList::endMarker(){
     if(!publicCommandStateAccessible())
         return;
     if(m_markerStack.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring an unmatched command-list marker end"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Ignoring an unmatched command-list marker end"));
         return;
     }
-    if(!validateCommandRecordingScope(NWB_TEXT("end command-list marker")))
+    if(!validateCommandRecordingScope(FOUNDATION_TEXT("end command-list marker")))
         return;
 
     closeTopMarkerWithoutCallbacks();
@@ -46,11 +46,11 @@ void CommandList::abandonMarker()noexcept{
 
 
 CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name){
-    constexpr TStringView s_OperationName = NWB_TEXT("begin command-list marker");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin command-list marker");
     if(!validateCommandRecordingScope(s_OperationName))
         return {};
     if(m_nextMarkerSerial == Limit<u64>::s_Max){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("marker identity space is exhausted"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("marker identity space is exhausted"));
         return {};
     }
 
@@ -110,7 +110,7 @@ b8 CommandList::endMarkerLease(const CommandMarkerRecordingToken& token){
         invalidateCommandRecording();
         return false;
     }
-    if(!validateCommandRecordingScope(NWB_TEXT("end owned command-list marker")))
+    if(!validateCommandRecordingScope(FOUNDATION_TEXT("end owned command-list marker")))
         return false;
 
     closeTopMarkerWithoutCallbacks();

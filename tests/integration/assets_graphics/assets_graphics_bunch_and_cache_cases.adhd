@@ -49,7 +49,7 @@ static constexpr AStringView s_ProjectFixturesBundleFirst = "project/fixtures/bu
 static constexpr AStringView s_Local = "local";
 static constexpr AStringView s_Label = "label";
 static constexpr AStringView s_ASeparatelyOwnedMetadataString = "a separately owned metadata string";
-static constexpr TStringView s_DoesNotTargetADeclaredAsset = NWB_TEXT("does not target a declared asset");
+static constexpr TStringView s_DoesNotTargetADeclaredAsset = FOUNDATION_TEXT("does not target a declared asset");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,7 +330,7 @@ asset_bunch bunch = [first, second];
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference")));
 }
 
 TEST(AssetBunchOwnership, MissingLaterReferenceReleasesPartialNestedCollections){
@@ -370,7 +370,7 @@ TEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFro
     ASSERT_FALSE(failed);
     EXPECT_EQ(failed.error(), AssetBunchExpandFailure::Error);
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("list must contain at least one asset")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("list must contain at least one asset")));
 }
 
 TEST(AssetBunchOwnership, RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime){
@@ -420,7 +420,7 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
         EXPECT_FALSE(Impl::ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, entry.skeletonObjects.get_allocator().arena(), fixture.scratchArena));
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("asset is not a map")));
 }
 
 TEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder){
@@ -482,7 +482,7 @@ asset_bunch bunch = [Asset, asset];
         );
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
+        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("variable 'asset' is listed more than once")));
         EXPECT_FALSE(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset));
     }
 }
@@ -505,7 +505,7 @@ asset_bunch bunch = [asset];
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference 'local'")));
+        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference 'local'")));
     }
 }
 
@@ -521,7 +521,7 @@ TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceL
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'")) : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))));
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(FOUNDATION_TEXT("item 0 references undeclared asset variable 'bunch'")) : TStringView(FOUNDATION_TEXT("reference 'bunch' does not target a declared asset"))));
         }
     }
 }
@@ -536,7 +536,7 @@ TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
             ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))));
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(FOUNDATION_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(FOUNDATION_TEXT("item 0 must be a declared asset reference"))));
         }
     }
 }
@@ -559,7 +559,7 @@ TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_EQ(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset), caseIndex == 0u);
-            EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")), caseIndex == 1u);
+            EXPECT_EQ(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference")), caseIndex == 1u);
         }
     }
 }
@@ -1146,7 +1146,7 @@ TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalizati
     Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathSeparatorScratch)};
     AString<Alloc::ScratchArena> output(scratchArena);
     const NWB::Path path(inputArena, "Prefix/Upper\\Name//./File");
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(path, output));
     EXPECT_EQ(AStringView(output), "prefix/upper/name/file");
     const NWB::Path driveRoot(inputArena, "C:\\Root\\File");
@@ -1241,8 +1241,8 @@ TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaU
                 const auto normal = source.lexicallyNormal();
                 const auto stem = normal.stem();
                 const auto extension = normal.extension();
-                EXPECT_EQ(stem.native(), TStringView(NWB_TEXT("Second.LOD1")));
-                EXPECT_EQ(extension.native(), TStringView(NWB_TEXT(".NWB")));
+                EXPECT_EQ(stem.native(), TStringView(FOUNDATION_TEXT("Second.LOD1")));
+                EXPECT_EQ(extension.native(), TStringView(FOUNDATION_TEXT(".NWB")));
             }
             EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
         }
@@ -1552,7 +1552,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectSamplersFailing), samplerPayload, reordered, s_SharedCookKeyHash));
     reordered.entries.back().identity.payloadHash ^= 1u;
     EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, reordered, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid payload identity")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("invalid payload identity")));
     NWB::Core::Assets::AssetBytes retainedList(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, retainedList));
     EXPECT_EQ(retainedList, originalList);

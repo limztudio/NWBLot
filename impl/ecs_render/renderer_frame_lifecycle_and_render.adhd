@@ -254,7 +254,7 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
     , m_deferredLightingSubmissionTransaction(arena)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register built-in CSG shape types"));
 
     m_deferredTaskTimingFeedback.activate();
 }
@@ -363,7 +363,7 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
         m_shaderSystem.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<RendererSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(RendererSubsystem::s_AssetTypeText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(RendererSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -377,7 +377,7 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
     }
 
     if(!RendererGpuTimingScopeReservations::Prepare(m_graphics))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
     b8 targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
@@ -446,7 +446,7 @@ void RendererFramePipeline::invalidateResources(){
     m_preparedTaskGraphPresentationContributor = nullptr;
     m_preparedTaskGraphOutputLayerContributor = nullptr;
     resetFrameTaskState();
-    NWB_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
+    FOUNDATION_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
@@ -479,7 +479,7 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
     const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
     if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
     }
@@ -571,22 +571,22 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
             m_preparedTaskGraphOutputLayerContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: output layer requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
     }
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))
             m_preparedTaskGraphPresentationContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
     }
 
     return true;
@@ -640,7 +640,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
         if(planAccess.valid()){
             const u64 recordingAttemptGeneration = m_deferredLightingRecordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration != 0u && !m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, recordingAttemptGeneration))
-                NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
             m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
             m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
         }
@@ -728,7 +728,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
         const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(declarations, m_deferredLightingTaskGraphQueueAssignments, compiledPlan, m_deferredLightingSubmissionTransaction, queueAssignmentTelemetryScratchArena))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred queue-assignment history refresh failed before graph reset"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred queue-assignment history refresh failed before graph reset"));
     }
 
     resetFrameTaskState();
@@ -739,7 +739,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::AcquiredPresentationFrame presentationFrame = m_graphics.acquiredPresentationFrame();
     const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
     if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: render target did not match the acquired presentation frame; requesting recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: render target did not match the acquired presentation frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return;
     }
@@ -748,16 +748,16 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
-    NWB_ASSERT(m_preparedCsgFrameStateValid);
+    FOUNDATION_ASSERT(m_preparedCsgFrameStateValid);
     if(!m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility resource preflight was unavailable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: shadow-visibility resource preflight was unavailable"));
         return;
     }
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const b8 hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     const b8 hasTransparentRenderers = m_preparedHasTransparentRenderers;
-    NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
+    FOUNDATION_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
     if(m_graphics.isDeviceRecreationRequested() || device.requiresRecreation()){
         if(device.requiresRecreation())
@@ -765,12 +765,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     }
     if(m_frameRenderRecoveryFailed){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
     Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease = device.getDescriptorHeap().acquirePendingRecordingLease();
     if(!descriptorHeapPendingRecordingLease.valid()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: descriptor heap pending-recording lease was unavailable; requesting recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: descriptor heap pending-recording lease was unavailable; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return;
     }
@@ -782,8 +782,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const b8 laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
     const b8 laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
-        NWB_ASSERT(laggedLightingHistoryResourcesReady);
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged async lighting requires validated history targets"));
+        FOUNDATION_ASSERT(laggedLightingHistoryResourcesReady);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: lagged async lighting requires validated history targets"));
         return;
     }
 
@@ -919,7 +919,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     buildDeferredGraph(requestsLaggedLightingHistoryCapture);
     if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphDeclared){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
         buildDeferredGraph(false);
     }
     const b8 deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphScratchArena);
@@ -962,7 +962,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto discardRenderPackets = [&](){
         timing.discardAll();
         if(!recovery.discardUnacceptedGraphPackets()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
             m_graphics.requestDeviceRecreation();
         }
         const b8 shadowPrepareAccepted = taskIsCompiled(m_shadowPrepareGraph.m_deferredShadowPrepareTask) && m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_shadowPrepareGraph.m_deferredShadowPrepareTask).valid();
@@ -976,7 +976,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Array<Core::GpuTaskGraphTaskTimingTicket, s_DeferredTimingTicketCapacity> normalTimingTickets = {};
     const auto normalTimingTicketCount = timing.bindNormalTimingTickets(*this, deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixUniquePacketCount, avboitValidation, hardwareShadowSupported, normalTimingTickets);
     if(!normalTimingTicketCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to bind normal deferred graph timing"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to bind normal deferred graph timing"));
         discardRenderPackets();
         return;
     }
@@ -1069,7 +1069,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     if(finalPresentationSubmissionToken.valid()){
         frameTimingEndReady = timing.frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true);
         if(!frameTimingEndReady){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
             timing.frameTimingTransaction.discard();
         }
     }
@@ -1101,13 +1101,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
 
         if(deferredPresentSubmissionToken.valid() && !finalPresentationSubmissionToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: acquired back buffer was written before presentation suffix rejection; requesting recreation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: acquired back buffer was written before presentation suffix rejection; requesting recreation"));
             m_graphics.requestDeviceRecreation();
         }
         if(!presentationSignalReady && finalPresentationSubmissionToken.valid())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: terminal graph presentation signal confirmation failed"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: terminal graph presentation signal confirmation failed"));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned normal deferred execution was rejected"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: graph-owned normal deferred execution was rejected"));
         if(!recovered || acceptedStateLost || (!presentationSignalReady && finalPresentationSubmissionToken.valid()))
             recovery.failFrameRenderRecovery();
         return;
@@ -1207,14 +1207,14 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
     const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
     for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
     for(const Core::GpuTaskGraphPacketSubmissionStatistics& packetStatistics : packetSubmissionStatistics){
         const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics = ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index);
         if(!builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
@@ -1336,7 +1336,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
     if(m_deferredLightingTaskGraphScheduled){
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
         else{
             const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
                 .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,
@@ -1344,7 +1344,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
                 .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
             };
             if(!deferredTaskGraphView.appendFrameGraphTelemetry(m_deferredLightingTaskGraphAnalysis, scratchArena, builder, deferredLightingTelemetryOptions))
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
         }
     }
 

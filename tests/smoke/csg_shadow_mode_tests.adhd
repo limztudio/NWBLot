@@ -6,6 +6,7 @@
 #include "scene_types.adhd"
 
 native{
+#include <tests/smoke/test_environment.h>
 #include <cstdlib>
 #include <gtest/gtest.h>
 }
@@ -23,7 +24,7 @@ void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 
     String nameCopy = String(name);
     String valueCopy = String(value);
     native(in nameCopy, in valueCopy, in hasValue){
-        ASSERT_EQ(hasValue ? ::setenv(nameCopy.c_str(), valueCopy.c_str(), 1) : ::unsetenv(nameCopy.c_str()), 0);
+        ASSERT_EQ(SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr), 0);
     }
 }
 

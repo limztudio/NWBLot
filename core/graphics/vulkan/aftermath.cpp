@@ -95,7 +95,7 @@ static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const
     State& state = GetState();
     ScopedLock lock(state.dumpMutex);
     state.dumpBytes.resize(gpuCrashDumpSize);
-    NWB_MEMCPY(state.dumpBytes.data(), gpuCrashDumpSize, pGpuCrashDump, gpuCrashDumpSize);
+    FOUNDATION_MEMCPY(state.dumpBytes.data(), gpuCrashDumpSize, pGpuCrashDump, gpuCrashDumpSize);
     state.dumpReady = true;
 }
 
@@ -134,7 +134,7 @@ b8 Initialize(){
     const auto opened = state.library.open(arena, Crash::s_AftermathRuntimeName);
     if(!opened){
         const SharedLibraryFailure& failure = opened.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
         return false;
     }
 
@@ -143,7 +143,7 @@ b8 Initialize(){
     const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(arena, "GFSDK_Aftermath_GetCrashDumpStatus");
     if(!enable || !disable || !getStatus){
         const SharedLibraryFailure& failure = !enable ? enable.error() : !disable ? disable.error() : getStatus.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath symbol lookup failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: NVIDIA Aftermath symbol lookup failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
         state.library.close();
         return false;
     }
@@ -163,13 +163,13 @@ b8 Initialize(){
         nullptr
     );
     if(!GFSDK_Aftermath_SUCCEED(result)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GFSDK_Aftermath_EnableGpuCrashDumps failed (0x{:x}); GPU crash dumps disabled."), static_cast<u32>(result));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: GFSDK_Aftermath_EnableGpuCrashDumps failed (0x{:x}); GPU crash dumps disabled."), static_cast<u32>(result));
         state.library.close();
         return false;
     }
 
     state.active = true;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps enabled."));
+    NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps enabled."));
     return true;
 #endif
 }
@@ -185,7 +185,7 @@ void Shutdown(){
     if(state.disable){
         const GFSDK_Aftermath_Result result = state.disable();
         if(!GFSDK_Aftermath_SUCCEED(result)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GFSDK_Aftermath_DisableGpuCrashDumps failed (0x{:x}); retaining the active runtime."), static_cast<u32>(result));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: GFSDK_Aftermath_DisableGpuCrashDumps failed (0x{:x}); retaining the active runtime."), static_cast<u32>(result));
             return;
         }
     }

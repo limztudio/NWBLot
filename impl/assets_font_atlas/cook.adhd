@@ -155,7 +155,7 @@ using Core::Metascript::Value;
         return MakeUnexpected(Failure{});
     glyph.planeTop = *planeTopResult;
     if(glyph.width == 0u || glyph.height == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     ComputeFontAtlasGlyphPlaneBounds(unitsPerPixel, glyph);
@@ -214,7 +214,7 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSideca
         return false;
     const Expected<FontAtlasRasterMode::Enum> parsedRasterMode = TryParseFontAtlasRasterMode(rasterModeResult->text);
     if(!parsedRasterMode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
         return false;
     }
     payload.rasterMode = *parsedRasterMode;
@@ -245,7 +245,7 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 
 
 b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
     if(!atlas.checkVirtualPath(s_FontAtlasValidatePayloadContext))
@@ -268,7 +268,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     if(!glyphs)
         return MakeUnexpected(glyphs.error());
     if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || (*glyphs)->asList().size() != payload.sourceGlyphCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(payload.glyphs.get_allocator().arena());
@@ -287,7 +287,7 @@ Expected<u32> ReadFontAtlasMetadataU32(const Path& path, const Core::Metascript:
     const Core::Metascript::Value* value = map.findField(field);
     if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum)
         return static_cast<u32>(value->asInteger());
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer in {}..{}"), ConvertString(diagnosticPrefix), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be an integer in {}..{}"), ConvertString(diagnosticPrefix), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
     return MakeUnexpected(Failure{});
 }
 
@@ -322,7 +322,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     candidate.payload.faceIndex = font.faceIndex();
     const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(font.fontBytes());
     if(!sfntMetrics){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     candidate.payload.unitsPerEm = sfntMetrics->unitsPerEm;

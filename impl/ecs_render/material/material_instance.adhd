@@ -83,7 +83,7 @@ public:
     if(component)
         return component;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
     return nullptr;
 }
 

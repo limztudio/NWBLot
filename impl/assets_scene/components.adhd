@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
+inline constexpr TStringView s_ComponentAssetKindLabel = FOUNDATION_TEXT("component");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,7 +79,7 @@ template<typename TPod>
     usize cursor = 0u;
     const auto binaryPayload = ReadPOD<TPod>(payload, cursor);
     if(!binaryPayload || cursor != payload.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid payload size"), contextLabel);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: invalid payload size"), contextLabel);
         return MakeUnexpected(Failure{});
     }
     return binaryPayload;
@@ -177,7 +177,7 @@ public:
 #if defined(NWB_COOK)
 public:
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
-        if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedComponentAssetCodec::serialize")))
+        if(!this->checkSerializeAssetType(asset, FOUNDATION_TEXT("TypedComponentAssetCodec::serialize")))
             return false;
 
         return ComponentAssetSerialization::Serialize(*MakeNotNull(checked_cast<const ComponentT*>(&asset)), outBinary);

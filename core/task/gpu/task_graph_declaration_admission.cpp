@@ -34,7 +34,7 @@ GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
 
     NothrowScopedLock lock(m_graph.m_lifecycleMutex);
     if(m_graph.m_activeDeclarationAccessCount == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation admission must retain its exact lifecycle claim");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation admission must retain its exact lifecycle claim");
     --m_graph.m_activeDeclarationAccessCount;
 }
 
@@ -60,7 +60,7 @@ GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
 
     NothrowScopedLock lock(m_graph->m_lifecycleMutex);
     if(m_graph->m_activeDeclarationAccessCount == 0u || m_graph->m_activeDeclarationReadCount == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration read admission must retain its exact lifecycle claim");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration read admission must retain its exact lifecycle claim");
     --m_graph->m_activeDeclarationAccessCount;
     --m_graph->m_activeDeclarationReadCount;
 }

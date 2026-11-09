@@ -59,7 +59,7 @@ public:
 
     [[nodiscard]] const FontAtlasGlyph* glyph(const u32 glyphId)const noexcept{ return glyphId < m_glyphs.size() ? &m_glyphs[glyphId] : nullptr; }
     [[nodiscard]] const SharedSdfAtlasPage& page(const u32 group)const noexcept{
-        NWB_FATAL_ASSERT(group < m_pages.size());
+        FOUNDATION_FATAL_ASSERT(group < m_pages.size());
         return m_pages[group];
     }
 

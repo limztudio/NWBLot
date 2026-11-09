@@ -83,7 +83,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
     case ExprKind::StringLiteral:{
         if(expr.adaptToTChar){
-            out.append("NWB_TEXT(\"");
+            out.append("FOUNDATION_TEXT(\"");
             out.append(expr.text.data(), expr.text.size());
             out.append("\")");
         }
@@ -221,8 +221,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         if(expr.derefNotNull)
             out.append("(*");
         emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall);
-        if(!expr.callTemplateArgs.empty())
-            m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
+        if(!expr.callTemplateArgs.empty()){
+            const BuiltinGenericTypeInfo* genericInfo = expr.lhs && expr.lhs->kind == ExprKind::Identifier ? FindBuiltinGenericType(expr.lhs->text) : nullptr;
+            const b8 appendArena = genericInfo && genericInfo->isArenaBacked;
+            m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs, appendArena);
+        }
         const MStringView injectedArena = expr.injectClassArena
             ? MStringView("s_ClassArena")
             : (expr.injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});

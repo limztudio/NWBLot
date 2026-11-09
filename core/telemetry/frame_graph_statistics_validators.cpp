@@ -34,12 +34,12 @@ inline constexpr usize s_PhysicalQueuePackedDurationCount = 2u;
 inline constexpr usize s_OwnerPackedDurationCount = 7u;
 
 
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_NEON64)
 inline constexpr u64 s_DoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
 inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
 inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 
-[[nodiscard]] NWB_INLINE b8 HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
     const Array<f64, 4u> lanes = { pack[0], pack[1], pack[2], pack[3] };
     for(const f64 lane : lanes){
         const u64 bits = BitCast<u64>(lane);
@@ -54,7 +54,7 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 #endif
 
 [[nodiscard]] static b8 DurationsAreOrdinary(const Span<const SIMDVectorDouble> durations)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_NEON64)
     for(const SIMDVectorDouble pack : durations){
         if(HasExceptionalDurationPack(pack))
             return false;
@@ -374,7 +374,7 @@ template<typename StatisticsT>
 
 // Default-context copies retain the complete original validation order and compiler FP lowering.
 // Exceptional values and non-native targets use these boundaries before packed comparisons.
-[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE static b8 ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
@@ -408,7 +408,7 @@ template<typename StatisticsT>
     return true;
 }
 
-[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueCompileAndRecordingCountsAreValid(statistics))
         return false;
 
@@ -428,7 +428,7 @@ template<typename StatisticsT>
     return true;
 }
 
-[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     if(
         !ScalarIsValidFrameGraphRuntimeStatistics(ownerStatistics)
         || !ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)

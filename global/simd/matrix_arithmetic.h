@@ -25,15 +25,15 @@ inline constexpr usize s_MatrixRowCount = 4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row, const SIMDMatrix& matrix)noexcept{
-#if defined(NWB_HAS_SCALAR)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row, const SIMDMatrix& matrix)noexcept{
+#if defined(FOUNDATION_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(
         (matrix.v[0].f[0] * row.f[0]) + (matrix.v[1].f[0] * row.f[1]) + (matrix.v[2].f[0] * row.f[2]) + (matrix.v[3].f[0] * row.f[3]),
         (matrix.v[0].f[1] * row.f[0]) + (matrix.v[1].f[1] * row.f[1]) + (matrix.v[2].f[1] * row.f[2]) + (matrix.v[3].f[1] * row.f[3]),
         (matrix.v[0].f[2] * row.f[0]) + (matrix.v[1].f[2] * row.f[1]) + (matrix.v[2].f[2] * row.f[2]) + (matrix.v[3].f[2] * row.f[3]),
         (matrix.v[0].f[3] * row.f[0]) + (matrix.v[1].f[3] * row.f[1]) + (matrix.v[2].f[3] * row.f[2]) + (matrix.v[3].f[3] * row.f[3])
     );
-#elif defined(NWB_HAS_NEON)
+#elif defined(FOUNDATION_HAS_NEON)
     const float32x2_t rowL = vget_low_f32(row);
     const float32x2_t rowH = vget_high_f32(row);
     const SIMDVectorSingle x = vmulq_lane_f32(matrix.v[0], rowL, 0);
@@ -42,8 +42,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row
     const SIMDVectorSingle w = vmlaq_lane_f32(y, matrix.v[3], rowH, 1);
     return vaddq_f32(z, w);
 #else
-#if defined(NWB_HAS_AVX)
-#if defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_HAS_AVX)
+#if defined(FOUNDATION_HAS_AVX2)
     SIMDVectorSingle x = _mm_broadcastss_ps(row);
 #else
     SIMDVectorSingle x = _mm_permute_ps(row, _MM_SHUFFLE(0, 0, 0, 0));
@@ -67,8 +67,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row
 #endif
 }
 
-#if defined(NWB_HAS_AVX) && defined(NWB_HAS_FMA3)
-NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(const SIMDMatrix& m0, const SIMDMatrix& m1, __m256& outRows01, __m256& outRows23)noexcept{
+#if defined(FOUNDATION_HAS_AVX) && defined(FOUNDATION_HAS_FMA3)
+FOUNDATION_INLINE void FOUNDATION_SIMD_CALL MatrixMultiplyPackedRowsFMA(const SIMDMatrix& m0, const SIMDMatrix& m1, __m256& outRows01, __m256& outRows23)noexcept{
     __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
     t0 = _mm256_insertf128_ps(t0, m0.v[1], 1);
     __m256 t1 = _mm256_castps128_ps256(m0.v[2]);
@@ -109,7 +109,7 @@ NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(const SIMDMatrix& m0, 
     outRows23 = t1;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
     __m256 rows01{};
     __m256 rows23{};
     MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
@@ -121,7 +121,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiplyFMA(const SIMDMatrix& m0, cons
     return result;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
     __m256 rows01{};
     __m256 rows23{};
     MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
@@ -152,7 +152,7 @@ inline constexpr f64 s_DoubleMatrixHalf = 0.5;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDouble row, const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDouble row, const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble result = VectorDoubleMultiply(VectorDoubleSplatX(row), matrix.v[0]);
     result = VectorDoubleMultiplyAdd(VectorDoubleSplatY(row), matrix.v[1], result);
     result = VectorDoubleMultiplyAdd(VectorDoubleSplatZ(row), matrix.v[2], result);
@@ -169,28 +169,28 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDoub
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE b8 NWB_SIMD_CALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle mask = VectorOrInt(VectorIsNaN(matrix.v[0]), VectorIsNaN(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsNaN(const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDoubleIsNaN(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble mask = VectorDoubleOrInt(VectorDoubleIsNaN(matrix.v[0]), VectorDoubleIsNaN(matrix.v[1]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsNaN(matrix.v[2]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsNaN(matrix.v[3]));
     return VectorDoubleMoveMask(mask) != 0;
 }
 
-NWB_INLINE b8 NWB_SIMD_CALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle mask = VectorOrInt(VectorIsInfinite(matrix.v[0]), VectorIsInfinite(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble mask = VectorDoubleOrInt(VectorDoubleIsInfinite(matrix.v[0]), VectorDoubleIsInfinite(matrix.v[1]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsInfinite(matrix.v[2]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsInfinite(matrix.v[3]));
@@ -201,16 +201,16 @@ NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose(const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleTranspose(const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::MatrixDoubleTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
-#if defined(NWB_HAS_AVX) && defined(NWB_HAS_FMA3)
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+#if defined(FOUNDATION_HAS_AVX) && defined(FOUNDATION_HAS_FMA3)
     return SIMDMatrixDetail::MatrixMultiplyFMA(m0, m1);
 #else
     SIMDMatrix result{};
@@ -222,7 +222,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiply(const SIMDMatrix& m0, const S
 #endif
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleMultiply(const SIMDMatrixDouble& m0, const SIMDMatrixDouble& m1)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleMultiply(const SIMDMatrixDouble& m0, const SIMDMatrixDouble& m1)noexcept{
     SIMDMatrixDouble result{};
     result.v[0] = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[0], m1);
     result.v[1] = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[1], m1);
@@ -231,8 +231,8 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleMultiply(const SIMDMatrixD
     return result;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiplyTranspose(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
-#if defined(NWB_HAS_AVX) && defined(NWB_HAS_FMA3)
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixMultiplyTranspose(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+#if defined(FOUNDATION_HAS_AVX) && defined(FOUNDATION_HAS_FMA3)
     return SIMDMatrixDetail::MatrixMultiplyTransposeFMA(m0, m1);
 #else
     const SIMDVectorSingle r0 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[0], m1);
@@ -243,7 +243,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixMultiplyTranspose(const SIMDMatrix& m0
 #endif
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleMultiplyTranspose(const SIMDMatrixDouble& m0, const SIMDMatrixDouble& m1)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleMultiplyTranspose(const SIMDMatrixDouble& m0, const SIMDMatrixDouble& m1)noexcept{
     const SIMDVectorDouble r0 = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[0], m1);
     const SIMDVectorDouble r1 = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[1], m1);
     const SIMDVectorDouble r2 = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[2], m1);
@@ -251,7 +251,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleMultiplyTranspose(const SI
     return SIMDVectorDoubleDetail::MatrixDoubleTranspose4(r0, r1, r2, r3);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixDeterminant(const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL MatrixDeterminant(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle v0 = VectorSwizzle<1, 0, 0, 0>(matrix.v[2]);
     SIMDVectorSingle v1 = VectorSwizzle<2, 2, 1, 1>(matrix.v[3]);
     SIMDVectorSingle v2 = VectorSwizzle<1, 0, 0, 0>(matrix.v[2]);
@@ -285,7 +285,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixDeterminant(const SIMDMatrix& ma
     return Vector4Dot(s, r);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleDeterminant(const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL MatrixDoubleDeterminant(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble v0 = VectorDoubleSwizzle<1, 0, 0, 0>(matrix.v[2]);
     SIMDVectorDouble v1 = VectorDoubleSwizzle<2, 2, 1, 1>(matrix.v[3]);
     SIMDVectorDouble v2 = VectorDoubleSwizzle<1, 0, 0, 0>(matrix.v[2]);
@@ -319,7 +319,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleDeterminant(const SIMDMatr
     return VectorDouble4Dot(s, r);
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDeterminant, const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDeterminant, const SIMDMatrix& matrix)noexcept{
     const SIMDMatrix mt = MatrixTranspose(matrix);
 
     SIMDVectorSingle v0[SIMDMatrixDetail::s_MatrixRowCount]{};
@@ -411,7 +411,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDetermina
     return result;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* outDeterminant, const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* outDeterminant, const SIMDMatrixDouble& matrix)noexcept{
     const SIMDMatrixDouble mt = MatrixDoubleTranspose(matrix);
 
     SIMDVectorDouble v0[SIMDMatrixDetail::s_MatrixRowCount]{};

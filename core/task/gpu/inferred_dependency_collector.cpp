@@ -72,7 +72,7 @@ GpuInferredDependencyCollector::DependencyPairIndices& GpuInferredDependencyColl
 }
 
 void GpuInferredDependencyCollector::appendInferred(const GpuTaskDependencyEdge& edge){
-    NWB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
+    FOUNDATION_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
     DependencyPairIndices& pair = appendRawEdge(edge);
     b8 indexed = pair.firstInferredEdge == s_IndexedInferredEdges;
@@ -89,7 +89,7 @@ void GpuInferredDependencyCollector::appendInferred(const GpuTaskDependencyEdge&
                 m_inferredEdgeIndices.reserve(m_expectedEdgeCount / 2u + 1u);
             for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = m_nextInferredEdges[index]){
                 if(!m_inferredEdgeIndices.insert(index).second)
-                    NWB_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
+                    FOUNDATION_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
             }
             // Edge vectors cannot reach this reserved ordinal; it marks a pair promoted to indexed lookup.
             pair.firstInferredEdge = s_IndexedInferredEdges;

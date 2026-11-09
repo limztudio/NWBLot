@@ -102,7 +102,7 @@ public:
         for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
             const auto inserted = jointLookup.emplace(joints[jointIndex], jointIndex);
             if(!inserted.second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return false;
             }
         }

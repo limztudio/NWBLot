@@ -109,7 +109,7 @@ void Win32ClipboardService::startNativeRequest(const ClipboardRequestToken token
     if(m_nativeToken == token){
         m_nativeToken = {};
         if(!completeNativeRequest(token, status, m_utf8Text))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
     m_utf8Text.clear();
 }
@@ -122,7 +122,7 @@ void Win32ClipboardService::cancelNativeRequest(const ClipboardRequestToken toke
 ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::GlobalArena>& text){
     using namespace __hidden_win32_clipboard_service;
     if(!OpenClipboard(static_cast<HWND>(m_nativeWindowHandle.get()))){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
         return ClipboardStatus::Unavailable;
     }
     ClipboardCloseGuard closeGuard;
@@ -131,19 +131,19 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
 
     const HGLOBAL memory = GetClipboardData(CF_UNICODETEXT);
     if(!memory){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GetClipboardData failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: GetClipboardData failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     const usize bytes = GlobalSize(memory);
     if(bytes < sizeof(wchar) || (bytes % sizeof(wchar)) != 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: invalid Unicode clipboard allocation"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: invalid Unicode clipboard allocation"));
         return ClipboardStatus::InvalidText;
     }
     if(bytes > (s_ClipboardMaxTextBytes * 2u + 1u) * sizeof(wchar))
         return ClipboardStatus::TooLarge;
     const wchar* const wide = static_cast<const wchar*>(GlobalLock(memory));
     if(!wide){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GlobalLock failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: GlobalLock failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     GlobalUnlockGuard unlockGuard(memory);
@@ -152,7 +152,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
     while(length < capacity && wide[length] != L'\0')
         ++length;
     if(length == capacity){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: Unicode clipboard text is not terminated"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: Unicode clipboard text is not terminated"));
         return ClipboardStatus::InvalidText;
     }
     if(length == 0u){
@@ -161,7 +161,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
     }
     const i32 utf8Length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), nullptr, 0, nullptr, nullptr);
     if(utf8Length == 0){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: invalid Unicode text ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: invalid Unicode text ({})"), GetLastError());
         return ClipboardStatus::InvalidText;
     }
     if(static_cast<usize>(utf8Length) > s_ClipboardMaxTextBytes * 2u)
@@ -169,7 +169,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
     text.resize(static_cast<usize>(utf8Length));
     const i32 convertedBytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, static_cast<i32>(length), text.data(), utf8Length, nullptr, nullptr);
     if(convertedBytes != utf8Length){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: Unicode conversion failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: Unicode conversion failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     CollapseCrLfInPlace(text);
@@ -184,13 +184,13 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
     if(!text.empty()){
         const i32 length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<i32>(text.size()), nullptr, 0);
         if(length == 0){
-            NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: invalid UTF-8 text ({})"), GetLastError());
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: invalid UTF-8 text ({})"), GetLastError());
             return ClipboardStatus::InvalidText;
         }
         m_wideText.resize(static_cast<usize>(length));
         const i32 convertedLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<i32>(text.size()), m_wideText.data(), length);
         if(convertedLength != length){
-            NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: UTF-8 conversion failed ({})"), GetLastError());
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: UTF-8 conversion failed ({})"), GetLastError());
             return ClipboardStatus::NativeFailure;
         }
     }
@@ -200,13 +200,13 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
     const usize bytes = (m_wideText.size() + extraCarriageReturns + 1u) * sizeof(wchar);
     const HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
     if(!memory){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GlobalAlloc failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: GlobalAlloc failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     GlobalMemoryOwner memoryOwner(memory);
     wchar* const destination = static_cast<wchar*>(GlobalLock(memory));
     if(!destination){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GlobalLock failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: GlobalLock failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     {
@@ -216,16 +216,16 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
         destination[output] = L'\0';
     }
     if(!OpenClipboard(static_cast<HWND>(m_nativeWindowHandle.get()))){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
         return ClipboardStatus::Unavailable;
     }
     ClipboardCloseGuard closeGuard;
     if(!EmptyClipboard()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: EmptyClipboard failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: EmptyClipboard failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     if(!SetClipboardData(CF_UNICODETEXT, memory)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: SetClipboardData failed ({})"), GetLastError());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Clipboard: SetClipboardData failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
     memoryOwner.release();

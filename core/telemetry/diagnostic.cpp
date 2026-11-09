@@ -64,11 +64,11 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
     }
 
     const EncodedDiagnosticPayloadHeader header = MakePayloadHeader(record);
-    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    FOUNDATION_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     usize cursor = sizeof(header);
     for(const AStringView text : fields){
         if(!text.empty())
-            NWB_MEMCPY(payload.data() + cursor, payload.size() - cursor, text.data(), text.size());
+            FOUNDATION_MEMCPY(payload.data() + cursor, payload.size() - cursor, text.data(), text.size());
         cursor += text.size();
     }
     return payloadBytes;
@@ -216,8 +216,8 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(
         else{
             expectedGuard = this;
             if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expectedGuard, nullptr, MemoryOrder::acq_rel)){
-                NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
-                NWB_ASSERT(false);
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
+                FOUNDATION_ASSERT(false);
             }
         }
     }
@@ -229,12 +229,12 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
 
     const b8 callbackOwnershipChanged = !ReleaseDiagnosticEventCallback(__hidden_telemetry_diagnostic::CaptureCallback);
     if(callbackOwnershipChanged)
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
 
     DiagnosticCaptureGuard* expected = this;
     const b8 guardOwnershipChanged = !__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
     if(guardOwnershipChanged)
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
 
     if(callbackOwnershipChanged){
         CaptureDiagnosticEvent(DiagnosticEventRecord{

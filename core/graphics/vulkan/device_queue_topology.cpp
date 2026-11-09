@@ -30,7 +30,7 @@ QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mas
             if(result.familyIndices[index] == static_cast<u32>(familyIndex))
                 return;
         }
-        NWB_ASSERT(result.familyIndexCount < result.familyIndices.size());
+        FOUNDATION_ASSERT(result.familyIndexCount < result.familyIndices.size());
         result.familyIndices[result.familyIndexCount] = static_cast<u32>(familyIndex);
         ++result.familyIndexCount;
     };
@@ -102,7 +102,7 @@ Expected<GpuQueueTimelineSnapshot> Device::getQueueTimelineSnapshot(const GpuPhy
     if(result == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("queue timeline snapshot");
     if(result != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
         return MakeUnexpected(Failure{});
     }
     return snapshot;
@@ -116,7 +116,7 @@ b8 Device::supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const
 GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     if(!getPhysicalQueueInfo(queue))
         return {};
-    NWB_ASSERT(queue.index < m_physicalQueues.size());
+    FOUNDATION_ASSERT(queue.index < m_physicalQueues.size());
     const auto physicalQueue = m_physicalQueues[queue.index];
 
     return physicalQueue->commandArenaStatistics();
@@ -125,7 +125,7 @@ GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQue
 GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
     if(!getPhysicalQueueInfo(queue))
         return {};
-    NWB_ASSERT(queue.index < m_physicalQueues.size());
+    FOUNDATION_ASSERT(queue.index < m_physicalQueues.size());
     const auto physicalQueue = m_physicalQueues[queue.index];
 
     return physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex);

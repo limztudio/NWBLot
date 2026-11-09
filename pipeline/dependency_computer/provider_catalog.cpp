@@ -65,7 +65,7 @@ namespace Assets = Core::Assets;
 
 b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
-    auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("DependencyComputer"), m_arena);
+    auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), FOUNDATION_TEXT("DependencyComputer"), m_arena);
     if(!resolvedRepoRoot)
         return false;
     Path repoRoot = Move(*resolvedRepoRoot);
@@ -74,8 +74,8 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::All
         options.inputs,
         options.assetRoots,
         Assets::AssetRootDuplicatePolicy::HostFilesystem,
-        NWB_TEXT("DependencyComputer"),
-        NWB_TEXT("no asset roots available for dependency resolution"),
+        FOUNDATION_TEXT("DependencyComputer"),
+        FOUNDATION_TEXT("no asset roots available for dependency resolution"),
         scratchArena
     );
     if(!roots)
@@ -113,7 +113,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
     if(options.inputs.empty()){
         const Assets::DefaultCookEntryAssetDescriptor& defaultEntry = dependencyRegistry.defaultEntryAsset();
         if(!defaultEntry.virtualPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no default entry asset registered"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: no default entry asset registered"));
             return MakeUnexpected(Failure{});
         }
         const auto projectProvider = resolve(
@@ -124,7 +124,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
             scratchArena
         );
         if(!projectProvider){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(defaultEntry.virtualPathText));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(defaultEntry.virtualPathText));
             return MakeUnexpected(Failure{});
         }
         selected[*projectProvider] = 1u;
@@ -134,7 +134,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 
     const auto selectionResult = Assets::CookInputSelector::Select(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
     if(!selectionResult){
-        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("DependencyComputer"));
+        LogCookInputSelectionFailure(selectionResult.error(), FOUNDATION_TEXT("DependencyComputer"));
         return MakeUnexpected(Failure{});
     }
     return selection;
@@ -142,7 +142,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 
 Expected<Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
-    NWB_ASSERT(index < m_files.size());
+    FOUNDATION_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
     if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, [&](const AStringView source){ return document.parse(source); }, text, document))
@@ -180,7 +180,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
                 return MakeUnexpected(Failure{});
             if(*hasBunch){
                 if(assetType){
-                    NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                     return MakeUnexpected(Failure{});
                 }
                 const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena);
@@ -219,7 +219,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             }
 
             if(document->declarations().size() != 1u){
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                 return MakeUnexpected(Failure{});
             }
             if(!recordMatch(index))
@@ -254,9 +254,9 @@ Expected<usize> DependencyProviderCatalog::resolve(
 
     if(matched == s_InvalidProviderIndex){
         if(assetType)
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPathText));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPathText));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no provider for '{}'"), ConvertString(virtualPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: no provider for '{}'"), ConvertString(virtualPath));
         return MakeUnexpected(Failure{});
     }
     return matched;

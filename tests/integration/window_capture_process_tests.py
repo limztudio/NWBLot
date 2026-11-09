@@ -400,7 +400,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
             log_path = log_directory / LIT_TEST_LOG
-            args = SimpleNamespace(application_arg=[], executable=sys.executable, expect_log_message=list(required), expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, log_port=0, logserver_executable=None,
+            args = SimpleNamespace(graceful_exit_timeout=10.0, application_arg=[], executable=sys.executable, expect_log_message=list(required), expect_texture_smoke=False, expect_transparent_csg=False, expect_transparent_multi=False, log_port=0, logserver_executable=None,
                 no_logserver=False, output=log_directory / LIT_CAPTURE_BMP, reject_log_message=list(rejected), render_ready_timeout=1.0, settle_seconds=0.0, skip_blocking_log_message=[], skip_log_message=[], software_vulkan=LIT_OFF, timeout=1.0,
                 window_title="NWB Test", working_directory=log_directory,)
             backend = mock.Mock()

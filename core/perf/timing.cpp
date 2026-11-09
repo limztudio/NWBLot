@@ -153,7 +153,7 @@ const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
     if(index >= m_scopes.size())
         return m_emptyStats;
 
-    NWB_ASSERT(m_scopes[index]);
+    FOUNDATION_ASSERT(m_scopes[index]);
     return m_scopes[index]->accumulator.lastStats();
 }
 

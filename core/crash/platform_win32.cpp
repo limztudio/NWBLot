@@ -256,19 +256,19 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
         for(const char value : FixedBufferView(text))
             commandLine[cursor++] = static_cast<tchar>(value);
     };
-    append(NWB_TEXT("\""));
+    append(FOUNDATION_TEXT("\""));
     append(handlerExecutablePath.native());
-    append(NWB_TEXT("\" "));
+    append(FOUNDATION_TEXT("\" "));
     append(s_RequestHandleArgument);
-    append(NWB_TEXT(" "));
+    append(FOUNDATION_TEXT(" "));
     appendHandle(requestReadHandle);
-    append(NWB_TEXT(" "));
+    append(FOUNDATION_TEXT(" "));
     append(s_AckHandleArgument);
-    append(NWB_TEXT(" "));
+    append(FOUNDATION_TEXT(" "));
     appendHandle(ackWriteHandle);
-    append(NWB_TEXT(" "));
+    append(FOUNDATION_TEXT(" "));
     append(s_AckEventArgument);
-    append(NWB_TEXT(" "));
+    append(FOUNDATION_TEXT(" "));
     appendHandle(ackEvent);
     commandLine[cursor] = 0;
 

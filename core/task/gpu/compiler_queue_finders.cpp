@@ -48,7 +48,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 [[nodiscard]] b8 HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
     // assignQueues() rejects an enabled invalid policy before this query.
-    NWB_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
+    FOUNDATION_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
     return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
 }
 
@@ -98,19 +98,19 @@ namespace GpuTaskGraphCompilerDetail{
     const b8 allowCrossFamilyRouting
 )noexcept{
     // Balancing runs after every task has a dense assignment from the same topology; the prefix ends at the current group.
-    NWB_ASSERT(assignedPrefixCount <= assignments.size());
+    FOUNDATION_ASSERT(assignedPrefixCount <= assignments.size());
     const GpuPhysicalQueueInfo* result = nullptr;
     usize resultAssignmentIndex = 0u;
     const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
     for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
         const u32 producerTaskIndex = producerIndices[producerIndex];
-        NWB_ASSERT(producerTaskIndex < assignmentIndicesByTask.size());
+        FOUNDATION_ASSERT(producerTaskIndex < assignmentIndicesByTask.size());
 
         const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTaskIndex];
         if(producerAssignmentIndex >= assignedPrefixCount)
             continue;
         const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
-        NWB_ASSERT(assignment.task.generation == task.id.generation && assignment.task.index == producerTaskIndex);
+        FOUNDATION_ASSERT(assignment.task.generation == task.id.generation && assignment.task.index == producerTaskIndex);
         auto& candidate = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
         if(candidate.queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
             continue;

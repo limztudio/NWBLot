@@ -17,12 +17,12 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_AVX)
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
+#if defined(FOUNDATION_HAS_AVX)
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
 #endif
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVectorSingle r1, SIMDVectorSingle r2, SIMDVectorSingle r3)noexcept{
-#if defined(NWB_HAS_NEON)
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVectorSingle r1, SIMDVectorSingle r2, SIMDVectorSingle r3)noexcept{
+#if defined(FOUNDATION_HAS_NEON)
     const float32x4x2_t p0 = vzipq_f32(r0, r2);
     const float32x4x2_t p1 = vzipq_f32(r1, r3);
     const float32x4x2_t t0 = vzipq_f32(p0.val[0], p1.val[0]);
@@ -34,14 +34,14 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVe
     result.v[2] = t1.val[0];
     result.v[3] = t1.val[1];
     return result;
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     __m256 t0 = _mm256_castps128_ps256(r0);
     t0 = _mm256_insertf128_ps(t0, r1, 1);
     __m256 t1 = _mm256_castps128_ps256(r2);
     t1 = _mm256_insertf128_ps(t1, r3, 1);
 
     return MatrixTransposePackedRows(t0, t1);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     SIMDVectorSingle temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
     SIMDVectorSingle temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
     SIMDVectorSingle temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
@@ -75,12 +75,12 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranspose4(SIMDVectorSingle r0, SIMDVe
 #endif
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
     return MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
-#if defined(NWB_HAS_AVX)
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
+#if defined(FOUNDATION_HAS_AVX)
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
     __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
     __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
     __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, s_SIMDAvxPermute2F128Low0Low1);
@@ -104,14 +104,14 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 
 
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept(
+FOUNDATION_INLINE NotNull<OutputT*> FOUNDATION_SIMD_CALL VectorTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept(
     IsNothrowDestructible_V<TransformT>
     && noexcept(MatrixTransposeForTransform(matrix))
     && noexcept(DeclVal<void(*)(SIMDVectorSingle)noexcept>()(LoadFloat(*VectorScalarDetail::StridePointer(inputStream, inputStride, 0u))))
     && noexcept(StoreFloat(transform(DeclVal<const SIMDVectorSingle&>(), DeclVal<const SIMDMatrix&>()), *VectorScalarDetail::StridePointer(outputStream, outputStride, 0u)))
 ){
-    NWB_ASSERT(inputStride >= sizeof(InputT));
-    NWB_ASSERT(outputStride >= sizeof(OutputT));
+    FOUNDATION_ASSERT(inputStride >= sizeof(InputT));
+    FOUNDATION_ASSERT(outputStride >= sizeof(OutputT));
 
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){
@@ -126,9 +126,9 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorTransformStreamImpl(NotNull<Out
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SSE4)
+#if defined(FOUNDATION_HAS_SSE4)
 template<int Mask>
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle x = _mm_dp_ps(matrix.v[0], value, Mask);
     const SIMDVectorSingle y = _mm_dp_ps(matrix.v[1], value, Mask);
     const SIMDVectorSingle z = _mm_dp_ps(matrix.v[2], value, Mask);
@@ -155,9 +155,9 @@ namespace SIMDVectorDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDouble r0, SIMDVectorDouble r1, SIMDVectorDouble r2, SIMDVectorDouble r3)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDouble r0, SIMDVectorDouble r1, SIMDVectorDouble r2, SIMDVectorDouble r3)noexcept{
     SIMDMatrixDouble result{};
-#if defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_NEON64)
     const float64x2_t low0 = GetLow(r0);
     const float64x2_t low1 = GetLow(r1);
     const float64x2_t low2 = GetLow(r2);
@@ -170,7 +170,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDoubl
     result.v[1] = FromPairs(vzip2q_f64(low0, low1), vzip2q_f64(low2, low3));
     result.v[2] = FromPairs(vzip1q_f64(high0, high1), vzip1q_f64(high2, high3));
     result.v[3] = FromPairs(vzip2q_f64(high0, high1), vzip2q_f64(high2, high3));
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     const __m256d row0 = BitCast<__m256d>(r0);
     const __m256d row1 = BitCast<__m256d>(r1);
     const __m256d row2 = BitCast<__m256d>(r2);
@@ -183,7 +183,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDoubl
     result.v[1] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, s_SIMDAvxPermute2F128Low0Low1));
     result.v[2] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(even01, even23, s_SIMDAvxPermute2F128High0High1));
     result.v[3] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, s_SIMDAvxPermute2F128High0High1));
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     const __m128d low0 = GetLow(r0);
     const __m128d low1 = GetLow(r1);
     const __m128d low2 = GetLow(r2);
@@ -205,7 +205,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDoubl
     return result;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransposeForTransform(const SIMDMatrixDouble& matrix)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleTransposeForTransform(const SIMDMatrixDouble& matrix)noexcept{
     return MatrixDoubleTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
@@ -213,8 +213,8 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTransposeForTransform(cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
-#if defined(NWB_HAS_NEON64)
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDouble4TransformTransposed(SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
     const float64x2_t low = GetLow(value);
     const float64x2_t high = GetHigh(value);
     const float64x2_t x = vdupq_laneq_f64(low, 0);
@@ -230,7 +230,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
     resultHigh = vaddq_f64(resultHigh, vmulq_f64(GetHigh(transposedMatrix.v[2]), z));
     resultHigh = vaddq_f64(resultHigh, vmulq_f64(GetHigh(transposedMatrix.v[3]), w));
     return FromPairs(resultLow, resultHigh);
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     const __m256d lanes = BitCast<__m256d>(value);
     const __m256d low = _mm256_permute2f128_pd(lanes, lanes, s_SIMDAvxPermute2F128LowLow);
     const __m256d high = _mm256_permute2f128_pd(lanes, lanes, s_SIMDAvxPermute2F128HighHigh);
@@ -243,7 +243,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
     result = _mm256_add_pd(result, _mm256_mul_pd(BitCast<__m256d>(transposedMatrix.v[2]), z));
     result = _mm256_add_pd(result, _mm256_mul_pd(BitCast<__m256d>(transposedMatrix.v[3]), w));
     return BitCast<SIMDVectorDouble>(result);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     const __m128d low = GetLow(value);
     const __m128d high = GetHigh(value);
     const __m128d x = _mm_unpacklo_pd(low, low);
@@ -274,7 +274,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
+FOUNDATION_INLINE NotNull<OutputT*> FOUNDATION_SIMD_CALL VectorDoubleTransformStreamImpl(
     NotNull<OutputT*> outputStream,
     usize outputStride,
     NotNull<const InputT*> inputStream,
@@ -288,10 +288,10 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
     && noexcept(DeclVal<void(*)(SIMDVectorDouble)noexcept>()(LoadDouble(*VectorScalarDetail::StridePointer(inputStream, inputStride, 0u))))
     && noexcept(StoreDouble(transform(DeclVal<const SIMDVectorDouble&>(), DeclVal<const SIMDMatrixDouble&>()), *VectorScalarDetail::StridePointer(outputStream, outputStride, 0u)))
 ){
-    NWB_ASSERT(inputStride >= sizeof(InputT));
-    NWB_ASSERT(outputStride >= sizeof(OutputT));
-    NWB_ASSERT(inputStride % alignof(InputT) == 0u);
-    NWB_ASSERT(outputStride % alignof(OutputT) == 0u);
+    FOUNDATION_ASSERT(inputStride >= sizeof(InputT));
+    FOUNDATION_ASSERT(outputStride >= sizeof(OutputT));
+    FOUNDATION_ASSERT(inputStride % alignof(InputT) == 0u);
+    FOUNDATION_ASSERT(outputStride % alignof(OutputT) == 0u);
 
     const SIMDMatrixDouble transposedMatrix = MatrixDoubleTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){

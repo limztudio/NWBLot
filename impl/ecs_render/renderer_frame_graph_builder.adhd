@@ -217,7 +217,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .hasCsgFrameWork = !csgFrameState.empty(),
         });
     if(!deferredGraphResources){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
         return;
     }
     const Core::GpuGraphResourceId albedo = deferredGraphResources->albedo;
@@ -275,7 +275,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         deferredTargets,
         shadowPrepareTimingTicket
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
     const Core::GpuTaskId shadowPrepareHandoffTask = m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask.valid() ? m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask : m_shadowPrepareGraph.m_deferredShadowPrepareTask;
@@ -324,13 +324,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         graphicsPrefixTimingTickets
     );
     if(!graphicsPrefixResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
     }
     reflectionContentStamp.lighting = *graphicsPrefixResult;
 
     if(!m_raytracingSystem.prepareCausticOpticalReadTracking(meshViewBufferSnapshot)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare accepted optical reader tracking"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not prepare accepted optical reader tracking"));
         return;
     }
     const b8 causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
@@ -345,7 +345,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan = m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics);
     if(rayTracingShadowVisibilityPlan.lightSpace.ready && hasOpaqueCsgFrameWork){
         if(!csgResources.bindingValid() || !frameBindings.meshView.bindingValid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not bind the current direct-shadow receiver cap state"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not bind the current direct-shadow receiver cap state"));
             return;
         }
         rayTracingShadowVisibilityPlan.lightSpace.push.csgFlags |= NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS;
@@ -360,7 +360,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
         if(!sceneReadsResult){
             sceneReads = RayTracingSceneGraphReads(scratchArena);
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared hardware optical scene reads"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import shared hardware optical scene reads"));
             return;
         }
         sceneReads = Move(*sceneReadsResult);
@@ -373,7 +373,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         else{
             const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
             if(!optical){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software caustic optical scene reads"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import software caustic optical scene reads"));
                 return;
             }
             causticOpticalScene = optical->resource;
@@ -386,7 +386,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         const auto deferredLightingHistoryReadReadyCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryReadReadyDesc);
         if(!deferredLightingHistoryReadReadyCompletionResult){
             m_deferredLightingHistoryReadReadyCompletion = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
             return;
         }
         m_deferredLightingHistoryReadReadyCompletion = *deferredLightingHistoryReadReadyCompletionResult;
@@ -398,7 +398,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         const auto deferredLightingHistoryWriterDrainCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryWriterDrainDesc);
         if(!deferredLightingHistoryWriterDrainCompletionResult){
             m_deferredLightingHistoryWriterDrainCompletion = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
             return;
         }
         m_deferredLightingHistoryWriterDrainCompletion = *deferredLightingHistoryWriterDrainCompletionResult;
@@ -410,7 +410,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         const auto deferredSurfelGiCounterReadbackCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(surfelCounterReadbackCompletionDesc);
         if(!deferredSurfelGiCounterReadbackCompletionResult){
             m_deferredSurfelGiCounterReadbackCompletion = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback completion"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import surfel counter-readback completion"));
             return;
         }
         m_deferredSurfelGiCounterReadbackCompletion = *deferredSurfelGiCounterReadbackCompletionResult;
@@ -564,7 +564,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             scratchArena
         );
         if(!hardwareCausticsStageResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics stage"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics stage"));
             return;
         }
         m_causticsGraph.m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult->causticIrradianceClearTask;
@@ -645,7 +645,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lightingTimingTicket
     );
     if(!deferredLightingStageResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
         return;
     }
     m_deferredLaggedLightingHistorySlotsUploadTask = deferredLightingStageResult->historySlotsUploadTask;
@@ -687,7 +687,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneReads
     );
     if(!reflectionResolveResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare reflection graph tasks"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare reflection graph tasks"));
         return;
     }
     const ReflectionGraphResult reflectionGraph = reflectionResolveResult->reflectionGraph;
@@ -732,7 +732,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneReads
     );
     if(!refractionResolveResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare refraction resolve graph tasks"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare refraction resolve graph tasks"));
         return;
     }
     const Core::GpuTaskId refractionResolveTask = *refractionResolveResult;
@@ -865,7 +865,7 @@ b8 RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTransa
             m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;
         else
             m_deferredFrameTimingBeginTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare frame timing prelude"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare frame timing prelude"));
         return false;
     }
     m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;
@@ -917,11 +917,11 @@ b8 RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::Al
     const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
     if(!compiledPlan.validFor(declarations)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
         return false;
     }
     if(!prepareDeferredGraphPacketEnvelopeMetrics(declarations, compiledPlan, scratchArena))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
 
     m_deferredLightingTaskGraphScheduled = true;
     return true;
@@ -1037,7 +1037,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
         });
     if(!prefixSceneUploadResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult->meshViewSetupTask;
@@ -1063,7 +1063,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const auto graphicsPrefixDeferredClearTaskResult = context.graph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
     if(!graphicsPrefixDeferredClearTaskResult){
         m_graphicsPrefixDeferredClearTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred-clear task"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixDeferredClearTask = *graphicsPrefixDeferredClearTaskResult;
@@ -1131,7 +1131,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .dependencyTask = m_graphicsPrefixDeferredClearTask,
         });
     if(!opaqueUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque upload chain"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult->csgUploadTask;
@@ -1187,7 +1187,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         csgIntervalClearTimingState
     );
     if(!opaqueCsgIntervalClearResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult->clearFirstTask;
@@ -1351,7 +1351,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const auto graphicsPrefixGbufferTaskResult = context.graph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
     if(!graphicsPrefixGbufferTaskResult){
         m_graphicsPrefixGbufferTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque G-buffer task"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixGbufferTask = *graphicsPrefixGbufferTaskResult;

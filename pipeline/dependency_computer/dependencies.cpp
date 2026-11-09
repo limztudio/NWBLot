@@ -137,12 +137,12 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
         }
 
         if(document->declarations().size() != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch"), PathToString<tchar>(files[fileIndex].filePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch"), PathToString<tchar>(files[fileIndex].filePath));
             return MakeUnexpected(Failure{});
         }
         const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
         if(!assetDeclaration){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: meta '{}' is missing asset declaration 'asset'"), PathToString<tchar>(files[fileIndex].filePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: meta '{}' is missing asset declaration 'asset'"), PathToString<tchar>(files[fileIndex].filePath));
             return MakeUnexpected(Failure{});
         }
         const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));

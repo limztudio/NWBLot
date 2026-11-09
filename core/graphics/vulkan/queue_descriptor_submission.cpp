@@ -27,7 +27,7 @@ b8 Queue::DescriptorSubmission::prepare(CommandList* const* ppCmd, const usize n
             for(const auto heap : tracked.m_referencedDescriptorHeaps){
 
                 if(heap.get() != &m_queue.m_device.m_gpuDescriptorHeap){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
                     return false;
                 }
                 m_submissionDescriptorHeap = heap.get();
@@ -61,7 +61,7 @@ b8 Queue::DescriptorSubmission::prepare(CommandList* const* ppCmd, const usize n
                     )
                 )
             ){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
                 return false;
             }
         }
@@ -78,7 +78,7 @@ b8 Queue::DescriptorSubmission::validateHeapUses(TrackedCommandBuffer& tracked, 
             return false;
         for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
             if(ticket.heap == heap && ticket.heapUseIndex == *heapUseIndex){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
                 return false;
             }
         }

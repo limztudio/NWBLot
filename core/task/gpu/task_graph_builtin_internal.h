@@ -102,7 +102,7 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
             return false;
     }()
 ){
-    NWB_ASSERT(CopiesPayloadHasWork(payload));
+    FOUNDATION_ASSERT(CopiesPayloadHasWork(payload));
     for(const auto& copy : payload.copies){
         if(context.commandIrCapture && !captureCopy(context, copy))
             return false;

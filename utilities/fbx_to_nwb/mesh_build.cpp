@@ -41,7 +41,7 @@ template<typename VisitTriangle>
 
 #if defined(NWB_DEBUG)
             for(const u32 cornerIndex : cornerIndices)
-                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
+                FOUNDATION_ASSERT(cornerIndex < mesh.vertex_indices.count);
 #endif
 
             if(!visitTriangle(cornerIndices))
@@ -141,7 +141,7 @@ template<typename VisitTriangle>
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
         const auto normal = Vector3TryNormalize(LoadFloat(it.value().value));
         if(!normal){
-            NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
         StoreFloat(normal->value, it.value().value);
@@ -166,7 +166,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
     if(!mesh || !node){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
         return false;
     }
     if(!ValidateFbxMeshAttributes(mesh->vertex_position.exists, normalMode == NormalMode::Imported, mesh->vertex_normal.exists))
@@ -183,7 +183,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             return false;
         skin = mesh->skin_deformers.data[0u];
         if(!skin){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
             return false;
         }
         auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, *skin, scratchArena, inOutSkinContext);
@@ -216,7 +216,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             if(normalMode == NormalMode::Imported){
                 const auto importedNormal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
                 if(!importedNormal){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal is invalid"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: imported normal is invalid"));
                     return false;
                 }
                 normal = importedNormal->value;
@@ -224,12 +224,12 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(position));
                 if(foundNormal == smoothNormals.end()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
                 const auto generatedNormal = Vector3TryNormalize(LoadFloat(foundNormal.value().value));
                 if(!generatedNormal){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
                 normal = generatedNormal->value;
@@ -267,7 +267,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             }
 
             if(!IsFiniteSourceTriangleCornerValues(position, normal, corner, wantsSkinning)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }
 
@@ -282,7 +282,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(faceNormal64);
             const auto normalizedFaceNormal = Vector3TryNormalize(faceNormal);
             if(!normalizedFaceNormal){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
             for(SIMDVectorSingle& normal : triangleNormals)
@@ -306,13 +306,13 @@ Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const Span<const M
     usize outTriangleCorners = 0u;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: selected mesh index is out of range"));
             return MakeUnexpected(Failure{});
         }
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
         if(!mesh){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
             return MakeUnexpected(Failure{});
         }
         if(!TryAccumulateFbxSelectedTriangleCorners(static_cast<usize>(mesh->num_triangles), outTriangleCorners))

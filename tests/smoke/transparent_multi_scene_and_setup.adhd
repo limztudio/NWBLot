@@ -209,13 +209,13 @@ static constexpr Name s_TransparentCsgReceiverGroup = NWB::Tests::Smoke::s_Smoke
         const f32 x = static_cast<f32>(stripe) * 0.2f - 2.3f;
         const auto entity = CreateTintedStaticMeshEntity(s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.0f), Float4(x, TransparentMultiSceneTransforms::s_CameraTargetY, 2.2f, 0.0f), Float4(0.1f, 1.0f, 1.3f, 0.0f), world);
         if(!entity.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
             return false;
         }
         auto& transform = world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
     return true;
 }
 #endif
@@ -236,7 +236,7 @@ static constexpr Name s_TransparentCsgReceiverGroup = NWB::Tests::Smoke::s_Smoke
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
     cutter.shapeType = Name(NWB::Impl::s_CsgPlaneShapeName);
     cutter.active = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
 
     NWB::Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = Float4(0.0f, -1.0f, 0.0f, 0.0f);
@@ -282,7 +282,7 @@ b8 TransparentMultiScene::Populate(const f32 cameraDistance, [[maybe_unused]] co
     const auto causticSetting = ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED");
     const b8 causticsEnabled = !causticSetting || *causticSetting != 0.0f;
     world.entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? FOUNDATION_TEXT("enabled") : FOUNDATION_TEXT("disabled"));
 #else
     world.entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 #endif
@@ -350,16 +350,16 @@ b8 TransparentMultiScene::Populate(const f32 cameraDistance, [[maybe_unused]] co
     const b8 csgEntitiesValid = true;
 #endif
     transforms.update(yaw, world);
-    NWB_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, NWB_TEXT("TransparentMultiSmokeProjectImpl failed to create all scene entities"));
+    FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl failed to create all scene entities"));
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     if(causticTiming){
         const auto& camera = world.entity(activeCamera).getComponent<NWB::Impl::Scene::CameraComponent>();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: vertical FOV radians {}"), camera.verticalFovRadians());
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: vertical FOV radians {}"), camera.verticalFovRadians());
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
     }
 #endif
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProjectImpl: shared transparent material with three mutable instance overrides created"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: shared transparent material with three mutable instance overrides created"));
     return true;
 }
 
@@ -382,14 +382,14 @@ void TransparentMultiRendererSetup::Configure(Core::ECS::World& world, ProjectRu
 #endif
     const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
     if(rayQueryHardwareAvailable)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProjectImpl: natural hardware shadow route selected on RayQuery-capable hardware"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: natural hardware shadow route selected on RayQuery-capable hardware"));
     else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProjectImpl: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     auto& rendererSystem = AddSmokeRenderSystems(world, context);
     rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path"));
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
     auto& rendererSystem = AddSmokeRenderSystems(world, context);
@@ -410,7 +410,7 @@ void TransparentMultiRendererSetup::Configure(Core::ECS::World& world, ProjectRu
         else if(mode == "screen")
             reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::ScreenSpace;
         else
-            NWB_FATAL_ASSERT_MSG(mode == "hybrid", NWB_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
+            FOUNDATION_FATAL_ASSERT_MSG(mode == "hybrid", FOUNDATION_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
     }
     if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON")){
         reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.0f);
@@ -424,22 +424,22 @@ void TransparentMultiRendererSetup::Configure(Core::ECS::World& world, ProjectRu
         reflectionSettings.temporalEnabled = false;
         reflectionSettings.spatialFilterEnabled = false;
         reflectionSettings.screenFeedbackEnabled = false;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}")
             , reflectionSettings.diagnosticsEnabled
             , reflectionSettings.temporalEnabled
             , reflectionSettings.spatialFilterEnabled
             , reflectionSettings.screenFeedbackEnabled
         );
     }
-    NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+    FOUNDATION_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), FOUNDATION_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticSphereSmokeProject: camera refraction {}"), refractionEnabled ? FOUNDATION_TEXT("enabled") : FOUNDATION_TEXT("disabled"));
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     auto& rendererSystem = AddSmokeRenderSystems(world, context);
     rendererSystem.setRefractionEnabled(false);
     NWB::Impl::ReflectionSettings reflectionSettings;
     reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-    NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("TransparentCsgSmokeProject: invalid reflection settings"));
+    FOUNDATION_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), FOUNDATION_TEXT("TransparentCsgSmokeProject: invalid reflection settings"));
 #else
     AddSmokeRenderSystems(world, context);
 #endif

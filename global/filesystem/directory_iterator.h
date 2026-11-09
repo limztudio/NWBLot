@@ -88,8 +88,8 @@ private:
 private:
     [[nodiscard]] Expected<void, ErrorCode> collect(const Path<ArenaT>& path){
         ErrorCode iterationError;
-#if defined(NWB_PLATFORM_WINDOWS)
-        const Path<ArenaT> pattern = path / NWB_TEXT("*");
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        const Path<ArenaT> pattern = path / FOUNDATION_TEXT("*");
         WIN32_FIND_DATA data = {};
         const HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
         if(findHandle == INVALID_HANDLE_VALUE)
@@ -97,7 +97,7 @@ private:
         ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(findHandle, iterationError); });
         for(;;){
             const TStringView fileName(data.cFileName);
-            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT(".."))
+            if(fileName != FOUNDATION_TEXT(".") && fileName != FOUNDATION_TEXT(".."))
                 this->m_entries.emplace_back(path / fileName);
             if(FindNextFile(findHandle, &data))
                 continue;

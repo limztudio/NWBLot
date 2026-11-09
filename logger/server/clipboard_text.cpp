@@ -4,7 +4,7 @@
 
 #include "clipboard_text_internal.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ Expected<ClipboardText, ClipboardTextFailure> BuildClipboardText(const MessageDe
     for(const auto& message : messages){
         const LogString& text = message.first();
         const usize textBytes = text.size() * sizeof(tchar);
-        NWB_MEMCPY(destination + cursor, *byteSize - cursor * sizeof(tchar), text.data(), textBytes);
+        FOUNDATION_MEMCPY(destination + cursor, *byteSize - cursor * sizeof(tchar), text.data(), textBytes);
         cursor += text.size();
         destination[cursor++] = static_cast<tchar>('\r');
         destination[cursor++] = static_cast<tchar>('\n');
@@ -84,7 +84,7 @@ Expected<ClipboardText, ClipboardTextFailure> BuildClipboardText(const MessageDe
 NWB_LOG_END
 
 
-#endif // NWB_PLATFORM_WINDOWS
+#endif // FOUNDATION_PLATFORM_WINDOWS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

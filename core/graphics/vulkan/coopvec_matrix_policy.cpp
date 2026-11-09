@@ -128,7 +128,7 @@ Expected<CooperativeVectorMatrixPolicy::MatrixLayout> CooperativeVectorMatrixPol
 }
 
 Expected<CooperativeVectorMatrixPolicy::DeviceAddressRange> CooperativeVectorMatrixPolicy::CheckedDeviceRange(Buffer& buffer, const u64 offset, const usize declaredByteSize, const usize requiredByteSize)noexcept{
-    NWB_ASSERT(requiredByteSize != 0u);
+    FOUNDATION_ASSERT(requiredByteSize != 0u);
     if(declaredByteSize < requiredByteSize)
         return MakeUnexpected(Failure{});
     if(!VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, declaredByteSize))

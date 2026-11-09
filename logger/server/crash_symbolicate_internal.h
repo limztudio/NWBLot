@@ -56,7 +56,7 @@ void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, C
 // Cross-platform: the Aftermath runtime ships for Windows + Linux, and a .nv-gpudmp may be decoded by whichever server ingests the package.
 void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport);
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 [[nodiscard]] Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(
     const CrashScratchPath& packageDirectory,
     const CrashPackageSummary& summary,

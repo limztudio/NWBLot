@@ -28,10 +28,10 @@ template<typename ValueContainer>
         return true;
 
     if(result.error() == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
     }
 
     return false;
@@ -41,12 +41,12 @@ template<typename HeaderT>
 [[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const Span<const u8> binary, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType, usize& inOutCursor){
     const auto header = ReadPOD<HeaderT>(binary, inOutCursor);
     if(!header){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: malformed header"), failureContext);
         return MakeUnexpected(Failure{});
     }
 
     if(header->magic != expectedMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
         return MakeUnexpected(Failure{});
     }
 
@@ -72,10 +72,10 @@ template<typename ValueContainer>
         return true;
 
     if(result.error() == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
     }
 
     return false;

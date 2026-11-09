@@ -94,7 +94,7 @@ namespace __hidden_gpu_command_ir_capture{
     static Atomic<u64> s_NextIdentity{ 1u };
     const u64 identity = TryNextAtomicIdentity(s_NextIdentity);
     if(identity == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
     return identity;
 }
 
@@ -105,7 +105,7 @@ template<typename RecordT>
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
     static_assert(sizeof(RecordT) <= Limit<u16>::s_Max, "Command IR record exceeds its u16 byte-size field");
 
-    NWB_ASSERT(outBytes.size() >= sizeof(GpuCommandIrStreamHeader));
+    FOUNDATION_ASSERT(outBytes.size() >= sizeof(GpuCommandIrStreamHeader));
     if(!CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
         return false;
 
@@ -149,7 +149,7 @@ GpuCommandIrCapture::GpuCommandIrCapture(GraphicsArena& arena)
 void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    NWB_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
+    FOUNDATION_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
 
     // Shrinking resize keeps capacity without allocating.
     m_recordEndOffsets.clear();
@@ -162,7 +162,7 @@ void GpuCommandIrCapture::reset()noexcept{
         m_rasterOwners->heapOwners.clear();
     }
     m_packedDirty = true;
-    NWB_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture reset epoch exhausted");
+    FOUNDATION_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture reset epoch exhausted");
     ++m_resetEpoch;
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
@@ -184,7 +184,7 @@ BinaryByteView GpuCommandIrCapture::commandBytes()const{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
 
     if(m_packedDirty){
-        NWB_FATAL_ASSERT_MSG(m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(), "Command IR stream size exceeded addressable storage");
+        FOUNDATION_FATAL_ASSERT_MSG(m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(), "Command IR stream size exceeded addressable storage");
         const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
         ContainerDetail::ReserveGrowingCapacity(m_packedBytes, totalSize);
         m_packedBytes.clear();
@@ -497,14 +497,14 @@ b8 GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& 
 }
 
 void GpuCommandIrCapture::writeStreamHeader()noexcept{
-    NWB_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
+    FOUNDATION_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
     GpuCommandIrStreamHeader header;
     header.graphGeneration = m_graphGeneration;
     header.planGeneration = m_planGeneration;
     header.recordCount = static_cast<u64>(m_recordEndOffsets.size());
     header.commandBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
     header.blobBytes = static_cast<u64>(m_blobBytes.size());
-    NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
+    FOUNDATION_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
     m_packedDirty = true;
 }
 
@@ -529,7 +529,7 @@ void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 grap
     m_planGeneration = planGeneration;
     m_recordingAttemptGeneration = attemptGeneration;
     if(recordCount == 0u){
-        NWB_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture rollback epoch exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture rollback epoch exhausted");
         ++m_resetEpoch;
     }
     writeStreamHeader();

@@ -51,10 +51,10 @@ public:
             const GpuSubmissionPacketId packet = m_planAccess.packetIdAt(m_packetIndices[parallelIndex]);
             m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(packet, m_artifactOperation);
             const b8 abortAbandoned = m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, abort);
-            NWB_FATAL_ASSERT_MSG(abortAbandoned, "joined packet unwind must consume every deferred recording abort");
+            FOUNDATION_FATAL_ASSERT_MSG(abortAbandoned, "joined packet unwind must consume every deferred recording abort");
         }
         const b8 recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
-        NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet unwind must preserve or resolve its exact recording-plan lease");
+        FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet unwind must preserve or resolve its exact recording-plan lease");
     }
 
 
@@ -386,13 +386,13 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
                 const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
-                NWB_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
+                FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
             }
             const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
-            NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
+            FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
             recordingUnwind.release();
             if(!parallelWork){
-                NWB_LOGGER_ERROR(NWB_TEXT("GpuNativePacketRecorder: packet recording rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuNativePacketRecorder: packet recording rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
                 if(outFailedPacket)
                     *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices.front());
                 return false;

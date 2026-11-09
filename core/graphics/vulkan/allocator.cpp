@@ -184,7 +184,7 @@ inline VkResult InvalidateAllocation(const VulkanAllocatorHandle allocator, cons
 }
 
 inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
-    NWB_ASSERT(allocation);
+    FOUNDATION_ASSERT(allocation);
     vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
 }
 
@@ -216,7 +216,7 @@ inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, const
         allocation = nullptr;
     }
     else{
-        NWB_ASSERT(buffer == VK_NULL_HANDLE);
+        FOUNDATION_ASSERT(buffer == VK_NULL_HANDLE);
     }
 
     buffer = VK_NULL_HANDLE;
@@ -263,7 +263,7 @@ b8 VulkanAllocator::initialize(){
     VmaAllocator allocator = nullptr;
     VkResult res = vmaCreateAllocator(&allocatorInfo, &allocator);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create VMA allocator: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create VMA allocator: {}"), ResultToString(res));
         m_allocator = nullptr;
         return false;
     }
@@ -335,7 +335,7 @@ void VulkanAllocator::destroyTexture(Texture& texture){
         vmaDestroyImage(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), texture.m_image, __hidden_vulkan_allocator::ToVmaAllocation(texture.m_allocation));
     }
     else{
-        NWB_ASSERT(texture.m_image == VK_NULL_HANDLE);
+        FOUNDATION_ASSERT(texture.m_image == VK_NULL_HANDLE);
     }
 
     texture.m_image = VK_NULL_HANDLE;

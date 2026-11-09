@@ -33,8 +33,8 @@ namespace __hidden_texture_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_LoadBinaryContext = NWB_TEXT("Texture::loadBinary");
-static constexpr TStringView s_ValidatePayloadContext = NWB_TEXT("Texture::validatePayload");
+static constexpr TStringView s_LoadBinaryContext = FOUNDATION_TEXT("Texture::loadBinary");
+static constexpr TStringView s_ValidatePayloadContext = FOUNDATION_TEXT("Texture::validatePayload");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetCodec);
 

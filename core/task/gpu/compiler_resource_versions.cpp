@@ -395,7 +395,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             // Analysis admits every resource use before building version edges.
-            NWB_ASSERT(graph.validResource(use.resource));
+            FOUNDATION_ASSERT(graph.validResource(use.resource));
             if(!IsWriteAccess(use.access) || lastWriterTasks[use.resource.index] == task.id.index)
                 continue;
             lastWriterTasks[use.resource.index] = task.id.index;
@@ -428,7 +428,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            NWB_ASSERT(graph.validResource(use.resource));
+            FOUNDATION_ASSERT(graph.validResource(use.resource));
             if(!IsWriteAccess(use.access) || lastWriterTasks[use.resource.index] == task.id.index)
                 continue;
             lastWriterTasks[use.resource.index] = task.id.index;

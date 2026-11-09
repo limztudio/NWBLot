@@ -115,13 +115,13 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
         return VkDeviceAddress{0u};
     if(!m_currentCmdBuf || m_nativeRecordingID == 0u || scratchAlignment == 0u){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch recording identity or alignment is invalid"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch recording identity or alignment is invalid"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 scratchPadding = scratchAlignment - 1u;
     if(buildScratchSize > Limit<u64>::s_Max - scratchPadding){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch allocation size overflows"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch allocation size overflows"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
@@ -132,12 +132,12 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
     if(!allocation){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
     if(!isBufferReadyForCommandQueue(allocation->buffer.get(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -145,13 +145,13 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const auto alignedScratchAddress = AlignUpChecked(scratchBaseAddress, scratchAlignment);
     if(scratchBaseAddress == 0u || !alignedScratchAddress){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch device address is null or cannot be aligned"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch device address is null or cannot be aligned"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 scratchOffset = *alignedScratchAddress - scratchBaseAddress;
     if(scratchOffset > scratchAllocationSize || buildScratchSize > scratchAllocationSize - scratchOffset){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: aligned scratch range is outside the buffer"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: aligned scratch range is outside the buffer"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -161,13 +161,13 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
 Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteCount, const u64 deviceAddressAlignment, TStringView operationName){
     if(!m_currentCmdBuf || m_nativeRecordingID == 0u || byteCount == 0u || deviceAddressAlignment == 0u){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input recording identity, size, or alignment is invalid"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input recording identity, size, or alignment is invalid"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 inputPadding = deviceAddressAlignment - 1u;
     if(byteCount > Limit<u64>::s_Max - inputPadding){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input allocation size overflows"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input allocation size overflows"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 inputAllocationSize = byteCount + inputPadding;
@@ -178,12 +178,12 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
     const auto allocation = m_device.m_accelStructInputManager.suballocateBuffer(inputAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
     if(!allocation){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input suballocation failed"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
     if(!allocation->cpuAddress || !isBufferReadyForCommandQueue(allocation->buffer.get(), VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input buffer is not mapped or not ready for device-address access"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input buffer is not mapped or not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -191,13 +191,13 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
     const auto alignedInputAddress = AlignUpChecked(inputBaseAddress, deviceAddressAlignment);
     if(inputBaseAddress == 0u || !alignedInputAddress){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input device address is null or cannot be aligned"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input device address is null or cannot be aligned"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 inputOffset = *alignedInputAddress - inputBaseAddress;
     if(inputOffset > inputAllocationSize || byteCount > inputAllocationSize - inputOffset){
         invalidateCommandRecording();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: aligned build-input range is outside the buffer"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: aligned build-input range is outside the buffer"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -222,16 +222,16 @@ Expected<b8> CommandList::validateAccelStructBuildSignature(
         operationName
     ](const VkAccelerationStructureTypeKHR priorAccelStructType, const VkBuildAccelerationStructureFlagsKHR priorBuildFlags, const AccelStructGeometryBuildSignature* const priorGeometrySignatures, const usize priorGeometrySignatureCount) -> b8{
         if((priorBuildFlags & VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR) == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: the prior accepted build did not allow updates"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: the prior accepted build did not allow updates"), operationName);
             return false;
         }
         if(priorAccelStructType != accelStructType || priorBuildFlags != buildFlags || priorGeometrySignatureCount != geometrySignatureCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
             return false;
         }
         for(usize geometryIndex = 0u; geometryIndex < geometrySignatureCount; ++geometryIndex){
             if(!VulkanDetail::AccelStructGeometryBuildSignaturesEqual(priorGeometrySignatures[geometryIndex], geometrySignatures[geometryIndex])){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: update build signature does not match the prior build"), operationName);
                 return false;
             }
         }
@@ -252,7 +252,7 @@ Expected<b8> CommandList::validateAccelStructBuildSignature(
     if(!performUpdate)
         return acceptedRole != nullptr;
     if(!acceptedRole){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires a previously accepted build or an earlier same-command-buffer build"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: PerformUpdate requires a previously accepted build or an earlier same-command-buffer build"), operationName);
         return MakeUnexpected(Failure{});
     }
 

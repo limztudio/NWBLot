@@ -91,7 +91,7 @@ b8 AdhdOutputTransaction::publish(){
             m_hadExisting[k] = false;
             continue;
         }
-        const auto reservedBackup = StagedFileWriter(m_outputPaths[k]).stageUnique(nullptr, 0u, NWB_TEXT("backup"));
+        const auto reservedBackup = StagedFileWriter(m_outputPaths[k]).stageUnique(nullptr, 0u, FOUNDATION_TEXT("backup"));
         if(!reservedBackup){
             logOutputWriteFailure(k);
             rollbackOutputs();
@@ -101,7 +101,7 @@ b8 AdhdOutputTransaction::publish(){
         if(!backedUp){
             const auto removedBackup = RemoveFile(*reservedBackup);
             if(!removedBackup)
-                NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: failed removing backup reservation '{}'"), PathToString<tchar>(*reservedBackup));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("AdhdCompiler: failed removing backup reservation '{}'"), PathToString<tchar>(*reservedBackup));
             logOutputWriteFailure(k);
             rollbackOutputs();
             return false;
@@ -126,7 +126,7 @@ b8 AdhdOutputTransaction::publish(){
             continue;
         const auto removedBackup = RemoveFile(m_backupPaths[k]);
         if(!removedBackup)
-            NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: failed removing backup '{}'"), PathToString<tchar>(m_backupPaths[k]));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("AdhdCompiler: failed removing backup '{}'"), PathToString<tchar>(m_backupPaths[k]));
     }
     return true;
 }
@@ -134,9 +134,9 @@ b8 AdhdOutputTransaction::publish(){
 
 void AdhdOutputTransaction::logOutputWriteFailure(const usize outputIndex)const{
     if(!m_depfilePath.empty() && outputIndex + 1u == m_outputPaths.size())
-        NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(m_depfilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(m_depfilePath));
     else
-        NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to write generated output for '{}'"), ConvertString(m_inputs[outputIndex / 2u]));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write generated output for '{}'"), ConvertString(m_inputs[outputIndex / 2u]));
 }
 
 void AdhdOutputTransaction::rollbackOutputs()noexcept{
@@ -146,17 +146,17 @@ void AdhdOutputTransaction::rollbackOutputs()noexcept{
         if(m_promoted[k]){
             const auto removed = RemoveFile(m_outputPaths[k]);
             if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed removing '{}'"), PathToString<tchar>(m_outputPaths[k]));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("AdhdCompiler: rollback failed removing '{}'"), PathToString<tchar>(m_outputPaths[k]));
         }
         if(m_hasBackup[k]){
             const auto restored = RenamePath(m_backupPaths[k], m_outputPaths[k]);
             if(!restored)
-                NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed restoring '{}'"), PathToString<tchar>(m_outputPaths[k]));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("AdhdCompiler: rollback failed restoring '{}'"), PathToString<tchar>(m_outputPaths[k]));
         }
         if(m_hasStaged[k]){
             const auto removed = RemoveFile(m_stagedPaths[k]);
             if(!removed)
-                NWB_LOGGER_WARNING(NWB_TEXT("AdhdCompiler: rollback failed removing staged '{}'"), PathToString<tchar>(m_stagedPaths[k]));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("AdhdCompiler: rollback failed removing staged '{}'"), PathToString<tchar>(m_stagedPaths[k]));
         }
     }
 }

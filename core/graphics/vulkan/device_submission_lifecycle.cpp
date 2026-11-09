@@ -43,7 +43,7 @@ Device::SubmissionOperationLease::SubmissionOperationLease(Device& device)noexce
 Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
     if(!m_device)
         return;
-    NWB_FATAL_ASSERT(ActiveLease() == this);
+    FOUNDATION_FATAL_ASSERT(ActiveLease() == this);
     ActiveLease() = m_previousActiveLease;
     m_device->endSubmissionOperation();
 }
@@ -92,7 +92,7 @@ b8 Device::beginLifecycleDrain()noexcept{
     while((state & s_SubmissionOperationCountMask) != 0u){
         m_submissionOperationState.wait(state, MemoryOrder::acquire);
         state = m_submissionOperationState.load(MemoryOrder::acquire);
-        NWB_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
+        FOUNDATION_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
     }
     return true;
 }
@@ -100,8 +100,8 @@ b8 Device::beginLifecycleDrain()noexcept{
 void Device::endLifecycleDrain()noexcept{
     const b8 lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
     const u64 submissionOperationState = m_submissionOperationState.load(MemoryOrder::acquire);
-    NWB_FATAL_ASSERT(!lifecycleDestructionPrepared);
-    NWB_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
+    FOUNDATION_FATAL_ASSERT(!lifecycleDestructionPrepared);
+    FOUNDATION_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
     m_submissionOperationState.store(0u, MemoryOrder::release);
 }
 
@@ -135,11 +135,11 @@ Expected<VkResult> Device::presentNativeQueue(const u32 nativeQueueIndex, const 
     if(!submissionOperation.valid())
         return MakeUnexpected(Failure{});
     if(nativeQueueIndex >= m_nativeQueueStates.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
         return MakeUnexpected(Failure{});
     }
 
-    NWB_ASSERT(m_nativeQueueStates[nativeQueueIndex]->queue != VK_NULL_HANDLE);
+    FOUNDATION_ASSERT(m_nativeQueueStates[nativeQueueIndex]->queue != VK_NULL_HANDLE);
     NativeQueueState& nativeQueue = *m_nativeQueueStates[nativeQueueIndex];
     ScopedLock hostLock(nativeQueue.hostMutex);
     if(submissionsBlocked())

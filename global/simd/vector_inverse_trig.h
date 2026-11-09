@@ -17,7 +17,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorArcCoefficientApproximation(SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorArcCoefficientApproximation(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle x = VectorAbs(value);
     SIMDVectorSingle root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
 
@@ -31,7 +31,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorArcCoefficientApproximation(SIMD
     return VectorMultiply(result, root);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2SelectResult(SIMDVectorSingle y, SIMDVectorSingle x, SIMDVectorSingle atanResult, SIMDVectorSingle constants)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorATan2SelectResult(SIMDVectorSingle y, SIMDVectorSingle x, SIMDVectorSingle atanResult, SIMDVectorSingle constants)noexcept{
     const SIMDVectorSingle zero = VectorZero();
     SIMDVectorSingle atanResultValid = VectorTrueInt();
 
@@ -81,11 +81,11 @@ namespace SIMDVectorDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ACosReplicated(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL ACosReplicated(SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ATan2Replicated(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL ATan2Replicated(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
     return VectorDoubleReplicate(ATan2(VectorDoubleGetX(y), VectorDoubleGetX(x)));
 }
 
@@ -99,7 +99,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ATan2Replicated(SIMDVectorDouble y, SI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorASin(SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorASin(SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
     SIMDVectorSingle t1 = VectorSubtract(s_SIMDPi, t0);
@@ -107,7 +107,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorASin(SIMDVectorSingle value)noex
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleACos(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleACos(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(ACos(value[0]), ACos(value[1]), ACos(value[2]), ACos(value[3]));
 }
 
@@ -115,7 +115,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleACos(SIMDVectorDouble valu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan(SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorATan(SIMDVectorSingle value)noexcept{
     SIMDVectorSingle absV = VectorAbs(value);
     SIMDVectorSingle invV = VectorReciprocal(value);
     SIMDVectorSingle comp = VectorGreater(value, s_SIMDOne);
@@ -144,13 +144,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan(SIMDVectorSingle value)noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
     const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_3PIDIV4);
     SIMDVectorSingle v = VectorDivide(y, x);
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATan(v), constants);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATan2(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleATan2(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
     return VectorDoubleSet(ATan2(y[0], x[0]), ATan2(y[1], x[1]), ATan2(y[2], x[2]), ATan2(y[3], x[3]));
 }
 

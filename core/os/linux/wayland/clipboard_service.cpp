@@ -82,13 +82,13 @@ b8 WaylandClipboardService::initialize(){
 }
 
 void WaylandClipboardService::observeSerial(const u32 serial)noexcept{
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     if(m_seat && serial)
         m_serial = serial;
 }
 
 void WaylandClipboardService::setKeyboardFocus(const b8 focused)noexcept{
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     m_focused = focused && m_seat;
     if(!m_focused){
         m_serial = 0u;
@@ -112,19 +112,19 @@ void WaylandClipboardService::startNativeRequest(const ClipboardRequestToken tok
     if(operation == ClipboardOperation::WriteText){
         const ClipboardStatus::Enum status = writeSelection(channel, text);
         if(!completeNativeRequest(token, status))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         return;
     }
     Offer* const offer = m_selected[channel == ClipboardChannel::Clipboard ? 0u : 1u];
     if(!m_focused || !offer || offer->rank == 0u){
         if(!completeNativeRequest(token, ClipboardStatus::Unavailable))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         return;
     }
     const auto pipe = OpenClipboardPipe();
     if(!pipe){
         if(!completeNativeRequest(token, ClipboardStatus::NativeFailure))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         return;
     }
     m_readFd = pipe->readFd;
@@ -204,7 +204,7 @@ void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
     m_readToken = {};
     CloseClipboardPipe(m_readFd);
     if(token.valid() && !completeNativeRequest(token, status, m_received.text()))
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
     m_received.clear();
 }
 
@@ -253,7 +253,7 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
 Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display){
     auto service = MakeGlobalUnique<WaylandClipboardService>(arena, arena, display);
     if(!service || !service->initialize()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Wayland clipboard initialization failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Wayland clipboard initialization failed"));
         return MakeUnexpected(Failure{});
     }
     return service;

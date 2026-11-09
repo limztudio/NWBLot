@@ -263,7 +263,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
             const auto deferredShadowVisibilityAdaptiveCounterClearTaskResult = context.graph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
             if(!deferredShadowVisibilityAdaptiveCounterClearTaskResult){
                 m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
                 return false;
             }
             m_deferredShadowVisibilityAdaptiveCounterClearTask = *deferredShadowVisibilityAdaptiveCounterClearTaskResult;
@@ -297,7 +297,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     >(allLitClearDesc, ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = shadowVisibility, .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources, .floatValue = ECSRenderDetail::s_ShadowVisibilityAllLitClearColor, });
     if(!deferredShadowVisibilityAllLitClearTaskResult){
         m_deferredShadowVisibilityAllLitClearTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
         return false;
     }
     m_deferredShadowVisibilityAllLitClearTask = *deferredShadowVisibilityAllLitClearTaskResult;
@@ -332,7 +332,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     );
     if(!deferredShadowVisibilityTaskResult){
         m_deferredShadowVisibilityTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
     m_deferredShadowVisibilityTask = *deferredShadowVisibilityTaskResult;
@@ -431,7 +431,7 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
 
     const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_ShadowPassSceneGeometry), s_SceneGeometryDomainLabel));
     if(!sceneGeometryDomainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
     }
     sceneGeometryDomain = *sceneGeometryDomainResult;
@@ -580,14 +580,14 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
             resourceUses.push_back(use);
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
         return false;
     }
     if(adaptiveCompact){
         const auto adaptiveEdgeCounterResult = ImportExternalBuffer(m_graph, rayTracingShadowResources.swShadowEdgeCounterBuffer, Name(s_ShadowEdgeCounterName), s_ShadowEdgeCounterLabel);
         if(!adaptiveEdgeCounterResult){
             adaptiveEdgeCounter = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
             return false;
         }
         adaptiveEdgeCounter = *adaptiveEdgeCounterResult;
@@ -639,7 +639,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         // The lagged-history copy may run on Transfer after producers finish. Keep all three transports shareable.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
-    if(!createShadowTarget(visibilityDesc, "engine/shadow/visibility", NWB_TEXT("RendererSystem: failed to create shadow visibility target"), targets.shadowVisibility))
+    if(!createShadowTarget(visibilityDesc, "engine/shadow/visibility", FOUNDATION_TEXT("RendererSystem: failed to create shadow visibility target"), targets.shadowVisibility))
         return false;
 
     // Round up half-resolution scratch so odd extents retain coverage.
@@ -654,7 +654,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         .setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
     ;
-    if(!createShadowTarget(coarseDesc, "engine/shadow/coarse_transmittance", NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"), targets.shadowCoarseTransmittance))
+    if(!createShadowTarget(coarseDesc, "engine/shadow/coarse_transmittance", FOUNDATION_TEXT("RendererSystem: failed to create shadow coarse transmittance target"), targets.shadowCoarseTransmittance))
         return false;
 
     // Ping-pong half-resolution soft visibility and geometry cache.
@@ -684,14 +684,14 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
 
     // Recreated history must not reproject through the previous target's matrix.
     if(
-        !createShadowTarget(softHalfDesc, "engine/shadow/soft_half_a", NWB_TEXT("RendererSystem: failed to create soft shadow half-A target"), targets.shadowSoftHalfA)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/soft_half_b", NWB_TEXT("RendererSystem: failed to create soft shadow half-B target"), targets.shadowSoftHalfB)
-        || !createShadowTarget(softGeometryDesc, "engine/shadow/soft_geometry", NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"), targets.shadowSoftGeometry)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/hist_a", NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"), targets.shadowHistA)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/hist_b", NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"), targets.shadowHistB)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/moments_a", NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"), targets.shadowMomentsA)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/moments_b", NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"), targets.shadowMomentsB)
-        || !createShadowTarget(softGeometryDesc, "engine/shadow/soft_geometry_prev", NWB_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"), targets.shadowSoftGeometryPrev)
+        !createShadowTarget(softHalfDesc, "engine/shadow/soft_half_a", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow half-A target"), targets.shadowSoftHalfA)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/soft_half_b", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow half-B target"), targets.shadowSoftHalfB)
+        || !createShadowTarget(softGeometryDesc, "engine/shadow/soft_geometry", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow geometry cache target"), targets.shadowSoftGeometry)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/hist_a", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"), targets.shadowHistA)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/hist_b", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"), targets.shadowHistB)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/moments_a", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"), targets.shadowMomentsA)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/moments_b", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"), targets.shadowMomentsB)
+        || !createShadowTarget(softGeometryDesc, "engine/shadow/soft_geometry_prev", FOUNDATION_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"), targets.shadowSoftGeometryPrev)
     )
         return false;
 
@@ -706,11 +706,11 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
 
     // Transparent temporal history shares geometry and the opaque history selector.
     if(
-        !createShadowTarget(softHalfDesc, "engine/shadow/transparent_soft_half", NWB_TEXT("RendererSystem: failed to create soft transparent shadow half target"), targets.transparentSoftHalf)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_hist_a", NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"), targets.transparentHistA)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_hist_b", NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"), targets.transparentHistB)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_moments_a", NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"), targets.transparentMomentsA)
-        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_moments_b", NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"), targets.transparentMomentsB)
+        !createShadowTarget(softHalfDesc, "engine/shadow/transparent_soft_half", FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow half target"), targets.transparentSoftHalf)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_hist_a", FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"), targets.transparentHistA)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_hist_b", FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"), targets.transparentHistB)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_moments_a", FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"), targets.transparentMomentsA)
+        || !createShadowTarget(softHalfDesc, "engine/shadow/transparent_moments_b", FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"), targets.transparentMomentsB)
     )
         return false;
 
@@ -727,7 +727,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
             .transparentOutput = targets.shadowSoftHalfA.get(),
         };
         if(!waveletInputs.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft-shadow target allocation produced aliased resolve resources"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: soft-shadow target allocation produced aliased resolve resources"));
             return false;
         }
     }
@@ -748,7 +748,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     ;
     auto edgeListBufferResult = m_graphics.createBuffer(edgeListDesc);
     if(!edgeListBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
@@ -756,7 +756,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState.m_swShadowEdgeListHeapHandle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
@@ -913,7 +913,7 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
         || !shadowTypedMaterialsResult
         || !shadowInstancesResult
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
         return false;
     }
     const Core::GpuGraphResourceId sceneInstances = *sceneInstancesResult;
@@ -1158,7 +1158,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         const Core::GpuGraphResourceId receiverCapData = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalData);
         const Core::GpuGraphResourceId receiverCapCount = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalCount);
         if(!receiverView.valid() || !receiverCapState.valid() || !receiverCapDepth.valid() || !receiverCapData.valid() || !receiverCapCount.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
             return MakeUnexpected(Failure{});
         }
         const Core::TextureSubresourceSet layers(0u, 1u, 0u, inputs.targets.csgRemovedIntervalLayerCount);
@@ -1197,13 +1197,13 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         if(!resource.valid()){
             const auto importedResource = ImportExternalBuffer(m_graph, buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
             if(!importedResource){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return MakeUnexpected(Failure{});
             }
             resource = *importedResource;
         }
         if(!resource.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
             return MakeUnexpected(Failure{});
         }
         if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing)noexcept{ return existing == resource; }) != csgBoundsResources.end())
@@ -1228,7 +1228,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         m_graph
     );
     if(!mapsResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare light-space shadow maps"));
         return MakeUnexpected(Failure{});
     }
     const LightSpaceShadowGraph maps = Move(*mapsResult);
@@ -1301,7 +1301,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     );
     if(!opaqueTaskResult){
         tasks.opaque = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
         return false;
     }
     tasks.opaque = *opaqueTaskResult;
@@ -1335,7 +1335,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         );
         if(!opaqueFirstWaveletTaskResult){
             tasks.opaqueFirstWavelet = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
             return false;
         }
         tasks.opaqueFirstWavelet = *opaqueFirstWaveletTaskResult;
@@ -1366,7 +1366,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         );
         if(!opaqueResolveTaskResult){
             tasks.opaqueResolve = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
             return false;
         }
         tasks.opaqueResolve = *opaqueResolveTaskResult;
@@ -1409,7 +1409,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!transparentTraceTaskResult){
         tasks.transparentTrace = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
         return false;
     }
     tasks.transparentTrace = *transparentTraceTaskResult;
@@ -1442,7 +1442,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         );
         if(!transparentTemporalMergeTaskResult){
             tasks.transparentTemporalMerge = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
             return false;
         }
         tasks.transparentTemporalMerge = *transparentTemporalMergeTaskResult;
@@ -1474,7 +1474,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!transparentFirstWaveletTaskResult){
         tasks.transparentFirstWavelet = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
         return false;
     }
     tasks.transparentFirstWavelet = *transparentFirstWaveletTaskResult;
@@ -1505,7 +1505,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!foldTaskResult){
         tasks.fold = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
         return false;
     }
     tasks.fold = *foldTaskResult;
@@ -1525,7 +1525,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         );
         if(!diagnosticsTaskResult){
             tasks.diagnostics = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
             return false;
         }
         tasks.diagnostics = *diagnosticsTaskResult;
@@ -1562,7 +1562,7 @@ void SoftShadowTemporalMergeRecorder::record(
     const b8 graphOwnsMergeTemporalEntryStates
 )const{
     const u32 historyValid = m_historyReadable ? 1u : 0u;
-    NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
+    FOUNDATION_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
     if(!graphOwnsSoftTraceInputState)
         m_commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
     if(!graphOwnsMergeTemporalEntryStates){

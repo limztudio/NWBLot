@@ -20,7 +20,7 @@ NWB_LOG_BEGIN
 
 
 class Frame{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     using NativeFrameData = Core::Common::WinFrame;
 #else
     using NativeFrameData = Core::Common::FrameData;

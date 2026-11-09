@@ -57,22 +57,22 @@ inline constexpr f64 s_TemporalWarmupSeconds = 30.0;
 inline constexpr u64 s_TemporalFrameInterval = 8u;
 
 [[nodiscard]] inline TStringView CsgVisibleFpsLabel()noexcept{
-    return NWB_TEXT("CsgVisibleSmokeProject");
+    return FOUNDATION_TEXT("CsgVisibleSmokeProject");
 }
 
 [[nodiscard]] inline NotNullUniquePtr<World> CreateCsgVisibleWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(CsgVisibleFpsLabel(), context);
 
     if(context.graphics.queryFeatureSupport(Core::Feature::Meshlets))
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
     else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
 
     auto& renderer = AddSmokeRenderSystems(*world, context);
     if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
         Impl::ReflectionSettings reflection;
         reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid temporal reflection settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid temporal reflection settings"));
         renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
     }
 
@@ -129,15 +129,15 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                         material = s_EventStateMaterial;
                     else if(*view == "event_data"){
                         material = s_EventDataMaterial;
-                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"));
+                        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"));
                     }
                     else if(*view == "event_order"){
                         material = s_EventOrderMaterial;
-                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"));
+                        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"));
                     }
                     else if(*view == "span_state"){
                         material = s_SpanStateMaterial;
-                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"));
+                        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"));
                     }
                     else if(*view != "full"){
                         configured = false;
@@ -162,7 +162,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                             this->m_capture = Move(captureSeries->capture);
                             this->m_temporalAnimated = ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
                             if(overlapping && this->m_temporalAnimated){
-                                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
+                                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
                                 configured = false;
                             }
                             else{
@@ -170,7 +170,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                                 if(intervalText){
                                     const auto interval = ParseU64(AStringView(intervalText->data(), intervalText->size()));
                                     if(!interval || *interval == 0u || *interval > 64u){
-                                        NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal interval must be between 1 and 64"));
+                                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgVisibleSmokeProject: temporal interval must be between 1 and 64"));
                                         configured = false;
                                     }
                                     else{
@@ -178,9 +178,9 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                                     }
                                 }
                                 if(configured){
-                                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(this->m_temporalAnimated), ConvertString(*view), this->m_temporalFrameInterval);
+                                    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(this->m_temporalAnimated), ConvertString(*view), this->m_temporalFrameInterval);
                                     if(this->m_temporalAnimated)
-                                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
+                                        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
                                 }
                             }
                         }
@@ -270,7 +270,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
         native{
             if(this->m_temporalFrameInterval == 1u && this->m_capture->capturedGraphicsFrameIndex() != Limit<u64>::s_Max){
                 if(!this->m_context->graphics.waitForIdle()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: consecutive capture completion failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgVisibleSmokeProject: consecutive capture completion failed"));
                     this->m_context->requestQuit();
                     return;
                 }
@@ -280,14 +280,14 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                 return;
             const u64 sourceFrame = this->m_capture->capturedGraphicsFrameIndex();
             if(sourceFrame != this->m_nextCaptureFrame){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal sample missed frame {} (captured {})"), this->m_nextCaptureFrame, sourceFrame);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgVisibleSmokeProject: temporal sample missed frame {} (captured {})"), this->m_nextCaptureFrame, sourceFrame);
                 this->m_context->requestQuit();
                 return;
             }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal sample {} graphics frame {}"), this->m_temporalSample, sourceFrame);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: temporal sample {} graphics frame {}"), this->m_temporalSample, sourceFrame);
             ++this->m_temporalSample;
             if(this->m_temporalSample == s_TemporalSampleCount){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal series complete samples=32"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: temporal series complete samples=32"));
                 this->m_capture->finish();
                 return;
             }
@@ -321,7 +321,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB CSG Visible Smoke");
+    return FOUNDATION_TEXT("NWB CSG Visible Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

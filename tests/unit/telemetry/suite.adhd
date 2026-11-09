@@ -898,11 +898,11 @@ TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidating
     Telemetry::TelemetryBytes bytes(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
-    NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
+    FOUNDATION_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
     auto parsed = Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
     ASSERT_TRUE(parsed);
     for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
-        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        FOUNDATION_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         parsed = Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
         ASSERT_TRUE(parsed);
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
@@ -917,13 +917,13 @@ TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidating
         case 7u: malformed.scopeHash = {}; break;
         case 8u: ++malformed.scopeNameBytes; break;
         }
-        NWB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
+        FOUNDATION_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size()));
         ExpectSnapshot(parsed->snapshot, snapshot);
         EXPECT_EQ(parsed->scopeName, owner);
     }
     for(const usize truncatedSize : { sizeof(validHeader) - 1u, bytes.size() - 1u }){
-        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        FOUNDATION_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         parsed = Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
         ASSERT_TRUE(parsed);
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(bytes.data(), truncatedSize));

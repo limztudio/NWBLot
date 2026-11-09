@@ -33,15 +33,15 @@ int RunPipelineTool(const int argc, char** argv){
 
         const auto text = Core::Assets::EncodeAssetInputList(inputs, scratchArena);
         if(!text){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input paths cannot be represented in the dependency list"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: input paths cannot be represented in the dependency list"));
             return s_PipelineExitFailure;
         }
         const auto output = AbsolutePath(Path(arena, parsed.outputPath));
         if(!output || !EnsureDirectories(output->parentPath()) || !StagedFileWriter(*output).writeTextAtomic(AStringView(*text))){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
             return s_PipelineExitFailure;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs"), inputs.size());
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("DependencyComputer: returned {} inputs"), inputs.size());
         return s_PipelineExitSuccess;
     }, arena, scratchArena);
 }

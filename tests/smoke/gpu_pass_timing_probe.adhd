@@ -33,7 +33,7 @@ inline void OpenGpuPassTimingFile(ScratchArena& scratchArena, OutputFileStream& 
 
     timingFile.open(timingPath->c_str(), s_FileOpenAppend);
     if(!timingFile.is_open())
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: failed to open requested timing output"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuPassTimingProbe: failed to open requested timing output"));
 }
 };
 }
@@ -59,6 +59,11 @@ class GpuPassTimingProbe{
         this.m_arena = GlobalArena(Name(s_SmokeNameSmokeGpuPassTimingProbe));
         this.m_scopes = GpuPassTimingScopeStateVector(this.m_arena);
         this.m_label = label;
+        this.m_logScopes = true;
+    }
+
+    public void setLogScopes(in b8 value){
+        this.m_logScopes = value;
     }
 
     public void recordFrame(in f32 delta, in TimingView gpuTiming){
@@ -139,14 +144,16 @@ class GpuPassTimingProbe{
                 const f64 minMs = accum.minSeconds * s_GpuTimingMillisecondsPerSecond;
                 const f64 maxMs = accum.maxSeconds * s_GpuTimingMillisecondsPerSecond;
                 const f64 totalMs = accum.sumSeconds * s_GpuTimingMillisecondsPerSecond;
-                NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
-                    , ConvertString(scopeName.resolvedText())
-                    , avgMs
-                    , minMs
-                    , maxMs
-                    , accum.frames
-                );
+                if(this->m_logScopes || !timingFile.is_open()){
+                    NWB_LOGGER_ESSENTIAL_INFO(
+                        FOUNDATION_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
+                        , ConvertString(scopeName.resolvedText())
+                        , avgMs
+                        , minMs
+                        , maxMs
+                        , accum.frames
+                    );
+                }
                 if(timingFile.is_open()){
                     timingFile
                         << "  " << scopeName.resolvedText()
@@ -164,7 +171,7 @@ class GpuPassTimingProbe{
             if(timingFile.is_open()){
                 timingFile.close();
                 if(!timingFile.good())
-                    NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: timing output write or close failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuPassTimingProbe: timing output write or close failed"));
             }
         }
     }
@@ -182,6 +189,7 @@ class GpuPassTimingProbe{
     private f64 m_elapsedSeconds = 0.0;
     private f64 m_intervalSeconds = 0.0;
     private u32 m_intervalFrames = 0u;
+    private b8 m_logScopes = true;
 }
 
 

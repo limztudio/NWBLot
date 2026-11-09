@@ -12,8 +12,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE2)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE2)
     __m128i iTrunc = _mm_cvttps_epi32(value);
     SIMDVectorSingle fTrunc = _mm_cvtepi32_ps(iTrunc);
     SIMDVectorSingle y = VectorSubtract(value, fTrunc);
@@ -65,7 +65,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noex
     select0 = _mm_and_si128(isNaN, s_SIMDQNaN);
     select1 = _mm_andnot_si128(isNaN, result5);
     return _mm_castsi128_ps(_mm_or_si128(select0, select1));
-#elif defined(NWB_HAS_NEON)
+#elif defined(FOUNDATION_HAS_NEON)
     int32x4_t iTrunc = vcvtq_s32_f32(value);
     const float32x4_t fTrunc = vcvtq_f32_s32(iTrunc);
     const float32x4_t y = vsubq_f32(value, fTrunc);
@@ -112,22 +112,22 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noex
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp2(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleExp2(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(Exp2(VectorDoubleGetX(value)), Exp2(VectorDoubleGetY(value)), Exp2(VectorDoubleGetZ(value)), Exp2(VectorDoubleGetW(value)));
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExpE(SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorExpE(SIMDVectorSingle value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE2)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorLog2(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE2)
     __m128i rawBiased = _mm_and_si128(_mm_castps_si128(value), s_SIMDInfinity);
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
     const __m128i isExponentZero = _mm_cmpeq_epi32(s_SIMDZero, rawBiased);
@@ -193,7 +193,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
     select0 = _mm_and_si128(isNaN, s_SIMDQNaN);
     select1 = _mm_andnot_si128(isNaN, result);
     return _mm_castsi128_ps(_mm_or_si128(select0, select1));
-#elif defined(NWB_HAS_NEON)
+#elif defined(FOUNDATION_HAS_NEON)
     const int32x4_t rawBiased = vandq_s32(vreinterpretq_s32_f32(value), s_SIMDInfinity);
     const int32x4_t trailing = vandq_s32(vreinterpretq_s32_f32(value), s_SIMDQNaNTest);
     const uint32x4_t isExponentZero = vceqq_s32(vreinterpretq_s32_f32(s_SIMDZero), rawBiased);
@@ -248,7 +248,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(Log2(VectorDoubleGetX(value)), Log2(VectorDoubleGetY(value)), Log2(VectorDoubleGetZ(value)), Log2(VectorDoubleGetW(value)));
 }
 
@@ -256,13 +256,13 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble valu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(NWB_DEBUG)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(FOUNDATION_DEBUG)
     return SIMDVectorPowWindowsArm64Detail::Pow(v0, v1);
 #else
-#if defined(NWB_HAS_SCALAR)
+#if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
-#elif defined(NWB_HAS_NEON)
+#elif defined(FOUNDATION_HAS_NEON)
     return SIMDConvertDetail::MakeF32(Pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)), Pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)), Pow(vgetq_lane_f32(v0, 2), vgetq_lane_f32(v1, 2)), Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3)));
 #else
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
@@ -270,7 +270,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVec
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePow(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoublePow(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
     return VectorDoubleSet(Pow(VectorDoubleGetX(v0), VectorDoubleGetX(v1)), Pow(VectorDoubleGetY(v0), VectorDoubleGetY(v1)), Pow(VectorDoubleGetZ(v0), VectorDoubleGetZ(v1)), Pow(VectorDoubleGetW(v0), VectorDoubleGetW(v1)));
 }
 

@@ -47,12 +47,12 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
     for(usize clusterIndex = 0u; clusterIndex < skin.clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin.clusters.data[clusterIndex];
         if(!cluster){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains a null cluster"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: skin deformer contains a null cluster"));
             return MakeUnexpected(Failure{});
         }
 
         if(!cluster->bone_node){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
             return MakeUnexpected(Failure{});
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
@@ -70,11 +70,11 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         auto foundJoint = inOutContext.jointLookup.find(MakeNotNull(cluster->bone_node));
         if(foundJoint != inOutContext.jointLookup.end()){
             const usize jointIndex = static_cast<usize>(foundJoint.value());
-            NWB_ASSERT(jointIndex < inOutContext.inverseBindMatrices.size());
-            NWB_ASSERT(jointIndex < inOutContext.bindPoseMatrices.size());
+            FOUNDATION_ASSERT(jointIndex < inOutContext.inverseBindMatrices.size());
+            FOUNDATION_ASSERT(jointIndex < inOutContext.bindPoseMatrices.size());
             const SIMDMatrix existingInverseBind = LoadFloat(inOutContext.inverseBindMatrices[jointIndex]);
             if(!NearlyEqualFbxJointMatrices(existingInverseBind, inverseBindValue)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(ResolveFbxNodeDisplayName(cluster->bone_node != nullptr, UfbxStringView(cluster->bone_node->name))));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(ResolveFbxNodeDisplayName(cluster->bone_node != nullptr, UfbxStringView(cluster->bone_node->name))));
                 return MakeUnexpected(Failure{});
             }
             outClusterJoints.push_back(foundJoint.value());
@@ -94,7 +94,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         inOutContext.inverseBindMatrices.push_back(storedInverseBind);
         const auto inserted = inOutContext.jointLookup.emplace(MakeNotNull(cluster->bone_node), joint);
         if(!inserted.second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         outClusterJoints.push_back(joint);

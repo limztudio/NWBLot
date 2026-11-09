@@ -31,9 +31,9 @@ NWB_CORE_BEGIN
 class Frame{
 private:
     using FrameString = TString<Alloc::GlobalArena>;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     using NativeFrameData = Common::WinFrame;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     using NativeFrameData = Common::LinuxFrame;
 #else
     using NativeFrameData = Common::FrameData;

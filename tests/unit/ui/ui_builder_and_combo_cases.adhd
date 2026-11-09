@@ -537,7 +537,7 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     ASSERT_TRUE(retainedMarker);
     EXPECT_FLOAT_EQ(retainedMarker->width, originalMarker->width);
     ASSERT_EQ(first.vertices().size(), saved.size());
-    EXPECT_EQ(NWB_MEMCMP(first.vertices().data(), saved.data(), saved.size() * sizeof(Vertex)), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(first.vertices().data(), saved.data(), saved.size() * sizeof(Vertex)), 0);
     EXPECT_EQ(ComputeSha256({ page->pixels().data(), page->pixels().size() }), pixelHash);
     EXPECT_EQ(page->binding().fontGeneration, 1u);
     EXPECT_EQ(first.generation(), 1u);

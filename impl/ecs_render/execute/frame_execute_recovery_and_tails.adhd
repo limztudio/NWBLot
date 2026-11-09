@@ -192,14 +192,14 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
 
     // Retire the scope after rejection; Graphics order needs no extra wait.
     if(renderer.m_graphics.getDevice().requiresRecreation()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
         m_frameTimingTransaction.discard();
         return false;
     }
     if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !m_compiledPlan.findTask(renderer.m_deferredFrameRecoveryTask).valid()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
         m_frameTimingTransaction.discard();
@@ -207,7 +207,7 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     }
     b8 retireTiming = m_frameTimingTransaction.needsRetirement();
     if(retireTiming && !m_frameTimingTransaction.prepareForRecovery()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
         m_frameTimingTransaction.discard();
         retireTiming = false;
     }
@@ -224,7 +224,7 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
         &renderer.m_graphics.gpuTiming()
     );
     if(!recoveryAccepted){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));
         return false;
     }
     return true;
@@ -245,7 +245,7 @@ void FrameExecuteRecovery::failFrameRenderRecovery(){
     if(renderer.m_frameRenderRecoveryFailed)
         return;
     renderer.m_frameRenderRecoveryFailed = true;
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
+    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
     // Defer recreation until accepted work is safe.
     renderer.m_graphics.requestDeviceRecreation();
 }
@@ -595,7 +595,7 @@ void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& r
     if(hardwareShadowSupported)
         recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_causticsGraph.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask, };
     recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask, };
-    NWB_ASSERT(recordedCallbackCount <= recordedCallbacks.size());
+    FOUNDATION_ASSERT(recordedCallbackCount <= recordedCallbacks.size());
 
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask, };
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask, };
@@ -605,7 +605,7 @@ void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& r
     if(hardwareShadowSupported)
         acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_causticsGraph.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask, };
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask, };
-    NWB_ASSERT(acceptedCallbackCount <= acceptedCallbacks.size());
+    FOUNDATION_ASSERT(acceptedCallbackCount <= acceptedCallbacks.size());
 }
 
 
@@ -729,7 +729,7 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
             renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask,
             renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()
         );
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
     }
     else{
         Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(renderer.m_surfelGiCounterPersistentState);
@@ -758,15 +758,15 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
         );
         const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
         if(!readbackSubmissionToken.valid())
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
         else if(!readbackAccepted || !readbackContext.acceptedStateReady){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
             m_recovery.failFrameRenderRecovery();
             return false;
         }
         else{
             // Publish only after retained state commits.
-            NWB_ASSERT(renderer.m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
+            FOUNDATION_ASSERT(renderer.m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
         }
     }
     return true;
@@ -776,7 +776,7 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
     RendererFramePipeline& renderer = m_renderer;
     if(requestsCapture && !captureDeclared){
         // Present already completed; force next frame through bootstrap.
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
         renderer.invalidateLaggedLightingHistorySubmission();
     }
     else if(captureDeclared){
@@ -793,7 +793,7 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
                 if(!renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     renderer.m_graphics.requestDeviceRecreation();
             }
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
             renderer.invalidateLaggedLightingHistorySubmission();
         }
         else{
@@ -836,12 +836,12 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
             if(!historyCopyAccepted || !historyCopySubmissionToken.valid()){
                 if(!renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     renderer.m_graphics.requestDeviceRecreation();
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
                 renderer.invalidateLaggedLightingHistorySubmission();
             }
             else{
                 // The accepted hook publishes this token; keep the assertion here.
-                NWB_ASSERT(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
+                FOUNDATION_ASSERT(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
                 if(!laggedAsyncLightingSchedule)
                     renderer.reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, targets.laggedLightingHistory.generation);
             }

@@ -159,14 +159,14 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, ICom
         return nodeIndex;
     }
 
-    NWB_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
     const u32 nodeIndex = static_cast<u32>(m_entityComponentNodes.size());
     m_entityComponentNodes.push_back(EntityComponentNode{ typeId, MakeNotNull(&pool), nextNode });
     return nodeIndex;
 }
 
 void World::releaseEntityComponentNode(u32 nodeIndex)noexcept{
-    NWB_ASSERT(nodeIndex < m_entityComponentNodes.size());
+    FOUNDATION_ASSERT(nodeIndex < m_entityComponentNodes.size());
     m_entityComponentNodes[nodeIndex].next = m_freeEntityComponentNode;
     m_freeEntityComponentNode = nodeIndex;
 }

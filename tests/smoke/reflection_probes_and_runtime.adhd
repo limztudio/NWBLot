@@ -71,18 +71,18 @@ private:
 
 ReflectionCpuTimingProbe::ReflectionCpuTimingProbe(ProjectRuntimeContext& context)noexcept
     : m_context(context)
-    , m_publications(NWB_TEXT("reflection"), context.objectArena)
+    , m_publications(FOUNDATION_TEXT("reflection"), context.objectArena)
 {}
 
 b8 ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Alloc::ScratchArena& scratchArena){
     if((caseName != "optical_csg_cap" && caseName != "optical_csg_reference") || !m_context.requestQuit){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires the cap or matched slab fixture and a quit callback"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCpuTiming: requires the cap or matched slab fixture and a quit callback"));
         return false;
     }
     const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
     if(!m_publications.initialize(true, true, outputPath ? AStringView(outputPath->data(), outputPath->size()) : AStringView{}))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), ConvertString(caseName));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") FOUNDATION_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), ConvertString(caseName));
     return true;
 }
 
@@ -97,17 +97,17 @@ b8 ReflectionCpuTimingProbe::update(){
             return true;
         m_prepared = true;
         m_preparationBegin = now;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: preparation complete presentations={} source_frame={}"), presentations, sourceFrame);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCpuTiming: preparation complete presentations={} source_frame={}"), presentations, sourceFrame);
     }
     const auto status = m_presentation.observe(presentations, now);
     if(status == PresentationFpsStatus::Invalid){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: presentation counter or steady clock regressed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCpuTiming: presentation counter or steady clock regressed"));
         return false;
     }
     if(m_presentation.measurementStarted() && !m_measuring){
         m_measuring = true;
         m_intervalSourceFrame = sourceFrame;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}"), presentations, sourceFrame, DurationInSeconds<f64>(now, m_preparationBegin));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}"), presentations, sourceFrame, DurationInSeconds<f64>(now, m_preparationBegin));
     }
     if(!m_publications.observe(m_context.perfSession, m_presentation, presentations, false))
         return false;
@@ -116,7 +116,7 @@ b8 ReflectionCpuTimingProbe::update(){
     const auto& interval = m_presentation.interval();
     if(interval.presentations() > 0u)
         ++m_positiveIntervals;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: interval presentations={} seconds={} first={} last={}") NWB_TEXT(" first_source={} end_source={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCpuTiming: interval presentations={} seconds={} first={} last={}") FOUNDATION_TEXT(" first_source={} end_source={}")
         , interval.presentations()
         , interval.wallSeconds
         , interval.firstPresentationCount
@@ -136,7 +136,7 @@ b8 ReflectionCpuTimingProbe::update(){
     if(!m_publications.observe(m_context.perfSession, m_presentation, presentations, true))
         return false;
     m_complete = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: measurement complete presentations={} seconds={} first={} last={}") NWB_TEXT(" positive_intervals={} end_source={} diagnostic_only=1")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCpuTiming: measurement complete presentations={} seconds={} first={} last={}") FOUNDATION_TEXT(" positive_intervals={} end_source={} diagnostic_only=1")
         , total.presentations()
         , total.wallSeconds
         , total.firstPresentationCount
@@ -150,7 +150,7 @@ b8 ReflectionCpuTimingProbe::update(){
 
 void ReflectionCpuTimingProbe::finish(){
     if(!m_complete)
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: shutdown before the diagnostic measurement completed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCpuTiming: shutdown before the diagnostic measurement completed"));
 }
 
 
@@ -224,7 +224,7 @@ b8 ReflectionSmokeConfiguration::ReadFlag(const AStringView name, NWB::Core::All
     else if(*text == "1")
         value = true;
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: {} must be 0 or 1"), ConvertString(name));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: {} must be 0 or 1"), ConvertString(name));
         return false;
     }
     return true;
@@ -236,7 +236,7 @@ b8 ReflectionSmokeConfiguration::ReadU32(const AStringView name, const u32 minim
         return true;
     const auto parsed = ParseU64(AStringView(text->data(), text->size()));
     if(!parsed || *parsed < minimum || *parsed > maximum){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: {} must be in [{}, {}]"), ConvertString(name), minimum, maximum);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: {} must be in [{}, {}]"), ConvertString(name), minimum, maximum);
         return false;
     }
     value = static_cast<u32>(*parsed);
@@ -294,7 +294,7 @@ b8 ReflectionSmokeConfiguration::configure(Impl::RendererSystem& renderer, Core:
     if(budgetText){
         const auto parsed = ParseU64(AStringView(budgetText->data(), budgetText->size()));
         if(!parsed || *parsed > Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: ray budget must be a nonnegative u32"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: ray budget must be a nonnegative u32"));
             return false;
         }
         settings.maxHardwareRaysPerFrame = static_cast<u32>(*parsed);
@@ -309,7 +309,7 @@ b8 ReflectionSmokeConfiguration::configure(Impl::RendererSystem& renderer, Core:
     else if(route == "hybrid")
         settings.traceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
     else if(route != s_HardwareRoute){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown reflection mode '{}'"), ConvertString(route));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: unknown reflection mode '{}'"), ConvertString(route));
         return false;
     }
     const auto debugText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_DEBUG");
@@ -320,22 +320,22 @@ b8 ReflectionSmokeConfiguration::configure(Impl::RendererSystem& renderer, Core:
         else if(debugView == "confidence")
             settings.debugView = NWB::Impl::ReflectionDebugView::Confidence;
         else if(debugView != "none"){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown debug view '{}'"), ConvertString(debugView));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: unknown debug view '{}'"), ConvertString(debugView));
             return false;
         }
     }
     if(!renderer.setReflectionSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: screen feedback {}"), settings.screenFeedbackEnabled ? 1u : 0u);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: screen steps {}"), settings.screenMaxSteps);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: screen feedback {}"), settings.screenFeedbackEnabled ? 1u : 0u);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: screen steps {}"), settings.screenMaxSteps);
     renderer.setRefractionEnabled(true);
     renderer.setRefractionHardwareTracingEnabled(true);
     const b8 hardwareAvailable = graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: hardware {}"), hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable"));
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: reflection mode {}"), ConvertString(route));
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: hardware {}"), hardwareAvailable ? FOUNDATION_TEXT("available") : FOUNDATION_TEXT("unavailable"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: reflection mode {}"), ConvertString(route));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
     if(opticalCase)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: optical query limit {}"), settings.maxOpticalQueries);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: optical query limit {}"), settings.maxOpticalQueries);
     return true;
 }
 
@@ -400,16 +400,16 @@ b8 ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::Ref
     else if(selection == "sequence1")
         m_lastPhase = 3u;
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: unknown selection"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: unknown selection"));
         return false;
     }
     if(settings.traceMode != Impl::ReflectionTraceMode::Hardware || !settings.diagnosticsEnabled || !settings.temporalEnabled || settings.temporalMaxSamples != 1u || !settings.spatialFilterEnabled || settings.screenFeedbackEnabled){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
         return false;
     }
     settings.spatialRadius = m_radii[0];
     settings.samplingSeed = 99u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), ConvertString(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), ConvertString(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
     return true;
 }
 
@@ -430,7 +430,7 @@ b8 ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statist
         || !m_phaseWork.valid() || statistics.graphicsFrameIndex < m_phaseWork.lastSampleFrameIndex
     )
         return true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}") NWB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}") FOUNDATION_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
         , m_phase, statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
         , statistics.historyStartGraphicsFrame, statistics.sampleIndex, statistics.samplingSeed
         , m_phaseWork.publishFrameIndex, m_phaseWork.firstSampleFrameIndex, m_phaseWork.lastSampleFrameIndex, m_phaseWork.sampleCount
@@ -441,12 +441,12 @@ b8 ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statist
     }
     settings.samplingSeed = 0u;
     if(!m_renderer.setReflectionSettings(settings)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: final seed reset rejected"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: final seed reset rejected"));
         return false;
     }
     m_finalSource = m_context.graphics.getFrameIndex();
     m_finalReset = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0"), settings.spatialRadius, m_finalSource);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0"), settings.spatialRadius, m_finalSource);
     return true;
 }
 
@@ -464,12 +464,12 @@ b8 ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& timi
     if(!work.valid() || (m_hasPublication && work.publishFrameIndex == m_lastPublish))
         return true;
     if((m_hasPublication && work.publishFrameIndex < m_lastPublish) || work.firstSampleFrameIndex > work.lastSampleFrameIndex || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u || !IsFinite(work.seconds) || work.seconds < 0.0){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
         return false;
     }
     m_hasPublication = true;
     m_lastPublish = work.publishFrameIndex;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}"), work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}"), work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount);
     if(m_started && !m_finalReset && !m_phaseWork.valid() && work.firstSampleFrameIndex >= m_phaseSource)
         m_phaseWork = work;
     // Require one completed spatial timing range per source frame in the window.
@@ -482,13 +482,13 @@ b8 ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings){
     settings.spatialRadius = m_radii[m_phase];
     settings.samplingSeed = 101u + m_phase;
     if(!m_renderer.setReflectionSettings(settings)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: radius transition rejected"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: radius transition rejected"));
         return false;
     }
     m_phaseSource = m_context.graphics.getFrameIndex();
     m_phaseWork = {};
     m_started = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}"), m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}"), m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource);
     return true;
 }
 
@@ -525,11 +525,11 @@ b8 ReflectionStatisticsReporter::poll(Impl::RendererSystem& renderer){
     m_statisticsGeneration = statistics.generation;
     m_latestStatistics = statistics;
     m_feedbackObservedBypass = m_feedbackObservedBypass || statistics.feedbackBypassedPixels > 0u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
-        NWB_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
-        NWB_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
-        NWB_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
-        NWB_TEXT(" screen_attempts={} screen_hits={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
+        FOUNDATION_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
+        FOUNDATION_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
+        FOUNDATION_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
+        FOUNDATION_TEXT(" screen_attempts={} screen_hits={}")
         , statistics.sequence
         , statistics.generation
         , statistics.frameIndex
@@ -555,7 +555,7 @@ b8 ReflectionStatisticsReporter::poll(Impl::RendererSystem& renderer){
         , statistics.screenAttempts
         , statistics.screenHits
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}") NWB_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}") FOUNDATION_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
         , statistics.sequence
         , statistics.generation
         , statistics.graphicsFrameIndex
@@ -570,9 +570,9 @@ b8 ReflectionStatisticsReporter::poll(Impl::RendererSystem& renderer){
         , static_cast<u32>(statistics.historyResetReason)
     );
     {
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} query_budget_units={} physical_queries={}")
-            NWB_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
-            NWB_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} query_budget_units={} physical_queries={}")
+            FOUNDATION_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
+            FOUNDATION_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
             , statistics.sequence
             , statistics.generation
             , statistics.maxOpticalQueries
@@ -588,11 +588,11 @@ b8 ReflectionStatisticsReporter::poll(Impl::RendererSystem& renderer){
             , statistics.opticalTransportEnabled ? 1u : 0u
         );
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedback: sequence={} generation={} graphics_frame={}")
-        NWB_TEXT(" feedback_sequence={} epoch={} start_graphics_frame={} probe_index={}")
-        NWB_TEXT(" requested={} enabled={} reused={} reset={} reason={} scheduling_valid={}")
-        NWB_TEXT(" potential_receivers={} screen_returns={} bypassed_pixels={} probe_tiles={}")
-        NWB_TEXT(" screen_iterations={} screen_limit_misses={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeFeedback: sequence={} generation={} graphics_frame={}")
+        FOUNDATION_TEXT(" feedback_sequence={} epoch={} start_graphics_frame={} probe_index={}")
+        FOUNDATION_TEXT(" requested={} enabled={} reused={} reset={} reason={} scheduling_valid={}")
+        FOUNDATION_TEXT(" potential_receivers={} screen_returns={} bypassed_pixels={} probe_tiles={}")
+        FOUNDATION_TEXT(" screen_iterations={} screen_limit_misses={}")
         , statistics.sequence
         , statistics.generation
         , statistics.graphicsFrameIndex
@@ -647,7 +647,7 @@ b8 ReflectionTimingRenderPass::prepareQueries(const u32 width, const u32 height)
     for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
         ++mipCount;
     if(width == 0u || height == 0u || mipCount > NWB_REFLECTION_MAX_DEPTH_MIPS){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: invalid extent for depth timing capacity"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: invalid extent for depth timing capacity"));
         return false;
     }
     const Array<Name, 17> singleRangeScopes = {
@@ -675,16 +675,16 @@ b8 ReflectionTimingRenderPass::prepareQueries(const u32 width, const u32 height)
     // Reserve enough timer queries to cover all in-flight passes and depth mips.
     for(const Name& scope : singleRangeScopes){
         if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
             return false;
         }
     }
     if(!timing.prepareScopeQueries(NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_InFlightRanges * mipCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare depth timing capacity"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: failed to prepare depth timing capacity"));
         return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing in-flight ranges {}"), s_InFlightRanges);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing depth mip count {}"), mipCount);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: timing in-flight ranges {}"), s_InFlightRanges);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: timing depth mip count {}"), mipCount);
     return true;
 }
 
@@ -711,7 +711,7 @@ namespace __hidden_reflection_smoke{
 
 
 constexpr AStringView s_SmokeCaseEnvironment = "NWB_REFLECTION_SMOKE_CASE";
-constexpr TStringView s_ProjectName = NWB_TEXT("ReflectionSmokeProjectImpl");
+constexpr TStringView s_ProjectName = FOUNDATION_TEXT("ReflectionSmokeProjectImpl");
 constexpr AStringView s_OffscreenCase = "offscreen";
 constexpr AStringView s_RoughCase = "rough";
 constexpr AStringView s_CapturePathEnvironment = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH";
@@ -772,7 +772,7 @@ public:
             return false;
         const auto cpuTimingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
         if(cpuTimingPath.has_value() != cpuDiagnostics){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: diagnostic request and explicit output path must agree"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCpuTiming: diagnostic request and explicit output path must agree"));
             return false;
         }
         if(cpuDiagnostics){
@@ -782,7 +782,7 @@ public:
                 || m_configuration.settings().traceMode != NWB::Impl::ReflectionTraceMode::Hardware
                 || ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics"));
                 return false;
             }
             m_cpuTimingProbe = MakeUnique<ReflectionCpuTimingProbe>(m_context);
@@ -792,7 +792,7 @@ public:
         const auto spatialOwnerSelection = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
         if(spatialOwnerSelection){
             if(caseName != s_RoughCase || m_configuration.authoredRoughness() != 0.4f){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
                 return false;
             }
             m_spatialOwnerProbe = MakeUnique<ReflectionSpatialOwnerProbe>(m_context, m_renderer);
@@ -801,7 +801,7 @@ public:
         }
         const b8 screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
         if(caseName != s_OffscreenCase && caseName != s_MovedCase && caseName != s_OpaqueGlassCase && !screenCase && !m_extendedCase){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: unknown case '{}'"), ConvertString(caseName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProjectImpl: unknown case '{}'"), ConvertString(caseName));
             return false;
         }
         const auto cameraId = CreateSmokeCamera(1.4f, 6.0f, 0.0f, *m_world);
@@ -811,7 +811,7 @@ public:
         camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
         m_csgSliceRayCapacity = Min(m_configuration.settings().maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
+        FOUNDATION_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), FOUNDATION_TEXT("ReflectionSmokeProject: camera/light creation failed"));
         if(m_opticalCase)
             m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
@@ -835,7 +835,7 @@ public:
             if(!m_roughnessScene->create(caseName, m_configuration.freshFinalState()))
                 return false;
             if(m_roughnessScene->mutationCase() && !m_roughnessScene->deforming() && m_configuration.settings().temporalEnabled && (m_configuration.targetSamples() < 32u || m_configuration.postResetSamples() > m_configuration.targetSamples())){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
                 return false;
             }
         }
@@ -850,7 +850,7 @@ public:
         if(!configureFramebufferCapture(scratchArena))
             return false;
         if(m_spatialOwnerProbe && !m_framebufferCapture){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
             return false;
         }
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe || m_cpuTimingProbe){
@@ -861,9 +861,9 @@ public:
                 return false;
             m_context.graphics.addRenderPassToBack(m_timingRenderPass);
             m_timingRenderPassRegistered = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), ConvertString(caseName));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProject: case {} created"), ConvertString(caseName));
         return true;
     }
 
@@ -871,7 +871,7 @@ public:
         if(m_cpuTimingProbe)
             m_cpuTimingProbe->finish();
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeProject: shutdown"));
     }
 
     virtual b8 onUpdate(const f32 delta)override{
@@ -908,12 +908,12 @@ private:
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
         if(m_configuration.freshFinalState()){
             m_configuration.settings().samplingSeed = m_configuration.requestedSeed();
-            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), NWB_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), FOUNDATION_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
         }
         else
-            NWB_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: scene mutation failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), FOUNDATION_TEXT("ReflectionSmokeProject: scene mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u, m_configuration.requestedSeed());
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u, m_configuration.requestedSeed());
     }
 
     void updateFeedbackScene(){
@@ -924,12 +924,12 @@ private:
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
         if(m_configuration.freshFinalState()){
             m_configuration.settings().samplingSeed = m_configuration.requestedSeed();
-            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), NWB_TEXT("ReflectionSmokeProject: fresh feedback reset failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_configuration.settings()), FOUNDATION_TEXT("ReflectionSmokeProject: fresh feedback reset failed"));
         }
         else
-            NWB_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: feedback mutation failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), FOUNDATION_TEXT("ReflectionSmokeProject: feedback mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_configuration.freshFinalState() ? 1u : 0u);
     }
 
     b8 shouldCapture(const u64 graphicsFrame)const noexcept{
@@ -980,7 +980,7 @@ private:
                 // Timing-only extended scenes do not request completed-state capture.
                 const auto capturePath = ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment);
                 if(capturePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
                     return false;
                 }
             }
@@ -1058,11 +1058,11 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     const auto extent = Tests::Smoke::ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SMOKE_EXTENT");
     if(!extent || *extent == "native")
         return { 960, 720 };
-    NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
+    FOUNDATION_FATAL_ASSERT_MSG(*extent == "npot", FOUNDATION_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Reflection Smoke"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return FOUNDATION_TEXT("NWB Reflection Smoke"); }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::ReflectionSmokeProjectImpl>(context);

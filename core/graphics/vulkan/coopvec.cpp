@@ -113,11 +113,11 @@ Expected<usize> Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum typ
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    constexpr TStringView s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
-    constexpr TStringView s_EnumerateComponentTypesFailedReason = NWB_TEXT("failed to enumerate cooperative-vector component types");
-    constexpr TStringView s_MatrixQueryInvalidReason = NWB_TEXT("matrix type, layout, stride, or size query is invalid");
-    constexpr TStringView s_MatrixRangeInvalidReason = NWB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned");
-    constexpr TStringView s_ConversionRangesOverlapReason = NWB_TEXT("cooperative-vector conversion memory ranges overlap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("convert cooperative-vector matrices");
+    constexpr TStringView s_EnumerateComponentTypesFailedReason = FOUNDATION_TEXT("failed to enumerate cooperative-vector component types");
+    constexpr TStringView s_MatrixQueryInvalidReason = FOUNDATION_TEXT("matrix type, layout, stride, or size query is invalid");
+    constexpr TStringView s_MatrixRangeInvalidReason = FOUNDATION_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned");
+    constexpr TStringView s_ConversionRangesOverlapReason = FOUNDATION_TEXT("cooperative-vector conversion memory ranges overlap");
     constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
     if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, s_OperationName))
         return;
@@ -128,18 +128,18 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
         || !m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
     ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector feature or entry points are unavailable"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("cooperative-vector feature or entry points are unavailable"));
         return;
     }
 
     if(numDescs == 0)
         return;
     if(!convertDescs){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptors are null"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("descriptors are null"));
         return;
     }
     if(numDescs > UINT32_MAX || numDescs > Limit<usize>::s_Max / 2u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptor count exceeds supported limits"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("descriptor count exceeds supported limits"));
         return;
     }
 
@@ -195,11 +195,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     for(usize i = 0u; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a source or destination buffer is null"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("a source or destination buffer is null"));
             return;
         }
         if(convertDesc.numRows == 0u || convertDesc.numColumns == 0u){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix dimensions must be nonzero"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("matrix dimensions must be nonzero"));
             return;
         }
 
@@ -213,7 +213,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             || convertDesc.dst.type == CooperativeVectorDataType::UInt8Packed
             || convertDesc.dst.type == CooperativeVectorDataType::SInt8Packed
         ){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix type or layout is invalid"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("matrix type or layout is invalid"));
             return;
         }
 
@@ -222,15 +222,15 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         VkCooperativeVectorMatrixLayoutNV srcLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
         VkCooperativeVectorMatrixLayoutNV dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
         if(!CooperativeVectorMatrixPolicy::IsComponentTypeSupported(srcComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount) || !CooperativeVectorMatrixPolicy::IsComponentTypeSupported(dstComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix component type is unsupported"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("a matrix component type is unsupported"));
             return;
         }
         if(!CooperativeVectorMatrixPolicy::IsTypeConversionSupported(srcComponentType, dstComponentType)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("the matrix component type conversion is unsupported"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("the matrix component type conversion is unsupported"));
             return;
         }
         if(CooperativeVectorMatrixPolicy::IsFloat8(dstComponentType) && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("float8 destinations require an optimal matrix layout"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("float8 destinations require an optimal matrix layout"));
             return;
         }
 

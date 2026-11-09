@@ -57,7 +57,7 @@ public:
 static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, [[maybe_unused]] Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     usize frameLineCount = 1u;
     for(const char ch : callstackText){
         if(ch == '\n')
@@ -83,7 +83,7 @@ static void AppendLinuxClientCallstack(const AStringView callstackText, const Li
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
                 const auto symbolOffset = AddNoOverflow(moduleOffset, mapEntry->fileOffset);
                 AppendHexAddress(moduleOffset, outReport);
                 if(symbolOffset){
@@ -115,7 +115,7 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     const auto corePath = packageDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
     if(!corePresent){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
         outReport += "core_artifact=inspect_failed\n";
     }
     else
@@ -177,7 +177,7 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";
     AppendHexAddress(*instructionPointer - instructionMapEntry->begin, outReport);
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
     const auto symbolOffset = AddNoOverflow(*instructionPointer - instructionMapEntry->begin, instructionMapEntry->fileOffset);
     if(symbolOffset)

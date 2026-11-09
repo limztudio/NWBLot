@@ -168,7 +168,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
 ){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph_statistics::PacketRecordingIntervalEntry;
     const b8 artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
-    NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
+    FOUNDATION_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
     if(packetIndices.size() < __hidden_gpu_packet_runtime_recorded_graph_statistics::s_MinOverlapPacketCount)
         return;
     ArtifactStorage& storage = *m_activeStorage;

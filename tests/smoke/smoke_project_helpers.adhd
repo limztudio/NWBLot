@@ -74,15 +74,15 @@ inline void SetSmokeYawWindowTitle(const f32 yaw, const b8 manualControl, const 
 
     static constexpr usize s_TitleCapacity = 192u;
     Array<tchar, s_TitleCapacity> title{};
-    NWB_TSPRINTF(
+    FOUNDATION_TSPRINTF(
         title.data(),
         s_TitleCapacity,
-        NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
+        FOUNDATION_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
         static_cast<i32>(QueryProjectWindowTitle().size()),
         QueryProjectWindowTitle().data(),
         VectorGetX(display),
         VectorGetY(display),
-        manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+        manualControl ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
     );
     context.graphics.setWindowTitle(TStringView(title.data()));
 }
@@ -156,11 +156,11 @@ namespace NWB::Tests::Smoke{
 [[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("{}: ECS world allocation failed"), projectName);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{}: ECS world allocation failed"), projectName);
         throw RuntimeException("Smoke project initialization failed");
     }
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
         throw RuntimeException("Smoke project initialization failed");
     }
 

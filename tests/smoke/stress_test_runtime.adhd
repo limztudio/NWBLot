@@ -40,7 +40,7 @@ namespace __hidden_stress_test_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr TStringView s_ProjectName = NWB_TEXT("StressTestSmokeProjectImpl");
+constexpr TStringView s_ProjectName = FOUNDATION_TEXT("StressTestSmokeProjectImpl");
 
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
@@ -99,7 +99,7 @@ private:
         NWB::Core::Alloc::GlobalArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsStressWorkload)};
         const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
         if(!value){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: failed to read workload environment: {}"), ConvertString(value.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: failed to read workload environment: {}"), ConvertString(value.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(!*value)
@@ -108,7 +108,7 @@ private:
         if(text == "5")
             return s_ComparisonCharactersPerClass;
         if(text != "10"){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: characters per class must be exactly 5 or 10"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: characters per class must be exactly 5 or 10"));
             return MakeUnexpected(Failure{});
         }
         return s_DefaultCharactersPerClass;
@@ -180,14 +180,14 @@ public:
             || !graphicsInfo || graphicsInfo->id != graphicsQueue || !graphicsRegistered
             || (computeQueue.valid() ? !computeInfo || computeInfo->id != computeQueue || !computeRegistered || computeQueue.deviceGeneration != deviceGeneration : computeQueue != NWB::Core::GpuPhysicalQueueId{} || computeInfo != nullptr)
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: M4 selected queue topology is invalid"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: M4 selected queue topology is invalid"));
             return false;
         }
         const b8 computeDedicated = computeInfo && computeInfo->dedicated;
         const b8 computeSupported = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Compute) != NWB::Core::GpuQueueCapability::None;
         const b8 computeGraphics = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Graphics) != NWB::Core::GpuQueueCapability::None;
         const b8 asyncEffective = s_AsyncRequested && computeQueue != graphicsQueue && computeDedicated && computeSupported && !computeGraphics;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}")
             , s_AsyncRequested ? 1u : 0u
             , asyncEffective ? 1u : 0u
             , graphicsQueue.index
@@ -207,7 +207,7 @@ public:
         else
             m_frameGraphSnapshotPath.clear();
         if(snapshotPath && (m_timingEnabled || M4PixelCaptureFreezeFrame() == 0u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: frame graph snapshot requires pixel freeze and excludes presentation measurement"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: frame graph snapshot requires pixel freeze and excludes presentation measurement"));
             return false;
         }
 #endif
@@ -221,7 +221,7 @@ public:
         if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(reflectionSettings, m_renderer, scratchArena))
             return false;
         if(m_reflectionDiagnosticsEnabled)
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: reflection diagnostics enabled"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: reflection diagnostics enabled"));
         const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CPU_TIMING_FILE");
         if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled, cpuTimingPath ? AStringView(cpuTimingPath->data(), cpuTimingPath->size()) : AStringView{}))
             return false;
@@ -229,7 +229,7 @@ public:
         capture.cpuTiming = m_cpuDiagnosticsEnabled;
         m_context.setPerfCapture(capture);
         if(m_timingEnabled && (M4PixelCaptureFreezeFrame() != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit)){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: timing requires continuous submissions and a quit callback"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: timing requires continuous submissions and a quit callback"));
             return false;
         }
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
@@ -241,8 +241,8 @@ public:
             return false;
         if(m_timingEnabled){
             m_pacingRing.reset();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}")
                 , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets) ? 1u : 0u
                 , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 1u : 0u
                 , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingPipeline) ? 1u : 0u
@@ -264,9 +264,9 @@ public:
         m_context.input.removeHandler(m_arrowYawInput);
         m_timingRenderPass.stop();
         if(m_timingEnabled && !m_timingComplete)
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: presentation measurement incomplete"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation measurement incomplete"));
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: shutdown"));
     }
 
     virtual b8 onUpdate(const f32 delta)override{
@@ -279,7 +279,7 @@ public:
 #endif
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_m4PixelCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: M4 pixel capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: M4 pixel capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
             }
             return true;
         }
@@ -289,7 +289,7 @@ public:
             if(!m_rendererBaselineCapturePaused){
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
             }
             return true;
         }
@@ -328,10 +328,10 @@ private:
             return;
         m_reflectionStatisticsSequence = statistics.sequence;
         m_reflectionStatisticsGeneration = statistics.generation;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
-            NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
-            NWB_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
-            NWB_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
+            FOUNDATION_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
+            FOUNDATION_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
+            FOUNDATION_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
             , statistics.sequence
             , statistics.generation
             , statistics.frameIndex
@@ -360,7 +360,7 @@ private:
         m_pacingRing.record(successfulPresentations, observationTime);
         const auto status = m_fpsProbe.observe(successfulPresentations, observationTime);
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProjectImpl: presentation measurement invalid counter or clock"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation measurement invalid counter or clock"));
             return false;
         }
         if(!m_cpuTimingProbe.observe(m_context.perfSession, m_fpsProbe, successfulPresentations, status == NWB::Tests::Smoke::PresentationFpsStatus::Complete))
@@ -369,7 +369,7 @@ private:
             return true;
 
         const auto& interval = m_fpsProbe.interval();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: presentation fps avg={} presentations={} seconds={} first={} last={}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation fps avg={} presentations={} seconds={} first={} last={}")
             , interval.averageFps()
             , interval.presentations()
             , interval.wallSeconds
@@ -379,7 +379,7 @@ private:
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
             const auto& total = m_fpsProbe.total();
             const NWB::Tests::Smoke::PresentationPacingSummary pacingSummary = m_pacingRing.summarize();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
                 , pacingSummary.samples
                 , pacingSummary.p50Ms
                 , pacingSummary.p95Ms
@@ -387,7 +387,7 @@ private:
                 , pacingSummary.stallsOver50Ms
             );
             m_timingComplete = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProjectImpl: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProjectImpl: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
                 , total.averageFps()
                 , total.presentations()
                 , total.wallSeconds
@@ -408,7 +408,7 @@ private:
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ TimingEnabled() ? 5.0 : 0.25, TimingEnabled() ? 30.0 : 0.0 };
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
-    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
+    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ FOUNDATION_TEXT("stress"), m_context.objectArena };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     ArrowYawInputHandler m_arrowYawInput;
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
@@ -441,11 +441,11 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-    return NWB_TEXT("NWB Hardware Shadow Boundary Benchmark");
+    return FOUNDATION_TEXT("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    return NWB_TEXT("NWB Async Shadow M4 Benchmark");
+    return FOUNDATION_TEXT("NWB Async Shadow M4 Benchmark");
 #else
-    return NWB_TEXT("NWB Stress Test Smoke");
+    return FOUNDATION_TEXT("NWB Stress Test Smoke");
 #endif
 }
 

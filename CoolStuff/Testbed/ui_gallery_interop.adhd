@@ -71,7 +71,7 @@ template<typename... Args>
     const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
     if(!uiSubsystem || !uiSubsystem->basicSkin.valid())
         return false;
-    auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
+    auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), FOUNDATION_TEXT("UiImageGallery"));
     if(!skin)
         return false;
     auto source = LoadImageSource(arena, assets, (*skin)->texture());

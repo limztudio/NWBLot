@@ -17,7 +17,7 @@
 #include "type.h"
 #include "container/adaptor.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -25,15 +25,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace NWB::Core::Alloc{ class GlobalArena; }
-
-template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename T, typename ArenaT>
 using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
-template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename ArenaT>
 using AString = BasicString<char, ArenaT>;
-template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename ArenaT>
 using WString = BasicString<wchar, ArenaT>;
-template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
+template<typename ArenaT>
 using TString = BasicString<tchar, ArenaT>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
@@ -393,7 +391,7 @@ inline void WriteConvertedText(Out& out, const In& input)noexcept(BasicStringDet
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 template<typename ArenaT, typename In> requires BasicStringDetail::FromCharView<In>
 inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     AStringView src(raw);
@@ -401,14 +399,14 @@ inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     if(src.empty())
         return dst;
 
-#if defined(NWB_PLATFORM_WINDOWS)
-    NWB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    FOUNDATION_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
     const int inputLength = static_cast<int>(src.length());
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, nullptr, 0);
-    NWB_FATAL_ASSERT(len != 0);
+    FOUNDATION_FATAL_ASSERT(len != 0);
     dst.resize(len);
     const auto written = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, dst.data(), len);
-    NWB_FATAL_ASSERT(written == len);
+    FOUNDATION_FATAL_ASSERT(written == len);
     return dst;
 #else
     dst.resize(src.size());
@@ -429,15 +427,15 @@ inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     if(src.empty())
         return TString<ArenaT>{arena};
 
-#if defined(NWB_PLATFORM_WINDOWS)
-    NWB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    FOUNDATION_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
     const int inputLength = static_cast<int>(src.length());
     const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, nullptr, 0, nullptr, nullptr);
-    NWB_FATAL_ASSERT(len != 0);
+    FOUNDATION_FATAL_ASSERT(len != 0);
     TString<ArenaT> dst{arena};
     dst.resize(len);
     const auto written = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, dst.data(), len, nullptr, nullptr);
-    NWB_FATAL_ASSERT(written == len);
+    FOUNDATION_FATAL_ASSERT(written == len);
     return dst;
 #else
     return WideToUtf8(arena, src);

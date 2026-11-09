@@ -85,7 +85,7 @@ X11TextInputService::~X11TextInputService()noexcept{
 b8 X11TextInputService::initialize(){
     // Xlib binds an input method to LC_CTYPE; select the user's native text locale during Frame startup.
     if(!SetLocale(LC_CTYPE, "") || !XSupportsLocale() || !XSetLocaleModifiers("")){
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: native locale initialization unavailable"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: native locale initialization unavailable"));
         return true;
     }
     openMethod();
@@ -93,7 +93,7 @@ b8 X11TextInputService::initialize(){
 }
 
 b8 X11TextInputService::filterEvent(XEvent& event){
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     if(!m_context || !activeSession().valid())
         return false;
     m_dispatch.enter();
@@ -107,7 +107,7 @@ b8 X11TextInputService::filterEvent(XEvent& event){
 }
 
 b8 X11TextInputService::dispatchKey(XKeyEvent& event){
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     const TextInputSessionToken token = activeSession();
     if(!token.valid())
         return false;
@@ -216,7 +216,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     const b8 unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
     if(unsupported){
         m_caretHintSupported = false;
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: active input style does not support native caret positioning"));
     }
     return TextInputAdmission::Accepted;
 }
@@ -226,7 +226,7 @@ void X11TextInputService::openMethod(){
     m_caretHintSupported = true;
     m_method = XOpenIM(&m_display, nullptr, nullptr, nullptr);
     if(!m_method){
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method unavailable; session capability disabled"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: input method unavailable; session capability disabled"));
         return;
     }
     XIMStyles* styles = nullptr;
@@ -243,7 +243,7 @@ void X11TextInputService::openMethod(){
         XFree(styles);
     XIMCallback destroyed{ reinterpret_cast<XPointer>(this), &OnInputMethodDestroyed };
     if(XSetIMValues(m_method, XNDestroyCallback, &destroyed, nullptr))
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method destruction notification unavailable"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: input method destruction notification unavailable"));
 }
 
 b8 X11TextInputService::createContext(){
@@ -275,7 +275,7 @@ b8 X11TextInputService::createContext(){
 void X11TextInputService::nativeFailure(){
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !cancelSession(token, TextInputCancelReason::NativeFailure))
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: native failure could not cancel current session"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: native failure could not cancel current session"));
 }
 
 void X11TextInputService::releaseContext()noexcept{

@@ -31,11 +31,11 @@ namespace __hidden_encode{
     basisu::imagef image;
     const auto pathText = PathToGenericString(scratchArena, path);
     if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     if(image.get_width() == 0u || image.get_height() == 0u || image.get_width() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION || image.get_height() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image '{}' has an unsupported resolution."), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: input image '{}' has an unsupported resolution."), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     return image;
@@ -85,14 +85,14 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
     ))
         return MakeUnexpected(Failure{});
     if(!IsValidAlphaSourceMode(alphaSource.mode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: unsupported alpha source."));
         return MakeUnexpected(Failure{});
     }
 
     const b8 hdr = PathHasListedExtension(inputPaths.front(), s_HdrInputExtensions);
     for(const ScratchPath& path : inputPaths){
         if(PathHasListedExtension(path, s_HdrInputExtensions) != hdr){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
             return MakeUnexpected(Failure{});
         }
     }

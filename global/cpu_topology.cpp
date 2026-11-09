@@ -11,10 +11,10 @@
 #include "span.h"
 #include "thread.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <cerrno>
 #include <cstdio>
 #include <sched.h>
@@ -49,7 +49,7 @@ void ClassifyPlacements(const Span<CpuWorkerPlacement> placements)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,7 +160,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +191,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 [[nodiscard]] u32 QueryLinuxCapacity(u32 processorIndex){
     Array<char, s_SysfsCapacityPathCapacity> path = {};
-    const int pathLength = NWB_SPRINTF(path.data(), path.size(), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
+    const int pathLength = FOUNDATION_SPRINTF(path.data(), path.size(), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
     if(pathLength <= 0 || static_cast<usize>(pathLength) >= path.size())
         return 0u;
     InputFileStream stream(path.data());
@@ -248,14 +248,14 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 
 Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements(){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     auto placements = __hidden_cpu_topology::QueryWindowsPlacements();
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     auto placements = __hidden_cpu_topology::QueryLinuxPlacements();
 #else
     return MakeUnexpected(Failure{});
 #endif
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
     if(!placements)
         return MakeUnexpected(placements.error());
     __hidden_cpu_topology::ClassifyPlacements(*placements);
@@ -267,14 +267,14 @@ Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements(){
 b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     if(!placement.valid())
         return false;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(placement.processorGroup >= GetActiveProcessorGroupCount() || placement.logicalProcessorIndex >= sizeof(KAFFINITY) * s_BitsPerByte)
         return false;
     GROUP_AFFINITY affinity{};
     affinity.Group = static_cast<WORD>(placement.processorGroup);
     affinity.Mask = static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex;
     return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != FALSE;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     if(placement.processorGroup != 0u)
         return false;
     auto affinityWords = __hidden_cpu_topology::QueryLinuxAffinity();

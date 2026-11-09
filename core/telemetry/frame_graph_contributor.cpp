@@ -63,7 +63,7 @@ FrameGraphBuilder::FrameGraphBuilder(
         if(m_physicalQueueIdentities.contains(identity))
             continue;
         if(!m_physicalQueueIdentities.insert(identity).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return;
         }
     }
@@ -87,7 +87,7 @@ FrameGraphBuilder::FrameGraphBuilder(
         if(m_packetIdentities.contains(identity))
             continue;
         if(!m_packetIdentities.insert(identity).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return;
         }
     }
@@ -177,7 +177,7 @@ FrameGraphNodeHandle FrameGraphBuilder::addNode(const Name& name, const AStringV
         auto* const storage = static_cast<char*>(m_scratchArena.allocate(alignof(char), label.size()));
         if(!storage)
             throw AllocationException{};
-        NWB_MEMCPY(storage, label.size(), label.data(), label.size());
+        FOUNDATION_MEMCPY(storage, label.size(), label.data(), label.size());
         storedLabel = AStringView(storage, label.size());
     }
     const u32 index = static_cast<u32>(m_nodes.size());

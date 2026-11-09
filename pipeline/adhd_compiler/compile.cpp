@@ -145,22 +145,22 @@ public:
 
         const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> ResolveResult::Enum{
             const Path<MetaArena> include(arena, relPath);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             const auto includeText = include.native();
-            const b8 hasDrive = includeText.size() >= 2u && includeText[1u] == NWB_TEXT(':');
+            const b8 hasDrive = includeText.size() >= 2u && includeText[1u] == FOUNDATION_TEXT(':');
 #else
             const b8 hasDrive = false;
 #endif
             const auto candidate = ResolveComparisonPath(include.isAbsolute() || hasDrive ? include : baseDir / include);
             if(!candidate){
-                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve include '{}' from '{}': {}"), ConvertString(includePath), PathToString<tchar>(baseDir), ConvertString(candidate.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve include '{}' from '{}': {}"), ConvertString(includePath), PathToString<tchar>(baseDir), ConvertString(candidate.error().message()));
                 return ResolveResult::Error;
             }
             const auto read = ReadTextFile(*candidate, outContent);
             if(!read){
                 if(IsMissingPathError(read.error()))
                     return ResolveResult::Missing;
-                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to read include '{}': {}"), PathToString<tchar>(*candidate), ConvertString(read.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to read include '{}': {}"), PathToString<tchar>(*candidate), ConvertString(read.error().message()));
                 return ResolveResult::Error;
             }
             outResolvedKey = PathToGenericString<MChar>(arena, *candidate);
@@ -221,15 +221,15 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         auto absoluteHeader = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
         auto absoluteSource = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveSourceFilename(input, arena)));
         if(!absoluteInput){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve input path '{}': {}"), ConvertString(input), ConvertString(absoluteInput.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve input path '{}': {}"), ConvertString(input), ConvertString(absoluteInput.error().message()));
             return false;
         }
         if(!absoluteHeader){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve header path for '{}': {}"), ConvertString(input), ConvertString(absoluteHeader.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve header path for '{}': {}"), ConvertString(input), ConvertString(absoluteHeader.error().message()));
             return false;
         }
         if(!absoluteSource){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve source path for '{}': {}"), ConvertString(input), ConvertString(absoluteSource.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve source path for '{}': {}"), ConvertString(input), ConvertString(absoluteSource.error().message()));
             return false;
         }
         inputPaths.push_back(Move(*absoluteInput));
@@ -239,11 +239,11 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     const auto conflictingPaths = [](const Path<MetaArena>& lhs, const Path<MetaArena>& rhs) -> b8{
         const auto same = PathIdentity(lhs, rhs).sameOutput();
         if(!same){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to compare '{}' and '{}': {}"), PathToString<tchar>(lhs), PathToString<tchar>(rhs), ConvertString(same.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to compare '{}' and '{}': {}"), PathToString<tchar>(lhs), PathToString<tchar>(rhs), ConvertString(same.error().message()));
             return true;
         }
         if(*same){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: paths '{}' and '{}' have the same output name"), PathToString<tchar>(lhs), PathToString<tchar>(rhs));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: paths '{}' and '{}' have the same output name"), PathToString<tchar>(lhs), PathToString<tchar>(rhs));
             return true;
         }
         return false;
@@ -261,7 +261,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     if(!options.depfilePath.empty()){
         auto depfile = ResolveComparisonPath(Path<MetaArena>(arena, options.depfilePath));
         if(!depfile){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve depfile path '{}': {}"), ConvertString(options.depfilePath), ConvertString(depfile.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve depfile path '{}': {}"), ConvertString(options.depfilePath), ConvertString(depfile.error().message()));
             return false;
         }
         for(const auto& input : inputPaths){
@@ -289,7 +289,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
 
         MString sourceContent(arena);
         if(!ReadTextFile(inputPath, sourceContent)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to read input file '{}'"), ConvertString(inputView));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to read input file '{}'"), ConvertString(inputView));
             return false;
         }
 
@@ -300,7 +300,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         Adhd::CompileResult result(arena);
         if(!Adhd::Compiler::Compile(sourceContent, virtualPath, &resolver, customNs, {}, arena, result)){
             for(const ParseError& err : result.errors)
-                NWB_LOGGER_ERROR(NWB_TEXT("{}:{}:{}: error: {}"), ConvertString(inputView), err.line, err.column, ConvertString(err.message));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}:{}:{}: error: {}"), ConvertString(inputView), err.line, err.column, ConvertString(err.message));
             return false;
         }
 
@@ -313,7 +313,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         for(const MString& includePath : result.unit.resolvedIncludedFiles){
             const auto include = ResolveComparisonPath(Path<MetaArena>(arena, includePath));
             if(!include){
-                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve included path '{}': {}"), ConvertString(includePath), ConvertString(include.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve included path '{}': {}"), ConvertString(includePath), ConvertString(include.error().message()));
                 return false;
             }
             for(const auto& output : outputPaths){
@@ -331,12 +331,12 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
                 || !__hidden_compile::IsRepresentableDepfilePath(sourceGeneric)
                 || !__hidden_compile::IsRepresentableDepfilePath(inputGeneric)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: depfile path for '{}' cannot be represented safely"), ConvertString(inputView));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: depfile path for '{}' cannot be represented safely"), ConvertString(inputView));
                 return false;
             }
             for(const MString& depPath : result.unit.resolvedIncludedFiles){
                 if(!__hidden_compile::IsRepresentableDepfilePath(depPath)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: included dependency path for '{}' cannot be represented safely"), ConvertString(inputView));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: included dependency path for '{}' cannot be represented safely"), ConvertString(inputView));
                     return false;
                 }
             }
@@ -357,13 +357,13 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     }
 
     if(!EnsureDirectories(outDir)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to create output directory '{}'"), ConvertString(options.outputDirectory));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create output directory '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
     if(!options.depfilePath.empty()){
         const Path<MetaArena> depfileParent = outputPaths.back().parentPath();
         if(!depfileParent.empty() && !EnsureDirectories(depfileParent)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to create depfile directory for '{}'"), ConvertString(options.depfilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create depfile directory for '{}'"), ConvertString(options.depfilePath));
             return false;
         }
     }

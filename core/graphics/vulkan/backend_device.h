@@ -300,7 +300,7 @@ private:
         if(res == VK_SUCCESS)
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         return false;
     }
 
@@ -310,7 +310,7 @@ private:
         if(res == VK_SUCCESS)
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         return false;
     }
     void appendPipelineShaderStage(const Shader& shader, VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const;

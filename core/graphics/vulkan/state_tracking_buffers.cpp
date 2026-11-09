@@ -25,7 +25,7 @@ namespace __hidden_state_tracking_buffers{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_ByteRangeOutsideBufferReason = NWB_TEXT("byte range is empty or outside the buffer");
+static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,7 +212,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
 void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, const b8 forceMemoryDependency, const BufferRange range){
     if(!bufferResource)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set buffer state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!validateBufferForGpuState(bufferResource, stateBits, s_OperationName))
@@ -280,7 +280,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, const BufferRange range){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("begin tracking buffer state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin tracking buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
@@ -295,7 +295,7 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
     }
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state conflicts with the permanent buffer state"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("initial state conflicts with the permanent buffer state"));
         return;
     }
     m_stateTracker.beginTrackingBuffer(buffer, stateBits, range);
@@ -305,7 +305,7 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
 void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits, const BufferRange range){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("seed buffer state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("seed buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){

@@ -209,7 +209,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
 Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena, scratchArena);
     if(!payload){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
         return MakeUnexpected(payload.error());
     }
     return payload;
@@ -217,7 +217,7 @@ Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> bina
 
 b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena&){
     if(!payload.font || !IsFontAtlasDigestNonZero(Span<const u8>(payload.fontSha256.bytes, sizeof(payload.fontSha256.bytes))) || payload.faceIndex != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
     }
     if(!ValidateFontAtlasHeaderParameters(
@@ -260,7 +260,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
     if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
         return false;
     if(payload.positioningTables.size() > s_FontAtlasMaxPositioningTableCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));
         return false;
     }
     u64 positioningBytes = 0u;
@@ -310,13 +310,13 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
             }
         }
         if(!exported || !AreFontAtlasByteSpansEqual(exported->bytes, sourceTable->bytes)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }
         ++matched;
     }
     if(matched != payload.positioningTables.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
         return false;
     }
     return true;
@@ -352,7 +352,7 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
 
 
 b8 FontAtlas::loadBinary(const Span<const u8> binary){
-    if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("FontAtlas::loadBinary")))
         return false;
     Core::Alloc::ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
     auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena(), scratchArena);

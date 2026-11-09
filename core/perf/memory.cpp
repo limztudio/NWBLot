@@ -104,7 +104,7 @@ Expected<MemoryScopeId> MemoryRecorder::registerScope(const Name& scopeName, con
     m_scopes.push_back(Move(record));
     ScopeExit discardScope([&]()noexcept{ m_scopes.pop_back(); });
     if(!m_scopeMap.try_emplace(key, scope).second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return MakeUnexpected(Failure{});
     }
     discardScope.release();
@@ -182,7 +182,7 @@ const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const noexcep
     if(index >= m_scopes.size())
         return m_emptySnapshot;
 
-    NWB_ASSERT(m_scopes[index]);
+    FOUNDATION_ASSERT(m_scopes[index]);
     return m_scopes[index]->lastSnapshot;
 }
 
@@ -190,7 +190,7 @@ const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const noexcept{
     if(index >= m_scopes.size())
         return m_emptyDelta;
 
-    NWB_ASSERT(m_scopes[index]);
+    FOUNDATION_ASSERT(m_scopes[index]);
     return m_scopes[index]->lastDelta;
 }
 

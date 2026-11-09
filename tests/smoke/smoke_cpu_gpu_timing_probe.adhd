@@ -167,7 +167,7 @@ class SmokeCpuGpuTimingProbe{
         native{
             OutputFileStream output(this->m_outputPath.c_str(), s_FileOpenTruncate);
             if(!output.is_open()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: failed to open diagnostic output"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SmokeCpuGpuTimingProbe: failed to open diagnostic output"));
                 return false;
             }
             output.precision(17);
@@ -195,7 +195,7 @@ class SmokeCpuGpuTimingProbe{
             output << "complete " << this->m_records.size() << ' ' << scopeCount << '\n';
             output.close();
             if(!output.good()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: diagnostic output write failed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SmokeCpuGpuTimingProbe: diagnostic output write failed"));
                 return false;
             }
             return true;

@@ -202,7 +202,7 @@ b8 DoesFontAtlasDigestMatchBytes(in Span<u8> dataBytes, in Span<u8> expectedSha2
     native(in dataBytes, in expectedSha256Bytes, mut matches){
         const Sha256Digest computed = ComputeSha256({ dataBytes.data(), dataBytes.size() });
         if(expectedSha256Bytes.size() == sizeof(computed.bytes))
-            matches = NWB_MEMCMP(computed.bytes, expectedSha256Bytes.data(), sizeof(computed.bytes)) == 0;
+            matches = FOUNDATION_MEMCMP(computed.bytes, expectedSha256Bytes.data(), sizeof(computed.bytes)) == 0;
     }
     return matches;
 }

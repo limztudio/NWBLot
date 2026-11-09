@@ -64,7 +64,7 @@ public:
         const usize indexCount = instance.meshletPrimitiveIndices.size();
         auto triangleIndices = BuildMeshletTriangleIndices(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size(), scratchArena);
         if(!triangleIndices){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
         }
         if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices->size(), indexCount, instance.handle.value))
@@ -74,7 +74,7 @@ public:
     [[nodiscard]] static Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildAttributes(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
         auto triangleAttributes = BuildMeshletTriangleAttributes(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0, scratchArena);
         if(!triangleAttributes){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
         }
         return Move(*triangleAttributes);
@@ -92,10 +92,10 @@ public:
     const Expected<SkinnedRuntimeMeshIdentity> identity = TryResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance->entity, instance->dirtyFlags, instance->sourceName, instance->handle.value, instance->editRevision);
     if(!identity)
         return MakeUnexpected(Failure{});
-    NWB_ASSERT(instance->valid());
-    NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(identity->meshKey);
+    FOUNDATION_ASSERT(instance->valid());
+    FOUNDATION_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(identity->meshKey);
     return *identity;
 }
 // Success retains raster and optional RT roles.
@@ -122,7 +122,7 @@ public:
     mesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
     mesh.dynamicMeshletBoundsFresh = boundsFresh;
     mesh.dynamicMeshletConesFresh = conesFresh;
-    NWB_ASSERT(mesh.valid());
+    FOUNDATION_ASSERT(mesh.valid());
     return mesh;
 }
 
@@ -199,7 +199,7 @@ private:
         discardIdentity.release();
     }
     void promoteBufferIndex(){
-        NWB_ASSERT(!m_index && m_inlineCount == s_SkinningLiveStateInlineBufferCount && m_buffers.size() == m_inlineCount);
+        FOUNDATION_ASSERT(!m_index && m_inlineCount == s_SkinningLiveStateInlineBufferCount && m_buffers.size() == m_inlineCount);
         BufferIndex index(s_SkinningLiveStateInlineBufferCount * s_SkinningPromotedIndexCapacityFactor, m_scratchArena);
         for(Core::Buffer* const identity : m_inlineBuffers){
             const auto [found, inserted] = index.insert(MakeNotNull(identity));
@@ -419,7 +419,7 @@ namespace __hidden_resources{
 template<typename PayloadT>
 static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const TStringView label){
     if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
     }
 
@@ -534,13 +534,13 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
         const auto skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_SkinBufferSuffix);
         const auto jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_JointPaletteBufferSuffix);
         if(!skinBufferName || !jointPaletteBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
         }
 
-        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer<MeshSkinningInfluenceGpu>(m_graphics, skinBufferName, *skinInfluences, NWB_TEXT("skin influence"));
+        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer<MeshSkinningInfluenceGpu>(m_graphics, skinBufferName, *skinInfluences, FOUNDATION_TEXT("skin influence"));
         if(!skinBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
         }
         rebuilt.skinBuffer = Move(*skinBufferResult);
@@ -556,7 +556,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
         ;
         auto jointPaletteBufferResult = m_graphics.createBuffer(jointPaletteBufferDesc);
         if(!jointPaletteBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
         }
         rebuilt.jointPaletteBuffer = Move(*jointPaletteBufferResult);
@@ -564,7 +564,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
 
     const auto bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_BindlessSlotsBufferSuffix);
     if(!bindlessSlotsBufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
         return MakeUnexpected(Failure{});
     }
     Core::BufferDesc bindlessSlotsBufferDesc;
@@ -581,7 +581,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
     else
         rebuilt.bindlessResourceSlotsBuffer.reset();
     if(!bindlessResourceSlotsBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
         return MakeUnexpected(Failure{});
     }
 
@@ -599,16 +599,16 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRunt
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);
         return false;
     }
     const auto fail = [&](){
         releaseRuntimeResourceBindlessHeapHandles(resources);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
     if(!resources.bindlessResourceSlotsBuffer || !instance.hasPersistentComputeBuffers()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
         return false;
     }
 
@@ -650,7 +650,7 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRunt
 
     if(resources.skinCount != 0u){
         if(!resources.skinBuffer || !resources.jointPaletteBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers"), instance.handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers"), instance.handle.value);
             return fail();
         }
         if(
@@ -697,7 +697,7 @@ namespace __hidden_runtime_cache_source{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeCache");
+static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("MeshSkinningRuntimeCache");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -738,7 +738,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
         return false;
 
     if(!EncodeMeshletRefDeltas(runtimePositionRefs, runtimeAttributeRefs, true, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
         return false;
     }, instance.meshlets, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas
     ))
@@ -932,7 +932,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
 
     if(!instance.valid()){
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
         return false;
     }
 
@@ -940,7 +940,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
     auto [storedInstance, instanceInserted] = m_instances.try_emplace(entity, Move(instance));
     if(!instanceInserted){
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
         return false;
     }
     ScopeExit discardInstance([&]()noexcept{ m_instances.erase(storedInstance); });
@@ -949,7 +949,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
         m_instances.erase(storedInstance);
         discardInstance.release();
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
         return false;
     }
 
@@ -960,7 +960,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
 }
 
 Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
-    NWB_ASSERT(skinAsset.valid());
+    FOUNDATION_ASSERT(skinAsset.valid());
 
     const Name& sourceName = skinAsset.name();
     const auto foundSource = m_sources.find(sourceName);
@@ -983,7 +983,7 @@ Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRun
 
     auto [stored, inserted] = m_sources.try_emplace(sourceName, Move(source));
     if(!inserted){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
         return MakeUnexpected(Failure{});
     }
     MeshSkinningSource& storedSource = stored.value();
@@ -1019,13 +1019,13 @@ namespace __hidden_runtime_cache_resources{
     ))
         return false;
     // Skin::loadBinary already admitted the copied skin and inverse bind data.
-    NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    NWB_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
+    FOUNDATION_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
+    FOUNDATION_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
 #if defined(NWB_DEBUG)
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
-        NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
+        FOUNDATION_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
     for(const SkinInfluence4& skin : instance.skin)
-        NWB_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+        FOUNDATION_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
     return true;
 }
@@ -1350,21 +1350,21 @@ b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSki
     const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_MeshletLocalBoundsSuffix);
     const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_LocalBoundsSuffix);
     if(!partialName || !outputName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
         return false;
     }
     Core::BufferDesc desc;
     desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
     auto partialsResult = graphics.createBuffer(desc);
     if(!partialsResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
         return false;
     }
     Core::BufferHandle partials = Move(*partialsResult);
     desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
     auto outputResult = graphics.createBuffer(desc);
     if(!outputResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
         return false;
     }
     Core::BufferHandle output = Move(*outputResult);
@@ -1468,7 +1468,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: cannot declare graph-owned skinning without a physical queue topology"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: cannot declare graph-owned skinning without a physical queue topology"));
         return false;
     }
 
@@ -1547,7 +1547,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
             deformationDesc.setDependencies({ &terminalTask, 1u });
         const auto deformationTaskResult = graph.addTask<TaskGraphSkinningDeformationTask>(deformationDesc, Move(deformationPayload));
         if(!deformationTaskResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning deformation"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning deformation"));
             return false;
         }
         const Core::GpuTaskId deformationTask = *deformationTaskResult;
@@ -1568,7 +1568,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         postDispatchDesc.setDependencies({ &postDispatchDependency, 1u });
     const auto postDispatchTaskResult = graph.addTask<TaskGraphSkinningPostDispatchTask>(postDispatchDesc, Move(postDispatchPayload));
     if(!postDispatchTaskResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack"));
         return false;
     }
     const Core::GpuTaskId postDispatchTask = *postDispatchTaskResult;
@@ -1585,7 +1585,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         localBoundsDesc.setExternalStateSources({ previousFrameStateSources.data(), previousFrameStateSourceCount });
     const auto localBoundsTaskResult = graph.addTask<MeshSkinningLocalBoundsTask>(localBoundsDesc, Move(localBoundsPayload));
     if(!localBoundsTaskResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
         return false;
     }
     const Core::GpuTaskId localBoundsTask = *localBoundsTaskResult;
@@ -1599,7 +1599,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     ;
     const auto finalizerTaskResult = graph.addTask<TaskGraphSkinningFinalizerTask>(finalizerDesc, Move(finalizerPayload));
     if(!finalizerTaskResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final-state handoff"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final-state handoff"));
         return false;
     }
     const Core::GpuTaskId finalizerTask = *finalizerTaskResult;
@@ -1614,26 +1614,26 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
     const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
     if(!scheduler.scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
         return false;
     }
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
     if(!compiledPlan.validFor(declarations)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
         return false;
     }
 
     if(compiledPlan.packetCount() != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work did not merge into one primary Graphics packet"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: graph-owned skinning work did not merge into one primary Graphics packet"));
         return false;
     }
 
     const Core::GpuPhysicalQueueInfo* const terminalQueue = compiledPlan.queueInfoForTask(terminalTask);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(!terminalQueue || terminalQueue->id != graphicsQueue){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
         return false;
     }
 
@@ -1659,21 +1659,21 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))
             m_graphics.requestDeviceRecreation();
         if(!skinningState.preparationInvoked())
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
         else if(!skinningState.statePrepared())
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }
     if(!skinningGraphAccepted || !skinningState.stateAccepted()){
         m_graphics.requestDeviceRecreation();
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
         return false;
     }
     if(!skinningToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
         m_graphics.requestDeviceRecreation();
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
         return false;
     }
     return true;
@@ -1685,7 +1685,7 @@ void MeshSkinningSystem::resolveFrameTaskGraphAttempt(const Core::GpuCompiledGra
         return;
     const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
     if(recordingAttemptGeneration != 0u && !m_frameSubmissionTransaction.discardUnaccepted(m_frameTaskGraph, m_frameCompiledGraph, recordingAttemptGeneration))
-        NWB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
 }
 
 void MeshSkinningSystem::resetFrameTaskGraph(){

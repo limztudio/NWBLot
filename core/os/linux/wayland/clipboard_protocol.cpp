@@ -48,7 +48,7 @@ static void SelectMime(const AStringView mime, u8& rank)noexcept{
 
 
 NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank)noexcept{
-    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard_protocol::s_Utf8Mimes.size());
+    FOUNDATION_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard_protocol::s_Utf8Mimes.size());
     return MakeNotNull(__hidden_wayland_clipboard_protocol::s_Utf8Mimes[__hidden_wayland_clipboard_protocol::s_Utf8Mimes.size() - rank].data());
 }
 
@@ -197,7 +197,7 @@ void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_s
 
 
 void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     const b8 focused = seat && seat == m_seat && seatGlobalName == m_seatName && m_focused;
     releaseDevices();
     m_seat = seat;
@@ -209,14 +209,14 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
         m_device = wl_data_device_manager_get_data_device(m_manager, seat);
         static const wl_data_device_listener s_Listener{ OnDataOffer, OnEnter, OnLeave, OnMotion, OnDrop, OnSelection };
         if(m_device && wl_data_device_add_listener(m_device, &s_Listener, this) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(m_primaryManager){
         m_primaryDevice = zwp_primary_selection_device_manager_v1_get_device(m_primaryManager, seat);
         static const zwp_primary_selection_device_v1_listener s_Listener{ OnPrimaryOffer, OnPrimarySelection };
         if(m_primaryDevice && zwp_primary_selection_device_v1_add_listener(m_primaryDevice, &s_Listener, this) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
 #endif
 }
@@ -235,13 +235,13 @@ void WaylandClipboardService::addOffer(void* const handle, const ClipboardChanne
     if(channel == ClipboardChannel::Clipboard){
         static const wl_data_offer_listener s_Listener{ OnOfferMime, OnOfferActions, OnOfferAction };
         if(wl_data_offer_add_listener(static_cast<wl_data_offer*>(handle), &s_Listener, offer.get()) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     else{
         static const zwp_primary_selection_offer_v1_listener s_Listener{ OnPrimaryMime };
         if(zwp_primary_selection_offer_v1_add_listener(static_cast<zwp_primary_selection_offer_v1*>(handle), &s_Listener, offer.get()) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
 #endif
     m_offers.push_back(Move(offer));
@@ -263,7 +263,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         auto* const native = static_cast<wl_data_source*>(source->handle);
         static const wl_data_source_listener s_Listener{ OnSourceTarget, OnSourceSend, OnSourceCancelled, OnSourceDrop, OnSourceFinished, OnSourceAction };
         if(wl_data_source_add_listener(native, &s_Listener, source.get()) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
             wl_data_source_offer(native, mime.data());
         wl_data_device_set_selection(m_device, native, m_serial);
@@ -276,7 +276,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         auto* const native = static_cast<zwp_primary_selection_source_v1*>(source->handle);
         static const zwp_primary_selection_source_v1_listener s_Listener{ OnPrimarySend, OnPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &s_Listener, source.get()) != 0)
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
             zwp_primary_selection_source_v1_offer(native, mime.data());
         zwp_primary_selection_device_v1_set_selection(m_primaryDevice, native, m_serial);

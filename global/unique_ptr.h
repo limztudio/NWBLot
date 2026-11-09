@@ -118,7 +118,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_UNIQUE_PTR_NULL_CONSTRUCTORS \
+#define FOUNDATION_UNIQUE_PTR_NULL_CONSTRUCTORS \
     constexpr UniquePtr()noexcept \
         : base_type(pointer()) \
     { \
@@ -146,7 +146,7 @@ public:
 
 
 public:
-    NWB_UNIQUE_PTR_NULL_CONSTRUCTORS
+    FOUNDATION_UNIQUE_PTR_NULL_CONSTRUCTORS
     explicit UniquePtr(pointer value)noexcept
         : base_type(value)
     {
@@ -251,7 +251,7 @@ public:
 
 
 public:
-    NWB_UNIQUE_PTR_NULL_CONSTRUCTORS
+    FOUNDATION_UNIQUE_PTR_NULL_CONSTRUCTORS
     template<typename P, typename = EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>>
     explicit UniquePtr(P array)noexcept
         : base_type(array)
@@ -320,7 +320,7 @@ public:
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };
 
-#undef NWB_UNIQUE_PTR_NULL_CONSTRUCTORS
+#undef FOUNDATION_UNIQUE_PTR_NULL_CONSTRUCTORS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -345,7 +345,7 @@ public:
     explicit NotNullUniquePtr(owner_type&& owner)noexcept
         : m_owner(Move(owner))
     {
-        NWB_ASSERT_MSG(m_owner.get(), "NotNullUniquePtr requires non-null owner");
+        FOUNDATION_ASSERT_MSG(m_owner.get(), "NotNullUniquePtr requires non-null owner");
     }
     NotNullUniquePtr(NotNullUniquePtr&&)noexcept = default;
     NotNullUniquePtr(const NotNullUniquePtr&) = delete;
@@ -431,7 +431,7 @@ inline void swap(UniquePtr<T, D>& a, UniquePtr<T, D>& b)noexcept{ a.swap(b); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SMART_PTR_COMPARISON_OPERATORS(UniquePtr)
+FOUNDATION_SMART_PTR_COMPARISON_OPERATORS(UniquePtr)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

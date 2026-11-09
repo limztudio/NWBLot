@@ -237,7 +237,7 @@ class RendererGatherBenchmarkProjectImpl final : public IProjectEntryCallbacks{
 public:
     explicit RendererGatherBenchmarkProjectImpl(ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeWorldOrDie(NWB_TEXT("RendererGatherBenchmark"), context))
+        , m_world(CreateSmokeWorldOrDie(FOUNDATION_TEXT("RendererGatherBenchmark"), context))
         , m_scene(*m_world)
         , m_timingPass(context.graphics)
         , m_probe(context.objectArena)
@@ -268,7 +268,7 @@ public:
         m_memoryEnabled = *mode == s_MemoryMode;
         m_runtime = workload == s_RuntimeWorkload;
         if(!m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
             return false;
         }
         if(m_runtime)
@@ -307,26 +307,26 @@ public:
         capture.gpuTiming = true;
         capture.memory = m_memoryEnabled;
         m_context.setPerfCapture(capture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), ConvertString(workload), ConvertString(*mode));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVSyncEnabled() ? 1u : 0u);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), ConvertString(workload), ConvertString(*mode));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVSyncEnabled() ? 1u : 0u);
         return true;
     }
 
     virtual void onShutdown()override{
         m_compilerProbe.stop();
         if(!m_compilerProbe.write())
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
         if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers, m_scene.counts().runtimeOwners))
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
     }
 
     virtual b8 onUpdate(const f32)override{
         if(!m_probe.poll(m_context.perfSession.report(), m_memoryEnabled)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: incomplete or mismatched successful CPU frame"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererGatherBenchmark: incomplete or mismatched successful CPU frame"));
             return false;
         }
         if(m_probe.finished()){
@@ -360,10 +360,10 @@ private:
                 ++m_scene.counts().runtimeRenderers;
         }
         if(m_scene.counts().renderers != 65u || (m_runtime && (m_scene.counts().runtimeRenderers != 8u || m_scene.counts().runtimeOwners != 8u)) || (!m_runtime && m_scene.counts().runtimeRenderers != 0u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererGatherBenchmark: actual ready renderer/runtime counts do not match the workload"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RendererGatherBenchmark: warmed ready renderers {} runtime {} transparent {}"), m_scene.counts().renderers, m_scene.counts().runtimeRenderers, m_scene.counts().transparentRenderers);
         return true;
     }
 
@@ -409,7 +409,7 @@ namespace NWB::Tests::Smoke{ using RendererGatherBenchmarkProjectImpl = __hidden
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return FOUNDATION_TEXT("NWB Renderer Gather Benchmark"); }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::RendererGatherBenchmarkProjectImpl>(context);

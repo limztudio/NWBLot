@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -229,7 +229,7 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
     if(ordinaryText && textScancode != 0 && m_frame.input().keyboardTextBlocked(textScancode)){
         if(auto* textInput = m_frame.tryTextInput()){
             if(!ResetWin32FallbackCharInput(*textInput))
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 suppressed text-input character reset failed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 suppressed text-input character reset failed"));
         }
         return LRESULT{ 0 };
     }
@@ -282,7 +282,7 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
             return LRESULT{ 0 };
         if(auto* textInput = m_frame.tryTextInput()){
             if(!ResetWin32FallbackCharInput(*textInput))
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 text-input character reset failed"));
         }
         for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
             dispatchUnicodeInput(static_cast<u32>(wParam));
@@ -293,7 +293,7 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
         TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, m_hwnd, 0u };
         if(!TrackMouseEvent(&tracking)){
             const DWORD nativeError = GetLastError();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 mouse-leave tracking failed; native_domain=Win32 native_code={}"), nativeError);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 mouse-leave tracking failed; native_domain=Win32 native_code={}"), nativeError);
         }
         dispatchMousePosition(lParam);
     }
@@ -312,7 +312,7 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
         m_frame.input().pointerCaptureLost();
         if(GetCapture() == m_hwnd && !ReleaseCapture()){
             const DWORD nativeError = GetLastError();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 pointer capture release failed; native_domain=Win32 native_code={}"), nativeError);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 pointer capture release failed; native_domain=Win32 native_code={}"), nativeError);
         }
         return LRESULT{ 0 };
 
@@ -358,9 +358,9 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
 void Win32FrameInput::dispatchTextInputFocus(const b8 focused){
     if(auto* textInput = m_frame.tryTextInput()){
         if(!ResetWin32FallbackCharInput(*textInput))
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 text-input character reset failed"));
         if(!textInput->setFocused(focused))
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input focus update failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 text-input focus update failed"));
     }
 }
 
@@ -386,7 +386,7 @@ void Win32FrameInput::releaseMouseIfNoButtonIsDown(){
 
     if(!ReleaseCapture()){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 pointer capture release failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 pointer capture release failed; native_domain=Win32 native_code={}"), nativeError);
     }
 }
 
@@ -404,7 +404,7 @@ void Win32FrameInput::dispatchScreenMousePosition(const LPARAM lParam){
         m_frame.input().mousePosUpdate(static_cast<f64>(point.x), static_cast<f64>(point.y));
     else{
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame Win32 mouse position conversion failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Frame Win32 mouse position conversion failed; native_domain=Win32 native_code={}"), nativeError);
     }
 }
 
@@ -419,7 +419,7 @@ void Win32FrameInput::dispatchKeyEvent(const WPARAM wParam, const LPARAM lParam,
 }
 
 void Win32FrameInput::dispatchCharInput(const WPARAM wParam, const LPARAM lParam){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
     if(auto* textInput = m_frame.tryTextInput()){
         const auto unicode = DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam));
         if(unicode){

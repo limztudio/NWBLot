@@ -62,7 +62,7 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
     const BinaryByteView bytesBeforeRejectedRecord = capture.commandBytes();
     Core::GraphicsBytes streamBeforeRejectedRecord(testArena.arena);
     streamBeforeRejectedRecord.resize(bytesBeforeRejectedRecord.size());
-    NWB_MEMCPY(streamBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size(), bytesBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size());
+    FOUNDATION_MEMCPY(streamBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size(), bytesBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size());
     const Core::GpuTaskId anotherGraphTask{ .generation = task.generation + 1u, .index = static_cast<u32>(task.index) };
     const Core::GpuSubmissionPacketId anotherGraphPacket{ .generation = packet.generation + 1u, .index = static_cast<u32>(packet.index) };
     const Core::GpuGraphResourceId anotherGraphResource{ .generation = destination.generation + 1u, .index = static_cast<u32>(destination.index) };
@@ -70,7 +70,7 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
     EXPECT_FALSE(capture.captureClearBuffer(task, Core::GpuSubmissionPacketId{ .generation = packet.generation + 2u, .index = packet.index }, queue, destination, 0xdecafbadU));
     const BinaryByteView bytesAfterRejectedRecord = capture.commandBytes();
     EXPECT_EQ(bytesAfterRejectedRecord.size(), streamBeforeRejectedRecord.size());
-    EXPECT_EQ(NWB_MEMCMP(bytesAfterRejectedRecord.data(), streamBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(bytesAfterRejectedRecord.data(), streamBeforeRejectedRecord.data(), streamBeforeRejectedRecord.size()), 0);
 
 }
 
@@ -160,14 +160,14 @@ TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundar
 
     Core::GraphicsBytes expectedPrefix(testArena.arena);
     expectedPrefix.resize(copyTextureEnd);
-    NWB_MEMCPY(expectedPrefix.data(), expectedPrefix.size(), bytes.data(), expectedPrefix.size());
+    FOUNDATION_MEMCPY(expectedPrefix.data(), expectedPrefix.size(), bytes.data(), expectedPrefix.size());
     capture.rollback(2u);
     const BinaryByteView rolledBackBytes = capture.commandBytes();
     EXPECT_EQ(capture.recordCount(), 2u);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(rolledBackBytes.size(), expectedPrefix.size());
     // Rollback rewrites the header count/payload; the two surviving records stay an exact byte prefix of the capture.
-    EXPECT_EQ(NWB_MEMCMP(rolledBackBytes.data() + sizeof(Core::GpuCommandIrStreamHeader), expectedPrefix.data() + sizeof(Core::GpuCommandIrStreamHeader), expectedPrefix.size() - sizeof(Core::GpuCommandIrStreamHeader)), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(rolledBackBytes.data() + sizeof(Core::GpuCommandIrStreamHeader), expectedPrefix.data() + sizeof(Core::GpuCommandIrStreamHeader), expectedPrefix.size() - sizeof(Core::GpuCommandIrStreamHeader)), 0);
 
     usize cursor = 0u;
     const auto streamHeader = ReadPOD<Core::GpuCommandIrStreamHeader>(rolledBackBytes, cursor);
@@ -518,7 +518,7 @@ TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcro
     const BinaryByteView blob = reader.blobBytes();
     ASSERT_LE(decoded->raster.blobOffsetBytes, blob.size());
     ASSERT_LE(decoded->raster.blobSizeBytes, blob.size() - decoded->raster.blobOffsetBytes);
-    EXPECT_EQ(NWB_MEMCMP(blob.data() + decoded->raster.blobOffsetBytes, expectedPush.data(), sizeof(expectedPush)), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(blob.data() + decoded->raster.blobOffsetBytes, expectedPush.data(), sizeof(expectedPush)), 0);
 
 }
 
@@ -1108,14 +1108,14 @@ TEST(GpuCommandIrCapture, MixedRecordGrowthRollbackAndRefillPreserveTheExactPref
     EXPECT_EQ(capture.recordingAttemptGeneration(), 31u);
     const BinaryByteView prefix = capture.commandBytes();
     const usize headerSize = sizeof(Core::GpuCommandIrStreamHeader);
-    EXPECT_EQ(NWB_MEMCMP(prefix.data() + headerSize, original.data() + headerSize, prefix.size() - headerSize), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(prefix.data() + headerSize, original.data() + headerSize, prefix.size() - headerSize), 0);
     const usize prefixBytes = prefix.size();
     capture.rollback(130u);
     EXPECT_EQ(capture.commandBytes().size(), prefixBytes);
     VerifyMixedRecords(capture, 129u);
     ASSERT_TRUE(AppendMixedRecords(capture, 129u, 257u));
     ASSERT_EQ(capture.commandBytes().size(), original.size());
-    EXPECT_EQ(NWB_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
     VerifyMixedRecords(capture, 257u);
 }
 
@@ -1166,7 +1166,7 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     EXPECT_FALSE(capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 0u, s_CommandIrDestination, 0u, 0u));
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
     ASSERT_EQ(capture.commandBytes().size(), original.size());
-    EXPECT_EQ(NWB_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
     VerifyMixedRecords(capture, 129u);
     capture.rollback(0u);
     ASSERT_TRUE(capture.beginRecordingAttempt(32u));
@@ -1241,7 +1241,7 @@ TEST(GpuCommandIrUploadCapture, CapturesBorrowedCommandBytesAcrossGrowthForUploa
         ASSERT_EQ(commands.size(), sizeof(Core::GpuCommandIrStreamHeader));
         const BinaryByteView source{ commands.data() + sizeof(u32), commands.size() - sizeof(u32) };
         Array<u8, sizeof(Core::GpuCommandIrStreamHeader) - sizeof(u32)> expected{};
-        NWB_MEMCPY(expected.data(), expected.size(), source.data(), source.size());
+        FOUNDATION_MEMCPY(expected.data(), expected.size(), source.data(), source.size());
         if(pushConstants)
             ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, source));
         else{
@@ -1254,7 +1254,7 @@ TEST(GpuCommandIrUploadCapture, CapturesBorrowedCommandBytesAcrossGrowthForUploa
         ASSERT_TRUE(reader.next());
         const BinaryByteView captured = reader.blobBytes();
         ASSERT_EQ(captured.size(), expected.size());
-        EXPECT_EQ(NWB_MEMCMP(captured.data(), expected.data(), expected.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(captured.data(), expected.data(), expected.size()), 0);
     }
 }
 
@@ -1301,7 +1301,7 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
     EXPECT_EQ(record->blobSizeBytes, s_ByteCount);
     const BinaryByteView blobBytes = reader.blobBytes();
     ASSERT_EQ(blobBytes.size(), s_ByteCount);
-    EXPECT_EQ(NWB_MEMCMP(blobBytes.data(), expected.data(), s_ByteCount), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(blobBytes.data(), expected.data(), s_ByteCount), 0);
     const auto terminal1 = reader.nextBuiltinTask();
     ASSERT_FALSE(terminal1);
     EXPECT_EQ(terminal1.error(), Core::GpuCommandIrStreamReadStatus::End);
@@ -1310,7 +1310,7 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
     ASSERT_TRUE(Core::ValidateGpuCommandIrStream(owned->bytes()).valid());
     Core::GpuCommandIrStreamReader retainedReader(owned->bytes());
     ASSERT_TRUE((record = retainedReader.nextBuiltinTask()));
-    EXPECT_EQ(NWB_MEMCMP(retainedReader.blobBytes().data(), expected.data(), s_ByteCount), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(retainedReader.blobBytes().data(), expected.data(), s_ByteCount), 0);
 }
 
 TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefixThenRefills){
@@ -1334,14 +1334,14 @@ TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefix
     const auto rolledBack = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(rolledBack);
     ASSERT_EQ(rolledBack->bytes().size(), prefix->bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(rolledBack->bytes().data(), prefix->bytes().data(), prefix->bytes().size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(rolledBack->bytes().data(), prefix->bytes().data(), prefix->bytes().size()), 0);
     ASSERT_TRUE(Core::ValidateGpuCommandIrStream(rolledBack->bytes()).valid());
 
     ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, secondBlob, s_CommandIrDestination, 16u, BinaryByteView{ s_SecondBytes.data(), sizeof(s_SecondBytes) }, Core::ResourceStates::ShaderResource));
     const auto refilled = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(refilled);
     ASSERT_EQ(refilled->bytes().size(), full->bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(refilled->bytes().data(), full->bytes().data(), full->bytes().size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(refilled->bytes().data(), full->bytes().data(), full->bytes().size()), 0);
     EXPECT_TRUE(Core::ValidateGpuCommandIrStream(refilled->bytes()).valid());
 }
 
@@ -1364,7 +1364,7 @@ TEST(GpuCommandIrUploadCapture, RejectedInputsAndForeignOrStaleCheckpointsPreser
     const auto after = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(after);
     ASSERT_EQ(after->bytes().size(), before->bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(after->bytes().data(), before->bytes().data(), before->bytes().size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(after->bytes().data(), before->bytes().data(), before->bytes().size()), 0);
     EXPECT_EQ(capture.recordCount(), 1u);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 31u);
 

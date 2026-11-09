@@ -37,7 +37,7 @@ using EncodedMip = TextureFormat::MipLevelLayout;
     // All mip encoders in this process share the initialized Basis tables.
     static const b8 s_Initialized = basisu::basisu_encoder_init(false);
     if(!s_Initialized)
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to initialize Basis Universal."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to initialize Basis Universal."));
     return s_Initialized;
 }
 
@@ -70,9 +70,9 @@ using EncodedMip = TextureFormat::MipLevelLayout;
             return false;
         slices[desc.m_source_file_index] = index;
     }
-    NWB_ASSERT(mip.sizeBytes <= Limit<usize>::s_Max && bytes.size() <= Limit<usize>::s_Max - static_cast<usize>(mip.sizeBytes));
+    FOUNDATION_ASSERT(mip.sizeBytes <= Limit<usize>::s_Max && bytes.size() <= Limit<usize>::s_Max - static_cast<usize>(mip.sizeBytes));
     for(const usize index : slices){
-        NWB_ASSERT(index != s_InvalidSlice);
+        FOUNDATION_ASSERT(index != s_InvalidSlice);
         const basisu::uint8_vec& blocks = output.m_slice_image_data[index];
         bytes.insert(bytes.end(), blocks.get_ptr(), blocks.get_ptr() + blocks.size_in_bytes());
     }
@@ -122,16 +122,16 @@ using EncodedMip = TextureFormat::MipLevelLayout;
 
     basisu::basis_compressor compressor;
     if(!compressor.init(params)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize a linear mip encoder."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: Basis Universal failed to initialize a linear mip encoder."));
         return false;
     }
     const basisu::basis_compressor::error_code encoded = compressor.process();
     if(encoded != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to encode a linear mip, error {}."), static_cast<i32>(encoded));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: Basis Universal failed to encode a linear mip, error {}."), static_cast<i32>(encoded));
         return false;
     }
     if(!AppendEncodedMip(compressor.get_uastc_backend_output(), mip, basisFormat, scratchArena, bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an invalid mip layout."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: Basis Universal returned an invalid mip layout."));
         return false;
     }
     return true;
@@ -196,7 +196,7 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
                 return MakeUnexpected(Failure{});
         }
     }
-    NWB_ASSERT(prepared.bytes.size() == payloadByteCount);
+    FOUNDATION_ASSERT(prepared.bytes.size() == payloadByteCount);
     return prepared;
 }
 

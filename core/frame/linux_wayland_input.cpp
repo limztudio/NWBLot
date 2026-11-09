@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +114,7 @@ void WaylandFrameInput::OnSeatCapabilities(void* data, wl_seat* seat, u32 capabi
         if(!frameInput.m_keyboard){
             frameInput.m_keyboard = wl_seat_get_keyboard(seat);
             if(!frameInput.m_keyboard || wl_keyboard_add_listener(frameInput.m_keyboard, &s_KeyboardListener, &frameInput) != 0){
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keyboard listener registration failed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland keyboard listener registration failed"));
                 return;
             }
         }
@@ -124,7 +124,7 @@ void WaylandFrameInput::OnSeatCapabilities(void* data, wl_seat* seat, u32 capabi
         frameInput.m_inputSerial = 0u;
         if(ITextInputService* const textInput = frameInput.m_frame.tryTextInput()){
             if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-                NWB_FATAL_ASSERT(false);
+                FOUNDATION_FATAL_ASSERT(false);
         }
         if(IClipboardService* const clipboard = frameInput.m_frame.tryClipboard())
             SetWaylandClipboardKeyboardFocus(*clipboard, false);
@@ -150,7 +150,7 @@ void WaylandFrameInput::OnKeyboardKeymap(void* data, [[maybe_unused]] wl_keyboar
     if(map == MAP_FAILED){
         const i32 nativeError = errno;
         ReleaseKeymapResources(fd, nullptr, 0u);
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keymap mmap failed; native_domain=POSIX native_code={}"), nativeError);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland keymap mmap failed; native_domain=POSIX native_code={}"), nativeError);
         return;
     }
 
@@ -158,14 +158,14 @@ void WaylandFrameInput::OnKeyboardKeymap(void* data, [[maybe_unused]] wl_keyboar
     ReleaseKeymapResources(fd, map, size);
 
     if(!keymap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keymap creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland keymap creation failed"));
         return;
     }
 
     xkb_state* state = xkb_state_new(keymap);
     if(!state){
         xkb_keymap_unref(keymap);
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keyboard state creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland keyboard state creation failed"));
         return;
     }
 
@@ -185,7 +185,7 @@ void WaylandFrameInput::OnKeyboardEnter(void* data, [[maybe_unused]] wl_keyboard
     frameInput.m_keyboardFocused = true;
     if(ITextInputService* const textInput = frameInput.m_frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, true))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
     if(IClipboardService* const clipboard = frameInput.m_frame.tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, true);
@@ -201,7 +201,7 @@ void WaylandFrameInput::OnKeyboardLeave(void* data, [[maybe_unused]] wl_keyboard
     frameInput.m_inputSerial = 0u;
     if(ITextInputService* const textInput = frameInput.m_frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
     if(IClipboardService* const clipboard = frameInput.m_frame.tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, false);
@@ -299,13 +299,13 @@ void WaylandFrameInput::bindSeat(wl_registry& registry, const u32 name, const u3
     const u32 bindVersion = version < s_WaylandSeatBindVersion ? version : s_WaylandSeatBindVersion;
     m_seat = static_cast<wl_seat*>(wl_registry_bind(&registry, name, &wl_seat_interface, bindVersion));
     if(!m_seat){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland seat acquisition failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland seat acquisition failed"));
         return;
     }
     m_seatVersion = bindVersion;
     m_seatGlobalName = name;
     if(wl_seat_add_listener(m_seat, &s_SeatListener, this) != 0)
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
     if(IClipboardService* const clipboard = m_frame.tryClipboard())
         AttachWaylandClipboardSeat(*clipboard, m_seat, name);
     if(ITextInputService* const textInput = m_frame.tryTextInput())
@@ -321,7 +321,7 @@ void WaylandFrameInput::removeSeat(const u32 name){
     m_inputSerial = 0u;
     if(ITextInputService* const textInput = m_frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
         AttachWaylandTextInputSeat(*textInput, nullptr, 0u);
     }
     m_frame.input().windowFocusUpdate(false);
@@ -357,7 +357,7 @@ void WaylandFrameInput::attachTextInput(ITextInputService& textInput)const{
     AttachWaylandTextInputSeat(textInput, m_seat, m_seatGlobalName);
     SetWaylandTextInputBufferScale(textInput, m_bufferScale);
     if(!SetWaylandTextInputKeyboardFocus(textInput, m_keyboardFocused))
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
 }
 
 void WaylandFrameInput::stopKeyRepeat()noexcept{

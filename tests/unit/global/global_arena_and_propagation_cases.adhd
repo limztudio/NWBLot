@@ -1331,7 +1331,7 @@ TEST(Global, GenericPathKeepsNativeFilenameCharacters){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     const ::Path<NWB::Core::Alloc::ScratchArena> path(scratchArena, "one\\two");
     const auto text = PathToGenericString<char>(scratchArena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     EXPECT_EQ(AStringView(text), "one/two");
 #else
     EXPECT_EQ(AStringView(text), "one\\two");
@@ -1341,11 +1341,11 @@ TEST(Global, GenericPathKeepsNativeFilenameCharacters){
 #if !defined(_MSC_VER)
 TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
     Array<char, 4u> truncatedText = {};
-    EXPECT_NE(NWB_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef"), 0);
+    EXPECT_NE(FOUNDATION_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef"), 0);
     EXPECT_STREQ(truncatedText.data(), "abc");
 
     Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
-    EXPECT_NE(NWB_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e"), 0);
+    EXPECT_NE(FOUNDATION_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e"), 0);
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 }
 #endif

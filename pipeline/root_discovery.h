@@ -51,7 +51,7 @@ inline constexpr AStringView s_DefaultRepoRoot = ".";
 ){
     const auto repoRoot = AbsolutePath(requestedRepoRoot.empty() ? Path(arena, s_DefaultRepoRoot) : requestedRepoRoot);
     if(!repoRoot){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve repository root: {}"), toolLabel, ConvertString(repoRoot.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to resolve repository root: {}"), toolLabel, ConvertString(repoRoot.error().message()));
         return MakeUnexpected(Failure{});
     }
     return repoRoot->lexicallyNormal();
@@ -79,13 +79,13 @@ inline constexpr AStringView s_DefaultRepoRoot = ".";
     if(!roots){
         const auto& error = roots.error();
         if(error.reason == Core::Assets::AssetRootResolutionFailure::InspectInput)
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to inspect input '{}'"), toolLabel, ConvertString(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to inspect input '{}'"), toolLabel, ConvertString(sources[error.sourceIndex]));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve asset root from '{}'"), toolLabel, ConvertString(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to resolve asset root from '{}'"), toolLabel, ConvertString(sources[error.sourceIndex]));
         return MakeUnexpected(Failure{});
     }
     if(roots->empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {}"), toolLabel, emptyErrorMessage);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: {}"), toolLabel, emptyErrorMessage);
         return MakeUnexpected(Failure{});
     }
     return Move(*roots);
@@ -94,17 +94,17 @@ inline constexpr AStringView s_DefaultRepoRoot = ".";
 inline void LogCookInputSelectionFailure(const Core::Assets::CookInputSelectionError& error, const TStringView toolLabel){
     switch(error.reason){
         case Core::Assets::CookInputSelectionFailure::ResolveInput:
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve input '{}'"), toolLabel, ConvertString(error.rawInput));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to resolve input '{}'"), toolLabel, ConvertString(error.rawInput));
             break;
         case Core::Assets::CookInputSelectionFailure::NotFileOrDirectory:
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: input is not a file or directory '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: input is not a file or directory '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
             break;
         case Core::Assets::CookInputSelectionFailure::DirectoryOutsideAssetRoots:
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: input directory is outside the asset roots '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: input directory is outside the asset roots '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
             break;
         case Core::Assets::CookInputSelectionFailure::NoMatchingAsset:
         case Core::Assets::CookInputSelectionFailure::None:
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: input is not a .nwb asset within the asset roots '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: input is not a .nwb asset within the asset roots '{}'"), toolLabel, PathToString<tchar>(error.resolvedPath));
             break;
     }
 }

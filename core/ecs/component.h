@@ -170,11 +170,11 @@ private:
 
     [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const noexcept{
         const u32 index = entityId.index();
-        NWB_ASSERT(index < static_cast<u32>(m_sparse.size()));
+        FOUNDATION_ASSERT(index < static_cast<u32>(m_sparse.size()));
 
         const u32 denseIndex = m_sparse[index];
-        NWB_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
-        NWB_ASSERT(m_dense[denseIndex] == entityId);
+        FOUNDATION_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
+        FOUNDATION_ASSERT(m_dense[denseIndex] == entityId);
         return denseIndex;
     }
 

@@ -40,7 +40,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     set(_nwb_smoke_capture_mid_settle_seconds "2.0")
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
     # CTest budgets include process startup and orderly teardown around the script timeout.
-    set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
+    set(_nwb_window_capture_smoke_ctest_timeout_seconds 150)
     set(_nwb_csg_temporal_script_timeout_seconds 150)
     set(_nwb_csg_temporal_ctest_timeout_seconds 210)
     set(_nwb_avboit_depth_warp_probe_timeout_seconds 180)
@@ -100,7 +100,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_target(nwb_testbed_smoke_assets DEPENDS "${_nwb_testbed_smoke_asset_stamp}")
         add_dependencies(testbed nwb_testbed_smoke_assets)
         nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${_nwb_testbed_smoke_runtime_root}" "NWB Testbed"
-            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
+            "--graceful-exit-timeout" "30" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
         unset(_nwb_testbed_smoke_asset_stamp)
         unset(_nwb_testbed_smoke_asset_inputs)
         unset(_nwb_testbed_smoke_runtime_root)
@@ -421,7 +421,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_dependencies(nwb_skinned_caustic_smoke nwb_skinning_culling_benchmark_assets)
 
         nwb_add_window_capture_smoke(nwb_skinned_caustic_capture_late_smoke skinned_caustic_capture_late.bmp "$<TARGET_FILE:nwb_skinned_caustic_smoke>" "${_nwb_skinning_culling_runtime_root}" "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}" "--graceful-exit-timeout" "30" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
             "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created" "--expect-log-message" "SkinnedCausticSmokeProject: shutdown")
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"

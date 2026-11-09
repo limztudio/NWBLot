@@ -163,7 +163,7 @@ static constexpr Array<Name, 5> s_CausticCpuTimingScopes = {
 
 CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept
     : IRenderPass(context.graphics)
-    , m_cpu(NWB_TEXT("csg_caustic"), context.objectArena)
+    , m_cpu(FOUNDATION_TEXT("csg_caustic"), context.objectArena)
     , m_startPath(context.objectArena)
     , m_records(context.objectArena)
     , m_native(context.objectArena)
@@ -174,7 +174,7 @@ CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noex
 
 b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8 hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
     if(!m_context.requestQuit || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
         return false;
     }
     static_assert(s_CausticGpuTimingScopes.size() == s_GpuScopeCount);
@@ -197,8 +197,8 @@ b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8
         if(!m_context.graphics.gpuTiming().prepareScopeQueries(scope.identity, m_context.graphics.getDevice(), 32u))
             return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: configured mode={} csg={} hardware={} preparation_presentations=64 warmup_seconds=30 minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 capture=0")
-        , diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), csg ? 1u : 0u, hardware ? 1u : 0u
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: configured mode={} csg={} hardware={} preparation_presentations=64 warmup_seconds=30 minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 capture=0")
+        , diagnostic ? FOUNDATION_TEXT("diagnostic") : FOUNDATION_TEXT("performance"), csg ? 1u : 0u, hardware ? 1u : 0u
     );
     return true;
 }
@@ -212,7 +212,7 @@ b8 CsgCausticTimingProbe::update(){
     if(!m_prepared){
         const auto started = FileExists(m_startPath);
         if(!started){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: focus gate status failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: focus gate status failed"));
             return false;
         }
         if(!*started)
@@ -234,27 +234,27 @@ b8 CsgCausticTimingProbe::update(){
         }
         m_prepared = true;
         m_preparationBegin = now;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: preparation presentations={} source={} gpu_ready_scopes=6"), presentations, frame);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: preparation presentations={} source={} gpu_ready_scopes=6"), presentations, frame);
     }
     const auto status = m_presentation.observe(presentations, now);
     if(status == PresentationFpsStatus::Invalid){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native counter or clock regressed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: native counter or clock regressed"));
         return false;
     }
     if(m_presentation.measurementStarted() && !m_measuring){
         m_measuring = true;
         m_firstSource = frame;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: begin presentations={} source={} warmup_seconds={}"), presentations, frame, DurationInSeconds<f64>(now, m_preparationBegin));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: begin presentations={} source={} warmup_seconds={}"), presentations, frame, DurationInSeconds<f64>(now, m_preparationBegin));
     }
     if(!m_measuring)
         return true;
     const auto options = m_context.perfSession.captureOptions();
     if(!options.gpuTimingActive() || options.cpuTimingActive() != m_diagnostic || options.memoryActive()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: capture mode changed inside measurement"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: capture mode changed inside measurement"));
         return false;
     }
     if(m_native.size() == s_MaxNativeEndpoints || (!m_native.empty() && (frame != m_native.back().source + 1u || presentations > m_native.back().presentations + 1u))){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native source endpoints are not contiguous or capacity was exceeded"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: native source endpoints are not contiguous or capacity was exceeded"));
         return false;
     }
     NativeEndpoint endpoint;
@@ -274,11 +274,11 @@ b8 CsgCausticTimingProbe::update(){
     if((m_diagnostic && !m_cpu.observe(m_context.perfSession, m_presentation, presentations, true)) || !write(frame))
         return false;
     m_complete = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: common first={} last={} first_source={} end_source={} collection_end={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: common first={} last={} first_source={} end_source={} collection_end={}")
         , m_commonPresentation.firstPresentationCount, m_commonPresentation.lastPresentationCount, m_native[m_commonBegin].source, m_native[m_commonEnd].source, frame
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: complete mode={} presentations={} seconds={} positive_intervals={}")
-        , m_diagnostic ? NWB_TEXT("diagnostic") : NWB_TEXT("performance"), m_commonPresentation.presentations(), m_commonPresentation.wallSeconds, m_positiveIntervals
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: complete mode={} presentations={} seconds={} positive_intervals={}")
+        , m_diagnostic ? FOUNDATION_TEXT("diagnostic") : FOUNDATION_TEXT("performance"), m_commonPresentation.presentations(), m_commonPresentation.wallSeconds, m_positiveIntervals
     );
     m_context.requestQuit();
     return true;
@@ -286,7 +286,7 @@ b8 CsgCausticTimingProbe::update(){
 
 void CsgCausticTimingProbe::finish(){
     if(!m_complete)
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: shutdown before measurement completion"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: shutdown before measurement completion"));
 }
 
 
@@ -295,7 +295,7 @@ void CsgCausticTimingProbe::finish(){
 
 b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 sourceFrame, const b8 cpu){
     if(!view.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing view is invalid"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: timing view is invalid"));
         return false;
     }
     const usize scopeBegin = cpu ? s_GpuScopeCount : 0u;
@@ -310,7 +310,7 @@ b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 
                 continue;
             const u32 generation = view.scopeAt(index).generation;
             if((m_generations[scope] != 0u && generation != m_generations[scope]) || stats.publishFrameIndex < m_lastPublication[scope]){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing identity or publication order changed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: timing identity or publication order changed"));
                 return false;
             }
             m_generations[scope] = generation;
@@ -319,7 +319,7 @@ b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 
                 continue;
             // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
             if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || m_records.size() == s_MaxRecords){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints"));
                 return false;
             }
             const u32 bit = 1u << static_cast<u32>(scope);
@@ -328,7 +328,7 @@ b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 
             for(usize frame = first; frame < end; ++frame){
                 NativeEndpoint& endpoint = m_native[frame];
                 if((endpoint.completeMask & bit) != 0u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: same-scope publication source ranges overlap"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: same-scope publication source ranges overlap"));
                     return false;
                 }
                 endpoint.completeMask |= bit;
@@ -380,7 +380,7 @@ Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
         if(DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp) < s_ReportIntervalSeconds && frame != end)
             continue;
         if(m_intervals.size() == s_MaxIntervals){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: native interval capacity exceeded"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: native interval capacity exceeded"));
             return MakeUnexpected(Failure{});
         }
         const PresentationFpsSample interval{
@@ -417,7 +417,7 @@ Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
 b8 CsgCausticTimingProbe::write(const u64 collectionEndSource){
     OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
     if(!output.is_open()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output open failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: output open failed"));
         return false;
     }
     output.precision(17);
@@ -446,7 +446,7 @@ b8 CsgCausticTimingProbe::write(const u64 collectionEndSource){
     output << "complete " << m_intervals.size() << ' ' << recordCount << '\n';
     output.close();
     if(!output.good()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output write or close failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: output write or close failed"));
         return false;
     }
     return true;
@@ -561,7 +561,7 @@ EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const S
         transparent && m_mode.openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_CsgShadowMaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
         center, extent, m_world
     );
-    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: box creation failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(entity.valid(), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: box creation failed"));
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
     if(transparent)
         m_world.entity(entity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
@@ -569,15 +569,15 @@ EntityID CsgShadowAtlas::createBox(const Box& box, const b8 transparent, const S
     if(transparent && m_mode.openAtlas){
         const Half packedIor = ConvertFloatToHalf(1.5f);
         const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
             NWB::Impl::PackMaterialInstanceValue(packedIor)
-        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet IOR override failed")
+        ), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open-sheet IOR override failed")
         );
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
             NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-        ), NWB_TEXT("CsgShadowSmokeProjectImpl: open-sheet transmission override failed")
+        ), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open-sheet transmission override failed")
         );
     }
     return entity;
@@ -619,7 +619,7 @@ void CsgShadowAtlas::addCaster(const Box& box, const Box& cutterBox, const u32 g
         initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_mode.pointLight ? 0.5f : 1.0f));
     AssignCsgCutterTransform(initialCenter, QuaternionIdentity(), cutter);
     if(moving){
-        NWB_ASSERT(m_movingCount < m_movingCutters.size());
+        FOUNDATION_ASSERT(m_movingCount < m_movingCutters.size());
         m_movingCutters[m_movingCount] = cutterEntity.id();
         StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
         ++m_movingCount;
@@ -636,7 +636,7 @@ void CsgShadowAtlas::createAtlas(){
         addCaster(split, cavity, 2u, true, false);
     const Box control{ Float3U(0.6f, -0.7f, -7.0f), Float3U(2.0f, 0.7f, -5.0f) };
     createBox(control, true);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two"));
 #else
     const f32 xyScale = m_mode.pointLight ? 0.5f : 1.0f;
     for(u32 slot = 0u; slot < 6u; ++slot){
@@ -711,7 +711,7 @@ void CsgShadowAtlas::createAnalyticAtlas(){
     // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
     plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
     addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
 }
 
 b8 CsgShadowAtlas::createOpenAtlas(){
@@ -756,7 +756,7 @@ b8 CsgShadowAtlas::createOpenAtlas(){
         }
     }
     const u32 firstCount = m_mode.openCase == OpenCase::Boundary64 ? 64u : m_mode.openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
         , ConvertString(m_mode.openCaseName())
         , firstCount
         , clipped ? 5u : 6u

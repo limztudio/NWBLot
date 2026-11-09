@@ -263,7 +263,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
     outSubsystem.subsystems.clear();
     if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemSubsystemsFieldName)){
         if(!subsystemsValue->isList()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemSubsystemsFieldName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemSubsystemsFieldName));
             return false;
         }
         outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
@@ -273,7 +273,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 return false;
             if(parsedRef->name() == outSubsystem.virtualPath()){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself")
+                    FOUNDATION_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself")
                     , ConvertString(s_SubsystemDiagnosticPrefix)
                     , PathToString<tchar>(nwbFilePath)
                     , ConvertString(s_SubsystemSubsystemsFieldName)
@@ -292,7 +292,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         const Core::Metascript::Value* const fieldValue = asset.findField(descriptor.fieldName);
         if(!fieldValue){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': required field '{}' is missing for '{}'")
+                FOUNDATION_TEXT("{} '{}': required field '{}' is missing for '{}'")
                 , ConvertString(s_SubsystemDiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , ConvertString(descriptor.fieldName)
@@ -303,7 +303,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         outSubsystem.clearFieldValues(i);
         if(descriptor.isArray){
             if(!fieldValue->isList() || fieldValue->asList().empty()){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a non-empty list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(descriptor.fieldName));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' must be a non-empty list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(descriptor.fieldName));
                 return false;
             }
             for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
@@ -314,7 +314,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 for(usize prevIndex = 0u; prevIndex < existingCount; ++prevIndex){
                     if(outSubsystem.fieldValue(i, prevIndex) == parsedRef->name()){
                         NWB_LOGGER_ERROR(
-                            NWB_TEXT("{} '{}': '{}' contains duplicate entry '{}'")
+                            FOUNDATION_TEXT("{} '{}': '{}' contains duplicate entry '{}'")
                             , ConvertString(s_SubsystemDiagnosticPrefix)
                             , PathToString<tchar>(nwbFilePath)
                             , ConvertString(descriptor.fieldName)

@@ -576,7 +576,7 @@ void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, 
         }
         const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
         if(!sliceIdentity){
-            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
             return;
         }
         sliceIdentities.push_back(*sliceIdentity);
@@ -629,9 +629,9 @@ void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, 
             break;
         }
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
-        NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
-        NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
+        FOUNDATION_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
+        FOUNDATION_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
         , sourceFrame
         , planGeneration
         , primaryGraphics.deviceGeneration
@@ -668,7 +668,7 @@ ReflectionCsgContextProbe::ReflectionCsgContextProbe(const u32 rayCapacity, Proj
 b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     if(!output){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
         return false;
     }
     const auto scene = CreateReflectionCsgContextScene(m_world);
@@ -687,7 +687,7 @@ b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
 b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
     // Wait before advancing the world so latest-only diagnostic rows are not skipped.
     if(!m_context.graphics.waitForIdle()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
         return false;
     }
     if(m_done)
@@ -707,19 +707,19 @@ b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStat
     if(m_capture->captureReady()){
         const u64 source = m_capture->capturedGraphicsFrameIndex();
         if(source != m_targetSource || source < m_phaseSource || m_completed < 16u){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: capture missed the qualified phase source frame"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCsgContext: capture missed the qualified phase source frame"));
             return false;
         }
         if(statistics.graphicsFrameIndex < source)
             return true;
         if(statistics.graphicsFrameIndex != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"), source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"), source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation);
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"), m_phase, source, m_completed);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"), m_phase, source, m_completed);
         if(m_phase == 4u){
             m_done = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: complete captures=5"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCsgContext: complete captures=5"));
             m_capture->finish();
             return true;
         }
@@ -744,7 +744,7 @@ b8 ReflectionCsgContextProbe::beginPhase(){
     m_phaseSource = m_context.graphics.getFrameIndex();
     m_completed = 0u;
     m_targetSource = Limit<u64>::s_Max;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
     return true;
 }
 

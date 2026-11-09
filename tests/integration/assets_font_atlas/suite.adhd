@@ -364,7 +364,7 @@ TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
     unnamed.setPayload(MakePayload(testArena));
     EXPECT_FALSE(codec.serialize(unnamed, binary));
     EXPECT_EQ(binary, expected);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("FontAtlas::validatePayload failed: virtual path is empty")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("FontAtlas::validatePayload failed: virtual path is empty")));
 
     FontAtlas corrupt(testArena.arena, Name(s_BodyFontAtlasPath));
     FontAtlasPayload payload = MakePayload(testArena);
@@ -372,7 +372,7 @@ TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
     corrupt.setPayload(Move(payload));
     EXPECT_FALSE(codec.serialize(corrupt, binary));
     EXPECT_EQ(binary, expected);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("pixel content hash mismatch")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("pixel content hash mismatch")));
 }
 
 TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization){

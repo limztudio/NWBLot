@@ -56,7 +56,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
     if(read && BytesMatch(existing, bytes))
         return true;
     if((!read && !IsMissingPathError(read.error())) || (!replaceDifferent && read)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
         return false;
     }
 
@@ -81,7 +81,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
             staged = true;
             break;
         }
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const b8 collision = result.error().value() == ERROR_FILE_EXISTS || result.error().value() == ERROR_ALREADY_EXISTS;
 #else
         const b8 collision = result.error() == ErrorCondition::file_exists;
@@ -90,7 +90,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
             break;
     }
     if(!staged || !ReadBinaryFile(temporary, existing) || !BytesMatch(existing, bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
     for(u32 attempt = 0u; attempt < __hidden_asset_file_publisher::s_MaxRenameAttempts; ++attempt){
@@ -101,7 +101,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
             }
         }
         else{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             if(MoveFileEx(temporary.c_str(), path.c_str(), 0u)){
                 ownsTemporary = false;
                 return true;
@@ -114,7 +114,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
         if(ReadBinaryFile(path, existing) && BytesMatch(existing, bytes))
             return true;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
     return false;
 }
 

@@ -22,7 +22,7 @@ NWB_VULKAN_BEGIN
 b8 SwapChainLifecycle::createSwapChain(){
     ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_context.m_swapChain || !m_context.m_swapChainImages.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
         return false;
     }
 
@@ -34,7 +34,7 @@ b8 SwapChainLifecycle::createSwapChain(){
     if(m_context.m_rhiDevice && !m_lifecycleDrainActive){
         m_lifecycleDrainActive = m_context.m_rhiDevice->beginLifecycleDrain();
         if(!m_lifecycleDrainActive)
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close submissions after swapchain creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to close submissions after swapchain creation failure."));
     }
     {
         ScopedLock presentationLock(m_context.m_framePresentation.m_framePresentationMutex);
@@ -92,7 +92,7 @@ Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransiti
         }
         if(m_context.m_rhiDevice && !m_context.m_rhiDevice->sealLifecycleDrainForDestruction()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
             return MakeUnexpected(Failure{});
         }
 
@@ -112,12 +112,12 @@ Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransiti
 
     if(m_context.m_rhiDevice && !m_lifecycleDrainActive){
         if(m_context.m_rhiDevice->submissionOperationActiveOnCurrentThread()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
             return MakeUnexpected(Failure{});
         }
         if(!m_context.m_rhiDevice->beginLifecycleDrain()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
             return MakeUnexpected(Failure{});
         }
         m_lifecycleDrainActive = true;
@@ -136,7 +136,7 @@ Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransiti
     const b8 acquireProofsComplete = m_context.waitAcquireSyncSlotsForLifecycle();
     if(!acquireProofsComplete && (!m_context.m_rhiDevice || !m_context.m_rhiDevice->isDeviceLost())){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
         return MakeUnexpected(Failure{});
     }
     if(!acquireProofsComplete && m_context.m_rhiDevice && m_context.m_rhiDevice->isDeviceLost()){
@@ -158,7 +158,7 @@ Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransiti
         }
         if(idleResult != VK_SUCCESS && !m_context.m_rhiDevice->isDeviceLost()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove device idle."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Swapchain transition could not prove device idle."));
             return MakeUnexpected(Failure{});
         }
         if(kind == SwapChainTransitionKind::Resize && m_context.m_rhiDevice->requiresRecreation()){
@@ -172,7 +172,7 @@ Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransiti
             lifecycleLock.lock();
             if(!m_context.m_rhiDevice->sealLifecycleDrainForDestruction()){
                 m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -205,7 +205,7 @@ b8 SwapChainLifecycle::commitSwapChainResize(SwapChainTransitionTicket&& ticket)
         return false;
     }
 
-    NWB_ASSERT(m_context.m_rhiDevice && m_lifecycleDrainActive);
+    FOUNDATION_ASSERT(m_context.m_rhiDevice && m_lifecycleDrainActive);
     m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
     {
         ScopedLock presentationLock(m_context.m_framePresentation.m_framePresentationMutex);
@@ -277,7 +277,7 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
     usize const numPresentSemaphores = m_context.m_swapChainImages.size();
     if(!m_context.recreateSemaphores(m_context.m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
         if(!m_context.destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
         return false;
     }
 
@@ -285,7 +285,7 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
     if(!m_context.recreateAcquireSyncSlots(numAcquireSyncSlots)){
         m_context.clearSemaphores(m_context.m_presentSemaphores);
         if(!m_context.destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
         return false;
     }
 
@@ -293,7 +293,7 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
         m_context.clearSemaphores(m_context.m_presentSemaphores);
         m_context.clearAcquireSyncSlots();
         if(!m_context.destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
         return false;
     }
 
@@ -306,8 +306,8 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
             m_context.clearAcquireSyncSlots();
             m_context.resetDirectPresentCommandList();
             if(!m_context.destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create the direct presentation command list."));
             return false;
         }
     }

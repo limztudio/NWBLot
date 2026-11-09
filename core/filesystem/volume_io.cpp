@@ -34,7 +34,7 @@ constexpr usize s_ErrnoMessageBufferBytes = 256u;
 static Expected<void, ErrorCode> GrowLastSegment(const Path& path, const u64 size, const u64 minimumBytes)noexcept{
     if(minimumBytes > size)
         return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -92,7 +92,7 @@ ACompactString LastErrnoMessage()noexcept{
         return ACompactString(s_NoMountLabel);
 
     Array<char, s_ErrnoMessageBufferBytes> errorText{};
-    if(NWB_STRERROR(errorText.data(), errorText.size(), errorNumber) != 0)
+    if(FOUNDATION_STRERROR(errorText.data(), errorText.size(), errorNumber) != 0)
         return ACompactString(s_UnknownMountLabel);
 
     ACompactString output(errorText.data());
@@ -103,16 +103,16 @@ ACompactString LastErrnoMessage()noexcept{
     return output;
 }
 
-void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(detail));
+void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!FOUNDATION_OCCUR_WARNING){
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): {} failed: {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(detail));
 }
 
-void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), ConvertString(detail));
+void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!FOUNDATION_OCCUR_WARNING){
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): {} failed on '{}': {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), ConvertString(detail));
 }
 
-void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), errorCode.value(), ConvertString(errorCode.message()));
+void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!FOUNDATION_OCCUR_WARNING){
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), errorCode.value(), ConvertString(errorCode.message()));
 }
 
 Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeName, const Path& segmentPath){
@@ -148,7 +148,7 @@ Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeN
 
 b8 VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     if(m_maxSegments != 0 && segmentIndex >= m_maxSegments){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), ConvertString(m_volumeName), segmentIndex, m_maxSegments);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), ConvertString(m_volumeName), segmentIndex, m_maxSegments);
         return false;
     }
     if(m_segmentSize == 0){
@@ -157,14 +157,14 @@ b8 VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     }
 
     if(segmentIndex != m_segmentPaths.size() || segmentIndex == Limit<usize>::s_Max){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), ConvertString(m_volumeName), segmentIndex, m_segmentPaths.size());
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), ConvertString(m_volumeName), segmentIndex, m_segmentPaths.size());
         return false;
     }
     m_segmentPaths.reserve(segmentIndex + 1u);
     Path path = segmentPath(segmentIndex);
     const auto created = CreateSizedFileExclusive(path, m_segmentSize);
     if(!created){
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem('{}'): failed to create segment '{}': {}{}"), ConvertString(m_volumeName), PathToString<tchar>(path), ConvertString(created.error().code.message()), created.error().created ? NWB_TEXT("; partial segment retained") : NWB_TEXT(""));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem('{}'): failed to create segment '{}': {}{}"), ConvertString(m_volumeName), PathToString<tchar>(path), ConvertString(created.error().code.message()), created.error().created ? FOUNDATION_TEXT("; partial segment retained") : FOUNDATION_TEXT(""));
         return false;
     }
     m_segmentPaths.push_back(Move(path));
@@ -189,11 +189,11 @@ b8 VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
             return true;
 
         if(!m_writable){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), ConvertString(m_volumeName), requiredBytes, capacity);
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), ConvertString(m_volumeName), requiredBytes, capacity);
             return false;
         }
         if(m_maxSegments != 0u && m_segmentPaths.size() >= m_maxSegments){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: maxSegments {} reached"), ConvertString(m_volumeName), m_maxSegments);
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): ensureCapacity failed: maxSegments {} reached"), ConvertString(m_volumeName), m_maxSegments);
             return false;
         }
         if(m_segmentPaths.empty()){
@@ -224,7 +224,7 @@ Expected<u64> VolumeFileSystem::computeLogicalCapacityLocked()const noexcept{
     return segmentCount * m_segmentSize;
 }
 
-Expected<u64, ErrorCode> VolumeFileSystem::computePhysicalCapacityLocked()const noexcept(!NWB_OCCUR_WARNING){
+Expected<u64, ErrorCode> VolumeFileSystem::computePhysicalCapacityLocked()const noexcept(!FOUNDATION_OCCUR_WARNING){
     if(m_segmentPaths.empty() || m_segmentSize == 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, FilesystemVolumeDetail::s_VolumeDetailNoMountedSegmentsOrSizeZero);
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));

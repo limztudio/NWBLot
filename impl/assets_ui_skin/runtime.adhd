@@ -79,7 +79,7 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
 }
 
 b8 UiSkin::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("UiSkin::validatePayload")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("UiSkin::validatePayload")))
         return false;
     return ValidateUiSkinPayloadData(
         m_texture,

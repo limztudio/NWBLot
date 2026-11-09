@@ -69,7 +69,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     const auto source = graph.uploadBlobData(record.sourceUploadBlob);
     if(!source || !blobBytes.data() || record.blobOffsetBytes > static_cast<u64>(blobBytes.size()) || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes || record.blobSizeBytes > static_cast<u64>(source->size()))
         return false;
-    return NWB_MEMCMP(source->data(), blobBytes.data() + static_cast<usize>(record.blobOffsetBytes), static_cast<usize>(record.blobSizeBytes)) == 0;
+    return FOUNDATION_MEMCMP(source->data(), blobBytes.data() + static_cast<usize>(record.blobOffsetBytes), static_cast<usize>(record.blobSizeBytes)) == 0;
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferUpload(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{

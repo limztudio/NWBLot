@@ -52,7 +52,7 @@ template<typename ArenaT>
     Array<char, s_Utf8MaxSequenceBytes> encoded{};
     for(const char character : text){
         const auto encodedLength = EncodeUtf8CodePoint(static_cast<u8>(character), encoded);
-        NWB_ASSERT(encodedLength);
+        FOUNDATION_ASSERT(encodedLength);
         output.append(encoded.data(), *encodedLength);
     }
     return {};

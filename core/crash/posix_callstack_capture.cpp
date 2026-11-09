@@ -6,7 +6,7 @@
 
 #include <global/algorithm.h>
 #include <ucontext.h>
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <execinfo.h>
 #endif
 
@@ -83,7 +83,7 @@ using __hidden_posix_callstack_capture::AppendCallstackFrame;
 using __hidden_posix_callstack_capture::CaptureFramePointerCallstack;
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 // backtrace() unwinds via .eh_frame without frame pointers; warmed up at install so the crash-time call stays allocation-free.
 // Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
@@ -125,7 +125,7 @@ void PosixCallstackCapture::CaptureCurrent(CrashDetail::CrashDumpRequestOptions&
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u ? outOptions.triggerInstructionPointer : outOptions.instructionPointer;
     if(CaptureEhFrame(outOptions, alignmentInstructionPointer)){
         // backtrace already trimmed crash-handler-internal frames, so the downstream skip must not drop user frames.
@@ -157,7 +157,7 @@ static void CaptureSignalContext(CrashDetail::CrashDumpRequestOptions& options, 
     options.framePointer = static_cast<u64>(context->uc_mcontext.regs[s_AArch64FramePointerRegisterIndex]);
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     // backtrace() crosses the signal trampoline into the interrupted frame, so the fault IP aligns the trace even in frame-pointer-omitting final builds.
     if(PosixCallstackCapture::CaptureEhFrame(options, options.instructionPointer))
         return;
@@ -191,7 +191,7 @@ void PosixCallstackCapture::SignalHandler(const int signalNumber, siginfo_t* sig
 
 [[noreturn]] void PosixCallstackCapture::Terminate()noexcept{
     CrashDetail::CrashDumpRequestOptions options;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the follow-up SIGABRT to carry it.
     if(!CaptureEhFrame(options, 0u))
         options.callstackFrameCount = 0u;

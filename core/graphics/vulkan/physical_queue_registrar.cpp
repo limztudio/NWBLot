@@ -24,13 +24,13 @@ b8 Device::PhysicalQueueRegistrar::registerQueue(const VulkanPhysicalQueueDesc& 
     const auto validation = PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, m_device.m_physicalQueueInfos, m_device.m_explicitPrimaryQueues);
     switch(validation){
     case PhysicalQueueRegistrationPolicy::Result::Invalid:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
         return false;
     case PhysicalQueueRegistrationPolicy::Result::DuplicateQueue:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
         return false;
     case PhysicalQueueRegistrationPolicy::Result::DuplicatePrimary:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
         return false;
     case PhysicalQueueRegistrationPolicy::Result::Valid:
         break;

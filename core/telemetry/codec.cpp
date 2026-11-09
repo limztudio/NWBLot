@@ -61,7 +61,7 @@ namespace __hidden_telemetry_codec{
 }
 
 static void AppendEncodedEvent(const EventHeader& header, const void* const payload, const usize payloadBytes, TelemetryBytes& outBytes){
-    NWB_ASSERT(payloadBytes <= Limit<usize>::s_Max - sizeof(EncodedEventHeader));
+    FOUNDATION_ASSERT(payloadBytes <= Limit<usize>::s_Max - sizeof(EncodedEventHeader));
 
     const EncodedEventHeader encodedHeader = EncodeHeader(header);
     AppendPOD(outBytes, encodedHeader);
@@ -99,7 +99,7 @@ b8 EncodeEvent(const EventHeader& header, const void* payload, const usize paylo
         outBytes.reserve(encodedBytes);
         const auto* const headerBytes = reinterpret_cast<const u8*>(&encodedHeader);
         outBytes.insert(outBytes.begin(), headerBytes, headerBytes + sizeof(encodedHeader));
-        NWB_ASSERT(outBytes.size() == encodedBytes);
+        FOUNDATION_ASSERT(outBytes.size() == encodedBytes);
         return true;
     }
 
@@ -108,7 +108,7 @@ b8 EncodeEvent(const EventHeader& header, const void* payload, const usize paylo
     AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
         AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
-    NWB_ASSERT(outBytes.size() == encodedBytes);
+    FOUNDATION_ASSERT(outBytes.size() == encodedBytes);
     return true;
 }
 
@@ -120,7 +120,7 @@ b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     usize payloadBytes = 0u;
     for(usize i = 0u; i < eventCount; ++i){
         auto& event = *MakeNotNull(events.eventAt(i));
-        NWB_ASSERT(__hidden_telemetry_codec::ValidateEventPayload(event.header, event.payload.data(), event.payload.size()));
+        FOUNDATION_ASSERT(__hidden_telemetry_codec::ValidateEventPayload(event.header, event.payload.data(), event.payload.size()));
         if(!AddBinaryReserveBytes(payloadBytes, sizeof(EncodedEventHeader)))
             return false;
         if(!AddBinaryReserveBytes(payloadBytes, event.payload.size()))
@@ -144,7 +144,7 @@ b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
         __hidden_telemetry_codec::AppendEncodedEvent(event.header, event.payload.data(), event.payload.size(), outBytes);
     }
 
-    NWB_ASSERT(outBytes.size() == encodedBytes);
+    FOUNDATION_ASSERT(outBytes.size() == encodedBytes);
     return true;
 }
 
@@ -170,7 +170,7 @@ Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const vo
         return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedPayload });
     if(payloadBytes != 0u){
         event.payload.resize(payloadBytes);
-        NWB_MEMCPY(event.payload.data(), event.payload.size(), encoded.data() + cursor, payloadBytes);
+        FOUNDATION_MEMCPY(event.payload.data(), event.payload.size(), encoded.data() + cursor, payloadBytes);
     }
     return DecodedEvent{ .event = Move(event), .bytesRead = cursor + payloadBytes };
 }
@@ -192,7 +192,7 @@ Expected<usize, DecodeResult> DecodeEventStream(const void* const bytes, const u
             }
             TelemetryBytes preserved(arena);
             preserved.resize(byteCount);
-            NWB_MEMCPY(preserved.data(), preserved.size(), bytes, byteCount);
+            FOUNDATION_MEMCPY(preserved.data(), preserved.size(), bytes, byteCount);
             return DecodeEventStream(preserved.data(), preserved.size(), arena, inOutRecorder);
         }
     }

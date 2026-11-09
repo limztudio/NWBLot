@@ -22,11 +22,11 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
-    constexpr TStringView s_OperationName = NWB_TEXT("execute cluster acceleration operation");
-    constexpr TStringView s_SourceInfoRangeName = NWB_TEXT("source-info");
-    constexpr TStringView s_SizeArrayRangeName = NWB_TEXT("size-array");
-    constexpr TStringView s_AddressArrayRangeName = NWB_TEXT("address-array");
-    constexpr TStringView s_DeviceAddressRangeInvalidReason = NWB_TEXT("a required device-address range is invalid");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("execute cluster acceleration operation");
+    constexpr TStringView s_SourceInfoRangeName = FOUNDATION_TEXT("source-info");
+    constexpr TStringView s_SizeArrayRangeName = FOUNDATION_TEXT("size-array");
+    constexpr TStringView s_AddressArrayRangeName = FOUNDATION_TEXT("address-array");
+    constexpr TStringView s_DeviceAddressRangeInvalidReason = FOUNDATION_TEXT("a required device-address range is invalid");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(
@@ -35,26 +35,26 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
         || !m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
     ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("cluster acceleration structure feature or entry points are unavailable"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("cluster acceleration structure feature or entry points are unavailable"));
         return;
     }
 
     ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
     RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
     if(!pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || !pipeline->allowsClusterAccelerationStructures()){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a cluster-enabled ray tracing pipeline must be bound"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("a cluster-enabled ray tracing pipeline must be bound"));
         return;
     }
     if(opDesc.params.maxArgCount == 0u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("maximum argument count is zero"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("maximum argument count is zero"));
         return;
     }
     if(opDesc.params.type > RayTracingClusterOperationType::BlasBuild){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("operation type is invalid"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("operation type is invalid"));
         return;
     }
     if(opDesc.params.mode > RayTracingClusterOperationMode::GetSizes){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("operation mode is invalid"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("operation mode is invalid"));
         return;
     }
     constexpr u32 s_SupportedOperationFlags =
@@ -64,23 +64,23 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         | static_cast<u32>(RayTracingClusterOperationFlags::AllowOMM)
     ;
     if((static_cast<u32>(opDesc.params.flags) & ~s_SupportedOperationFlags) != 0u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("operation flags contain unsupported bits"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("operation flags contain unsupported bits"));
         return;
     }
     if((opDesc.params.flags & RayTracingClusterOperationFlags::FastTrace) && (opDesc.params.flags & RayTracingClusterOperationFlags::FastBuild)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("fast-trace and fast-build flags are mutually exclusive"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("fast-trace and fast-build flags are mutually exclusive"));
         return;
     }
     if((opDesc.params.flags & RayTracingClusterOperationFlags::AllowOMM) && (!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("cluster opacity micromaps are unavailable"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("cluster opacity micromaps are unavailable"));
         return;
     }
     if((opDesc.params.flags & RayTracingClusterOperationFlags::NoOverlap) && opDesc.params.type != RayTracingClusterOperationType::Move){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("no-overlap is valid only for move operations"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("no-overlap is valid only for move operations"));
         return;
     }
     if(opDesc.params.type == RayTracingClusterOperationType::Move && opDesc.params.move.type > RayTracingClusterOperationMoveType::Template){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("move object type is invalid"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("move object type is invalid"));
         return;
     }
 
@@ -90,19 +90,19 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     auto* const outSizesBuffer = opDesc.outSizesBuffer;
     auto* const outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer;
     if(!indirectArgsBuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("indirect source-info array is required"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("indirect source-info array is required"));
         return;
     }
     if(!RayTracingClusterOperationMode::IsDestinationTopologyValid(opDesc.params.mode, inOutAddressesBuffer != nullptr, outSizesBuffer != nullptr, outAccelerationStructuresBuffer != nullptr)){
         switch(opDesc.params.mode){
         case RayTracingClusterOperationMode::ImplicitDestinations:
-            rejectCommandRecording(s_OperationName, NWB_TEXT("implicit destinations require acceleration-structure output storage"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("implicit destinations require acceleration-structure output storage"));
             break;
         case RayTracingClusterOperationMode::ExplicitDestinations:
-            rejectCommandRecording(s_OperationName, NWB_TEXT("explicit destinations require address and size arrays without implicit output storage"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("explicit destinations require address and size arrays without implicit output storage"));
             break;
         case RayTracingClusterOperationMode::GetSizes:
-            rejectCommandRecording(s_OperationName, NWB_TEXT("size-query mode requires only the size output buffer"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("size-query mode requires only the size output buffer"));
             break;
         default:
             break;
@@ -112,7 +112,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
     auto input = VulkanDetail::ClusterOperationInput::Build(opDesc.params, s_OperationName);
     if(!input){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("operation parameters are invalid"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("operation parameters are invalid"));
         return;
     }
     const auto inputInfo = input->nativeInfo();
@@ -125,14 +125,14 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             || opDesc.params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
             || opDesc.params.clas.minPositionTruncateBitCount > VulkanDetail::s_MaxPositionTruncateBitCount
         ){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster parameters exceed device limits"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("triangle-cluster parameters exceed device limits"));
             return;
         }
 
         VkFormatProperties formatProperties{};
         m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, input->cluster.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster vertex format lacks acceleration-structure support"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("triangle-cluster vertex format lacks acceleration-structure support"));
             return;
         }
     }
@@ -149,7 +149,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     const auto computeStridedRangeSize = [s_OperationName](const u64 stride, const u64 elementSize, const u32 count, const TStringView rangeName) -> Expected<u64>{
         const auto size = ComputeStridedRangeByteSize(count, stride, elementSize);
         if(!size){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} range overflows"), s_OperationName, rangeName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} range overflows"), s_OperationName, rangeName);
             return MakeUnexpected(Failure{});
         }
         return *size;
@@ -157,16 +157,16 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     const auto getCheckedAddress = [s_OperationName](Buffer& buffer, const u64 offset, const u64 size, const u64 alignment, const TStringView rangeName) -> Expected<VkDeviceAddress>{
         const VkDeviceAddress baseAddress = buffer.getGpuVirtualAddress();
         if(baseAddress == 0u || baseAddress > Limit<u64>::s_Max - offset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device address is invalid or overflows"), s_OperationName, rangeName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} device address is invalid or overflows"), s_OperationName, rangeName);
             return MakeUnexpected(Failure{});
         }
         const VkDeviceAddress address = baseAddress + offset;
         if(alignment == 0u || (address % alignment) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device address is not aligned to {} bytes"), s_OperationName, rangeName, alignment);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} device address is not aligned to {} bytes"), s_OperationName, rangeName, alignment);
             return MakeUnexpected(Failure{});
         }
         if(size == 0u || address > Limit<u64>::s_Max - (size - 1u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device-address range is empty or overflows"), s_OperationName, rangeName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} device-address range is empty or overflows"), s_OperationName, rangeName);
             return MakeUnexpected(Failure{});
         }
         return address;
@@ -174,13 +174,13 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
     const BufferDesc& sourceDesc = indirectArgsBuffer->getCreationDescription();
     if(sourceDesc.structStride != 0u && sourceDesc.structStride <= sourceInfoSize){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("indirect source-info stride must be zero or greater than its structure size"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("indirect source-info stride must be zero or greater than its structure size"));
         return;
     }
     const u64 sourceStride = sourceDesc.structStride != 0u ? sourceDesc.structStride : sourceInfoSize;
     const auto sourceRangeSize = computeStridedRangeSize(sourceStride, sourceInfoSize, opDesc.params.maxArgCount, s_SourceInfoRangeName);
     if(!sourceRangeSize || !VulkanDetail::IsBufferRangeInBounds(sourceDesc, opDesc.inIndirectArgsOffsetInBytes, *sourceRangeSize)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("indirect source-info range is outside the buffer"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("indirect source-info range is outside the buffer"));
         return;
     }
 
@@ -191,12 +191,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(outSizesBuffer){
         sizeStride = outSizesBuffer->getCreationDescription().structStride;
         if(sizeStride < sizeof(u32)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("size-array stride must be at least four bytes"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("size-array stride must be at least four bytes"));
             return;
         }
         const auto sizeRange = computeStridedRangeSize(sizeStride, sizeof(u32), opDesc.params.maxArgCount, s_SizeArrayRangeName);
         if(!sizeRange || !VulkanDetail::IsBufferRangeInBounds(outSizesBuffer->getCreationDescription(), opDesc.outSizesOffsetInBytes, *sizeRange)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("size-array range is outside the buffer"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("size-array range is outside the buffer"));
             return;
         }
         sizeRangeSize = *sizeRange;
@@ -204,19 +204,19 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(inOutAddressesBuffer){
         addressStride = inOutAddressesBuffer->getCreationDescription().structStride;
         if(addressStride < sizeof(VkDeviceAddress)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("address-array stride must be at least eight bytes"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("address-array stride must be at least eight bytes"));
             return;
         }
         const auto addressRange = computeStridedRangeSize(addressStride, sizeof(VkDeviceAddress), opDesc.params.maxArgCount, s_AddressArrayRangeName);
         if(!addressRange || !VulkanDetail::IsBufferRangeInBounds(inOutAddressesBuffer->getCreationDescription(), opDesc.inOutAddressesOffsetInBytes, *addressRange)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("address-array range is outside the buffer"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("address-array range is outside the buffer"));
             return;
         }
         addressRangeSize = *addressRange;
     }
 
     if(indirectArgCountBuffer && !VulkanDetail::IsBufferRangeInBounds(indirectArgCountBuffer->getCreationDescription(), opDesc.inIndirectArgCountOffsetInBytes, sizeof(u32))){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("indirect count range is outside the buffer"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("indirect count range is outside the buffer"));
         return;
     }
 
@@ -239,7 +239,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
     VkDeviceAddress sourceCountAddress = 0u;
     if(indirectArgCountBuffer){
-        const auto address = getCheckedAddress(*indirectArgCountBuffer, opDesc.inIndirectArgCountOffsetInBytes, sizeof(u32), alignof(u32), NWB_TEXT("source-info count"));
+        const auto address = getCheckedAddress(*indirectArgCountBuffer, opDesc.inIndirectArgCountOffsetInBytes, sizeof(u32), alignof(u32), FOUNDATION_TEXT("source-info count"));
         if(!address){
             rejectCommandRecording(s_OperationName, s_DeviceAddressRangeInvalidReason);
             return;
@@ -268,7 +268,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     auto buildSize = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &buildSize);
     if(opDesc.scratchSizeInBytes < buildSize.buildScratchSize){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("declared scratch size is smaller than the queried requirement"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("declared scratch size is smaller than the queried requirement"));
         return;
     }
 
@@ -278,7 +278,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         if(opDesc.params.type == RayTracingClusterOperationType::Move)
             destinationSize = Max<u64>(destinationSize, opDesc.params.move.maxBytes);
         if(destinationSize == 0u || !VulkanDetail::IsBufferRangeInBounds(outAccelerationStructuresBuffer->getCreationDescription(), opDesc.outAccelerationStructuresOffsetInBytes, destinationSize)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("implicit destination range is smaller than the queried requirement"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("implicit destination range is smaller than the queried requirement"));
             return;
         }
 
@@ -297,9 +297,9 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         case RayTracingClusterOperationType::ClasInstantiateTemplates: destinationAlignment = properties.clusterByteAlignment; break;
         case RayTracingClusterOperationType::BlasBuild:                destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
         }
-        const auto address = getCheckedAddress(*outAccelerationStructuresBuffer, opDesc.outAccelerationStructuresOffsetInBytes, destinationSize, destinationAlignment, NWB_TEXT("implicit destination"));
+        const auto address = getCheckedAddress(*outAccelerationStructuresBuffer, opDesc.outAccelerationStructuresOffsetInBytes, destinationSize, destinationAlignment, FOUNDATION_TEXT("implicit destination"));
         if(!address){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("the implicit destination device-address range is invalid"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("the implicit destination device-address range is invalid"));
             return;
         }
         destinationAddress = *address;
@@ -310,7 +310,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         const u64 scratchAlignment = m_context.nvClusterAccelerationStructureProperties.clusterScratchByteAlignment;
         const auto scratchAddressResult = suballocateBuildScratchAddress(buildSize.buildScratchSize, scratchAlignment, s_OperationName);
         if(!scratchAddressResult){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("scratch-buffer suballocation failed"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("scratch-buffer suballocation failed"));
             return;
         }
         scratchAddress = *scratchAddressResult;

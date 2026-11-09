@@ -30,16 +30,16 @@ public:
         Alloc::ScratchArena& scratchArena
     ){
         if(TrimView(text).empty() || text != TrimView(text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
             return MakeUnexpected(Failure{});
         }
         if(text.find('\\') != AStringView::npos || !HasReservedAssetVirtualRoot(text, scratchArena)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
             return MakeUnexpected(Failure{});
         }
         const auto ref = AssetRef<AssetT>::FromText(text);
         if(!ref || !ref->valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
             return MakeUnexpected(Failure{});
         }
         return *ref;
@@ -55,7 +55,7 @@ public:
         Alloc::ScratchArena& scratchArena
     ){
         if(!value.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(nonStringErrorText));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(nonStringErrorText));
             return MakeUnexpected(Failure{});
         }
         const AStringView text(value.asString().data(), value.asString().size());
@@ -72,7 +72,7 @@ public:
         Alloc::ScratchArena& scratchArena
     ){
         if(!listValue.isList()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
             return MakeUnexpected(Failure{});
         }
         const auto& items = listValue.asList();

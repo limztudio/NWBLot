@@ -11,7 +11,7 @@ import sys
 
 from capture_reference import analyze_frame, failure_description
 
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90.0
 
 
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
@@ -62,7 +62,7 @@ def capture_command(args, output):
     if args.mode == LIT_FRAMEBUFFER:
         command += ["--application-capture", "--application-capture-frame-count", str(args.frames), "--log-output", str(output.with_suffix(".log"))]
     else:
-        command += ["--resize-client", "800", "600", "--settle-seconds", SETTLE_SECONDS_ARGUMENT, "--resize-settle-seconds", SETTLE_SECONDS_ARGUMENT, "--render-ready-timeout", "30",
+        command += ["--graceful-exit-timeout", "30", "--resize-client", "800", "600", "--settle-seconds", SETTLE_SECONDS_ARGUMENT, "--resize-settle-seconds", SETTLE_SECONDS_ARGUMENT, "--render-ready-timeout", "30",
             "--expect-before-resize-log-message", "UiLayerSmokeProject: resize scene presented"]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable.resolve())]

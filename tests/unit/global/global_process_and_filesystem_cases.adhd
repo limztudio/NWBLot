@@ -383,7 +383,7 @@ TEST(Global, NameHashDebugTextRejectsInvalidHex){
 #include <global/shared_library.h>
 #include <global/text_utils.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
@@ -501,7 +501,7 @@ TEST(Global, DirectoryCreationRejectsExistingFileWithoutChangingIt){
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Global, FileWritesRejectBufferedDeviceFailure){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> fullDevice(testArena.arena, "/dev/full");
@@ -513,12 +513,12 @@ TEST(Global, FileWritesRejectBufferedDeviceFailure){
 
 TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance){
     NWB::Tests::TestArena<> testArena;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./í•œê¸€/File.TXT/");
-    constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+    constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("í•œê¸€"), FOUNDATION_TEXT("File.TXT") };
 #else
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./í•œê¸€/File.TXT/");
-    constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+    constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("í•œê¸€"), FOUNDATION_TEXT("File.TXT") };
 #endif
     auto componentIt = path.begin();
     const TStringView first = componentIt.nativeComponent();
@@ -568,7 +568,7 @@ TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
         ++componentIt;
         EXPECT_NE(componentIt.nativeComponent().data(), retained.data());
     }
-    EXPECT_EQ(retained, TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage")));
+    EXPECT_EQ(retained, TStringView(FOUNDATION_TEXT("First_component_long_enough_to_require_owning_storage")));
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(after.allocationCount, before.allocationCount);
     EXPECT_EQ(after.reallocationCount, before.reallocationCount);
@@ -606,25 +606,25 @@ TEST(Global, MovePathReplacesExistingDestinationWithoutRetainingSource){
 TEST(Global, PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutExtraAllocations){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> emptyPath(testArena.arena);
-    const Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, NWB_TEXT("///"));
-    const Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, NWB_TEXT("dir/.hidden///"));
-    const Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, NWB_TEXT("alpha/beta/archive.tar.NWB"));
+    const Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, FOUNDATION_TEXT("///"));
+    const Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, FOUNDATION_TEXT("dir/.hidden///"));
+    const Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, FOUNDATION_TEXT("alpha/beta/archive.tar.NWB"));
     const usize baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
 
     EXPECT_TRUE(emptyPath.parentPathView().empty());
     EXPECT_TRUE(emptyPath.filenameView().empty());
     EXPECT_TRUE(emptyPath.stemView().empty());
     EXPECT_TRUE(emptyPath.extensionView().empty());
-    EXPECT_EQ(rootSlash.parentPathView(), TStringView(NWB_TEXT("/")));
+    EXPECT_EQ(rootSlash.parentPathView(), TStringView(FOUNDATION_TEXT("/")));
     EXPECT_TRUE(rootSlash.filenameView().empty());
-    EXPECT_EQ(hiddenPath.parentPathView(), TStringView(NWB_TEXT("dir")));
-    EXPECT_EQ(hiddenPath.filenameView(), TStringView(NWB_TEXT(".hidden")));
-    EXPECT_EQ(hiddenPath.stemView(), TStringView(NWB_TEXT(".hidden")));
+    EXPECT_EQ(hiddenPath.parentPathView(), TStringView(FOUNDATION_TEXT("dir")));
+    EXPECT_EQ(hiddenPath.filenameView(), TStringView(FOUNDATION_TEXT(".hidden")));
+    EXPECT_EQ(hiddenPath.stemView(), TStringView(FOUNDATION_TEXT(".hidden")));
     EXPECT_TRUE(hiddenPath.extensionView().empty());
-    EXPECT_EQ(multiDotPath.parentPathView(), TStringView(NWB_TEXT("alpha/beta")));
-    EXPECT_EQ(multiDotPath.filenameView(), TStringView(NWB_TEXT("archive.tar.NWB")));
-    EXPECT_EQ(multiDotPath.stemView(), TStringView(NWB_TEXT("archive.tar")));
-    EXPECT_EQ(multiDotPath.extensionView(), TStringView(NWB_TEXT(".NWB")));
+    EXPECT_EQ(multiDotPath.parentPathView(), TStringView(FOUNDATION_TEXT("alpha/beta")));
+    EXPECT_EQ(multiDotPath.filenameView(), TStringView(FOUNDATION_TEXT("archive.tar.NWB")));
+    EXPECT_EQ(multiDotPath.stemView(), TStringView(FOUNDATION_TEXT("archive.tar")));
+    EXPECT_EQ(multiDotPath.extensionView(), TStringView(FOUNDATION_TEXT(".NWB")));
 
     constexpr Array<AStringView, 2u> s_AllowedExtensions = { ".nwb", ".slang" };
     EXPECT_TRUE(PathHasListedExtension(multiDotPath, s_AllowedExtensions));
@@ -633,24 +633,24 @@ TEST(Global, PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutE
 
     Path<NWB::Core::Alloc::GlobalArena> aliased(
         testArena.arena,
-        NWB_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
+        FOUNDATION_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
     );
     aliased += aliased.extensionView();
-    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.ext")));
+    EXPECT_EQ(aliased.filenameView(), TStringView(FOUNDATION_TEXT("delta.ext.ext")));
     aliased.replaceExtension(aliased.stemView());
-    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.delta.ext")));
+    EXPECT_EQ(aliased.filenameView(), TStringView(FOUNDATION_TEXT("delta.ext.delta.ext")));
     aliased /= aliased.parentPathView();
-    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("gamma_segment_0123456789")));
+    EXPECT_EQ(aliased.filenameView(), TStringView(FOUNDATION_TEXT("gamma_segment_0123456789")));
 
-    Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, NWB_TEXT("name.ext"));
+    Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, FOUNDATION_TEXT("name.ext"));
     extension.replaceExtension(extension.extensionView());
-    EXPECT_EQ(extension.native(), TStringView(NWB_TEXT("name.ext")));
-    Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, NWB_TEXT("name.ext"));
+    EXPECT_EQ(extension.native(), TStringView(FOUNDATION_TEXT("name.ext")));
+    Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, FOUNDATION_TEXT("name.ext"));
     filename.replaceExtension(filename.filenameView());
-    EXPECT_EQ(filename.native(), TStringView(NWB_TEXT("name.name.ext")));
-    Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, NWB_TEXT("name.ext"));
+    EXPECT_EQ(filename.native(), TStringView(FOUNDATION_TEXT("name.name.ext")));
+    Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, FOUNDATION_TEXT("name.ext"));
     self.replaceExtension(self);
-    EXPECT_EQ(self.native(), TStringView(NWB_TEXT("name.name.ext")));
+    EXPECT_EQ(self.native(), TStringView(FOUNDATION_TEXT("name.name.ext")));
 }
 
 TEST(Global, AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirectoryTargets){
@@ -677,7 +677,7 @@ TEST(Global, AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirectoryT
     EXPECT_FALSE(*sameDistinct);
     EXPECT_FALSE(*sameMissing);
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(CreateHardLink(hardLinkFile.c_str(), firstFile.c_str(), nullptr) != 0){
         const auto sameHardLink = PathIdentity(firstFile, hardLinkFile).sameExisting();
         ASSERT_TRUE(sameHardLink);
@@ -704,7 +704,7 @@ TEST(Global, AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirectoryT
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
@@ -765,7 +765,7 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
 #include <global/shared_library.h>
 #include <global/text_utils.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
@@ -782,11 +782,11 @@ namespace __hidden_process_execution_boundary_tests{
 
 constexpr AStringView s_CombinedOutputFilename = NWB::Tests::GlobalCases::s_GlobalProcessCombinedOutputFilename;
 using AString = NWB::Tests::TestAString;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 static constexpr AStringView s_BinSh = NWB::Tests::GlobalCases::s_GlobalProcessBinSh;
 static constexpr AStringView s_C = NWB::Tests::GlobalCases::s_GlobalProcessCFlag;
 #endif
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 static constexpr AStringView s_TrailingSuffix = NWB::Tests::GlobalCases::s_GlobalProcessTrailingSuffix;
 #endif
 
@@ -809,7 +809,7 @@ TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(Global, WindowsProcessInputsSupportBoundedViews){
     NWB::Tests::TestArena<> testArena;
     auto executableResult = ReadEnvironmentVariable(testArena.arena, "ComSpec");
@@ -848,7 +848,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
 
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 struct ThrowingCaptureOutput{
     Array<char, 64u> bytes{};
     usize byteCount = 0u;
@@ -868,7 +868,7 @@ public:
     void append(const char* data, const usize length){
         if(length > bytes.size() - byteCount)
             throw RuntimeException("child PID output exceeded the bounded fixture buffer");
-        NWB_MEMCPY(bytes.data() + byteCount, bytes.size() - byteCount, data, length);
+        FOUNDATION_MEMCPY(bytes.data() + byteCount, bytes.size() - byteCount, data, length);
         byteCount += length;
         const AStringView output(bytes.data(), byteCount);
         const usize lineEnd = output.find('\n');
@@ -1016,7 +1016,7 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
 #include <global/shared_library.h>
 #include <global/text_utils.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
@@ -1031,11 +1031,11 @@ namespace __hidden_shared_library_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(Global, SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols){
     NWB::Tests::TestArena<> testArena;
     SharedLibrary library;
-    constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
+    constexpr TStringView s_LibraryName = FOUNDATION_TEXT("kernel32.dll.trailing");
     ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
     using CurrentProcessIdFn = DWORD(WINAPI*)();
     const auto currentProcessId = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u));
@@ -1060,10 +1060,10 @@ TEST(Global, SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpening)
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().code, MakeErrorCode(ErrorCondition::invalid_argument));
     EXPECT_FALSE(library.isOpen());
-    const auto missing = library.open(testArena.arena, NWB_TEXT("nwb_contract_missing_library_6ee251a68fe246b0"));
+    const auto missing = library.open(testArena.arena, FOUNDATION_TEXT("nwb_contract_missing_library_6ee251a68fe246b0"));
     ASSERT_FALSE(missing);
     EXPECT_NE(missing.error().code.value(), 0);
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
     EXPECT_FALSE(missing.error().detail.view().empty());
 #endif
     EXPECT_FALSE(library.isOpen());
@@ -1228,7 +1228,7 @@ TEST(GlobalFilesystemCleanup, DirectoryAndRootLinksWithTrailingSeparatorsDoNotRe
     ASSERT_TRUE(EnsureDirectories(tree));
     ASSERT_TRUE(EnsureDirectories(outside));
     ASSERT_TRUE(WriteTextFile(outside / "payload", "retained"));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto absoluteOutside = AbsolutePath(outside);
     ASSERT_TRUE(absoluteOutside);
     if(!CreateSymbolicLinkW(link.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
@@ -1258,7 +1258,7 @@ TEST(GlobalFilesystemCleanup, RemoveAllIfExistsRemovesDanglingLinkWithoutTouchin
     const TestPath root(arena.arena, "global_test_artifacts/cleanup_dangling_link");
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     const TestPath link = root / "dangling";
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(!CreateSymbolicLinkW(link.c_str(), L"missing", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
         const DWORD error = GetLastError();
         ASSERT_TRUE(RemoveAllForCleanup(root));
@@ -1276,7 +1276,7 @@ TEST(GlobalFilesystemCleanup, RemoveAllIfExistsRemovesDanglingLinkWithoutTouchin
     EXPECT_TRUE(RemoveAllForCleanup(root));
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(GlobalFilesystemCleanup, DosDeviceDrivePathRemovesItsOwnedTree){
     NWB::Tests::TestArena<> arena;
     const TestPath root(arena.arena, "global_test_artifacts/cleanup_device_drive");

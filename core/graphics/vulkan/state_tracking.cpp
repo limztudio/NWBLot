@@ -22,7 +22,7 @@ NWB_VULKAN_BEGIN
 
 
 void StateTracker::beginRecordingAttempt()noexcept{
-    NWB_ASSERT(!m_recordingAttemptActive);
+    FOUNDATION_ASSERT(!m_recordingAttemptActive);
     m_attemptPermanentTextures.clear();
     m_attemptPermanentBuffers.clear();
     m_recordingAttemptActive = true;
@@ -73,7 +73,7 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(!m_permanentTextureStates.emplace(MakeNotNull(&texture), PermanentTextureStateValue{ TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentTextures.pop_back();
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
     }
 }
 
@@ -91,7 +91,7 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     if(!m_permanentBufferStates.emplace(MakeNotNull(&buffer), PermanentBufferStateValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentBuffers.pop_back();
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
     }
 }
 
@@ -141,7 +141,7 @@ void StateTracker::beginTrackingTexture(Texture& texture, TextureSubresourceSet 
 void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers){
     for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
-        NWB_ASSERT(key.texture);
+        FOUNDATION_ASSERT(key.texture);
 
         const TextureDesc& desc = key.texture->getCreationDescription();
         const ResourceStates::Mask currentState = it.value();
@@ -203,7 +203,7 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, b8 enableBar
     }
 
     if(!m_textureUavBarriers.emplace(MakeNotNull(&texture), TextureUavBarrierPolicyValue{ TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarriers){
@@ -214,7 +214,7 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarrie
     }
 
     if(!m_bufferUavBarriers.emplace(MakeNotNull(&buffer), BufferUavBarrierPolicyValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
 }
 
 Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
@@ -261,7 +261,7 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, b8 enableBarriers){
     if(!texture)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set texture UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isTextureReadyForCommandQueue(texture)){
@@ -274,7 +274,7 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, b8 enableBarr
 void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarriers){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set buffer UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isBufferReadyForCommandQueue(buffer)){
@@ -287,7 +287,7 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarrier
 void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!texture)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("begin tracking texture state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin tracking texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){

@@ -29,17 +29,17 @@ inline Expected<u64> ComputeVertexAttributeBytes(const VertexAttributeDesc& attr
 
     const FormatInfo& formatInfo = GetFormatInfo(attr.format);
     if(formatInfo.bytesPerBlock == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
         return MakeUnexpected(Failure{});
     }
     if(attr.arraySize > Limit<u64>::s_Max / static_cast<u64>(formatInfo.bytesPerBlock)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
         return MakeUnexpected(Failure{});
     }
 
     const u64 attributeBytes = static_cast<u64>(formatInfo.bytesPerBlock) * static_cast<u64>(attr.arraySize);
     if(attributeBytes == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
         return MakeUnexpected(Failure{});
     }
 
@@ -70,12 +70,12 @@ InputLayout::InputLayout(const VulkanContext& context)noexcept
 
 Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*){
     if(attributeCount > 0 && !d){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
         return MakeUnexpected(Failure{});
     }
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(attributeCount > limits.maxVertexInputAttributes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}"), attributeCount, limits.maxVertexInputAttributes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}"), attributeCount, limits.maxVertexInputAttributes);
         return MakeUnexpected(Failure{});
     }
 
@@ -93,19 +93,19 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
     for(u32 i = 0u; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
         if(VulkanDetail::ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
             return MakeUnexpected(Failure{});
         }
         if(attr.arraySize == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero array size"), i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} has zero array size"), i);
             return MakeUnexpected(Failure{});
         }
         if(attr.bufferIndex >= limits.maxVertexInputBindings){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}"), i, attr.bufferIndex, limits.maxVertexInputBindings);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}"), i, attr.bufferIndex, limits.maxVertexInputBindings);
             return MakeUnexpected(Failure{});
         }
         if(attr.offset > limits.maxVertexInputAttributeOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}"), i, attr.offset, limits.maxVertexInputAttributeOffset);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}"), i, attr.offset, limits.maxVertexInputAttributeOffset);
             return MakeUnexpected(Failure{});
         }
 
@@ -113,13 +113,13 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
         if(!attributeBytes)
             return MakeUnexpected(Failure{});
         if(static_cast<u64>(attr.offset) > Limit<u64>::s_Max - *attributeBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
             return MakeUnexpected(Failure{});
         }
 
         const u64 attributeEnd = static_cast<u64>(attr.offset) + *attributeBytes;
         if(attr.elementStride != 0 && attributeEnd > static_cast<u64>(attr.elementStride)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}"), i, attributeEnd, attr.elementStride);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}"), i, attributeEnd, attr.elementStride);
             return MakeUnexpected(Failure{});
         }
 
@@ -128,14 +128,14 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
         if(bindingInfoInsert.second)
             bindingInfo.isInstanced = attr.isInstanced;
         if(bindingInfo.isInstanced != attr.isInstanced){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"), attr.bufferIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"), attr.bufferIndex);
             return MakeUnexpected(Failure{});
         }
 
         bindingInfo.requiredStride = Max(bindingInfo.requiredStride, attributeEnd);
         if(attr.elementStride != 0){
             if(bindingInfo.hasExplicitStride && bindingInfo.explicitStride != attr.elementStride){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}"), attr.bufferIndex, bindingInfo.explicitStride, attr.elementStride);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}"), attr.bufferIndex, bindingInfo.explicitStride, attr.elementStride);
                 return MakeUnexpected(Failure{});
             }
 
@@ -147,11 +147,11 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         const u64 stride = bindingInfo.hasExplicitStride ? static_cast<u64>(bindingInfo.explicitStride) : bindingInfo.requiredStride;
         if(stride == 0 || stride > limits.maxVertexInputBindingStride){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}"), bufferIndex, stride, limits.maxVertexInputBindingStride);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}"), bufferIndex, stride, limits.maxVertexInputBindingStride);
             return MakeUnexpected(Failure{});
         }
         if(bindingInfo.requiredStride > stride){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}"), bufferIndex, bindingInfo.requiredStride, stride);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}"), bufferIndex, bindingInfo.requiredStride, stride);
             return MakeUnexpected(Failure{});
         }
     }
@@ -190,7 +190,7 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
     if(taskScheduler().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold){
         const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
         if(!parallelWork){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: input layout preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: input layout preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
             return MakeUnexpected(Failure{});
         }
     }

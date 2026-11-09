@@ -35,21 +35,21 @@ b8 BlasOpacityMicromapPolicy::PrepareBlasOpacityMicromapUsageOffsets(
         const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
         if(!triangles.opacityMicromap){
             if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.ommUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM metadata requires an opacity micromap"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM metadata requires an opacity micromap"), operation);
                 return false;
             }
             continue;
         }
         if(!context.extensions.extOpacityMicromap || !context.opacityMicromapFeatureEnabled){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM geometry requires VK_EXT_opacity_micromap"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM geometry requires VK_EXT_opacity_micromap"), operation);
             return false;
         }
         if(triangles.numOmmUsageCounts != 0u && !triangles.ommUsageCounts){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM usage counts are null"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM usage counts are null"), operation);
             return false;
         }
         if(totalOpacityMicromapUsageCount > Limit<usize>::s_Max - triangles.numOmmUsageCounts){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM usage-count storage overflows"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM usage-count storage overflows"), operation);
             return false;
         }
 
@@ -69,7 +69,7 @@ Expected<OpacityMicromapIndexFormatInfo> BlasOpacityMicromapPolicy::ResolveOpaci
     if(format == Format::R32_UINT)
         return OpacityMicromapIndexFormatInfo{ VK_INDEX_TYPE_UINT32, sizeof(u32) };
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM index format must be UNKNOWN, R16_UINT, or R32_UINT"), operation);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM index format must be UNKNOWN, R16_UINT, or R32_UINT"), operation);
     return MakeUnexpected(Failure{});
 }
 
@@ -87,7 +87,7 @@ b8 BlasOpacityMicromapPolicy::ValidateOpacityMicromapStorageAndFillUsages(
     Buffer* const micromapStorage = opacityMicromap->getDataBuffer();
     const BufferDesc& micromapStorageDesc = micromapStorage->getCreationDescription();
     if(!micromapStorageDesc.isAccelStructStorage || opacityMicromap->getMicromap() == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle opacity micromap is invalid"), operation);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle opacity micromap is invalid"), operation);
         return false;
     }
 
@@ -99,12 +99,12 @@ b8 BlasOpacityMicromapPolicy::ValidateOpacityMicromapStorageAndFillUsages(
         else if(usage.format == OpacityMicromapFormat::OC1_4_State)
             format = VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM usage count has an invalid format"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM usage count has an invalid format"), operation);
             return false;
         }
         const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT ? opacityMicromap->getMaxOpacity2StateSubdivisionLevel() : opacityMicromap->getMaxOpacity4StateSubdivisionLevel();
         if(usage.subdivisionLevel > maxSubdivisionLevel){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle OMM subdivision level {} exceeds device limit {}"), operation, usage.subdivisionLevel, maxSubdivisionLevel);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle OMM subdivision level {} exceeds device limit {}"), operation, usage.subdivisionLevel, maxSubdivisionLevel);
             return false;
         }
 

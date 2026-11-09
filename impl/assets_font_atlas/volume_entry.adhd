@@ -50,7 +50,7 @@ static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemCon
 
 static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
-        NWB_TEXT("font atlas"),
+        FOUNDATION_TEXT("font atlas"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadata(root, virtualRoot, path, doc, context.cookArena, context.scratchArena);
         },

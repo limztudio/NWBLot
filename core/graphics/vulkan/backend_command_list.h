@@ -30,23 +30,23 @@ NWB_VULKAN_BEGIN
 
 
 // Command operation labels shared by command-list recording paths.
-inline constexpr TStringView s_CloseCommandListOperation = NWB_TEXT("close command list");
-inline constexpr TStringView s_OwnershipReleaseBarriersOperation = NWB_TEXT("append ownership-release barriers");
-inline constexpr TStringView s_DispatchRaysOperation = NWB_TEXT("dispatch rays");
-inline constexpr TStringView s_CopyBufferOperation = NWB_TEXT("copy buffer");
-inline constexpr TStringView s_ClearTextureBoxOperation = NWB_TEXT("clear texture box");
-inline constexpr TStringView s_ReleaseTextureOwnershipOperation = NWB_TEXT("release texture ownership");
-inline constexpr TStringView s_SetPushConstantsOperation = NWB_TEXT("set push constants");
-inline constexpr TStringView s_SetGraphicsStateOperation = NWB_TEXT("set graphics state");
-inline constexpr TStringView s_SetMeshletStateOperation = NWB_TEXT("set meshlet state");
+inline constexpr TStringView s_CloseCommandListOperation = FOUNDATION_TEXT("close command list");
+inline constexpr TStringView s_OwnershipReleaseBarriersOperation = FOUNDATION_TEXT("append ownership-release barriers");
+inline constexpr TStringView s_DispatchRaysOperation = FOUNDATION_TEXT("dispatch rays");
+inline constexpr TStringView s_CopyBufferOperation = FOUNDATION_TEXT("copy buffer");
+inline constexpr TStringView s_ClearTextureBoxOperation = FOUNDATION_TEXT("clear texture box");
+inline constexpr TStringView s_ReleaseTextureOwnershipOperation = FOUNDATION_TEXT("release texture ownership");
+inline constexpr TStringView s_SetPushConstantsOperation = FOUNDATION_TEXT("set push constants");
+inline constexpr TStringView s_SetGraphicsStateOperation = FOUNDATION_TEXT("set graphics state");
+inline constexpr TStringView s_SetMeshletStateOperation = FOUNDATION_TEXT("set meshlet state");
 
 // Rejection reasons shared by command-list recording paths.
-inline constexpr TStringView s_DataIsNullReason = NWB_TEXT("data is null");
-inline constexpr TStringView s_StagingAllocationFailedReason = NWB_TEXT("staging allocation failed");
-inline constexpr TStringView s_NativeBufferAliasReason = NWB_TEXT("distinct buffer objects alias the same native buffer");
-inline constexpr TStringView s_TextureNotReadyForQueueReason = NWB_TEXT("texture is not ready for this exact command queue");
-inline constexpr TStringView s_BufferNotReadyForQueueReason = NWB_TEXT("buffer is not ready for this exact command queue");
-inline constexpr TStringView s_MeshShaderUnavailableReason = NWB_TEXT("mesh shader feature or entry point is unavailable");
+inline constexpr TStringView s_DataIsNullReason = FOUNDATION_TEXT("data is null");
+inline constexpr TStringView s_StagingAllocationFailedReason = FOUNDATION_TEXT("staging allocation failed");
+inline constexpr TStringView s_NativeBufferAliasReason = FOUNDATION_TEXT("distinct buffer objects alias the same native buffer");
+inline constexpr TStringView s_TextureNotReadyForQueueReason = FOUNDATION_TEXT("texture is not ready for this exact command queue");
+inline constexpr TStringView s_BufferNotReadyForQueueReason = FOUNDATION_TEXT("buffer is not ready for this exact command queue");
+inline constexpr TStringView s_MeshShaderUnavailableReason = FOUNDATION_TEXT("mesh shader feature or entry point is unavailable");
 
 // Index buffer and indirect-argument buffer states tracked next to the vertex buffers.
 inline constexpr u32 s_GraphicsExtraBufferStateCount = 2u;

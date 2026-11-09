@@ -167,7 +167,7 @@ b8 Skin::loadBinary(const Span<const u8> binary){
 }
 
 b8 Skin::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("Skin::validatePayload")))
         return false;
     return ValidateSkinAssetPayload(m_mesh.valid(), m_skeleton.valid(), m_influences, m_inverseBindMatrices);
 }

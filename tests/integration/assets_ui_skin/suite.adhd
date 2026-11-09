@@ -124,7 +124,7 @@ TEST(AssetsUiSkinRegionIndex, CanonicalDuplicateKeepsFirstAuthoredMatchAndFailsA
     SetRegions(skin, Move(regions));
     EXPECT_EQ(skin.findRegion(Name("BUTTON/NORMAL")), &skin.regions()[0u]);
     EXPECT_FALSE(skin.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate region")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate region")));
 }
 
 TEST(AssetsUiSkinRegionIndex, EqualLeadingHashLanesStillResolveDistinctNames){
@@ -215,7 +215,7 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     const UiSkinRegion* retained = loaded.findRegion(Name(s_LastRegionName));
     const usize firstHash = sizeof(UiSkinHeaderBinary);
     const usize secondHash = firstHash + sizeof(UiSkinRegionBinary);
-    NWB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
+    FOUNDATION_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
     EXPECT_FALSE(loaded.loadBinary(binary));
     EXPECT_EQ(loaded.findRegion(Name(s_LastRegionName)), retained);
     EXPECT_EQ(loaded.findRegion(Name(NWB::Tests::UiSkinCases::s_UiLookupNameFirst)), &loaded.regions()[1u]);
@@ -415,7 +415,7 @@ TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGeneric
     Core::Metascript::Document completeDocument(testArena.arena);
     ASSERT_TRUE(completeDocument.parse(completeMetadata));
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("missing required region 'window.normal'")));
 }
 
 
@@ -694,7 +694,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("recook required")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("recook required")));
 }
 
 TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
@@ -734,7 +734,7 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
     binary = MakeBinary(validHeader, validRegion, testArena);
     binary.push_back(0u);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("trailing bytes")));
 }
 
 TEST(AssetsUiSkin, LoadRejectsInvalidRegionBoundsMetricsAndFlags){
@@ -779,7 +779,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     binary.reserve(sizeof(header));
     AppendPOD(binary, header);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
     ASSERT_EQ(skin.regions().size(), 1u);
     EXPECT_EQ(skin.regions().front().name, Name(UiSkinCases::s_UiTestPanelNormal));
 
@@ -797,7 +797,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("regions exceed schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("regions exceed schema limit 4096")));
 
     UiSkin::RegionVector oversized(testArena.arena);
     oversized.reserve(s_UiSkinMaxRegionCount + 1u);
@@ -806,7 +806,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     UiSkin constructed(testArena.arena, skin.virtualPath());
     constructed.setAtlas(skin.texture(), skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity(), Move(oversized));
     EXPECT_FALSE(constructed.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096")));
 }
 
 TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
@@ -842,8 +842,8 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
         metadata.append(overrideText);
         EXPECT_FALSE(ParseMetadata(metadata, testArena)) << overrideText;
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("toolkit_contract must be 'widgets'")));
 }
 
 TEST(AssetsUiSkin, RetiredSpriteSliceFieldsAreRejected){
@@ -863,7 +863,7 @@ TEST(AssetsUiSkin, RetiredSpriteSliceFieldsAreRejected){
         metadata.append(overrideText);
         EXPECT_FALSE(ParseMetadata(metadata, testArena));
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'slice'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field 'slice'")));
     TestAString spriteMetadata(PaletteMetadata());
     spriteMetadata.append("asset.regions = [{ \"name\": \"sprite\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\" }];\r\n");
     auto spriteEntryResult = ParseMetadata(spriteMetadata, testArena);
@@ -889,7 +889,7 @@ TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){
         metadata.append(overrideText);
         EXPECT_FALSE(ParseMetadata(metadata, testArena)) << overrideText;
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate region")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate region")));
 }
 
 TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){

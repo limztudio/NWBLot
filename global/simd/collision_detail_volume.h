@@ -17,13 +17,13 @@ namespace CollisionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorSingle center, const SIMDVectorSingle radius, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
+FOUNDATION_INLINE void FastIntersectSpherePlane(const SIMDVectorSingle center, const SIMDVectorSingle radius, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
     const SIMDVectorSingle distance = PlaneDistance(plane, center);
     outOutside = VectorLess(distance, VectorNegate(radius));
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-[[nodiscard]] NWB_INLINE ContainmentType::Enum NWB_SIMD_CALL ContainmentFromSpherePlaneTests(const SIMDVectorSingle sphereValue, const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount])noexcept{
+[[nodiscard]] FOUNDATION_INLINE ContainmentType::Enum FOUNDATION_SIMD_CALL ContainmentFromSpherePlaneTests(const SIMDVectorSingle sphereValue, const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount])noexcept{
     const SIMDVectorSingle centerVector = SphereCenter(sphereValue);
     const SIMDVectorSingle sphereRadius = SphereRadius(sphereValue);
     SIMDVectorSingle anyIntersecting = VectorFalseInt();
@@ -38,14 +38,14 @@ NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorSingle center, const SI
     return Vector4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
 }
 
-NWB_INLINE void FastIntersectAxisAlignedBoxPlane(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
+FOUNDATION_INLINE void FastIntersectAxisAlignedBoxPlane(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
     const SIMDVectorSingle distance = PlaneDistance(plane, center);
     const SIMDVectorSingle radius = Vector3Dot(extents, VectorAbs(plane));
     outOutside = VectorLess(distance, VectorNegate(radius));
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-NWB_INLINE void FastIntersectOrientedBoxPlane(
+FOUNDATION_INLINE void FastIntersectOrientedBoxPlane(
     const SIMDVectorSingle center,
     const SIMDVectorSingle extents,
     const SIMDVectorSingle axis0,
@@ -65,7 +65,7 @@ NWB_INLINE void FastIntersectOrientedBoxPlane(
 }
 
 inline void FastIntersectPointsPlane(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
-    NWB_ASSERT(!points.empty());
+    FOUNDATION_ASSERT(!points.empty());
 
     SIMDVectorSingle minDistance = PlaneDistance(plane, points[0]);
     SIMDVectorSingle maxDistance = minDistance;
@@ -83,17 +83,17 @@ inline void FastIntersectPointsPlane(const Span<const SIMDVectorSingle> points, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& outAxis0, SIMDVectorSingle& outAxis1, SIMDVectorSingle& outAxis2)noexcept{
+FOUNDATION_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& outAxis0, SIMDVectorSingle& outAxis1, SIMDVectorSingle& outAxis2)noexcept{
     outAxis0 = Vector3Rotate(s_SIMDIdentityR0, orientation);
     outAxis1 = Vector3Rotate(s_SIMDIdentityR1, orientation);
     outAxis2 = Vector3Rotate(s_SIMDIdentityR2, orientation);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle PointToObbLocal(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle orientation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle PointToObbLocal(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle orientation)noexcept{
     return Vector3InverseRotate(VectorSubtract(point, center), orientation);
 }
 
-[[nodiscard]] NWB_INLINE b8 PointInsideObb(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 PointInsideObb(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
     return Vector3LessOrEqual(VectorAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 
@@ -359,13 +359,13 @@ namespace CollisionDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorDouble center, const SIMDVectorDouble radius, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
+FOUNDATION_INLINE void FastIntersectSpherePlane(const SIMDVectorDouble center, const SIMDVectorDouble radius, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
     const SIMDVectorDouble distance = PlaneDoubleDistance(plane, center);
     outOutside = VectorDoubleLess(distance, VectorDoubleNegate(radius));
     outInside = VectorDoubleGreaterOrEqual(distance, radius);
 }
 
-[[nodiscard]] NWB_INLINE ContainmentType::Enum NWB_SIMD_CALL ContainmentFromSpherePlaneTests(const SIMDVectorDouble sphereValue, const SIMDVectorDouble (&planes)[s_DoubleFrustumPlaneCount])noexcept{
+[[nodiscard]] FOUNDATION_INLINE ContainmentType::Enum FOUNDATION_SIMD_CALL ContainmentFromSpherePlaneTests(const SIMDVectorDouble sphereValue, const SIMDVectorDouble (&planes)[s_DoubleFrustumPlaneCount])noexcept{
     const SIMDVectorDouble centerVector = SphereCenter(sphereValue);
     const SIMDVectorDouble sphereRadius = SphereRadius(sphereValue);
     SIMDVectorDouble anyIntersecting = VectorDoubleFalseInt();
@@ -380,14 +380,14 @@ NWB_INLINE void FastIntersectSpherePlane(const SIMDVectorDouble center, const SI
     return VectorDouble4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
 }
 
-NWB_INLINE void FastIntersectAxisAlignedBoxPlane(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
+FOUNDATION_INLINE void FastIntersectAxisAlignedBoxPlane(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
     const SIMDVectorDouble distance = PlaneDoubleDistance(plane, center);
     const SIMDVectorDouble radius = VectorDouble3Dot(extents, VectorDoubleAbs(plane));
     outOutside = VectorDoubleLess(distance, VectorDoubleNegate(radius));
     outInside = VectorDoubleGreaterOrEqual(distance, radius);
 }
 
-NWB_INLINE void FastIntersectOrientedBoxPlane(
+FOUNDATION_INLINE void FastIntersectOrientedBoxPlane(
     const SIMDVectorDouble center,
     const SIMDVectorDouble extents,
     const SIMDVectorDouble axis0,
@@ -407,7 +407,7 @@ NWB_INLINE void FastIntersectOrientedBoxPlane(
 }
 
 inline void FastIntersectPointsPlane(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
-    NWB_ASSERT(!points.empty());
+    FOUNDATION_ASSERT(!points.empty());
 
     SIMDVectorDouble minDistance = PlaneDoubleDistance(plane, points[0]);
     SIMDVectorDouble maxDistance = minDistance;
@@ -425,17 +425,17 @@ inline void FastIntersectPointsPlane(const Span<const SIMDVectorDouble> points, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& outAxis0, SIMDVectorDouble& outAxis1, SIMDVectorDouble& outAxis2)noexcept{
+FOUNDATION_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& outAxis0, SIMDVectorDouble& outAxis1, SIMDVectorDouble& outAxis2)noexcept{
     outAxis0 = VectorDouble3Rotate(s_DoubleSIMDIdentityR0, orientation);
     outAxis1 = VectorDouble3Rotate(s_DoubleSIMDIdentityR1, orientation);
     outAxis2 = VectorDouble3Rotate(s_DoubleSIMDIdentityR2, orientation);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble PointToObbLocal(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble orientation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble PointToObbLocal(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble orientation)noexcept{
     return VectorDouble3InverseRotate(VectorDoubleSubtract(point, center), orientation);
 }
 
-[[nodiscard]] NWB_INLINE b8 PointInsideObb(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 PointInsideObb(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
     return VectorDouble3LessOrEqual(VectorDoubleAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 

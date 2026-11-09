@@ -56,7 +56,7 @@ struct SetupUploadReadinessBridgeGraphTask{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadReadinessBridgeTasks(GpuTaskGraph& graph, GraphicsBackend::Device& device, const ResourceQueueSharing::Mask queueSharing, const CommandQueue::Enum directConsumerQueue, const GpuTaskId uploadTask){
-    NWB_ASSERT(uploadTask.valid());
+    FOUNDATION_ASSERT(uploadTask.valid());
 
     GpuTaskId terminalTask = uploadTask;
     constexpr Array<CommandQueue::Enum, 3> s_ConsumerQueues = {{ CommandQueue::Graphics, CommandQueue::Compute, CommandQueue::Transfer }};
@@ -170,7 +170,7 @@ CommandQueue::Enum SetupUploadGraph::ResolveConsumerQueue(GraphicsBackend::Devic
     case CommandQueue::Graphics:
         return CommandQueue::Graphics;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
         return CommandQueue::Graphics;
     }
 }

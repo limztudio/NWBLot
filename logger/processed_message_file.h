@@ -46,7 +46,7 @@ public:
         for(usize attempt = 0u; attempt < s_MaxAttempts; ++attempt){
             const LogString fileName = StringFormat(
                 m_arena,
-                NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}.log"),
+                FOUNDATION_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}.log"),
                 fileNameBase,
                 localTime->tm_year + s_LocalTimeYearBase,
                 localTime->tm_mon + s_LocalTimeMonthBase,

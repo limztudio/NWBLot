@@ -37,7 +37,7 @@ public:
 
 public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
-    void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
+    void emitTypeArgListCpp(MString& out, Span<const TypeArg> args, b8 appendArena = false)const;
     void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
     void emitParamListCpp(MString& out, Span<const ParamDecl> params)const;
     void emitTemplateHeaderCpp(MString& out, Span<const TemplateParamDecl> params)const;

@@ -71,7 +71,7 @@ struct RelativeAssetPathLayout{
 template<typename PathArenaT>
 [[nodiscard]] inline RelativeAssetPathLayout<PathArenaT> MeasureRelativeAssetPathText(const ::Path<PathArenaT>& relativePath){
     using NativeStringView = typename ::Path<PathArenaT>::native_string_view;
-    constexpr NativeStringView s_PathSeparatorChars{ NWB_TEXT("/\\") };
+    constexpr NativeStringView s_PathSeparatorChars{ FOUNDATION_TEXT("/\\") };
 
     RelativeAssetPathLayout<PathArenaT> layout{ relativePath.end() };
     CountingByteOutput counter;
@@ -107,7 +107,7 @@ inline void WriteRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, c
         WriteConvertedText<char>(cursor, component);
         hasComponent = true;
     }
-    NWB_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);
+    FOUNDATION_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);
     for(char* character = output.get(); character != cursor; ++character)
         *character = Canonicalize(*character);
 }
@@ -133,7 +133,7 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
             const ::Path<Alloc::ScratchArena> rootPath(scratchArena, assetRoot);
             const ::Path<Alloc::ScratchArena> relativePath = sourcePath.lexicallyRelative(rootPath);
             if(relativePath.empty()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'"), PathToString<tchar>(sourceOrMetaPath), PathToString<tchar>(assetRoot));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'"), PathToString<tchar>(sourceOrMetaPath), PathToString<tchar>(assetRoot));
                 return MakeUnexpected(Failure{});
             }
 
@@ -141,17 +141,17 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
             logicalPath.replaceExtension();
             const auto layout = MeasureRelativeAssetPathText(logicalPath);
             if(!layout.accepted){
-                NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset '{}' is not under asset root '{}'"), PathToString<tchar>(sourceOrMetaPath), PathToString<tchar>(assetRoot));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: asset '{}' is not under asset root '{}'"), PathToString<tchar>(sourceOrMetaPath), PathToString<tchar>(assetRoot));
                 return MakeUnexpected(Failure{});
             }
 
             if(writeOutput){
-                NWB_ASSERT(virtualPathSize == virtualRoot.size() + 1u + layout.byteCount);
+                FOUNDATION_ASSERT(virtualPathSize == virtualRoot.size() + 1u + layout.byteCount);
                 WriteRelativeAssetPathText(logicalPath, layout, MakeNotNull(virtualPath.data() + virtualRoot.size() + 1u));
             }
             else{
                 if(virtualRoot.size() > Limit<usize>::s_Max - 1u || layout.byteCount > Limit<usize>::s_Max - virtualRoot.size() - 1u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Assets: derived asset virtual path size overflows for '{}'"), PathToString<tchar>(sourceOrMetaPath));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: derived asset virtual path size overflows for '{}'"), PathToString<tchar>(sourceOrMetaPath));
                     return MakeUnexpected(Failure{});
                 }
                 virtualPathSize = virtualRoot.size() + 1u + layout.byteCount;
@@ -161,7 +161,7 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
         if(!writeOutput){
             virtualPath.resize(virtualPathSize);
             if(!virtualRoot.empty())
-                NWB_MEMCPY(virtualPath.data(), virtualPathSize, virtualRoot.data(), virtualRoot.size());
+                FOUNDATION_MEMCPY(virtualPath.data(), virtualPathSize, virtualRoot.data(), virtualRoot.size());
             virtualPath[virtualRoot.size()] = '/';
         }
     }

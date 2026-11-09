@@ -186,7 +186,7 @@ GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(GraphicsArena& arena, const
     , m_assignments(arena)
     , m_maximumSamplesPerHistory(maximumSamplesPerHistory == 0u ? 1u : maximumSamplesPerHistory)
 {
-    NWB_ASSERT(maximumSamplesPerHistory != 0u);
+    FOUNDATION_ASSERT(maximumSamplesPerHistory != 0u);
 }
 
 
@@ -253,7 +253,7 @@ b8 GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey& 
         record->entry.physicalQueue = physicalQueue;
         record->samples.reserve(m_maximumSamplesPerHistory);
         if(m_historyIndex && !m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
         discardRecord.release();
@@ -290,7 +290,7 @@ b8 GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key
         assignment->lastSwitchFrameIndex = sourceFrameIndex;
         assignment->hasAcceptedAssignment = true;
         if(m_assignmentIndex && !m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
         discardAssignment.release();
@@ -406,7 +406,7 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentSta
 
 
 void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
-    NWB_ASSERT(!record.samples.empty());
+    FOUNDATION_ASSERT(!record.samples.empty());
 
     const OnlineF64Statistics statistics = ComputeOnlineF64Statistics(Span<const f64>(record.samples.data(), record.samples.size()));
     record.entry.history.averageSeconds = statistics.average;
@@ -420,12 +420,12 @@ b8 GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
-    NWB_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
+    FOUNDATION_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
     RouteIndex index(s_LinearHistoryCount * s_HistoryIndexBucketsPerEntry, m_arena);
     for(usize recordIndex = 0u; recordIndex < m_histories.size(); ++recordIndex){
         const GpuTaskTimingHistoryEntry& entry = m_histories[recordIndex].entry;
         if(!index.emplace(StoredRouteKey(entry.key, entry.physicalQueue), recordIndex).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
@@ -438,11 +438,11 @@ b8 GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
-    NWB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
+    FOUNDATION_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
     AssignmentIndex index(s_LinearHistoryCount * s_HistoryIndexBucketsPerEntry, m_arena);
     for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex){
         if(!index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }

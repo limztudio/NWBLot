@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ static constexpr u32 s_WaylandCompositorBindVersion = 4u;
 static constexpr u32 s_WaylandOutputBindVersion = 2u;
 static constexpr u32 s_WaylandWmBaseBindVersion = 1u;
 static constexpr u32 s_InitialConfigureRoundtripLimit = 2u;
-static constexpr TStringView s_PosixNativeDomain = NWB_TEXT("POSIX");
+static constexpr TStringView s_PosixNativeDomain = FOUNDATION_TEXT("POSIX");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,7 +159,7 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
         const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
         if(!context.output || wl_output_add_listener(context.output, &s_OutputListener, &context) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland output listener registration failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland output listener registration failed"));
             return;
         }
     }
@@ -226,7 +226,7 @@ static void OnToplevelClose(void* data, [[maybe_unused]] xdg_toplevel* toplevel)
     context.frame.input().pointerLeave();
     if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            NWB_FATAL_ASSERT(false);
+            FOUNDATION_FATAL_ASSERT(false);
     }
     context.shouldClose = true;
     context.visible = false;
@@ -289,17 +289,17 @@ struct WaylandEventFailure{
 
 [[nodiscard]] static Expected<void, WaylandEventFailure> PumpEvents(WaylandContext& context, const i32 timeoutMs){
     if(wl_display_dispatch_pending(context.display) == -1)
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("dispatch pending"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
 
     while(wl_display_prepare_read(context.display) != 0){
         if(wl_display_dispatch_pending(context.display) == -1)
-            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending during prepare_read"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
+            return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("dispatch pending during prepare_read"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     }
 
     const auto flushed = FlushDisplay(*context.display);
     if(!flushed){
         wl_display_cancel_read(context.display);
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display flush"), .nativeDomain = s_PosixNativeDomain, .nativeCode = flushed.error(), });
+        return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("display flush"), .nativeDomain = s_PosixNativeDomain, .nativeCode = flushed.error(), });
     }
 
     pollfd fd;
@@ -312,7 +312,7 @@ struct WaylandEventFailure{
         wl_display_cancel_read(context.display);
         if(nativeError == EINTR)
             return {};
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = nativeError, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = nativeError, });
     }
 
     if(pollResult == 0){
@@ -322,18 +322,18 @@ struct WaylandEventFailure{
 
     if((fd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0){
         wl_display_cancel_read(context.display);
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display connection"), .nativeDomain = NWB_TEXT("poll.revents"), .nativeCode = fd.revents, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("display connection"), .nativeDomain = FOUNDATION_TEXT("poll.revents"), .nativeCode = fd.revents, });
     }
 
     if((fd.revents & POLLIN) != 0){
         if(wl_display_read_events(context.display) == -1)
-            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("read events"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
+            return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("read events"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     }
     else
         wl_display_cancel_read(context.display);
 
     if(wl_display_dispatch_pending(context.display) == -1)
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending after poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = FOUNDATION_TEXT("dispatch pending after poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     return {};
 }
 
@@ -349,7 +349,7 @@ b8 InitWaylandFrame(Frame& frame){
     ScopeExit cleanupOnFailure([&frame]()noexcept{ CleanupWaylandFrame(frame); });
     auto contextOwner = MakeGlobalUnique<WaylandContext>(frame.projectObjectArena(), frame);
     if(!contextOwner){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland context allocation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland context allocation failed"));
         return false;
     }
     auto& context = *contextOwner;
@@ -360,7 +360,7 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.display){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland display connection failed"));
         return false;
     }
     frameData.nativeDisplay() = context.display;
@@ -368,7 +368,7 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.input.createKeymapContext()){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xkb context creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland xkb context creation failed"));
         return false;
     }
 
@@ -376,34 +376,34 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.registry){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry acquisition failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland registry acquisition failed"));
         return false;
     }
     if(wl_registry_add_listener(context.registry, &s_RegistryListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry listener registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland registry listener registration failed"));
         return false;
     }
 
     if(const auto roundtrip = RoundtripDisplay(*context.display); !roundtrip){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland registry roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
         return false;
     }
 
     if(!context.compositor || !context.wmBase){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
         return false;
     }
 
     if(xdg_wm_base_add_listener(context.wmBase, &s_WmBaseListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg-shell listener registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland xdg-shell listener registration failed"));
         return false;
     }
 
@@ -411,7 +411,7 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.surface){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland surface creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland surface creation failed"));
         return false;
     }
     ApplyBufferScale(context, context.bufferScale);
@@ -421,13 +421,13 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.xdgSurface){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland xdg_surface creation failed"));
         return false;
     }
     if(xdg_surface_add_listener(context.xdgSurface, &s_XdgSurfaceListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface listener registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland xdg_surface listener registration failed"));
         return false;
     }
 
@@ -435,13 +435,13 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.toplevel){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel creation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland toplevel creation failed"));
         return false;
     }
     if(xdg_toplevel_add_listener(context.toplevel, &s_ToplevelListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel listener registration failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland toplevel listener registration failed"));
         return false;
     }
     xdg_toplevel_set_title(context.toplevel, windowTitle.data());
@@ -454,7 +454,7 @@ b8 InitWaylandFrame(Frame& frame){
     if(const auto flushed = FlushDisplay(*context.display); !flushed){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial display flush failed; native_domain=POSIX native_code={}"), flushed.error());
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland initial display flush failed; native_domain=POSIX native_code={}"), flushed.error());
         return false;
     }
 
@@ -462,7 +462,7 @@ b8 InitWaylandFrame(Frame& frame){
         if(const auto roundtrip = RoundtripDisplay(*context.display); !roundtrip){
             CleanupWaylandFrame(frame);
             cleanupOnFailure.release();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial configure roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland initial configure roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
             return false;
         }
     }
@@ -470,7 +470,7 @@ b8 InitWaylandFrame(Frame& frame){
     if(!context.configured){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor did not send an initial configure"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland compositor did not send an initial configure"));
         return false;
     }
 
@@ -481,7 +481,7 @@ b8 InitWaylandFrame(Frame& frame){
 
 Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& frame){
     auto* const context = static_cast<WaylandContext*>(frame.data<Common::LinuxFrame>().nativeState());
-    NWB_FATAL_ASSERT(context && context->display);
+    FOUNDATION_FATAL_ASSERT(context && context->display);
     auto service = CreateWaylandClipboardService(frame.projectObjectArena(), *context->display);
     if(service)
         context->input.attachClipboard(**service);
@@ -490,7 +490,7 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& 
 
 Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& frame){
     auto* const context = static_cast<WaylandContext*>(frame.data<Common::LinuxFrame>().nativeState());
-    NWB_FATAL_ASSERT(context && context->display && context->surface);
+    FOUNDATION_FATAL_ASSERT(context && context->display && context->surface);
     auto service = CreateWaylandTextInputService(frame.projectObjectArena(), *context->display, *context->surface);
     if(service)
         context->input.attachTextInput(**service);
@@ -501,7 +501,7 @@ b8 ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     if(auto* const display = static_cast<wl_display*>(frameData.nativeDisplay())){
         if(const auto flushed = FlushDisplay(*display); !flushed){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland show display flush failed; native_domain=POSIX native_code={}"), flushed.error());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland show display flush failed; native_domain=POSIX native_code={}"), flushed.error());
             return false;
         }
     }
@@ -512,7 +512,7 @@ b8 RunWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     auto* context = static_cast<WaylandContext*>(frameData.nativeState());
     if(!context || !context->display){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland backend is not initialized"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland backend is not initialized"));
         return false;
     }
 
@@ -528,7 +528,7 @@ b8 RunWaylandFrame(Frame& frame){
         const i32 timeoutMs = context->input.pollTimeoutForKeyRepeat((!windowVisible || !windowIsInFocus) ? s_InactivePollTimeoutMs : 0);
         if(const auto pumped = PumpEvents(*context, timeoutMs); !pumped){
             const WaylandEventFailure& error = pumped.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland {} failed; native_domain={} native_code={}"), error.operation, error.nativeDomain, error.nativeCode);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland {} failed; native_domain={} native_code={}"), error.operation, error.nativeDomain, error.nativeCode);
             return false;
         }
 
@@ -543,7 +543,7 @@ b8 RunWaylandFrame(Frame& frame){
         if(const Optional<TStringView> title = frame.syncGraphicsWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus)){
             xdg_toplevel_set_title(context->toplevel, title->data());
             if(const auto flushed = FlushDisplay(*context->display); !flushed){
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland title display flush failed; native_domain=POSIX native_code={}"), flushed.error());
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Wayland title display flush failed; native_domain=POSIX native_code={}"), flushed.error());
                 return false;
             }
         }

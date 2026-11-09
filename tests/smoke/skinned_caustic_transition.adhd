@@ -147,7 +147,7 @@ b8 SkinnedCausticTransition::prepare(){
             return false;
         m_capturePaths = Move(captureSeries->paths);
         m_capture = Move(captureSeries->capture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
             , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
             , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
         );
@@ -202,7 +202,7 @@ void SkinnedCausticTransition::recordTransitionRoute(const u64 frame, Core::ECS:
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/skinned_caustic_frame_graph"));
     NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
     if(!renderer.appendFrameGraph(builder)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: could not capture public accepted-queue telemetry"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinnedCausticTransition: could not capture public accepted-queue telemetry"));
         m_context.requestQuit();
         return;
     }
@@ -223,7 +223,7 @@ void SkinnedCausticTransition::recordTransitionRoute(const u64 frame, Core::ECS:
             )
                 continue;
             const b8 offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: accepted photon route phase {} source_frame={} queue={} graphics_queue={} generation={} off_graphics={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: accepted photon route phase {} source_frame={} queue={} graphics_queue={} generation={} off_graphics={}")
                 , phase
                 , sourceFrame
                 , packet.queue.index
@@ -233,7 +233,7 @@ void SkinnedCausticTransition::recordTransitionRoute(const u64 frame, Core::ECS:
             );
             m_phaseRouteRecorded[phase] = true;
             if(m_transitionLagged && !offGraphics){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"));
                 m_context.requestQuit();
             }
             return;
@@ -248,7 +248,7 @@ void SkinnedCausticTransition::updateTransitionState(Core::ECS::World& world, f6
             return;
         m_transitionWarmupStart = TimerNow();
         m_transitionWarmupStarted = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: warmup started graphics frame {}"), frame);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: warmup started graphics frame {}"), frame);
     }
     if(!m_transitionStarted){
         const f64 elapsed = DurationInSeconds<f64>(TimerNow(), m_transitionWarmupStart);
@@ -257,7 +257,7 @@ void SkinnedCausticTransition::updateTransitionState(Core::ECS::World& world, f6
         m_transitionFirstFrame = frame;
         m_nextCaptureFrame = frame + __hidden_skinned_caustic_transition::s_TransitionCaptureInterval - 1u;
         m_transitionStarted = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: warmup complete elapsed_seconds={:.6f} first_frame={}"), elapsed, frame);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: warmup complete elapsed_seconds={:.6f} first_frame={}"), elapsed, frame);
     }
     const u64 relativeFrame = frame - m_transitionFirstFrame;
     const u32 phase = static_cast<u32>(Min(relativeFrame / __hidden_skinned_caustic_transition::s_TransitionPhaseFrames, static_cast<u64>(__hidden_skinned_caustic_transition::s_TransitionPhaseCount - 1u)));
@@ -267,7 +267,7 @@ void SkinnedCausticTransition::updateTransitionState(Core::ECS::World& world, f6
         auto& cutter = *MakeNotNull(world.tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutterEntity));
         cutter.active = (phase & 1u) != 0u;
         m_transitionPhase = phase;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: phase {} csg={} graphics frame {}"), phase, cutter.active ? 1u : 0u, frame);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: phase {} csg={} graphics frame {}"), phase, cutter.active ? 1u : 0u, frame);
     }
     foldTransitionTiming(Name("render.caustic_photons"), m_lastPhotonPublication, m_phasePhotonSamples);
     foldTransitionTiming(Name("mesh_skinning.skinning"), m_lastSkinningPublication, m_phaseSkinningSamples);
@@ -282,22 +282,22 @@ void SkinnedCausticTransition::updateTransitionCapture(){
         return;
     const u64 sourceFrame = m_capture->capturedGraphicsFrameIndex();
     if(sourceFrame != m_nextCaptureFrame){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: missed source frame {} (captured {})"), m_nextCaptureFrame, sourceFrame);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinnedCausticTransition: missed source frame {} (captured {})"), m_nextCaptureFrame, sourceFrame);
         m_context.requestQuit();
         return;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: sample {} graphics frame {} phase {} pose_frame {}"), m_transitionSample, sourceFrame, m_transitionSample / 2u, (sourceFrame - m_transitionFirstFrame) % __hidden_skinned_caustic_transition::s_TransitionPhaseFrames);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: sample {} graphics frame {} phase {} pose_frame {}"), m_transitionSample, sourceFrame, m_transitionSample / 2u, (sourceFrame - m_transitionFirstFrame) % __hidden_skinned_caustic_transition::s_TransitionPhaseFrames);
     ++m_transitionSample;
     if(m_transitionSample == __hidden_skinned_caustic_transition::s_TransitionSampleCount){
         for(u32 phase = 0u; phase < __hidden_skinned_caustic_transition::s_TransitionPhaseCount; ++phase)
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: completed GPU phase {} photon_samples={} skinning_samples={}"), phase, m_phasePhotonSamples[phase], m_phaseSkinningSamples[phase]);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: complete samples=8"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: completed GPU phase {} photon_samples={} skinning_samples={}"), phase, m_phasePhotonSamples[phase], m_phaseSkinningSamples[phase]);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinnedCausticTransition: complete samples=8"));
         m_capture->finish();
         return;
     }
     m_nextCaptureFrame += __hidden_skinned_caustic_transition::s_TransitionCaptureInterval;
     if(!m_capture->rearm(Move(m_capturePaths[m_transitionSample]))){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: failed to advance framebuffer capture"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinnedCausticTransition: failed to advance framebuffer capture"));
         m_context.requestQuit();
     }
 }

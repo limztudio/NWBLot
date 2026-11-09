@@ -461,7 +461,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     surfelGiLifecycleInputs.hasWork = hasSurfelWork;
     auto surfelGiLifecycleResult = surfelGiLifecycleBuilder.declare(surfelGiLifecycleInputs);
     if(!surfelGiLifecycleResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI lifecycle"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI lifecycle"));
         return false;
     }
     m_deferredSurfelGiPreparationTask = surfelGiLifecycleResult->preparationTask;
@@ -491,7 +491,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         surfelIrradianceClearDesc,
         ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = ECSRenderDetail::s_FramebufferSubresources, .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor, });
     if(!surfelIrradianceClearTaskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
         return false;
     }
     const Core::GpuTaskId surfelIrradianceClearTask = *surfelIrradianceClearTaskResult;
@@ -527,7 +527,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiAgeFreeTaskResult = surfelGiTasks.declareAgeFreeTask(ageFreeDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiAgeFreeTaskResult){
             m_deferredSurfelGiAgeFreeTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
             return false;
         }
         m_deferredSurfelGiAgeFreeTask = *deferredSurfelGiAgeFreeTaskResult;
@@ -543,7 +543,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiCellHeadClearTaskResult = context.graph.addClearBufferTask(cellHeadClearDesc, Core::GpuClearBufferTaskDesc{ .destination = surfelCellHead, .clearValue = NWB_SURFEL_CELL_INVALID, });
         if(!deferredSurfelGiCellHeadClearTaskResult){
             m_deferredSurfelGiCellHeadClearTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
             return false;
         }
         m_deferredSurfelGiCellHeadClearTask = *deferredSurfelGiCellHeadClearTaskResult;
@@ -564,7 +564,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiHashBuildTaskResult = surfelGiTasks.declareHashBuildTask(hashBuildDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiHashBuildTaskResult){
             m_deferredSurfelGiHashBuildTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
             return false;
         }
         m_deferredSurfelGiHashBuildTask = *deferredSurfelGiHashBuildTaskResult;
@@ -586,7 +586,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiSpawnTaskResult = surfelGiTasks.declareSpawnTask(spawnDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiSpawnTaskResult){
             m_deferredSurfelGiSpawnTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
             return false;
         }
         m_deferredSurfelGiSpawnTask = *deferredSurfelGiSpawnTaskResult;
@@ -608,7 +608,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiTraceBuildArgsTaskResult = surfelGiTasks.declareTraceBuildArgsTask(traceBuildArgsDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiTraceBuildArgsTaskResult){
             m_deferredSurfelGiTraceBuildArgsTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
             return false;
         }
         m_deferredSurfelGiTraceBuildArgsTask = *deferredSurfelGiTraceBuildArgsTaskResult;
@@ -627,7 +627,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiTraceTaskResult = surfelGiTasks.declareTraceTask(traceDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiTraceTaskResult){
             m_deferredSurfelGiTraceTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
             return false;
         }
         m_deferredSurfelGiTraceTask = *deferredSurfelGiTraceTaskResult;
@@ -652,7 +652,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         const auto deferredSurfelGiResolveTaskResult = surfelGiTasks.declareResolveTask(resolveDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiResolveTaskResult){
             m_deferredSurfelGiResolveTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
             return false;
         }
         m_deferredSurfelGiResolveTask = *deferredSurfelGiResolveTaskResult;
@@ -674,7 +674,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     const auto deferredSurfelGiTaskResult = surfelGiTasks.declareTerminalTask(desc, deferredLightingResources, deferredTargets, timingTicket, graphOwnsSurfelGiResolve ? &asyncTiming : nullptr);
     if(!deferredSurfelGiTaskResult){
         m_deferredSurfelGiTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
         return false;
     }
     m_deferredSurfelGiTask = *deferredSurfelGiTaskResult;
@@ -703,7 +703,7 @@ void SurfelGiCounterReadbackBuilder::declare(const RayTracingSurfelPersistentRes
         BufferResourceDesc(Name(s_SurfelCounterReadbackName), s_SurfelCounterReadbackLabel)
     );
     if(!counterResult || !readbackResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
         return;
     }
     const Core::GpuGraphResourceId counter = *counterResult;
@@ -721,7 +721,7 @@ void SurfelGiCounterReadbackBuilder::declare(const RayTracingSurfelPersistentRes
     const auto deferredSurfelGiCounterReadbackTaskResult = m_graph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions.data(), .regionCount = regions.size(), });
     if(!deferredSurfelGiCounterReadbackTaskResult){
         outTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
         return;
     }
     outTask = *deferredSurfelGiCounterReadbackTaskResult;
@@ -743,7 +743,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
         return result;
     {
         if(!inputs.surfelPool.valid() || !inputs.surfelCellHead.valid() || !inputs.surfelCounter.valid() || !inputs.surfelFreeList.valid() || !inputs.surfelPoolSnapshot.valid() || !inputs.surfelCellHeadSnapshot.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI snapshot resources were unavailable during graph declaration"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: surfel-GI snapshot resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
         }
 
@@ -763,7 +763,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
             ;
             const auto preparationTaskResult = m_graph.addClearBufferTask(poolClearDesc, Core::GpuClearBufferTaskDesc{ .destination = inputs.surfelPool, .clearValue = 0u, });
             if(!preparationTaskResult){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
                 return MakeUnexpected(Failure{});
             }
             result.preparationTask = *preparationTaskResult;
@@ -815,7 +815,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
                     inputs.computeStateSource.states ? 1u : 0u
                 ).has_value()
             ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization clears"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI initialization clears"));
                 return MakeUnexpected(Failure{});
             }
 
@@ -823,7 +823,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
             initializationLifecycleDesc.setIdentity(Name(s_SurfelGraphInitializeLifecycle)).setMarkerLabel("Surfel GI Initialize Lifecycle").setScheduling(chainedInitializationScheduling).setDependencies({ &initializationDependency, 1u });
             const auto initializationLifecycleTaskResult = m_raytracingSystem.declareSurfelResourceInitializationLifecycleTask(m_graph, initializationLifecycleDesc);
             if(!initializationLifecycleTaskResult){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
                 return MakeUnexpected(Failure{});
             }
             result.initializationLifecycleTask = *initializationLifecycleTaskResult;
@@ -844,7 +844,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
         ;
         const auto snapshotCopyTaskResult = m_graph.addCopyBufferTask(snapshotDesc, Core::GpuCopyBufferTaskDesc{ .regions = snapshotRegions.data(), .regionCount = snapshotRegions.size(), });
         if(!snapshotCopyTaskResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
             return MakeUnexpected(Failure{});
         }
         result.snapshotCopyTask = *snapshotCopyTaskResult;
@@ -901,7 +901,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
     const auto surfelIrradianceHalfResult = ImportExternalTexture(m_graph, deferredTargets.surfelIrradianceHalf, Name(s_SurfelGraphIrradianceHalf), "Surfel Irradiance Half");
     const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_SurfelGraphSceneGeometry), s_SceneGeometryDomainLabel));
     if(!surfelIrradianceHalfResult || !sceneGeometryDomainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
     }
     surfelIrradianceHalf = *surfelIrradianceHalfResult;
@@ -1044,7 +1044,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         }
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
         return false;
     }
 
@@ -1067,7 +1067,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         && rayTracingResources.surfelSplitGraphPipelinesReady
     ;
     if(hasSurfelWork && !graphOwnsSurfelGiResolve){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: active surfel GI has no complete prepared graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: active surfel GI has no complete prepared graph resources"));
         return false;
     }
     if(graphOwnsSurfelGiResolve){
@@ -1138,7 +1138,7 @@ b8 RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets){
     else
         targets.surfelIrradiance.reset();
     if(!surfelIrradianceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel irradiance target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create surfel irradiance target"));
         return false;
     }
 
@@ -1151,7 +1151,7 @@ b8 RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets){
     else
         targets.surfelIrradianceHalf.reset();
     if(!surfelIrradianceHalfResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel reduced-resolution irradiance target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create surfel reduced-resolution irradiance target"));
         return false;
     }
 
@@ -1163,7 +1163,7 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
     if(!hasSurfelWork())
         return Optional<Core::GpuUploadBlobId>{};
     if(!m_rayTracingState.m_surfelConstants){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
         return MakeUnexpected(Failure{});
     }
 
@@ -1216,7 +1216,7 @@ b8 RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::Qu
 }
 
 void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept{
-    NWB_ASSERT(submissionToken.valid());
+    FOUNDATION_ASSERT(submissionToken.valid());
     m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
 
@@ -1241,7 +1241,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
         return false;
     }
 
@@ -1259,7 +1259,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
             inOutBuffer = Move(*bufferResult);
         else{
             inOutBuffer.reset();
-            NWB_LOGGER_ERROR(NWB_TEXT("{}"), errorMessage);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}"), errorMessage);
             return false;
         }
         if(resetSeeded)
@@ -1311,7 +1311,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Fresh pool storage needs one clear before tracing.
         !ensureBuffer(
             makeStructuredDesc(ComputeSurfelBufferByteSize(NWB_SURFEL_RECORD_SIZE, poolCapacity), NWB_SURFEL_RECORD_SIZE, true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourcePool)),
-            NWB_TEXT("RendererSystem: failed to create surfel pool buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel pool buffer"),
             true,
             true,
             m_rayTracingState.m_surfelPoolBuffer
@@ -1322,7 +1322,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
                 ComputeSurfelBufferByteSize(static_cast<u64>(NWB_SURFEL_GUIDE_FLOAT4_STRIDE) * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL, poolCapacity),
                 NWB_SURFEL_GUIDE_FLOAT4_STRIDE, true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceGuidePool)
             ),
-            NWB_TEXT("RendererSystem: failed to create surfel guide pool buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel guide pool buffer"),
             true,
             false,
             m_rayTracingState.m_surfelGuidePoolBuffer
@@ -1330,7 +1330,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Hash heads use 0xFFFFFFFF as the empty sentinel.
         || !ensureBuffer(
             makeStructuredDesc(ComputeSurfelBufferByteSize(sizeof(u32), cellCount), sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCellHead)),
-            NWB_TEXT("RendererSystem: failed to create surfel cell-head buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel cell-head buffer"),
             true,
             false,
             m_rayTracingState.m_surfelCellHeadBuffer
@@ -1338,7 +1338,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // The persistent counter writes on Compute; the diagnostic tail may copy it on Transfer before the next import.
         || !ensureBuffer(
             makeStructuredDesc(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE, sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCounter)),
-            NWB_TEXT("RendererSystem: failed to create surfel counter buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel counter buffer"),
             true,
             false,
             m_rayTracingState.m_surfelCounterBuffer
@@ -1346,7 +1346,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Build-args rewrites the indirect dispatch buffer each frame.
         || !ensureBuffer(
             makeStructuredDesc(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT, sizeof(u32), true, true, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, Name(s_SurfelResourceTraceIndirectArgs)),
-            NWB_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"),
             false,
             false,
             m_rayTracingState.m_surfelTraceIndirectArgsBuffer
@@ -1354,7 +1354,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Age-free pushes ids and spawn pops them from this persistent free list.
         || !ensureBuffer(
             makeStructuredDesc(ComputeSurfelBufferByteSize(sizeof(u32), poolCapacity), sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, Name(s_SurfelResourceFreeList)),
-            NWB_TEXT("RendererSystem: failed to create surfel free-list buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel free-list buffer"),
             true,
             false,
             m_rayTracingState.m_surfelFreeListBuffer
@@ -1362,7 +1362,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Bounce gathers read a stable previous-frame pool snapshot.
         || !ensureBuffer(
             makeStructuredDesc(ComputeSurfelBufferByteSize(NWB_SURFEL_RECORD_SIZE, poolCapacity), NWB_SURFEL_RECORD_SIZE, false, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourcePoolSnapshot)),
-            NWB_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"),
             false,
             false,
             m_rayTracingState.m_surfelPoolSnapshotBuffer
@@ -1370,14 +1370,14 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Snapshot hash heads alongside the pool for a consistent bounce gather.
         || !ensureBuffer(
             makeStructuredDesc(ComputeSurfelBufferByteSize(sizeof(u32), cellCount), sizeof(u32), false, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCellHeadSnapshot)),
-            NWB_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"),
             false,
             false,
             m_rayTracingState.m_surfelCellHeadSnapshotBuffer
         )
         || !ensureBuffer(
             readbackDesc,
-            NWB_TEXT("RendererSystem: failed to create surfel counter readback buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel counter readback buffer"),
             false,
             false,
             m_rayTracingState.m_surfelCounterReadback
@@ -1385,7 +1385,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         // Every surfel pass binds this per-frame parameter buffer as a ConstantBuffer.
         || !ensureBuffer(
             constantsDesc,
-            NWB_TEXT("RendererSystem: failed to create surfel constant buffer"),
+            FOUNDATION_TEXT("RendererSystem: failed to create surfel constant buffer"),
             false,
             false,
             m_rayTracingState.m_surfelConstants
@@ -1405,7 +1405,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), m_rayTracingState.m_surfelPoolSnapshotHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
         return false;
     }
 
@@ -1431,7 +1431,7 @@ b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& target
 
     // GI consumes the same selector descriptor as the other current ray effects.
     if(!targets.bindless.valid() || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }
 

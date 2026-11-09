@@ -52,12 +52,12 @@ template<typename MetadataValue>
     const AStringView errorDetailText = "must be an integer boolean (0 or 1)"
 ){
     if(!value.isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(errorDetailText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(errorDetailText));
         return MakeUnexpected(Failure{});
     }
     const i64 integerValue = value.asInteger();
     if(integerValue != 0 && integerValue != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be 0 or 1"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be 0 or 1"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     return integerValue != 0;
@@ -111,12 +111,12 @@ template<typename MetadataValue>
     if(!fieldValue)
         return true;
     if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be an integer"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return false;
     }
     const i64 integerValue = fieldValue->asInteger();
     if(integerValue < static_cast<i64>(Limit<i32>::s_Min) || integerValue > static_cast<i64>(Limit<i32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return false;
     }
     outValue = static_cast<i32>(integerValue);

@@ -48,7 +48,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ModelAssetCodecAutoRegistrar, ModelAssetCodec
 
 
 b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
+    if(!checkVirtualPath(FOUNDATION_TEXT("Model::validatePayload")))
         return false;
 
     return ValidateModelPayloadObjects(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, scratchArena);

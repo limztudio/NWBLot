@@ -103,7 +103,7 @@ inline void PollCompletedStatisticsReadback(
             continue;
         }
         Array<u32, CounterByteSize / sizeof(u32)> completedCounters{};
-        NWB_MEMCPY(completedCounters.data(), sizeof(completedCounters), *counters, sizeof(completedCounters));
+        FOUNDATION_MEMCPY(completedCounters.data(), sizeof(completedCounters), *counters, sizeof(completedCounters));
         device.unmapBuffer(*buffers[index]);
         control->complete(key, token, completedCounters);
     }

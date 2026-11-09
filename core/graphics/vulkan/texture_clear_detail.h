@@ -36,13 +36,13 @@ inline constexpr u32 s_TextureClearStencilPatternBytes = 1u;
 inline constexpr u32 s_TextureClearMaxPatternBytes = 16u;
 inline constexpr u32 s_TextureClearUploadAlignment = 4u;
 
-inline constexpr TStringView s_TextureNotLiveResourceReason = NWB_TEXT("texture must be a live resource owned by this device");
-inline constexpr TStringView s_TextureNotReadyForNativeClearReason = NWB_TEXT("texture is not ready for the requested native clear on this exact command queue");
-inline constexpr TStringView s_ClearSubresourceRangeInvalidReason = NWB_TEXT("subresource range is empty or invalid");
-inline constexpr TStringView s_BoundedMultisampledClearInactiveReason = NWB_TEXT("bounded multisampled clears require active rendering");
-inline constexpr TStringView s_BoundedClearDepthReason = NWB_TEXT("attachment bounded clears require full attachment depth");
-inline constexpr TStringView s_ClearUploadLayoutUnaddressableReason = NWB_TEXT("clear upload layout is not addressable");
-inline constexpr TStringView s_ClearStagingRangeInvalidReason = NWB_TEXT("staging allocation returned an invalid range");
+inline constexpr TStringView s_TextureNotLiveResourceReason = FOUNDATION_TEXT("texture must be a live resource owned by this device");
+inline constexpr TStringView s_TextureNotReadyForNativeClearReason = FOUNDATION_TEXT("texture is not ready for the requested native clear on this exact command queue");
+inline constexpr TStringView s_ClearSubresourceRangeInvalidReason = FOUNDATION_TEXT("subresource range is empty or invalid");
+inline constexpr TStringView s_BoundedMultisampledClearInactiveReason = FOUNDATION_TEXT("bounded multisampled clears require active rendering");
+inline constexpr TStringView s_BoundedClearDepthReason = FOUNDATION_TEXT("attachment bounded clears require full attachment depth");
+inline constexpr TStringView s_ClearUploadLayoutUnaddressableReason = FOUNDATION_TEXT("clear upload layout is not addressable");
+inline constexpr TStringView s_ClearStagingRangeInvalidReason = FOUNDATION_TEXT("staging allocation returned an invalid range");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

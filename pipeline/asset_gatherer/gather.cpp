@@ -56,7 +56,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
             const b8 identical = AreGatheredAssetPayloadsIdentical(existing.payloadBytes, payloadBytes);
             if(!identical){
                 if(!options.mergePayloads || !options.mergePayloads(virtualPath, payloadBytes, scratchArena, existing.payloadBytes)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));
                     return false;
                 }
                 existing.identity.payloadSize = existing.payloadBytes.size();
@@ -72,7 +72,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
     Assets::ResolvedCookPaths paths(arena);
     const auto outputDirectory = AbsolutePath(Path(arena, options.outputDirectory));
     if(!outputDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve output '{}'"), ConvertString(options.outputDirectory));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to resolve output '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
     paths.outputDirectory = outputDirectory->lexicallyNormal();
@@ -83,7 +83,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
     const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(paths, configuration, manifest, arena, scratchArena);
     if(!result)
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, ConvertString(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, ConvertString(options.outputDirectory));
     return true;
 }
 

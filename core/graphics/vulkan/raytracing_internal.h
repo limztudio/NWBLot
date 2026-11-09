@@ -25,13 +25,13 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_TriangleVertexInputName = NWB_TEXT("triangle vertex");
-inline constexpr TStringView s_TriangleIndexInputName = NWB_TEXT("triangle index");
-inline constexpr TStringView s_AabbInputName = NWB_TEXT("AABB");
-inline constexpr TStringView s_SphereVertexInputName = NWB_TEXT("sphere vertex");
-inline constexpr TStringView s_SphereIndexInputName = NWB_TEXT("sphere index");
-inline constexpr TStringView s_LssVertexInputName = NWB_TEXT("LSS vertex");
-inline constexpr TStringView s_LssIndexInputName = NWB_TEXT("LSS index");
+inline constexpr TStringView s_TriangleVertexInputName = FOUNDATION_TEXT("triangle vertex");
+inline constexpr TStringView s_TriangleIndexInputName = FOUNDATION_TEXT("triangle index");
+inline constexpr TStringView s_AabbInputName = FOUNDATION_TEXT("AABB");
+inline constexpr TStringView s_SphereVertexInputName = FOUNDATION_TEXT("sphere vertex");
+inline constexpr TStringView s_SphereIndexInputName = FOUNDATION_TEXT("sphere index");
+inline constexpr TStringView s_LssVertexInputName = FOUNDATION_TEXT("LSS vertex");
+inline constexpr TStringView s_LssIndexInputName = FOUNDATION_TEXT("LSS index");
 inline constexpr VkBufferUsageFlags s_AccelStructBuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 inline constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 inline constexpr u32 s_MaxPositionTruncateBitCount = 32u;
@@ -199,7 +199,7 @@ Expected<u64> ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned,
 Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, b8 requireBuffers);
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 
-inline constexpr TStringView s_RetainBuildSignatureFailedReason = NWB_TEXT("failed to retain acceleration-structure build signature");
+inline constexpr TStringView s_RetainBuildSignatureFailedReason = FOUNDATION_TEXT("failed to retain acceleration-structure build signature");
 
 [[nodiscard]] AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     const VkAccelerationStructureGeometryKHR& geometry,

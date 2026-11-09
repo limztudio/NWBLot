@@ -74,7 +74,7 @@ public:
         if(!reserve(requiredSize))
             return false;
 
-        NWB_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
+        FOUNDATION_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
         size = requiredSize;
         return true;
     }

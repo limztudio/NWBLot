@@ -86,7 +86,7 @@ using namespace GpuTaskGraphCompilerDetail;
             if(resource.type == GpuGraphResourceType::HazardDomain || (!resource.initialOwnerQueue.valid() && resource.initialOwnerHandoffSourceCount == 0u))
                 continue;
             // Analysis rejects an unknown required state on every non-HazardDomain use.
-            NWB_ASSERT(use.requiredState != ResourceStates::Unknown);
+            FOUNDATION_ASSERT(use.requiredState != ResourceStates::Unknown);
 
             const auto plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range);
             if(!plannedRange)
@@ -221,7 +221,7 @@ namespace GpuTaskGraphCompilerDetail{
             combined.requiredCapabilities |= singleton.requiredCapabilities;
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
-                NWB_ASSERT(legalityWitness);
+                FOUNDATION_ASSERT(legalityWitness);
                 // The witness already admits preceding members; only the appended task can invalidate it.
                 if((!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id) && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness))
                     combinedWitness = legalityWitness;
@@ -289,7 +289,7 @@ namespace GpuTaskGraphCompilerDetail{
     u64 overlap = 0u;
     if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
         const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
-        NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
+        FOUNDATION_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
         overlap = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){

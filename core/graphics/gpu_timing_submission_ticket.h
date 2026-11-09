@@ -103,7 +103,7 @@ public:
 
 private:
     template<class ExecutionQueue>
-    [[nodiscard]] NWB_INLINE Expected<QueueSubmissionToken> submitToQueue(Device& device, Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] FOUNDATION_INLINE Expected<QueueSubmissionToken> submitToQueue(Device& device, Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
 
     // Rejects incomplete batches before they can partially submit a split timing scope.
     // Invalid command-list input releases reservations.

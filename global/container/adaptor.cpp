@@ -6,9 +6,9 @@
 
 #include <global/termination.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_APPLE)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_APPLE)
 #include <unistd.h>
 #endif
 
@@ -30,7 +30,7 @@ namespace __hidden_container_adaptor{
 
 constexpr usize s_DefaultCachelineSize = 64u;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 struct ProcessorInformationStorage final : NoCopy{
     HANDLE m_heap;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION* m_data;
@@ -58,7 +58,7 @@ struct CacheSize{
 
 public:
     CacheSize()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         DWORD bufferSize = 0u;
         if(GetLogicalProcessorInformation(nullptr, &bufferSize) || GetLastError() != ERROR_INSUFFICIENT_BUFFER || bufferSize < sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION))
             return;

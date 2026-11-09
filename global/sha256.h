@@ -23,7 +23,7 @@ struct Sha256Digest{
 };
 
 [[nodiscard]] inline b8 operator==(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
-    return NWB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
+    return FOUNDATION_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
 }
 
 [[nodiscard]] inline b8 operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
@@ -63,18 +63,18 @@ template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, Sta
     Array<u8, s_BlockByteCount> block = {};
     usize offset = 0u;
     while(input.size() - offset >= block.size()){
-        NWB_MEMCPY(block.data(), block.size(), input.data() + offset, block.size());
+        FOUNDATION_MEMCPY(block.data(), block.size(), input.data() + offset, block.size());
         CompressFn(state, block);
         offset += block.size();
     }
     const usize remainder = input.size() - offset;
-    NWB_MEMSET(block.data(), 0, block.size());
+    FOUNDATION_MEMSET(block.data(), 0, block.size());
     if(remainder > 0u)
-        NWB_MEMCPY(block.data(), block.size(), input.data() + offset, remainder);
+        FOUNDATION_MEMCPY(block.data(), block.size(), input.data() + offset, remainder);
     block[remainder] = s_PaddingMarker;
     if(remainder >= s_LengthFieldOffset){
         CompressFn(state, block);
-        NWB_MEMSET(block.data(), 0, block.size());
+        FOUNDATION_MEMSET(block.data(), 0, block.size());
     }
     const u64 bitCount = static_cast<u64>(input.size()) * s_BitsPerByte;
     for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)

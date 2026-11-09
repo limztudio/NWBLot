@@ -47,10 +47,10 @@ b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStrin
     else{
         const Core::Common::NameSymbols::DefaultFileLoadFailure& failure = nameSymbolLoad.error();
         loadedNameSymbols = failure.loadedAny;
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), ConvertString(failure.code.message())), Core::Common::LogType::Warning);
+        enqueue(StringFormat(BaseType::arena(), FOUNDATION_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), ConvertString(failure.code.message())), Core::Common::LogType::Warning);
     }
     if(loadedNameSymbols)
-        enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);
+        enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);
 
     if(logFileNameBase.empty()){
         if(!m_processedMessageFile.openByExecutableName())
@@ -77,10 +77,10 @@ b8 Server::internalUpdate(){
 
         Frame::Print(formattedMessage, type);
         if(!m_processedMessageFile.writeLine(formattedMessage)){
-            constexpr TStringView s_WriteFailure = NWB_TEXT("Log server: failed to write processed message to file.");
+            constexpr TStringView s_WriteFailure = FOUNDATION_TEXT("Log server: failed to write processed message to file.");
             Frame::Print(s_WriteFailure, Core::Common::LogType::Error);
-#if defined(NWB_PLATFORM_WINDOWS)
-            NWB_TCERR << s_WriteFailure << static_cast<tchar>('\n');
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+            FOUNDATION_TCERR << s_WriteFailure << static_cast<tchar>('\n');
 #endif
         }
     }
@@ -91,7 +91,7 @@ b8 Server::internalUpdate(){
 b8 Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena){
     if(m_crashIngestWorker.enqueue(path, scratchArena))
         return true;
-    enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Core::Common::LogType::Error);
+    enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Crash upload path exceeds queue capacity")), Core::Common::LogType::Error);
     return false;
 }
 

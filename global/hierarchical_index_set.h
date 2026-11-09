@@ -41,7 +41,7 @@ public:
         usize levelWords = (m_indexCount - 1u) / s_BitsPerWord + 1u;
         usize wordCount = 0u;
         for(;;){
-            NWB_ASSERT(m_levelCount < m_levelOffsets.size());
+            FOUNDATION_ASSERT(m_levelCount < m_levelOffsets.size());
             m_levelOffsets[m_levelCount++] = wordCount;
             wordCount += levelWords;
             if(levelWords == 1u)
@@ -80,7 +80,7 @@ public:
         usize taskIndex = 0u;
         for(usize level = m_levelCount; level > 0u; --level){
             const u64 word = m_words[m_levelOffsets[level - 1u] + taskIndex];
-            NWB_ASSERT(word != 0u);
+            FOUNDATION_ASSERT(word != 0u);
             taskIndex = taskIndex * s_BitsPerWord + static_cast<usize>(CountTrailingZeros(word));
         }
         usize index = taskIndex;

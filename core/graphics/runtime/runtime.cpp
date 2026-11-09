@@ -17,7 +17,7 @@
 #include <global/termination.h>
 #include <global/platform.h>
 
-#if defined(NWB_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
 #include <windows.h>
 #endif
 
@@ -114,7 +114,7 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
     , m_windowTitle(m_allocator.getObjectArena())
 {
     m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
-#if defined(NWB_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
     // Match the conservative ARM64 default when this x64 process runs under emulation.
     USHORT processMachine = IMAGE_FILE_MACHINE_UNKNOWN;
     USHORT nativeMachine = IMAGE_FILE_MACHINE_UNKNOWN;
@@ -140,7 +140,7 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 
     ScopeExit detachOnFailure(detachDevice);
 
-    NWB_FATAL_ASSERT_MSG(destroy(), NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss"));
+    FOUNDATION_FATAL_ASSERT_MSG(destroy(), FOUNDATION_TEXT("Graphics destruction requires either a completed device join or terminal device loss"));
     detachOnFailure.release();
 }
 
@@ -168,7 +168,7 @@ b8 GraphicsRuntime::init(const Common::FrameData& data){
 
     if(!m_backend->createDevice())
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: created device '{}'"), m_backend->getRendererString());
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GraphicsRuntime: created device '{}'"), m_backend->getRendererString());
     if(!m_gpuTasks.attachDevice(getDevice())){
         requestDeviceRecreation();
         return false;
@@ -187,7 +187,7 @@ b8 GraphicsRuntime::init(const Common::FrameData& data){
     }
     m_previousFrameTimestamp = TimerNow();
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: window device and swap chain created ({}x{})"), data.width(), data.height());
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GraphicsRuntime: window device and swap chain created ({}x{})"), data.width(), data.height());
     return true;
 }
 
@@ -196,7 +196,7 @@ void GraphicsRuntime::requestDeviceRecreation()const{
         return;
 
     m_deviceRecreationRequested = true;
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: device recreation requested; ending the current graphics session before another submission."));
+    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: device recreation requested; ending the current graphics session before another submission."));
 }
 
 b8 GraphicsRuntime::updateWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus){
@@ -255,7 +255,7 @@ b8 GraphicsRuntime::destroy(){
         // Commit rejection retains the backend device.
         // Restore only our binding; failed initialization must never detach or replace a scheduler belonging to a different runtime.
         if(detachScheduler && m_backend->getDevice() == device && !m_gpuTasks.attachDevice(*device))
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to restore the GPU scheduler after device teardown was rejected."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to restore the GPU scheduler after device teardown was rejected."));
         requestDeviceRecreation();
         return false;
     }
@@ -312,7 +312,7 @@ void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
 void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
     const b8 deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
-    NWB_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
+    FOUNDATION_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), FOUNDATION_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
 
     m_renderPasses.remove(pass);
 }

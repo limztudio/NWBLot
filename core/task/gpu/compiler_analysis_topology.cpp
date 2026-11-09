@@ -117,7 +117,7 @@ b8 BuildTopologicalOrder(
         outOrder.push_back(graph.taskAt(nextTask).id);
         for(usize adjacencyIndex = adjacency.offsets[nextTask]; adjacencyIndex < adjacency.offsets[nextTask + 1u]; ++adjacencyIndex){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
-            NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
+            FOUNDATION_ASSERT(indegrees[edge.consumer.index] > 0u);
             if(--indegrees[edge.consumer.index] == 0u){
                 if(readyIndex.m_levelCount != 0u)
                     readyIndex.add(edge.consumer.index);
@@ -146,7 +146,7 @@ b8 BuildTopologicalOrder(
                 return;
             }
         }
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
     };
     b8 foundCycle = false;
     for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
@@ -304,7 +304,7 @@ void BuildSchedulingTaskAdjacency(
     outIncomingOffsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : schedulingEdges){
         // Scheduling edges are a subset of current-graph raw edges after a successful topological sort, so they are bounded and acyclic.
-        NWB_ASSERT(
+        FOUNDATION_ASSERT(
             edge.producer.valid()
             && edge.consumer.valid()
             && edge.producer.generation == graphGeneration

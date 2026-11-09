@@ -42,7 +42,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
             ){
                 Array<Atom, s_MaxMultipleAtoms> pairs;
                 if(property->count)
-                    NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
+                    FOUNDATION_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
                 for(usize index = 0u; index < property->count; index += s_AtomPairLength){
                     b8 usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
                     for(usize previous = 0u; previous < index; previous += s_AtomPairLength){
@@ -79,7 +79,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     }
     XFlush(&m_display);
     if(propertyFailure)
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: MULTIPLE property read failed; native_domain=X11 native_status={} error_code={}"), propertyFailure->nativeStatus, propertyFailure->errorCode);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 clipboard: MULTIPLE property read failed; native_domain=X11 native_status={} error_code={}"), propertyFailure->nativeStatus, propertyFailure->errorCode);
 }
 
 b8 X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const Atom target, const Atom property, OwnedSelection& selection){

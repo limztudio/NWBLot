@@ -59,20 +59,20 @@ using SimdOptimizationBenchmark::s_DataCount;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
 }
 
-NWB_INLINE SIMDVectorDouble ReplicatedSin(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedSin(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
 }
 
-NWB_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMDVectorDouble x)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMDVectorDouble x)noexcept{
     return VectorDoubleReplicate(ATan2(VectorDoubleGetX(y), VectorDoubleGetX(x)));
 }
 
 template<u32 Dimension>
-NWB_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Dimension == 2u)
         return VectorDouble2Dot(lhs, rhs);
     else if constexpr(Dimension == 3u)
@@ -82,12 +82,12 @@ NWB_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDoub
 }
 
 template<u32 Dimension>
-NWB_INLINE SIMDVectorDouble ReciprocalLength(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReciprocalLength(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReciprocalSqrt(Dot<Dimension>(value, value));
 }
 
 template<u32 Dimension, b8 Vectors, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     SIMDVectorDouble cosine = Dot<Dimension>(lhs, rhs);
     if constexpr(Vectors)
         cosine = VectorDoubleMultiply(cosine, VectorDoubleMultiply(ReciprocalLength<Dimension>(lhs), ReciprocalLength<Dimension>(rhs)));
@@ -99,7 +99,7 @@ NWB_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDo
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     const SIMDVectorDouble w = VectorDoubleSplatW(value), xyz = VectorDoubleAndInt(value, s_DoubleSIMDMask3);
     const SIMDVectorDouble control = VectorDoubleInBounds(w, bound);
@@ -109,7 +109,7 @@ NWB_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble theta = VectorDouble3Length(value);
     SIMDVectorDouble sine{}, cosine{};
     if constexpr(Candidate)
@@ -123,7 +123,7 @@ NWB_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     const SIMDVectorDouble t = VectorDoubleReplicate(0.375);
     const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     SIMDVectorDouble cosine = QuaternionDoubleDot(lhs, rhs);
@@ -149,8 +149,8 @@ NWB_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SI
 }
 
 template<u32 Dimension, b8 Reciprocal, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_SSE2)
+FOUNDATION_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_SSE2)
     if constexpr(Candidate){
         const __m128d input = SIMDVectorDoubleDetail::GetLow(Dot<Dimension>(value, value));
         __m128d root = _mm_sqrt_sd(input, input);
@@ -174,10 +174,10 @@ NWB_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
 }
 
 template<u32 Dimension, b8 Clamp, b8 Candidate>
-NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const SIMDVectorDouble fallback)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const SIMDVectorDouble fallback)noexcept{
     const SIMDVectorDouble lengthSquared = Dot<Dimension>(value, value);
     const auto reciprocalLength = [&]()noexcept{
-#if defined(NWB_HAS_SSE2) && !defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) && !defined(FOUNDATION_HAS_AVX)
         if constexpr(Candidate)
             return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(lengthSquared);
         else
@@ -219,7 +219,7 @@ inline constexpr Array<b8, Operation::Count> s_ProductionCandidate = {
 
 
 template<Operation::Enum Kind, b8 Estimate = false>
-NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Kind == Operation::Ln)
         return QuaternionDoubleLn(lhs);
     else if constexpr(Kind == Operation::Exp)
@@ -277,13 +277,13 @@ NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SI
 }
 
 template<Operation::Enum Kind, b8 Estimate = false>
-NWB_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return ProductionValue<Kind, Estimate>(lhs, rhs);
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Candidate && s_ProductionCandidate[Kind])
         return ProductionValue<Kind>(lhs, rhs);
     else if constexpr(Kind == Operation::Ln)
@@ -331,7 +331,7 @@ NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorD
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Candidate && s_ProductionCandidate[Kind])
         return Production<Kind>(lhs, rhs);
@@ -353,7 +353,7 @@ u32 VerifyReduction(u64& seed){
             const auto& productionExpected = s_ProductionCandidate[Kind] ? actual : expected;
             if(!SimdOptimizationBenchmark::EqualObservation(productionExpected, *production)){
                 if(++failures <= 3u)
-                    NWB_COUT << "production mismatch operation=" << s_OperationNames[Kind] << " case=" << index << '\n';
+                    FOUNDATION_COUT << "production mismatch operation=" << s_OperationNames[Kind] << " case=" << index << '\n';
             }
             if constexpr(Kind == Operation::Normals2 || Kind == Operation::Normals3 || Kind == Operation::Normals4){
                 const auto estimate = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind, true>(lhs, rhs); });
@@ -398,7 +398,7 @@ u32 Verify(){
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;
-    NWB_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
+    FOUNDATION_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
     return failures;
 }
 
@@ -407,7 +407,7 @@ u32 Verify(){
 
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations)noexcept{
     return SimdOptimizationBenchmark::ThroughputWorkload<4u>(
         data, iterations,
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); });
@@ -441,11 +441,11 @@ b8 ReplicatedBenchmarkSupported(){
 native{
 int main(const int argc, const char* const* argv){
     using namespace __hidden_replicated_benchmark;
-    NWB_COUT.precision(17);
+    FOUNDATION_COUT.precision(17);
     if(argc == 2 && StringView(argv[1]) == "--verify")
         return Verify() == 0u ? 0 : 1;
     if(argc != 6 || StringView(argv[1]) != "--measure"){
-        NWB_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
+        FOUNDATION_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
         return 2;
     }
     const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max / 4u, false);

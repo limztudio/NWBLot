@@ -40,13 +40,13 @@ b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPat
     if(inOutSeenVirtualPathHashes.insert(pathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), ConvertString(virtualPath.resolvedText()), assetKind);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), ConvertString(virtualPath.resolvedText()), assetKind);
     return false;
 }
 
 b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
     }
 
@@ -54,7 +54,7 @@ b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPat
     if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
@@ -82,7 +82,7 @@ b8 CookEntryRegistry::parseDocument(const Name& assetType, const Path& assetRoot
     if(bucket)
         return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
     return false;
 }
 
@@ -91,7 +91,7 @@ b8 CookEntryRegistry::parseValue(const Name& assetType, const Name virtualPath, 
     if(bucket)
         return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
     return false;
 }
 
@@ -109,7 +109,7 @@ usize CookEntryRegistry::bucketCount()const noexcept{
 
 b8 CookEntryRegistry::writeBucket(const usize bucketIndex, CookEntryWriteContext& context){
     if(bucketIndex >= m_buckets.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
         return false;
     }
 
@@ -130,7 +130,7 @@ u64 CookEntryRegistry::entryCount()const noexcept{
 
 b8 CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
     if(!owner){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: bucket allocation returned null for '{}'"), ConvertString(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: bucket allocation returned null for '{}'"), ConvertString(assetType.resolvedText()));
         return false;
     }
 
@@ -147,7 +147,7 @@ b8 CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
         }
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), ConvertString(assetType.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: duplicate cook entry type registration '{}'"), ConvertString(assetType.resolvedText()));
     return false;
 }
 
@@ -162,8 +162,8 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
 b8 RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
     Vector<NotNull<CookEntryRegistrationFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(
-        QueryAssetAutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetsArenaScope::s_AutoRegistrationQueueArena>(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
+        QueryAssetAutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetsArenaScope::s_AutoRegistrationQueueArena>(), registry, functions, [](){ NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: collected null cook entry registration function")); },
+        [](){ NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
     );
 }
 

@@ -33,7 +33,7 @@ namespace Tests::GTestMain{
 static int GoogleTestEntryPoint(const isize argc, tchar** argv, [[maybe_unused]] void* userData){
     Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "test common initialization failed\n";
+        FOUNDATION_CERR << "test common initialization failed\n";
         return s_GoogleTestInitFailureExitCode;
     }
 

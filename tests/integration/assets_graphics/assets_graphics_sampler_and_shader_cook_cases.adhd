@@ -90,7 +90,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
-        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
+        FOUNDATION_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
         EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
 
         description.reductionType = reduction;
@@ -106,7 +106,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     }){
         binary = validBinary;
         const f32 nonblack = 1.0f;
-        NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
+        FOUNDATION_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
         EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
     }
 
@@ -124,7 +124,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     ASSERT_TRUE(recoveredResult);
     recoveredAsset = Move(*recoveredResult);
     ASSERT_NE(recoveredAsset.get(), nullptr);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("sampler description is invalid")));
 }
 
 TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary){
@@ -153,7 +153,7 @@ TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAnd
     }
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         NWB::Impl::SamplerBinaryHeader header;
-        NWB_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
+        FOUNDATION_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
         switch(invalidCase){
         case 0u: header.magic = 0u; break;
         case 1u: ++header.version; break;
@@ -199,7 +199,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreserv
     }){
         for(const u32 rawValue : { 0x100u, 0x101u }){
             NWB::Core::Assets::AssetBytes malformed(binary);
-            NWB_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
+            FOUNDATION_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
             EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
             NWB::Core::Assets::AssetBytes retained(testArena.arena);
             ASSERT_TRUE(codec.serialize(sampler, retained));
@@ -220,7 +220,7 @@ TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
     const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing asset declaration 'asset'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("missing asset declaration 'asset'")));
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
@@ -246,7 +246,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << assignment;
-        const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
+        const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? FOUNDATION_TEXT("unsupported reduction type") : FOUNDATION_TEXT("unsupported asset field 'border_color'");
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
 }
@@ -269,7 +269,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field 'version'")));
 #endif
 }
 
@@ -373,7 +373,7 @@ TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmitting
     alignas(u32) Array<u8, 2048u> unalignedStorage = {};
     ASSERT_LT(encoded->size(), unalignedStorage.size());
     u8* const unalignedBytes = unalignedStorage.data() + 1u;
-    NWB_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
+    FOUNDATION_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
     const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
     ASSERT_TRUE(admitted);
     ASSERT_EQ(admitted->size(), 1u);
@@ -382,7 +382,7 @@ TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmitting
     EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
     EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
     EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("nonempty byte view has no data")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("nonempty byte view has no data")));
     EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
 }
 
@@ -461,7 +461,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatc
 
     Core::Assets::AssetBytes unalignedBytes(testArena.arena);
     unalignedBytes.resize(1u + copiedWords.size() * sizeof(u32));
-    NWB_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
+    FOUNDATION_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
     const BinaryByteView unalignedModule{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u };
     AStringView byteEntryPoint;
     const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);
@@ -654,7 +654,7 @@ TEST(AssetsGraphics, CompilerPathTextCapacityChecksWideOverflow){
     ASSERT_TRUE(wideCapacity);
     EXPECT_EQ(*wideCapacity, wideUnits * Impl::ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit);
     EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(wideUnits + 1u, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("compiler path text exceeds representable size")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("compiler path text exceeds representable size")));
     const auto narrowCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(limit, true);
     ASSERT_TRUE(narrowCapacity);
     EXPECT_EQ(*narrowCapacity, limit);
@@ -683,7 +683,7 @@ TEST(AssetsGraphics, CompilerArgumentCapacitiesRejectOverflow){
     ASSERT_TRUE(includeCapacity);
     EXPECT_EQ(*includeCapacity, (limit / 2u) * 2u);
     EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u + 1u));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("too many include directories")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("too many include directories")));
     const auto replacementBytes = Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 2u);
     ASSERT_TRUE(replacementBytes);
     EXPECT_EQ(*replacementBytes, limit);
@@ -900,8 +900,8 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n"));
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("BOM_CLEANUP_REGRESSION")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("compiler exit code")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("BOM_CLEANUP_REGRESSION")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("compiler exit code")));
     ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
     const usize failureErrors = logger.errorCount();
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource));
@@ -943,7 +943,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
             AStringView resolvedEntryPoint;
             NWB::Core::GraphicsVector<u32> words(testArena.arena);
             words.resize(shader.bytecode().size() / sizeof(u32));
-            NWB_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
+            FOUNDATION_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
             const auto entryPointResult11 = NWB::Core::ResolveSpirvEntryPointName(words, AStringView(shader.entryPoint()), NWB::Core::ShaderType::Pixel);
             ASSERT_TRUE(entryPointResult11);
             resolvedEntryPoint = *entryPointResult11;

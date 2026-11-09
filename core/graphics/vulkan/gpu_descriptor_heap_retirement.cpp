@@ -203,7 +203,7 @@ b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandB
 
 Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken){
     if(!submissionToken.valid() || !m_device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration })){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
         return MakeUnexpected(Failure{});
     }
 
@@ -212,14 +212,14 @@ Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(Trac
         if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid())
             continue;
         if(!submissionToken.matchesPhysicalQueue(heapUse.physicalQueue.index, heapUse.physicalQueue.deviceGeneration)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue."));
             return MakeUnexpected(Failure{});
         }
 
         return heapUseIndex;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap could not resolve command-buffer heap use for accepted submission {}."), submissionToken.value);
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap could not resolve command-buffer heap use for accepted submission {}."), submissionToken.value);
     return MakeUnexpected(Failure{});
 }
 

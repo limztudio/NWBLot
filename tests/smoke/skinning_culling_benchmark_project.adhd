@@ -34,7 +34,7 @@ native{
 
 namespace NWB::Tests::Smoke{
 inline constexpr AStringView s_SkinningUnknownLabel = "unknown";
-inline constexpr TStringView s_SkinningBenchmarkProjectName = NWB_TEXT("SkinningCullingBenchmark");
+inline constexpr TStringView s_SkinningBenchmarkProjectName = FOUNDATION_TEXT("SkinningCullingBenchmark");
 
 using BenchmarkModelRef = Core::Assets::AssetRef<Impl::Model>;
 using BenchmarkMaterialRef = Core::Assets::AssetRef<Impl::Material>;
@@ -209,7 +209,7 @@ b8 PopulateSkinningBenchmarkScene(
             cameraEntity = activeCamera.camera;
             const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(world, -0.65f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
             if(!activeCamera.camera.valid() || !directionalLight.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
                 ok = false;
             }
             else{
@@ -234,7 +234,7 @@ b8 PopulateSkinningBenchmarkScene(
                 for(const Core::ECS::EntityID owner : modelOwners){
                     const Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(owner, skeletonObject, Impl::ModelObjectKind::Skeleton, world);
                     if(!skeletonEntity.valid()){
-                        NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
+                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
                         ok = false;
                         break;
                     }
@@ -272,7 +272,7 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
         native{
             auto bindJoints = LoadSmokeSkeletonBindJoints(s_BenchmarkModel, s_SkinningBenchmarkProjectName, s_SmokeNameSkeleton, true, this->m_context->objectArena, this->m_context->assetManager);
             if(!bindJoints){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
                 this->requestQuit();
                 return true;
             }
@@ -292,11 +292,11 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
             if(this->m_staticPreview){
                 this->m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
                 this->configureCamera(BenchmarkView::Front);
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
             }
             else
                 this->configureCase();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(this->m_bindJoints.size()));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(this->m_bindJoints.size()));
         }
         return true;
     }
@@ -430,14 +430,14 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
             const BenchmarkCase& benchmarkCase = s_BenchmarkCases[this->m_caseIndex];
             this->m_runtimeMeshProvider.setMode(benchmarkCase.mode);
             this->configureCamera(benchmarkCase.view);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), this->m_repeatIndex + 1u, this->repeatCount(), ConvertString(BenchmarkModeName(benchmarkCase.mode)), ConvertString(BenchmarkViewName(benchmarkCase.view)));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), this->m_repeatIndex + 1u, this->repeatCount(), ConvertString(BenchmarkModeName(benchmarkCase.mode)), ConvertString(BenchmarkViewName(benchmarkCase.view)));
         }
     }
 
     private void finishCase(){
         native{
             const BenchmarkCase& benchmarkCase = s_BenchmarkCases[this->m_caseIndex];
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
                 , this->m_repeatIndex + 1u
                 , this->repeatCount()
                 , ConvertString(BenchmarkModeName(benchmarkCase.mode))
@@ -499,7 +499,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Skinning Culling Benchmark");
+    return FOUNDATION_TEXT("NWB Skinning Culling Benchmark");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

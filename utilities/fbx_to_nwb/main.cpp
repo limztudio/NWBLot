@@ -30,10 +30,10 @@ static int Run(const int argc, char** argv){
     const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, scratchArena, prompted);
     cpuScheduler.wait();
     if(prompted && result >= NWB::FbxToNwb::s_PromptSuccessThreshold){
-        NWB_COUT << "Press Enter to exit...";
+        FOUNDATION_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::ScratchString line(scratchArena);
-        if(!ReadTextLine(NWB_CIN, line))
-            NWB_COUT << "\n";
+        if(!ReadTextLine(FOUNDATION_CIN, line))
+            FOUNDATION_COUT << "\n";
     }
     return result;
 }
@@ -48,7 +48,7 @@ static int Run(const int argc, char** argv){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, NWB_TEXT("fbx_to_nwb"), NWB::FbxToNwb::s_FbxToNwbEntryFailure, __hidden_fbx_to_nwb_main::Run)
+NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, FOUNDATION_TEXT("fbx_to_nwb"), NWB::FbxToNwb::s_FbxToNwbEntryFailure, __hidden_fbx_to_nwb_main::Run)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

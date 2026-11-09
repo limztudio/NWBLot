@@ -25,47 +25,47 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
     if(!m_enabled)
         return false;
     if(!allocation.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation is invalid."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: allocation is invalid."));
         return false;
     }
     if(item.type == ResourceType::VolatileConstantBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Persistent descriptor-buffer writes reject volatile constant buffers."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Persistent descriptor-buffer writes reject volatile constant buffers."));
         return false;
     }
     if(!VulkanDetail::IsSupportedDescriptorBindingType(item.type) || VulkanDetail::ConvertDescriptorType(item.type) != descriptorType){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: resource type {} does not match descriptor type {}."), static_cast<u32>(item.type), static_cast<u32>(descriptorType));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: resource type {} does not match descriptor type {}."), static_cast<u32>(item.type), static_cast<u32>(descriptorType));
         return false;
     }
 
     const b8 isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
     const DescriptorBufferSegmentKind::Enum expectedKind = isSampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
     if(allocation.kind != expectedKind){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation has the wrong segment kind."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: allocation has the wrong segment kind."));
         return false;
     }
     SegmentStorage& storage = isSampler ? m_samplerSegment : m_resourceSegment;
-    NWB_ASSERT(storage.storageIdentity);
+    FOUNDATION_ASSERT(storage.storageIdentity);
     if(allocation.storageIdentity != *storage.storageIdentity){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation belongs to another storage."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: allocation belongs to another storage."));
         return false;
     }
 
     const u32 descriptorSize = VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
     if(descriptorSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: unknown size for descriptor type {}."), static_cast<u32>(descriptorType));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: unknown size for descriptor type {}."), static_cast<u32>(descriptorType));
         return false;
     }
     if(!item.resourceHandle){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: resource handle is null."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: resource handle is null."));
         return false;
     }
     if(dstOffsetBytes < allocation.offsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} precedes its allocation."), dstOffsetBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: offset {} precedes its allocation."), dstOffsetBytes);
         return false;
     }
     const u32 allocationRelativeOffsetBytes = dstOffsetBytes - allocation.offsetBytes;
     if(allocationRelativeOffsetBytes > allocation.sizeBytes || descriptorSize > allocation.sizeBytes - allocationRelativeOffsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds its allocation."), dstOffsetBytes, descriptorSize);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds its allocation."), dstOffsetBytes, descriptorSize);
         return false;
     }
 
@@ -73,13 +73,13 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
 
     const auto dstBytes = MakeNotNull(static_cast<u8*>(storage.mappedMemory));
     if(dstOffsetBytes > storage.capacityBytes || descriptorSize > storage.capacityBytes - dstOffsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}."), dstOffsetBytes, descriptorSize, storage.capacityBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}."), dstOffsetBytes, descriptorSize, storage.capacityBytes);
         return false;
     }
     // Validate full live-allocation identity to reject stale recycled ranges.
     const b8 ownsLiveAllocation = storage.allocations.ownsAt(allocation, dstOffsetBytes);
     if(!ownsLiveAllocation){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation is not live for offset {}."), dstOffsetBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: allocation is not live for offset {}."), dstOffsetBytes);
         return false;
     }
 
@@ -96,40 +96,40 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         const b8 isUniform = item.type == ResourceType::ConstantBuffer;
         const VkBufferUsageFlags requiredUsage = isUniform ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         if(!m_device.isBufferReadyForGpuUse(&buffer, requiredUsage)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Buffer."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Buffer."));
             return false;
         }
         const BufferDesc& bufferDesc = buffer.getCreationDescription();
-        NWB_ASSERT((buffer.m_bufferInfo.usage & requiredUsage) == requiredUsage);
+        FOUNDATION_ASSERT((buffer.m_bufferInfo.usage & requiredUsage) == requiredUsage);
         if(isUniform && (!bufferDesc.isConstantBuffer || bufferDesc.isVolatile)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not a persistent constant buffer."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not a persistent constant buffer."));
             return false;
         }
         if((item.type == ResourceType::RawBuffer_SRV || item.type == ResourceType::RawBuffer_UAV) && !bufferDesc.canHaveRawViews){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no raw-view capability."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no raw-view capability."));
             return false;
         }
         if((item.type == ResourceType::StructuredBuffer_SRV || item.type == ResourceType::StructuredBuffer_UAV) && bufferDesc.structStride == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not structured."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not structured."));
             return false;
         }
         if((item.type == ResourceType::StructuredBuffer_UAV || item.type == ResourceType::RawBuffer_UAV) && !bufferDesc.canHaveUAVs){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no UAV capability."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no UAV capability."));
             return false;
         }
         const auto range = VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc);
         if(!range)
             return false;
         const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer.getGpuVirtualAddress());
-        NWB_ASSERT(bufferAddress != 0u);
+        FOUNDATION_ASSERT(bufferAddress != 0u);
         if(range->byteOffset > UINT64_MAX - bufferAddress){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer device address range overflows."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: buffer device address range overflows."));
             return false;
         }
         const VkDeviceAddress descriptorAddress = bufferAddress + range->byteOffset;
         const u64 requiredAlignment = isUniform ? getUniformBufferAddressAlignmentBytes() : getStorageBufferAddressAlignmentBytes();
         if((descriptorAddress % requiredAlignment) != 0u || range->byteSize > UINT64_MAX - descriptorAddress){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer address or range is invalid."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: buffer address or range is invalid."));
             return false;
         }
         addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
@@ -150,40 +150,40 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
             ;
             if(!m_device.isBufferReadyForGpuUse(&buffer, requiredUsage)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready typed Buffer."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready typed Buffer."));
                 return false;
             }
             const BufferDesc& bufferDesc = buffer.getCreationDescription();
-            NWB_ASSERT((buffer.m_bufferInfo.usage & requiredUsage) == requiredUsage);
+            FOUNDATION_ASSERT((buffer.m_bufferInfo.usage & requiredUsage) == requiredUsage);
             if(!bufferDesc.canHaveTypedViews || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;
             }
             const auto range = VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc);
             if(!range)
                 return false;
             const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer.getGpuVirtualAddress());
-            NWB_ASSERT(bufferAddress != 0u);
+            FOUNDATION_ASSERT(bufferAddress != 0u);
             if(range->byteOffset > UINT64_MAX - bufferAddress){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer device address range overflows."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer device address range overflows."));
                 return false;
             }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
             if(viewFormat == Format::UNKNOWN || viewFormat >= Format::Count){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is invalid."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is invalid."));
                 return false;
             }
             const VkFormat vkFormat = VulkanDetail::ConvertFormat(viewFormat);
             const FormatInfo& formatInfo = GetFormatInfo(viewFormat);
             if(vkFormat == VK_FORMAT_UNDEFINED || formatInfo.bytesPerBlock == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is unsupported."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is unsupported."));
                 return false;
             }
             VkFormatProperties formatProperties{};
             m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
             const VkFormatFeatureFlags requiredFormatFeature = item.type == ResourceType::TypedBuffer_UAV ? VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT : VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
             if((formatProperties.bufferFeatures & requiredFormatFeature) == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: format lacks texel-buffer support."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: format lacks texel-buffer support."));
                 return false;
             }
             const VkDeviceAddress descriptorAddress = bufferAddress + range->byteOffset;
@@ -194,7 +194,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 || (range->byteSize / formatInfo.bytesPerBlock) > getMaxTexelBufferElements()
                 || range->byteSize > UINT64_MAX - descriptorAddress
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer range is invalid."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer range is invalid."));
                 return false;
             }
             addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
@@ -211,12 +211,12 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         case ResourceType::Texture_UAV:{
             auto& texture = *MakeNotNull(checked_cast<Texture*>(item.resourceHandle));
             if(!m_device.isTextureReadyForGpuUse(&texture)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Texture."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Texture."));
                 return false;
             }
             const VkImageUsageFlags requiredUsage = item.type == ResourceType::Texture_UAV ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT;
             if((texture.m_imageInfo.usage & requiredUsage) == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Texture lacks native descriptor usage."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Texture lacks native descriptor usage."));
                 return false;
             }
             const auto imageView = texture.getView(item.subresources, item.dimension, item.format);
@@ -231,12 +231,12 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         case ResourceType::Sampler:{
             auto& sampler = *MakeNotNull(checked_cast<Sampler*>(item.resourceHandle));
             if(&sampler.m_context != &m_context){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign Sampler."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign Sampler."));
                 return false;
             }
             samplerHandle = sampler.m_sampler;
             if(samplerHandle == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected an unready Sampler."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected an unready Sampler."));
                 return false;
             }
             getInfo.data.pSampler = &samplerHandle;
@@ -246,20 +246,20 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             // TLAS descriptor directly encodes the generation's device address.
             auto& as = *MakeNotNull(checked_cast<AccelStruct*>(item.resourceHandle));
             if(!m_device.isAccelStructReadyForGpuUse(&as)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready AccelStruct."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready AccelStruct."));
                 return false;
             }
             if(!as.m_isTopLevelAtCreation){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a bottom-level AccelStruct."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a bottom-level AccelStruct."));
                 return false;
             }
             accelStructAddress = static_cast<VkDeviceAddress>(as.getDeviceAddress());
-            NWB_ASSERT(accelStructAddress != 0u);
+            FOUNDATION_ASSERT(accelStructAddress != 0u);
             getInfo.data.accelerationStructure = accelStructAddress;
             break;
         }
         default:
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Admitted descriptor-buffer resource type has no writer"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Admitted descriptor-buffer resource type has no writer"));
             return false;
         }
     }

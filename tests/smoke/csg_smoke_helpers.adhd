@@ -22,7 +22,7 @@ using Impl::SkinnedCsgMeshComponent;
 template<typename ParameterT>
 inline void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
+    FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
 template<typename ReceiverComponentT>

@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_FontAtlasValidatePayloadContext = NWB_TEXT("FontAtlas::validatePayload");
+inline constexpr TStringView s_FontAtlasValidatePayloadContext = FOUNDATION_TEXT("FontAtlas::validatePayload");
 
 struct FontAtlasGroup{
     Sha256Digest sha256;

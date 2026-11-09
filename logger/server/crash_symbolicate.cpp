@@ -181,7 +181,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendEventSummary(summary, detailReport);
 
     if(summary.platform == Core::Crash::s_WindowsPlatformName){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const auto decoded = LoggerCrashSymbolicateDetail::AppendWindowsMinidumpStack(packageDirectory, summary, config, scratchArena, detailReport);
         if(!decoded)
             LoggerCrashSymbolicateDetail::AppendNativeFailure(decoded.error(), detailReport);

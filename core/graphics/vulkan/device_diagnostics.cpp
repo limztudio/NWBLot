@@ -30,7 +30,7 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE || !getPhysicalQueueInfo(queue))
         return write;
     // A live breadcrumb buffer exists only after its metadata was built from the same layout.
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(
         m_amdBreadcrumb.metadata
         && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
         && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount

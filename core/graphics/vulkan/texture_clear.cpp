@@ -23,8 +23,8 @@ namespace __hidden_texture_clear{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RequestedAspectMissingReason = NWB_TEXT("requested aspect is not present in the texture format");
-static constexpr TStringView s_ClearRectOutsideRenderAreaReason = NWB_TEXT("clear rect is outside the active render area");
+static constexpr TStringView s_RequestedAspectMissingReason = FOUNDATION_TEXT("requested aspect is not present in the texture format");
+static constexpr TStringView s_ClearRectOutsideRenderAreaReason = FOUNDATION_TEXT("clear rect is outside the active render area");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +41,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     if(!clearDepth && !clearStencil)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil texture");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("clear depth/stencil texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
@@ -106,7 +106,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil texture box");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("clear depth/stencil texture box");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
@@ -154,18 +154,18 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         return;
     }
     if(desc.dimension == TextureDimension::Texture3D){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("bounded clears do not support 3D depth/stencil textures"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("bounded clears do not support 3D depth/stencil textures"));
         return;
     }
 
     const auto depthPattern = clearDepth ? VulkanTextureDetail::BuildTextureDepthClearPattern(desc.format, clearDepthValue) : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearDepthPatternBytes>>{};
     if(!depthPattern){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("depth clear pattern is unsupported for the texture format"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("depth clear pattern is unsupported for the texture format"));
         return;
     }
     const auto stencilPattern = clearStencil ? VulkanTextureDetail::BuildTextureStencilClearPattern(desc.format, stencil) : Expected<VulkanTextureDetail::TextureClearPattern<VulkanTextureDetail::s_TextureClearStencilPatternBytes>>{};
     if(!stencilPattern){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("stencil clear pattern is unsupported for the texture format"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("stencil clear pattern is unsupported for the texture format"));
         return;
     }
 
@@ -187,7 +187,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
         if(mipPlan.resolvedBox.minZ != 0 || mipPlan.resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("bounded clears require full attachment depth"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("bounded clears require full attachment depth"));
             return;
         }
 
@@ -210,7 +210,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         }
     }
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box through staging")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, FOUNDATION_TEXT("clear depth/stencil texture box through staging")))
         return;
 
     setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
@@ -225,7 +225,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 continue;
 
             const VulkanTextureDetail::TextureClearUploadLayout& uploadLayout = aspect == VK_IMAGE_ASPECT_DEPTH_BIT ? mipPlan.depthLayout : mipPlan.stencilLayout;
-            const auto staging = prepareUploadStaging(uploadLayout.clearByteCount, NWB_TEXT("clearDepthStencilTextureBox"), uploadLayout.stagingAlignment);
+            const auto staging = prepareUploadStaging(uploadLayout.clearByteCount, FOUNDATION_TEXT("clearDepthStencilTextureBox"), uploadLayout.stagingAlignment);
             if(!staging){
                 rejectCommandRecording(s_OperationName, s_StagingAllocationFailedReason);
                 return false;
@@ -259,15 +259,15 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
 }
 
 b8 CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue){
-    constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("active rendering with a color attachment is required"));
         return false;
     }
 
     const auto clearTarget = VulkanTextureDetail::FindTextureColorAttachmentClearTarget(texture, resolvedSubresources, m_renderPassFramebuffer->getDescription());
     if(!clearTarget){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active color attachments"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("requested subresources are not active color attachments"));
         return false;
     }
 
@@ -275,7 +275,7 @@ b8 CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const Te
     if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
         return true;
     if(clearTarget->isReadOnly){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active color attachment is read-only"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("active color attachment is read-only"));
         return false;
     }
 
@@ -297,26 +297,26 @@ b8 CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const Te
 }
 
 b8 CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
-    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("active rendering with a depth/stencil attachment is required"));
         return false;
     }
 
     const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
     const FramebufferAttachment& attachment = fbDesc.depthAttachment;
     if(attachment.texture != &texture){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not the active depth/stencil attachment"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("texture is not the active depth/stencil attachment"));
         return false;
     }
     if(attachment.isReadOnly){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active depth/stencil attachment is read-only"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("active depth/stencil attachment is read-only"));
         return false;
     }
 
     const auto resolvedAttachmentSubresources = VulkanTextureDetail::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources);
     if(!resolvedAttachmentSubresources){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active depth/stencil attachments"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("requested subresources are not active depth/stencil attachments"));
         return false;
     }
 

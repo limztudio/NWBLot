@@ -21,7 +21,7 @@
 
 
 #if defined(UNICODE) || defined(_UNICODE)
-#define NWB_UNICODE
+#define FOUNDATION_UNICODE
 #endif
 
 
@@ -49,7 +49,7 @@ typedef float f32;
 typedef double f64;
 
 typedef wchar_t wchar;
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 typedef wchar tchar;
 #else
 typedef char tchar;
@@ -81,12 +81,12 @@ using InitializerList = std::initializer_list<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_UNICODE)
-#define NWB_DETAIL_TEXT(x) L ## x
+#if defined(FOUNDATION_UNICODE)
+#define FOUNDATION_DETAIL_TEXT(x) L ## x
 #else
-#define NWB_DETAIL_TEXT(x) x
+#define FOUNDATION_DETAIL_TEXT(x) x
 #endif
-#define NWB_TEXT(x) NWB_DETAIL_TEXT(x)
+#define FOUNDATION_TEXT(x) FOUNDATION_DETAIL_TEXT(x)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

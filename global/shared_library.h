@@ -12,7 +12,7 @@
 #include "not_null.h"
 #include "termination.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -32,7 +32,7 @@ public:
     [[nodiscard]] static SharedLibraryFailure FromNativeText(const char* const nativeError)noexcept{
         SharedLibraryFailure failure{ .code = MakeErrorCode(ErrorCondition::io_error), };
         if(nativeError){
-            const AStringView text(nativeError, NWB_STRNLEN(nativeError, failure.detail.value.size()));
+            const AStringView text(nativeError, FOUNDATION_STRNLEN(nativeError, failure.detail.value.size()));
             CopyEventText(failure.detail.value, text);
             failure.detailTruncated = text.size() == failure.detail.value.size();
         }
@@ -64,7 +64,7 @@ public:
             return MakeUnexpected(SharedLibraryFailure{ .code = MakeErrorCode(ErrorCondition::invalid_argument), });
 
         const TString<ArenaT> nativeName(name, arena);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         m_handle = ::LoadLibrary(nativeName.c_str());
         if(!m_handle){
             const DWORD error = GetLastError();
@@ -86,7 +86,7 @@ public:
         if(!m_handle)
             return;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const b8 released = ::FreeLibrary(static_cast<HMODULE>(m_handle)) != 0;
 #else
         const b8 released = ::dlclose(m_handle) == 0;
@@ -114,7 +114,7 @@ private:
             return MakeUnexpected(SharedLibraryFailure{ .code = MakeErrorCode(ErrorCondition::invalid_argument), });
 
         const AString<ArenaT> nativeSymbolName(symbolName, arena);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         void* const symbol = reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(m_handle), nativeSymbolName.c_str()));
         if(!symbol){
             const DWORD error = GetLastError();

@@ -129,27 +129,27 @@ void VulkanDeviceFeatureSetup::Initialize(VulkanContext& context, const DeviceDe
     }
 
     if(context.extensions.extDebugUtils && (!context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT || !context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
         context.extensions.extDebugUtils = false;
     }
 
     if(context.extensions.nvDeviceDiagnosticCheckpoints && (!context.deviceDispatch.vkCmdSetCheckpointNV || !context.deviceDispatch.vkGetQueueCheckpointDataNV)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device diagnostic checkpoint entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Device diagnostic checkpoint entry points are unavailable."));
         context.extensions.nvDeviceDiagnosticCheckpoints = false;
     }
 
     if(context.extensions.extDeviceFault && !context.deviceDispatch.vkGetDeviceFaultInfoEXT){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device fault info entry point is unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Device fault info entry point is unavailable."));
         context.extensions.extDeviceFault = false;
     }
 
     if(context.extensions.amdBufferMarker && !context.deviceDispatch.vkCmdWriteBufferMarkerAMD){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Buffer marker entry point is unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Buffer marker entry point is unavailable."));
         context.extensions.amdBufferMarker = false;
     }
 
     if(gpuCrashDiagnosticsEnabled && !context.extensions.nvDeviceDiagnosticCheckpoints && !context.extensions.amdBufferMarker && !context.extensions.extDeviceFault){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: GPU crash diagnostics will use minimal text reports; device checkpoints, buffer markers, ") NWB_TEXT("and device fault are unavailable."));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Vulkan: GPU crash diagnostics will use minimal text reports; device checkpoints, buffer markers, ") FOUNDATION_TEXT("and device fault are unavailable."));
     }
 
     if(
@@ -162,25 +162,25 @@ void VulkanDeviceFeatureSetup::Initialize(VulkanContext& context, const DeviceDe
             || !context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR
         )
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
         context.extensions.khrAccelerationStructure = false;
         context.accelerationStructureFeatureEnabled = false;
     }
 
     if(context.extensions.khrRayTracingPipeline && (!context.deviceDispatch.vkCreateRayTracingPipelinesKHR || !context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR || !context.deviceDispatch.vkCmdTraceRaysKHR)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
         context.extensions.khrRayTracingPipeline = false;
         context.rayTracingPipelineFeatureEnabled = false;
     }
 
     if(context.extensions.extOpacityMicromap && (!context.deviceDispatch.vkCreateMicromapEXT || !context.deviceDispatch.vkDestroyMicromapEXT || !context.deviceDispatch.vkGetMicromapBuildSizesEXT || !context.deviceDispatch.vkCmdBuildMicromapsEXT)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
         context.extensions.extOpacityMicromap = false;
         context.opacityMicromapFeatureEnabled = false;
     }
 
     if(context.extensions.nvClusterAccelerationStructure && (!context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV || !context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
         context.extensions.nvClusterAccelerationStructure = false;
         context.clusterAccelerationStructureFeatureEnabled = false;
     }
@@ -189,14 +189,14 @@ void VulkanDeviceFeatureSetup::Initialize(VulkanContext& context, const DeviceDe
         context.extensions.nvCooperativeVector
         && (!context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV || !context.deviceDispatch.vkConvertCooperativeVectorMatrixNV || !context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV)
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
         context.extensions.nvCooperativeVector = false;
         context.coopVecFeatures.cooperativeVector = VK_FALSE;
         context.coopVecFeatures.cooperativeVectorTraining = VK_FALSE;
     }
 
     if(context.extensions.extMeshShader && !context.deviceDispatch.vkCmdDrawMeshTasksEXT){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
         context.extensions.extMeshShader = false;
         context.meshShaderFeatures.meshShader = VK_FALSE;
         context.meshShaderFeatures.taskShader = VK_FALSE;

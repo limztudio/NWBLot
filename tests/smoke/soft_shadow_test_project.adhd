@@ -42,7 +42,7 @@ inline constexpr SoftShadowMaterialRef s_SoftShadowTimingOpaqueMaterial{"project
 inline constexpr SoftShadowMaterialRef s_SoftShadowTimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
 inline constexpr SoftShadowMeshRef s_SoftShadowGroundMesh{"project/meshes/shadow_plane"};
 
-inline constexpr TStringView s_SoftShadowProjectName = NWB_TEXT("SoftShadowTestSmokeProject");
+inline constexpr TStringView s_SoftShadowProjectName = FOUNDATION_TEXT("SoftShadowTestSmokeProject");
 inline constexpr f32 s_SoftShadowDefaultAngularRadius = 0.03f;
 inline constexpr f32 s_SoftShadowDefaultSourceRadius = 0.15f;
 inline constexpr f32 s_SoftShadowSpinSpeed = s_SmokeSpinSpeed;
@@ -99,7 +99,7 @@ class SoftShadowScene{
             const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), world);
             this->m_characterOwner = characterModel.entity;
             if(!characterModel.tintApplied)
-                NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
             // The glass caster must preserve tint while its penumbra widens with receiver distance.
             const auto glassModel = CreateTintedModelEntity(
@@ -112,18 +112,18 @@ class SoftShadowScene{
             );
             this->m_glassOwner = glassModel.entity;
             if(!glassModel.tintApplied)
-                NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
             SyncSmokeModelRuntimes(world);
 
-            NWB_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_characterOwner.valid() && this->m_glassOwner.valid(), NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
+            FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_characterOwner.valid() && this->m_glassOwner.valid(), FOUNDATION_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
 
             if(timingEnabled){
                 const Array<Core::ECS::EntityID, 3> lights = { directionalLight, pointLight, spotLight };
                 for(const auto lightEntity : lights){
                     const auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(lightEntity);
                     if(!light || light->enableCaustics){
-                        NWB_LOGGER_ERROR(NWB_TEXT("ShadowTimingProbe: timing light policy unavailable"));
+                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShadowTimingProbe: timing light policy unavailable"));
                         ok = false;
                         break;
                     }
@@ -221,7 +221,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         if(this.m_timingEnabled){
             native{
                 const b8 hardwareAvailable = this->m_context->graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && this->m_context->graphics.queryFeatureSupport(Core::Feature::RayQuery);
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? FOUNDATION_TEXT("hardware") : FOUNDATION_TEXT("software"));
             }
             [essential] info("ShadowTimingProbe: caustic emission 0");
             [essential] info("ShadowTimingProbe: indirect response hemi-ambient");
@@ -291,11 +291,11 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
             static constexpr usize s_TitleCapacity = 256u;
             Array<tchar, s_TitleCapacity> title{};
-            NWB_TSPRINTF(
+            FOUNDATION_TSPRINTF(
                 title.data(), title.size(),
-                NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
+                FOUNDATION_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
                 static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDegrees, angleDegrees, ConfiguredSourceRadius(),
-                this->m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+                this->m_yaw.manualControl() ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
             );
             this->m_context->graphics.setWindowTitle(TStringView(title.data()));
         }
@@ -320,7 +320,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Soft Shadow Test");
+    return FOUNDATION_TEXT("NWB Soft Shadow Test");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

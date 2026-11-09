@@ -93,7 +93,7 @@ template<typename EntryPoint, typename CharT>
     );
 }
 
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 template<typename Run>
 [[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
@@ -133,7 +133,7 @@ template<typename LoggerT, typename Run>
 [[nodiscard]] inline int RunConsoleCommandLineTool(const TStringView appName, const int initFailureExitCode, const int argc, char** argv, Run&& run){
     LoggerT logger;
     if(!logger.init(appName)){
-        NWB_TCERR << NWB_TEXT("[") << appName << NWB_TEXT("] logger.init() failed\n");
+        FOUNDATION_TCERR << FOUNDATION_TEXT("[") << appName << FOUNDATION_TEXT("] logger.init() failed\n");
         return initFailureExitCode;
     }
     const LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
@@ -150,9 +150,9 @@ NWB_COMMON_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 #include <shellapi.h>
 
 
@@ -238,7 +238,7 @@ NWB_COMMON_END
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int main(int argc, char** argv)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, nullptr); \
@@ -249,7 +249,7 @@ NWB_COMMON_END
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint)
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_UNICODE)
 #define NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(runFunction) \
     static int EntryPoint(const isize argc, wchar** argv, void*){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, runFunction); \

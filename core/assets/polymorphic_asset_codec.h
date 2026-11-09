@@ -38,7 +38,7 @@ public:
 
         auto asset = Core::Assets::PolymorphicAssetTypeAutoRegistrar<BaseAssetT>::CreateByTypeHash(virtualPath, (*headerResult).*TypeHashMember, arena);
         if(!asset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: unregistered {} type in '{}'"), deserializeContext, assetKindLabel, ConvertString(virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: unregistered {} type in '{}'"), deserializeContext, assetKindLabel, ConvertString(virtualPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         if(!asset->loadBinary(binary))
@@ -56,7 +56,7 @@ public:
     ){
         const BaseAssetT* const typedAsset = Core::Assets::PolymorphicAssetTypeAutoRegistrar<BaseAssetT>::Cast(&asset);
         if(!typedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), serializeContext, ConvertString(asset.assetType().resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: invalid asset type '{}'"), serializeContext, ConvertString(asset.assetType().resolvedText()));
             return false;
         }
 

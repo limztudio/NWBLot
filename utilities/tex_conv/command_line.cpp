@@ -40,23 +40,23 @@ template<b8 AlphaMask>
     const auto isRegularFile = IsRegularFile(path);
     if(!isRegularFile && !IsMissingPathError(isRegularFile.error())){
         if constexpr(AlphaMask)
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
         return false;
     }
     if(!isRegularFile || !*isRegularFile){
         if constexpr(AlphaMask)
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: input image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(!PathHasListedExtension(path, s_SupportedInputExtensions)){
         if constexpr(AlphaMask)
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
         return false;
     }
     return true;
@@ -163,7 +163,7 @@ i32 Run(const i32 argc, char** argv){
             NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report));
             return s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_TexConvExitFatal; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, FOUNDATION_COUT, FOUNDATION_CERR); }, []()noexcept{ return s_TexConvExitFatal; });
 }
 
 

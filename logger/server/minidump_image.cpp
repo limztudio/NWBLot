@@ -34,7 +34,7 @@ Expected<WString<Core::Alloc::ScratchArena>> DumpImage::readString(const RVA rva
     WString<Core::Alloc::ScratchArena> text(scratchArena);
     text.resize(static_cast<usize>(*textByteCount / sizeof(wchar)));
     if(*textByteCount != 0u)
-        NWB_MEMCPY(text.data(), *textByteCount, textBytes, *textByteCount);
+        FOUNDATION_MEMCPY(text.data(), *textByteCount, textBytes, *textByteCount);
     return text;
 }
 

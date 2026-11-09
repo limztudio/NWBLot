@@ -52,26 +52,26 @@ b8 CrashReporting::Install(CrashArena& crashArena){
         const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
         const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
         if(!dumpResult.requestAccepted() || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
-            NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
         }
     }, nullptr
     );
     return true;
 }
 
-void CrashReporting::Configure(const b8 crashReportingInstalled, const b8 useStandaloneLogger, const AStringView logAddress, const AStringView crashUploadToken, const b8 enableGpuDebug)noexcept(!NWB_OCCUR_WARNING){
+void CrashReporting::Configure(const b8 crashReportingInstalled, const b8 useStandaloneLogger, const AStringView logAddress, const AStringView crashUploadToken, const b8 enableGpuDebug)noexcept(!FOUNDATION_OCCUR_WARNING){
     if(!crashReportingInstalled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
         return;
     }
 
     const AStringView logServerUrl = useStandaloneLogger ? AStringView() : logAddress;
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, crashUploadToken))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Loader: failed to set crash upload destination"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Loader: failed to set 'runtime' crash metadata"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, enableGpuDebug ? s_EnabledText : s_DisabledText))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 
 

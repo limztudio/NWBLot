@@ -18,35 +18,35 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
     if(!framebuffer)
         return true;
     if(&framebuffer->m_context != &m_commandList.m_context){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer belongs to another device"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer belongs to another device"));
         return false;
     }
 
     const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
     const FramebufferInfoEx& framebufferInfo = framebuffer->m_framebufferInfo;
     if(framebufferInfo.width == 0u || framebufferInfo.height == 0u || framebufferInfo.arraySize == 0u){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer dimensions are invalid"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer dimensions are invalid"));
         return false;
     }
     const VkPhysicalDeviceLimits& limits = m_commandList.m_context.physicalDeviceProperties.limits;
     if(framebufferInfo.width > limits.maxFramebufferWidth || framebufferInfo.height > limits.maxFramebufferHeight || framebufferInfo.arraySize > limits.maxFramebufferLayers){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer dimensions exceed Vulkan device limits"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer dimensions exceed Vulkan device limits"));
         return false;
     }
     if(framebufferDesc.shadingRateAttachment.valid()){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("shading-rate framebuffer attachments are not implemented"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("shading-rate framebuffer attachments are not implemented"));
         return false;
     }
     if(!framebufferDesc.depthAttachment.valid() && (framebufferDesc.depthAttachment.isReadOnly || framebufferDesc.depthAttachment.format != Format::UNKNOWN || framebufferDesc.depthAttachment.subresources != FramebufferAttachment{}.subresources)){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth/stencil metadata has no attachment texture"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth/stencil metadata has no attachment texture"));
         return false;
     }
     if(framebufferDesc.colorAttachments.size() > s_MaxRenderTargets || framebufferDesc.colorAttachments.size() > limits.maxColorAttachments){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer color count exceeds the render-target limit"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer color count exceeds the render-target limit"));
         return false;
     }
     if(framebufferDesc.colorAttachments.empty() && !framebufferDesc.depthAttachment.valid()){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer has no color or depth/stencil attachment"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer has no color or depth/stencil attachment"));
         return false;
     }
 
@@ -61,50 +61,50 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
     ) -> b8{
         Texture* const texture = attachment.texture;
         if(!m_commandList.isTextureReadyForCommandQueue(texture)){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for this exact command queue"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment is not ready for this exact command queue"));
             return false;
         }
         if(requireRenderTargetUsage && !texture->m_creationDesc.isRenderTarget){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment lacks render-target usage"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment lacks render-target usage"));
             return false;
         }
         if(requireShadingRateUsage && !texture->m_creationDesc.isShadingRateSurface){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment lacks shading-rate usage"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment lacks shading-rate usage"));
             return false;
         }
         if(!requireDepthStencilFormat && attachment.isReadOnly){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("only depth/stencil attachments may be read-only"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("only depth/stencil attachments may be read-only"));
             return false;
         }
         if(!VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(texture->m_creationDesc, attachment.subresources)){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment subresource metadata is invalid"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment subresource metadata is invalid"));
             return false;
         }
 
         const TextureSubresourceSet resolved = attachment.subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
         if(resolved.numMipLevels != 1u || resolved.numArraySlices == 0u){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment subresource range is invalid"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment subresource range is invalid"));
             return false;
         }
 
         const Format::Enum format = attachment.format == Format::UNKNOWN ? texture->m_creationDesc.format : attachment.format;
         if(format != texture->m_creationDesc.format){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format overrides are unsupported"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment format overrides are unsupported"));
             return false;
         }
         if(VulkanDetail::ConvertFormat(format) == VK_FORMAT_UNDEFINED){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format is unsupported"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment format is unsupported"));
             return false;
         }
         const FormatInfo& formatInfo = GetFormatInfo(format);
         const b8 depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
         const b8 depthStencilImage = (texture->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
         if(depthStencilFormat != requireDepthStencilFormat || depthStencilImage != requireDepthStencilFormat){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format class is incompatible"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment format class is incompatible"));
             return false;
         }
         if(expectedFormat != Format::UNKNOWN && format != expectedFormat){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format metadata is inconsistent"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment format metadata is inconsistent"));
             return false;
         }
 
@@ -118,24 +118,24 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
                 || texture->m_creationDesc.sampleCount != framebufferInfo.sampleCount
                 || texture->m_creationDesc.sampleQuality != framebufferInfo.sampleQuality
             ){
-                m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment extent or sampling is inconsistent"));
+                m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment extent or sampling is inconsistent"));
                 return false;
             }
         }
 
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(texture->m_creationDesc, resolved);
         if(viewDimension == TextureDimension::Unknown){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment texture dimension is unsupported"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment texture dimension is unsupported"));
             return false;
         }
-        const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*texture, resolved, viewDimension, format, NWB_TEXT("framebuffer attachment image view"), false);
+        const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*texture, resolved, viewDimension, format, FOUNDATION_TEXT("framebuffer attachment image view"), false);
         if(!viewInfo){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment view description is invalid"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view description is invalid"));
             return false;
         }
         const ResourceStates::Mask permanentState = m_commandList.getPermanentTextureState(texture);
         if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment permanent state is incompatible"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment permanent state is incompatible"));
             return false;
         }
         return true;
@@ -160,14 +160,14 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
                 continue;
             const TextureSubresourceSet priorRange = priorAttachment.subresources.resolve(priorAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
             if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, priorRange)){
-                m_commandList.rejectCommandRecording(operationName, NWB_TEXT("color attachments overlap the same image subresources"));
+                m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("color attachments overlap the same image subresources"));
                 return false;
             }
         }
         if(framebufferDesc.depthAttachment.texture == colorAttachment.texture){
             const TextureSubresourceSet depthRange = framebufferDesc.depthAttachment.subresources.resolve(framebufferDesc.depthAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
             if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, depthRange)){
-                m_commandList.rejectCommandRecording(operationName, NWB_TEXT("color and depth/stencil attachments overlap the same image subresources"));
+                m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("color and depth/stencil attachments overlap the same image subresources"));
                 return false;
             }
         }
@@ -178,7 +178,7 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
 
 b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, const TStringView operationName){
     if(m_commandList.m_renderPassActive){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("a render pass is already active"));
         return false;
     }
     if(!validateFramebuffer(&framebuffer, operationName))
@@ -189,11 +189,11 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
     for(u32 colorIndex = 0u; colorIndex < s_MaxRenderTargets; ++colorIndex){
         const RenderPassAttachmentActions& actions = params.colorAttachmentActions[colorIndex];
         if(!VulkanDetail::IsRenderPassAttachmentActionsValid(actions)){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("color attachment actions are invalid"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("color attachment actions are invalid"));
             return false;
         }
         if(colorIndex >= colorAttachmentCount && (actions.loadAction != RenderPassLoadAction::Load || actions.storeAction != RenderPassStoreAction::Store)){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("color attachment actions select no framebuffer attachment"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("color attachment actions select no framebuffer attachment"));
             return false;
         }
         if(colorIndex >= colorAttachmentCount || actions.loadAction != RenderPassLoadAction::Clear)
@@ -202,13 +202,13 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
         const FramebufferAttachment& attachment = framebufferDesc.colorAttachments[colorIndex];
         const Format::Enum format = attachment.format == Format::UNKNOWN ? attachment.texture->m_creationDesc.format : attachment.format;
         if(GetFormatInfo(format).kind == FormatKind::Integer){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("float color clear value targets an integer attachment"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("float color clear value targets an integer attachment"));
             return false;
         }
     }
 
     if(!VulkanDetail::IsRenderPassAttachmentActionsValid(params.depthAttachmentActions) || !VulkanDetail::IsRenderPassAttachmentActionsValid(params.stencilAttachmentActions)){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth/stencil attachment actions are invalid"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth/stencil attachment actions are invalid"));
         return false;
     }
 
@@ -217,7 +217,7 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
     const FramebufferAttachment& depthAttachment = framebufferDesc.depthAttachment;
     if(!depthAttachment.valid()){
         if(depthActionsRequested || stencilActionsRequested){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth/stencil attachment actions requested without an attachment"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth/stencil attachment actions requested without an attachment"));
             return false;
         }
         return true;
@@ -226,21 +226,21 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
     const b8 clearDepth = params.depthAttachmentActions.loadAction == RenderPassLoadAction::Clear;
     const b8 clearStencil = params.stencilAttachmentActions.loadAction == RenderPassLoadAction::Clear;
     if(depthAttachment.isReadOnly && (clearDepth || clearStencil)){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested for a read-only attachment"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth/stencil clear requested for a read-only attachment"));
         return false;
     }
 
     const VkImageAspectFlags attachmentAspects = depthAttachment.texture->m_aspectMask;
     if(depthActionsRequested && (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth attachment actions requested for an attachment without depth"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth attachment actions requested for an attachment without depth"));
         return false;
     }
     if(stencilActionsRequested && (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("stencil attachment actions requested for an attachment without stencil"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("stencil attachment actions requested for an attachment without stencil"));
         return false;
     }
     if(clearDepth && (!IsFinite(params.depthClearValue) || params.depthClearValue < 0.0f || params.depthClearValue > 1.0f)){
-        m_commandList.rejectCommandRecording(operationName, NWB_TEXT("depth clear value is outside the normalized depth range"));
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth clear value is outside the normalized depth range"));
         return false;
     }
     return true;
@@ -256,7 +256,7 @@ b8 FramebufferRenderingPreparation::prepareFramebuffer(Framebuffer* const frameb
         const TextureSubresourceSet resolved = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(attachment.texture->m_creationDesc, resolved);
         if(!attachment.texture->getView(attachment.subresources, viewDimension, attachment.format)){
-            m_commandList.rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment view could not be created"));
+            m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view could not be created"));
             return false;
         }
         return true;

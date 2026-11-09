@@ -398,17 +398,17 @@ void UiComboSmokeSource::toggleEmpty()noexcept{
 
 Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxPlacement& placement, const f32 fontSize){
     using namespace Impl::Ui;
-    NWB_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
+    FOUNDATION_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
     EditBoxView view(arena);
     const b8 captured = view.snapshot(model);
-    NWB_FATAL_ASSERT(captured);
+    FOUNDATION_FATAL_ASSERT(captured);
     const EditBoxRange range = view.selectionRange();
     if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
         return {};
     const b8 shaped = view.shape(text, { .fontSize = fontSize }) == TextLayoutStatus::Success;
-    NWB_FATAL_ASSERT(shaped);
+    FOUNDATION_FATAL_ASSERT(shaped);
     auto selection = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
-    NWB_FATAL_ASSERT(selection.has_value());
+    FOUNDATION_FATAL_ASSERT(selection.has_value());
     if(selection->width > 0.0f){
         const SIMDVectorSingle origin = VectorAdd(VectorSet(selection->x, selection->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
         selection->x = VectorGetX(origin);
@@ -445,7 +445,7 @@ StringView UiListSmokeSource::text(const u64 index)const noexcept{
     m_label[3] = ' ';
     Array<char, s_UsizeDecimalDigitCount> digits{};
     const AStringView formatted = FormatDecimal(rowKey, digits);
-    NWB_MEMCPY(m_label.data() + 4u, m_label.size() - 4u, formatted.data(), formatted.size());
+    FOUNDATION_MEMCPY(m_label.data() + 4u, m_label.size() - 4u, formatted.data(), formatted.size());
     return { m_label.data(), 4u + formatted.size() };
 }
 
@@ -506,7 +506,7 @@ Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, c
 }
 
 void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
 }
 
 void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){
@@ -514,15 +514,15 @@ void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& 
         return;
     inOutLastDisplay = display;
     inOutDisplayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: display logical={}x{} scale={}x{}"), tag, display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: display logical={}x{} scale={}x{}"), tag, display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection){
     const auto& bounds = placement.bounds;
     const auto& content = placement.content;
     const auto& caret = placement.caret;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"), tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height, content.x, content.y, content.width, content.height);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"), tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height, content.x, content.y, content.width, content.height);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
         , tag, sequence, field, caret.x, caret.y, caret.width, caret.height
         , selection.x, selection.y, selection.width, selection.height, placement.scroll
     );

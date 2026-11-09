@@ -23,7 +23,7 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
     const u64 identity = TryNextAtomicIdentity(s_NextGeneration);
     if(identity == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
     return identity;
 }
 
@@ -50,11 +50,11 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
             resetCompletion.activateWithinLock();
         }
     }
-    NWB_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+    FOUNDATION_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
 
     const b8 taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
     if(!taskPayloadsDestroyed)
-        NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
     resetCompletion.complete();
 }
 

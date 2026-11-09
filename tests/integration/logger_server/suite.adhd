@@ -489,7 +489,7 @@ TEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone){
 #include <global/scope_exit.h>
 #include <global/timer.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
@@ -532,7 +532,7 @@ public:
     [[nodiscard]] usize firstPayloadSize()const noexcept{ return m_payloadOverflow ? 0u : m_payloadSizes[0]; }
     [[nodiscard]] b8 firstPayloadRetried()const noexcept{
         return !m_payloadOverflow && m_payloadSizes[0] != 0u && m_payloadSizes[0] == m_payloadSizes[1]
-            && NWB_MEMCMP(m_payloads[0].data(), m_payloads[1].data(), m_payloadSizes[0]) == 0;
+            && FOUNDATION_MEMCMP(m_payloads[0].data(), m_payloads[1].data(), m_payloadSizes[0]) == 0;
     }
 
 
@@ -564,7 +564,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
 
     if(!serverContext || !connection || !method || !uploadDataSize || !connectionContext)
         return MHD_NO;
-    if(NWB_STRCMP(method, "POST") != 0)
+    if(FOUNDATION_STRCMP(method, "POST") != 0)
         return MHD_NO;
 
     if(!*connectionContext){
@@ -579,7 +579,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
             if(*uploadDataSize > server.m_payloads[requestIndex].size() - length)
                 server.m_payloadOverflow = true;
             else{
-                NWB_MEMCPY(server.m_payloads[requestIndex].data() + length, server.m_payloads[requestIndex].size() - length, uploadData, *uploadDataSize);
+                FOUNDATION_MEMCPY(server.m_payloads[requestIndex].data() + length, server.m_payloads[requestIndex].size() - length, uploadData, *uploadDataSize);
                 length += *uploadDataSize;
             }
         }
@@ -597,7 +597,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
     }
     const u32 requestIndex = server.m_requestCount.load(MemoryOrder::relaxed);
     if(requestIndex < server.m_telemetryRequests.size())
-        server.m_telemetryRequests[requestIndex] = url && NWB_STRCMP(url, "/telemetry") == 0;
+        server.m_telemetryRequests[requestIndex] = url && FOUNDATION_STRCMP(url, "/telemetry") == 0;
     server.m_requestCount.fetch_add(1u, MemoryOrder::release);
 
     static Array<char, 1u> s_EmptyResponse = {};
@@ -672,7 +672,7 @@ TEST(LogClientShutdown, MessageProgressesWhileTelemetryBacklogRemains){
         ASSERT_TRUE(server.processingFirstRequest());
         for(u32 index = 0u; index < 3u; ++index)
             ASSERT_TRUE(client.enqueueTelemetry(s_Telemetry.data(), s_Telemetry.size()));
-        client.enqueue(TStringView(NWB_TEXT("queued message")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("queued message")));
         server.releaseFirstRequest();
         releaseGate.release();
         for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
@@ -693,12 +693,12 @@ TEST(LogClientShutdown, TelemetryProgressesWhileMessageBacklogRemains){
         ScopeExit releaseGate([&server]()noexcept{ server.releaseFirstRequest(); });
         const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("first message")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("first message")));
         for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
             SleepMS(1u);
         ASSERT_TRUE(server.processingFirstRequest());
         for(u32 index = 0u; index < 3u; ++index)
-            client.enqueue(TStringView(NWB_TEXT("queued message")));
+            client.enqueue(TStringView(FOUNDATION_TEXT("queued message")));
         constexpr Array<u8, 1u> s_Telemetry = { 1u };
         ASSERT_TRUE(client.enqueueTelemetry(s_Telemetry.data(), s_Telemetry.size()));
         server.releaseFirstRequest();
@@ -720,8 +720,8 @@ TEST(LogClientShutdown, RetriesRejectedPayloadBeforeSendingNextMessage){
         NWB::Log::Client client;
         const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("first payload")));
-        client.enqueue(TStringView(NWB_TEXT("second payload")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("first payload")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("second payload")));
         for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 3u; ++attempt)
             SleepMS(10u);
         EXPECT_EQ(server.requestCount(), 3u);
@@ -741,7 +741,7 @@ TEST(LogClientShutdown, ShutdownInterruptsBackoffAfterRepeatedTemporaryFailures)
         const b8 initialized = client.init(AStringView(url.data(), url.size()));
         EXPECT_TRUE(initialized);
         if(initialized){
-            client.enqueue(TStringView(NWB_TEXT("retry payload")));
+            client.enqueue(TStringView(FOUNDATION_TEXT("retry payload")));
             for(u32 attempt = 0u; attempt < 1200u && server.requestCount() < 7u; ++attempt)
                 SleepMS(10u);
             EXPECT_GE(server.requestCount(), 7u);
@@ -761,7 +761,7 @@ TEST(LogClientShutdown, TransportFailureIsVisibleWithoutDiagnosticCallback){
         const b8 initialized = client.init("http://[invalid");
         EXPECT_TRUE(initialized);
         if(initialized){
-            client.enqueue(TStringView(NWB_TEXT("unsent payload")));
+            client.enqueue(TStringView(FOUNDATION_TEXT("unsent payload")));
             SleepMS(500u);
         }
     }
@@ -778,8 +778,8 @@ TEST(LogClientShutdown, PermanentBadRequestDoesNotBlockLaterMessages){
         NWB::Log::Client client;
         const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("rejected payload")));
-        client.enqueue(TStringView(NWB_TEXT("later payload")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("rejected payload")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("later payload")));
         for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
             SleepMS(10u);
         EXPECT_EQ(server.requestCount(), 2u);
@@ -800,7 +800,7 @@ TEST(LogClientShutdown, OversizedMessageDoesNotBlockLaterMessages){
         NWB::Log::LogString message(client.arena());
         message.resize(NWB::Log::s_MaxLogMessageUploadBytes / sizeof(tchar) + 1u, static_cast<tchar>('x'));
         client.enqueue(TStringView(message.data(), message.size()));
-        client.enqueue(TStringView(NWB_TEXT("later payload")));
+        client.enqueue(TStringView(FOUNDATION_TEXT("later payload")));
         for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
             SleepMS(10u);
         EXPECT_EQ(server.requestCount(), 2u);
@@ -829,7 +829,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
 
         for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
-            client.enqueue(StringFormat(client.arena(), NWB_TEXT("Log client shutdown payload {}"), messageIndex));
+            client.enqueue(StringFormat(client.arena(), FOUNDATION_TEXT("Log client shutdown payload {}"), messageIndex));
         }
     }
 
@@ -871,7 +871,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -894,7 +894,7 @@ constexpr AStringView s_WindowsExceptionCategory = "windows_exception";
 
 static constexpr AStringView s_PlatformLinux = "platform=linux";
 static constexpr AStringView s_Event = "[event]";
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 static constexpr AStringView s_Callstack = "callstack:";
 static constexpr AStringView s_StatusCallstackCaptured = "status=callstack_captured";
 #endif
@@ -936,7 +936,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 
 
 static void AppendDecimalText(const u64 value, CrashTestText& outText){
@@ -999,26 +999,26 @@ static void LinuxSilenceExpectedCrashChildConsole(){
 }
 
 [[nodiscard]] static AStringView LinuxObservableAssertCategory()noexcept{
-#if NWB_OCCUR_ASSERT
+#if FOUNDATION_OCCUR_ASSERT
     return DiagnosticEventCategory::s_Assert;
 #else
     return DiagnosticEventCategory::s_FatalAssert;
 #endif
 }
 
-NWB_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
-#if NWB_OCCUR_ASSERT
-    NWB_ASSERT(false);
+FOUNDATION_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
+#if FOUNDATION_OCCUR_ASSERT
+    FOUNDATION_ASSERT(false);
 #else
-    NWB_FATAL_ASSERT(false);
+    FOUNDATION_FATAL_ASSERT(false);
 #endif
     _exit(120);
 }
 #endif
 
 // Guard this helper on Android where its caller test is disabled.
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
+FOUNDATION_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
@@ -1058,7 +1058,7 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::Gl
 
 
 TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_linux_assert_observe_test");
@@ -1143,7 +1143,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 }
 
 TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport){
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(s_RecoverableErrorInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
@@ -1189,7 +1189,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     EXPECT_TRUE(Contains(report, "event=error"));
     EXPECT_TRUE(Contains(report, s_ErrorMessage));
     EXPECT_TRUE(Contains(report, s_TestSourceFilename));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     EXPECT_TRUE(Contains(report, s_PlatformLinux));
     EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
     EXPECT_TRUE(Contains(report, s_Callstack));
@@ -1197,7 +1197,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     ASSERT_TRUE(externalSymbolizer);
     if(*externalSymbolizer)
         EXPECT_TRUE(Contains(report, "CaptureRecoverableErrorForCrashObservation"));
-#elif defined(NWB_PLATFORM_WINDOWS)
+#elif defined(FOUNDATION_PLATFORM_WINDOWS)
     EXPECT_TRUE(Contains(report, "platform=windows"));
     EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
 #endif
@@ -1260,7 +1260,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -1330,7 +1330,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     EXPECT_TRUE(Contains(report, "event=crash"));
     EXPECT_TRUE(Contains(report, "exception=access_violation 0x00000000c0000005"));
     EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     CrashTestText missingDumpMessage(arena);
     missingDumpMessage += s_ProcessDumpFileName;
     missingDumpMessage += " is missing or unreadable";
@@ -1381,8 +1381,8 @@ TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE(Contains(result.message, NWB_TEXT("Crash upload rejected")));
-    EXPECT_TRUE(Contains(result.message, NWB_TEXT("invalid crash archive header")));
+    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("Crash upload rejected")));
+    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("invalid crash archive header")));
 
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
@@ -1408,7 +1408,7 @@ TEST_F(LoggerServerCrash, UnsafeArchiveEntryCannotEscapePackageDirectory){
     AppendArchiveFile("../escape", "payload", archive);
     const auto result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
     EXPECT_FALSE(result.accepted);
-    EXPECT_TRUE(Contains(result.message, NWB_TEXT("malformed crash archive file header")));
+    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("malformed crash archive file header")));
     const auto escaped = FileExistsNoFollow(StorageDirectory(arena, s_Group) / "packages" / "escape");
     ASSERT_TRUE(escaped);
     EXPECT_FALSE(*escaped);
@@ -1428,7 +1428,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE(Contains(result.message, NWB_TEXT("manifest.json is missing required fields")));
+    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("manifest.json is missing required fields")));
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
         ASSERT_TRUE(pathQuery);
@@ -1462,7 +1462,7 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     AppendArchiveFile(s_ManifestFileName, AStringView(manifest.data(), manifest.size()), invalidArchive);
     const auto invalidResult = ProcessCrashArchive(arena, s_Group, s_InvalidStem, invalidArchive);
     EXPECT_FALSE(invalidResult.accepted);
-    EXPECT_TRUE(Contains(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
+    EXPECT_TRUE(Contains(invalidResult.message, FOUNDATION_TEXT("manifest.json is missing required fields")));
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_InvalidStem));
         ASSERT_TRUE(pathQuery);
@@ -1562,7 +1562,7 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE(Contains(result.message, NWB_TEXT("raw upload archive could not be retained")));
+    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("raw upload archive could not be retained")));
     {
         const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem));
         ASSERT_TRUE(pathQuery);

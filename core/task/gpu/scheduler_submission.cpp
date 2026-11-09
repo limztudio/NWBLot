@@ -86,7 +86,7 @@ public:
 public:
     void arm(const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& submissionLease)noexcept{
         if(m_submissionLease)
-            NWB_FATAL_ASSERT_MSG(false, "packet submission unwind scope may arm exactly once");
+            FOUNDATION_FATAL_ASSERT_MSG(false, "packet submission unwind scope may arm exactly once");
         m_packet = packet;
         m_submissionLease = &submissionLease;
     }
@@ -273,13 +273,13 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         resolutionSubmittingPacketUnwind.release();
         transaction.rejectSubmittingPacket(graph, submissionLease, compiledGraph, planAccess, packetID);
         if(submissionLease.valid())
-            NWB_FATAL_ASSERT_MSG(false, "rejected native submission must consume its exact packet lease");
+            FOUNDATION_FATAL_ASSERT_MSG(false, "rejected native submission must consume its exact packet lease");
         if(!timingResolved)
-            NWB_LOGGER_ERROR(NWB_TEXT("GPU task graph: Rejected packet failed to discard prepared timing ownership"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU task graph: Rejected packet failed to discard prepared timing ownership"));
         return false;
     }
 
-    NWB_ASSERT(token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration));
+    FOUNDATION_ASSERT(token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration));
     if(emittedTimelineWaitCount > waitStatistics.timelineWaitCount)
         TerminateInvariant();
     nativeSubmissionInfo.timelineWaitCount = emittedTimelineWaitCount;

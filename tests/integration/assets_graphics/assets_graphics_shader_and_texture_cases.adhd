@@ -151,7 +151,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     EXPECT_FALSE(Impl::ShaderCook::ComputeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the declared dependency root aliases")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("outside the declared dependency root aliases")));
 #endif
 
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -241,7 +241,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAlia
 }
 
 TEST(AssetsGraphics, ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     GTEST_SKIP() << "Windows shader path duplicate policy is case insensitive";
 #endif
     TestArena testArena;
@@ -358,7 +358,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includeMetaPath, testArena, scratchArena, shaderCook));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'default_variant'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field 'default_variant'")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));
 #endif
@@ -481,7 +481,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
             EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook));
             EXPECT_FALSE(shaderEntry.defineValues.empty());
-            const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), ConvertString(transportName));
+            const auto expectedDiagnostic = StringFormat(testArena.arena, FOUNDATION_TEXT("define '{}' is an engine transport feature"), ConvertString(transportName));
             EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
             auto metadataResult4 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);
@@ -527,8 +527,8 @@ TEST(AssetsGraphics, InvalidShaderDefineNamePrecedesInvalidValueShape){
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
     Impl::ShaderCook shaderCook(testArena.arena);
     EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be an ASCII shader identifier")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("values must be a list of strings")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("must be an ASCII shader identifier")));
+    EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("values must be a list of strings")));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -679,7 +679,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParen
         EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("references missing or later parent")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("references missing or later parent")));
 }
 
 TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
@@ -692,7 +692,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
     }
     EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate joint name")));
 }
 
 
@@ -834,7 +834,7 @@ TEST(AssetsGraphics, Rgba8FallbackMipSizeRejectsAddressOverflow){
     ASSERT_TRUE(zeroBytes);
     EXPECT_EQ(*zeroBytes, 0u);
     EXPECT_FALSE(Impl::TryComputeRgba8FallbackMipBytes(Limit<u32>::s_Max, Limit<u32>::s_Max));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("RGBA8 fallback mip size exceeds addressable memory")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("RGBA8 fallback mip size exceeds addressable memory")));
 }
 
 TEST(AssetsGraphics, TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount){
@@ -855,7 +855,7 @@ TEST(AssetsGraphics, TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOve
     }
     Core::Assets::AssetBytes oversized(validBinary.begin(), validBinary.begin() + sizeof(::TextureBinaryPayload::HeaderBinary), testArena.arena);
     const u32 oversizedCount = Limit<u32>::s_Max;
-    NWB_MEMCPY(oversized.data() + offsetof(::TextureBinaryPayload::HeaderBinary, mipCount), sizeof(oversizedCount), &oversizedCount, sizeof(oversizedCount));
+    FOUNDATION_MEMCPY(oversized.data() + offsetof(::TextureBinaryPayload::HeaderBinary, mipCount), sizeof(oversizedCount), &oversizedCount, sizeof(oversizedCount));
     EXPECT_FALSE(texture.loadBinary(oversized));
     Core::Assets::AssetBytes retained(testArena.arena);
     ASSERT_TRUE(codec.serialize(texture, retained));
@@ -874,7 +874,7 @@ TEST(AssetsGraphics, TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPu
     for(const u32 payloadFormat : { 2u, 255u, 256u, 257u, 0xffffff00u, 0xffffff01u, Limit<u32>::s_Max }){
         SCOPED_TRACE(payloadFormat);
         Core::Assets::AssetBytes malformed(original);
-        NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(payloadFormat), &payloadFormat, sizeof(payloadFormat));
+        FOUNDATION_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(payloadFormat), &payloadFormat, sizeof(payloadFormat));
         EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
         EXPECT_FALSE(texture.loadBinary(malformed));
         Core::Assets::AssetBytes retained(testArena.arena);
@@ -891,17 +891,17 @@ TEST(AssetsGraphics, TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutRep
     Core::Assets::AssetBytes original = BuildPartialBlockTextureBinary(testArena);
     const u32 hdrFormat = TexturePayloadFormat::UastcHdr4x4;
     const u32 alphaInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_MaxConstantAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
-    NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(hdrFormat), &hdrFormat, sizeof(hdrFormat));
-    NWB_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(alphaInfo), &alphaInfo, sizeof(alphaInfo));
+    FOUNDATION_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(hdrFormat), &hdrFormat, sizeof(hdrFormat));
+    FOUNDATION_MEMCPY(original.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(alphaInfo), &alphaInfo, sizeof(alphaInfo));
     Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesConstantAlphaAdmission));
     ASSERT_TRUE(texture.loadBinary(original));
     Impl::TextureAssetCodec codec;
     Core::Assets::AssetBytes malformed(original);
     const u32 opaqueConstantInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_OpaqueAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
-    NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(opaqueConstantInfo), &opaqueConstantInfo, sizeof(opaqueConstantInfo));
+    FOUNDATION_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(opaqueConstantInfo), &opaqueConstantInfo, sizeof(opaqueConstantInfo));
     EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
     EXPECT_FALSE(texture.loadBinary(malformed));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("constant alpha must be below opaque alpha")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("constant alpha must be below opaque alpha")));
     Core::Assets::AssetBytes retained(testArena.arena);
     ASSERT_TRUE(codec.serialize(texture, retained));
     EXPECT_EQ(retained, original);
@@ -927,7 +927,7 @@ TEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEnco
     }};
     for(const Corruption& corruption : corruptions){
         Core::Assets::AssetBytes malformed(validBinary.begin(), validBinary.end(), testArena.arena);
-        NWB_MEMCPY(malformed.data() + sizeof(::TextureBinaryPayload::HeaderBinary) + corruption.fieldOffset, sizeof(corruption.value), &corruption.value, sizeof(corruption.value));
+        FOUNDATION_MEMCPY(malformed.data() + sizeof(::TextureBinaryPayload::HeaderBinary) + corruption.fieldOffset, sizeof(corruption.value), &corruption.value, sizeof(corruption.value));
         EXPECT_FALSE(texture.loadBinary(malformed)) << corruption.fieldOffset;
         Core::Assets::AssetBytes retained(testArena.arena);
         ASSERT_TRUE(codec.serialize(texture, retained));
@@ -939,7 +939,7 @@ TEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEnco
     Core::Assets::AssetBytes encoded(testArena.arena);
     ASSERT_TRUE(codec.serialize(texture, encoded));
     ASSERT_EQ(encoded.size(), validBinary.size());
-    EXPECT_EQ(NWB_MEMCMP(encoded.data(), validBinary.data(), validBinary.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(encoded.data(), validBinary.data(), validBinary.size()), 0);
 }
 
 
@@ -1067,14 +1067,14 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     for(const u32 version : { 0u, 1u, 2u, 3u, ::TextureBinaryPayload::s_TextureVersion + 1u }){
-        NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
+        FOUNDATION_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
         EXPECT_FALSE(codec.deserialize(texture.virtualPath(), binary, testArena.arena)) << version;
     }
     EXPECT_EQ(logger.errorCount(), 5u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported texture payload version")));
 
     const u32 currentVersion = ::TextureBinaryPayload::s_TextureVersion;
-    NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
+    FOUNDATION_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
     const auto loadedAssetResult = codec.deserialize(texture.virtualPath(), binary, testArena.arena);
     ASSERT_TRUE(loadedAssetResult);
 }
@@ -1087,7 +1087,7 @@ TEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat){
     NWB::Impl::Texture texture(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectTexturesInvalidAlphaMode));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
     EXPECT_FALSE(texture.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("invalid alpha transport for its payload format")));
 }
 
 TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain){
@@ -1116,7 +1116,7 @@ TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAg
     ASSERT_TRUE(codec.serialize(*texture, packaged));
     const usize rawOffset = sizeof(::TextureBinaryPayload::HeaderBinary) + texture->mipLevels().size() * sizeof(::TextureBinaryPayload::MipLevelBinary);
     ASSERT_EQ(packaged.size(), rawOffset + original.size());
-    EXPECT_EQ(NWB_MEMCMP(packaged.data() + rawOffset, original.data(), original.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(packaged.data() + rawOffset, original.data(), original.size()), 0);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -1144,7 +1144,7 @@ TEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes){
     ASSERT_TRUE(framedRuntimeBinary);
     entry.payloadBytes = *framedRuntimeBinary;
     EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match the declared mip and alpha layout")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("raw texture byte count does not match the declared mip and alpha layout")));
     entry.payloadBytes = original;
     EXPECT_TRUE(Impl::BuildTextureAsset(entry, testArena.arena));
 }
@@ -1159,10 +1159,10 @@ TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAll
         TStringView diagnostic;
     };
     const Array<OverflowLayout, 4u> layouts = {{
-        { TextureDimension::Texture2D, Limit<u32>::s_Max, Limit<u32>::s_Max, 1u, NWB_TEXT("block layout exceeds supported limits") },
-        { TextureDimension::TextureCube, 2147483648u, 2147483648u, 1u, NWB_TEXT("block layout exceeds supported limits") },
-        { TextureDimension::Texture3D, 65536u, 65536u, Limit<u32>::s_Max, NWB_TEXT("mip byte offsets overflow") },
-        { TextureDimension::Texture3D, 131072u, 131072u, Limit<u32>::s_Max, NWB_TEXT("block layout exceeds supported limits") },
+        { TextureDimension::Texture2D, Limit<u32>::s_Max, Limit<u32>::s_Max, 1u, FOUNDATION_TEXT("block layout exceeds supported limits") },
+        { TextureDimension::TextureCube, 2147483648u, 2147483648u, 1u, FOUNDATION_TEXT("block layout exceeds supported limits") },
+        { TextureDimension::Texture3D, 65536u, 65536u, Limit<u32>::s_Max, FOUNDATION_TEXT("mip byte offsets overflow") },
+        { TextureDimension::Texture3D, 131072u, 131072u, Limit<u32>::s_Max, FOUNDATION_TEXT("block layout exceeds supported limits") },
     }};
     for(const OverflowLayout& layout : layouts){
         CapturingLogger logger;
@@ -1177,7 +1177,7 @@ TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAll
         EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
         EXPECT_EQ(testArena.arena.memoryStats().usedBytes, allocatedBytes);
         EXPECT_TRUE(logger.sawErrorContaining(layout.diagnostic)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
-        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("raw texture byte count does not match")));
+        EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("raw texture byte count does not match")));
     }
 }
 
@@ -1196,8 +1196,8 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectin
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("checker.tex")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("failed to read raw texture sidecar")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("checker.tex")));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -1222,30 +1222,30 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         TStringView diagnostic;
     };
     constexpr Array<ObsoleteField, 24u> s_ObsoleteFields = {{
-        { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
-        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.data = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'data'") },
-        { "asset.file = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'file'") },
-        { "asset.mip_filter = \"linear\";\n", NWB_TEXT("unsupported asset field 'mip_filter'") },
-        { "asset.uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
-        { "asset.uastc_hdr_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
-        { "asset.alpha_uastc_spec_revision = \"old\";\n", NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
-        { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
-        { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
-        { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
-        { "asset.block_height = 4;\n", NWB_TEXT("unsupported asset field 'block_height'") },
-        { "asset.bytes_per_block = 16;\n", NWB_TEXT("unsupported asset field 'bytes_per_block'") },
-        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
-        { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
-        { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
-        { "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
-        { "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
-        { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
-        { "asset.alpha_payload_byte_count = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
-        { "asset.color_space = \"srgb\";\n", NWB_TEXT("unsupported asset field 'color_space'") },
-        { "asset.width = 7;\n", NWB_TEXT("unsupported asset field 'width'") },
-        { "asset.height = 5;\n", NWB_TEXT("unsupported asset field 'height'") },
-        { "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
+        { "asset.version = 1;\n", FOUNDATION_TEXT("unsupported asset field 'version'") },
+        { "asset.mip_count = 3;\n", FOUNDATION_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.data = \"checker.tex\";\n", FOUNDATION_TEXT("unsupported asset field 'data'") },
+        { "asset.file = \"checker.tex\";\n", FOUNDATION_TEXT("unsupported asset field 'file'") },
+        { "asset.mip_filter = \"linear\";\n", FOUNDATION_TEXT("unsupported asset field 'mip_filter'") },
+        { "asset.uastc_spec_revision = \"old\";\n", FOUNDATION_TEXT("unsupported asset field 'uastc_spec_revision'") },
+        { "asset.uastc_hdr_spec_revision = \"old\";\n", FOUNDATION_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
+        { "asset.alpha_uastc_spec_revision = \"old\";\n", FOUNDATION_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
+        { "asset.schema_version = 1;\n", FOUNDATION_TEXT("unsupported asset field 'schema_version'") },
+        { "asset.revision = 1;\n", FOUNDATION_TEXT("unsupported asset field 'revision'") },
+        { "asset.block_width = 4;\n", FOUNDATION_TEXT("unsupported asset field 'block_width'") },
+        { "asset.block_height = 4;\n", FOUNDATION_TEXT("unsupported asset field 'block_height'") },
+        { "asset.bytes_per_block = 16;\n", FOUNDATION_TEXT("unsupported asset field 'bytes_per_block'") },
+        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", FOUNDATION_TEXT("unsupported asset field 'payload_layout'") },
+        { "asset.mip_address_mode = \"clamp\";\n", FOUNDATION_TEXT("unsupported asset field 'mip_address_mode'") },
+        { "asset.mips = [];\n", FOUNDATION_TEXT("unsupported asset field 'mips'") },
+        { "asset.has_alpha = 1;\n", FOUNDATION_TEXT("unsupported asset field 'has_alpha'") },
+        { "asset.alpha_constant_unorm8 = 128;\n", FOUNDATION_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+        { "asset.alpha_payload_offset_bytes = 48;\n", FOUNDATION_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
+        { "asset.alpha_payload_byte_count = 48;\n", FOUNDATION_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
+        { "asset.color_space = \"srgb\";\n", FOUNDATION_TEXT("unsupported asset field 'color_space'") },
+        { "asset.width = 7;\n", FOUNDATION_TEXT("unsupported asset field 'width'") },
+        { "asset.height = 5;\n", FOUNDATION_TEXT("unsupported asset field 'height'") },
+        { "asset.depth = 1;\n", FOUNDATION_TEXT("unsupported asset field 'depth'") },
     }};
     for(const ObsoleteField& field : s_ObsoleteFields){
         CapturingLogger logger;
@@ -1269,10 +1269,10 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors){
         TStringView diagnostic;
     };
     constexpr Array<RequiredField, 4u> s_RequiredFields = {{
-        { "asset.format = \"uastc_ldr_4x4\";\n", NWB_TEXT("field 'format' is required") },
-        { "asset.dimension = \"2d\";\n", NWB_TEXT("field 'dimension' is required") },
-        { "asset.resolution = [7, 5];\n", NWB_TEXT("resolution must contain exactly") },
-        { "asset.alpha_mode = \"embedded_ldr\";\n", NWB_TEXT("field 'alpha_mode' is required") },
+        { "asset.format = \"uastc_ldr_4x4\";\n", FOUNDATION_TEXT("field 'format' is required") },
+        { "asset.dimension = \"2d\";\n", FOUNDATION_TEXT("field 'dimension' is required") },
+        { "asset.resolution = [7, 5];\n", FOUNDATION_TEXT("resolution must contain exactly") },
+        { "asset.alpha_mode = \"embedded_ldr\";\n", FOUNDATION_TEXT("field 'alpha_mode' is required") },
     }};
     for(const RequiredField& field : s_RequiredFields){
         CapturingLogger logger;
@@ -1298,25 +1298,25 @@ TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadin
         TStringView diagnostic;
     };
     constexpr Array<InvalidLayout, 19u> s_InvalidLayouts = {{
-        { "asset.format = 17;", NWB_TEXT("field 'format' must be a string") },
-        { "asset.format = \"rgba8\";", NWB_TEXT("unsupported texture format") },
-        { "asset.dimension = \"3d\";", NWB_TEXT("unsupported texture dimension") },
-        { "asset.dimension = \"cube\";", NWB_TEXT("cube resolution must be square") },
-        { "asset.dimension = \"volume\";", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [7];", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [7, 5, 1];", NWB_TEXT("resolution must contain exactly") },
-        { "asset.resolution = [0, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [-1, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [7.5, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.resolution = [4294967296, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.mip_count = 0;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.mip_count = 2;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.mip_count = 4;", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.alpha_mode = \"straight\";", NWB_TEXT("unsupported alpha_mode") },
-        { "asset.alpha_mode = \"constant_unorm8\";", NWB_TEXT("field 'alpha_constant_unorm8' is required") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = -1;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
-        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0.5;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+        { "asset.format = 17;", FOUNDATION_TEXT("field 'format' must be a string") },
+        { "asset.format = \"rgba8\";", FOUNDATION_TEXT("unsupported texture format") },
+        { "asset.dimension = \"3d\";", FOUNDATION_TEXT("unsupported texture dimension") },
+        { "asset.dimension = \"cube\";", FOUNDATION_TEXT("cube resolution must be square") },
+        { "asset.dimension = \"volume\";", FOUNDATION_TEXT("resolution must contain exactly") },
+        { "asset.resolution = [7];", FOUNDATION_TEXT("resolution must contain exactly") },
+        { "asset.resolution = [7, 5, 1];", FOUNDATION_TEXT("resolution must contain exactly") },
+        { "asset.resolution = [0, 5];", FOUNDATION_TEXT("positive u32 integer") },
+        { "asset.resolution = [-1, 5];", FOUNDATION_TEXT("positive u32 integer") },
+        { "asset.resolution = [7.5, 5];", FOUNDATION_TEXT("positive u32 integer") },
+        { "asset.resolution = [4294967296, 5];", FOUNDATION_TEXT("positive u32 integer") },
+        { "asset.mip_count = 0;", FOUNDATION_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mip_count = 2;", FOUNDATION_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mip_count = 4;", FOUNDATION_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.alpha_mode = \"straight\";", FOUNDATION_TEXT("unsupported alpha_mode") },
+        { "asset.alpha_mode = \"constant_unorm8\";", FOUNDATION_TEXT("field 'alpha_constant_unorm8' is required") },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", FOUNDATION_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = -1;", FOUNDATION_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0.5;", FOUNDATION_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },
     }};
     for(const InvalidLayout& invalid : s_InvalidLayouts){
         CapturingLogger logger;
@@ -1331,7 +1331,7 @@ TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadin
         const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
         EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(invalid.diagnostic)) << invalid.assignment;
-        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar"))) << invalid.assignment;
+        EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("failed to read raw texture sidecar"))) << invalid.assignment;
     }
 }
 

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import sys
 import time
 
-from popup_tools_native import PopupToolsNativeInput
+from guarded_native import GuardedNativeInput
 from probe_common import center
 from popup_tools_probe import observe_popup_tools, snapshot_from_logs
 from window_smoke import parse_args
@@ -47,7 +48,7 @@ class PopupToolsRun:
         self.log_directory = log_directory
         self.log_baseline = log_baseline
         self.log_pattern = log_pattern
-        self.native = PopupToolsNativeInput(backend, handle)
+        self.native = GuardedNativeInput(backend, handle)
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
@@ -62,16 +63,32 @@ class PopupToolsRun:
         return round(x * scale_x), round(y * scale_y)
 
     def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
+        self.native.confirmed_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])), deadline=self.deadline)
 
     def hover(self, name):
         self.native.pointer(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
+    def hover_transition(self, name, expected):
+        pattern = r"UiPopupToolsSmoke: anchor_hover=([01])"
+        previous = len(re.findall(pattern, self.logs()))
+        self.hover(name)
+        deadline = min(self.deadline, time.monotonic() + 10.0)
+        while time.monotonic() < deadline:
+            ensure_process_running(self.process, "while waiting for popup tools hover")
+            self.native.maintain_pointer()
+            events = re.findall(pattern, self.logs())
+            if len(events) > previous and int(events[-1]) == int(expected):
+                return
+            time.sleep(CHECKPOINT_POLL_SECONDS)
+        raise SmokeFailure(f"popup tools hover transition to {name} was not observed")
+
     def right_click_anchor(self):
-        self.native.right_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR])))
+        self.native.confirmed_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR])), deadline=self.deadline, secondary=True)
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), settle=0.25, **changes):
         path, stage_deadline = prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
+        if name in ("delayed_tooltip_keeps_edit_focus", "tooltip_reappears_after_new_delay"):
+            stage_deadline = min(self.deadline, time.monotonic() + 20.0)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during popup tools UI capture")
@@ -104,20 +121,20 @@ class PopupToolsRun:
         self.checkpoint("initial_tools_state")
         self.click("sentinel")
         self.checkpoint("outside_edit_owns_focus", sentinel_focused=1)
-        self.hover(LIT_ANCHOR)
+        self.hover_transition(LIT_ANCHOR, True)
         self.checkpoint("hover_before_delay", settle=0.05)
         self.checkpoint("delayed_tooltip_keeps_edit_focus", tooltip=1)
         self.native.text("x")
         self.checkpoint("tooltip_does_not_steal_native_text", text_bytes=9)
-        self.hover(LIT_COUNTER)
+        self.hover_transition(LIT_COUNTER, False)
         self.checkpoint("leaving_anchor_hides_tooltip", tooltip=0)
-        self.hover(LIT_ANCHOR)
+        self.hover_transition(LIT_ANCHOR, True)
         self.checkpoint("new_hover_restarts_delay", settle=0.05)
         self.checkpoint("tooltip_reappears_after_new_delay", tooltip=1)
         anchor = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR]))
-        self.native.button(True, *anchor)
+        self.native.confirmed_button(True, *anchor, deadline=self.deadline)
         self.checkpoint("held_primary_suppresses_tooltip", tooltip=0, sentinel_focused=0)
-        self.native.button(False, *anchor)
+        self.native.confirmed_button(False, *anchor, deadline=self.deadline)
         # Move the pointer off the anchor so the hover tooltip does not reappear during capture.
         self.hover(LIT_COUNTER)
         self.checkpoint("primary_release_activates_anchor", anchor_clicks=1)
@@ -139,9 +156,9 @@ class PopupToolsRun:
         self.native.tap("space")
         self.checkpoint("menu_space_activates_first_command", open=0, command=1, commits=2, dynamic=(LIT_CURSOR,))
         anchor = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR]))
-        self.native.right_button(True, *anchor)
+        self.native.confirmed_button(True, *anchor, deadline=self.deadline, secondary=True)
         self.checkpoint("secondary_press_waits_for_release")
-        self.native.right_button(False, *anchor)
+        self.native.confirmed_button(False, *anchor, deadline=self.deadline, secondary=True)
         self.checkpoint("right_click_opens_without_primary_activation", open=1, cursor=1)
         self.click("disabled")
         self.checkpoint("disabled_menu_command_cannot_activate")
@@ -156,10 +173,10 @@ class PopupToolsRun:
         self.right_click_anchor()
         self.checkpoint("source_revision_held_pointer_setup", open=1, cursor=1)
         old_second = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_SECOND]))
-        self.native.button(True, *old_second)
+        self.native.confirmed_button(True, *old_second, deadline=self.deadline)
         self.native.tap("F5")
         self.checkpoint("source_revision_resets_preview_and_fences_pointer", reversed=1, source_revision=2, cursor=5)
-        self.native.button(False, *old_second)
+        self.native.confirmed_button(False, *old_second, deadline=self.deadline)
         self.checkpoint("stale_pointer_release_cannot_activate_new_order")
         self.hover(LIT_COUNTER)
         self.native.tap("Home")

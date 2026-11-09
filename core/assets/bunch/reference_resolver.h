@@ -33,8 +33,8 @@ namespace AssetsBunchCook{
 
 inline constexpr Name s_AssetBunchTypeName("asset_bunch");
 inline constexpr Name s_MetadataDeclarationTypeName("metadata");
-inline constexpr TStringView s_AssetBunchDiagnosticPrefix = NWB_TEXT("Asset bunch");
-inline constexpr TStringView s_CompositeAssetDiagnosticPrefix = NWB_TEXT("Composite asset");
+inline constexpr TStringView s_AssetBunchDiagnosticPrefix = FOUNDATION_TEXT("Asset bunch");
+inline constexpr TStringView s_CompositeAssetDiagnosticPrefix = FOUNDATION_TEXT("Composite asset");
 
 using ScratchNameHashSet = HashSet<NameHash, Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 

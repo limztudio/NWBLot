@@ -34,7 +34,7 @@ static b8 ValidateManifestVirtualPath(const Name& virtualPath){
     if(virtualPath)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: tried to append an unnamed manifest entry"));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: tried to append an unnamed manifest entry"));
     return false;
 }
 
@@ -60,14 +60,14 @@ static b8 ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePayl
     if(identity.cookKeyHash != 0u)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an empty cook key"), ConvertString(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest entry '{}' has an empty cook key"), ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
 b8 ReserveAssetVolumePackManifest(const u64 plannedFileCount, AssetVolumePackManifest& manifest){
     manifest.plannedFileCount = plannedFileCount;
     if(plannedFileCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: planned manifest entry count exceeds container capacity"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: planned manifest entry count exceeds container capacity"));
         return false;
     }
 
@@ -79,7 +79,7 @@ b8 AppendPayloadBytesToManifest(const Name& virtualPath, const Span<const u8> pa
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(!payloadBytes.empty() && payloadBytes.data() == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), ConvertString(virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), ConvertString(virtualPath.resolvedText()));
         return false;
     }
 

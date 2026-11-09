@@ -5,5 +5,5 @@ function(nwb_configure_name_symbols)
         return()
     endif()
 
-    add_compile_definitions(NWB_BUILDMODE=1 NWB_BUILD_SYMBOLS=1)
+    add_compile_definitions(NWB_BUILDMODE=1 NWB_BUILD_SYMBOLS=1 FOUNDATION_BUILD_SYMBOLS=1)
 endfunction()

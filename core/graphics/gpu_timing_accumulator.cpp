@@ -66,7 +66,7 @@ void GpuTimingAccumulator::collect(
                 record.retirementSubscriptionIdentityLimit = 0u;
                 record.retirementNotificationPending = false;
             }
-            NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
             continue;
         }
         if(!recorder.submissionCompleted(device, record.acceptedSubmission))
@@ -167,7 +167,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             record.deviceReady = true;
         }
         else if(!matchesResetQueue)
-            NWB_LOGGER_ERROR(NWB_TEXT("GPU timing frame reset rejected an accepted token from a different physical queue"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing frame reset rejected an accepted token from a different physical queue"));
     }
 }
 
@@ -249,7 +249,7 @@ GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQuery(Comman
     if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
         record.publishSample = false;
-        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing end timestamp failed; retaining ownership until submission resolution"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing end timestamp failed; retaining ownership until submission resolution"));
         return QueryEndResult::RetirementRequired;
     }
     record.state = QueryState::EndedUnaccepted;
@@ -345,7 +345,7 @@ b8 GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 sub
 
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
         const b8 retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
-        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
         return retirementPending;
     }
     if(record.state == QueryState::Quarantined)
@@ -353,7 +353,7 @@ b8 GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 sub
 
     if(!record.query || !record.query->discardUnacceptedRecording(scope.timerQueryRecording)){
         const b8 retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
-        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because its unaccepted native recording could not be revoked"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU timing query quarantined because its unaccepted native recording could not be revoked"));
         return retirementPending;
     }
 
@@ -390,7 +390,7 @@ b8 GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u64 
 b8 GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subscriptionIdentityLimit)noexcept{
     if(record.state != QueryState::Quarantined){
         if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-            NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+            FOUNDATION_ASSERT(m_pendingAcceptedQueryCount > 0u);
             --m_pendingAcceptedQueryCount;
         }
         record.state = QueryState::Quarantined;
@@ -453,7 +453,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     const u64 retirementSubscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit;
     const b8 retirementNotificationPending = record.retirementNotificationPending;
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-        NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+        FOUNDATION_ASSERT(m_pendingAcceptedQueryCount > 0u);
         --m_pendingAcceptedQueryCount;
     }
 
@@ -478,7 +478,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     // An unsubscribe may mark an unaccepted scope and stream its notification after releasing the recorder lock.
     // Preserve that payload in the now-available pool, and keep findAvailableQuery() from reusing it until drained.
     if(retirementNotificationPending){
-        NWB_ASSERT(retirementAttribution != s_NoGpuTimingSampleAttribution);
+        FOUNDATION_ASSERT(retirementAttribution != s_NoGpuTimingSampleAttribution);
         record.physicalQueue = retirementPhysicalQueue;
         record.frameIndex = retirementFrameIndex;
         record.attribution = retirementAttribution;

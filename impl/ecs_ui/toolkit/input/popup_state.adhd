@@ -47,7 +47,7 @@ public:
         const b8 windowFocused,
         const u64 focusLossGeneration,
         const u64 expectedFocusLossGeneration,
-        Vector<CommandSource>& commandSources,
+        Vector<CommandSource, Core::Alloc::GlobalArena>& commandSources,
         WidgetId& inOutFocus,
         u64& inOutFocusDeclaration,
         ControlToken& inOutFocusControl

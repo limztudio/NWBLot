@@ -40,7 +40,7 @@ inline constexpr AStringView s_VolumeSegmentExtension = ".vol";
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex)noexcept{
     Array<char, s_DecimalTextBufferBytes> segmentIndexBuffer{};
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
-    NWB_ASSERT(!segmentIndexText.empty());
+    FOUNDATION_ASSERT(!segmentIndexText.empty());
 
     u64 hash = s_Fnv64OffsetBasis;
     hash = UpdateFnv64TextExact(hash, volumeName);

@@ -26,7 +26,7 @@ Expected<CooperativeVectorDeviceFeatures> CooperativeVectorFeatureQuery::Query(V
     uint32_t propertyCount = 0;
     res = context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(context.physicalDevice, &propertyCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cooperative vector property count: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to query cooperative vector property count: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
     if(propertyCount == 0)
@@ -41,7 +41,7 @@ Expected<CooperativeVectorDeviceFeatures> CooperativeVectorFeatureQuery::Query(V
 
     res = context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(context.physicalDevice, &propertyCount, properties.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cooperative vector properties: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to query cooperative vector properties: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -60,7 +60,7 @@ Expected<CooperativeVectorDeviceFeatures> CooperativeVectorFeatureQuery::Query(V
     if(scheduler.isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold){
         const auto parallelWork = scheduler.parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
         if(!parallelWork){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: cooperative vector feature preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: cooperative vector feature preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
             return MakeUnexpected(Failure{});
         }
     }

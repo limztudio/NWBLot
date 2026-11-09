@@ -23,7 +23,7 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
 template<typename CharT>
 inline constexpr void CopyDebugName(char* dst, const usize dstSize, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
@@ -79,14 +79,14 @@ private:
     template<typename CharT>
     constexpr Name(StringViewConstruction, const NameHash& hash, const BasicStringView<CharT> text)
         : m_hash(hash)
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         , m_hasSymbolText(true)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         NameDetail::CopyDebugName(m_debugName.data(), NameDetail::s_DebugNameCapacity, text);
 #endif
         if(!IsConstantEvaluated())
@@ -97,10 +97,10 @@ private:
 public:
     constexpr Name()noexcept
         : m_hash{}
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {}
@@ -109,40 +109,40 @@ public:
     {}
     constexpr Name(const char* str)noexcept
         : m_hash(str ? ComputeNameHash(MakeNotNull(str)) : NameHash{})
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         CopyCanonical(m_debugName.data(), NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     constexpr Name(const wchar* str)noexcept
         : m_hash(str ? ComputeNameHash(MakeNotNull(str)) : NameHash{})
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         CopyCanonical(m_debugName.data(), NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     explicit Name(const NameHash& hash)noexcept
         : m_hash(hash)
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         NameHashTextCodec::Format(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
 #endif
     }
@@ -165,7 +165,7 @@ public:
     [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
 
     [[nodiscard]] constexpr const NameHash& hash()const{
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
         return m_hash;
@@ -173,10 +173,10 @@ public:
 
     // In opt/fin, the view remains valid until its rotating thread-local symbol buffer is reused.
     [[nodiscard]] AStringView resolvedText()const{
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(NWB_DEBUG)
+#if defined(FOUNDATION_DEBUG)
         const AStringView text(m_debugName.data(), m_debugName.size());
         return text.substr(0u, text.find('\0'));
 #else
@@ -193,10 +193,10 @@ public:
     }
 
     [[nodiscard]] const char* c_str()const{
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(NWB_DEBUG)
+#if defined(FOUNDATION_DEBUG)
         return m_debugName.data();
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
@@ -212,7 +212,7 @@ public:
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const noexcept{
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         return AStringView(m_debugName.data());
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
@@ -223,7 +223,7 @@ public:
 
 
 private:
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
     constexpr void recordStoredSymbolText()const{
         if(!IsConstantEvaluated())
             NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName.data(), m_debugName.size()), m_hasSymbolText);
@@ -233,10 +233,10 @@ private:
 
 private:
     NameHash m_hash;
-#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
     Array<char, NameDetail::s_DebugNameCapacity> m_debugName;
 #endif
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
     b8 m_hasSymbolText;
 #endif
 };

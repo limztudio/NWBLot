@@ -92,12 +92,12 @@ using __hidden_cook_input_selection::PathSelectionIndex;
 
 b8 CookInputSelector::IsDirectoryWithinRoots(const Path& directoryPath, const Span<const ResolvedAssetRoot> assetRoots, ScratchArena& scratchArena){
     ScratchString normalized = PathToString(scratchArena, directoryPath.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(normalized);
 #endif
     for(const ResolvedAssetRoot& root : assetRoots){
         ScratchString rootText = PathToString(scratchArena, root.path.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(rootText);
 #endif
         if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size())))
@@ -116,14 +116,14 @@ Expected<void, CookInputSelectionError> CookInputSelector::Select(
     const Span<u8> outSelected,
     Vector<usize, ScratchArena>* const outOrder
 ){
-    NWB_ASSERT(outSelected.size() == files.size());
+    FOUNDATION_ASSERT(outSelected.size() == files.size());
     for(u8& flag : outSelected)
         flag = 0u;
     if(outOrder)
         outOrder->clear();
 
     const PathSelectionIndex fileIndex(files, false, scratchArena);
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
     Optional<PathSelectionIndex> directoryIndex;
 #endif
     for(const AssetString& input : inputs){
@@ -156,7 +156,7 @@ Expected<void, CookInputSelectionError> CookInputSelector::Select(
         }
 
         ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(normalized);
 #else
         if(!isDirectory)
@@ -164,7 +164,7 @@ Expected<void, CookInputSelectionError> CookInputSelector::Select(
 #endif
 
         NotNull<const PathSelectionIndex*> selectionIndex(&fileIndex);
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
         // Directory containment follows host case rules; explicit asset identities retain their canonical spelling.
         if(isDirectory){
             if(!directoryIndex)
@@ -194,7 +194,7 @@ Expected<void, CookInputSelectionError> CookInputSelector::Select(
 }
 
 void CookInputSelector::Compact(const Span<const u8> selected, DiscoveredNwbFileVector& inOutFiles)noexcept{
-    NWB_ASSERT(selected.size() == inOutFiles.size());
+    FOUNDATION_ASSERT(selected.size() == inOutFiles.size());
     CompactByMask(selected, inOutFiles);
 }
 

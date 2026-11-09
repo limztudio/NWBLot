@@ -7,7 +7,7 @@
 
 #include "simd/macro.h"
 
-#if defined(_MSC_VER) && defined(NWB_HAS_NEON64)
+#if defined(_MSC_VER) && defined(FOUNDATION_HAS_NEON64)
 #include <intrin.h>
 #endif
 
@@ -21,7 +21,7 @@
 #include "atomic.h"
 #include "thread.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -29,24 +29,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline void YieldThread()noexcept{ SwitchToThread(); }
 #else
 inline void YieldThread()noexcept{ std::this_thread::yield(); }
 #endif
 
 inline void MachinePause([[maybe_unused]] i32 delay)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64)
     while(delay > 0){
         __yield();
         --delay;
     }
-#elif defined(NWB_HAS_NEON64)
+#elif defined(FOUNDATION_HAS_NEON64)
     while(delay > 0){
         __asm__ __volatile__("yield");
         --delay;
     }
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     while(delay > 0){
         _mm_pause();
         --delay;

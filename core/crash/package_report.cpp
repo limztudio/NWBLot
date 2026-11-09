@@ -83,7 +83,7 @@ CrashStringT<ArenaT> CrashPackageReport::BuildManifest(ArenaT& arena, const Cras
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
     AppendUnsignedU64Text(manifest, request.threadId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const b8 hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
 #else
     const b8 hasExceptionContext = request.exceptionPointers != 0u;

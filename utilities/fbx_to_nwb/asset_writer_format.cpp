@@ -40,7 +40,7 @@ b8 EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView assetK
     if(created)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), ConvertString(assetKind), PathToString<tchar>(parentPath), ConvertString(created.error().message()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), ConvertString(assetKind), PathToString<tchar>(parentPath), ConvertString(created.error().message()));
     return false;
 }
 
@@ -51,7 +51,7 @@ template<typename WriteBodyFn>
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to open output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB {}: failed to open output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
         return false;
     }
     CrlfOutputFileStream file(rawFile);
@@ -61,7 +61,7 @@ template<typename WriteBodyFn>
 
     rawFile.close();
     if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed while writing output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB {}: failed while writing output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -109,7 +109,7 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
     using namespace __hidden_asset_writer_format;
 
     if(influences.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
     }
 

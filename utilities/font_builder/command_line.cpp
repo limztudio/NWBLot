@@ -50,10 +50,10 @@ int Run(const int argc, char** argv){
                 auto payload = Bake(options, arena, scratch, sourceFontBytes);
                 if(!payload || !WriteOutputs(options, sourceFontBytes, *payload, scratch))
                     return 1;
-                NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());
+                NWB_LOGGER_INFO(FOUNDATION_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());
                 return 0;
             },
-            [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); },
+            [&](const CLI::ParseError& error){ return app.exit(error, FOUNDATION_COUT, FOUNDATION_CERR); },
             []()noexcept{ return -1; });
 }
 

@@ -33,10 +33,10 @@ namespace SIMDVectorDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_NEON64)
 using NativeDoublePair = float64x2_t;
 using NativeUIntPair = uint64x2_t;
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
 using NativeDoublePair = __m128d;
 using NativeUIntPair = __m128i;
 #endif
@@ -45,29 +45,29 @@ using NativeUIntPair = __m128i;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_NEON64) || defined(NWB_HAS_SSE2)
-NWB_INLINE NativeDoublePair NWB_SIMD_CALL GetLow(SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_NEON64) || defined(FOUNDATION_HAS_SSE2)
+FOUNDATION_INLINE NativeDoublePair FOUNDATION_SIMD_CALL GetLow(SIMDVectorDouble value)noexcept{
     return BitCast<NativeDoublePair>(__builtin_shufflevector(value, value, 0, 1));
 }
 
-NWB_INLINE NativeDoublePair NWB_SIMD_CALL GetHigh(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE NativeDoublePair FOUNDATION_SIMD_CALL GetHigh(SIMDVectorDouble value)noexcept{
     return BitCast<NativeDoublePair>(__builtin_shufflevector(value, value, 2, 3));
 }
 
-NWB_INLINE NativeUIntPair NWB_SIMD_CALL GetLowBits(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE NativeUIntPair FOUNDATION_SIMD_CALL GetLowBits(SIMDVectorDouble value)noexcept{
     return BitCast<NativeUIntPair>(GetLow(value));
 }
 
-NWB_INLINE NativeUIntPair NWB_SIMD_CALL GetHighBits(SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE NativeUIntPair FOUNDATION_SIMD_CALL GetHighBits(SIMDVectorDouble value)noexcept{
     return BitCast<NativeUIntPair>(GetHigh(value));
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL FromPairs(NativeDoublePair low, NativeDoublePair high)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL FromPairs(NativeDoublePair low, NativeDoublePair high)noexcept{
     using DoublePair = f64 __attribute__((ext_vector_type(2)));
     return __builtin_shufflevector(BitCast<DoublePair>(low), BitCast<DoublePair>(high), 0, 1, 2, 3);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL FromUIntPairs(NativeUIntPair low, NativeUIntPair high)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL FromUIntPairs(NativeUIntPair low, NativeUIntPair high)noexcept{
     return FromPairs(BitCast<NativeDoublePair>(low), BitCast<NativeDoublePair>(high));
 }
 #endif
@@ -82,7 +82,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL FromUIntPairs(NativeUIntPair low, Nati
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SCALAR)
+#if defined(FOUNDATION_HAS_SCALAR)
 struct FPUVector4{
     union{
         f32 f[4];
@@ -91,9 +91,9 @@ struct FPUVector4{
 };
 #endif
 
-#if defined(NWB_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON)
 using SIMDVectorSingle = float32x4_t;
-#elif defined(NWB_HAS_SCALAR)
+#elif defined(FOUNDATION_HAS_SCALAR)
 using SIMDVectorSingle = FPUVector4;
 #else
 using SIMDVectorSingle = __m128;
@@ -103,13 +103,13 @@ using SIMDVectorSingle = __m128;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SCALAR)
+#if defined(FOUNDATION_HAS_SCALAR)
 struct SIMDMatrix
 #else
 struct alignas(16) SIMDMatrix
 #endif
 {
-#if defined(NWB_HAS_SCALAR)
+#if defined(FOUNDATION_HAS_SCALAR)
     union{
         struct{
             f32 _11, _12, _13, _14;

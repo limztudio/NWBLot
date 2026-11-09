@@ -19,16 +19,16 @@ NWB_VULKAN_BEGIN
 
 namespace __hidden_texture_clear_color{
 
-static constexpr TStringView s_BlockCompressedMultisampleReason = NWB_TEXT("block-compressed texture clears require a single-sampled texture");
-static constexpr TStringView s_BlockCompressedActiveRenderingReason = NWB_TEXT("block-compressed texture clears cannot execute during active rendering");
+static constexpr TStringView s_BlockCompressedMultisampleReason = FOUNDATION_TEXT("block-compressed texture clears require a single-sampled texture");
+static constexpr TStringView s_BlockCompressedActiveRenderingReason = FOUNDATION_TEXT("block-compressed texture clears cannot execute during active rendering");
 
 [[nodiscard]] static TStringView ColorClearSubresourceError(const TextureDesc& description, const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const b8 integerValue, const b8 signedIntegerValue)noexcept{
     if(!VulkanDetail::IsTextureSubresourceRangeValid(subresources))
         return VulkanTextureDetail::s_ClearSubresourceRangeInvalidReason;
     if(!VulkanTextureDetail::TextureColorClearAspectIsValid(aspectMask))
-        return NWB_TEXT("texture format does not have a color aspect");
+        return FOUNDATION_TEXT("texture format does not have a color aspect");
     if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(GetFormatInfo(description.format), integerValue, signedIntegerValue))
-        return NWB_TEXT("clear value type does not match the texture format");
+        return FOUNDATION_TEXT("clear value type does not match the texture format");
     return {};
 }
 
@@ -99,7 +99,7 @@ void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet sub
 void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, const b8 integerValue, const b8 signedIntegerValue){
     if(!publicCommandStateAccessible())
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("clear texture");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("clear texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
@@ -224,7 +224,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         : (signedIntegerValue ? VulkanTextureDetail::BuildTextureIntClearPattern(desc.format, clearValue) : VulkanTextureDetail::BuildTextureUIntClearPattern(desc.format, clearValue))
     ;
     if(!clearPattern || clearPattern->byteCount != texture.m_formatLayout.bytesPerBlock){
-        rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("bounded texture box clears do not support the texture format"));
+        rejectCommandRecording(s_ClearTextureBoxOperation, FOUNDATION_TEXT("bounded texture box clears do not support the texture format"));
         return;
     }
 
@@ -250,7 +250,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
         if(!VulkanTextureDetail::TextureClearBoxAlignedToBlocks(mipPlan.resolvedBox, mipExtent, texture.m_formatLayout)){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, FOUNDATION_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges"));
             return;
         }
 
@@ -261,7 +261,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
         const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
         if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, FOUNDATION_TEXT("clear byte size overflows"));
             return;
         }
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
@@ -277,12 +277,12 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
 
     const TextureClearQueueRequirement::Enum queueRequirement = VulkanTextureDetail::TextureClearBoxQueueRequirement(desc, resolvedSubresources, box);
     if(queueRequirement == TextureClearQueueRequirement::Transfer){
-        if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear color texture box through staging")))
+        if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, FOUNDATION_TEXT("clear color texture box through staging")))
             return;
     }
     else{
         constexpr GpuQueueCapability::Mask s_PartialClearCapabilities = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics));
-        if(!recordAndValidateAnyCommandCapability(s_PartialClearCapabilities, NWB_TEXT("clear partial color texture box through staging")))
+        if(!recordAndValidateAnyCommandCapability(s_PartialClearCapabilities, FOUNDATION_TEXT("clear partial color texture box through staging")))
             return;
     }
 
@@ -300,7 +300,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         const u64 clearHeight = static_cast<u64>(mipPlan.resolvedBox.height());
         const u64 clearDepth = static_cast<u64>(mipPlan.resolvedBox.depth());
 
-        const auto staging = prepareUploadStaging(mipPlan.uploadLayout.clearByteCount, NWB_TEXT("clearTextureBox"), mipPlan.uploadLayout.stagingAlignment);
+        const auto staging = prepareUploadStaging(mipPlan.uploadLayout.clearByteCount, FOUNDATION_TEXT("clearTextureBox"), mipPlan.uploadLayout.stagingAlignment);
         if(!staging){
             rejectCommandRecording(s_ClearTextureBoxOperation, s_StagingAllocationFailedReason);
             return;

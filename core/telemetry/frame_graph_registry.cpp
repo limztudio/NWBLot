@@ -39,7 +39,7 @@ static void ResolvePendingNameEdges(const Span<const FrameGraphNodeDesc> nodes, 
         if(nodeIndices.contains(nodes[i].name))
             continue;
         if(!nodeIndices.emplace(nodes[i].name, i).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return;
         }
     }

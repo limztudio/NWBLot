@@ -26,7 +26,7 @@ constexpr usize s_SIMDMemoryCopyQuadWordBytes = 8u;
 constexpr usize s_SIMDMemoryCopyWordBytes = 4u;
 constexpr usize s_SIMDMemoryCopyHalfWordBytes = 2u;
 
-#define NWB_SIMD_MEMCPY(destination, destinationCapacity, source, byteCount) ::SIMDMemoryCopy(destination, destinationCapacity, source, byteCount)
+#define FOUNDATION_SIMD_MEMCPY(destination, destinationCapacity, source, byteCount) ::SIMDMemoryCopy(destination, destinationCapacity, source, byteCount)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ constexpr usize s_SIMDMemoryCopyHalfWordBytes = 2u;
 // Insufficient capacity, null pointers, misalignment, or overlapping ranges terminate before either range is accessed.
 // A zero count does not inspect either range.
 // Mapped GPU memory requires the same CPU access contract, with synchronization and visibility managed by the caller.
-NWB_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, const void* source, usize byteCount)noexcept{
+FOUNDATION_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, const void* source, usize byteCount)noexcept{
     if(byteCount == 0u)
         return;
     if(byteCount > destinationCapacity || destination == nullptr || source == nullptr)
@@ -56,13 +56,13 @@ NWB_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, con
     NotNull<u8*> dst(static_cast<u8*>(__builtin_assume_aligned(destination, s_SIMDMemoryCopyAlignment)));
     NotNull<const u8*> src(static_cast<const u8*>(__builtin_assume_aligned(source, s_SIMDMemoryCopyAlignment)));
 
-#if defined(NWB_HAS_NEON) || defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_NEON) || defined(FOUNDATION_HAS_SSE2)
     if(byteCount > s_SIMDMemoryCopyCrtThreshold){
         __builtin_memcpy(dst.get(), src.get(), byteCount);
         return;
     }
 
-#if defined(NWB_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON)
     while(byteCount >= s_SIMDMemoryCopyBatchBytes){
         const uint8x16_t packet0 = vld1q_u8(src.get());
         const uint8x16_t packet1 = vld1q_u8(src.get() + s_SIMDMemoryCopyPacketBytes);
@@ -82,8 +82,8 @@ NWB_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, con
         src = src.get() + s_SIMDMemoryCopyPacketBytes;
         byteCount -= s_SIMDMemoryCopyPacketBytes;
     }
-#elif defined(NWB_HAS_SSE2)
-#if defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_SSE2)
+#if defined(FOUNDATION_HAS_AVX)
     if(((destinationAddress | sourceAddress) & (s_SIMDMemoryCopyWideAlignment - 1u)) == 0u){
         NotNull<u8*> dst32(static_cast<u8*>(__builtin_assume_aligned(dst.get(), s_SIMDMemoryCopyWideAlignment)));
         NotNull<const u8*> src32(static_cast<const u8*>(__builtin_assume_aligned(src.get(), s_SIMDMemoryCopyWideAlignment)));

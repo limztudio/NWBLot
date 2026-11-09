@@ -11,8 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleSlerpV(SIMDVectorDouble q0, SIMDVectorDouble q1, SIMDVectorDouble t)noexcept{
-    NWB_ASSERT((VectorDoubleGetY(t) == VectorDoubleGetX(t)) && (VectorDoubleGetZ(t) == VectorDoubleGetX(t)) && (VectorDoubleGetW(t) == VectorDoubleGetX(t)));
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleSlerpV(SIMDVectorDouble q0, SIMDVectorDouble q1, SIMDVectorDouble t)noexcept{
+    FOUNDATION_ASSERT((VectorDoubleGetY(t) == VectorDoubleGetX(t)) && (VectorDoubleGetZ(t) == VectorDoubleGetX(t)) && (VectorDoubleGetW(t) == VectorDoubleGetX(t)));
 
     const SIMDVectorDouble oneMinusEpsilon = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     SIMDVectorDouble cosOmega = QuaternionDoubleDot(q0, q1);
@@ -45,7 +45,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleSlerpV(SIMDVectorDoubl
     return VectorDoubleMultiplyAdd(q1, s1, result);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleSlerp(SIMDVectorDouble q0, SIMDVectorDouble q1, f64 t)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleSlerp(SIMDVectorDouble q0, SIMDVectorDouble q1, f64 t)noexcept{
     return QuaternionDoubleSlerpV(q0, q1, VectorDoubleReplicate(t));
 }
 

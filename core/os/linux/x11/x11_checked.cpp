@@ -65,7 +65,7 @@ X11CheckedOperation::X11CheckedOperation(Display& display)
     : m_display(display)
     , m_previous(nullptr)
 {
-    NWB_FATAL_ASSERT(!__hidden_x11_checked::g_Operation);
+    FOUNDATION_FATAL_ASSERT(!__hidden_x11_checked::g_Operation);
     XSync(&m_display, False);
     __hidden_x11_checked::g_Operation = this;
     m_previous = XSetErrorHandler(&X11CheckedOperation::OnError);

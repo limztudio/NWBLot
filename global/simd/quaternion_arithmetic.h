@@ -52,29 +52,29 @@ inline constexpr f64 s_DoubleQuaternionInterpolationEpsilon = 1.0e-12;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsNaN(SIMDVectorSingle q)noexcept{ return Vector4IsNaN(q); }
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL QuaternionIsNaN(SIMDVectorSingle q)noexcept{ return Vector4IsNaN(q); }
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsNaN(SIMDVectorDouble q)noexcept{ return VectorDouble4IsNaN(q); }
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL QuaternionDoubleIsNaN(SIMDVectorDouble q)noexcept{ return VectorDouble4IsNaN(q); }
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsInfinite(SIMDVectorSingle q)noexcept{ return Vector4IsInfinite(q); }
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL QuaternionIsInfinite(SIMDVectorSingle q)noexcept{ return Vector4IsInfinite(q); }
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsInfinite(SIMDVectorDouble q)noexcept{ return VectorDouble4IsInfinite(q); }
+FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL QuaternionDoubleIsInfinite(SIMDVectorDouble q)noexcept{ return VectorDouble4IsInfinite(q); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleDot(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Dot(q0, q1); }
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleDot(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Dot(q0, q1); }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept{
-#if defined(NWB_HAS_SCALAR)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept{
+#if defined(FOUNDATION_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(
         (lhs.f[3] * rhs.f[0]) + (lhs.f[0] * rhs.f[3]) + (lhs.f[1] * rhs.f[2]) - (lhs.f[2] * rhs.f[1]),
         (lhs.f[3] * rhs.f[1]) - (lhs.f[0] * rhs.f[2]) + (lhs.f[1] * rhs.f[3]) + (lhs.f[2] * rhs.f[0]),
         (lhs.f[3] * rhs.f[2]) + (lhs.f[0] * rhs.f[1]) - (lhs.f[1] * rhs.f[0]) + (lhs.f[2] * rhs.f[3]),
         (lhs.f[3] * rhs.f[3]) - (lhs.f[0] * rhs.f[0]) - (lhs.f[1] * rhs.f[1]) - (lhs.f[2] * rhs.f[2])
     );
-#elif defined(NWB_HAS_NEON)
+#elif defined(FOUNDATION_HAS_NEON)
     const float32x2_t lhsL = vget_low_f32(lhs);
     const float32x2_t lhsH = vget_high_f32(lhs);
 
@@ -101,9 +101,9 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lh
     SIMDVectorSingle lhsY = lhs;
     SIMDVectorSingle lhsZ = lhs;
     SIMDVectorSingle result = lhs;
-#if defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_AVX)
     result = _mm_permute_ps(result, _MM_SHUFFLE(3, 3, 3, 3));
-#if defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_HAS_AVX2)
     lhsX = _mm_broadcastss_ps(lhsX);
 #else
     lhsX = _mm_permute_ps(lhsX, _MM_SHUFFLE(0, 0, 0, 0));
@@ -119,7 +119,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lh
 
     result = _mm_mul_ps(result, rhs);
     SIMDVectorSingle rhsShuffle = rhs;
-#if defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_AVX)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
@@ -128,7 +128,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lh
     lhsX = _mm_mul_ps(lhsX, rhsShuffle);
     result = VectorMultiplyAdd(lhsX, SIMDQuaternionDetail::s_SIMDQuaternionControlWZYX, result);
 
-#if defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_AVX)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(2, 3, 0, 1));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(2, 3, 0, 1));
@@ -136,7 +136,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lh
     lhsY = _mm_mul_ps(lhsY, rhsShuffle);
     lhsY = _mm_mul_ps(lhsY, SIMDQuaternionDetail::s_SIMDQuaternionControlZWXY);
 
-#if defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_AVX)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
@@ -147,7 +147,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionMultiply(SIMDVectorSingle lh
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleMultiply(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleMultiply(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
     SIMDVectorDouble result = VectorDoubleMultiply(VectorDoubleSplatW(lhs), rhs);
     SIMDVectorDouble component = VectorDoubleMultiply(VectorDoubleSwizzle<3, 2, 1, 0>(rhs), SIMDQuaternionDoubleDetail::s_DoubleSIMDQuaternionControlWZYX);
     result = VectorDoubleMultiplyAdd(VectorDoubleSplatX(lhs), component, result);
@@ -157,19 +157,19 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleMultiply(SIMDVectorDou
     return VectorDoubleMultiplyAdd(VectorDoubleSplatZ(lhs), component, result);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionLengthSq(SIMDVectorSingle q)noexcept{ return Vector4LengthSq(q); }
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL QuaternionLengthSq(SIMDVectorSingle q)noexcept{ return Vector4LengthSq(q); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLengthSq(SIMDVectorDouble q)noexcept{ return VectorDouble4LengthSq(q); }
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleLengthSq(SIMDVectorDouble q)noexcept{ return VectorDouble4LengthSq(q); }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionNormalize(SIMDVectorSingle q)noexcept{ return Vector4Normalize(q); }
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL QuaternionNormalize(SIMDVectorSingle q)noexcept{ return Vector4Normalize(q); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleNormalize(SIMDVectorDouble q)noexcept{ return VectorDouble4Normalize(q); }
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleNormalize(SIMDVectorDouble q)noexcept{ return VectorDouble4Normalize(q); }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionConjugate(SIMDVectorSingle q)noexcept{ return VectorXorInt(q, s_SIMDNegate3); }
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL QuaternionConjugate(SIMDVectorSingle q)noexcept{ return VectorXorInt(q, s_SIMDNegate3); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleConjugate(SIMDVectorDouble q)noexcept{ return VectorDoubleXorInt(q, s_DoubleSIMDNegate3); }
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleConjugate(SIMDVectorDouble q)noexcept{ return VectorDoubleXorInt(q, s_DoubleSIMDNegate3); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleInverse(SIMDVectorDouble q)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleInverse(SIMDVectorDouble q)noexcept{
     const SIMDVectorDouble lengthSq = QuaternionDoubleLengthSq(q);
     const SIMDVectorDouble conjugate = QuaternionDoubleConjugate(q);
     const SIMDVectorDouble control = VectorDoubleLessOrEqual(lengthSq, s_DoubleSIMDEpsilon);
@@ -177,7 +177,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleInverse(SIMDVectorDoub
     return VectorDoubleSelect(result, VectorDoubleZero(), control);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)noexcept{
     const SIMDVectorDouble oneMinusEpsilon = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     const SIMDVectorDouble qw = VectorDoubleSplatW(q);
     const SIMDVectorDouble q0 = VectorDoubleAndInt(q, s_DoubleSIMDMask3);
@@ -189,11 +189,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)
     return VectorDoubleSelect(q0, result, controlW);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleExp(SIMDVectorDouble q)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL QuaternionDoubleExp(SIMDVectorDouble q)noexcept{
     const SIMDVectorDouble theta = VectorDouble3Length(q);
     SIMDVectorDouble sinTheta{};
     SIMDVectorDouble cosTheta{};
-#if defined(NWB_HAS_AVX2) || defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_AVX2) || defined(FOUNDATION_HAS_NEON64)
     SIMDVectorDoubleDetail::SinCosReplicated(sinTheta, cosTheta, theta);
 #else
     VectorDoubleSinCos(sinTheta, cosTheta, theta);

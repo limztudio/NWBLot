@@ -61,10 +61,10 @@ b8 GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& g
         return false;
 
     // An admitted plan is published and frozen, so its own sizes and present endpoint stay in step.
-    NWB_ASSERT(m_graph->m_tasks.size() == m_graph->m_graphTaskCount && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount);
-    NWB_ASSERT((m_graph->m_graphTaskCount == 0u) == m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount);
-    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->m_presentEndpoint.valid() && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation));
-    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (
+    FOUNDATION_ASSERT(m_graph->m_tasks.size() == m_graph->m_graphTaskCount && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount);
+    FOUNDATION_ASSERT((m_graph->m_graphTaskCount == 0u) == m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount);
+    FOUNDATION_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->m_presentEndpoint.valid() && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation));
+    FOUNDATION_ASSERT(!m_graph->m_hasPresentEndpoint || (
         m_graph->validPacket(m_graph->m_presentEndpoint.packet)
         && m_graph->m_presentEndpoint.packet == m_graph->packetForTask(m_graph->m_presentEndpoint.producer)
         && m_graph->queueInfo(m_graph->m_presentEndpoint.queue) != nullptr
@@ -123,9 +123,9 @@ GpuCompiledTaskView GpuCompiledGraph::ReadView::findTask(const GpuTaskId& task)c
     const GpuCompiledTask* const plan = m_graph->findTask(task);
     if(!plan)
         return {};
-    NWB_ASSERT(plan->prologueStateSeedCount == 0u || (plan->prologueStateSeedOffset <= m_graph->m_prologueStateSeeds.size() && plan->prologueStateSeedCount <= m_graph->m_prologueStateSeeds.size() - plan->prologueStateSeedOffset));
-    NWB_ASSERT(plan->prologueBarrierCount == 0u || (plan->prologueBarrierOffset <= m_graph->m_prologueBarriers.size() && plan->prologueBarrierCount <= m_graph->m_prologueBarriers.size() - plan->prologueBarrierOffset));
-    NWB_ASSERT(plan->epilogueBarrierCount == 0u || (plan->epilogueBarrierOffset <= m_graph->m_epilogueBarriers.size() && plan->epilogueBarrierCount <= m_graph->m_epilogueBarriers.size() - plan->epilogueBarrierOffset));
+    FOUNDATION_ASSERT(plan->prologueStateSeedCount == 0u || (plan->prologueStateSeedOffset <= m_graph->m_prologueStateSeeds.size() && plan->prologueStateSeedCount <= m_graph->m_prologueStateSeeds.size() - plan->prologueStateSeedOffset));
+    FOUNDATION_ASSERT(plan->prologueBarrierCount == 0u || (plan->prologueBarrierOffset <= m_graph->m_prologueBarriers.size() && plan->prologueBarrierCount <= m_graph->m_prologueBarriers.size() - plan->prologueBarrierOffset));
+    FOUNDATION_ASSERT(plan->epilogueBarrierCount == 0u || (plan->epilogueBarrierOffset <= m_graph->m_epilogueBarriers.size() && plan->epilogueBarrierCount <= m_graph->m_epilogueBarriers.size() - plan->epilogueBarrierOffset));
     return GpuCompiledTaskView{
         .plan = plan,
         .prologueStateSeeds = plan->prologueStateSeedCount != 0u ? m_graph->m_prologueStateSeeds.data() + plan->prologueStateSeedOffset : nullptr,
@@ -170,9 +170,9 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPack
     if(!m_graph || !m_graph->validPacket(packet))
         return {};
     const GpuSubmissionPacket& plan = m_graph->m_packets[packet.index];
-    NWB_ASSERT(plan.taskOffset <= m_graph->m_packetTasks.size() && plan.taskCount <= m_graph->m_packetTasks.size() - plan.taskOffset);
-    NWB_ASSERT(plan.dependencyOffset <= m_graph->m_packetDependencies.size() && plan.dependencyCount <= m_graph->m_packetDependencies.size() - plan.dependencyOffset);
-    NWB_ASSERT(plan.externalDependencyOffset <= m_graph->m_packetExternalDependencies.size() && plan.externalDependencyCount <= m_graph->m_packetExternalDependencies.size() - plan.externalDependencyOffset);
+    FOUNDATION_ASSERT(plan.taskOffset <= m_graph->m_packetTasks.size() && plan.taskCount <= m_graph->m_packetTasks.size() - plan.taskOffset);
+    FOUNDATION_ASSERT(plan.dependencyOffset <= m_graph->m_packetDependencies.size() && plan.dependencyCount <= m_graph->m_packetDependencies.size() - plan.dependencyOffset);
+    FOUNDATION_ASSERT(plan.externalDependencyOffset <= m_graph->m_packetExternalDependencies.size() && plan.externalDependencyCount <= m_graph->m_packetExternalDependencies.size() - plan.externalDependencyOffset);
     return GpuCompiledPacketView{
         .id = packet,
         .plan = &plan,
@@ -186,7 +186,7 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packetWithTasks(const GpuSubmi
     const GpuCompiledPacketView packetView = packet(packetId);
     if(!packetView.valid())
         return {};
-    NWB_ASSERT(packetView.plan->taskCount != 0u);
+    FOUNDATION_ASSERT(packetView.plan->taskCount != 0u);
     return packetView;
 }
 
@@ -236,13 +236,13 @@ void GpuCompiledGraph::ReadView::release()noexcept{
     if(!m_graph)
         return;
 
-    NWB_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
+    FOUNDATION_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
     s_ActiveView = m_previousView;
     if(m_ownsAdmission){
         u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
         for(;;){
             if((planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u)
-                NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
             if(m_graph->m_planAccessState.compare_exchange_weak(planAccessState, planAccessState - 1u, MemoryOrder::release, MemoryOrder::relaxed))
                 break;
         }

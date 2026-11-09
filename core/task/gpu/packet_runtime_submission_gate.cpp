@@ -54,7 +54,7 @@ namespace GpuPacketRuntimeDetail{
 u64 AllocateAcceptanceRevision()noexcept{
     const u64 identity = TryNextAtomicIdentity(__hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision);
     if(identity == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
     return identity;
 }
 
@@ -85,7 +85,7 @@ b8 GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(const Gpu
         u32 writerCount = transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire);
         for(;;){
             if(writerCount == Limit<u32>::s_Max)
-                NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership overflowed");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership overflowed");
             if(transaction.m_submissionGateWriterCount.compare_exchange_weak(writerCount, writerCount + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 break;
         }
@@ -99,7 +99,7 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
         return;
     const u32 previousWriterCount = m_transaction->m_submissionGateWriterCount.fetch_sub(1u, MemoryOrder::release);
     if(previousWriterCount == 0u)
-        NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership underflowed");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership underflowed");
     if(previousWriterCount == 1u)
         m_transaction->m_submissionGateWriterCount.notify_all();
     m_transaction = nullptr;
@@ -162,7 +162,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 continue;
             }
             if((operationState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask)
-                NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership overflowed");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership overflowed");
             if(!transaction.m_submissionGateState.compare_exchange_weak(operationState, operationState + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 continue;
             if(transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) == 0u)
@@ -208,13 +208,13 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
         return;
 
     if(s_ActiveOperation != this)
-        NWB_FATAL_ASSERT_MSG(false, "GPU graph submission operations must unwind in lexical order");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission operations must unwind in lexical order");
     s_ActiveOperation = m_previousOperation;
     if(m_composite)
         m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     if(m_exclusive){
         if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_gpu_packet_runtime_submission_gate::s_WriterBit)
-            NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
+            FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
         m_transaction->m_submissionGateState.store(0u, MemoryOrder::release);
         m_transaction->m_submissionGateState.notify_all();
         m_writerReservation.reset();
@@ -222,7 +222,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     else{
         const u32 previousState = m_transaction->m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
         if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 0u)
-            NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
+            FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
         if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
             m_transaction->m_submissionGateState.notify_all();
     }

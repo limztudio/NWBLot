@@ -1031,7 +1031,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
             const Array<u64, 2u> expectedBytes = { static_cast<u64>(index), ~static_cast<u64>(index) };
             ASSERT_TRUE(storedBytes);
             ASSERT_EQ(storedBytes->size(), sizeof(expectedBytes));
-            EXPECT_EQ(NWB_MEMCMP(storedBytes->data(), expectedBytes.data(), sizeof(expectedBytes)), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(storedBytes->data(), expectedBytes.data(), sizeof(expectedBytes)), 0);
         }
     }
     graph.reset();
@@ -1416,7 +1416,7 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
         && (!IsReference_V<decltype(first.value < second.value)> || IsNothrowConvertible_V<decltype(first.value < second.value), Decay_T<decltype(first.value < second.value)>>)
     ){ return first.value < second.value; });
     ASSERT_EQ(tokens.size(), original.size());
-    EXPECT_EQ(NWB_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
 }
 
 

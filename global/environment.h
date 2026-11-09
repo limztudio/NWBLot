@@ -33,7 +33,7 @@ template<typename ArenaT>
         return MakeUnexpected(ErrorCode(result, GenericCategory()));
     if(!value)
         return Optional<AString<ArenaT>>{};
-    const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(NWB_STRLEN(value));
+    const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(FOUNDATION_STRLEN(value));
     return Optional<AString<ArenaT>>(AString<ArenaT>(value, valueLength, arena));
 #else
     const char* const value = ::std::getenv(nativeName.c_str());

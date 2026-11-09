@@ -79,7 +79,7 @@ public:
 
 private:
     void observe(const Core::Common::LogString& text){
-        if(text.find(NWB_TEXT("UI font face initialization failed")) == Core::Common::LogString::npos)
+        if(text.find(FOUNDATION_TEXT("UI font face initialization failed")) == Core::Common::LogString::npos)
             return;
         m_sawFaceFailure = true;
         throw s_FontConstructionLogFailure;

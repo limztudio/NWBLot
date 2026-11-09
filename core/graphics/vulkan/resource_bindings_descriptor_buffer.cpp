@@ -60,7 +60,7 @@ b8 DescriptorBufferManager::initialize(){
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
     if(m_lifecycleTransitioning){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer initialization rejected during another lifecycle transition."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer initialization rejected during another lifecycle transition."));
         return false;
     }
     m_lifecycleTransitioning = true;
@@ -74,15 +74,15 @@ b8 DescriptorBufferManager::initialize(){
     };
 
     if(!VulkanDetail::HasDescriptorBufferStartupPrerequisites(VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
         return failInitialization();
     }
     if(!m_resourceSegment.storageIdentity || !m_samplerSegment.storageIdentity){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
         return failInitialization();
     }
     if(m_nextBindingGeneration == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer binding generation space is exhausted."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer binding generation space is exhausted."));
         return failInitialization();
     }
 
@@ -93,13 +93,13 @@ b8 DescriptorBufferManager::initialize(){
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
     if(props.descriptorBufferOffsetAlignment == 0 || props.descriptorBufferOffsetAlignment > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
         return failInitialization();
     }
 
     const u32 offsetAlignment = static_cast<u32>(props.descriptorBufferOffsetAlignment);
     if(props.maxDescriptorBufferBindings < DescriptorBufferManager::s_PersistentDescriptorBufferCount || props.maxResourceDescriptorBufferBindings == 0u || props.maxSamplerDescriptorBufferBindings == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
         return failInitialization();
     }
 
@@ -117,13 +117,13 @@ b8 DescriptorBufferManager::initialize(){
     const auto resourceCapacityBytes = makeCapacity(resourceMaxBytes, s_TargetResourceSegmentBytes);
     const auto samplerCapacityBytes = makeCapacity(samplerMaxBytes, s_TargetSamplerSegmentBytes);
     if(!resourceCapacityBytes || !samplerCapacityBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
         return failInitialization();
     }
 
     const VkDeviceSize totalCapacityBytes = static_cast<VkDeviceSize>(*resourceCapacityBytes) + *samplerCapacityBytes;
     if(totalCapacityBytes > props.descriptorBufferAddressSpaceSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer global address space {} cannot hold the requested {} bytes of resource and sampler segments."), props.descriptorBufferAddressSpaceSize, totalCapacityBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer global address space {} cannot hold the requested {} bytes of resource and sampler segments."), props.descriptorBufferAddressSpaceSize, totalCapacityBytes);
         return failInitialization();
     }
 
@@ -171,7 +171,7 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
     {
         ScopedLock lifecycleLock(m_lifecycleMutex);
         if(m_lifecycleTransitioning){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
             return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
         }
         if(m_resourceSegment.buffer == VK_NULL_HANDLE && m_samplerSegment.buffer == VK_NULL_HANDLE && !m_resourceSegment.allocation && !m_samplerSegment.allocation){
@@ -194,7 +194,7 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
 
             m_lifecycleTransitioning = false;
         }
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
         return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
     }
 
@@ -230,7 +230,7 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
     const auto resourceCapacityBytes = AlignUpChecked<u32>(Max(resourceBytes, m_resourceSegment.capacityBytes), alignmentBytes);
     const auto samplerCapacityBytes = AlignUpChecked<u32>(Max(samplerBytes, m_samplerSegment.capacityBytes), alignmentBytes);
     if(!resourceCapacityBytes || !samplerCapacityBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Initial descriptor-buffer layout capacity exceeds aligned 32-bit storage."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Initial descriptor-buffer layout capacity exceeds aligned 32-bit storage."));
         return false;
     }
     if(*resourceCapacityBytes == m_resourceSegment.capacityBytes && *samplerCapacityBytes == m_samplerSegment.capacityBytes)
@@ -240,7 +240,7 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
     ScopedLock resourceLock(m_resourceSegment.mutex);
     ScopedLock samplerLock(m_samplerSegment.mutex);
     if(m_resourceSegment.allocations.writableOffsetBytes() != 0u || m_samplerSegment.allocations.writableOffsetBytes() != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer capacity cannot change after allocations have been published."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer capacity cannot change after allocations have been published."));
         return false;
     }
 
@@ -249,7 +249,7 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
     const VkDeviceSize samplerMaxBytes = Min<VkDeviceSize>(props.samplerDescriptorBufferAddressSpaceSize, props.maxSamplerDescriptorBufferRange);
     const VkDeviceSize totalBytes = static_cast<VkDeviceSize>(*resourceCapacityBytes) + *samplerCapacityBytes;
     if(*resourceCapacityBytes > resourceMaxBytes || *samplerCapacityBytes > samplerMaxBytes || totalBytes > props.descriptorBufferAddressSpaceSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Initial descriptor-buffer layouts require {} resource and {} sampler bytes, exceeding device segment or address-space limits."), *resourceCapacityBytes, *samplerCapacityBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Initial descriptor-buffer layouts require {} resource and {} sampler bytes, exceeding device segment or address-space limits."), *resourceCapacityBytes, *samplerCapacityBytes);
         return false;
     }
 
@@ -265,7 +265,7 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
     if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failReservation();
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);
+    NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);
     return true;
 }
 
@@ -277,18 +277,18 @@ Expected<DescriptorBufferSegment> DescriptorBufferManager::allocateForBindingGen
     if(!m_enabled || sizeBytes == 0)
         return MakeUnexpected(Failure{});
     if(kind != DescriptorBufferSegmentKind::Resource && kind != DescriptorBufferSegmentKind::Sampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
         return MakeUnexpected(Failure{});
     }
 
     const u32 requiredAlignmentBytes = getOffsetAlignmentBytes();
     if(alignmentBytes == 0u || (alignmentBytes % requiredAlignmentBytes) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}."), alignmentBytes, requiredAlignmentBytes);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}."), alignmentBytes, requiredAlignmentBytes);
         return MakeUnexpected(Failure{});
     }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
-    NWB_ASSERT(segment.storageIdentity);
+    FOUNDATION_ASSERT(segment.storageIdentity);
     ScopedLock lock(segment.mutex);
     return segment.allocations.allocate(kind, sizeBytes, alignmentBytes, *segment.storageIdentity, segment.capacityBytes, segment.mappedMemory);
 }
@@ -301,11 +301,11 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
     if(!m_enabled || segment.sizeBytes == 0u)
         return;
     if(segment.kind != DescriptorBufferSegmentKind::Resource && segment.kind != DescriptorBufferSegmentKind::Sampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: invalid segment kind {}."), static_cast<u32>(segment.kind));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer free rejected: invalid segment kind {}."), static_cast<u32>(segment.kind));
         return;
     }
     if(segment.storageIdentity == 0u || segment.allocationSerial == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation identity is invalid."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer free rejected: allocation identity is invalid."));
         return;
     }
 
@@ -313,7 +313,7 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
     ScopedLock lock(storage.mutex);
 
-    NWB_ASSERT(storage.storageIdentity);
+    FOUNDATION_ASSERT(storage.storageIdentity);
     storage.allocations.free(segment, *storage.storageIdentity, storage.capacityBytes);
 }
 
@@ -323,7 +323,7 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
         return MakeUnexpected(Failure{});
 
     // Enabled storage keeps both segments fully initialized; every segment rebuild disables storage on failure.
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(
         m_resourceSegment.storageIdentity
         && m_samplerSegment.storageIdentity
         && *m_resourceSegment.storageIdentity != *m_samplerSegment.storageIdentity
@@ -357,7 +357,7 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
 }
 
 b8 DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, const DescriptorBufferSegmentKind::Enum expectedKind)const noexcept{
-    NWB_ASSERT(storage.storageIdentity);
+    FOUNDATION_ASSERT(storage.storageIdentity);
     return storage.allocations.isLive(segment, expectedKind, *storage.storageIdentity, storage.capacityBytes);
 }
 
@@ -375,14 +375,14 @@ b8 DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ASt
 
     const auto allocation = m_allocator.createHostMappedBuffer(bufferInfo);
     if(!allocation){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), ConvertString(debugName), ResultToString(allocation.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), ConvertString(debugName), ResultToString(allocation.error()));
         return false;
     }
     segment.buffer = allocation->buffer;
     segment.allocation = allocation->allocation;
     segment.mappedMemory = allocation->mappedMemory;
     if(!segment.mappedMemory){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), ConvertString(debugName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), ConvertString(debugName));
         shutdownSegment(segment);
         return false;
     }
@@ -392,7 +392,7 @@ b8 DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ASt
     addressInfo.buffer = segment.buffer;
     segment.deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(segment.deviceAddress == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), ConvertString(debugName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), ConvertString(debugName));
         shutdownSegment(segment);
         return false;
     }
@@ -403,7 +403,7 @@ b8 DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ASt
     segment.bindingInfo.usage = (&segment == &m_resourceSegment ? VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT : VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT);
     segment.allocations.resetOffset();
 
-    NWB_MEMSET(segment.mappedMemory, 0, capacityBytes);
+    FOUNDATION_MEMSET(segment.mappedMemory, 0, capacityBytes);
     return true;
 }
 

@@ -16,7 +16,7 @@ NWB_ASSETS_BEGIN
 
 b8 ReadCompletePayload(const Span<const u8> binary, const usize cursor, const TStringView failureContext){
     if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;
     }
 

@@ -99,17 +99,17 @@ void AccelStruct::retireBuildSignatureRole(AccelStructBuildSignatureRole& role)n
 
 Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
     if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: queue sharing contains unknown bits"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create acceleration structure: queue sharing contains unknown bits"));
         return MakeUnexpected(Failure{});
     }
 
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Enabled acceleration structure feature support is required to create ray tracing acceleration structures."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Enabled acceleration structure feature support is required to create ray tracing acceleration structures."));
         return MakeUnexpected(Failure{});
     }
-    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, NWB_TEXT("create acceleration structure"));
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, FOUNDATION_TEXT("create acceleration structure"));
     if(!vkBuildFlagsResult)
         return MakeUnexpected(Failure{});
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
@@ -125,7 +125,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
     u64 accelStructSize = s_DefaultTopLevelASBufferSize;
     if(desc.isTopLevel && desc.topLevelMaxInstances > 0){
         if(desc.topLevelMaxInstances > UINT32_MAX){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: TLAS instance capacity exceeds Vulkan limit"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create acceleration structure: TLAS instance capacity exceeds Vulkan limit"));
             return MakeUnexpected(Failure{});
         }
 
@@ -149,7 +149,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
     }
     else if(!desc.isTopLevel && !desc.bottomLevelGeometries.empty()){
         if(desc.bottomLevelGeometries.size() > UINT32_MAX){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: geometry count exceeds Vulkan limit"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create BLAS: geometry count exceeds Vulkan limit"));
             return MakeUnexpected(Failure{});
         }
 
@@ -158,7 +158,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
         const usize geometryCount = desc.bottomLevelGeometries.size();
         blasScratch.resizeForSizeQuery(geometryCount);
 
-        constexpr TStringView s_CreateBlasOperation = NWB_TEXT("create BLAS");
+        constexpr TStringView s_CreateBlasOperation = FOUNDATION_TEXT("create BLAS");
         VulkanDetail::OpacityMicromapGeometryVector opacityMicromapGeometries(geometryCount, scratchArena);
         VulkanDetail::OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(geometryCount, scratchArena);
         VulkanDetail::OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
@@ -176,11 +176,11 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
                 const RayTracingGeometryTriangles& triangles = desc.bottomLevelGeometries[i].geometryData.triangles;
                 OpacityMicromap* const opacityMicromap = triangles.opacityMicromap;
                 if(&opacityMicromap->m_context != &m_context){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap belongs to another device"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap belongs to another device"));
                     return MakeUnexpected(Failure{});
                 }
                 if(!isBufferReadyForGpuUse(opacityMicromap->m_dataBuffer.get(), VulkanDetail::s_MicromapStorageUsage)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap storage is not ready"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap storage is not ready"));
                     return MakeUnexpected(Failure{});
                 }
                 const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_CreateBlasOperation);
@@ -226,7 +226,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
 
     auto bufferResult = createBuffer(bufferDesc);
     if(!bufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate acceleration structure storage buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to allocate acceleration structure storage buffer"));
         return MakeUnexpected(Failure{});
     }
     as->m_buffer = Move(*bufferResult);
@@ -239,7 +239,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
 
     res = m_context.deviceDispatch.vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create acceleration structure: {}"), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 
@@ -248,7 +248,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
     if(!desc.isVirtual){
         constexpr VkBufferUsageFlags s_RequiredStorageUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         if(!isBufferReadyForGpuUse(as->m_buffer.get(), s_RequiredStorageUsage)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: storage buffer is not ready for device-address access"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create acceleration structure: storage buffer is not ready for device-address access"));
             return MakeUnexpected(Failure{});
         }
         as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
@@ -279,15 +279,15 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
 
 Expected<MemoryRequirements> Device::getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure){
     if(&accelerationStructure.m_context != &m_context){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource belongs to another device"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource belongs to another device"));
         return MakeUnexpected(Failure{});
     }
     if(!accelerationStructure.m_desc.isVirtual || !accelerationStructure.m_buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource is not virtual"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource is not virtual"));
         return MakeUnexpected(Failure{});
     }
 
-    NWB_ASSERT(accelerationStructure.getDeviceGeneration() == accelerationStructure.m_buffer->getDeviceGeneration());
+    FOUNDATION_ASSERT(accelerationStructure.getDeviceGeneration() == accelerationStructure.m_buffer->getDeviceGeneration());
     const auto requirements = getBufferMemoryRequirements(*accelerationStructure.m_buffer);
     if(!requirements)
         return MakeUnexpected(requirements.error());
@@ -311,7 +311,7 @@ b8 Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, H
 
         constexpr VkBufferUsageFlags s_RequiredStorageUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         if(!isBufferReadyForGpuUse(accelerationStructure.m_buffer.get(), s_RequiredStorageUsage)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is not ready for device-address access"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is not ready for device-address access"));
             return false;
         }
 
@@ -321,11 +321,11 @@ b8 Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, H
         if(accelerationStructure.m_deviceAddress != 0u)
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: device address is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to bind acceleration structure memory: device address is null"));
         return false;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
     return false;
 }
 

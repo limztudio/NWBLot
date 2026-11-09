@@ -52,19 +52,19 @@ MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropert
 
 b8 CommandList::validateViewportState(const ViewportState& viewportState, const TStringView operationName){
     if(viewportState.viewports.size() > 1u || viewportState.scissorRects.size() > 1u){
-        rejectCommandRecording(operationName, NWB_TEXT("only one viewport and scissor are supported"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("only one viewport and scissor are supported"));
         return false;
     }
     if(!viewportState.viewports.empty() && !VulkanViewportPolicy::IsViewportValid(viewportState.viewports[0u], m_context.physicalDeviceProperties.limits)){
-        rejectCommandRecording(operationName, NWB_TEXT("viewport is outside Vulkan device limits"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("viewport is outside Vulkan device limits"));
         return false;
     }
     if(!viewportState.scissorRects.empty() && !viewportState.scissorRects[0u].validScissor()){
-        rejectCommandRecording(operationName, NWB_TEXT("scissor rectangle is invalid"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("scissor rectangle is invalid"));
         return false;
     }
     if(viewportState.scissorRects.empty() && !viewportState.viewports.empty() && !VulkanViewportPolicy::IsImplicitScissorValid(viewportState.viewports[0u])){
-        rejectCommandRecording(operationName, NWB_TEXT("viewport cannot be converted to an implicit scissor"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("viewport cannot be converted to an implicit scissor"));
         return false;
     }
     return true;
@@ -74,7 +74,7 @@ b8 CommandList::validateTextureForGpuState(Texture* const texture, const Resourc
     if(!publicCommandStateAccessible())
         return false;
     if(!VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)){
-        rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a texture"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("state is invalid for a texture"));
         return false;
     }
     const VkImageUsageFlags requiredUsage = explicitRequiredUsage | VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(requiredState);
@@ -85,7 +85,7 @@ b8 CommandList::validateTextureForGpuState(Texture* const texture, const Resourc
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
-        rejectCommandRecording(operationName, NWB_TEXT("state conflicts with the permanent texture state"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("state conflicts with the permanent texture state"));
         return false;
     }
     return true;
@@ -95,11 +95,11 @@ b8 CommandList::validateBufferForGpuState(Buffer* const buffer, const ResourceSt
     if(!publicCommandStateAccessible())
         return false;
     if(!VulkanBufferDetail::IsBufferResourceStateMaskValid(requiredState)){
-        rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a buffer"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("state is invalid for a buffer"));
         return false;
     }
     if(buffer && !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(buffer->m_creationDesc, requiredState)){
-        rejectCommandRecording(operationName, NWB_TEXT("state requires an undeclared buffer capability"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("state requires an undeclared buffer capability"));
         return false;
     }
     const VkBufferUsageFlags requiredUsage = explicitRequiredUsage | (buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->m_creationDesc, requiredState) : 0u);
@@ -110,7 +110,7 @@ b8 CommandList::validateBufferForGpuState(Buffer* const buffer, const ResourceSt
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
-        rejectCommandRecording(operationName, NWB_TEXT("state conflicts with the permanent buffer state"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("state conflicts with the permanent buffer state"));
         return false;
     }
     return true;

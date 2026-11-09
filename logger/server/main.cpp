@@ -32,7 +32,7 @@ inline constexpr StringView s_CrashSymbolStoreOption = ::NWB::Log::s_LogServerVa
 inline constexpr StringView s_CrashRetainPackagesOption = ::NWB::Log::s_LogServerValueMainCrashRetainPackagesOption;
 inline constexpr StringView s_CrashRetainRawOption = ::NWB::Log::s_LogServerValueMainCrashRetainRawOption;
 inline constexpr StringView s_CrashRetainInvalidOption = ::NWB::Log::s_LogServerValueMainCrashRetainInvalidOption;
-inline constexpr TStringView s_LogFileNameBase = NWB_TEXT("logserver");
+inline constexpr TStringView s_LogFileNameBase = FOUNDATION_TEXT("logserver");
 inline constexpr Name s_CommandLineArena = NWB::Log::s_LogServerArenaNameLoggerServerCommandLine;
 inline constexpr int s_LoggerServerExitSuccess = ::NWB::Log::s_LogServerValueMainLoggerServerExitSuccess;
 inline constexpr int s_LoggerServerExitFailure = ::NWB::Log::s_LogServerValueMainLoggerServerExitFailure;
@@ -55,20 +55,20 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
     return ::InvokeTerminalEntry<GeneralException>([&](){
         NWB::Log::Frame frame(inst);
         if(!frame.init()){
-            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Core::Common::LogType::Fatal);
+            logger.enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Log server frame initialization failed")), NWB::Core::Common::LogType::Fatal);
             return __hidden_logger_server_main::s_LoggerServerExitFailure;
         }
 
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Core::Common::LogType::EssentialInfo);
+        logger.enqueue(StringFormat(logger.arena(), FOUNDATION_TEXT("Log server: listening on port {}"), logPort), NWB::Core::Common::LogType::EssentialInfo);
         frame.showFrame();
 
         if(!frame.mainLoop()){
-            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server main loop failed")), NWB::Core::Common::LogType::Error);
+            logger.enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Log server main loop failed")), NWB::Core::Common::LogType::Error);
             return __hidden_logger_server_main::s_LoggerServerExitFailure;
         }
         return __hidden_logger_server_main::s_LoggerServerExitSuccess;
     }, [&](const GeneralException& error){
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), ConvertString(error.what())), NWB::Core::Common::LogType::Fatal);
+        logger.enqueue(StringFormat(logger.arena(), FOUNDATION_TEXT("Exception: {}"), ConvertString(error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
     }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
@@ -98,7 +98,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         CommandLineParseApp(app, argc, argv);
 
         return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), AStringView(readinessToken.data(), readinessToken.size()), inst);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, FOUNDATION_COUT, FOUNDATION_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 

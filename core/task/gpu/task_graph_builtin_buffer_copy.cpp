@@ -48,7 +48,7 @@ public:
                 return captureContext.commandIrCapture->captureCopyBuffer(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceOffsetBytes, copy.destinationResource, copy.destinationOffsetBytes, copy.dataSizeBytes);
             },
             [](CommandList& emitCommandList, const Copy& copy){
-                NWB_ASSERT(copy.source && copy.destination && copy.dataSizeBytes != 0u);
+                FOUNDATION_ASSERT(copy.source && copy.destination && copy.dataSizeBytes != 0u);
                 emitCommandList.endRenderPass();
                 emitCommandList.copyBuffer(*copy.destination, copy.destinationOffsetBytes, *copy.source, copy.sourceOffsetBytes, copy.dataSizeBytes);
                 return true;

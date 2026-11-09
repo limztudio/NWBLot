@@ -29,7 +29,7 @@ b8 Device::waitForIdle(){
         return false;
     }
     else if(res != VK_SUCCESS){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
         return false;
     }
 
@@ -64,7 +64,7 @@ void Device::runGarbageCollection(){
             return;
         }
         if(completionResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
             return;
         }
     }
@@ -105,10 +105,10 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         heapUseCount = m_gpuDescriptorHeap.m_heapUses.size();
     }
     if(activePendingRecordingLeaseCount != 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} active GpuDescriptorHeap pending-recording leases."), activePendingRecordingLeaseCount);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Device teardown is discarding {} active GpuDescriptorHeap pending-recording leases."), activePendingRecordingLeaseCount);
     }
     if(heapUseCount != 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap."), heapUseCount);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap."), heapUseCount);
     }
 
     b8 descriptorLifecycleTransitioning = false;
@@ -117,7 +117,7 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         descriptorLifecycleTransitioning = m_descriptorBufferManager.m_lifecycleTransitioning;
     }
     if(descriptorLifecycleTransitioning){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition."));
     }
 
     {
@@ -135,7 +135,7 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
 
 Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc){
     if(!desc.nativeQueues || desc.nativeQueueCount == 0u || !desc.physicalQueues || desc.physicalQueueCount == 0u || !desc.getInstanceProcAddr || !desc.instanceDispatch.vkGetPhysicalDeviceProperties || !desc.deviceDispatch.vkDestroyDevice){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
         return MakeUnexpected(Failure{});
     }
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);

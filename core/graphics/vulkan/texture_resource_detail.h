@@ -61,7 +61,7 @@ struct TextureCreateMetadata{
 [[nodiscard]] inline b8 TextureDescriptionsEqual(const TextureDesc& lhs, const TextureDesc& rhs)noexcept{
     return
         lhs.name == rhs.name
-        && NWB_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
+        && FOUNDATION_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
         && lhs.width == rhs.width
         && lhs.height == rhs.height
         && lhs.depth == rhs.depth

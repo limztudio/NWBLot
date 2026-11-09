@@ -116,7 +116,7 @@ void AppendTextureStateBarriersBefore(
 
 
 void CommandList::commitBarriers(){
-    if(!validateCommandRecordingScope(NWB_TEXT("commit barriers")))
+    if(!validateCommandRecordingScope(FOUNDATION_TEXT("commit barriers")))
         return;
 
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
@@ -131,7 +131,7 @@ void CommandList::commitBarriers(){
 void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, const b8 forceMemoryDependency){
     if(!textureResource)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!validateTextureForGpuState(textureResource, stateBits, s_OperationName))
@@ -226,7 +226,7 @@ void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource
 }
 
 void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
-    constexpr TStringView s_OperationName = NWB_TEXT("pipeline barrier");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("pipeline barrier");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
 
@@ -294,7 +294,7 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
             m_renderPassFramebuffer = resumeFramebuffer;
         }
         else
-            rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not resume after the barrier"));
+            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("dynamic rendering could not resume after the barrier"));
     }
 }
 

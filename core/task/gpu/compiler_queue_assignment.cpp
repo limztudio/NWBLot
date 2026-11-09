@@ -31,7 +31,7 @@ void GpuTaskGraphQueueAssignments::reset()noexcept{
 }
 
 b8 GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
-    NWB_ASSERT(!m_valid || (m_assignments.size() == m_taskCount && m_assignmentIndicesByTask.size() == m_taskCount));
+    FOUNDATION_ASSERT(!m_valid || (m_assignments.size() == m_taskCount && m_assignmentIndicesByTask.size() == m_taskCount));
     return m_valid && m_generation == graph.generation() && m_declarationRevision == graph.declarationRevision() && m_taskCount == graph.taskCount();
 }
 
@@ -133,7 +133,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
             // Groups partition the unique topological order of current graph tasks.
-            NWB_ASSERT(
+            FOUNDATION_ASSERT(
                 taskID.valid()
                 && taskID.generation == outAssignments.m_generation
                 && taskID.index < outAssignments.m_assignmentIndicesByTask.size()
@@ -153,7 +153,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
             outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
         }
     }
-    NWB_ASSERT(outAssignments.m_assignments.size() == outAssignments.m_assignmentIndicesByTask.size());
+    FOUNDATION_ASSERT(outAssignments.m_assignments.size() == outAssignments.m_assignmentIndicesByTask.size());
     scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
 
     // Score complete groups against the same provisional plan, omitting group-local work from crossing/overlap costs.
@@ -223,7 +223,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
                 }
             }
         }
-        NWB_ASSERT(selectedQueue);
+        FOUNDATION_ASSERT(selectedQueue);
         scoredQueues[groupIndex] = selectedQueue->id;
         scoredReasons[groupIndex] = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics) ? GpuTaskQueueAssignmentReason::RequiredGraphics : conservative ? GpuTaskQueueAssignmentReason::Conservative : GpuTaskQueueAssignmentReason::Scored;
     }

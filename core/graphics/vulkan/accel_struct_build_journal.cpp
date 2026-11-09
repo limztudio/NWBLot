@@ -18,8 +18,8 @@ b8 AccelStructBuildJournal::appendPendingAccelStructBuildCommit(
     const Span<const AccelStructGeometryBuildSignature> geometrySignatures,
     const Span<const RayTracingInstanceDesc> instances
 ){
-    NWB_ASSERT(geometrySignatures.size() <= UINT32_MAX);
-    NWB_ASSERT(geometrySignatures.empty() || geometrySignatures.data());
+    FOUNDATION_ASSERT(geometrySignatures.size() <= UINT32_MAX);
+    FOUNDATION_ASSERT(geometrySignatures.empty() || geometrySignatures.data());
 
     GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = accelStruct.acquireBuildSignatureRole();
     if(!preparedRole)

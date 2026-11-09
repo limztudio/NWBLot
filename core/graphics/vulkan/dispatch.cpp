@@ -47,15 +47,15 @@ VkResult InitializeVolkLoader()noexcept{
 }
 
 void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, const VkInstance instance)noexcept{
-    NWB_ASSERT(instance != VK_NULL_HANDLE);
+    FOUNDATION_ASSERT(instance != VK_NULL_HANDLE);
     ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
     volkLoadInstanceTable(&instanceDispatch, instance);
 }
 
 void LoadVolkDeviceDispatch(VolkInstanceTable& instanceDispatch, VolkDeviceTable& deviceDispatch, const VkInstance instance, const VkDevice device)noexcept{
-    NWB_ASSERT(instance != VK_NULL_HANDLE);
-    NWB_ASSERT(device != VK_NULL_HANDLE);
+    FOUNDATION_ASSERT(instance != VK_NULL_HANDLE);
+    FOUNDATION_ASSERT(device != VK_NULL_HANDLE);
     ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
     // Volk loads vkGetDeviceProcAddr through one process-global slot; refresh both tables under one lock.

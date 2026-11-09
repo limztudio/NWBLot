@@ -152,7 +152,7 @@ template<typename T>
         value = T{ 0 };
 
     Bits bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    FOUNDATION_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
     return bits;
 }
 

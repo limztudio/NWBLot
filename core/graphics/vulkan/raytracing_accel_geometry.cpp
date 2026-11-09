@@ -98,28 +98,28 @@ u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
 b8 ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, u64 requiredAddressAlignment, TStringView operation, TStringView resourceName){
     auto* buffer = bufferResource;
     if(!buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
         return false;
     }
 
     const BufferDesc& desc = buffer->getCreationDescription();
     if(!desc.isAccelStructBuildInput){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer was not created with acceleration-structure build input usage"), operation, resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer was not created with acceleration-structure build input usage"), operation, resourceName);
         return false;
     }
     const u64 validatedByteSize = byteSize != 0u ? byteSize : 1u;
     if(!IsBufferRangeInBounds(desc, offset, validatedByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range is outside the buffer"), operation, resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer range is outside the buffer"), operation, resourceName);
         return false;
     }
 
     const VkDeviceAddress address = GetBufferDeviceAddress(buffer, offset);
     if(address == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is null or overflows"), operation, resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer device address is null or overflows"), operation, resourceName);
         return false;
     }
     if(requiredAddressAlignment > 1u && (address % requiredAddressAlignment) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is not {}-byte aligned"), operation, resourceName, requiredAddressAlignment);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer device address is not {}-byte aligned"), operation, resourceName, requiredAddressAlignment);
         return false;
     }
 
@@ -129,7 +129,7 @@ b8 ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 by
 b8 ValidateStridedBuildInputRange(Buffer* buffer, u64 offset, u32 elementCount, u64 stride, u64 elementSize, TStringView operation, TStringView resourceName){
     const auto byteSizeResult = ComputeStridedRangeByteSize(elementCount, stride, elementSize);
     if(!byteSizeResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range overflows"), operation, resourceName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {} buffer range overflows"), operation, resourceName);
         return false;
     }
     const u64 byteSize = *byteSizeResult;
@@ -152,43 +152,43 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         const auto& triangles = geomDesc.geometryData.triangles;
         const VkFormat vertexFormat = ConvertFormat(triangles.vertexFormat);
         if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers && !triangles.vertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer is null"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex buffer is null"), operation);
             return MakeUnexpected(Failure{});
         }
         if(triangles.vertexCount > 0 && triangles.vertexStride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
         const FormatInfo& vertexFormatInfo = GetFormatInfo(triangles.vertexFormat);
         if(vertexFormatInfo.bytesPerBlock == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format size is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex format size is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         const u64 vertexComponentAlignment = GetRayTracingVertexComponentAlignment(vertexFormatInfo);
         if(vertexComponentAlignment == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex component alignment is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex component alignment is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(triangles.vertexCount > 0 && triangles.vertexStride < vertexFormatInfo.bytesPerBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is smaller than the vertex format size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex stride is smaller than the vertex format size"), operation);
             return MakeUnexpected(Failure{});
         }
         if(triangles.vertexStride > Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride exceeds the Vulkan limit"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex stride exceeds the Vulkan limit"), operation);
             return MakeUnexpected(Failure{});
         }
         if(triangles.vertexCount > 0u && (triangles.vertexStride % vertexComponentAlignment) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is not a multiple of the vertex component size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex stride is not a multiple of the vertex component size"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers){
             const auto vertexByteSizeResult = ComputeStridedRangeByteSize(triangles.vertexCount, triangles.vertexStride, vertexFormatInfo.bytesPerBlock);
             if(!vertexByteSizeResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer range overflows"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle vertex buffer range overflows"), operation);
                 return MakeUnexpected(Failure{});
             }
             const u64 vertexByteSize = *vertexByteSizeResult;
@@ -205,7 +205,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         if(triangles.indexBuffer){
             const auto indexType = GetRayTracingIndexType(triangles.indexFormat);
             if(!indexType){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle index format must be R16_UINT or R32_UINT"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: triangle index format must be R16_UINT or R32_UINT"), operation);
                 return MakeUnexpected(Failure{});
             }
             geometry.geometry.triangles.indexType = *indexType;
@@ -225,21 +225,21 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
     else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
         const auto& aabbs = geomDesc.geometryData.aabbs;
         if(requireBuffers && !aabbs.buffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer is null"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: AABB buffer is null"), operation);
             return MakeUnexpected(Failure{});
         }
         if(aabbs.count > 0 && aabbs.stride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
         if(aabbs.count > 0u && (aabbs.stride % s_AabbStrideAlignment) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is not a multiple of 8 bytes"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: AABB stride is not a multiple of 8 bytes"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers){
             const auto aabbByteSizeResult = ComputeStridedRangeByteSize(aabbs.count, aabbs.stride, sizeof(RayTracingGeometryAABB));
             if(!aabbByteSizeResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
                 return MakeUnexpected(Failure{});
             }
             const u64 aabbByteSize = *aabbByteSizeResult;
@@ -254,7 +254,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
         if(!context.extensions.nvRayTracingLinearSweptSpheres || context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere geometry requires VK_NV_ray_tracing_linear_swept_spheres with spheres support"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere geometry requires VK_NV_ray_tracing_linear_swept_spheres with spheres support"), operation);
             return MakeUnexpected(Failure{});
         }
 
@@ -262,48 +262,48 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         const VkFormat vertexFormat = ConvertFormat(spheres.vertexPositionFormat);
         const VkFormat radiusFormat = ConvertFormat(spheres.vertexRadiusFormat);
         if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere position format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(radiusFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere radius format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers && !spheres.vertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere vertex buffer is null"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere vertex buffer is null"), operation);
             return MakeUnexpected(Failure{});
         }
         if(spheres.vertexCount > 0 && spheres.vertexPositionStride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere position stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
         if(spheres.vertexCount > 0 && spheres.vertexRadiusStride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere radius stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
 
         const FormatInfo& vertexFormatInfo = GetFormatInfo(spheres.vertexPositionFormat);
         const FormatInfo& radiusFormatInfo = GetFormatInfo(spheres.vertexRadiusFormat);
         if(vertexFormatInfo.bytesPerBlock == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position format size is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere position format size is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(radiusFormatInfo.bytesPerBlock == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius format size is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere radius format size is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(spheres.vertexCount > 0 && spheres.vertexPositionStride < vertexFormatInfo.bytesPerBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position stride is smaller than the position format size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere position stride is smaller than the position format size"), operation);
             return MakeUnexpected(Failure{});
         }
         if(spheres.vertexCount > 0 && spheres.vertexRadiusStride < radiusFormatInfo.bytesPerBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius stride is smaller than the radius format size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere radius stride is smaller than the radius format size"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers){
-            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexPositionOffset, spheres.vertexCount, spheres.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, NWB_TEXT("sphere position")))
+            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexPositionOffset, spheres.vertexCount, spheres.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, FOUNDATION_TEXT("sphere position")))
                 return MakeUnexpected(Failure{});
-            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexRadiusOffset, spheres.vertexCount, spheres.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, NWB_TEXT("sphere radius")))
+            if(!ValidateStridedBuildInputRange(spheres.vertexBuffer, spheres.vertexRadiusOffset, spheres.vertexCount, spheres.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, FOUNDATION_TEXT("sphere radius")))
                 return MakeUnexpected(Failure{});
         }
 
@@ -311,17 +311,17 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         if(spheres.indexBuffer){
             const auto indexType = GetRayTracingIndexType(spheres.indexFormat);
             if(!indexType){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index format must be R16_UINT or R32_UINT"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere index format must be R16_UINT or R32_UINT"), operation);
                 return MakeUnexpected(Failure{});
             }
             spheresData.indexType = *indexType;
             const u64 indexElementSize = GetRayTracingIndexElementSize(spheres.indexFormat);
             if(spheres.indexCount > 0 && spheres.indexStride == 0){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index stride is zero"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere index stride is zero"), operation);
                 return MakeUnexpected(Failure{});
             }
             if(spheres.indexCount > 0 && spheres.indexStride < indexElementSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index stride is smaller than the index format size"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: sphere index stride is smaller than the index format size"), operation);
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
@@ -342,7 +342,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
         if(!context.extensions.nvRayTracingLinearSweptSpheres || context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS geometry requires VK_NV_ray_tracing_linear_swept_spheres with linearSweptSpheres support"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS geometry requires VK_NV_ray_tracing_linear_swept_spheres with linearSweptSpheres support"), operation);
             return MakeUnexpected(Failure{});
         }
 
@@ -350,53 +350,53 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         const VkFormat vertexFormat = ConvertFormat(lss.vertexPositionFormat);
         const VkFormat radiusFormat = ConvertFormat(lss.vertexRadiusFormat);
         if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS position format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(radiusFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS radius format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(requireBuffers && !lss.vertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS vertex buffer is null"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS vertex buffer is null"), operation);
             return MakeUnexpected(Failure{});
         }
         if(lss.vertexCount > 0 && lss.vertexPositionStride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS position stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
         if(lss.vertexCount > 0 && lss.vertexRadiusStride == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius stride is zero"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS radius stride is zero"), operation);
             return MakeUnexpected(Failure{});
         }
 
         const VkRayTracingLssIndexingModeNV indexingMode = ConvertRayTracingLssIndexingMode(lss.primitiveFormat);
         const VkRayTracingLssPrimitiveEndCapsModeNV endCapsMode = ConvertRayTracingLssEndcapMode(lss.endcapMode);
         if(indexingMode == VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive format is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS primitive format is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(endCapsMode == VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS endcap mode is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS endcap mode is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
 
         const FormatInfo& vertexFormatInfo = GetFormatInfo(lss.vertexPositionFormat);
         const FormatInfo& radiusFormatInfo = GetFormatInfo(lss.vertexRadiusFormat);
         if(vertexFormatInfo.bytesPerBlock == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position format size is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS position format size is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(radiusFormatInfo.bytesPerBlock == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius format size is invalid"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS radius format size is invalid"), operation);
             return MakeUnexpected(Failure{});
         }
         if(lss.vertexCount > 0 && lss.vertexPositionStride < vertexFormatInfo.bytesPerBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position stride is smaller than the position format size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS position stride is smaller than the position format size"), operation);
             return MakeUnexpected(Failure{});
         }
         if(lss.vertexCount > 0 && lss.vertexRadiusStride < radiusFormatInfo.bytesPerBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius stride is smaller than the radius format size"), operation);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS radius stride is smaller than the radius format size"), operation);
             return MakeUnexpected(Failure{});
         }
 
@@ -405,20 +405,20 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
             requiredVertexCount = lss.vertexCount;
         else{
             if(lss.primitiveCount > UINT32_MAX / s_LssVerticesPerPrimitive){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows vertex consumption"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS primitive count overflows vertex consumption"), operation);
                 return MakeUnexpected(Failure{});
             }
             requiredVertexCount = lss.primitiveCount * s_LssVerticesPerPrimitive;
             if(lss.vertexCount < requiredVertexCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS vertex count is smaller than the non-indexed primitive consumption"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS vertex count is smaller than the non-indexed primitive consumption"), operation);
                 return MakeUnexpected(Failure{});
             }
         }
 
         if(requireBuffers){
-            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexPositionOffset, requiredVertexCount, lss.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, NWB_TEXT("LSS position")))
+            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexPositionOffset, requiredVertexCount, lss.vertexPositionStride, vertexFormatInfo.bytesPerBlock, operation, FOUNDATION_TEXT("LSS position")))
                 return MakeUnexpected(Failure{});
-            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexRadiusOffset, requiredVertexCount, lss.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, NWB_TEXT("LSS radius")))
+            if(!ValidateStridedBuildInputRange(lss.vertexBuffer, lss.vertexRadiusOffset, requiredVertexCount, lss.vertexRadiusStride, radiusFormatInfo.bytesPerBlock, operation, FOUNDATION_TEXT("LSS radius")))
                 return MakeUnexpected(Failure{});
         }
 
@@ -426,27 +426,27 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         if(lss.indexBuffer){
             const auto indexType = GetRayTracingIndexType(lss.indexFormat);
             if(!indexType){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index format must be R16_UINT or R32_UINT"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS index format must be R16_UINT or R32_UINT"), operation);
                 return MakeUnexpected(Failure{});
             }
             lssData.indexType = *indexType;
             const u64 indexElementSize = GetRayTracingIndexElementSize(lss.indexFormat);
             const u32 indicesPerPrimitive = lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List ? s_LssListIndicesPerPrimitive : s_LssSuccessiveIndicesPerPrimitive;
             if(lss.primitiveCount > UINT32_MAX / indicesPerPrimitive){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows index consumption"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS primitive count overflows index consumption"), operation);
                 return MakeUnexpected(Failure{});
             }
             const u32 requiredIndexCount = lss.primitiveCount * indicesPerPrimitive;
             if(lss.indexCount < requiredIndexCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index count is smaller than the selected primitive indexing mode requires"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS index count is smaller than the selected primitive indexing mode requires"), operation);
                 return MakeUnexpected(Failure{});
             }
             if(requiredIndexCount > 0 && lss.indexStride == 0){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index stride is zero"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS index stride is zero"), operation);
                 return MakeUnexpected(Failure{});
             }
             if(requiredIndexCount > 0 && lss.indexStride < indexElementSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index stride is smaller than the index format size"), operation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: LSS index stride is smaller than the index format size"), operation);
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
@@ -466,7 +466,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
         primitiveCount = lss.primitiveCount;
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: geometry type is not supported by the Vulkan backend"), operation);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: geometry type is not supported by the Vulkan backend"), operation);
         return MakeUnexpected(Failure{});
     }
 
@@ -490,11 +490,11 @@ Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(cons
     ;
     const u8 flagBits = static_cast<u8>(buildFlags);
     if((flagBits & static_cast<u8>(~s_KnownFlags)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration-structure build flags contain unknown bits"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: acceleration-structure build flags contain unknown bits"), operationName);
         return MakeUnexpected(Failure{});
     }
     if((buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace) && (buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operationName);
         return MakeUnexpected(Failure{});
     }
 

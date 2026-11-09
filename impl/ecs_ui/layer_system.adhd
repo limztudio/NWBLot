@@ -34,7 +34,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
+inline constexpr TStringView s_UiLayerSystemOwnerName = FOUNDATION_TEXT("UiLayerSystem");
 
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
 class UiLayerSystem final
@@ -255,7 +255,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
         m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -283,7 +283,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;
@@ -317,13 +317,13 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
         return;
     if(!m_renderer.renderStandalone(m_graphics.acquiredPresentationFrame())){
         // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: standalone UI presentation failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: standalone UI presentation failed"));
         m_graphics.requestDeviceRecreation();
     }
 }
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
-    NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    FOUNDATION_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
     m_frameDelta.clear();
     abandonPendingFrame(true);
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
@@ -583,7 +583,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queue(event);
     if(!normalized){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         resetNormalizedInput();
         return;
     }
@@ -604,7 +604,7 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consume
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queuePointer(input);
     if(!normalized){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
         resetNormalizedInput();
         return;
     }
@@ -639,7 +639,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation, Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
@@ -662,12 +662,12 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
             break;
     }
     if(!m_context.finishFrame()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         abandonPendingFrame();
         abandon.release();
         return {};
@@ -694,7 +694,7 @@ void UiLayerSystem::synchronizeInput(){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){
             const b8 committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
-            NWB_FATAL_ASSERT(committed);
+            FOUNDATION_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
         else if(status == Core::PresentationReceiptStatus::Rejected)

@@ -107,11 +107,11 @@ public:
 
 public:
     constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+        FOUNDATION_ASSERT_MSG((buffer != nullptr || count == 0), FOUNDATION_TEXT("null pointer cannot point to a block of non-zero size"));
         if(buffer == nullptr)
             return;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot deallocate without an arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator cannot deallocate without an arena"));
         if(m_arena == nullptr)
             return;
 
@@ -124,7 +124,7 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot allocate without an arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
             throw AllocationException{};
 
@@ -136,7 +136,7 @@ public:
     }
 
     [[nodiscard]] ArenaT& arena()const noexcept{
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator has no arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator has no arena"));
         return *m_arena;
     }
 
@@ -261,11 +261,11 @@ public:
     }
 
     constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+        FOUNDATION_ASSERT_MSG((buffer != nullptr || count == 0), FOUNDATION_TEXT("null pointer cannot point to a block of non-zero size"));
         if(buffer == nullptr)
             return;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
         if(m_arena == nullptr)
             return;
 
@@ -278,7 +278,7 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
             throw AllocationException{};
 
@@ -290,7 +290,7 @@ public:
     }
 
     [[nodiscard]] ArenaT& arena()const noexcept{
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator has no arena"));
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator has no arena"));
         return *m_arena;
     }
 

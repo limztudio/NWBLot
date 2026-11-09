@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 
 
 u32 GpuTaskGraphSchedulingTaskIndexView::operator[](const usize index)const noexcept{
-    NWB_ASSERT(index < taskCount);
+    FOUNDATION_ASSERT(index < taskCount);
     return taskIndices[index];
 }
 
@@ -118,7 +118,7 @@ b8 GpuTaskGraphCompiler::compile(
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();
 
-    NWB_ASSERT(topology.queues && topology.queueCount != 0u);
+    FOUNDATION_ASSERT(topology.queues && topology.queueCount != 0u);
     if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
         return false;
 
@@ -248,7 +248,7 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.uploadBlobCount = graph.uploadBlobCount();
     for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
         const auto bytes = graph.uploadBlobData(GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) });
-        NWB_ASSERT(bytes);
+        FOUNDATION_ASSERT(bytes);
         statistics.uploadBlobBytes += bytes->size();
     }
     statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();

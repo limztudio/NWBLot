@@ -163,7 +163,7 @@ NWB_ADHD_EXPORT_PARALLEL_PRIORITY("Background", Background, "Background")
 NWB_ADHD_EXPORT_SCHEDULING_ATTRIBUTE("core",     seenCore,     outCore,     TryParseParallelCoreKind,     "duplicate 'core' attribute on parallel statement",     "'core' attribute requires a single identifier argument (Heavy, Light, MainThread, or Any)", "invalid 'core' attribute value; expected Heavy, Light, MainThread, or Any")
 NWB_ADHD_EXPORT_SCHEDULING_ATTRIBUTE("priority", seenPriority, outPriority, TryParseParallelPriorityKind, "duplicate 'priority' attribute on parallel statement", "'priority' attribute requires a single identifier argument (Critical, Normal, or Background)",  "invalid 'priority' attribute value; expected Critical, Normal, or Background")
 
-NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("assert",  Assert,  "NWB_ASSERT(",         "NWB_FATAL_ASSERT(",             "NWB_ASSERT_MSG(",         "NWB_FATAL_ASSERT_MSG(")
+NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("assert",  Assert,  "FOUNDATION_ASSERT(",         "FOUNDATION_FATAL_ASSERT(",             "FOUNDATION_ASSERT_MSG(",         "FOUNDATION_FATAL_ASSERT_MSG(")
 NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("info",    Info,    "NWB_LOGGER_INFO(",    "NWB_LOGGER_ESSENTIAL_INFO(",    "NWB_LOGGER_INFO(",        "NWB_LOGGER_ESSENTIAL_INFO(")
 NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("warning", Warning, "NWB_LOGGER_WARNING(", "NWB_LOGGER_CRITICAL_WARNING(",  "NWB_LOGGER_WARNING(",     "NWB_LOGGER_CRITICAL_WARNING(")
 NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("error",   Error,   "NWB_LOGGER_ERROR(",   "NWB_LOGGER_FATAL(",             "NWB_LOGGER_ERROR(",       "NWB_LOGGER_FATAL(")

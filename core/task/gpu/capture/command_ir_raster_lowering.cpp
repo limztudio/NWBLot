@@ -228,7 +228,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
             return GpuCommandIrReplayError::InvalidRasterState;
         // An active state was admitted with this owner and its pipeline.
         auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
-        NWB_ASSERT(owner.pipeline);
+        FOUNDATION_ASSERT(owner.pipeline);
         if(record.blobSizeBytes > owner.pipeline->pushConstantByteSize)
             return GpuCommandIrReplayError::InvalidRasterState;
         state.pushConstantsSet = true;
@@ -256,7 +256,7 @@ b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCom
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
         auto& owner = *MakeNotNull(stream.rasterStateOwner(record.framebufferOwnerIndex));
-        NWB_ASSERT(owner.pipeline && owner.framebuffer);
+        FOUNDATION_ASSERT(owner.pipeline && owner.framebuffer);
         ViewportState viewport;
         viewport.addViewport(record.viewport);
         if(record.hasScissor)
@@ -275,12 +275,12 @@ b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCom
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
         auto& owner = *MakeNotNull(stream.rasterHeapOwner(record.heapOwnerIndex));
-        NWB_ASSERT(owner.heap && owner.pipeline);
+        FOUNDATION_ASSERT(owner.heap && owner.pipeline);
         owner.heap->bindGraphics(commandList, *owner.pipeline);
         return !commandList.commandRecordingFailed();
     }
     case GpuCommandIrWireOpcode::SetPushConstants:
-        NWB_ASSERT(blobBytes.data() && record.blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && record.blobSizeBytes <= static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes);
+        FOUNDATION_ASSERT(blobBytes.data() && record.blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && record.blobSizeBytes <= static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes);
         commandList.setPushConstants(blobBytes.data() + static_cast<usize>(record.blobOffsetBytes), static_cast<usize>(record.blobSizeBytes));
         return !commandList.commandRecordingFailed();
     case GpuCommandIrWireOpcode::Draw:

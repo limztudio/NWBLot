@@ -210,7 +210,7 @@ TEST_F(FilesystemVolumeTest, SegmentProbePreservesInspectionErrors){
     ASSERT_TRUE(missing);
     EXPECT_FALSE(*missing);
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const Path invalidPath(m_arena, "invalid|volume");
 #else
     TString<NWB::Core::Alloc::GlobalArena> longName(m_arena);
@@ -243,7 +243,7 @@ TEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated){
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(unexpected, loaded));
     ASSERT_EQ(loaded.size(), sentinel.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
     EXPECT_FALSE(filesystem.fileExists(s_TestFile));
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -268,13 +268,13 @@ TEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(collision, loaded));
     ASSERT_EQ(loaded.size(), sentinel.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
     ASSERT_TRUE(RemoveFile(collision));
     ASSERT_TRUE(filesystem.unmount());
     ASSERT_TRUE(filesystem.mount(m_desc));
     ASSERT_TRUE(filesystem.readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     EXPECT_FALSE(filesystem.fileExists(s_Large));
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -335,13 +335,13 @@ TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     auto bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
     ASSERT_TRUE(bytesRead);
     ASSERT_EQ(*bytesRead, buffer.size());
-    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 3570, *bytesRead), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(buffer.data(), payload.data() + 3570, *bytesRead), 0);
     EXPECT_EQ(cursor.offset, 3634u);
     ASSERT_TRUE(filesystem->seekFile(cursor, -10, FileSeekOrigin::End));
     bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
     ASSERT_TRUE(bytesRead);
     EXPECT_EQ(*bytesRead, 10u);
-    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 9990, *bytesRead), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(buffer.data(), payload.data() + 9990, *bytesRead), 0);
     bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
     ASSERT_TRUE(bytesRead);
     EXPECT_EQ(*bytesRead, 0u);
@@ -432,7 +432,7 @@ TEST_F(FilesystemVolumeTest, ExplicitFlushSurvivesResourceOnlyDestructionWithout
     VolumeBytes loaded(m_arena);
     ASSERT_TRUE((*reopened)->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
     ASSERT_TRUE((*reopened)->unmount());
 }
 
@@ -448,7 +448,7 @@ TEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata){
     VolumeBytes loaded(m_arena);
     ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
     ASSERT_TRUE(filesystem->unmount());
 }
 
@@ -493,14 +493,14 @@ TEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories){
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(backupEvidence, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     ASSERT_TRUE(ReadBinaryFile(stageEvidence, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     ASSERT_TRUE(filesystem.unmount());
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){
     VolumeFileSystem filesystem(m_arena);
     ASSERT_TRUE(filesystem.mount(m_desc));
@@ -530,7 +530,7 @@ TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(backup, loaded));
     ASSERT_EQ(loaded.size(), original.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), original.data(), original.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), original.data(), original.size()), 0);
     EXPECT_FALSE(filesystem.readFile(s_TestFile, loaded));
     EXPECT_TRUE(filesystem.unmount());
 }
@@ -571,11 +571,11 @@ TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBy
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(filesystem.readFile(s_Target, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     ASSERT_TRUE(filesystem.unmount());
 }
 
-#if NWB_OCCUR_WARNING
+#if FOUNDATION_OCCUR_WARNING
 TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership){
     constexpr Name s_First = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsMutationFirst;
     constexpr Name s_New = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsMutationNew;
@@ -617,7 +617,7 @@ TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndM
         EXPECT_FALSE(filesystem.fileExists(s_New));
         ASSERT_TRUE(filesystem.readFile(s_TestFile, loaded));
         ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     }
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -673,10 +673,10 @@ TEST_F(FilesystemVolumeTest, RejectsInvalidPathHashFromMetadataIndex){
     ASSERT_TRUE(ReadBinaryFile(segmentPath, bytes));
     ASSERT_GE(bytes.size(), sizeof(VolumeHeaderDisk) + sizeof(VolumeIndexEntryDisk));
     VolumeIndexEntryDisk entry{};
-    NWB_MEMCPY(&entry, sizeof(entry), bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry));
+    FOUNDATION_MEMCPY(&entry, sizeof(entry), bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry));
     ASSERT_TRUE(Name(entry.hash));
     entry.hash = NameHash{};
-    NWB_MEMCPY(bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry), &entry, sizeof(entry));
+    FOUNDATION_MEMCPY(bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry), &entry, sizeof(entry));
     ASSERT_TRUE(WriteBinaryFile(segmentPath, bytes));
 
     m_desc.createIfMissing = false;
@@ -730,7 +730,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         expected.insert(expected.end(), payload.begin(), payload.end());
         ASSERT_TRUE(ReadBinaryFile(segmentPath, actual));
         ASSERT_EQ(actual.size(), expected.size());
-        EXPECT_EQ(NWB_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
     };
     verifyImage(0u);
     ASSERT_TRUE(filesystem->unmount());
@@ -744,7 +744,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
             EXPECT_TRUE(loaded.empty());
         else{
             ASSERT_EQ(loaded.size(), payload.size());
-            EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
         }
     }
     ASSERT_TRUE(filesystem->unmount());
@@ -882,7 +882,7 @@ TEST_F(FilesystemVolumeTest, IncompletePublicationRollbackPreservesRecoveryFiles
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(backup, loaded));
     ASSERT_EQ(loaded.size(), oldBytes.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
     const auto stageExists = IsDirectory(paths.stageDirectory);
     ASSERT_TRUE(stageExists);
     EXPECT_TRUE(*stageExists);
@@ -916,7 +916,7 @@ TEST_F(FilesystemVolumeTest, ThrowingDiagnosticStillRetainsIncompleteRollback){
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(backup, loaded));
     ASSERT_EQ(loaded.size(), oldBytes.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
     const auto stageExists = IsDirectory(paths.stageDirectory);
     ASSERT_TRUE(stageExists);
     EXPECT_TRUE(*stageExists);
@@ -940,14 +940,14 @@ TEST_F(FilesystemVolumeTest, FailedLaterSegmentPromotionRestoresPublishedBytes){
     ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
     EXPECT_FALSE(PublishStagedVolume(stagedPaths, m_directory, m_desc.volumeName.view(), 3u, scratchArena));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("failed to promote staged segment")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("failed to promote staged segment")));
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded));
     ASSERT_EQ(loaded.size(), firstOld.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), firstOld.data(), firstOld.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), firstOld.data(), firstOld.size()), 0);
     ASSERT_TRUE(ReadBinaryFile(secondOutput, loaded));
     ASSERT_EQ(loaded.size(), secondOld.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), secondOld.data(), secondOld.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), secondOld.data(), secondOld.size()), 0);
     const auto absent = FileExists(absentOutput);
     ASSERT_TRUE(absent);
     EXPECT_FALSE(*absent);
@@ -980,10 +980,10 @@ TEST_F(FilesystemVolumeTest, ThrowingPromotionDiagnosticRestoresPublishedBytesDu
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded));
     ASSERT_EQ(loaded.size(), firstOld.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), firstOld.data(), firstOld.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), firstOld.data(), firstOld.size()), 0);
     ASSERT_TRUE(ReadBinaryFile(secondOutput, loaded));
     ASSERT_EQ(loaded.size(), secondOld.size());
-    EXPECT_EQ(NWB_MEMCMP(loaded.data(), secondOld.data(), secondOld.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), secondOld.data(), secondOld.size()), 0);
 }
 
 

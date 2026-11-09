@@ -303,7 +303,7 @@ public:
 #if defined(NWB_COOK)
 public:
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
-        if(!this->checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
+        if(!this->checkSerializeAssetType(asset, FOUNDATION_TEXT("ShaderAssetCodec::serialize")))
             return false;
 
         return ShaderAssetSerialization::Serialize(*MakeNotNull(checked_cast<const ShaderT*>(&asset)), outBinary);

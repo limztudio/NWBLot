@@ -51,22 +51,22 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
 
     if(numCmd > 0u && !ppCmd){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     const b8 hasCommands = numCmd > 0u;
     if(hasCommands && !expectedCommandLists){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     // Queue-global synchronization belongs to the next accepted native submission.
     // Validation and injected pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(localSignalCount > 0u && !localSignals){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
@@ -74,18 +74,18 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     const b8 requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(
         localWaitCount > static_cast<usize>(Limit<u32>::s_Max)
         || localSignalCount >= static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(requiresNativeSubmission && m_lastSubmittedID == Limit<u64>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(hasCommands && !SubmissionValidator(*this).validate(ppCmd, numCmd, expectedCommandLists))
@@ -100,7 +100,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                 localWaits ? Span<const SubmissionWait>(localWaits, localWaitCount) : Span<const SubmissionWait>{},
                 validatedTimerQueryCommandBuffers
             )){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             validatedTimerQueryCommandBuffers.push_back(MakeNotNull(&tracked));
@@ -112,7 +112,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
 
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
     }
@@ -121,7 +121,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         return SubmissionReceipt{ m_lastSubmittedID, 0u, false };
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
@@ -138,7 +138,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     for(usize i = 0u; i < localWaitCount; ++i){
         const SubmissionWait& wait = localWaits[i];
         if(wait.semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
 
@@ -196,13 +196,13 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             cmdBufInfos.push_back(commandBufferInfo);
         }
     }
-    NWB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
+    FOUNDATION_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
     for(usize i = 0u; i < numCmd; ++i){
         auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
         if(!validateCommandBufferSubmissionState(tracked))
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         if(!tracked.validatePendingAccelStructBuildCommits()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
         if(tracked.hasRetainedTopLevelAccelStructs()){
@@ -270,13 +270,13 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             rejectedCommandBuffer = recycleCommandBuffer(m_commandBuffersInFlight, rejectedCommandBuffer);
 
         if(submissionSuppressed){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
         }
         else if(res == VK_ERROR_OUT_OF_HOST_MEMORY || res == VK_ERROR_OUT_OF_DEVICE_MEMORY){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
         }
         else if(res != VK_ERROR_DEVICE_LOST){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
 
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, res });
@@ -346,7 +346,7 @@ void Queue::waitForIdle(){
     if(res == VK_ERROR_DEVICE_LOST)
         m_device.captureDeviceLoss("queue wait idle");
     if(res != VK_SUCCESS)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
 }
 
 Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList& source, const CommandBufferList::iterator commandBuffer){
@@ -354,26 +354,26 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     ++next;
 
     TrackedCommandBufferPtr& cmdBuf = *commandBuffer;
-    NWB_ASSERT(cmdBuf);
+    FOUNDATION_ASSERT(cmdBuf);
     if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Command buffer recycle owner mismatch"));
         return next;
     }
 
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
-        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        FOUNDATION_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
         m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
         return next;
     }
 
     WorkerCommandArena* const workerArena = findWorkerCommandArena(cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
     if(!workerArena){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"), m_physicalQueue.index, cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
-        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"), m_physicalQueue.index, cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Worker command buffer lost its owning command arena"));
+        FOUNDATION_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
         m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
         return next;
     }
@@ -381,7 +381,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     // Submission/retirement holds m_mutex here. Worker recording never takes m_mutex, so no lock cycle.
     ScopedLock lock(workerArena->mutex);
 
-    NWB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
+    FOUNDATION_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
     workerArena->commandBuffersPool.splice(workerArena->commandBuffersPool.end(), source, commandBuffer);
     return next;
 }
@@ -395,7 +395,7 @@ b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite,
         return false;
 
     const auto producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
-    NWB_ASSERT(producerQueue->m_physicalQueue.deviceGeneration == prerequisite.deviceGeneration);
+    FOUNDATION_ASSERT(producerQueue->m_physicalQueue.deviceGeneration == prerequisite.deviceGeneration);
     if(producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 
@@ -436,7 +436,7 @@ Expected<u64> Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue)
     if(result == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
     if(result != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
         return MakeUnexpected(Failure{});
     }
     return completedInstance;

@@ -22,7 +22,7 @@ void ApplyTextReplacements(const Span<ReplacementT> inOutReplacements, StringT& 
 
     usize capacity = inOutSource.size();
     for(const ReplacementT& replacement : inOutReplacements){
-        NWB_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
+        FOUNDATION_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
         const usize oldSize = replacement.end - replacement.begin;
         if(replacement.text.size() > oldSize)
             capacity = AddSize(capacity, replacement.text.size() - oldSize);

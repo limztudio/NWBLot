@@ -53,13 +53,13 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 [[nodiscard]] ScratchPath MakeTelemetryUploadStem(Core::Alloc::ScratchArena& arena){
     const auto timeResult = GetLocalTime();
     if(!timeResult)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for telemetry upload name"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to read local time for telemetry upload name"));
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
         arena,
-        NWB_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}"),
+        FOUNDATION_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}"),
         localTime.tm_year + s_LocalTimeYearBase,
         localTime.tm_mon + s_LocalTimeMonthBase,
         localTime.tm_mday,
@@ -117,7 +117,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     const auto rawPublication = PublishNewFileDurable(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
     result.storedRaw = rawPublication.published;
     if(rawPublication.error && !rawPublication.published){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry raw publication failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), rawPublication.stagingRetained, rawPublication.error.value());
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Telemetry raw publication failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), rawPublication.stagingRetained, rawPublication.error.value());
         result.type = Core::Common::LogType::Error;
         return result;
     }
@@ -128,14 +128,14 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     const auto decoded = Core::Telemetry::DecodeEventStream(bytes, byteCount, arena, recorder);
     result.decode = decoded ? Core::Telemetry::DecodeResult{ *decoded, Core::Telemetry::DecodeStatus::Ok } : decoded.error();
     if(!result.decode.ok()){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"), PathToString<tchar>(result.rawPath), result.decode.bytesRead, static_cast<u32>(result.decode.status));
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"), PathToString<tchar>(result.rawPath), result.decode.bytesRead, static_cast<u32>(result.decode.status));
         result.type = Core::Common::LogType::Error;
         return result;
     }
 
     auto report = BuildTelemetryReport(recorder.view(), arena, scratchArena);
     if(!report){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Core::Common::LogType::Error;
         return result;
     }
@@ -150,14 +150,14 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     result.wrotePerfCsv = csvPublication.published;
     result.wroteGraph = graphPublication.published;
     if(jsonPublication.error || csvPublication.error || graphPublication.error){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry report publication failed: raw='{}' json='{}' error={} csv='{}' error={} graph='{}' error={}"), PathToString<tchar>(result.rawPath), PathToString<tchar>(result.jsonPath), jsonPublication.error.value(), PathToString<tchar>(result.perfCsvPath), csvPublication.error.value(), PathToString<tchar>(result.graphPath), graphPublication.error.value());
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Telemetry report publication failed: raw='{}' json='{}' error={} csv='{}' error={} graph='{}' error={}"), PathToString<tchar>(result.rawPath), PathToString<tchar>(result.jsonPath), jsonPublication.error.value(), PathToString<tchar>(result.perfCsvPath), csvPublication.error.value(), PathToString<tchar>(result.graphPath), graphPublication.error.value());
         result.type = Core::Common::LogType::Error;
         return result;
     }
 
     result.message = StringFormat(
         arena,
-        NWB_TEXT("Telemetry upload processed: events={} parse_failures={} raw='{}' json='{}' csv='{}'"),
+        FOUNDATION_TEXT("Telemetry upload processed: events={} parse_failures={} raw='{}' json='{}' csv='{}'"),
         result.summary.eventCount,
         result.summary.parseFailureCount,
         PathToString<tchar>(result.rawPath),

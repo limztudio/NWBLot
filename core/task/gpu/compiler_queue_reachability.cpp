@@ -85,24 +85,24 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
 
     // Graph storage keeps task indices below u32 max, and valid analysis holds one order entry plus adjacency per task.
     const usize taskCount = graph.taskCount();
-    NWB_ASSERT(taskCount <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(taskCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(analysis.schedulingEdges().empty()){
         outReachability.m_graphGeneration = graph.generation();
         outReachability.m_taskCount = taskCount;
         outReachability.m_valid = true;
         return true;
     }
-    NWB_ASSERT(analysis.topologicalOrder().size() == taskCount);
+    FOUNDATION_ASSERT(analysis.topologicalOrder().size() == taskCount);
     b8 totalOrder = taskCount > 1u;
     for(usize orderIndex = 0u; orderIndex < taskCount && totalOrder; ++orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex];
-        NWB_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
+        FOUNDATION_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
         const b8 finalTask = orderIndex + 1u == taskCount;
         b8 reachesNext = finalTask;
         const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
         for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
             const u32 consumerIndex = consumers[consumerOffset];
-            NWB_ASSERT(consumerIndex < taskCount && consumerIndex != source.index);
+            FOUNDATION_ASSERT(consumerIndex < taskCount && consumerIndex != source.index);
             if(!finalTask && consumerIndex == analysis.topologicalOrder()[orderIndex + 1u].index)
                 reachesNext = true;
         }
@@ -141,12 +141,12 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         }
         for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
             const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
-            NWB_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
+            FOUNDATION_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
             auto& sourceRange = descendantRanges[source.index];
             const auto consumers = analysis.schedulingConsumers(source);
             for(usize consumer = 0u; consumer < consumers.taskCount; ++consumer){
                 const usize child = consumers[consumer];
-                NWB_ASSERT(child < taskCount && child != source.index);
+                FOUNDATION_ASSERT(child < taskCount && child != source.index);
                 const auto& childRange = descendantRanges[child];
                 sourceRange.begin = Min(sourceRange.begin, childRange.begin);
                 sourceRange.end = Max(sourceRange.end, childRange.end);
@@ -229,13 +229,13 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         range = { .begin = wordsPerRow, .end = 0u };
     for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
-        NWB_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
+        FOUNDATION_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
 
         const usize sourceRowOffset = source.index * wordsPerRow;
         const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
         for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
             const usize consumerIndex = consumers[consumerOffset];
-            NWB_ASSERT(consumerIndex < taskCount && consumerIndex != source.index);
+            FOUNDATION_ASSERT(consumerIndex < taskCount && consumerIndex != source.index);
             const usize consumerRowOffset = consumerIndex * wordsPerRow;
             const auto& consumerRange = outReachability.m_relatedWordRanges[consumerIndex];
             for(usize wordIndex = consumerRange.begin; wordIndex < consumerRange.end; ++wordIndex){

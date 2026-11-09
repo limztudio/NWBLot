@@ -184,7 +184,7 @@ b8 GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiled
         return false;
 
     const GpuTaskNode& task = m_tasks[taskID.index];
-    NWB_ASSERT(task.resourceUseOffset <= m_resourceUses.size() && task.resourceUseCount <= m_resourceUses.size() - task.resourceUseOffset);
+    FOUNDATION_ASSERT(task.resourceUseOffset <= m_resourceUses.size() && task.resourceUseCount <= m_resourceUses.size() - task.resourceUseOffset);
     const GpuTaskResourceUse* const resourceUses = task.resourceUseCount != 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr;
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& use = resourceUses[useIndex];

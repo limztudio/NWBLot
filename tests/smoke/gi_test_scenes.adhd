@@ -288,11 +288,11 @@ b8 ComplexGiScene::Create(Core::ECS::World& world, const b8 coverageViewEnabled)
         placedBodies[placedBodyCount++] = body;
     }
     if(placedBodyCount != s_ComplexRandomBodyCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProjectImpl: could place only {} of {} seeded bodies"), placedBodyCount, s_ComplexRandomBodyCount);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GiTestSmokeProjectImpl: could place only {} of {} seeded bodies"), placedBodyCount, s_ComplexRandomBodyCount);
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created")
         , s_ComplexSceneBoxes.size()
         , s_ComplexBouncePatches.size()
         , s_ComplexFrontEnclosureBoxes.size()
@@ -303,7 +303,7 @@ b8 ComplexGiScene::Create(Core::ECS::World& world, const b8 coverageViewEnabled)
         const auto probe = CreateTintedStaticMeshEntity(s_BoxMesh, s_CoverageProbeMaterial, s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f), world);
         if(!probe.valid())
             return false;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: coverage probe with perpendicular same-cell faces created"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: coverage probe with perpendicular same-cell faces created"));
     }
     return true;
 }
@@ -488,14 +488,14 @@ Expected<b8> CsgGiScene::start(){
         return false;
     const AStringView arm(configuredArm->data(), configuredArm->size());
     if(arm != __hidden_csg_gi_scene::s_ReferenceArm && arm != __hidden_csg_gi_scene::s_CutArm && arm != "uncut"){
-        NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProjectImpl: invalid NWB_GI_CSG_ARM"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GiTestSmokeProjectImpl: invalid NWB_GI_CSG_ARM"));
         return MakeUnexpected(Failure{});
     }
     if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
         const auto count = ParseU64(AStringView(value->data(), value->size()));
         constexpr u32 s_MinimumWarmupPresentations = 360u;
         if(!count || *count < s_MinimumWarmupPresentations || *count > Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProjectImpl: CSG GI warmup requires at least 360 successful presentations"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GiTestSmokeProjectImpl: CSG GI warmup requires at least 360 successful presentations"));
             return MakeUnexpected(Failure{});
         }
         m_requiredPresentations = *count;
@@ -544,13 +544,13 @@ Expected<b8> CsgGiScene::start(){
 
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
     constexpr u32 s_DefaultCaptureFrameCount = 360u;
-    auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(NWB_TEXT("GiTestSmokeProjectImpl"), s_DefaultCaptureFrameCount, options, scratchArena);
+    auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(FOUNDATION_TEXT("GiTestSmokeProjectImpl"), s_DefaultCaptureFrameCount, options, scratchArena);
     if(!capture)
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);
     m_active = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}"), ConvertString(arm), m_requiredPresentations);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: mixed CSG receiver has 12 closed and 2 open triangles"));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}"), ConvertString(arm), m_requiredPresentations);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: mixed CSG receiver has 12 closed and 2 open triangles"));
     return true;
 }
 
@@ -574,7 +574,7 @@ void CsgGiScene::update(){
             m_liveWarmupStartTime = now;
             m_liveWarmupStartPresentations = presentations;
             m_liveWarmupStarted = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}")
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}")
                 , frameIndex
                 , presentations
                 , m_requiredPresentations
@@ -584,7 +584,7 @@ void CsgGiScene::update(){
             const f64 elapsedSeconds = DurationInSeconds<f64>(now, m_liveWarmupStartTime);
             if(elapsedSeconds >= __hidden_csg_gi_scene::s_LiveWarmupSeconds && presentations > m_liveWarmupStartPresentations){
                 m_liveWarmupComplete = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}"), frameIndex, presentations, elapsedSeconds);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}"), frameIndex, presentations, elapsedSeconds);
             }
         }
     }
@@ -592,7 +592,7 @@ void CsgGiScene::update(){
     m_capture->update();
     if(m_capture->captureReady() && !m_captureReceiptLogged){
         m_captureReceiptLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProjectImpl: CSG GI capture source_frame={}"), m_capture->capturedGraphicsFrameIndex());
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("GiTestSmokeProjectImpl: CSG GI capture source_frame={}"), m_capture->capturedGraphicsFrameIndex());
     }
 }
 

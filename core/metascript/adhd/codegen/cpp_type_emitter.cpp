@@ -95,6 +95,11 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         out.push_back('>');
         return;
     }
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isArenaBacked && !type.templateArgs.empty()){
+        out.append(name.data(), name.size());
+        emitTypeArgListCpp(out, type.templateArgs, true);
+        return;
+    }
     if(const MStringView mappedBuiltin = MapBuiltinCppType(name); !mappedBuiltin.empty()){
         out.append(mappedBuiltin.data(), mappedBuiltin.size());
         if(!type.templateArgs.empty())
@@ -113,9 +118,10 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         emitTypeArgListCpp(out, type.templateArgs);
 }
 
-void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> args)const{
+void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> args, const b8 appendArena)const{
     out.push_back('<');
-    for(usize i = 0u; i < args.size(); ++i){
+    const usize count = args.size();
+    for(usize i = 0u; i < count; ++i){
         if(i > 0u)
             out.append(", ");
         const TypeArg& arg = args[i];
@@ -123,6 +129,11 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
             emitTypeCpp(out, *arg.type);
         else if(!arg.constantText.empty())
             out.append(arg.constantText.data(), arg.constantText.size());
+    }
+    if(appendArena){
+        if(count > 0u)
+            out.append(", ");
+        out.append("::NWB::Core::Alloc::GlobalArena");
     }
     out.push_back('>');
 }

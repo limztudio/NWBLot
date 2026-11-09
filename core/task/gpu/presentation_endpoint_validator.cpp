@@ -23,7 +23,7 @@ b8 GpuPresentationEndpointValidator::Validate(const GpuTaskGraph::DeclarationRea
         return false;
     };
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
-        NWB_ASSERT(graph.validTask(endpoint->producer) && graph.validResource(endpoint->backBuffer));
+        FOUNDATION_ASSERT(graph.validTask(endpoint->producer) && graph.validResource(endpoint->backBuffer));
 
         const GpuTaskGraphTaskView producer = graph.taskAt(endpoint->producer.index);
         const GpuTaskGraphResourceView backBuffer = graph.resourceAt(endpoint->backBuffer.index);

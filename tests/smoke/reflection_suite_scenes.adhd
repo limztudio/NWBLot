@@ -235,7 +235,7 @@ void ReflectionReferenceScene::createMirrorScene(const b8 moved){
     // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
     const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
     const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
-    NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: offscreen markers failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(red.valid() && green.valid(), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: offscreen markers failed"));
 }
 
 void ReflectionReferenceScene::createOnscreenMirrorScene(const b8 moved, const b8 boundary){
@@ -250,7 +250,7 @@ void ReflectionReferenceScene::createOnscreenMirrorScene(const b8 moved, const b
 void ReflectionReferenceScene::createFloorMirrorScene(){
     createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
     const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
-    NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: floor mirror creation failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(floor.valid(), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: floor mirror creation failed"));
     // Reflection through y=0 places virtual marker centers at y=-2.
     createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
     createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
@@ -264,7 +264,7 @@ void ReflectionReferenceScene::createOpaqueGlassScene(){
     }
     const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
     const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
-    NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: opaque/glass spheres failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: opaque/glass spheres failed"));
     m_world.entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
     createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
     createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
@@ -273,19 +273,19 @@ void ReflectionReferenceScene::createOpaqueGlassScene(){
 
 NWB::Core::ECS::EntityID ReflectionReferenceScene::createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0){
     const auto entity = CreateTintedStaticMeshEntity(mesh, material, s_MaterialInterface, color, position, scale, m_world);
-    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProjectImpl: mesh creation failed"));
+    FOUNDATION_FATAL_ASSERT_MSG(entity.valid(), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: mesh creation failed"));
     const Name materialInterface(s_MaterialInterface);
     const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
     const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
-    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+    FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
         m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3,
         NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
-    ), NWB_TEXT("ReflectionSmokeProjectImpl: F0 override failed")
+    ), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: F0 override failed")
     );
-    NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+    FOUNDATION_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
         m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16,
         NWB::Impl::PackMaterialInstanceValue(roughness)
-    ), NWB_TEXT("ReflectionSmokeProjectImpl: roughness override failed")
+    ), FOUNDATION_TEXT("ReflectionSmokeProjectImpl: roughness override failed")
     );
     return entity;
 }
@@ -478,7 +478,7 @@ b8 ReflectionRoughnessScene::createDeformingSource(){
     const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
     if(!modelAsset)
         return false;
-    NWB_ASSERT(*modelAsset);
+    FOUNDATION_ASSERT(*modelAsset);
     const NWB::Impl::Model* modelPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset->get());
     if(!modelPtr)
         return false;
@@ -488,7 +488,7 @@ b8 ReflectionRoughnessScene::createDeformingSource(){
     const auto skeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name());
     if(!skeletonAsset)
         return false;
-    NWB_ASSERT(*skeletonAsset);
+    FOUNDATION_ASSERT(*skeletonAsset);
     const NWB::Impl::Skeleton* skeletonPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset->get());
     if(!skeletonPtr)
         return false;

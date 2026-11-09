@@ -161,7 +161,7 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
         for(usize index = 0u; index < m_pipelines.size(); ++index){
             const GpuGraphPipelineNode& pipeline = m_pipelines[index];
             if(!identities.emplace(pipeline.identity.identityHash(), static_cast<u32>(index)).second)
-                NWB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained identities");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained identities");
             if(MakePipelinePointerKey(pipeline).pointer)
                 ++pointerCount;
         }
@@ -171,7 +171,7 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
             for(usize index = 0u; index < m_pipelines.size(); ++index){
                 const PipelinePointerKey key = MakePipelinePointerKey(m_pipelines[index]);
                 if(key.pointer && !pointers->emplace(key, static_cast<u32>(index)).second)
-                    NWB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained typed pointers");
+                    FOUNDATION_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained typed pointers");
             }
         }
 

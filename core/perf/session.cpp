@@ -76,7 +76,7 @@ void Session::ensureMemoryScopes(){
         const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
         const auto scope = m_memory.registerScope(identity.ownerName, source);
         if(!scope){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             continue;
         }
     }

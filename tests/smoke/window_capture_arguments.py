@@ -49,6 +49,7 @@ class WindowCaptureArguments:
         parser.add_argument("--window-handle", type=WindowCaptureArguments.parse_int, help="Capture an existing native window handle instead of launching testbed.")
         parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
         parser.add_argument(LIT_TIMEOUT, type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
+        parser.add_argument("--graceful-exit-timeout", type=float, default=10.0, help="Seconds to wait for application shutdown after a completed capture.")
         parser.add_argument(LIT_SETTLE_SECONDS, type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
         parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
         parser.add_argument(LIT_RESIZE_SETTLE_SECONDS, type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
@@ -87,9 +88,10 @@ class WindowCaptureArguments:
             parser.error("--log-output requires --application-capture")
         if args.window_handle is None and not args.executable:
             parser.error("--executable is required unless --window-handle is provided")
-        for name, value in ((LIT_TIMEOUT, args.timeout), (LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout), (LIT_SETTLE_SECONDS, args.settle_seconds), (LIT_RESIZE_SETTLE_SECONDS, args.resize_settle_seconds)):
+        for name, value in ((LIT_TIMEOUT, args.timeout), ("--graceful-exit-timeout", args.graceful_exit_timeout), (LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout), (LIT_SETTLE_SECONDS, args.settle_seconds), (LIT_RESIZE_SETTLE_SECONDS, args.resize_settle_seconds)):
             if value is not None and not math.isfinite(value):
                 parser.error(f"{name} must be finite")
+        WindowCaptureArguments.require_positive_arg(parser, "--graceful-exit-timeout", args.graceful_exit_timeout)
         WindowCaptureArguments.require_positive_arg(parser, LIT_TIMEOUT, args.timeout)
         WindowCaptureArguments.require_positive_arg(parser, LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout)
         WindowCaptureArguments.require_positive_arg(parser, LIT_APPLICATION_CAPTURE_FRAME_COUNT, args.application_capture_frame_count,)

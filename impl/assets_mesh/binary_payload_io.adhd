@@ -25,11 +25,11 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_MeshLoadBinaryContext = NWB_TEXT("Mesh::loadBinary");
+inline constexpr TStringView s_MeshLoadBinaryContext = FOUNDATION_TEXT("Mesh::loadBinary");
 #if defined(NWB_COOK)
-inline constexpr TStringView s_MeshSerializeContext = NWB_TEXT("MeshAssetCodec::serialize");
+inline constexpr TStringView s_MeshSerializeContext = FOUNDATION_TEXT("MeshAssetCodec::serialize");
 #endif
-inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
+inline constexpr TStringView s_MeshAssetKindLabel = FOUNDATION_TEXT("mesh");
 
 static_assert(sizeof(MeshBinaryHeader) == sizeof(u32) + (sizeof(u64) * 11u), "MeshBinaryHeader layout drifted");
 static_assert(alignof(MeshBinaryHeader) == 1u, "MeshBinaryHeader must stay packed");
@@ -50,23 +50,23 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_PositionStreamNameView = NWB_TEXT("position");
-inline constexpr TStringView s_NormalStreamNameView = NWB_TEXT("normal");
-inline constexpr TStringView s_TangentStreamNameView = NWB_TEXT("tangent");
-inline constexpr TStringView s_Uv0StreamNameView = NWB_TEXT("uv0");
-inline constexpr TStringView s_ColorStreamNameView = NWB_TEXT("color");
-inline constexpr TStringView s_PositionsStreamLabel = NWB_TEXT("positions");
-inline constexpr TStringView s_NormalsStreamLabel = NWB_TEXT("normals");
-inline constexpr TStringView s_TangentsStreamLabel = NWB_TEXT("tangents");
-inline constexpr TStringView s_Uv0StreamLabel = NWB_TEXT("uv0");
-inline constexpr TStringView s_ColorsStreamLabel = NWB_TEXT("colors");
-inline constexpr TStringView s_MeshletsStreamLabel = NWB_TEXT("meshlets");
-inline constexpr TStringView s_MeshletBoundsStreamLabel = NWB_TEXT("meshlet bounds");
-inline constexpr TStringView s_MeshletPositionRefDeltasStreamLabel = NWB_TEXT("meshlet position ref deltas");
-inline constexpr TStringView s_MeshletAttributeRefDeltasStreamLabel = NWB_TEXT("meshlet attribute ref deltas");
-inline constexpr TStringView s_MeshletLocalVertexRefsStreamLabel = NWB_TEXT("meshlet local vertex refs");
-inline constexpr TStringView s_MeshletPrimitiveIndicesStreamLabel = NWB_TEXT("meshlet primitive indices");
-inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid triangle words");
+inline constexpr TStringView s_PositionStreamNameView = FOUNDATION_TEXT("position");
+inline constexpr TStringView s_NormalStreamNameView = FOUNDATION_TEXT("normal");
+inline constexpr TStringView s_TangentStreamNameView = FOUNDATION_TEXT("tangent");
+inline constexpr TStringView s_Uv0StreamNameView = FOUNDATION_TEXT("uv0");
+inline constexpr TStringView s_ColorStreamNameView = FOUNDATION_TEXT("color");
+inline constexpr TStringView s_PositionsStreamLabel = FOUNDATION_TEXT("positions");
+inline constexpr TStringView s_NormalsStreamLabel = FOUNDATION_TEXT("normals");
+inline constexpr TStringView s_TangentsStreamLabel = FOUNDATION_TEXT("tangents");
+inline constexpr TStringView s_Uv0StreamLabel = FOUNDATION_TEXT("uv0");
+inline constexpr TStringView s_ColorsStreamLabel = FOUNDATION_TEXT("colors");
+inline constexpr TStringView s_MeshletsStreamLabel = FOUNDATION_TEXT("meshlets");
+inline constexpr TStringView s_MeshletBoundsStreamLabel = FOUNDATION_TEXT("meshlet bounds");
+inline constexpr TStringView s_MeshletPositionRefDeltasStreamLabel = FOUNDATION_TEXT("meshlet position ref deltas");
+inline constexpr TStringView s_MeshletAttributeRefDeltasStreamLabel = FOUNDATION_TEXT("meshlet attribute ref deltas");
+inline constexpr TStringView s_MeshletLocalVertexRefsStreamLabel = FOUNDATION_TEXT("meshlet local vertex refs");
+inline constexpr TStringView s_MeshletPrimitiveIndicesStreamLabel = FOUNDATION_TEXT("meshlet primitive indices");
+inline constexpr TStringView s_SolidTriangleWordsStreamLabel = FOUNDATION_TEXT("solid triangle words");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

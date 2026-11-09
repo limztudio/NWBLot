@@ -26,7 +26,7 @@ namespace FrustumTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL Transform(
+inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVectorSingle& outOrigin,
     SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
 )noexcept{
@@ -93,7 +93,7 @@ inline void NWB_SIMD_CALL Transform(
     outFarPlane = VectorGetZ(fitted->maximum);
 }
 
-inline void NWB_SIMD_CALL Transform(
+inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, f32 scale, SIMDVectorSingle rotation,
     SIMDVectorSingle translation, SIMDVectorSingle& outOrigin, SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
 )noexcept{
@@ -113,7 +113,7 @@ inline void NWB_SIMD_CALL Transform(
     }
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsPoint(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsPoint(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle point
 )noexcept{
     SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
@@ -125,7 +125,7 @@ inline void NWB_SIMD_CALL Transform(
     return ContainmentType::Contains;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsTriangle(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsTriangle(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2
 )noexcept{
     SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
@@ -134,7 +134,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::ContainmentFromPlaneTests(points, planes);
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlane(
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL IntersectsPlane(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane
 )noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
@@ -149,7 +149,7 @@ inline void NWB_SIMD_CALL Transform(
     return PlaneIntersectionType::Intersecting;
 }
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL IntersectsRay(
+[[nodiscard]] inline Expected<f32> FOUNDATION_SIMD_CALL IntersectsRay(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle rayOrigin, SIMDVectorSingle direction
 )noexcept{
     SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
@@ -179,7 +179,7 @@ inline void NWB_SIMD_CALL Transform(
     return VectorGetX(tMin);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainedBy(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainedBy(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1,
     SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
 )noexcept{
@@ -189,7 +189,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsSphere(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsSphere(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle sphereValue
 )noexcept{
@@ -198,7 +198,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsBox(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )noexcept{
@@ -209,7 +209,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsOrientedBox(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsOrientedBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )noexcept{
@@ -220,7 +220,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsFrustum(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsFrustum(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherFrustumOrigin, const SIMDVectorSingle otherFrustumOrientation, const f32 otherRightSlope, const f32 otherLeftSlope, const f32 otherTopSlope, const f32 otherBottomSlope, const f32 otherNearPlane, const f32 otherFarPlane
 )noexcept{
@@ -239,7 +239,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsSphere(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsSphere(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle sphereValue
 )noexcept{
@@ -248,7 +248,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsBox(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )noexcept{
@@ -257,7 +257,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsOrientedBox(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )noexcept{
@@ -266,7 +266,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsFrustum(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsFrustum(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherFrustumOrigin, const SIMDVectorSingle otherFrustumOrientation, const f32 otherRightSlope, const f32 otherLeftSlope, const f32 otherTopSlope, const f32 otherBottomSlope, const f32 otherNearPlane, const f32 otherFarPlane
 )noexcept{
@@ -299,7 +299,7 @@ namespace FrustumDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL Transform(
+inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outOrigin,
     SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
 )noexcept{
@@ -366,7 +366,7 @@ inline void NWB_SIMD_CALL Transform(
     outFarPlane = VectorDoubleGetZ(fitted->maximum);
 }
 
-inline void NWB_SIMD_CALL Transform(
+inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, f64 scale, SIMDVectorDouble rotation,
     SIMDVectorDouble translation, SIMDVectorDouble& outOrigin, SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
 )noexcept{
@@ -386,7 +386,7 @@ inline void NWB_SIMD_CALL Transform(
     }
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsPoint(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsPoint(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble point
 )noexcept{
     SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
@@ -398,7 +398,7 @@ inline void NWB_SIMD_CALL Transform(
     return ContainmentType::Contains;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsTriangle(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsTriangle(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2
 )noexcept{
     SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
@@ -407,7 +407,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::ContainmentFromPlaneTests(points, planes);
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlane(
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL IntersectsPlane(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane
 )noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
@@ -422,7 +422,7 @@ inline void NWB_SIMD_CALL Transform(
     return PlaneIntersectionType::Intersecting;
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL IntersectsRay(
+[[nodiscard]] inline Expected<f64> FOUNDATION_SIMD_CALL IntersectsRay(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble rayOrigin, SIMDVectorDouble direction
 )noexcept{
     SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
@@ -452,7 +452,7 @@ inline void NWB_SIMD_CALL Transform(
     return VectorDoubleGetX(tMin);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainedBy(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainedBy(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1,
     SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
 )noexcept{
@@ -462,7 +462,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsSphere(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsSphere(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble sphereValue
 )noexcept{
@@ -471,7 +471,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsBox(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )noexcept{
@@ -482,7 +482,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsOrientedBox(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsOrientedBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )noexcept{
@@ -493,7 +493,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL ContainsFrustum(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsFrustum(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherFrustumOrigin, const SIMDVectorDouble otherFrustumOrientation, const f64 otherRightSlope, const f64 otherLeftSlope, const f64 otherTopSlope, const f64 otherBottomSlope, const f64 otherNearPlane, const f64 otherFarPlane
 )noexcept{
@@ -512,7 +512,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsSphere(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsSphere(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble sphereValue
 )noexcept{
@@ -521,7 +521,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsBox(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )noexcept{
@@ -530,7 +530,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsOrientedBox(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )noexcept{
@@ -539,7 +539,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsFrustum(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsFrustum(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherFrustumOrigin, const SIMDVectorDouble otherFrustumOrientation, const f64 otherRightSlope, const f64 otherLeftSlope, const f64 otherTopSlope, const f64 otherBottomSlope, const f64 otherNearPlane, const f64 otherFarPlane
 )noexcept{

@@ -20,13 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
-inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
+inline constexpr TStringView s_SkinAssetKindLabel = FOUNDATION_TEXT("skin");
+inline constexpr TStringView s_SkinLoadBinaryContext = FOUNDATION_TEXT("Skin::loadBinary");
 #if defined(NWB_COOK)
-inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");
+inline constexpr TStringView s_SkinSerializeContext = FOUNDATION_TEXT("SkinAssetCodec::serialize");
 #endif
-inline constexpr TStringView s_SkinInfluencesPayloadLabel = NWB_TEXT("influences");
-inline constexpr TStringView s_SkinInverseBindMatricesPayloadLabel = NWB_TEXT("inverse bind matrices");
+inline constexpr TStringView s_SkinInfluencesPayloadLabel = FOUNDATION_TEXT("influences");
+inline constexpr TStringView s_SkinInverseBindMatricesPayloadLabel = FOUNDATION_TEXT("inverse bind matrices");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -28,7 +28,7 @@ b8 BlendState::RenderTarget::usesConstantColor()const noexcept{
 
 
 b8 BlendState::usesConstantColor(u32 numTargets)const noexcept{
-    NWB_ASSERT(numTargets <= s_MaxRenderTargets);
+    FOUNDATION_ASSERT(numTargets <= s_MaxRenderTargets);
     for(u32 rt = 0u; rt < numTargets; ++rt){
         if(targets[rt].usesConstantColor())
             return true;

@@ -157,7 +157,7 @@ b8 FramePresentationCoordinator::replaceFramePresentationSemaphoreAfterIdle(){
     if(result != VK_SUCCESS){
         if(result == VK_ERROR_DEVICE_LOST && m_context.m_rhiDevice)
             m_context.m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
         return false;
     }
 

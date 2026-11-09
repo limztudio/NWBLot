@@ -59,7 +59,7 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, co
         }
 
         ticket = activeSubmissionTicket();
-        NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
+        FOUNDATION_ASSERT_MSG(ticket, FOUNDATION_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
         if(!ticket){
             ++m_statistics.beginFailureCount;
             return MakeUnexpected(Failure{});

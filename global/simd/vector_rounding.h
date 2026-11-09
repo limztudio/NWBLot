@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SSE2) && !defined(NWB_HAS_SSE4)
+#if defined(FOUNDATION_HAS_SSE2) && !defined(FOUNDATION_HAS_SSE4)
 namespace SIMDVectorArithmeticDetail{
 
 
@@ -32,7 +32,7 @@ enum Enum : u8{
 
 
 template<Rounding::Enum Mode>
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL RoundFixed(SIMDVectorSingle value)noexcept{
     const __m128i bits = _mm_castps_si128(value);
     const __m128i magnitude = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(s_F32AbsoluteBitMask)));
     const __m128i sign = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(s_F32SignBitMask)));
@@ -89,13 +89,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRound(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorRound(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Nearest>(value);
-#elif defined(NWB_HAS_NEON)
-#if defined(NWB_HAS_NEON64)
+#elif defined(FOUNDATION_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON64)
     return vrndnq_f32(value);
 #else
     const uint32x4_t sign = vandq_u32(vreinterpretq_u32_f32(value), vreinterpretq_u32_f32(s_SIMDNegativeZero));
@@ -110,25 +110,25 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRound(SIMDVectorSingle value)noe
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleRound(SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_NEON64)
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleRound(SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(vrndnq_f64(SIMDVectorDoubleDetail::GetLow(value)), vrndnq_f64(SIMDVectorDoubleDetail::GetHigh(value)));
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_round_pd(BitCast<__m256d>(value), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(FOUNDATION_HAS_SSE4)
     return SIMDVectorDoubleDetail::FromPairs(_mm_round_pd(SIMDVectorDoubleDetail::GetLow(value), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm_round_pd(SIMDVectorDoubleDetail::GetHigh(value), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
 #else
     return VectorDoubleSet(VectorScalarDetail::RoundToNearest(value[0]), VectorScalarDetail::RoundToNearest(value[1]), VectorScalarDetail::RoundToNearest(value[2]), VectorScalarDetail::RoundToNearest(value[3]));
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTruncate(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorTruncate(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Truncate>(value);
-#elif defined(NWB_HAS_NEON)
-#if defined(NWB_HAS_NEON64)
+#elif defined(FOUNDATION_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON64)
     return vrndq_f32(value);
 #else
     const uint32x4_t mask = vcltq_f32(vabsq_f32(value), s_SIMDNoFraction);
@@ -141,25 +141,25 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTruncate(SIMDVectorSingle value)
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTruncate(SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_NEON64)
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleTruncate(SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(vrndq_f64(SIMDVectorDoubleDetail::GetLow(value)), vrndq_f64(SIMDVectorDoubleDetail::GetHigh(value)));
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_round_pd(BitCast<__m256d>(value), _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(FOUNDATION_HAS_SSE4)
     return SIMDVectorDoubleDetail::FromPairs(_mm_round_pd(SIMDVectorDoubleDetail::GetLow(value), _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC), _mm_round_pd(SIMDVectorDoubleDetail::GetHigh(value), _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC));
 #else
     return VectorDoubleSet(BitCast<f64>(VectorScalarDetail::TruncateBits(value[0])), BitCast<f64>(VectorScalarDetail::TruncateBits(value[1])), BitCast<f64>(VectorScalarDetail::TruncateBits(value[2])), BitCast<f64>(VectorScalarDetail::TruncateBits(value[3])));
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorFloor(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorFloor(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE4)
     return _mm_floor_ps(value);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Floor>(value);
-#elif defined(NWB_HAS_NEON)
-#if defined(NWB_HAS_NEON64)
+#elif defined(FOUNDATION_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON64)
     return vrndmq_f32(value);
 #else
     const uint32x4_t mask = vcltq_f32(vabsq_f32(value), s_SIMDNoFraction);
@@ -175,25 +175,25 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorFloor(SIMDVectorSingle value)noe
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleFloor(SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_NEON64)
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleFloor(SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(vrndmq_f64(SIMDVectorDoubleDetail::GetLow(value)), vrndmq_f64(SIMDVectorDoubleDetail::GetHigh(value)));
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_round_pd(BitCast<__m256d>(value), _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(FOUNDATION_HAS_SSE4)
     return SIMDVectorDoubleDetail::FromPairs(_mm_round_pd(SIMDVectorDoubleDetail::GetLow(value), _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC), _mm_round_pd(SIMDVectorDoubleDetail::GetHigh(value), _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC));
 #else
     return VectorDoubleSet(Floor(value[0]), Floor(value[1]), Floor(value[2]), Floor(value[3]));
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCeiling(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE4)
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorCeiling(SIMDVectorSingle value)noexcept{
+#if defined(FOUNDATION_HAS_SSE4)
     return _mm_ceil_ps(value);
-#elif defined(NWB_HAS_SSE2)
+#elif defined(FOUNDATION_HAS_SSE2)
     return SIMDVectorArithmeticDetail::RoundFixed<SIMDVectorArithmeticDetail::Rounding::Ceiling>(value);
-#elif defined(NWB_HAS_NEON)
-#if defined(NWB_HAS_NEON64)
+#elif defined(FOUNDATION_HAS_NEON)
+#if defined(FOUNDATION_HAS_NEON64)
     return vrndpq_f32(value);
 #else
     const uint32x4_t mask = vcltq_f32(vabsq_f32(value), s_SIMDNoFraction);
@@ -209,12 +209,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCeiling(SIMDVectorSingle value)n
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCeiling(SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_NEON64)
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleCeiling(SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(vrndpq_f64(SIMDVectorDoubleDetail::GetLow(value)), vrndpq_f64(SIMDVectorDoubleDetail::GetHigh(value)));
-#elif defined(NWB_HAS_AVX)
+#elif defined(FOUNDATION_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_round_pd(BitCast<__m256d>(value), _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC));
-#elif defined(NWB_HAS_SSE4)
+#elif defined(FOUNDATION_HAS_SSE4)
     return SIMDVectorDoubleDetail::FromPairs(_mm_round_pd(SIMDVectorDoubleDetail::GetLow(value), _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC), _mm_round_pd(SIMDVectorDoubleDetail::GetHigh(value), _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC));
 #else
     return VectorDoubleSet(Ceil(value[0]), Ceil(value[1]), Ceil(value[2]), Ceil(value[3]));
@@ -225,12 +225,12 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCeiling(SIMDVectorDouble v
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMod(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMod(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
     const SIMDVectorSingle quotient = VectorFloor(VectorDivide(v0, v1));
     return VectorNegativeMultiplySubtract(v1, quotient, v0);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMod(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMod(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
     // FMod stays libm per lane for exact results. The floor fix-up runs in packed lanes.
     const SIMDVectorDouble remainder = VectorDoubleSet(FMod(v0[0], v1[0]), FMod(v0[1], v1[1]), FMod(v0[2], v1[2]), FMod(v0[3], v1[3]));
     const SIMDVectorDouble zero = VectorDoubleEqual(remainder, VectorDoubleZero());
@@ -240,13 +240,13 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMod(SIMDVectorDouble v0, S
     return VectorDoubleSelect(VectorDoubleSelect(remainder, wrapped, wrap), VectorDoubleAndInt(v1, s_DoubleSIMDNegativeZero), zero);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorModAngles(SIMDVectorSingle angles)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorModAngles(SIMDVectorSingle angles)noexcept{
     SIMDVectorSingle quotient = VectorMultiply(angles, s_SIMDReciprocalTwoPi);
     quotient = VectorRound(quotient);
     return VectorNegativeMultiplySubtract(s_SIMDTwoPi, quotient, angles);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleModAngles(SIMDVectorDouble angles)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleModAngles(SIMDVectorDouble angles)noexcept{
     return VectorDoubleSet(Remainder(angles[0], s_Double2PI), Remainder(angles[1], s_Double2PI), Remainder(angles[2], s_Double2PI), Remainder(angles[3], s_Double2PI));
 }
 

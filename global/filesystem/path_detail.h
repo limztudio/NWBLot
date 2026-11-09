@@ -37,7 +37,7 @@ concept PathSourceLike = CanMakeCharView<SourceT> || CanMakeWCharView<SourceT> |
 template<typename CharT>
 [[nodiscard]] inline b8 IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == static_cast<CharT>('/')
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         || ch == static_cast<CharT>('\\')
 #endif
     ;
@@ -45,7 +45,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline CharT PreferredSeparator()noexcept(IsArithmetic_V<CharT>){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return static_cast<CharT>('\\');
 #else
     return static_cast<CharT>('/');
@@ -54,7 +54,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline usize RootNameLength([[maybe_unused]] const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(text.size() >= s_DriveRootNameLength && text[1] == static_cast<CharT>(':'))
         return s_DriveRootNameLength;
     if(text.size() > 2u && IsSeparator(text[0]) && IsSeparator(text[1]) && !IsSeparator(text[2])){

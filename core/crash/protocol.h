@@ -36,7 +36,7 @@ inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
 inline constexpr usize s_MaxUrlText = 1024u;
 inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr u32 s_WindowsContextArchitectureMask = 0x00FF0000u;
 inline constexpr u32 s_WindowsContextArchitecture = CONTEXT_CONTROL & s_WindowsContextArchitectureMask;
 inline constexpr u32 s_WindowsExtendedContextFlag = CONTEXT_XSTATE & ~s_WindowsContextArchitectureMask;
@@ -112,7 +112,7 @@ struct CrashRequest{
     Array<FixedMetadata, s_MaxMetadata> metadata = {};
     Array<FixedBreadcrumb, s_MaxBreadcrumbs> breadcrumbs = {};
     Array<u64, s_MaxCallstackFrames> callstackFrames = {};
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     u32 manualContextSize = 0u;
     u32 manualExceptionRecordSize = 0u;
     u32 manualContextArchitecture = 0u;
@@ -122,7 +122,7 @@ struct CrashRequest{
 };
 
 static_assert(IsTriviallyCopyable_V<CrashRequest>, "crash request transport requires an owning fixed native value");
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 static_assert(alignof(CrashRequest) >= alignof(CONTEXT), "crash request must preserve native context alignment");
 #endif
 

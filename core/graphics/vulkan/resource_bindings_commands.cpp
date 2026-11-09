@@ -73,13 +73,13 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     }
     if(byteSize > UINT32_MAX){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, FOUNDATION_TEXT("byte size exceeds uint32 range"));
         return;
     }
 
     const u32 pushConstantByteSize = static_cast<u32>(byteSize);
     if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
+        rejectCommandRecording(s_SetPushConstantsOperation, FOUNDATION_TEXT("byte size is unaligned or exceeds the device limit"));
         return;
     }
 
@@ -113,18 +113,18 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("exactly one active valid pipeline layout is required"));
+        rejectCommandRecording(s_SetPushConstantsOperation, FOUNDATION_TEXT("exactly one active valid pipeline layout is required"));
         return;
     }
     if(!recordAndValidateCommandCapability(requiredCapabilities, s_SetPushConstantsOperation))
         return;
 
     if(pipelinePushConstantByteSize == 0){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, FOUNDATION_TEXT("active pipeline layout has no push constant range"));
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds the active pipeline push constant range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, FOUNDATION_TEXT("byte size exceeds the active pipeline push constant range"));
         return;
     }
 
@@ -132,19 +132,19 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const ComputePipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
-    constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("bind compute descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("compute pipeline is foreign or has no native pipeline layout"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("compute pipeline is foreign or has no native pipeline layout"));
         return;
     }
     if(m_currentComputeState.pipeline != &pipeline){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("compute pipeline is not the current command-list pipeline"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("compute pipeline is not the current command-list pipeline"));
         return;
     }
     if(m_renderPassActive || m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("compute heap binding requires no active render scope"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("compute heap binding requires no active render scope"));
         return;
     }
 
@@ -152,19 +152,19 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Comput
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline){
-    constexpr TStringView s_OperationName = NWB_TEXT("bind graphics descriptor-buffer heap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("bind graphics descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline is foreign or has no native pipeline layout"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("graphics pipeline is foreign or has no native pipeline layout"));
         return;
     }
     if(m_currentGraphicsState.pipeline != &pipeline){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline is not the current command-list pipeline"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("graphics pipeline is not the current command-list pipeline"));
         return;
     }
     if(!m_renderPassActive || !m_renderPassFramebuffer || m_renderPassFramebuffer != m_currentGraphicsState.framebuffer || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("graphics heap binding requires the matching active render scope"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("graphics heap binding requires the matching active render scope"));
         return;
     }
 
@@ -172,19 +172,19 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Graphi
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline){
-    constexpr TStringView s_OperationName = NWB_TEXT("bind meshlet descriptor-buffer heap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("bind meshlet descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline is foreign or has no native pipeline layout"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("meshlet pipeline is foreign or has no native pipeline layout"));
         return;
     }
     if(m_currentMeshletState.pipeline != &pipeline){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline is not the current command-list pipeline"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("meshlet pipeline is not the current command-list pipeline"));
         return;
     }
     if(!m_renderPassActive || !m_renderPassFramebuffer || m_renderPassFramebuffer != m_currentMeshletState.framebuffer || pipeline.m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet heap binding requires the matching active render scope"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("meshlet heap binding requires the matching active render scope"));
         return;
     }
 
@@ -192,20 +192,20 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Meshle
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTracingPipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
-    constexpr TStringView s_OperationName = NWB_TEXT("bind ray-tracing descriptor-buffer heap");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("bind ray-tracing descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(&pipeline.m_context != &m_context || &pipeline.m_device != &m_device || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("ray-tracing pipeline is foreign or has no native pipeline layout"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("ray-tracing pipeline is foreign or has no native pipeline layout"));
         return;
     }
     ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
     if(!shaderTable || shaderTable->m_pipeline.get() != &pipeline){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("ray-tracing pipeline is not the current shader-table pipeline"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("ray-tracing pipeline is not the current shader-table pipeline"));
         return;
     }
     if(m_renderPassActive || m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("ray-tracing heap binding requires no active render scope"));
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("ray-tracing heap binding requires no active render scope"));
         return;
     }
 
@@ -218,8 +218,8 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    NWB_ASSERT(!m_commandRecordingFailed && exactQueueInfo && matchesActiveNativeLeaseIdentity());
-    NWB_ASSERT(pipelineBindings.pipelineLayout != VK_NULL_HANDLE);
+    FOUNDATION_ASSERT(!m_commandRecordingFailed && exactQueueInfo && matchesActiveNativeLeaseIdentity());
+    FOUNDATION_ASSERT(pipelineBindings.pipelineLayout != VK_NULL_HANDLE);
     if(
         &heap.m_device != &m_device
         || &heap.m_context != &m_context
@@ -231,7 +231,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || !m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT
         || !VulkanDetail::IsDescriptorBufferBackendReady(m_context)
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("heap, device, context, or manager is not exact"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap, device, context, or manager is not exact"));
         return;
     }
 
@@ -248,7 +248,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || abi.samplerSetIndex >= maxBoundDescriptorSets
         || abi.accelStructSetIndex >= maxBoundDescriptorSets
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits"));
         return;
     }
 
@@ -270,7 +270,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || samplerLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Sampler
         || (accelStructLayout && accelStructLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource)
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("heap layouts are unavailable, foreign, or incompatible"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap layouts are unavailable, foreign, or incompatible"));
         return;
     }
     const BindlessLayoutDesc* const resourceDesc = resourceLayout->getBindlessDesc();
@@ -288,19 +288,19 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || (accelStructDesc && accelStructDesc->maxCapacity != 1u)
         || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
         return;
     }
 
     if(!heap.retainedResourcesReadyForQueueLocked(*exactQueueInfo)){
-        rejectCommandRecording(operationName, NWB_TEXT("heap retains a resource unavailable to this exact command queue"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap retains a resource unavailable to this exact command queue"));
         return;
     }
 #if defined(NWB_DEBUG)
     // Heap writes retain only exact, ready samplers, and a retained sampler keeps its native handle.
     for(u32 slot = 0u; slot < heap.m_samplerSlots.nextFresh; ++slot){
         const Sampler* const sampler = heap.m_samplerDescriptorResources[slot].get();
-        NWB_ASSERT(!sampler || (&sampler->m_context == &m_context && sampler->m_sampler != VK_NULL_HANDLE));
+        FOUNDATION_ASSERT(!sampler || (&sampler->m_context == &m_context && sampler->m_sampler != VK_NULL_HANDLE));
     }
 #endif
 
@@ -309,7 +309,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
     const auto managerSnapshot = manager->captureBindingSnapshotLocked();
     if(!managerSnapshot || managerSnapshot->generation != heap.m_descriptorBufferGeneration){
-        rejectCommandRecording(operationName, NWB_TEXT("descriptor-buffer manager generation is unavailable or stale"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("descriptor-buffer manager generation is unavailable or stale"));
         return;
     }
 
@@ -321,7 +321,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || resourceBlock.sizeBytes != resourceLayout->m_descriptorBufferSetSizeBytes
         || samplerBlock.sizeBytes != samplerLayout->m_descriptorBufferSetSizeBytes
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("persistent heap blocks are not exact live manager allocations"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("persistent heap blocks are not exact live manager allocations"));
         return;
     }
 
@@ -338,7 +338,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
             || (slotState != GpuDescriptorHeap::SlotState::Live && slotState != GpuDescriptorHeap::SlotState::PendingRecording)
             || heap.m_accelStructSlots.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
         ){
-            rejectCommandRecording(operationName, NWB_TEXT("TLAS handle is stale, retagged, or outside the recordable heap"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("TLAS handle is stale, retagged, or outside the recordable heap"));
             return;
         }
 
@@ -352,13 +352,13 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
             || !isBufferAdmittedToCommandQueue(*backingBuffer)
             || !accelStruct->m_isTopLevelAtCreation
         ){
-            rejectCommandRecording(operationName, NWB_TEXT("TLAS block or retained top-level acceleration structure is not live"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("TLAS block or retained top-level acceleration structure is not live"));
             return;
         }
     }
 
     if((resourceBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u || (samplerBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u || (bindAccelStruct && (accelStructBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u)){
-        rejectCommandRecording(operationName, NWB_TEXT("a descriptor-buffer set block offset is misaligned"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("a descriptor-buffer set block offset is misaligned"));
         return;
     }
 
@@ -368,11 +368,11 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || (trackedCommandBuffer.m_descriptorBufferGeneration != 0u && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation)
         || (m_descriptorBuffersBound && (trackedCommandBuffer.m_descriptorBufferManager != manager || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation))
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("command buffer already references another descriptor generation"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("command buffer already references another descriptor generation"));
         return;
     }
     if(!heap.trackCommandBufferUseLocked(trackedCommandBuffer, m_creationDesc.physicalQueue)){
-        rejectCommandRecording(operationName, NWB_TEXT("descriptor-heap command-buffer use identity is exhausted"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("descriptor-heap command-buffer use identity is exhausted"));
         return;
     }
     for(u32 slot = 0u; slot < heap.m_resourceSlots.nextFresh; ++slot){

@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixIdentity()noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixIdentity()noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
     matrix.v[1] = s_SIMDIdentityR1;
@@ -21,7 +21,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixIdentity()noexcept{
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleIdentity()noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleIdentity()noexcept{
     SIMDMatrixDouble matrix{};
     matrix.v[0] = s_DoubleSIMDIdentityR0;
     matrix.v[1] = s_DoubleSIMDIdentityR1;
@@ -30,7 +30,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleIdentity()noexcept{
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03, f32 m10, f32 m11, f32 m12, f32 m13, f32 m20, f32 m21, f32 m22, f32 m23, f32 m30, f32 m31, f32 m32, f32 m33)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03, f32 m10, f32 m11, f32 m12, f32 m13, f32 m20, f32 m21, f32 m22, f32 m23, f32 m30, f32 m31, f32 m32, f32 m33)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(m00, m01, m02, m03);
     matrix.v[1] = VectorSet(m10, m11, m12, m13);
@@ -39,7 +39,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleSet(f64 m00, f64 m01, f64 m02, f64 m03, f64 m10, f64 m11, f64 m12, f64 m13, f64 m20, f64 m21, f64 m22, f64 m23, f64 m30, f64 m31, f64 m32, f64 m33)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleSet(f64 m00, f64 m01, f64 m02, f64 m03, f64 m10, f64 m11, f64 m12, f64 m13, f64 m20, f64 m21, f64 m22, f64 m23, f64 m30, f64 m31, f64 m32, f64 m33)noexcept{
     SIMDMatrixDouble matrix{};
     matrix.v[0] = VectorDoubleSet(m00, m01, m02, m03);
     matrix.v[1] = VectorDoubleSet(m10, m11, m12, m13);
@@ -48,7 +48,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleSet(f64 m00, f64 m01, f64 
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranslation(f32 offsetX, f32 offsetY, f32 offsetZ)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixTranslation(f32 offsetX, f32 offsetY, f32 offsetZ)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(1.0f, 0.0f, 0.0f, offsetX);
     matrix.v[1] = VectorSet(0.0f, 1.0f, 0.0f, offsetY);
@@ -57,7 +57,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranslation(f32 offsetX, f32 offsetY, 
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranslation(f64 offsetX, f64 offsetY, f64 offsetZ)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleTranslation(f64 offsetX, f64 offsetY, f64 offsetZ)noexcept{
     SIMDMatrixDouble matrix{};
     matrix.v[0] = VectorDoubleSet(1.0, 0.0, 0.0, offsetX);
     matrix.v[1] = VectorDoubleSet(0.0, 1.0, 0.0, offsetY);
@@ -66,7 +66,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranslation(f64 offsetX, f
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranslationFromVector(SIMDVectorDouble offset)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleTranslationFromVector(SIMDVectorDouble offset)noexcept{
     SIMDMatrixDouble matrix{};
     matrix.v[0] = VectorDoubleSelect(s_DoubleSIMDIdentityR0, VectorDoubleSplatX(offset), s_DoubleSIMDMaskW);
     matrix.v[1] = VectorDoubleSelect(s_DoubleSIMDIdentityR1, VectorDoubleSplatY(offset), s_DoubleSIMDMaskW);
@@ -75,7 +75,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranslationFromVector(SIMD
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixScaling(f32 scaleX, f32 scaleY, f32 scaleZ)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixScaling(f32 scaleX, f32 scaleY, f32 scaleZ)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(scaleX, 0.0f, 0.0f, 0.0f);
     matrix.v[1] = VectorSet(0.0f, scaleY, 0.0f, 0.0f);
@@ -84,7 +84,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixScaling(f32 scaleX, f32 scaleY, f32 sc
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleScaling(f64 scaleX, f64 scaleY, f64 scaleZ)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleScaling(f64 scaleX, f64 scaleY, f64 scaleZ)noexcept{
     SIMDMatrixDouble matrix{};
     matrix.v[0] = VectorDoubleSet(scaleX, 0.0, 0.0, 0.0);
     matrix.v[1] = VectorDoubleSet(0.0, scaleY, 0.0, 0.0);
@@ -97,7 +97,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleScaling(f64 scaleX, f64 sc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationX(f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleRotationX(f64 angle)noexcept{
     SIMDVectorDouble sinAngle{};
     SIMDVectorDouble cosAngle{};
     VectorDoubleSinCos(sinAngle, cosAngle, VectorDoubleReplicate(angle));
@@ -110,7 +110,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationX(f64 angle)noexce
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationY(f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleRotationY(f64 angle)noexcept{
     SIMDVectorDouble sinAngle{};
     SIMDVectorDouble cosAngle{};
     VectorDoubleSinCos(sinAngle, cosAngle, VectorDoubleReplicate(angle));
@@ -123,7 +123,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationY(f64 angle)noexce
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationZ(f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleRotationZ(f64 angle)noexcept{
     SIMDVectorDouble sinAngle{};
     SIMDVectorDouble cosAngle{};
     VectorDoubleSinCos(sinAngle, cosAngle, VectorDoubleReplicate(angle));
@@ -136,7 +136,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationZ(f64 angle)noexce
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationQuaternion(SIMDVectorSingle quaternion)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixRotationQuaternion(SIMDVectorSingle quaternion)noexcept{
     quaternion = QuaternionConjugate(quaternion);
 
     const SIMDVectorSingle q0 = VectorAdd(quaternion, quaternion);
@@ -171,7 +171,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationQuaternion(SIMDVectorSingle qu
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationQuaternion(SIMDVectorDouble quaternion)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleRotationQuaternion(SIMDVectorDouble quaternion)noexcept{
     quaternion = QuaternionDoubleConjugate(quaternion);
 
     const SIMDVectorDouble q0 = VectorDoubleAdd(quaternion, quaternion);
@@ -206,11 +206,11 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleRotationQuaternion(SIMDVec
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationRollPitchYawFromVector(SIMDVectorSingle angles)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixRotationRollPitchYawFromVector(SIMDVectorSingle angles)noexcept{
     return MatrixRotationQuaternion(QuaternionRotationRollPitchYawFromVector(angles));
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
     return MatrixRotationRollPitchYawFromVector(VectorSet(pitch, yaw, roll, 0.0f));
 }
 
@@ -218,7 +218,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixRotationRollPitchYaw(f32 pitch, f32 ya
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixAffineTransformation(SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixAffineTransformation(SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation)noexcept{
     // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVectorSingle origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
     const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
@@ -232,7 +232,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixAffineTransformation(SIMDVectorSingle 
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleAffineTransformation(SIMDVectorDouble scaling, SIMDVectorDouble rotationOrigin, SIMDVectorDouble rotationQuaternion, SIMDVectorDouble translation)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleAffineTransformation(SIMDVectorDouble scaling, SIMDVectorDouble rotationOrigin, SIMDVectorDouble rotationQuaternion, SIMDVectorDouble translation)noexcept{
     // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVectorDouble origin = VectorDoubleSelect(VectorDoubleZero(), rotationOrigin, s_DoubleSIMDSelect1110);
     const SIMDMatrixDouble rotation = MatrixDoubleRotationQuaternion(rotationQuaternion);

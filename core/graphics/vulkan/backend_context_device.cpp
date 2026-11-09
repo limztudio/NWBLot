@@ -63,19 +63,19 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     uint32_t extCount = 0;
     res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
         return false;
     }
     Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
     res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
         return false;
     }
 
     const b8 swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     for(const auto& ext : deviceExtensions){
-        const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
+        const AStringView name(ext.extensionName, FOUNDATION_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
         b8 enableExtension = false;
         DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
 
@@ -109,7 +109,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     VkPhysicalDeviceProperties physicalDeviceProperties;
     m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
-    const AStringView deviceName(physicalDeviceProperties.deviceName, NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
+    const AStringView deviceName(physicalDeviceProperties.deviceName, FOUNDATION_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
     m_rendererString = ConvertString(m_arena, deviceName);
 
     const b8 apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
@@ -123,7 +123,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     // Configure process-global NVIDIA Aftermath before device creation.
     const b8 aftermathActive = aftermathRequested && Aftermath::Initialize();
     if(aftermathRequested && !aftermathActive)
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
+        NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
 
     m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
@@ -139,7 +139,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
     VulkanDetail::PhysicalDeviceCapabilities::QueryFeatureSupport(m_instanceDispatch, m_vulkanPhysicalDevice, featureQueryOptions, featureSupport);
     if(const AStringView missingFeature = VulkanDetail::PhysicalDeviceCapabilities::FindMissingFeature(featureSupport); !missingFeature.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), ConvertString(missingFeature));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), ConvertString(missingFeature));
         return false;
     }
 
@@ -193,10 +193,10 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     for(const auto& name : unsupportedFeatureExtensions){
         const auto extensionIt = m_enabledExtensions.device.find(AStringView(name));
         if(extensionIt != m_enabledExtensions.device.end() && extensionIt.value() == DeviceExtensionFeature::DescriptorBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), ConvertString(name));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), ConvertString(name));
             return false;
         }
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), ConvertString(name));
+        NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), ConvertString(name));
         m_enabledExtensions.device.erase(AStringView(name));
     }
 
@@ -204,7 +204,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         constexpr AStringView s_SamplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
         const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(s_SamplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), ConvertString(s_SamplerFilterMinmaxExtensionName));
+            NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), ConvertString(s_SamplerFilterMinmaxExtensionName));
             m_enabledExtensions.device.erase(s_SamplerFilterMinmaxExtensionName);
         }
     }
@@ -213,7 +213,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         constexpr AStringView s_MeshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
         const auto meshShaderIt = m_enabledExtensions.device.find(s_MeshShaderExtensionName);
         if(meshShaderIt != m_enabledExtensions.device.end() && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so native mesh-shader support is not reported.")
+            NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so native mesh-shader support is not reported.")
                 , ConvertString(s_MeshShaderExtensionName)
                 , ConvertString(physicalDeviceProperties.deviceName)
             );
@@ -429,7 +429,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
     res = m_instanceDispatch.vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
         return false;
     }
 
@@ -445,7 +445,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
             VkQueue queue = VK_NULL_HANDLE;
             m_deviceDispatch.vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);
             if(queue == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Created native queue could not be retrieved."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Created native queue could not be retrieved."));
                 return false;
             }
             m_nativeQueues.push_back(VulkanNativeQueueDesc{ .queue = queue, .familyIndex = queueInfo.queueFamilyIndex, .queueIndex = nativeQueueOffset, });
@@ -466,20 +466,20 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         || (createComputeQueue && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max)
         || (createDedicatedTransferQueue && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) == Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
         return false;
     }
     if(!m_deviceParams.headlessDevice){
         m_presentNativeQueueIndex = findNativeQueueIndex(static_cast<u32>(m_presentQueueFamily), s_PresentQueueIndex);
         if(m_presentNativeQueueIndex == Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
             return false;
         }
     }
 
-    const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily)noexcept(!NWB_OCCUR_ASSERT){
+    const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily)noexcept(!FOUNDATION_OCCUR_ASSERT){
         if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return GpuQueueCapability::None;
         }
         return VulkanDetail::QueueCapabilitiesForQueueFlags(physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags);
@@ -491,7 +491,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
             const u32 nativeQueueIndex = findNativeQueueIndex(static_cast<u32>(request.family), request.queueIndex);
             if(nativeQueueIndex == Limit<u32>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
                 return false;
             }
 

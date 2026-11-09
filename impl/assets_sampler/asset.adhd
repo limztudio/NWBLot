@@ -25,8 +25,8 @@ namespace SamplerBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_SamplerAssetKindLabel = NWB_TEXT("sampler");
-inline constexpr TStringView s_SamplerLoadBinaryContext = NWB_TEXT("Sampler::loadBinary");
+inline constexpr TStringView s_SamplerAssetKindLabel = FOUNDATION_TEXT("sampler");
+inline constexpr TStringView s_SamplerLoadBinaryContext = FOUNDATION_TEXT("Sampler::loadBinary");
 
 static_assert(sizeof(SamplerBinaryHeader) == s_SamplerHeaderBinaryByteSize, "Sampler header layout drifted");
 static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sampler header must stay packed");

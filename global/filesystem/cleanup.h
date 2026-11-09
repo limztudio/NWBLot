@@ -8,7 +8,7 @@
 #include "operations.h"
 #include "../not_null.h"
 
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <fcntl.h>
 #include <limits.h>
 #endif
@@ -43,7 +43,7 @@ template<typename CharT>
     return !leaf.empty() && !IsDot(leaf) && !IsDotDot(leaf);
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr usize s_PathCapacity = 32768u;
 inline constexpr usize s_DevicePrefixLength = 4u;
 inline constexpr usize s_UncPrefixLength = 2u;
@@ -248,7 +248,7 @@ template<typename ArenaT>
     if(text.empty())
         return {};
     const usize namedEnd = GlobalFilesystemCleanupDetail::NamedPathEnd(text);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(text.find(L'\0') != decltype(text)::npos || !GlobalFilesystemCleanupDetail::HasNamedLeaf(text, namedEnd) || namedEnd <= GlobalFilesystemCleanupDetail::WindowsRootLength(text))
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_INVALID_NAME));
     Array<wchar, GlobalFilesystemCleanupDetail::s_PathCapacity> buffer = {};

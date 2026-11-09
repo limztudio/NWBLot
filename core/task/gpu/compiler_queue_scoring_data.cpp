@@ -173,7 +173,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const
     if(assignedCostWords.empty()){
         for(GpuTaskQueueLoad& load : assignedQueueLoads){
             if(load.queue == previousQueue){
-                NWB_ASSERT(load.estimatedCost >= cost);
+                FOUNDATION_ASSERT(load.estimatedCost >= cost);
                 load.estimatedCost -= cost;
             }
             if(load.queue == selectedQueue)
@@ -188,7 +188,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const
         GpuTaskQueueLoad& load = assignedQueueLoads[queueIndex];
         u64& word = assignedCostWords[(queueIndex + 1u) * wordsPerQueue + wordIndex];
         if(load.queue == previousQueue){
-            NWB_ASSERT(load.estimatedCost >= cost);
+            FOUNDATION_ASSERT(load.estimatedCost >= cost);
             load.estimatedCost -= cost;
             word &= ~mask;
         }
@@ -214,7 +214,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
 #if defined(NWB_DEBUG)
     for(const GpuTaskQueueAssignment& member : members){
         const GpuTaskId task = member.task;
-        NWB_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
+        FOUNDATION_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
     }
 #endif
     usize queueIndex = 0u;
@@ -232,7 +232,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
         }
         return independentCost;
     }
-    NWB_ASSERT(costWordsPerGroup == reachability.m_wordsPerRow);
+    FOUNDATION_ASSERT(costWordsPerGroup == reachability.m_wordsPerRow);
     usize firstWord = costWordsPerGroup;
     usize lastWord = 0u;
     for(const GpuTaskQueueAssignment& member : members){

@@ -99,7 +99,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const usize ignoredAssignmentOffset = exclusions.assignmentOffset;
     const usize ignoredAssignmentCount = exclusions.assignmentCount;
     const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
-    NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
+    FOUNDATION_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
     u64 queueLoad = assignedQueueCost - exclusions.candidateQueueCost;
     const u32 taskAssignmentIndex = assignmentIndicesByTask[task.id.index];
     const b8 taskExcluded = taskAssignmentIndex >= ignoredAssignmentOffset && taskAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount;

@@ -83,7 +83,7 @@ b8 Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 
     LogBytes upload(BaseType::arena());
     upload.resize(byteCount);
-    NWB_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
+    FOUNDATION_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
     m_telemetryQueue.emplace(Move(upload));
     m_telemetryCount.fetch_add(1u, MemoryOrder::relaxed);
     this->m_semaphore.release();
@@ -122,16 +122,16 @@ b8 Client::internalUpdate(){
                 if(Get<2>(msg).size() > s_MaxMessageTextUnits){
                     CaptureDiagnosticEvent("logger_client_payload", "Message exceeded the server upload limit", __FILE__, __LINE__);
                     m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
-                    NWB_CERR << "[ERROR] Log client: message exceeded the server upload limit.\n";
-                    msg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena()));
+                    FOUNDATION_CERR << "[ERROR] Log client: message exceeded the server upload limit.\n";
+                    msg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(FOUNDATION_TEXT("Logger client dropped an oversized message"), BaseType::arena()));
                 }
                 const auto builtPayload = MessagePayloadCodec::Build(msg, m_pendingPayload);
                 if(!builtPayload){
                     const DiagnosticEventText detail = MakeDiagnosticEventText("Message payload admission failed: domain=MessagePayloadError code={}", builtPayload.error());
                     CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);
                     m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
-                    NWB_CERR << "[ERROR] Log client: message payload could not be encoded.\n";
-                    const MessageType fallbackMsg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an invalid message payload"), BaseType::arena()));
+                    FOUNDATION_CERR << "[ERROR] Log client: message payload could not be encoded.\n";
+                    const MessageType fallbackMsg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(FOUNDATION_TEXT("Logger client dropped an invalid message payload"), BaseType::arena()));
                     if(!MessagePayloadCodec::Build(fallbackMsg, m_pendingPayload))
                         return true;
                 }
@@ -149,7 +149,7 @@ b8 Client::internalUpdate(){
     auto scheduleRetry = [this](){
         const auto reportUnsent = [this](){
             CaptureDiagnosticEvent("logger_client_delivery", "Logger stopped with an unsent payload", __FILE__, __LINE__);
-            NWB_CERR << "[ERROR] Log client: stopped with an unsent payload and "
+            FOUNDATION_CERR << "[ERROR] Log client: stopped with an unsent payload and "
                      << m_messageCount.load(MemoryOrder::relaxed) << " queued messages and "
                      << m_telemetryCount.load(MemoryOrder::relaxed) << " queued telemetry streams.\n";
             return false;
@@ -172,7 +172,7 @@ b8 Client::internalUpdate(){
         if(m_lastCurlFailureCode != static_cast<i32>(code)){
             const DiagnosticEventText detail = MakeDiagnosticEventText("Logger {} failed: curl code={} detail={}", operation, static_cast<i32>(code), curl_easy_strerror(code));
             CaptureDiagnosticEvent("logger_client_delivery", detail.view(), __FILE__, __LINE__);
-            NWB_CERR << "[ERROR] Log client: " << operation << " failed: " << curl_easy_strerror(code) << ".\n";
+            FOUNDATION_CERR << "[ERROR] Log client: " << operation << " failed: " << curl_easy_strerror(code) << ".\n";
             m_lastCurlFailureCode = static_cast<i32>(code);
         }
         return scheduleRetry();
@@ -181,7 +181,7 @@ b8 Client::internalUpdate(){
     if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
         CaptureDiagnosticEvent("logger_client_payload", "Payload exceeds curl's size limit", __FILE__, __LINE__);
         m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
-        NWB_CERR << "[ERROR] Log client: payload exceeds the transport size limit.\n";
+        FOUNDATION_CERR << "[ERROR] Log client: payload exceeds the transport size limit.\n";
         m_pendingPayload.clear();
         m_hasPendingPayload = false;
         m_pendingPayloadKind = ClientPayloadKind::Message;
@@ -200,13 +200,13 @@ b8 Client::internalUpdate(){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Server rejected a logger payload with HTTP status {}", responseCode);
         CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);
         m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
-        NWB_CERR << "[ERROR] Log client: server rejected a payload with HTTP status " << responseCode << ".\n";
+        FOUNDATION_CERR << "[ERROR] Log client: server rejected a payload with HTTP status " << responseCode << ".\n";
     }
     else if(responseCode < __hidden_logger_client::s_HttpSuccessRangeMin || responseCode >= __hidden_logger_client::s_HttpSuccessRangeMax){
         if(m_lastHttpFailureStatus != responseCode){
             const DiagnosticEventText detail = MakeDiagnosticEventText("Logger delivery is waiting after HTTP status {}", responseCode);
             CaptureDiagnosticEvent("logger_client_delivery", detail.view(), __FILE__, __LINE__);
-            NWB_CERR << "[ERROR] Log client: delivery is waiting after HTTP status " << responseCode << ".\n";
+            FOUNDATION_CERR << "[ERROR] Log client: delivery is waiting after HTTP status " << responseCode << ".\n";
             m_lastHttpFailureStatus = responseCode;
         }
         return scheduleRetry();
@@ -259,10 +259,10 @@ b8 ClientStandalone::internalUpdate(){
     while(tryDequeue(msg)){
         const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
 
-        auto& stream = MessageTypeWritesToErrorStream(Get<1>(msg)) ? NWB_TCERR : NWB_TCOUT;
+        auto& stream = MessageTypeWritesToErrorStream(Get<1>(msg)) ? FOUNDATION_TCERR : FOUNDATION_TCOUT;
         stream << formattedMessage << static_cast<tchar>('\n');
         if(!m_processedMessageFile.writeLine(formattedMessage))
-            NWB_TCERR << NWB_TEXT("[ERROR] Log client: failed to write processed message to file.\n");
+            FOUNDATION_TCERR << FOUNDATION_TEXT("[ERROR] Log client: failed to write processed message to file.\n");
     }
 
     return true;

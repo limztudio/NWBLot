@@ -654,7 +654,7 @@ TEST(WaylandTextInputState, RingEvictionStillAdmitsDelayedCommitButMarksDeletion
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 #include <core/os/win32/text_input.h>
 #include <core/os/win32/text_input_context.h>
@@ -888,8 +888,8 @@ TEST_F(Win32TextInputFixture, IsolatedLowSurrogateCancelsWithExplicitFailure){
     EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
     EXPECT_EQ(event.cancelReason, TextInputCancelReason::NativeFailure);
     EXPECT_TRUE(event.text.empty());
-#if NWB_OCCUR_WARNING
-    EXPECT_TRUE(m_logger.sawMessageContaining(NWB_TEXT("Text input: native delivery rejected")));
+#if FOUNDATION_OCCUR_WARNING
+    EXPECT_TRUE(m_logger.sawMessageContaining(FOUNDATION_TEXT("Text input: native delivery rejected")));
     EXPECT_EQ(m_logger.lastType(), Common::LogType::Warning);
 #endif
 }
@@ -1226,7 +1226,7 @@ TEST_F(Win32TextInputFixture, UnfocusedSceneFallbackRefusesLateWindowCharacterAn
 #endif
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 #include <core/os/linux/pipe_io.h>
 
@@ -1412,7 +1412,7 @@ TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){
 #endif
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 // Include gtest before X11 headers because X11 defines None as a macro.
 #include <tests/common/test_context.adhd.h>

@@ -77,10 +77,10 @@ public:
     virtual void reserveFileCapacity(usize fileCount)override;
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
-    virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING)override;
+    virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING)override;
     virtual b8 removeFile(const Name& virtualPath)override;
     virtual b8 fileExists(const Name& virtualPath)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING)override;
+    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING)override;
     b8 compact(b8 shrinkSegments = true);
 
 
@@ -95,8 +95,8 @@ private:
     b8 loadMetadataLocked(Alloc::ScratchArena& scratchArena);
     b8 flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name& excludedPath = s_NameNone);
     b8 canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
-    [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING);
-    Expected<u64, ErrorCode> computePhysicalCapacityLocked()const noexcept(!NWB_OCCUR_WARNING);
+    [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING);
+    Expected<u64, ErrorCode> computePhysicalCapacityLocked()const noexcept(!FOUNDATION_OCCUR_WARNING);
 
     b8 readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     b8 writeBytesLocked(u64 offset, const void* data, u64 byteCount);

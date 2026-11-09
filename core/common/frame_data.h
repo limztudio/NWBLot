@@ -7,7 +7,7 @@
 
 #include "global.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -25,11 +25,11 @@ struct FrameParam{
     u16 width = 0u;
     u16 height = 0u;
     b8 active = false;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     HINSTANCE instance = nullptr;
     HWND window = nullptr;
     ATOM windowClass = 0u;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     u8 backend = 0u;
     void* nativeDisplay = nullptr;
     u64 nativeWindowHandle = 0u;
@@ -58,7 +58,7 @@ public:
 protected:
     FrameParam m_data{};
 };
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 class WinFrame : public FrameData{
 public:
     inline b8 isActive()const noexcept{ return m_data.active; }
@@ -77,7 +77,7 @@ public:
 
     inline void setWindowClass(ATOM value)noexcept{ m_data.windowClass = value; }
 };
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
     static constexpr u8 s_LinuxFrameBackendNoneBase = 0;
     enum Enum : u8{

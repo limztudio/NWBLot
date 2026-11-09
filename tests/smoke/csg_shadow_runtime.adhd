@@ -30,7 +30,7 @@ namespace __hidden_csg_shadow_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProjectImpl");
+constexpr TStringView s_ProjectName = FOUNDATION_TEXT("CsgShadowSmokeProjectImpl");
 
 using NWB::Tests::Smoke::s_ShadowSmokeDirectional;
 using NWB::Tests::Smoke::s_ShadowSmokePoint;
@@ -65,11 +65,11 @@ private:
         auto& renderer = AddSmokeRenderSystems(*world, context);
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid CSG shadow reflection settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid CSG shadow reflection settings"));
         renderer.setRefractionEnabled(false);
         NWB::Impl::PresentationSettings presentation;
         presentation.toneMap = NWB::Impl::PresentationToneMap::LinearClamp;
-        NWB_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), NWB_TEXT("Invalid CSG shadow presentation settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), FOUNDATION_TEXT("Invalid CSG shadow presentation settings"));
         return world;
     }
 
@@ -93,28 +93,28 @@ public:
         if(!m_mode.read(s_Caustic))
             return false;
         const auto camera = CreateSmokeCamera(0.0f, -s_CameraDepth, 0.0f, *m_world);
-        NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera creation failed"));
+        FOUNDATION_FATAL_ASSERT_MSG(camera.valid(), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: camera creation failed"));
         auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
         const f32 cameraX = m_mode.arm == Arm::CameraShift ? 0.3f : 0.0f;
         cameraTransform.position.x = cameraX;
         const auto receiver = CreateTintedStaticMeshEntity(s_PlaneMesh, s_OpaqueMaterial, s_CsgShadowMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f), *m_world);
-        NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera/receiver creation failed"));
+        FOUNDATION_FATAL_ASSERT_MSG(receiver.valid(), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: camera/receiver creation failed"));
         auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
         const auto light = m_mode.pointLight
             ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
             : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: light creation failed"));
+        FOUNDATION_FATAL_ASSERT_MSG(light.valid(), FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: light creation failed"));
         auto& lightComponent = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light));
         lightComponent.angularRadius = m_mode.finiteLightSource && !m_mode.pointLight ? 0.005f : 0.0f;
         lightComponent.sourceRadius = m_mode.finiteLightSource && m_mode.pointLight ? 0.02f : 0.0f;
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
         lightComponent.enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? FOUNDATION_TEXT("enabled") : FOUNDATION_TEXT("disabled"));
 #else
         lightComponent.enableCaustics = false;
 #endif
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: light_source={} angular_radius={:.3f} source_radius={:.3f}")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: light_source={} angular_radius={:.3f} source_radius={:.3f}")
             , ConvertString(m_mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard)
             , static_cast<f64>(lightComponent.angularRadius)
             , static_cast<f64>(lightComponent.sourceRadius)
@@ -122,7 +122,7 @@ public:
         if(!m_atlas.create())
             return false;
         const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_mode.arm)
             , ConvertString(m_mode.pointLight ? s_ShadowSmokePoint : s_ShadowSmokeDirectional)
             , hardware ? 1u : 0u
@@ -147,7 +147,7 @@ public:
             m_timing->finish();
 #endif
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: shutdown"));
     }
 
     virtual b8 onUpdate(const f32 delta)override{
@@ -156,7 +156,7 @@ public:
         ++m_update;
         if(m_mode.arm == Arm::Moved && m_update == s_MoveUpdate){
             m_atlas.moveCutters();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProjectImpl: cutters moved at update40"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgShadowSmokeProjectImpl: cutters moved at update40"));
         }
         const f32 fixedDelta = RendererBaselineFixedDelta();
         if(!TickSmokeWorld(fixedDelta > 0.0f ? fixedDelta : delta, *m_world))
@@ -179,7 +179,7 @@ private:
         const auto start = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_START_FILE");
         if(!mode){
             if(output || cpuOutput || start){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: mode and explicit output must agree"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: mode and explicit output must agree"));
                 return false;
             }
             return true;
@@ -191,29 +191,29 @@ private:
             (modeView != "performance" && modeView != "diagnostic") || (routeView != "hardware" && routeView != "software") || !output || !start || m_capture || !m_context.requestQuit
             || (m_mode.arm != Arm::Reference && m_mode.arm != Arm::Cut) || m_mode.pointLight || m_mode.finiteLightSource || m_mode.analyticAtlas || m_mode.openAtlas || ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED")
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: requires uncaptured directional hard-light reference/cut boxes and an explicit route"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: requires uncaptured directional hard-light reference/cut boxes and an explicit route"));
             return false;
         }
         const b8 rayTracing = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         const b8 rayQuery = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         const b8 hardware = rayTracing && rayQuery;
         if(routeView == "hardware" && !hardware){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: hardware unavailable rt_accel={} ray_query={}"), rayTracing ? 1u : 0u, rayQuery ? 1u : 0u);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: hardware unavailable rt_accel={} ray_query={}"), rayTracing ? 1u : 0u, rayQuery ? 1u : 0u);
             m_context.requestQuit();
             return true;
         }
         if((routeView == "hardware") != hardware){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: actual route differs from requested acquisition"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: actual route differs from requested acquisition"));
             return false;
         }
         const usize receivers = m_world->view<NWB::Impl::StaticCsgMeshComponent>().candidateCount() + m_world->view<NWB::Impl::SkinnedCsgMeshComponent>().candidateCount();
         const usize cutters = m_world->view<NWB::Impl::CsgCutterComponent>().candidateCount();
         if(receivers != (m_mode.arm == Arm::Cut ? 1u : 0u) || cutters != receivers){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: fixture receiver/cutter identity differs from selected arm"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgCausticTiming: fixture receiver/cutter identity differs from selected arm"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: scene arm={} receivers={} cutters={} expected_shader_csg={} camera=960x720 light=directional capture=0")
-            , m_mode.arm == Arm::Cut ? NWB_TEXT("cut") : NWB_TEXT("reference")
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgCausticTiming: scene arm={} receivers={} cutters={} expected_shader_csg={} camera=960x720 light=directional capture=0")
+            , m_mode.arm == Arm::Cut ? FOUNDATION_TEXT("cut") : FOUNDATION_TEXT("reference")
             , receivers
             , cutters
             , receivers != 0u ? 1u : 0u
@@ -271,7 +271,7 @@ namespace NWB::Tests::Smoke{ using CsgShadowSmokeProjectImpl = __hidden_csg_shad
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return FOUNDATION_TEXT("NWB CSG Shadow Smoke"); }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::CsgShadowSmokeProjectImpl>(context);

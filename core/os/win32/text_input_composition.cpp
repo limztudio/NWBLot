@@ -98,7 +98,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInpu
         return TextInputAdmission::Accepted;
     }();
     if(!release.release())
-        NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: ImmReleaseContext failed"));
     return admission;
 }
 

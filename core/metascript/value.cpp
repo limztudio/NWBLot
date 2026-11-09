@@ -28,11 +28,11 @@ template<typename IntOverflowCheck, typename IntOp, typename FloatOp>
 void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, FloatOp&& floatOp, [[maybe_unused]] const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
     if(lhs.isInteger() && rhs.isInteger()){
         if(rejectZeroDivisor && rhs.asInteger() == 0){
-            NWB_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
             return;
         }
         if(overflows(lhs.asInteger(), rhs.asInteger())){
-            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return;
         }
         target.setInteger(intOp(lhs.asInteger(), rhs.asInteger()));
@@ -41,14 +41,14 @@ void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOv
 
     if(lhs.isNumeric() && rhs.isNumeric()){
         if(rejectZeroDivisor && rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
             return;
         }
         target.setDouble(floatOp(lhs.toDouble(), rhs.toDouble()));
         return;
     }
 
-    NWB_ASSERT_MSG(false, invalidOpMessage);
+    FOUNDATION_ASSERT_MSG(false, invalidOpMessage);
 }
 
 
@@ -131,7 +131,7 @@ Value& Value::operator=(Value&& other){
 Value Value::operator+(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return Value(m_arena);
         }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
@@ -144,7 +144,7 @@ Value Value::operator+(const Value& rhs)const{
         const auto lsv = asString();
         const auto rsv = rhs.asString();
         if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
-            NWB_ASSERT_MSG(false, OperationValidator::s_StringConcatenationSizeOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_StringConcatenationSizeOverflowText);
             return Value(m_arena);
         }
 
@@ -166,7 +166,7 @@ Value Value::operator+(const Value& rhs)const{
         v.makeList();
         auto& dst = *v.m_data.m_list;
         if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
-            NWB_ASSERT_MSG(false, OperationValidator::s_ListConcatenationSizeOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_ListConcatenationSizeOverflowText);
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
@@ -175,7 +175,7 @@ Value Value::operator+(const Value& rhs)const{
         return v;
     }
 
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator+"));
+    FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("invalid operand types for operator+"));
     return Value(m_arena);
 }
 
@@ -188,7 +188,7 @@ Value Value::operator-(const Value& rhs)const noexcept{
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
         [](const f64 a, const f64 b)noexcept{ return a - b; },
-        NWB_TEXT("invalid operand types for operator-")
+        FOUNDATION_TEXT("invalid operand types for operator-")
     );
     return out;
 }
@@ -202,7 +202,7 @@ Value Value::operator*(const Value& rhs)const noexcept{
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
         [](const f64 a, const f64 b)noexcept{ return a * b; },
-        NWB_TEXT("invalid operand types for operator*")
+        FOUNDATION_TEXT("invalid operand types for operator*")
     );
     return out;
 }
@@ -216,7 +216,7 @@ Value Value::operator/(const Value& rhs)const noexcept{
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
         [](const f64 a, const f64 b)noexcept{ return a / b; },
-        NWB_TEXT("invalid operand types for operator/"),
+        FOUNDATION_TEXT("invalid operand types for operator/"),
         true
     );
     return out;
@@ -225,7 +225,7 @@ Value Value::operator/(const Value& rhs)const noexcept{
 Value& Value::operator+=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return *this;
         }
         m_data.m_integer += rhs.m_data.m_integer;
@@ -239,7 +239,7 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
-            NWB_ASSERT_MSG(false, OperationValidator::s_StringAppendSizeOverflowText);
+            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_StringAppendSizeOverflowText);
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
@@ -253,7 +253,7 @@ Value& Value::operator+=(const Value& rhs){
             // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
-                NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
+                FOUNDATION_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
                 return *this;
             }
             const usize appendCount = sourceList.size();
@@ -263,7 +263,7 @@ Value& Value::operator+=(const Value& rhs){
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
-                NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
+                FOUNDATION_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
@@ -275,7 +275,7 @@ Value& Value::operator+=(const Value& rhs){
         return *this;
     }
 
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator+="));
+    FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("invalid operand types for operator+="));
     return *this;
 }
 
@@ -287,7 +287,7 @@ Value& Value::operator-=(const Value& rhs)noexcept{
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
         [](const f64 a, const f64 b)noexcept{ return a - b; },
-        NWB_TEXT("invalid operand types for operator-=")
+        FOUNDATION_TEXT("invalid operand types for operator-=")
     );
     return *this;
 }
@@ -300,7 +300,7 @@ Value& Value::operator*=(const Value& rhs)noexcept{
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
         [](const f64 a, const f64 b)noexcept{ return a * b; },
-        NWB_TEXT("invalid operand types for operator*=")
+        FOUNDATION_TEXT("invalid operand types for operator*=")
     );
     return *this;
 }
@@ -313,7 +313,7 @@ Value& Value::operator/=(const Value& rhs)noexcept{
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
         [](const f64 a, const f64 b)noexcept{ return a / b; },
-        NWB_TEXT("invalid operand types for operator/="),
+        FOUNDATION_TEXT("invalid operand types for operator/="),
         true
     );
     return *this;
@@ -324,49 +324,49 @@ Value& Value::operator/=(const Value& rhs)noexcept{
 
 
 i64 Value::asInteger()const noexcept{
-    NWB_ASSERT(m_type == ValueType::Integer);
+    FOUNDATION_ASSERT(m_type == ValueType::Integer);
     return m_data.m_integer;
 }
 
 f64 Value::asDouble()const noexcept{
-    NWB_ASSERT(m_type == ValueType::Double);
+    FOUNDATION_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
 f64 Value::toDouble()const noexcept{
     if(m_type == ValueType::Integer)
         return static_cast<f64>(m_data.m_integer);
-    NWB_ASSERT(m_type == ValueType::Double);
+    FOUNDATION_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
 MStringView Value::asString()const noexcept{
-    NWB_ASSERT(m_type == ValueType::String);
+    FOUNDATION_ASSERT(m_type == ValueType::String);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
 MStringView Value::asReference()const noexcept{
-    NWB_ASSERT(m_type == ValueType::Reference);
+    FOUNDATION_ASSERT(m_type == ValueType::Reference);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
 const Value::ListType& Value::asList()const noexcept{
-    NWB_ASSERT(m_type == ValueType::List);
+    FOUNDATION_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
 Value::ListType& Value::asList()noexcept{
-    NWB_ASSERT(m_type == ValueType::List);
+    FOUNDATION_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
 const Value::MapType& Value::asMap()const noexcept{
-    NWB_ASSERT(m_type == ValueType::Map);
+    FOUNDATION_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
 Value::MapType& Value::asMap()noexcept{
-    NWB_ASSERT(m_type == ValueType::Map);
+    FOUNDATION_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
@@ -399,7 +399,7 @@ void Value::makeMap(){
 Value& Value::field(MStringView name){
     if(m_type == ValueType::Null)
         makeMap();
-    NWB_ASSERT(m_type == ValueType::Map);
+    FOUNDATION_ASSERT(m_type == ValueType::Map);
 
     const auto it = m_data.m_map->find(name);
     if(it != m_data.m_map->end())
@@ -408,14 +408,14 @@ Value& Value::field(MStringView name){
     StringType key(name.data(), name.size(), m_arena);
     const auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
     if(!result.second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return result.first.value();
     }
     return result.first.value();
 }
 
 const Value* Value::findField(MStringView name)const noexcept{
-    NWB_ASSERT(m_type == ValueType::Map);
+    FOUNDATION_ASSERT(m_type == ValueType::Map);
 
     const auto it = m_data.m_map->find(name);
     if(it == m_data.m_map->end())
@@ -431,11 +431,11 @@ void Value::append(Value&& val){
 
     if(m_type == ValueType::Null)
         makeList();
-    NWB_ASSERT(m_type == ValueType::List);
+    FOUNDATION_ASSERT(m_type == ValueType::List);
 
     const usize listSize = m_data.m_list->size();
     if(listSize == Limit<usize>::s_Max){
-        NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
+        FOUNDATION_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
         return;
     }
 
@@ -524,7 +524,7 @@ void Value::copyFrom(const Value& other){
         for(const auto& [k, v] : *other.m_data.m_map){
             const auto result = candidate.m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
             if(!result.second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 continue;
             }
             result.first.value().copyFrom(v);
@@ -539,7 +539,7 @@ void Value::copyFrom(const Value& other){
 }
 
 void Value::moveFrom(Value&& other)noexcept{
-    NWB_ASSERT(&m_arena == &other.m_arena);
+    FOUNDATION_ASSERT(&m_arena == &other.m_arena);
 
     m_type = other.m_type;
     m_data = other.m_data;
@@ -549,7 +549,7 @@ void Value::moveFrom(Value&& other)noexcept{
 }
 
 void Value::appendListCopy(const Value& val){
-    NWB_ASSERT(m_type == ValueType::List);
+    FOUNDATION_ASSERT(m_type == ValueType::List);
     Value candidate(m_arena);
     candidate.copyFrom(val);
     m_data.m_list->push_back(Move(candidate));

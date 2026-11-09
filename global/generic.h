@@ -43,7 +43,7 @@ inline T checked_cast(U u)noexcept(IsPointer_V<T> && IsPointer_V<U>){
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);
-    NWB_ASSERT(t);
+    FOUNDATION_ASSERT(t);
     return t;
 }
 

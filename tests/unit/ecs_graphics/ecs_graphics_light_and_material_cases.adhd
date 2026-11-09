@@ -335,7 +335,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
         instance.meshletPositionRefDeltas,
         instance.meshletAttributeRefDeltas
     );
-    NWB_FATAL_ASSERT(meshletRefsEncoded);
+    FOUNDATION_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 
@@ -410,9 +410,9 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(scaledDualQuaternionJoint, joints.joints, joints.skinningMode, jointMatrices));
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("failed dual-quaternion payload build")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(FOUNDATION_TEXT("joint palette count")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(FOUNDATION_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(FOUNDATION_TEXT("failed dual-quaternion payload build")));
 }
 #endif
 
@@ -1539,7 +1539,7 @@ TEST(MaterialInstanceOverrideApplierTests, RejectsTruncatedStorageWithoutWriting
     for(const u8 value : bytes)
         EXPECT_EQ(value, 0xABu);
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("exceeds mutable storage")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("exceeds mutable storage")));
 
     Span<u8> exact(bytes.data(), bytes.size());
     ASSERT_TRUE(applier.apply(1u, Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsOverrideMaterial), interfaceName, blocks, fields, instance, exact));
@@ -1620,7 +1620,7 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
         EXPECT_TRUE(key.materialName == material || key.materialName == otherMaterial);
         ASSERT_EQ(range.byteCount, sizeof(s_Constants));
         ASSERT_LE(range.byteOffset + range.byteCount, uploadBytes.size());
-        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, s_Constants.data(), sizeof(s_Constants)), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(uploadBytes.data() + range.byteOffset, s_Constants.data(), sizeof(s_Constants)), 0);
     }
 }
 
@@ -1735,7 +1735,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
     ASSERT_GT(uploadBytes.capacity(), initialCapacity);
     ASSERT_EQ(appendedRange.byteCount, expectedBytes.size());
     ASSERT_EQ(uploadBytes.size(), expectedBytes.size() * 2u);
-    EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + appendedRange.byteOffset, expectedBytes.data(), expectedBytes.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(uploadBytes.data() + appendedRange.byteOffset, expectedBytes.data(), expectedBytes.size()), 0);
 
     // Mutating the original upload bytes cannot change the retained dedup key.
     for(usize index = 0u; index < expectedBytes.size(); ++index)

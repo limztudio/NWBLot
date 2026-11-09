@@ -11,7 +11,7 @@
 
 #include "../platform.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
 #include <dirent.h>
@@ -65,7 +65,7 @@ inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
 }
 
 [[nodiscard]] inline ErrorCode LastSystemError()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return ErrorCode(static_cast<i32>(GetLastError()), SystemCategory());
 #else
     return ErrorCode(errno, GenericCategory());
@@ -90,7 +90,7 @@ inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline void CloseDirectory(const HANDLE findHandle, ErrorCode& outError)noexcept{
     if(!FindClose(findHandle) && !outError)
         outError = LastSystemError();
@@ -130,7 +130,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ReadSymlink([[maybe_unused]] const Path<ArenaT>& path){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return MakeUnexpected(MakeErrorCode(ErrorCondition::function_not_supported));
 #else
     TString<ArenaT> buffer(path.arena());
@@ -152,7 +152,7 @@ template<typename ArenaT>
 template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetCurrentPath(ArenaT& arena){
     TString<ArenaT> buffer(arena);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     DWORD capacity = MAX_PATH;
     for(;;){
         buffer.resize(static_cast<usize>(capacity));
@@ -220,7 +220,7 @@ namespace GlobalFilesystemDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 template<typename ArenaT>
 [[nodiscard]] inline Expected<DWORD, ErrorCode> FileAttributes(const Path<ArenaT>& path)noexcept{
     const DWORD attributes = GetFileAttributes(path.c_str());
@@ -261,7 +261,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> FileExists(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(attributes.error());
@@ -279,7 +279,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> FileExistsNoFollow(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(attributes.error());
@@ -297,7 +297,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> IsDirectory(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(attributes.error());
@@ -315,7 +315,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> IsDirectoryNoFollow(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(attributes.error());
@@ -333,7 +333,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> IsRegularFile(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
         return MakeUnexpected(attributes.error());
@@ -350,7 +350,7 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] inline b8 IsMissingPathError(const ErrorCode& error)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return error.category() == SystemCategory() && (error.value() == ERROR_FILE_NOT_FOUND || error.value() == ERROR_PATH_NOT_FOUND || error.value() == ERROR_DIRECTORY);
 #else
     return error == ErrorCondition::no_such_file_or_directory || error == ErrorCondition::not_a_directory;
@@ -360,7 +360,7 @@ template<typename ArenaT>
 [[nodiscard]] inline b8 IsMissingOrInvalidPathLookupError(const ErrorCode& error)noexcept{
     if(IsMissingPathError(error))
         return true;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(error.category() != SystemCategory())
         return false;
     switch(error.value()){
@@ -403,7 +403,7 @@ namespace GlobalFilesystemDetail{
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> CreateDirectorySingle(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(CreateDirectory(path.c_str(), nullptr))
         return true;
     const ErrorCode createError = LastSystemError();
@@ -474,7 +474,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> RemoveFile(const Path<ArenaT>& path)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(DeleteFile(path.c_str()))
         return true;
     const DWORD error = GetLastError();
@@ -491,7 +491,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<void, ErrorCode> RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING))
 #else
     if(std::rename(from.c_str(), to.c_str()) == 0)

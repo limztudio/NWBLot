@@ -27,15 +27,15 @@ inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjection
 
 
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
-NWB_INLINE b8 ScalarNearEqual(T value0, T value1, T epsilon)noexcept{
+FOUNDATION_INLINE b8 ScalarNearEqual(T value0, T value1, T epsilon)noexcept{
     return Abs(value0 - value1) <= epsilon;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
-    NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
+    FOUNDATION_ASSERT(nearZ > 0.0f && farZ > 0.0f);
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
     SIMDVectorSingle sinFov{};
     SIMDVectorSingle cosFov{};
@@ -54,10 +54,10 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 viewLeft, const f32 viewRight, const f32 viewBottom, const f32 viewTop, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 viewLeft, const f32 viewRight, const f32 viewBottom, const f32 viewTop, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle left = VectorReplicate(viewLeft);
@@ -105,11 +105,11 @@ inline constexpr f64 s_DoubleMatrixPerspectiveFovNearEqualEpsilon = s_DoubleMatr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f64 fovAngleY, const f64 aspectRatio, const f64 nearZ, const f64 farZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
-    NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f64 fovAngleY, const f64 aspectRatio, const f64 nearZ, const f64 farZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
+    FOUNDATION_ASSERT(nearZ > 0.0 && farZ > 0.0);
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    FOUNDATION_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     SIMDVectorDouble sinFov{};
     SIMDVectorDouble cosFov{};
@@ -138,15 +138,15 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f, 1.0f);
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovLH(f64 fovAngleY, f64 aspectRatio, f64 nearZ, f64 farZ)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoublePerspectiveFovLH(f64 fovAngleY, f64 aspectRatio, f64 nearZ, f64 farZ)noexcept{
     return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0, 1.0);
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
+FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0f);
 }
 

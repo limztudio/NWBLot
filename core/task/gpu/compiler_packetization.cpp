@@ -40,7 +40,7 @@ struct PacketMergeSummary{
     for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
         const GpuTaskId consumer{ .generation = task.generation, .index = static_cast<u32>(consumers[consumerIndex]) };
         auto& consumerAssignment = *MakeNotNull(assignments.find(consumer));
-        NWB_ASSERT(consumerAssignment.queue.valid());
+        FOUNDATION_ASSERT(consumerAssignment.queue.valid());
         if(consumerAssignment.queue != packetQueue)
             return true;
     }
@@ -180,7 +180,7 @@ namespace GpuTaskGraphCompilerDetail{
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
     // The sole compile() caller runs after successful analysis and queue assignment for this graph and sizes an empty task map.
-    NWB_ASSERT(analysis.validFor(graph) && assignments.validFor(graph) && compiledPlan.compiledTaskIndexByTask.size() == graph.taskCount() && compiledPlan.tasks.empty());
+    FOUNDATION_ASSERT(analysis.validFor(graph) && assignments.validFor(graph) && compiledPlan.compiledTaskIndexByTask.size() == graph.taskCount() && compiledPlan.tasks.empty());
 
     // Default: one acceptance/sync point per task.
     // Opt-in successors may share the preceding compatible packet (FrontierScored absorbs only cheap successors with no cross-queue frontier).
@@ -189,7 +189,7 @@ namespace GpuTaskGraphCompilerDetail{
     const b8 trackConsumerFrontiers = policy == GpuTaskGraphPacketizationPolicy::FrontierSafe || policy == GpuTaskGraphPacketizationPolicy::FrontierScored;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
         // The topological order is a unique permutation of current graph tasks, each with a published queue assignment.
-        NWB_ASSERT(
+        FOUNDATION_ASSERT(
             taskID.valid()
             && taskID.generation == compiledPlan.graphGeneration
             && taskID.index < compiledPlan.compiledTaskIndexByTask.size()
@@ -199,7 +199,7 @@ namespace GpuTaskGraphCompilerDetail{
         const u32 compiledTaskIndex = static_cast<u32>(compiledPlan.tasks.size());
 
         auto& assignment = *MakeNotNull(assignments.find(taskID));
-        NWB_ASSERT(assignment.queue.valid());
+        FOUNDATION_ASSERT(assignment.queue.valid());
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const b8 taskRecordsTiming = task.timing.policy != GpuTaskTimingPolicy::None;
@@ -290,7 +290,7 @@ namespace GpuTaskGraphCompilerDetail{
         });
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
-    NWB_ASSERT(compiledPlan.tasks.size() == compiledPlan.compiledTaskIndexByTask.size());
+    FOUNDATION_ASSERT(compiledPlan.tasks.size() == compiledPlan.compiledTaskIndexByTask.size());
     return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(timingEnvelope, compiledPlan);
 }
 

@@ -42,6 +42,14 @@ Optional<RendererComponent> TryGetOwnerRendererComponent(in World world, in Enti
     return result;
 }
 
+b8 HasOwnerMaterialInstance(in World world, in EntityID owner){
+    b8 present = false;
+    native(in world, in owner, mut present){
+        present = world.tryGetComponent<MaterialInstanceComponent>(owner) != nullptr;
+    }
+    return present;
+}
+
 void CopyOwnerMaterialInstanceIfPresent(in World world, in EntityID owner, mut MaterialInstanceComponent outMaterialInstance){
     native(in world, in owner, mut outMaterialInstance){
         if(const MaterialInstanceComponent* const ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner))
@@ -64,6 +72,9 @@ void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material,
 
     mut RendererComponent renderer = entity.addComponent<RendererComponent>();
     renderer = resolvedRenderer.value();
+
+    if(!HasOwnerMaterialInstance(world, owner))
+        return;
 
     mut MaterialInstanceComponent materialInstance = entity.addComponent<MaterialInstanceComponent>();
     CopyOwnerMaterialInstanceIfPresent(world, owner, materialInstance);

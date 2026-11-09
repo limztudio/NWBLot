@@ -113,7 +113,7 @@ b8 GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const
     const usize oldBlobSize = m_blobBytes.size();
     m_blobBytes.resize(oldBlobSize + bytes.size());
     const u8* const source = sourceOffset ? m_commandBytes.data() + *sourceOffset : bytes.data();
-    NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, bytes.size(), source, bytes.size());
+    FOUNDATION_MEMCPY(m_blobBytes.data() + oldBlobSize, bytes.size(), source, bytes.size());
 
     m_recordEndOffsets.push_back(m_commandBytes.size());
     m_blobEndOffsets.push_back(m_blobBytes.size());

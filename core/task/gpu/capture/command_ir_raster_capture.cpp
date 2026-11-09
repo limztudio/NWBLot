@@ -210,9 +210,9 @@ b8 GpuCommandIrCapture::appendRasterBytes(
     const GpuCommandIrRasterStateOwner* const stateOwner,
     const GpuCommandIrRasterHeapOwner* const heapOwner
 ){
-    NWB_ASSERT(encoded.size() >= sizeof(GpuCommandIrHeader) && encoded.data());
-    NWB_ASSERT(blob.empty() || blob.data());
-    NWB_ASSERT(!(stateOwner && heapOwner));
+    FOUNDATION_ASSERT(encoded.size() >= sizeof(GpuCommandIrHeader) && encoded.data());
+    FOUNDATION_ASSERT(blob.empty() || blob.data());
+    FOUNDATION_ASSERT(!(stateOwner && heapOwner));
     if(
         !task.valid() || !packet.valid() || !queue.valid()
         || (m_graphGeneration != 0u && m_graphGeneration != task.generation)
@@ -255,12 +255,12 @@ b8 GpuCommandIrCapture::appendRasterBytes(
 
     const usize oldCommandSize = m_commandBytes.size();
     m_commandBytes.resize(oldCommandSize + encoded.size());
-    NWB_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
+    FOUNDATION_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
     if(!blob.empty()){
         const usize oldBlobSize = m_blobBytes.size();
         m_blobBytes.resize(oldBlobSize + blob.size());
         const u8* const source = sourceOffset ? m_commandBytes.data() + *sourceOffset : blob.data();
-        NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), source, blob.size());
+        FOUNDATION_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), source, blob.size());
     }
     if(stateOwner){
         GpuCommandIrRasterStateOwner owner = *stateOwner;

@@ -61,12 +61,12 @@ b8 TextureShapePolicy::IsValid(const TextureDesc& desc)noexcept{
 
 b8 TextureShapePolicy::Validate(const TextureDesc& desc, TStringView operationName){
     if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
         return false;
     }
     switch(desc.dimension){
     case TextureDimension::Unknown:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
         return false;
     case TextureDimension::Texture1D:
     case TextureDimension::Texture1DArray:
@@ -79,43 +79,43 @@ b8 TextureShapePolicy::Validate(const TextureDesc& desc, TStringView operationNa
     case TextureDimension::Texture3D:
         break;
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
         return false;
     }
     if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture2D || desc.dimension == TextureDimension::Texture2DMS) && desc.arraySize != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
         return false;
     }
     if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
         return false;
     }
     if(desc.dimension != TextureDimension::Texture3D && desc.depth != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-3D texture depth must be 1"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: non-3D texture depth must be 1"), operationName);
         return false;
     }
     if(desc.dimension == TextureDimension::Texture3D && desc.arraySize != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 3D texture array size must be 1"), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: 3D texture array size must be 1"), operationName);
         return false;
     }
 
     const u32 maxMipLevels = TextureShapePolicy::MaxMipLevels(desc);
     if(desc.mipLevels > maxMipLevels){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"), operationName, desc.mipLevels, maxMipLevels, desc.width, desc.height, desc.depth);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"), operationName, desc.mipLevels, maxMipLevels, desc.width, desc.height, desc.depth);
         return false;
     }
 
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray){
         if(desc.width != desc.height){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
             return false;
         }
         if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != VulkanTextureDetail::s_TextureCubeLayerCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
             return false;
         }
         if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < VulkanTextureDetail::s_TextureCubeLayerCount || (desc.arraySize % VulkanTextureDetail::s_TextureCubeLayerCount) != 0)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
             return false;
         }
     }

@@ -128,7 +128,7 @@ template<typename ObjectT, typename ParseObjectFn>
     if(!fieldValue)
         return objects;
     if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a map"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Model meta '{}': field '{}' must be a map"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -137,7 +137,7 @@ template<typename ObjectT, typename ParseObjectFn>
     for(const auto& [objectName, objectValue] : map){
         const auto nameResult = Name::FromText(AStringView(objectName.data(), objectName.size()));
         if(!nameResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name contains an embedded null"), ConvertString(objectKind), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': object name contains an embedded null"), ConvertString(objectKind), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         const Name name = *nameResult;
@@ -154,7 +154,7 @@ template<typename ObjectT, typename ParseObjectFn>
 [[nodiscard]] Expected<ModelSkeletonObject> ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue){
     ModelSkeletonObject object{};
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkeletonObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkeletonObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, &IsAllowedModelSkeletonObjectField))
@@ -174,7 +174,7 @@ template<typename ObjectT, typename ParseObjectFn>
 [[nodiscard]] Expected<ModelStaticMeshObject> ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue){
     ModelStaticMeshObject object{};
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelStaticMeshObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelStaticMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, &IsAllowedModelStaticMeshObjectField))
@@ -206,7 +206,7 @@ template<typename ObjectT, typename ParseObjectFn>
 [[nodiscard]] Expected<ModelSkinnedMeshObject> ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue){
     ModelSkinnedMeshObject object{};
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkinnedMeshObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkinnedMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, &IsAllowedModelSkinnedMeshObjectField))

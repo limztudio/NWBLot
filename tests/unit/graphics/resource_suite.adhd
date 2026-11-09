@@ -230,7 +230,7 @@ TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){
         RayTracingClusterOperationParams params;
         params.type = type;
         params.maxArgCount = 7u;
-        const auto built = VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
+        const auto built = VulkanDetail::ClusterOperationInput::Build(params, FOUNDATION_TEXT("test cluster input"));
         ASSERT_TRUE(built);
         auto copied = *built;
         const auto native = copied.nativeInfo();
@@ -592,7 +592,7 @@ TEST(GpuDescriptorImagePolicy, Storage3dRejectsIntegerFormatWhileTwoDimensionalS
     auto item = Core::DescriptorWriteItem::None();
     using Policy = Core::GraphicsBackend::DescriptorImagePolicy;
     EXPECT_FALSE(Policy::Validate(Core::GpuDescriptorClass::StorageImage, item, texture));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("rejected format")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("rejected format")));
     item.dimension = Core::TextureDimension::Texture2D;
     EXPECT_TRUE(Policy::Validate(Core::GpuDescriptorClass::StorageImage, item, texture));
     item.dimension = Core::TextureDimension::Unknown;

@@ -307,22 +307,22 @@ protected:
 
 TEST_F(BuildInputSelection, MissingRootTakesPriorityOverMissingOutput){
     EXPECT_FALSE(Builder::ValidateAssetBuilderPathInputs(false, false));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
-    EXPECT_FALSE(m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("no asset roots specified")));
+    EXPECT_FALSE(m_logger.sawErrorContaining(FOUNDATION_TEXT("output directory is empty")));
     EXPECT_FALSE(Builder::ValidateAssetBuilderPathInputs(true, false));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("output directory is empty")));
     EXPECT_EQ(m_logger.errorCount(), 2u);
 }
 
 TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
     m_options.assetType.clear();
     EXPECT_FALSE(Builder::BuildAssets(m_options, m_scratchArena));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("unsupported --asset-type ''")));
     EXPECT_EQ(m_logger.errorCount(), 1u);
 
     ASSERT_TRUE(m_options.assetType.assign(Assets::AssetsVolumeCookDetail::s_AssetVolumeName));
     EXPECT_FALSE(Builder::BuildAssets(m_options, m_scratchArena));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("no asset roots specified")));
     EXPECT_EQ(m_logger.errorCount(), 2u);
 }
 
@@ -376,7 +376,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     addFile("assets/case/b.nwb");
     addInput("assets/Case");
     ASSERT_TRUE(select());
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     EXPECT_EQ(m_files.size(), 2u);
 #else
     ASSERT_EQ(m_files.size(), 1u);
@@ -419,7 +419,7 @@ TEST_F(BuildInputSelection, ExplicitRootsPreserveFirstSpellingAndCallerDuplicate
     EXPECT_EQ((*exact)[2].virtualRoot.view(), s_ProjectVirtualRoot);
     const auto host = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
     ASSERT_TRUE(host);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     ASSERT_EQ(host->size(), 2u);
     EXPECT_EQ((*host)[1].path, (*exact)[2].path);
 #else
@@ -724,7 +724,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         addDefine(entry.defineValues, option, values);
         addDefine(entry.defineValues, s_AuthoredDefine, { "inherited" });
         auto key = PathToString(testArena.arena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(key);
 #endif
         ASSERT_TRUE(includeMetadata.emplace(Move(key), Move(entry)).second);
@@ -835,7 +835,7 @@ TEST(AssetsGraphics, CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishingThe
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_NE(entries[0].shapeTypeId, NWB::Impl::s_InvalidCsgShapeTypeId);
     EXPECT_EQ(entries[1].shapeTypeId, NWB::Impl::s_InvalidCsgShapeTypeId);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("collide on canonical GPU id")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("collide on canonical GPU id")));
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
@@ -964,7 +964,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
 
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     EXPECT_FALSE(CsgShapeModuleWriter().emit(root / s_CacheDirectory, "tests", entries, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("generated include")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -1133,8 +1133,8 @@ TEST_F(GatherInputs, MissingOutputIsRejectedBeforeInputDiscovery){
     m_options.outputDirectory.clear();
     m_options.inputs.emplace_back("missing-gather-input", m_testArena.arena);
     EXPECT_FALSE(Gatherer::GatherAssets(m_options, m_scratchArena));
-    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
-    EXPECT_FALSE(m_logger.sawErrorContaining(NWB_TEXT("failed to inspect input")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(FOUNDATION_TEXT("output directory is empty")));
+    EXPECT_FALSE(m_logger.sawErrorContaining(FOUNDATION_TEXT("failed to inspect input")));
     EXPECT_EQ(m_logger.errorCount(), 1u);
 }
 
@@ -1258,8 +1258,8 @@ TEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWitho
     EXPECT_TRUE(entries[1u].avboitOccupancyPixelShaderName.empty());
     EXPECT_TRUE(entries[1u].avboitExtinctionPixelShaderName.empty());
     EXPECT_EQ(logger.errorCount(), 3u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("project/materials/transparent")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("project/materials/opaque")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("project/materials/transparent")));
+    EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("project/materials/opaque")));
 }
 
 

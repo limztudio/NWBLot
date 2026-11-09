@@ -499,7 +499,7 @@ void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex,
                 m_aborting = true;
                 node->canceled = true;
             }
-            NWB_ASSERT(node->state == TaskState::Running);
+            FOUNDATION_ASSERT(node->state == TaskState::Running);
             readyToRetire = node->children == 0u;
             node->state = readyToRetire ? TaskState::Retiring : TaskState::Children;
         }
@@ -520,7 +520,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
     TaskNode* node = &first;
     while(node){
         // The locked Retiring transition transfers exclusive retirement ownership to this caller.
-        NWB_ASSERT(node->state == TaskState::Retiring);
+        FOUNDATION_ASSERT(node->state == TaskState::Retiring);
         // Tasks retain callables until descendants complete; destruction precedes publication.
         node->function.reset();
         TaskHandle parentHandle;
@@ -536,7 +536,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                 if(!dependent)
                     continue;
                 dependent->canceled = dependent->canceled || node->canceled;
-                NWB_ASSERT(dependent->dependencies > 0u);
+                FOUNDATION_ASSERT(dependent->dependencies > 0u);
                 if(--dependent->dependencies == 0u){
                     enqueueLocked(dependentHandle.index);
                     madeReady = true;
@@ -544,7 +544,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             if(TaskNode* parent = resolveLocked(node->parent)){
                 parent->canceled = parent->canceled || node->canceled;
-                NWB_ASSERT(parent->children > 0u);
+                FOUNDATION_ASSERT(parent->children > 0u);
                 if(--parent->children == 0u && parent->state == TaskState::Children){
                     parent->state = TaskState::Retiring;
                     parentHandle = node->parent;
@@ -561,7 +561,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             else
                 ++m_statistics.completedTasks;
-            NWB_ASSERT(m_outstanding > 0u);
+            FOUNDATION_ASSERT(m_outstanding > 0u);
             --m_outstanding;
             node->dependents.clear();
             node->scope = nullptr;

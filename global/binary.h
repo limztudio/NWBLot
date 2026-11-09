@@ -61,7 +61,7 @@ inline void RequireByteContainer()noexcept{
 }
 
 [[nodiscard]] inline b8 BytesMatch(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
-    return lhs.size() == rhs.size() && (rhs.empty() || NWB_MEMCMP(lhs.data(), rhs.data(), rhs.size()) == 0);
+    return lhs.size() == rhs.size() && (rhs.empty() || FOUNDATION_MEMCMP(lhs.data(), rhs.data(), rhs.size()) == 0);
 }
 
 // The pattern must fit the output and must not overlap it.
@@ -69,10 +69,10 @@ inline void FillRepeatingBytes(const usize byteCount, const Span<const u8> patte
     if(byteCount == 0u || pattern.empty())
         return;
     const auto outBytes = MakeNotNull(static_cast<u8*>(bytes));
-    NWB_MEMCPY(outBytes.get(), byteCount, pattern.data(), pattern.size());
+    FOUNDATION_MEMCPY(outBytes.get(), byteCount, pattern.data(), pattern.size());
     for(usize filled = pattern.size(); filled < byteCount; ){
         const usize copySize = Min(filled, byteCount - filled);
-        NWB_MEMCPY(outBytes.get() + filled, byteCount - filled, outBytes.get(), copySize);
+        FOUNDATION_MEMCPY(outBytes.get() + filled, byteCount - filled, outBytes.get(), copySize);
         filled += copySize;
     }
 }
@@ -89,7 +89,7 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
     if(byteCount == 0u)
         return;
 
-    NWB_ASSERT(bytes);
+    FOUNDATION_ASSERT(bytes);
 
     using ByteType = typename Container::value_type;
     const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
@@ -140,7 +140,7 @@ template<typename Container>
         return false;
 
     if(byteCount > 0u)
-        NWB_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
+        FOUNDATION_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
     inOutOffset += byteCount;
     return true;
 }
@@ -333,12 +333,12 @@ template<typename Container, typename ValueContainer>
     if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
         return s_CommonIsNothrow && s_ReserveIsNothrow
             && noexcept(DeclVal<ValueContainer&>().resize(DeclVal<const usize&>()))
-            && noexcept(NWB_MEMCPY(DeclVal<ValueContainer&>().data(), DeclVal<const usize&>(), DeclVal<const Container&>().data() + DeclVal<usize&>(), DeclVal<const usize&>()))
+            && noexcept(FOUNDATION_MEMCPY(DeclVal<ValueContainer&>().data(), DeclVal<const usize&>(), DeclVal<const Container&>().data() + DeclVal<usize&>(), DeclVal<const usize&>()))
         ;
     }
     else{
         return s_CommonIsNothrow && s_ReserveIsNothrow && noexcept(ValueType{}) && IsNothrowDestructible_V<ValueType>
-            && noexcept(NWB_MEMCPY(&DeclVal<ValueType&>(), sizeof(ValueType), DeclVal<const Container&>().data() + DeclVal<usize&>(), sizeof(ValueType)))
+            && noexcept(FOUNDATION_MEMCPY(&DeclVal<ValueType&>(), sizeof(ValueType), DeclVal<const Container&>().data() + DeclVal<usize&>(), sizeof(ValueType)))
             && noexcept(DeclVal<ValueContainer&>().push_back(DeclVal<ValueType&>()))
         ;
     }
@@ -367,13 +367,13 @@ template<typename Container, typename ValueContainer>
     if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
         outValues.resize(valueCount);
         if(*byteCount > 0u)
-            NWB_MEMCPY(outValues.data(), *byteCount, binary.data() + cursor, *byteCount);
+            FOUNDATION_MEMCPY(outValues.data(), *byteCount, binary.data() + cursor, *byteCount);
         cursor += *byteCount;
     }
     else{
         for(usize i = 0u; i < valueCount; ++i){
             ValueType value = {};
-            NWB_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
+            FOUNDATION_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
             cursor += sizeof(ValueType);
             outValues.push_back(value);
         }

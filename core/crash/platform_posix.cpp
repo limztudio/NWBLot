@@ -11,7 +11,7 @@
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <global/posix/descriptor.h>
 #include <global/posix/socket_io.h>
 #endif
@@ -21,7 +21,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -108,7 +108,7 @@ static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanup
     return {};
 }
 
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_ANDROID)
 [[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> OpenAndroidEmergencyFile()noexcept{
     const AStringView directory(CrashDetail::g_State.spoolDirectoryText.data());
     const AStringView filename(PackageNames::s_AndroidEmergencyRequestFileName);
@@ -126,7 +126,7 @@ static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanup
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 [[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
     if(!WriteAllFileDescriptor(startupDescriptor, &error, sizeof(error)))
         _exit(s_HandlerExecFailureExitCode);
@@ -310,10 +310,10 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
         status = WriteAllFileDescriptor(g_State.emergencyWriteFd, &request, sizeof(request)) ? CrashDumpTransportStatus::Sent : CrashDumpTransportStatus::Failed;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0){
         __hidden_crash_posix::DrainPendingAcks(g_State.ackReadFd);
         if(!SendAllSocketNoSigpipe(g_State.requestWriteFd, &request, sizeof(request)))
@@ -330,9 +330,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
 template<typename ArenaT>
 Expected<void, PlatformFailure> StartDesktopHandler([[maybe_unused]] const ::Path<ArenaT>& handlerExecutablePath, [[maybe_unused]] Alloc::ScratchArena& scratchArena, [[maybe_unused]] PlatformCleanupObservations& observations)noexcept{
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_ANDROID)
     return {};
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     using namespace __hidden_crash_posix;
     if(g_State.handlerStarted)
         return {};
@@ -451,11 +451,11 @@ Expected<void, PlatformFailure> StartDesktopHandler([[maybe_unused]] const ::Pat
 template Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<Alloc::ScratchArena>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations)noexcept;
 
 Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_ANDROID)
     const auto emergency = __hidden_crash_posix::OpenAndroidEmergencyFile();
     if(!emergency)
         return MakeUnexpected(emergency.error());
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     PosixCallstackCapture::WarmUp();
 #endif
     const auto signals = __hidden_crash_posix::InstallSignalHandlers();
@@ -468,9 +468,9 @@ Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
 
 void UninstallPlatformResources(PlatformCleanupObservations& observations)noexcept{
     using namespace __hidden_crash_posix;
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_ANDROID)
     CleanupOwnedDescriptor(g_State.emergencyWriteFd, observations);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     CleanupOwnedDescriptor(g_State.requestWriteFd, observations);
     WaitForOwnedChild(false, g_State.handlerPid, observations);
     CleanupOwnedDescriptor(g_State.ackReadFd, observations);
@@ -523,7 +523,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
         else
             g_State.signalStackInstalled = false;
     }
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     pending = pending || g_State.handlerPid > 0;
 #endif
     g_State.platformRestorePending = pending;

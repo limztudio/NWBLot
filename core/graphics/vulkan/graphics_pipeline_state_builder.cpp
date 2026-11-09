@@ -65,7 +65,7 @@ VkPipelineColorBlendStateCreateInfo GraphicsPipelineStateBuilder::BuildPipelineC
 Expected<VkPipelineMultisampleStateCreateInfo> GraphicsPipelineStateBuilder::ConfigurePipelineMultisampleState(const u32 sampleCount, const b8 alphaToCoverageEnable, TStringView operationName){
     auto state = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
         return MakeUnexpected(Failure{});
     }
     state.rasterizationSamples = GetSampleCountFlagBits(sampleCount);
@@ -127,11 +127,11 @@ Expected<PipelineRenderingInfo> GraphicsPipelineStateBuilder::BuildPipelineRende
     for(u32 i = 0u; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
             return MakeUnexpected(Failure{});
         }
         if(!VulkanDetail::IsPipelineColorAttachmentFormatClassValid(fbinfo.colorFormats[i])){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} has depth or stencil aspects"), operationName, i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: color attachment format {} has depth or stencil aspects"), operationName, i);
             return MakeUnexpected(Failure{});
         }
         rendering.colorFormats.push_back(vkFormat);
@@ -143,12 +143,12 @@ Expected<PipelineRenderingInfo> GraphicsPipelineStateBuilder::BuildPipelineRende
     if(fbinfo.depthFormat != Format::UNKNOWN){
         const VkFormat vkDepthFormat = ConvertFormat(fbinfo.depthFormat);
         if(vkDepthFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format is unsupported"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format is unsupported"), operationName);
             return MakeUnexpected(Failure{});
         }
         const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
         if(!depthFormatInfo.hasDepth && !depthFormatInfo.hasStencil){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format has no depth or stencil aspect"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format has no depth or stencil aspect"), operationName);
             return MakeUnexpected(Failure{});
         }
         if(depthFormatInfo.hasDepth)

@@ -28,7 +28,7 @@ QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
 }
 
 QueuedClipboardService::~QueuedClipboardService()noexcept{
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
 }
 
 Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService::requestReadText(const ClipboardChannel::Enum channel){

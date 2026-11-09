@@ -68,7 +68,7 @@ void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, con
         out.append("    return 0u;\r\n");
     }
     out.append(indent.data(), indent.size());
-    out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &");
+    out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
     out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
@@ -120,7 +120,7 @@ void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, c
         out.append("    return false;\r\n");
     }
     out.append(indent.data(), indent.size());
-    out.append("{ ::NameHash __hash{}; NWB_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); ");
+    out.append("{ ::NameHash __hash{}; FOUNDATION_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); ");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
     out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
@@ -261,7 +261,7 @@ void BinarySerializationEmitter::emitSerializeBody(MString& out, const Span<cons
         out.append(indent.data(), indent.size());
         out.append("    return 0u;\r\n");
         out.append(indent.data(), indent.size());
-        out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+        out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
         out.append(field->name.data(), field->name.size());
         out.append(", sizeof(this->");
         out.append(field->name.data(), field->name.size());
@@ -317,7 +317,7 @@ void BinarySerializationEmitter::emitDeserializeBody(MString& out, const Span<co
         out.append(indent.data(), indent.size());
         out.append("    return false;\r\n");
         out.append(indent.data(), indent.size());
-        out.append("NWB_MEMCPY(&this->");
+        out.append("FOUNDATION_MEMCPY(&this->");
         out.append(field->name.data(), field->name.size());
         out.append(", sizeof(this->");
         out.append(field->name.data(), field->name.size());

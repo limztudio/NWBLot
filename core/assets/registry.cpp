@@ -22,13 +22,13 @@ NWB_ASSETS_BEGIN
 
 b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replaceExisting){
     if(!codec){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected null codec registration"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: rejected null codec registration"));
         return false;
     }
 
     const Name typeName = codec->assetType();
     if(!typeName){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected codec registration with empty asset type"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: rejected codec registration with empty asset type"));
         return false;
     }
 
@@ -38,7 +38,7 @@ b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replace
         auto found = m_codecs.find(typeName);
         if(found != m_codecs.end()){
             if(!replaceExisting){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
                 return false;
             }
 
@@ -52,7 +52,7 @@ b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replace
         }
 
         if(!m_codecs.emplace(typeName, Move(codec)).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
@@ -81,7 +81,7 @@ b8 AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
 
 Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetType, const Name& virtualPath, const Span<const u8> binary)const{
     if(!assetType){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: asset type is empty"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: asset type is empty"));
         return MakeUnexpected(Failure{});
     }
 
@@ -90,7 +90,7 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetTyp
         ScopedLock lock(m_mutex);
         const auto found = m_codecs.find(assetType);
         if(found == m_codecs.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         rawCodec = found.value().get();

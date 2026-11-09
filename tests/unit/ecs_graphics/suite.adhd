@@ -937,7 +937,7 @@ public:
 
 void SetParameters(const Float4& parameter, CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(parameter));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
+    FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
 [[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
@@ -1156,11 +1156,11 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     ASSERT_TRUE(state.snapshot.hasCsg);
     const usize rangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
     u32 membershipOffset = 0u;
-    NWB_MEMCPY(&membershipOffset, sizeof(membershipOffset), state.bytes.data() + rangeMembershipOffset, sizeof(membershipOffset));
+    FOUNDATION_MEMCPY(&membershipOffset, sizeof(membershipOffset), state.bytes.data() + rangeMembershipOffset, sizeof(membershipOffset));
     EXPECT_NE(membershipOffset, 0u);
     EXPECT_EQ(membershipOffset, state.bytes.size() - sizeof(u32));
     u32 membershipWord = Limit<u32>::s_Max;
-    NWB_MEMCPY(&membershipWord, sizeof(membershipWord), state.bytes.data() + membershipOffset, sizeof(membershipWord));
+    FOUNDATION_MEMCPY(&membershipWord, sizeof(membershipWord), state.bytes.data() + membershipOffset, sizeof(membershipWord));
     EXPECT_EQ(membershipWord, s_OpenTriangleWords[0]);
     constexpr u32 s_SoftwareRootSlot = 17u;
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
@@ -1203,7 +1203,7 @@ TEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext){
         EXPECT_TRUE(state.bytes.empty());
     }
     EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("CSG receiver has no valid cooked solid topology")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("CSG receiver has no valid cooked solid topology")));
 }
 
 TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence){

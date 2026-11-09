@@ -213,13 +213,13 @@ using namespace SceneAssetCook;
     if(asset.isNull() || asset.isMap())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
     return false;
 }
 
 [[nodiscard]] static Expected<Float4> ParseFloat3Field(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
     if(!listValue.isList() || listValue.asList().size() != 3u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 3-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a 3-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const auto& items = listValue.asList();
@@ -233,7 +233,7 @@ using namespace SceneAssetCook;
 
 [[nodiscard]] static Expected<Float4> ParseQuaternionField(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
     if(!listValue.isList() || listValue.asList().size() != 4u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 4-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a 4-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const auto& items = listValue.asList();
@@ -246,7 +246,7 @@ using namespace SceneAssetCook;
 
     const Expected<SIMDVectorSingleResult> normalized = TryNormalizeTransformQuaternion(*x, *y, *z, *w);
     if(!normalized){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     Float4 result{};
@@ -274,7 +274,7 @@ using namespace Core::Metascript;
 
 [[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!mapValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneAssetsField));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneAssetsField));
         return MakeUnexpected(Failure{});
     }
 
@@ -284,19 +284,19 @@ using namespace Core::Metascript;
     for(const auto& [nicknameKey, assetValue] : map){
         const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
         if(!IsValidSceneAssetNicknameText(nicknameView)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
         const auto nickname = Name::FromText(nicknameView);
         if(!nickname || !*nickname){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
         const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
         if(!parsedRef)
             return MakeUnexpected(Failure{});
         if(!assets.emplace(*nickname, *parsedRef).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
     }
@@ -437,7 +437,7 @@ Expected<TransformComponentCookEntry> SceneComponentMetadataParser::ParseTransfo
         const Core::Metascript::Value* const eulerDegreesValue = asset.findField(s_TransformRotationEulerDegreesField);
         const usize rotationFieldCount = static_cast<usize>(rotationValue != nullptr) + static_cast<usize>(eulerValue != nullptr) + static_cast<usize>(eulerDegreesValue != nullptr);
         if(rotationFieldCount > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"), ConvertString(s_TransformDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"), ConvertString(s_TransformDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         if(rotationValue){
@@ -493,7 +493,7 @@ Expected<CameraComponentCookEntry> SceneComponentMetadataParser::ParseCamera(con
         const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_CameraVerticalFovDegreesField);
         const Core::Metascript::Value* const fovRadiansValue = asset.findField(s_CameraVerticalFovRadiansField);
         if(fovDegreesValue && fovRadiansValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"), ConvertString(s_CameraDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"), ConvertString(s_CameraDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         if(fovDegreesValue){
@@ -615,7 +615,7 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
 
     const Core::Metascript::Value* componentsValue = asset.findField(s_EntityComponentsField);
     if(!componentsValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EntityComponentsField));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EntityComponentsField));
         return MakeUnexpected(Failure{});
     }
     auto components = Core::Assets::ReservedAssetRefParser::ParseList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
@@ -695,7 +695,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
 
     const Core::Metascript::Value* subsystemsValue = asset.findField(s_SceneSubsystemsField);
     if(!subsystemsValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneSubsystemsField));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneSubsystemsField));
         return MakeUnexpected(Failure{});
     }
     auto subsystems = Core::Assets::ReservedAssetRefParser::ParseList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);

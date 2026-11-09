@@ -30,7 +30,7 @@ void RenderPassCollection::addToBack(IRenderPass& pass, const u32 width, const u
     pass.backBufferResizing();
     pass.backBufferResized(width, height, samples);
     if(!pass.validateResources(width, height, samples))
-        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
 }
 
 void RenderPassCollection::remove(IRenderPass& pass){

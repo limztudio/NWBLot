@@ -37,18 +37,18 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     for(u32 i = 0u; i < static_cast<u32>(bindingLayouts.size()); ++i){
         auto* layout = bindingLayouts[i].get();
         if(!layout){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
             return MakeUnexpected(Failure{});
         }
         if(&layout->m_context != &m_context){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"), operationName, i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"), operationName, i);
             return MakeUnexpected(Failure{});
         }
 
         // Layout factories publish only descriptor-buffer layouts; a bindless layout owns one set with an explicit index.
-        NWB_ASSERT(layout->isDescriptorBufferCompatible());
-        NWB_ASSERT(layout->m_descriptorSetLayouts.size() == (layout->getBindlessDesc() ? 1u : 0u));
-        NWB_ASSERT(!layout->getBindlessDesc() || layout->getBindlessDesc()->descriptorSetIndex != Limit<u32>::s_Max);
+        FOUNDATION_ASSERT(layout->isDescriptorBufferCompatible());
+        FOUNDATION_ASSERT(layout->m_descriptorSetLayouts.size() == (layout->getBindlessDesc() ? 1u : 0u));
+        FOUNDATION_ASSERT(!layout->getBindlessDesc() || layout->getBindlessDesc()->descriptorSetIndex != Limit<u32>::s_Max);
 
         pushConstantByteSize = Max<u32>(pushConstantByteSize, layout->m_pushConstantByteSize);
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
@@ -84,7 +84,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     }
 
     if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}"), operationName, maxSetIndex, m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}"), operationName, maxSetIndex, m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets);
         return MakeUnexpected(Failure{});
     }
 
@@ -102,7 +102,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
         for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);
             if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, setIndex);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, setIndex);
                 return MakeUnexpected(Failure{});
             }
             descriptorSetLayouts[setIndex] = layout.m_descriptorSetLayouts[localSetIndex];
@@ -111,7 +111,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
 
     for(u32 setIndex = 0u; setIndex < totalSets; ++setIndex){
         if(descriptorSetLayouts[setIndex] == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing"), operationName, setIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing"), operationName, setIndex);
             return MakeUnexpected(Failure{});
         }
     }
@@ -130,7 +130,7 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(const Span<const Bi
     PipelineBindingState bindings;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
         return MakeUnexpected(Failure{});
     }
 

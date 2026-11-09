@@ -35,7 +35,7 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
             Win32TextInputContextGuard release(window, context);
             m_imeAvailable = true;
             if(!release.release())
-                NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: ImmReleaseContext failed"));
         }
     }
 }
@@ -43,7 +43,7 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
 Win32TextInputService::~Win32TextInputService()noexcept{
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !end(token))
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
 }
 
 TextInputCapabilities Win32TextInputService::capabilities()const noexcept{
@@ -80,9 +80,9 @@ void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
             if(context){
                 Win32TextInputContextGuard release(window, context);
                 if(!ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0u))
-                    NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 composition cancellation unavailable"));
+                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: IMM32 composition cancellation unavailable"));
                 if(!release.release())
-                    NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: ImmReleaseContext failed"));
             }
         }
     }
@@ -110,11 +110,11 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
     const b8 candidateSet = ImmSetCandidateWindow(context, &candidate) != FALSE;
     TextInputAdmission::Enum admission = TextInputAdmission::Accepted;
     if(!compositionSet || !candidateSet){
-        NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 caret placement failed"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: IMM32 caret placement failed"));
         admission = TextInputAdmission::NativeFailure;
     }
     if(!release.release())
-        NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Text input: ImmReleaseContext failed"));
     return admission;
 }
 

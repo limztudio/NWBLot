@@ -59,7 +59,7 @@ static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_G
 static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
 static_assert(s_FontAtlasDistanceEncoding == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
-inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
+inline constexpr TStringView s_GpuRendererContext = FOUNDATION_TEXT("GpuRenderer");
 inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
 
 

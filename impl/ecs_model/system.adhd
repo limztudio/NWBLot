@@ -179,7 +179,7 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_AssetLoadContext = NWB_TEXT("ModelSystem");
+static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("ModelSystem");
 
 static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& queries){
     const usize queryCount = queries.size();
@@ -365,7 +365,7 @@ b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model,
 
 b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
     const Name skeletonName = object.skeleton.name();
-    NWB_ASSERT(skeletonName);
+    FOUNDATION_ASSERT(skeletonName);
     auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
     if(!skeletonAsset)
         return false;
@@ -393,7 +393,7 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
     auto& attachment = entity.addComponent<ModelStaticMeshAttachmentComponent>();
     attachment.localTransform = object.transform;
 
-    NWB_ASSERT(object.parentObject || !object.parentJoint);
+    FOUNDATION_ASSERT(object.parentObject || !object.parentJoint);
     if(object.parentObject){
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
         const ModelSkeletonComponent* skeletonComponent = attachment.parentEntity.valid()

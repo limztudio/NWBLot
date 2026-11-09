@@ -286,7 +286,7 @@ public:
 
 
 public:
-    RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ FOUNDATION_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
 
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value)noexcept{ flags = value; return *this; }
 
@@ -341,7 +341,7 @@ public:
 
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value)noexcept{ instanceMask = value; return *this; }
 
-    RayTracingInstanceDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    RayTracingInstanceDesc& setTransform(const AffineTransform& value)noexcept{ FOUNDATION_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
 
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
 

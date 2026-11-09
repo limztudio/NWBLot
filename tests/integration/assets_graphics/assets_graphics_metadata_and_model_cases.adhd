@@ -311,7 +311,7 @@ namespace __hidden_metadata_discovery_tests{
 
 
 constexpr AStringView s_ProjectVirtualRoot = NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
 constexpr AStringView s_BuildDirectory = NWB::Tests::AssetsGraphicsFixture::s_BuildDirectory;
 #endif
 
@@ -346,7 +346,7 @@ TEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths){
 
 
 TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmission){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     GTEST_SKIP() << "The current Windows host identity folds physical path case";
 #else
     AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCaseIdentity)};
@@ -380,7 +380,7 @@ TEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoo
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::ReportOnly);
     const NWB::Path repo = Tests::RepoRootOf(arena, __FILE__);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const NWB::Path invalidRoot = repo / "invalid|root";
 #else
     TString<AssetArena> longName(arena);
@@ -834,7 +834,7 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
         }
         EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("asset is not a map")));
     const Metascript::Value* const asset = document.findVariable("asset");
     ASSERT_NE(asset, nullptr);
     EXPECT_TRUE(asset->isNull());
@@ -983,7 +983,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         }
         EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
         if(rejectDuplicate)
-            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate property asset virtual path")));
+            EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("duplicate property asset virtual path")));
         else
             EXPECT_EQ(logger.errorCount(), 0u);
     }
@@ -999,7 +999,7 @@ TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
     EXPECT_FALSE(registry.registerCustomType<NullAllocatedBucket>(type));
     EXPECT_EQ(registry.bucketCount(), 0u);
     EXPECT_EQ(registry.find(type), nullptr);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("bucket allocation returned null")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("bucket allocation returned null")));
 }
 
 
@@ -1125,7 +1125,7 @@ constexpr AStringView s_MeshField = "mesh";
 static constexpr AStringView s_Skeleton = "skeleton";
 static constexpr AStringView s_SkinnedMeshes = "skinned_meshes";
 static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh";
-static constexpr TStringView s_TargetsAMissingSkeletonObject = NWB_TEXT("targets a missing skeleton object");
+static constexpr TStringView s_TargetsAMissingSkeletonObject = FOUNDATION_TEXT("targets a missing skeleton object");
 static constexpr AStringView s_RigA = "rig_a";
 static constexpr AStringView s_RigB = "rig_b";
 using NWB::Tests::AssetsGraphicsFixture::s_ModelRigSegment;
@@ -1274,7 +1274,7 @@ TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("name is duplicated in the model")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("name is duplicated in the model")));
 }
 
 TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
@@ -1305,7 +1305,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     object.field(s_MeshField).setString(s_MeshVirtualPath);
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field 'mesh'")));
 
     ASSERT_EQ(object.asMap().erase(s_MeshField), 1u);
     ASSERT_TRUE(metadata.parse());
@@ -1341,7 +1341,7 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThr
     EXPECT_FALSE(metadata.parse());
     ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
     EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("must be a 3x4 affine matrix")));
 
     transform.asList().pop_back();
     ASSERT_TRUE(metadata.parse());
@@ -1562,17 +1562,17 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     const usize skinnedOffset = staticOffset + sizeof(ModelStaticMeshObjectBinary);
     Core::Assets::AssetBytes malformed(binary);
     ModelSkinnedMeshObjectBinary skinnedObject;
-    NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
+    FOUNDATION_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
     skinnedObject.nameHash = Name(s_Prop).hash();
-    NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
+    FOUNDATION_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
     malformed = binary;
     ModelStaticMeshObjectBinary staticObject;
-    NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
+    FOUNDATION_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
     staticObject.parentObjectNameHash = Name(s_ModelBodySegment).hash();
-    NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
+    FOUNDATION_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
@@ -1596,7 +1596,7 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
 
     Core::Assets::AssetBytes malformed(binary);
     constexpr u32 s_PreviousModelMagic = 0x4D444C31u;
-    NWB_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
+    FOUNDATION_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     Core::Assets::AssetBytes retained(inputs.arena);
     ASSERT_TRUE(codec.serialize(loaded, retained));

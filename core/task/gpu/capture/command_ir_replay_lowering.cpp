@@ -141,7 +141,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         if(recordPacket == packet){
             // Preflight rejected every raster record without the owned sidecar.
-            NWB_ASSERT(!raster || ownedStream);
+            FOUNDATION_ASSERT(!raster || ownedStream);
             const GpuCommandIrReplayError::Enum operandError = raster
                 ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, recordIndex, commandList, rasterState)
                 : ValidateBackendOperands(decoded.builtin, graph, *commandQueue, commandList)
@@ -179,14 +179,14 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
             commandList.clearDepthStencilTexture(*graph.textureForResource(record.destination), record.destinationSubresources, record.clearDepth, record.depthClearValue, record.clearStencil, record.stencilClearValue);
             return;
         default:
-            NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR clear type lost its lowerer"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Validated command IR clear type lost its lowerer"));
             return;
         }
     case GpuCommandIrOpcode::ClearTextureRectUInt:
         commandList.clearTextureRectUInt(*graph.textureForResource(record.destination), record.destinationSubresources, record.clearRect, record.uintClearValue);
         return;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR opcode lost its lowerer"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Validated command IR opcode lost its lowerer"));
         return;
     }
 }
@@ -215,7 +215,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
 
     // Preflight admitted this packet and its queue on the same pinned plan.
     const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
-    NWB_ASSERT(packetView.valid());
+    FOUNDATION_ASSERT(packetView.valid());
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     auto& queue = *MakeNotNull(compiledGraph.queueInfo(packetPlan.queue));
     if(!commandList.isRecording()){
@@ -257,10 +257,10 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         }
 
         // Preflight admitted these resources and the raster sidecar; the graph and bytes are caller-stable and concurrent mutation stays unsupported.
-        NWB_ASSERT(raster || (graph.validResource(decoded.builtin.destination) && ((decoded.builtin.opcode != GpuCommandIrOpcode::CopyBuffer && decoded.builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(decoded.builtin.source))));
+        FOUNDATION_ASSERT(raster || (graph.validResource(decoded.builtin.destination) && ((decoded.builtin.opcode != GpuCommandIrOpcode::CopyBuffer && decoded.builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(decoded.builtin.source))));
 
         if(raster){
-            NWB_ASSERT(ownedStream);
+            FOUNDATION_ASSERT(ownedStream);
             if(!GpuCommandIrDetail::LowerRasterOperation(decoded.raster, *ownedStream, reader.blobBytes(), commandList))
                 return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }

@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ namespace Win32MessagePumpResult{
 
 [[nodiscard]] static Win32MessagePumpResult::Enum HandleWin32QuitMessage(const WPARAM exitCode){
     if(exitCode != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 quit signaled failure; exit_domain=application exit_code={}"), static_cast<i32>(exitCode));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 quit signaled failure; exit_domain=application exit_code={}"), static_cast<i32>(exitCode));
         return Win32MessagePumpResult::Failed;
     }
     return Win32MessagePumpResult::Quit;
@@ -83,7 +83,7 @@ template<typename IsActiveFunc>
     const int received = GetMessage(&message, nullptr, 0, 0);
     if(received == -1){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 message retrieval failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 message retrieval failed; native_domain=Win32 native_code={}"), nativeError);
         return Win32MessagePumpResult::Failed;
     }
     if(received == 0)
@@ -112,7 +112,7 @@ namespace FrameDetail{
 
 static Frame* s_Frame = nullptr;
 
-static constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
+static constexpr TStringView s_ClassName = FOUNDATION_TEXT("NWB_FRAME");
 static constexpr i32 s_PaintFailureExitCode = 1;
 
 static constexpr StringView s_WindowLifecycleCategory = "frame_window_lifecycle";
@@ -126,7 +126,7 @@ static b8 EnableProcessDpiAwareness(){
         return true;
 
     if(!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)){
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 per-monitor DPI awareness setup failed: {}"), GetLastError());
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame Win32 per-monitor DPI awareness setup failed: {}"), GetLastError());
         return false;
     }
     return true;
@@ -141,7 +141,7 @@ static void ResizeWindowForClientExtentOnPrimaryWorkArea(HWND hwnd, const u16 cl
     const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hwnd, GWL_EXSTYLE));
     if(!AdjustWindowRectExForDpi(&rc, style, FALSE, exStyle, dpi)){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 DPI window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 DPI window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
         return;
     }
 
@@ -163,7 +163,7 @@ static void ResizeWindowForClientExtentOnPrimaryWorkArea(HWND hwnd, const u16 cl
     const i32 y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
     if(!SetWindowPos(hwnd, nullptr, x, y, actualWidth, actualHeight, SWP_NOZORDER | SWP_NOACTIVATE)){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 DPI window resize failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 DPI window resize failed; native_domain=Win32 native_code={}"), nativeError);
     }
 }
 
@@ -186,7 +186,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_CLOSE:
             if(!DestroyWindow(hwnd)){
                 const DWORD nativeError = GetLastError();
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 close failed; native_domain=Win32 native_code={}"), nativeError);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 close failed; native_domain=Win32 native_code={}"), nativeError);
             }
             return 0;
         case WM_ACTIVATE: {
@@ -223,7 +223,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
             else{
                 PostQuitMessage(s_PaintFailureExitCode);
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 paint preparation failed; exit_domain=application exit_code={}"), s_PaintFailureExitCode);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 paint preparation failed; exit_domain=application exit_code={}"), s_PaintFailureExitCode);
             }
             return 0;
         }
@@ -247,7 +247,7 @@ b8 Frame::init(){
 
     const UINT initialDpi = GetDpiForSystem();
     if(initialDpi == 0u){
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 system DPI query failed"));
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame Win32 system DPI query failed"));
         return false;
     }
 
@@ -270,7 +270,7 @@ b8 Frame::init(){
     const ATOM windowClass = RegisterClassEx(&wc);
     if(!windowClass){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame window registration failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window registration failed; native_domain=Win32 native_code={}"), nativeError);
         return false;
     }
     frameData.setWindowClass(windowClass);
@@ -288,7 +288,7 @@ b8 Frame::init(){
     RECT decorationRect = { 0, 0, 0, 0 };
     if(!AdjustWindowRectExForDpi(&decorationRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
         return false;
     }
 
@@ -303,11 +303,11 @@ b8 Frame::init(){
     const u16 windowWidth = FrameDetail::ClampInitialWindowDimension(requestedWidth, maxClientWidth);
     const u16 windowHeight = FrameDetail::ClampInitialWindowDimension(requestedHeight, maxClientHeight);
     if(windowWidth == 0u || windowHeight == 0u){
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 work area dimensions are invalid: {}x{}"), workAreaWidth, workAreaHeight);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame Win32 work area dimensions are invalid: {}x{}"), workAreaWidth, workAreaHeight);
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, workAreaWidth, workAreaHeight);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"), requestedWidth, requestedHeight, windowWidth, windowHeight, workAreaWidth, workAreaHeight);
     }
     frameData.width() = windowWidth;
     frameData.height() = windowHeight;
@@ -315,7 +315,7 @@ b8 Frame::init(){
     RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
     if(!AdjustWindowRectExForDpi(&rc, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
         return false;
     }
 
@@ -328,7 +328,7 @@ b8 Frame::init(){
     frameData.setHwnd(hwnd);
     if(!frameData.hwnd()){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window creation failed; native_domain=Win32 native_code={}"), nativeError);
         return false;
     }
 
@@ -337,12 +337,12 @@ b8 Frame::init(){
         RECT windowRect = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
         if(!AdjustWindowRectExForDpi(&windowRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, windowDpi)){
             const DWORD nativeError = GetLastError();
-            NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+            NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
             return false;
         }
         if(!SetWindowPos(hwnd, nullptr, x, y, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top, SWP_NOZORDER | SWP_NOACTIVATE)){
             const DWORD nativeError = GetLastError();
-            NWB_LOGGER_FATAL(NWB_TEXT("Frame window DPI resize failed; native_domain=Win32 native_code={}"), nativeError);
+            NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame window DPI resize failed; native_domain=Win32 native_code={}"), nativeError);
             return false;
         }
     }
@@ -350,13 +350,13 @@ b8 Frame::init(){
     RECT clientRect = {};
     if(!GetClientRect(hwnd, &clientRect)){
         const DWORD nativeError = GetLastError();
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
         return false;
     }
     const i32 clientWidth = clientRect.right - clientRect.left;
     const i32 clientHeight = clientRect.bottom - clientRect.top;
     if(clientWidth <= 0 || clientHeight <= 0){
-        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 client rectangle dimensions are invalid: {}x{}"), clientWidth, clientHeight);
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("Frame Win32 client rectangle dimensions are invalid: {}x{}"), clientWidth, clientHeight);
         return false;
     }
     frameData.width() = static_cast<u16>(Min<u32>(static_cast<u32>(clientWidth), s_MaxU16));
@@ -365,7 +365,7 @@ b8 Frame::init(){
     if(!startup())
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Windows backend."));
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Frame: Using Windows backend."));
     return true;
 }
 
@@ -400,7 +400,7 @@ b8 Frame::mainLoop(){
         RECT rect = {};
         if(!GetClientRect(hwnd, &rect)){
             const DWORD nativeError = GetLastError();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
             return false;
         }
         const b8 windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
@@ -412,14 +412,14 @@ b8 Frame::mainLoop(){
         }
         const b8 windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
         if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
-#ifdef NWB_UNICODE
+#ifdef FOUNDATION_UNICODE
             const b8 titleChanged = SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
 #else
             const b8 titleChanged = SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
 #endif
             if(!titleChanged){
                 const DWORD nativeError = GetLastError();
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 window title update failed; native_domain=Win32 native_code={}"), nativeError);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 window title update failed; native_domain=Win32 native_code={}"), nativeError);
                 return false;
             }
         }

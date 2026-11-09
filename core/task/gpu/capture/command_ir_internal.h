@@ -72,7 +72,7 @@ template<typename RecordT>
 inline void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept{
     static_assert(IsStandardLayout_V<RecordT>, "Command IR records must be standard layout");
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
-    NWB_MEMSET(&record, 0, sizeof(record));
+    FOUNDATION_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;
     record.header.byteSize = static_cast<u16>(sizeof(record));
 }

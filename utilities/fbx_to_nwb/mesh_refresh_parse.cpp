@@ -26,7 +26,7 @@ namespace MeshRefreshParseDetail{
 
 [[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
         return false;
     }
 
@@ -35,7 +35,7 @@ namespace MeshRefreshParseDetail{
         if(Impl::IsAllowedMeshAssetField(fieldName))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
         return false;
     }
     return true;
@@ -55,7 +55,7 @@ namespace MeshRefreshParseDetail{
         return false;
 
     if(!SourceVertexRefsHaveNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
         return false;
     }
 

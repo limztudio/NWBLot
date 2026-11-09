@@ -38,9 +38,9 @@ namespace __hidden_transparent_multi_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr TStringView s_TransparentProjectName = NWB_TEXT("TransparentMultiSmokeProjectImpl");
+constexpr TStringView s_TransparentProjectName = FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl");
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-constexpr TStringView s_CausticProjectName = NWB_TEXT("CausticSphereSmokeProject");
+constexpr TStringView s_CausticProjectName = FOUNDATION_TEXT("CausticSphereSmokeProject");
 constexpr AStringView s_CausticTimingEnvironment = "NWB_CAUSTIC_SMOKE_TIMING";
 constexpr AStringView s_SparsePreset = "sparse";
 #endif
@@ -101,9 +101,9 @@ public:
 
 [[nodiscard]] static TStringView TransparentMultiFpsLabel()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
+    return FOUNDATION_TEXT("FrameLaggedAsyncLightingSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("TransparentCsgSmokeProject");
+    return FOUNDATION_TEXT("TransparentCsgSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     return s_CausticProjectName;
 #else
@@ -188,19 +188,19 @@ public:
             NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             const auto presetText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CAUSTIC_SMOKE_CAMERA_PRESET");
             if(!presetText){
-                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset is required"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CausticTimingProbe: camera preset is required"));
                 return false;
             }
             const AStringView preset(presetText->data(), presetText->size());
             if(preset != "populated" && preset != s_SparsePreset){
-                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
             }
             cameraDistance = cameraDistance * (preset == s_SparsePreset ? 2.0f : 1.0f);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, TransparentMultiSceneTransforms::s_CameraTargetY);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), TransparentMultiScene::s_CausticSphereScale);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases {}"), NWB::Impl::s_CausticTemporalPhaseCount);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}"), TransparentMultiScene::s_DefaultDirectionalLightPitch, TransparentMultiScene::s_DefaultDirectionalLightYaw, TransparentMultiScene::s_DefaultDirectionalLightIntensity);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? FOUNDATION_TEXT("sparse") : FOUNDATION_TEXT("populated"), cameraDistance, TransparentMultiSceneTransforms::s_CameraTargetY);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), TransparentMultiScene::s_CausticSphereScale);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: photon phases {}"), NWB::Impl::s_CausticTemporalPhaseCount);
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}"), TransparentMultiScene::s_DefaultDirectionalLightPitch, TransparentMultiScene::s_DefaultDirectionalLightYaw, TransparentMultiScene::s_DefaultDirectionalLightIntensity);
         }
 #endif
         if(!TransparentMultiScene::Populate(cameraDistance, causticTiming, m_sceneYaw.yaw(), *m_world, m_sceneTransforms))
@@ -217,7 +217,7 @@ public:
         removeFrameLaggedAsyncLightingUnfocusedPass();
 #endif
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProjectImpl: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: shutdown"));
     }
 
     virtual b8 onUpdate(const f32 delta)override{
@@ -232,7 +232,7 @@ public:
             if(!m_rendererBaselineCapturePaused){
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TransparentMultiSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }
@@ -247,9 +247,9 @@ public:
             m_frameLaggedAsyncLightingEnabled = !m_frameLaggedAsyncLightingEnabled;
             rendererSystem.setFrameLaggedAsyncLightingEnabled(m_frameLaggedAsyncLightingEnabled);
             if(m_frameLaggedAsyncLightingEnabled)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
             else
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
         }
 #endif
         const f32 frozenAngle = EffectiveFrozenAngle();
@@ -334,13 +334,13 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
+    return FOUNDATION_TEXT("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("NWB Transparent CSG Smoke");
+    return FOUNDATION_TEXT("NWB Transparent CSG Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return NWB_TEXT("NWB Caustic Sphere Smoke");
+    return FOUNDATION_TEXT("NWB Caustic Sphere Smoke");
 #else
-    return NWB_TEXT("NWB Transparent Multi Smoke");
+    return FOUNDATION_TEXT("NWB Transparent Multi Smoke");
 #endif
 }
 

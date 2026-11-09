@@ -29,7 +29,7 @@ class SceneShadingUploadTracker{
                 lightDataUnchanged = true;
             else{
                 native(in storedLightBytes, in lights, in lightByteCount, mut lightDataUnchanged){
-                    lightDataUnchanged = NWB_MEMCMP(storedLightBytes.data(), lights.data(), lightByteCount) == 0;
+                    lightDataUnchanged = FOUNDATION_MEMCMP(storedLightBytes.data(), lights.data(), lightByteCount) == 0;
                 }
             }
         }
@@ -45,7 +45,7 @@ class SceneShadingUploadTracker{
             return true;
         b8 matches = false;
         native(in storedShadingBytes, in sceneShadingState, mut matches){
-            matches = NWB_MEMCMP(storedShadingBytes.data(), &sceneShadingState, sizeof(sceneShadingState)) == 0;
+            matches = FOUNDATION_MEMCMP(storedShadingBytes.data(), &sceneShadingState, sizeof(sceneShadingState)) == 0;
         }
         return !matches;
     }
@@ -66,7 +66,7 @@ class SceneShadingUploadTracker{
         if(lightUploadRequired || lightCount == 0u){
             if(lightByteCount != 0u){
                 native(in lights, in lightByteCount, mut inOutLightGpuData){
-                    NWB_MEMCPY(inOutLightGpuData.data(), inOutLightGpuData.size(), lights.data(), lightByteCount);
+                    FOUNDATION_MEMCPY(inOutLightGpuData.data(), inOutLightGpuData.size(), lights.data(), lightByteCount);
                 }
             }
             inOutLightGpuDataCount = lightCount;
@@ -74,7 +74,7 @@ class SceneShadingUploadTracker{
         }
         if(sceneShadingUploadRequired){
             native(in sceneShadingState, mut inOutSceneShadingGpuData){
-                NWB_MEMCPY(inOutSceneShadingGpuData.data(), inOutSceneShadingGpuData.size(), &sceneShadingState, sizeof(sceneShadingState));
+                FOUNDATION_MEMCPY(inOutSceneShadingGpuData.data(), inOutSceneShadingGpuData.size(), &sceneShadingState, sizeof(sceneShadingState));
             }
             inOutSceneShadingGpuDataValid = true;
         }

@@ -241,8 +241,8 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
         while(runBegin > 0u && discovered[runBegin - 1u].stateIndex == stateIndex)
             --runBegin;
 
-        NWB_ASSERT(discovered[runBegin].state);
-        NWB_ASSERT(runBegin == 0u || discovered[runBegin - 1u].stateIndex > stateIndex);
+        FOUNDATION_ASSERT(discovered[runBegin].state);
+        FOUNDATION_ASSERT(runBegin == 0u || discovered[runBegin - 1u].stateIndex > stateIndex);
         for(usize fragmentIndex = runBegin; fragmentIndex < runEnd; ++fragmentIndex)
             outFragments.push_back(discovered[fragmentIndex]);
         runEnd = runBegin;

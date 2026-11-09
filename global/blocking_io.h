@@ -10,9 +10,9 @@
 #include "type.h"
 #include "type_properties.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID) || defined(FOUNDATION_PLATFORM_APPLE) || defined(FOUNDATION_PLATFORM_UNIX)
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
+#if defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID) || defined(FOUNDATION_PLATFORM_APPLE) || defined(FOUNDATION_PLATFORM_UNIX)
 template<typename PointerT, typename OperationT>
     requires((IsSame_V<PointerT, u8*> || IsSame_V<PointerT, const u8*>) && IsSame_V<decltype(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())), ssize_t>)
 [[nodiscard]] inline b8 TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept(noexcept(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())) && IsNothrowDestructible_V<OperationT>){
@@ -60,7 +60,7 @@ template<typename PointerT, typename OperationT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 [[nodiscard]] inline b8 ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
     usize remaining = byteCount;

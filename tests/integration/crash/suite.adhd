@@ -101,7 +101,7 @@ void FillPackageRequest(const CrashTestPath& spoolDirectory, AStringView crashId
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
 extern u32 s_NativeLifecycleDiagnostics;
 extern u32 s_UnlockedLifecycleDiagnostics;
 extern Array<char, 192u> s_LastLifecycleDiagnostic;
@@ -147,11 +147,11 @@ b8 CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringVie
 }
 
 NWB::Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return NWB::Core::Crash::CrashDetail::PlatformKind::Windows;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_ANDROID)
     return NWB::Core::Crash::CrashDetail::PlatformKind::Android;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     return NWB::Core::Crash::CrashDetail::PlatformKind::Linux;
 #else
     return NWB::Core::Crash::CrashDetail::PlatformKind::Unknown;
@@ -176,7 +176,7 @@ void FillPackageRequest(const CrashTestPath& spoolDirectory, const AStringView c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
 u32 s_NativeLifecycleDiagnostics = 0u;
 u32 s_UnlockedLifecycleDiagnostics = 0u;
 Array<char, 192u> s_LastLifecycleDiagnostic = {};
@@ -364,10 +364,10 @@ TEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <dbghelp.h>
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -459,7 +459,7 @@ TEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(Crash, InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -691,7 +691,7 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
         capturedContextFlags = storage.context.ContextFlags & ~NWB::Core::Crash::CrashDetail::s_WindowsExtendedContextFlag;
         capturedInstructionPointer = options.instructionPointer;
         auto sourceRequest = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
-        NWB_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
+        FOUNDATION_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
         sourceRequest = NWB::Core::Crash::CrashDetail::CrashRequest{};
         storage.context = CONTEXT{};
         storage.exceptionRecord = EXCEPTION_RECORD{};
@@ -741,14 +741,14 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     ASSERT_LE(streamOffset, dumpBytes.size());
     ASSERT_LE(sizeof(MINIDUMP_EXCEPTION_STREAM), dumpBytes.size() - streamOffset);
     MINIDUMP_EXCEPTION_STREAM exceptionStream = {};
-    NWB_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
+    FOUNDATION_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
     EXPECT_EQ(exceptionStream.ThreadId, request.threadId);
     EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionCode, NWB::Core::Crash::CrashDetail::s_ManualDumpExceptionCode);
     EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionAddress, capturedInstructionPointer);
     ASSERT_GE(exceptionStream.ThreadContext.DataSize, sizeof(CONTEXT));
     ASSERT_LE(static_cast<u64>(exceptionStream.ThreadContext.Rva) + sizeof(CONTEXT), dumpBytes.size());
     CONTEXT dumpedContext = {};
-    NWB_MEMCPY(&dumpedContext, sizeof(dumpedContext), dumpBytes.data() + exceptionStream.ThreadContext.Rva, sizeof(dumpedContext));
+    FOUNDATION_MEMCPY(&dumpedContext, sizeof(dumpedContext), dumpBytes.data() + exceptionStream.ThreadContext.Rva, sizeof(dumpedContext));
 #if defined(_M_X64) || defined(__x86_64__)
     EXPECT_EQ(dumpedContext.Rip, capturedInstructionPointer);
 #elif defined(_M_IX86) || defined(__i386__)
@@ -820,8 +820,8 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
 }
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -937,7 +937,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     TestArena testArena;
     auto& arena = testArena.arena;

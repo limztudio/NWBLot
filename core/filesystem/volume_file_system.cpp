@@ -134,12 +134,12 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
 
             const b8 isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
                 unmountLocked();
                 return false;
             }
             if(isLastSegment && segmentFileSize > m_segmentSize){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
                 unmountLocked();
                 return false;
             }
@@ -158,7 +158,7 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.segmentSize != 0 && desc.segmentSize != m_segmentSize){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}"), ConvertString(m_volumeName), desc.segmentSize, m_segmentSize);
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}"), ConvertString(m_volumeName), desc.segmentSize, m_segmentSize);
             unmountLocked();
             return false;
         }
@@ -170,14 +170,14 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.metadataSize != 0 && desc.metadataSize != m_metadataBytes){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}"), ConvertString(m_volumeName), desc.metadataSize, m_metadataBytes);
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}"), ConvertString(m_volumeName), desc.metadataSize, m_metadataBytes);
             unmountLocked();
             return false;
         }
     }
 
     if(m_maxSegments != 0 && m_segmentPaths.size() > m_maxSegments){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"), ConvertString(m_volumeName), m_segmentPaths.size(), m_maxSegments);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"), ConvertString(m_volumeName), m_segmentPaths.size(), m_maxSegments);
         unmountLocked();
         return false;
     }
@@ -269,7 +269,7 @@ Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 of
     return static_cast<usize>(readSize);
 }
 
-b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING){
+b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING){
     NothrowScopedLock lock(m_mutex);
     if(cursor.filesystem != this)
         return false;
@@ -322,7 +322,7 @@ b8 VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
     return m_mounted && virtualPath && m_files.find(virtualPath) != m_files.end();
 }
 
-Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING){
+Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING){
     NothrowScopedLock lock(m_mutex);
     if(!m_mounted){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
@@ -369,7 +369,7 @@ b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, 
         ++fileCountAfterWrite;
     }
     if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}"), ConvertString(m_volumeName), fileCountAfterWrite);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}"), ConvertString(m_volumeName), fileCountAfterWrite);
         return false;
     }
 
@@ -450,7 +450,7 @@ b8 VolumeFileSystem::scanSegmentsLocked(){
     return true;
 }
 
-Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING){
+Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING){
     if(!m_mounted){
         FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
         return MakeUnexpected(Failure{});

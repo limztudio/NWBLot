@@ -26,7 +26,7 @@ namespace __hidden_graphics_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_DynamicRenderingBeginFailedReason = NWB_TEXT("dynamic rendering could not begin");
+static constexpr TStringView s_DynamicRenderingBeginFailedReason = FOUNDATION_TEXT("dynamic rendering could not begin");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +72,7 @@ void SetGraphicsDynamicState(const VolkDeviceTable& deviceDispatch, VkCommandBuf
 
 
 void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
-    constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin render pass");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(!FramebufferRenderingPreparation(*this).validateRenderPassBegin(framebuffer, params, s_OperationName))
@@ -108,7 +108,7 @@ void CommandList::endRenderPass(){
         return;
     if(!m_renderPassActive)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, FOUNDATION_TEXT("end render pass")))
         return;
     endActiveRenderPass();
 }
@@ -167,7 +167,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 }
 
 void CommandList::draw(const DrawArguments& args){
-    constexpr TStringView s_OperationName = NWB_TEXT("draw");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("draw");
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
@@ -179,7 +179,7 @@ void CommandList::draw(const DrawArguments& args){
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
-    constexpr TStringView s_OperationName = NWB_TEXT("draw indexed");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("draw indexed");
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
@@ -191,12 +191,12 @@ void CommandList::drawIndexed(const DrawArguments& args){
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    constexpr TStringView s_OperationName = NWB_TEXT("draw indirect");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("draw indirect");
     if(drawCount == 0u)
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), s_OperationName, NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), s_OperationName, FOUNDATION_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
     if(!indirectBuffer)
         return;
 
@@ -205,12 +205,12 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 }
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    constexpr TStringView s_OperationName = NWB_TEXT("draw indexed indirect");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("draw indexed indirect");
     if(drawCount == 0u)
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), s_OperationName, NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), s_OperationName, FOUNDATION_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
     if(!indirectBuffer)
         return;
 
@@ -241,13 +241,13 @@ void CommandList::setViewportState(const ViewportState& viewportState){
 }
 
 b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
-    NWB_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
+    FOUNDATION_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
     Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> colorAttachments = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
-    NWB_ASSERT(numColorAttachments <= s_MaxRenderTargets);
+    FOUNDATION_ASSERT(numColorAttachments <= s_MaxRenderTargets);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
         auto& tex = *fbDesc.colorAttachments[i].texture;
@@ -256,8 +256,8 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex.m_creationDesc, resolvedColorSubresources);
         const auto view = tex.getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
         if(!view){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             return false;
         }
 
@@ -284,8 +284,8 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
         const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(depthTex.m_creationDesc, resolvedDepthSubresources);
         const auto depthView = depthTex.getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
         if(!depthView){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             return false;
         }
 
@@ -347,7 +347,7 @@ b8 CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
 
     RenderPassParameters params = {};
     if(!beginDynamicRendering(*framebuffer, params)){
-        rejectCommandRecording(NWB_TEXT("begin graphics render pass"), __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
+        rejectCommandRecording(FOUNDATION_TEXT("begin graphics render pass"), __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
         return false;
     }
     retainResource(framebuffer);

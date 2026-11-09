@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
+inline void FOUNDATION_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation, b8& outCollapsedToAxisAligned
 )noexcept{
     outCollapsedToAxisAligned = false;
@@ -58,7 +58,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     outExtents = VectorAdd(VectorMultiply(VectorAbs(projectedAxis0), VectorSplatX(boxExtents)), yzExtents);
 }
 
-inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
+inline void FOUNDATION_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation
 )noexcept{
     outCenter = VectorAdd(Vector3Rotate(VectorScale(boxCenter, scale), rotation), translation);
@@ -66,7 +66,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, boxOrientation));
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
+inline void FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation, b8& outCollapsedToAxisAligned
 )noexcept{
     outCollapsedToAxisAligned = false;
@@ -95,7 +95,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     outExtents = VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleAbs(projectedAxis0), VectorDoubleSplatX(boxExtents)), yzExtents);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
+inline void FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation
 )noexcept{
     outCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(boxCenter, scale), rotation), translation);
@@ -107,15 +107,15 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle point)noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle point)noexcept{
     return CollisionDetail::PointInsideObb(point, boxCenter, boxExtents, boxOrientation) ? ContainmentType::Contains : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::ContainsPointValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble point)noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::ContainsPointValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble point)noexcept{
     return CollisionDoubleDetail::PointInsideObb(point, boxCenter, boxExtents, boxOrientation) ? ContainmentType::Contains : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::ContainsTriangleValue(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::ContainsTriangleValue(
     SIMDVectorSingle boxCenter,
     SIMDVectorSingle boxExtents,
     SIMDVectorSingle boxOrientation,
@@ -129,7 +129,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     return IntersectsTriangleValue(boxCenter, boxExtents, boxOrientation, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::ContainsTriangleValue(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::ContainsTriangleValue(
     SIMDVectorDouble boxCenter,
     SIMDVectorDouble boxExtents,
     SIMDVectorDouble boxOrientation,
@@ -147,21 +147,21 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingOrientedBox::IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingOrientedBox::IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
     const SIMDVectorSingle localV0 = CollisionDetail::PointToObbLocal(v0, boxCenter, boxOrientation);
     const SIMDVectorSingle localV1 = CollisionDetail::PointToObbLocal(v1, boxCenter, boxOrientation);
     const SIMDVectorSingle localV2 = CollisionDetail::PointToObbLocal(v2, boxCenter, boxOrientation);
     return CollisionDetail::TriangleAabbOverlap(localV0, localV1, localV2, VectorNegate(boxExtents), boxExtents);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleOrientedBox::IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
     const SIMDVectorDouble localV0 = CollisionDoubleDetail::PointToObbLocal(v0, boxCenter, boxOrientation);
     const SIMDVectorDouble localV1 = CollisionDoubleDetail::PointToObbLocal(v1, boxCenter, boxOrientation);
     const SIMDVectorDouble localV2 = CollisionDoubleDetail::PointToObbLocal(v2, boxCenter, boxOrientation);
     return CollisionDoubleDetail::TriangleAabbOverlap(localV0, localV1, localV2, VectorDoubleNegate(boxExtents), boxExtents);
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingOrientedBox::IntersectsPlaneValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle plane)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::IntersectsPlaneValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle plane)noexcept{
     SIMDVectorSingle outside{};
     SIMDVectorSingle inside{};
     SIMDVectorSingle axis0{};
@@ -176,7 +176,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     return PlaneIntersectionType::Intersecting;
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::IntersectsPlaneValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble plane)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::IntersectsPlaneValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble plane)noexcept{
     SIMDVectorDouble outside{};
     SIMDVectorDouble inside{};
     SIMDVectorDouble axis0{};
@@ -191,13 +191,13 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     return PlaneIntersectionType::Intersecting;
 }
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingOrientedBox::IntersectsRayValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle origin, SIMDVectorSingle direction)noexcept{
+[[nodiscard]] inline Expected<f32> FOUNDATION_SIMD_CALL BoundingOrientedBox::IntersectsRayValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle origin, SIMDVectorSingle direction)noexcept{
     const SIMDVectorSingle localOrigin = CollisionDetail::PointToObbLocal(origin, boxCenter, boxOrientation);
     const SIMDVectorSingle localDirection = Vector3InverseRotate(direction, boxOrientation);
     return CollisionDetail::RayIntersectsMinMax(localOrigin, localDirection, VectorNegate(boxExtents), boxExtents);
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleOrientedBox::IntersectsRayValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept{
+[[nodiscard]] inline Expected<f64> FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::IntersectsRayValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept{
     const SIMDVectorDouble localOrigin = CollisionDoubleDetail::PointToObbLocal(origin, boxCenter, boxOrientation);
     const SIMDVectorDouble localDirection = VectorDouble3InverseRotate(direction, boxOrientation);
     return CollisionDoubleDetail::RayIntersectsMinMax(localOrigin, localDirection, VectorDoubleNegate(boxExtents), boxExtents);
@@ -207,7 +207,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::ContainedByValue(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::ContainedByValue(
     SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
 )noexcept{
     SIMDVectorSingle corners[s_CornerCount];
@@ -216,7 +216,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::ContainedByValue(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::ContainedByValue(
     SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
 )noexcept{
     SIMDVectorDouble corners[s_DoubleCornerCount];
@@ -254,7 +254,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containsSphereValues(const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle sphereValue)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::containsSphereValues(const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle sphereValue)const noexcept{
     const SIMDVectorSingle sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVectorSingle localCenter = CollisionDetail::PointToObbLocal(CollisionDetail::SphereCenter(sphereValue), boxCenter, boxOrientation);
     const SIMDVectorSingle closestPoint = CollisionDetail::ClosestPointOnMinMax(localCenter, VectorNegate(boxExtents), boxExtents);
@@ -266,7 +266,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return ContainmentType::Intersects;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containsSphereValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::containsSphereValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble sphereValue
 )const noexcept{
     const SIMDVectorDouble sphereRadius = CollisionDoubleDetail::SphereRadius(sphereValue);
@@ -280,7 +280,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return ContainmentType::Intersects;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containsBoxValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::containsBoxValues(
     const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )const noexcept{
     SIMDVectorSingle corners[BoundingBox::s_CornerCount];
@@ -290,7 +290,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return intersectsBoxValues(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containsBoxValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::containsBoxValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )const noexcept{
     SIMDVectorDouble corners[BoundingDoubleBox::s_DoubleCornerCount];
@@ -300,7 +300,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return intersectsBoxValues(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containsOrientedBoxValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::containsOrientedBoxValues(
     const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )const noexcept{
     SIMDVectorSingle corners[BoundingOrientedBox::s_CornerCount];
@@ -310,7 +310,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return intersectsOrientedBoxValues(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, otherBoxOrientation) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containsOrientedBoxValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::containsOrientedBoxValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )const noexcept{
     SIMDVectorDouble corners[BoundingDoubleOrientedBox::s_DoubleCornerCount];
@@ -320,7 +320,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return intersectsOrientedBoxValues(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, otherBoxOrientation) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containsFrustumValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::containsFrustumValues(
     const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue,
     const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue
 )const noexcept{
@@ -333,7 +333,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
     return CollisionDetail::FrustumPlanesIntersectOrientedBox(planes, boxCenter, boxExtents, boxOrientation) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containsFrustumValues(
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::containsFrustumValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue,
     const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue
 )const noexcept{
@@ -350,25 +350,25 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingOrientedBox::intersectsBoxValues(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingOrientedBox::intersectsBoxValues(
     const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )const noexcept{
     return CollisionDetail::ObbIntersectsObb(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, s_SIMDIdentityR3);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleOrientedBox::intersectsBoxValues(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::intersectsBoxValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )const noexcept{
     return CollisionDoubleDetail::ObbIntersectsObb(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, s_DoubleSIMDIdentityR3);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingOrientedBox::intersectsOrientedBoxValues(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingOrientedBox::intersectsOrientedBoxValues(
     const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )const noexcept{
     return CollisionDetail::ObbIntersectsObb(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleOrientedBox::intersectsOrientedBoxValues(
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::intersectsOrientedBoxValues(
     const SIMDVectorDouble boxCenter, const SIMDVectorDouble boxExtents, const SIMDVectorDouble boxOrientation, const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )const noexcept{
     return CollisionDoubleDetail::ObbIntersectsObb(boxCenter, boxExtents, boxOrientation, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
@@ -378,7 +378,7 @@ inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept{
     SIMDVectorSingle centerVector{};
     SIMDVectorSingle extentsVector{};
     SIMDVectorSingle orientationVector{};
@@ -396,7 +396,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& ou
     StoreFloat(orientationVector, outBox.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)const noexcept{
     SIMDVectorSingle centerVector{};
     SIMDVectorSingle extentsVector{};
     SIMDVectorSingle orientationVector{};
@@ -406,7 +406,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& ou
     StoreFloat(orientationVector, outBox.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOrientedBox& outBox, const SIMDMatrixDouble& matrix)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOrientedBox& outBox, const SIMDMatrixDouble& matrix)const noexcept{
     SIMDVectorDouble centerVector{};
     SIMDVectorDouble extentsVector{};
     SIMDVectorDouble orientationVector{};
@@ -424,7 +424,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOri
     StoreDouble(orientationVector, outBox.orientation);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOrientedBox& outBox, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)const noexcept{
+inline void FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOrientedBox& outBox, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)const noexcept{
     SIMDVectorDouble centerVector{};
     SIMDVectorDouble extentsVector{};
     SIMDVectorDouble orientationVector{};
@@ -457,11 +457,11 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::contains(const SIMDVectorSingle point)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::contains(const SIMDVectorSingle point)const noexcept{
     return ContainsPointValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::contains(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::contains(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return ContainsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
 }
 
@@ -483,11 +483,11 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
     );
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::contains(const SIMDVectorDouble point)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::contains(const SIMDVectorDouble point)const noexcept{
     return ContainsPointValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), point);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::contains(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::contains(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return ContainsTriangleValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), v0, v1, v2);
 }
 
@@ -531,15 +531,15 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
     );
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingOrientedBox::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingOrientedBox::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return IntersectsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingOrientedBox::intersects(const SIMDVectorSingle plane)const noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::intersects(const SIMDVectorSingle plane)const noexcept{
     return IntersectsPlaneValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane);
 }
 
-[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingOrientedBox::intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept{
+[[nodiscard]] inline Expected<f32> FOUNDATION_SIMD_CALL BoundingOrientedBox::intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept{
     return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), origin, direction);
 }
 
@@ -561,15 +561,15 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
     );
 }
 
-[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleOrientedBox::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return IntersectsTriangleValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), v0, v1, v2);
 }
 
-[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::intersects(const SIMDVectorDouble plane)const noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::intersects(const SIMDVectorDouble plane)const noexcept{
     return IntersectsPlaneValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), plane);
 }
 
-[[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleOrientedBox::intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept{
+[[nodiscard]] inline Expected<f64> FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept{
     return IntersectsRayValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), origin, direction);
 }
 
@@ -577,11 +577,11 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingOrientedBox::containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept{
     return ContainedByValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
-[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
+[[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return ContainedByValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 

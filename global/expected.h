@@ -8,7 +8,7 @@
 #include <expected>
 
 #if !defined(__cpp_lib_expected) || __cpp_lib_expected < 202202L
-#error "NWB requires C++23 std::expected support."
+#error "C++23 std::expected support is required."
 #endif
 
 #include "type_properties.h"

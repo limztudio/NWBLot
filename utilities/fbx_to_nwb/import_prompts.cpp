@@ -19,13 +19,13 @@ NWB_FBX_TO_NWB_BEGIN
 
 Expected<AString> ImportPrompts::PromptString(const AStringView label, const AStringView defaultValue, b8& inOutPrompted){
     inOutPrompted = true;
-    NWB_COUT << label;
+    FOUNDATION_COUT << label;
     if(!defaultValue.empty())
-        NWB_COUT << " [" << defaultValue << "]";
-    NWB_COUT << ": ";
+        FOUNDATION_COUT << " [" << defaultValue << "]";
+    FOUNDATION_COUT << ": ";
 
     AString line;
-    if(ReadTextLine(NWB_CIN, line))
+    if(ReadTextLine(FOUNDATION_CIN, line))
         line = TrimCopy(Move(line));
     if(line.empty())
         line = defaultValue;
@@ -38,10 +38,10 @@ b8 ImportPrompts::PromptBool(const AStringView label, const b8 defaultValue, Cor
     inOutPrompted = true;
     ScratchString line(scratchArena);
     for(;;){
-        NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
+        FOUNDATION_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         line.clear();
-        if(!ReadTextLine(NWB_CIN, line))
+        if(!ReadTextLine(FOUNDATION_CIN, line))
             return defaultValue;
 
         line = NormalizeOptionText(Move(line));
@@ -51,7 +51,7 @@ b8 ImportPrompts::PromptBool(const AStringView label, const b8 defaultValue, Cor
         if(value)
             return *value;
 
-        NWB_COUT << "Please answer y or n.\n";
+        FOUNDATION_COUT << "Please answer y or n.\n";
     }
 }
 
@@ -59,10 +59,10 @@ f64 ImportPrompts::PromptDouble(const AStringView label, const f64 defaultValue,
     inOutPrompted = true;
     ScratchString line(scratchArena);
     for(;;){
-        NWB_COUT << label << " [" << defaultValue << "]: ";
+        FOUNDATION_COUT << label << " [" << defaultValue << "]: ";
 
         line.clear();
-        if(!ReadTextLine(NWB_CIN, line))
+        if(!ReadTextLine(FOUNDATION_CIN, line))
             return defaultValue;
 
         line = TrimCopy(Move(line));
@@ -73,14 +73,14 @@ f64 ImportPrompts::PromptDouble(const AStringView label, const f64 defaultValue,
         if(parsed && IsValidFbxImportScale(*parsed))
             return *parsed;
 
-        NWB_COUT << "Please enter a positive finite number.\n";
+        FOUNDATION_COUT << "Please enter a positive finite number.\n";
     }
 }
 
 b8 ImportPrompts::ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
     const auto exists = FileExistsNoFollow(outputPath);
     if(!exists){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
         return false;
     }
     if(!*exists)
@@ -88,7 +88,7 @@ b8 ImportPrompts::ValidateOutputOverwrite(const ScratchPath& outputPath, const I
     if(options.forceOverwrite)
         return true;
     if(options.acceptDefaults){
-        NWB_LOGGER_WARNING(NWB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
         return false;
     }
 
@@ -98,13 +98,13 @@ b8 ImportPrompts::ValidateOutputOverwrite(const ScratchPath& outputPath, const I
 b8 ImportPrompts::ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
     if(inOutOptions.inputPath.empty()){
         if(inOutOptions.acceptDefaults){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Input FBX or NWB path is required."));
             return false;
         }
 
         auto input = PromptString("Input FBX or NWB path", {}, inOutPrompted);
         if(!input){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Input FBX or NWB path is required."));
             return false;
         }
         inOutOptions.inputPath = Move(*input);

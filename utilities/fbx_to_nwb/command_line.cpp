@@ -36,7 +36,7 @@ Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances,
     b8 sawSkinned = false;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Selected mesh index is out of range"));
             return MakeUnexpected(Failure{});
         }
 
@@ -47,7 +47,7 @@ Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances,
     }
 
     if(sawStatic && sawSkinned){
-        NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Model export does not support mixed static and skinned source meshes yet"));
         return MakeUnexpected(Failure{});
     }
 
@@ -143,7 +143,7 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
 
         const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));
         if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), ConvertString(inputIsRegularFile.error().message()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to query input FBX path: {}"), ConvertString(inputIsRegularFile.error().message()));
             return s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile || !*inputIsRegularFile)
@@ -166,9 +166,9 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
         }
         if(instances.empty()){
             if(options.includeHidden)
-                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("No mesh instances found in FBX."));
             else
-                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
             return s_FbxToNwbExitFailure;
         }
 
@@ -257,7 +257,7 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
 
         return s_FbxToNwbExitSuccess;
     }, [&](const CLI::ParseError& error){ return FbxCliDiagnostics::ExitParseError(app, error, scratchArena); }, [](){
-        NWB_LOGGER_ERROR(NWB_TEXT("FBX conversion terminated with an unexpected exception"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FBX conversion terminated with an unexpected exception"));
         return -1;
     });
 }

@@ -82,8 +82,8 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     }
 
     for(BufferChunkPtr& retiredChunk : activeLedger.chunks){
-        NWB_ASSERT(retiredChunk);
-        NWB_ASSERT(retiredChunk->physicalQueue == queue && (retiredChunk->owner == nullptr) == (retiredChunk->nativeRecordingID == 0u));
+        FOUNDATION_ASSERT(retiredChunk);
+        FOUNDATION_ASSERT(retiredChunk->physicalQueue == queue && (retiredChunk->owner == nullptr) == (retiredChunk->nativeRecordingID == 0u));
         if(!retiredChunk->owner && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
             m_retiredChunkBytes = SubtractSaturating(m_retiredChunkBytes, retiredChunk->size);
             retiredChunk->owner = owner;
@@ -185,8 +185,8 @@ void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, cons
     auto it = ledger->chunks.begin();
     while(m_retiredChunkBytes > m_memoryLimit && it != ledger->chunks.end()){
         BufferChunkPtr& chunk = *it;
-        NWB_ASSERT(chunk);
-        NWB_ASSERT(chunk->physicalQueue == queue);
+        FOUNDATION_ASSERT(chunk);
+        FOUNDATION_ASSERT(chunk->physicalQueue == queue);
         if(chunk->owner || chunk->version > completedVersion){
             ++it;
             continue;
@@ -208,7 +208,7 @@ UploadManager::QueueChunkLedger* UploadManager::findQueueLedgerLocked(const GpuP
 }
 
 UploadManager::QueueChunkLedger& UploadManager::findOrCreateQueueLedgerLocked(const GpuPhysicalQueueId queue){
-    NWB_ASSERT(queue.valid());
+    FOUNDATION_ASSERT(queue.valid());
     if(QueueChunkLedger* const ledger = findQueueLedgerLocked(queue))
         return *ledger;
 
@@ -255,7 +255,7 @@ void UploadManager::retireSubmittedChunksLocked(
     BufferChunk* chunk = ledger->firstActiveChunk;
     while(chunk){
         BufferChunk* const nextChunk = chunk->nextActiveChunk;
-        NWB_ASSERT(chunk->owner && chunk->nativeRecordingID != 0u);
+        FOUNDATION_ASSERT(chunk->owner && chunk->nativeRecordingID != 0u);
         b8 submitted = false;
         if(submittedOwners.indexed())
             submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);

@@ -32,7 +32,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructTransition;
     default:
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return GpuCompiledBarrierType::TextureTransition;
     }
 }
@@ -46,7 +46,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructUav;
     default:
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return GpuCompiledBarrierType::TextureUav;
     }
 }
@@ -134,7 +134,7 @@ namespace GpuTaskGraphCompilerDetail{
             // HazardDomain uses never reach state planning, so the type is texture, buffer or acceleration structure.
             const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
             const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-            NWB_ASSERT(releaseType < GpuCompiledBarrierType::Count && acquireType < GpuCompiledBarrierType::Count);
+            FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count && acquireType < GpuCompiledBarrierType::Count);
             if(!AppendCompiledOwnershipTransfer(plan, resource, barrierRange, previousState.task, compiledTask.task, previousState.queue, compiledTask.queue, GpuOwnershipTransferRoute::Internal))
                 return MakeUnexpected(Failure{});
             pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
@@ -191,7 +191,7 @@ namespace GpuTaskGraphCompilerDetail{
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase mutates that vector.
     for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
         const GpuTaskId taskID = topologicalOrder[taskIndex];
-        NWB_ASSERT(taskIndex < compiledPlan.tasks.size() && compiledPlan.tasks[taskIndex].task == taskID);
+        FOUNDATION_ASSERT(taskIndex < compiledPlan.tasks.size() && compiledPlan.tasks[taskIndex].task == taskID);
         GpuCompiledTask& compiledTask = compiledPlan.tasks[taskIndex];
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
@@ -209,7 +209,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(resource.type == GpuGraphResourceType::HazardDomain)
                 continue;
             // Analysis rejects an unknown required state on every non-HazardDomain use.
-            NWB_ASSERT(use.requiredState != ResourceStates::Unknown);
+            FOUNDATION_ASSERT(use.requiredState != ResourceStates::Unknown);
             if(
                 (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer || resource.type == GpuGraphResourceType::AccelStruct)
                 && ResourceUsesConcurrentQueueSharing(resource, topology)
@@ -271,7 +271,7 @@ namespace GpuTaskGraphCompilerDetail{
                             if(!initialOwnerHandoffSource)
                                 return false;
                             initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                            NWB_ASSERT(initialOwnerAcquireType < GpuCompiledBarrierType::Count);
+                            FOUNDATION_ASSERT(initialOwnerAcquireType < GpuCompiledBarrierType::Count);
                             initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = initialOwnerHandoffSource->completion, .consumer = taskID, });
                         }
                         else if(resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask.queue)
@@ -343,7 +343,7 @@ namespace GpuTaskGraphCompilerDetail{
                 continue;
             }
 
-            NWB_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
+            FOUNDATION_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
             const usize previousStateIndex = resourceHistory.last(use.resource);
             const TrackedCompiledResourceState* previousState = previousStateIndex != Limit<usize>::s_Max ? &trackedResourceStates[previousStateIndex] : nullptr;
 

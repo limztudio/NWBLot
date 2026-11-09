@@ -44,7 +44,7 @@ namespace __hidden_assets_material_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
+inline constexpr TStringView s_MaterialAssetKindLabel = FOUNDATION_TEXT("material");
 
 [[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
     const AStringView trimmed = TrimView(valueText);

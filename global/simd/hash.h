@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void NWB_SIMD_CALL HashCombineF32x4(const SIMDVectorSingle lanes, usize& seed)noexcept{
+FOUNDATION_INLINE void FOUNDATION_SIMD_CALL HashCombineF32x4(const SIMDVectorSingle lanes, usize& seed)noexcept{
     seed = HashCombineValue(seed, BitCast<u32>(VectorGetX(lanes)));
     seed = HashCombineValue(seed, BitCast<u32>(VectorGetY(lanes)));
     seed = HashCombineValue(seed, BitCast<u32>(VectorGetZ(lanes)));

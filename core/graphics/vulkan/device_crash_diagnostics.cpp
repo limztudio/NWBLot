@@ -101,7 +101,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
         }
 
         if(hasBufferMarker && remainingEntries > 0u){
-            NWB_ASSERT(device.m_amdBreadcrumb.mappedMemory && device.m_amdBreadcrumb.metadata && device.m_amdBreadcrumb.metadata->slotRecordCount == device.m_amdBreadcrumb.layout.totalSlotCount && device.m_amdBreadcrumb.metadata->nextSerialCount == device.m_amdBreadcrumb.layout.physicalQueueCount);
+            FOUNDATION_ASSERT(device.m_amdBreadcrumb.mappedMemory && device.m_amdBreadcrumb.metadata && device.m_amdBreadcrumb.metadata->slotRecordCount == device.m_amdBreadcrumb.layout.totalSlotCount && device.m_amdBreadcrumb.metadata->nextSerialCount == device.m_amdBreadcrumb.layout.physicalQueueCount);
             const auto breadcrumbSlots = MakeNotNull(static_cast<const u32*>(device.m_amdBreadcrumb.mappedMemory));
             // Select each exact queue independently because physical queues remain unordered globally.
             for(usize queueIndex = 0u; queueIndex < device.m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
@@ -189,7 +189,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
 
                 const VkResult faultResult = device.m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(device.m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
-                    const AStringView faultDescription(faultInfo.description, NWB_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
+                    const AStringView faultDescription(faultInfo.description, FOUNDATION_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
                     report.details.append(StringFormat(m_reportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
                     if(vendorBinaryByteSize != 0u){
                         if(!vendorBinary.empty()){
@@ -222,7 +222,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
 
                     for(u32 i = 0u; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                        const AStringView vendorDescription(vendorInfo.description, NWB_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
+                        const AStringView vendorDescription(vendorInfo.description, FOUNDATION_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
                         report.details.append(StringFormat(m_reportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
                             , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)
@@ -252,7 +252,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
             ));
     }
 
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), ConvertString(report.context), ConvertString(report.details));
+    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: GPU crash detected during {}:\n{}"), ConvertString(report.context), ConvertString(report.details));
 
     // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){

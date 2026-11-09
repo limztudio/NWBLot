@@ -82,13 +82,13 @@ static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free lin
 
 [[nodiscard]] inline Block* BlockFromAllocation(NotNull<void*> p)noexcept{
     Block* block = nullptr;
-    NWB_MEMCPY(&block, sizeof(block), static_cast<u8*>(p.get()) - sizeof(block), sizeof(block));
+    FOUNDATION_MEMCPY(&block, sizeof(block), static_cast<u8*>(p.get()) - sizeof(block), sizeof(block));
     return block;
 }
 
 inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     Block* const blockPtr = &block;
-    NWB_MEMCPY(static_cast<u8*>(p.get()) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
+    FOUNDATION_MEMCPY(static_cast<u8*>(p.get()) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
 }
 
 [[nodiscard]] inline b8 IsLiveBlock(const void* const bucket, const usize bucketSize, const Block* const block)noexcept{
@@ -167,7 +167,7 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
 }
 
 inline void InsertFreeBlock(void*& freeHead, Block& block)noexcept{
-    NWB_ASSERT(block.isFree);
+    FOUNDATION_ASSERT(block.isFree);
 
     Block* const next = static_cast<Block*>(freeHead);
     new(BlockData(block).get()) FreeLinks{ .previous = nullptr, .next = next, };
@@ -177,7 +177,7 @@ inline void InsertFreeBlock(void*& freeHead, Block& block)noexcept{
 }
 
 inline void RemoveFreeBlock(void*& freeHead, Block& block)noexcept{
-    NWB_ASSERT(block.isFree);
+    FOUNDATION_ASSERT(block.isFree);
 
     const FreeLinks links = Links(block);
     if(links.previous)
@@ -190,7 +190,7 @@ inline void RemoveFreeBlock(void*& freeHead, Block& block)noexcept{
 }
 
 inline void MergeNextBlock(Block& block, Block& next)noexcept{
-    NWB_ASSERT(block.next == &next);
+    FOUNDATION_ASSERT(block.next == &next);
 
     block.spanBytes += sizeof(Block) + next.spanBytes;
     block.next = next.next;
@@ -199,8 +199,8 @@ inline void MergeNextBlock(Block& block, Block& next)noexcept{
 }
 
 inline void SplitUsedBlock(void*& freeHead, Block& block, const usize requestedSpan)noexcept{
-    NWB_ASSERT(!block.isFree);
-    NWB_ASSERT(requestedSpan <= block.spanBytes);
+    FOUNDATION_ASSERT(!block.isFree);
+    FOUNDATION_ASSERT(requestedSpan <= block.spanBytes);
 
     const usize remainder = block.spanBytes - requestedSpan;
     if(remainder < sizeof(Block) + MinimumFreeSpan())
@@ -281,7 +281,7 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
 
 usize PersistentArena::StructureAlignedSize(const usize byte, const usize align){
     if(!IsSupportedAlignmentValue(align)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return 0u;
     }
 
@@ -299,13 +299,13 @@ PersistentArena::PersistentArena(const Name& allocationLog, const usize maxSize)
 {
     if(m_maxSize != 0u)
         m_bucket = CoreAlloc(m_maxSize);
-    NWB_FATAL_ASSERT(m_bucket || m_maxSize == 0u);
+    FOUNDATION_FATAL_ASSERT(m_bucket || m_maxSize == 0u);
 
     m_memoryStats.reset(static_cast<u64>(m_maxSize));
     if(!m_bucket)
         return;
 
-    NWB_FATAL_ASSERT(reinterpret_cast<usize>(m_bucket) % __hidden_persistent::s_BlockAlignment == 0u);
+    FOUNDATION_FATAL_ASSERT(reinterpret_cast<usize>(m_bucket) % __hidden_persistent::s_BlockAlignment == 0u);
     const usize managedBytes = m_maxSize - (m_maxSize % __hidden_persistent::s_BlockAlignment);
     if(managedBytes < sizeof(__hidden_persistent::Block) + __hidden_persistent::MinimumFreeSpan())
         return;
@@ -327,7 +327,7 @@ void* PersistentArena::allocate(const usize align, usize size){
     if(size == 0u)
         return nullptr;
     if(!IsSupportedAlignmentValue(align)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return nullptr;
     }
 
@@ -351,7 +351,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     const NotNull<void*> nonNullPtr = MakeNotNull(p);
     auto* const blockPtr = __hidden_persistent::BlockFromAllocation(nonNullPtr);
     const b8 liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
-    NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena reallocation must reference a live block from this arena"));
+    FOUNDATION_ASSERT_MSG(liveBlock, FOUNDATION_TEXT("PersistentArena reallocation must reference a live block from this arena"));
     if(!liveBlock)
         return nullptr;
 
@@ -363,7 +363,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         return nullptr;
     }
     if(!IsSupportedAlignmentValue(align)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return nullptr;
     }
 
@@ -387,7 +387,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         }
         if(layout->spanBytes <= combinedSpanBytes){
             while(layout->spanBytes > block->spanBytes){
-                NWB_ASSERT(block->next && block->next->isFree);
+                FOUNDATION_ASSERT(block->next && block->next->isFree);
                 __hidden_persistent::Block* const next = block->next;
                 __hidden_persistent::RemoveFreeBlock(m_freeHead, *next);
                 __hidden_persistent::MergeNextBlock(*block, *next);
@@ -405,7 +405,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         return nullptr;
 
     auto& replacementBlock = *static_cast<__hidden_persistent::Block*>(replacement->block.get());
-    NWB_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, nonNullPtr.get(), copyBytes);
+    FOUNDATION_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, nonNullPtr.get(), copyBytes);
     deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
     m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock.spanBytes));
     return replacement->pointer.get();
@@ -419,7 +419,7 @@ void PersistentArena::deallocate(void* const p, [[maybe_unused]] const usize ali
 
     auto* const blockPtr = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
     const b8 liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
-    NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena deallocation must reference a live block from this arena"));
+    FOUNDATION_ASSERT_MSG(liveBlock, FOUNDATION_TEXT("PersistentArena deallocation must reference a live block from this arena"));
     if(!liveBlock)
         return;
 

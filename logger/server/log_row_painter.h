@@ -8,7 +8,7 @@
 #include "clipboard_text_internal.h"
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 NWB_LOG_BEGIN

@@ -32,7 +32,7 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
         if(!prepared)
             return MakeUnexpected(prepared.error());
         if(prepared->faceIndex != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: malformed prepared .font input"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: malformed prepared .font input"));
             return MakeUnexpected(AStringView("prepared font face index must be zero"));
         }
         return Move(prepared->fontBytes);
@@ -42,7 +42,7 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
         return MakeUnexpected(AStringView("failed to open font source"));
     const StreamOffset sourceSize = stream.tellg();
     if(!stream || sourceSize <= 0 || static_cast<u64>(sourceSize) > Impl::s_FontMaxSourceBytes || !CanRepresentStreamSize(static_cast<u64>(sourceSize))){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source size is invalid or unreadable"));
         return MakeUnexpected(AStringView("source size is invalid or unreadable"));
     }
     stream.seekg(0, InputFileStream::beg);
@@ -65,36 +65,36 @@ FontSource::FontSource(Core::Assets::AssetArena& arena)noexcept
 b8 FontSource::open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload){
     auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena());
     if(!bytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
         return false;
     }
     m_bytes = Move(*bytes);
     if(!m_freeType.openAndValidate(m_bytes, 0u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source admission failed"));
         return false;
     }
     const FT_Library library = m_freeType.library();
     const FT_Face face = m_freeType.face();
     if(!IsValidBakeFontFaceMetrics(face->num_glyphs, face->units_per_EM)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unsupported glyph count or units per em"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: unsupported glyph count or units per em"));
         return false;
     }
     u32 spread = options.spread;
     const AStringView module = ResolveBakeFreeTypeSdfModule(options.outline);
     const FT_Error spreadSet = FT_Property_Set(library, module.data(), "spread", &spread);
     if(spreadSet != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
         return false;
     }
     const FT_Error sizeSet = FT_Set_Pixel_Sizes(face, 0u, options.ppem);
     if(sizeSet != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
         return false;
     }
     const auto stem = PathToGenericString(scratch, options.output.stemView());
     const auto fontReference = Core::Assets::AssetRef<Impl::Font>::FromText(AStringView(stem));
     if(!fontReference){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output asset stem contains an embedded null"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: output asset stem contains an embedded null"));
         return false;
     }
     payload.font = *fontReference;

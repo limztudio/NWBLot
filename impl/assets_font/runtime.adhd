@@ -146,7 +146,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 
 
 [[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
-    NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), ConvertString(reason));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), ConvertString(reason));
     return MakeUnexpected(reason);
 }
 
@@ -209,7 +209,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
 
     PreparedFontSource candidate(arena);
     candidate.faceIndex = faceIndex;
-    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
+    FOUNDATION_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
     Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts{};
     u64 pixelByteCount = 0u;
@@ -228,7 +228,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         );
         if(!groupDecode)
             return ReadFailure(path, groupDecode.error());
-        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
+        FOUNDATION_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 

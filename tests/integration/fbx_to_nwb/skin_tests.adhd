@@ -127,10 +127,10 @@ TEST(FbxMesh, MissingAttributesAndDeformerCountsPreserveFailureOrder){
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
     using namespace NWB::FbxToNwb;
     EXPECT_FALSE(ValidateFbxMeshAttributes(false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh is missing positions")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("imported normal mode")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("mesh is missing positions")));
+    EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("imported normal mode")));
     EXPECT_FALSE(ValidateFbxMeshAttributes(true, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("imported normal mode")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("imported normal mode")));
     EXPECT_TRUE(ValidateFbxMeshAttributes(true, false, false));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(0u));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(2u));
@@ -142,12 +142,12 @@ TEST(FbxMesh, OutputModeValidationPreservesFailureOrder){
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
     using namespace NWB::FbxToNwb;
     EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, true, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("--separate-assets is only valid")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("requires a skinned source mesh")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("--separate-assets is only valid")));
+    EXPECT_FALSE(logger.sawErrorContaining(FOUNDATION_TEXT("requires a skinned source mesh")));
     EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Mesh, false, false, false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh output cannot write split skeleton/skin payload")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("mesh output cannot write split skeleton/skin payload")));
     EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, false, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("requires a skinned source mesh")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("requires a skinned source mesh")));
     EXPECT_EQ(logger.errorCount(), 3u);
 }
 
@@ -200,8 +200,8 @@ TEST(FbxOptions, MixedSkinningSelectionIsRejected){
     EXPECT_FALSE(*staticOnly);
     summary.observe(true);
     EXPECT_FALSE(summary.resolve());
-#if NWB_OCCUR_WARNING
-    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("mixed static and skinned source meshes")));
+#if FOUNDATION_OCCUR_WARNING
+    EXPECT_TRUE(logger.sawMessageContaining(FOUNDATION_TEXT("mixed static and skinned source meshes")));
 #endif
     EXPECT_EQ(logger.errorCount(), 0u);
 }

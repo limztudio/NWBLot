@@ -46,23 +46,23 @@ static void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AS
 
     if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
         const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("{}: failed to remove {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("{}: failed to remove {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
     }
 }
 
 b8 CreateNewStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
     if(const auto operation = EnsureDirectories(directoryPath.parentPath()); !operation){
         const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
         return false;
     }
     const auto created = GlobalFilesystemDetail::CreateDirectorySingle(directoryPath);
     if(!created){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(created.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(created.error().message()));
         return false;
     }
     if(!*created){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' already exists; preserve it for recovery"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: {} '{}' already exists; preserve it for recovery"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath));
         return false;
     }
     return true;
@@ -150,7 +150,7 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
     const auto sourceExists = FileExists(fromDirectory);
     if(!sourceExists){
         const ErrorCode& errorCode = sourceExists.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query output directory '{}': {}"), PathToString<tchar>(fromDirectory), ConvertString(errorCode.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to query output directory '{}': {}"), PathToString<tchar>(fromDirectory), ConvertString(errorCode.message()));
         return MakeUnexpected(Failure{});
     }
     if(!*sourceExists)
@@ -160,10 +160,10 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
     if(!directory || !*directory){
         if(!directory){
             const ErrorCode& errorCode = directory.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}"), PathToString<tchar>(fromDirectory), ConvertString(errorCode.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}"), PathToString<tchar>(fromDirectory), ConvertString(errorCode.message()));
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: output path '{}' is not a directory"), PathToString<tchar>(fromDirectory));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: output path '{}' is not a directory"), PathToString<tchar>(fromDirectory));
         }
         return MakeUnexpected(Failure{});
     }
@@ -174,13 +174,13 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
         const auto exists = FileExists(currentPath);
         if(!exists){
             const ErrorCode& errorCode = exists.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}"), PathToString<tchar>(currentPath), ConvertString(errorCode.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}"), PathToString<tchar>(currentPath), ConvertString(errorCode.message()));
             return MakeUnexpected(Failure{});
         }
         if(!*exists)
             return segmentIndex;
         if(segmentIndex == Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while inspecting existing volume"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: segment index overflow while inspecting existing volume"));
             return MakeUnexpected(Failure{});
         }
     }
@@ -194,7 +194,7 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
 
 b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer, StagedDirectoryCleanupGuard* const stageCleanup, StagedDirectoryCleanupGuard* const backupCleanup){
     if(segmentCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
         return false;
     }
     const auto existingSegmentCount = FilesystemVolumeStagingDetail::CountExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
@@ -215,13 +215,13 @@ b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
 
     if(const auto operation = EnsureDirectories(outputDirectory); !operation){
         const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
         return false;
     }
     if(*existingSegmentCount != 0u){
         if(const auto operation = EnsureDirectories(stagedPaths.backupDirectory); !operation){
             const ErrorCode errorCode = operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"), PathToString<tchar>(stagedPaths.backupDirectory), ConvertString(errorCode.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"), PathToString<tchar>(stagedPaths.backupDirectory), ConvertString(errorCode.message()));
             return false;
         }
     }
@@ -264,7 +264,7 @@ b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
             if(const auto operation = RenamePath(move.sourcePath, move.destinationPath); !operation){
                 const ErrorCode errorCode = operation.error();
                 const AStringView action = movedCount < *existingSegmentCount ? "back up existing" : "promote staged";
-                NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to {} segment '{}' to '{}': {}"), ConvertString(action), PathToString<tchar>(move.sourcePath), PathToString<tchar>(move.destinationPath), ConvertString(errorCode.message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem volume publish: failed to {} segment '{}' to '{}': {}"), ConvertString(action), PathToString<tchar>(move.sourcePath), PathToString<tchar>(move.destinationPath), ConvertString(errorCode.message()));
                 promoted = false;
                 break;
             }
@@ -292,7 +292,7 @@ b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeNam
     const auto outputExists = FileExists(outputDirectory);
     if(!outputExists){
         const ErrorCode& errorCode = outputExists.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to query output directory '{}' : {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to query output directory '{}' : {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
         return false;
     }
     if(!*outputExists)
@@ -302,10 +302,10 @@ b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeNam
     if(!directory || !*directory){
         if(!directory){
             const ErrorCode& errorCode = directory.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect output directory '{}' : {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to inspect output directory '{}' : {}"), PathToString<tchar>(outputDirectory), ConvertString(errorCode.message()));
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old segments: output path '{}' is not a directory"), PathToString<tchar>(outputDirectory));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to remove old segments: output path '{}' is not a directory"), PathToString<tchar>(outputDirectory));
         }
         return false;
     }
@@ -318,7 +318,7 @@ b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeNam
         const auto exists = FileExists(hashedPath);
         if(!exists){
             const ErrorCode& errorCode = exists.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(errorCode.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to query hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(errorCode.message()));
             return false;
         }
         if(!*exists)
@@ -326,12 +326,12 @@ b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeNam
 
         if(const auto operation = RemoveFile(hashedPath); !operation || !*operation){
             const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(FilesystemVolumeStagingDetail::FilesystemMutationFailureDetail(errorCode, "segment was not present")));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to remove old hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(FilesystemVolumeStagingDetail::FilesystemMutationFailureDetail(errorCode, "segment was not present")));
             return false;
         }
 
         if(segmentIndex == Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Segment index overflow while removing old hashed segments"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Segment index overflow while removing old hashed segments"));
             return false;
         }
     }

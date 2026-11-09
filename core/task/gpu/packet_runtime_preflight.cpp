@@ -403,7 +403,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
         const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
-        NWB_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID && taskView.id == task && (taskView.resourceUseCount == 0u || taskView.resourceUses != nullptr));
+        FOUNDATION_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID && taskView.id == task && (taskView.resourceUseCount == 0u || taskView.resourceUses != nullptr));
         for(usize useIndex = 0u; useIndex < taskView.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = taskView.resourceUses[useIndex];
             if(use.access >= GpuTaskResourceAccess::Count || !validateResourceState(use.resource, use.requiredState))
@@ -415,7 +415,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
                 return false;
         }
         const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
-        NWB_ASSERT(compiledTask->prologueStateSeedCount == 0u || stateSeeds != nullptr);
+        FOUNDATION_ASSERT(compiledTask->prologueStateSeedCount == 0u || stateSeeds != nullptr);
         for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
             if(!planAccess.validPacket(seed.sourcePacket) || seed.sourcePacket.index >= packetID.index || !validateResourceReady(seed.resource))
@@ -427,10 +427,10 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             )
                 return false;
         }
-        NWB_ASSERT(compiledTask->prologueBarrierCount == 0u || compiledTaskView.prologueBarriers != nullptr);
+        FOUNDATION_ASSERT(compiledTask->prologueBarrierCount == 0u || compiledTaskView.prologueBarriers != nullptr);
         if(!validateBarrierList(Span<const GpuCompiledBarrier>(compiledTaskView.prologueBarriers, compiledTask->prologueBarrierCount)))
             return false;
-        NWB_ASSERT(compiledTask->epilogueBarrierCount == 0u || compiledTaskView.epilogueBarriers != nullptr);
+        FOUNDATION_ASSERT(compiledTask->epilogueBarrierCount == 0u || compiledTaskView.epilogueBarriers != nullptr);
         if(!validateBarrierList(Span<const GpuCompiledBarrier>(compiledTaskView.epilogueBarriers, compiledTask->epilogueBarrierCount)))
             return false;
     }

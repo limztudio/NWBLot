@@ -18,7 +18,7 @@ Projects configure graphics and storage before device initialization through the
 #include <loader/project_entry.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/filesystem/volume_file_system.h>
-#include <impl/assets_graphics/bindless/runtime_abi.h>
+#include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
 
 TESTBED_BEGIN
 

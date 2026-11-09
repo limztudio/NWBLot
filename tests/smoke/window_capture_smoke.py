@@ -308,7 +308,7 @@ def launch_and_capture(args, backend):
             time.sleep(args.settle_seconds)
             ensure_process_running(testbed_process, "before checked capture")
             result = WindowFrameCapture(ensure_process_running).capture_render_ready_window(args, backend, handle, testbed_process)
-        testbed_exit_code, testbed_exit_tail = CaptureProcessTermination.terminate_process(testbed_process, LIT_TESTBED, handle, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
+        testbed_exit_code, testbed_exit_tail = CaptureProcessTermination.terminate_process(testbed_process, LIT_TESTBED, handle, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles, graceful_exit_timeout=args.graceful_exit_timeout)
         testbed_process = None
         require_normal_process_exit(testbed_exit_code, testbed_exit_tail, LIT_TESTBED)
         if logserver_process is not None:
@@ -353,7 +353,7 @@ def launch_and_capture_application(args):
             wait_failure = error
 
         try:
-            testbed_exit_code, testbed_exit_tail = CaptureProcessTermination.terminate_process(testbed_process, LIT_TESTBED, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
+            testbed_exit_code, testbed_exit_tail = CaptureProcessTermination.terminate_process(testbed_process, LIT_TESTBED, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles, graceful_exit_timeout=args.graceful_exit_timeout)
             testbed_process = None
             log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
             logserver_process = None

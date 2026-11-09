@@ -26,7 +26,7 @@ inline constexpr u32 s_InFlightRanges = 32u;
     auto& device = graphics.getDevice();
     for(const Name& scope : scopes){
         if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to prepare scope '{}'"), probeName, ConvertString(scope.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to prepare scope '{}'"), probeName, ConvertString(scope.resolvedText()));
             return false;
         }
     }
@@ -35,8 +35,8 @@ inline constexpr u32 s_InFlightRanges = 32u;
 
 inline void RegisterTimingProbeRenderPass(Core::GraphicsRuntime& graphics, Core::IRenderPass& pass, const TStringView probeName){
     graphics.addRenderPassToBack(pass);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: in-flight ranges {}"), probeName, s_InFlightRanges);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: render unfocused 1"), probeName);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: in-flight ranges {}"), probeName, s_InFlightRanges);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: render unfocused 1"), probeName);
 }
 };
 };
@@ -64,7 +64,7 @@ class AvboitTimingRenderPass{
         if(this.m_registered)
             return this.m_includeCaustics == includeCaustics;
         native(in includeCaustics){
-            constexpr TStringView s_ProbeName = NWB_TEXT("AvboitTimingProbe");
+            constexpr TStringView s_ProbeName = FOUNDATION_TEXT("AvboitTimingProbe");
             const Array<Name, 24> scopes = {
                 Impl::RendererGpuTimingScope::s_Frame.identity,
                 Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
@@ -103,7 +103,7 @@ class AvboitTimingRenderPass{
             this->m_registered = true;
             this->m_includeCaustics = includeCaustics;
             if(includeCaustics)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitTimingProbe: caustic in-flight ranges {}"), __hidden_timing_render_pass::s_InFlightRanges);
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("AvboitTimingProbe: caustic in-flight ranges {}"), __hidden_timing_render_pass::s_InFlightRanges);
             return true;
         }
     }
@@ -136,7 +136,7 @@ class ShadowTimingRenderPass{
         if(this.m_registered)
             return true;
         native{
-            constexpr TStringView s_ProbeName = NWB_TEXT("ShadowTimingProbe");
+            constexpr TStringView s_ProbeName = FOUNDATION_TEXT("ShadowTimingProbe");
             const Array<Name, 13> scopes = {
                 Impl::RendererGpuTimingScope::s_Frame.identity,
                 Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,

@@ -96,7 +96,7 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
                     }
                 }
             }
-            NWB_ASSERT(m_scopeContributionVisits[index] == positiveStamp);
+            FOUNDATION_ASSERT(m_scopeContributionVisits[index] == positiveStamp);
             return true;
         }
         const auto visit = [this](const TaskHandle handle)noexcept{

@@ -375,10 +375,10 @@ inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOff
 void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes);
 
 template<typename PodT>
-inline void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
-    NWB_ASSERT(byteOffset <= bytes.size());
-    NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
-    NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
+inline void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(FOUNDATION_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
+    FOUNDATION_ASSERT(byteOffset <= bytes.size());
+    FOUNDATION_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
+    FOUNDATION_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
 }
 
 
@@ -833,7 +833,7 @@ namespace TaskGraphTestUtils{
 void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes){
     outBytes.resize(source.size());
     if(!source.empty())
-        NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
+        FOUNDATION_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
 }
 
 

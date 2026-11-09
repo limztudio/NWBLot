@@ -59,7 +59,7 @@ inline constexpr u32 s_ClearHighWordShift = 32u;
 
 template<typename ValueT>
 inline void WriteClearPatternValue(const ValueT& value, NotNull<u8*> outBytes)noexcept{
-    NWB_MEMCPY(outBytes.get(), sizeof(value), &value, sizeof(value));
+    FOUNDATION_MEMCPY(outBytes.get(), sizeof(value), &value, sizeof(value));
 }
 
 template<usize ByteCount>

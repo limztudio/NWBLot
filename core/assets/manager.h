@@ -35,7 +35,7 @@ public:
     template<typename TAsset, typename TResource>
     [[nodiscard]] static b8 CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner){
         if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, ConvertString(TAsset::s_AssetTypeText));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: {} asset reference is empty"), owner, ConvertString(TAsset::s_AssetTypeText));
             return false;
         }
         return !resource.valid();
@@ -57,12 +57,12 @@ public:
     [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(const Name& virtualPath, const TStringView ownerName)const{
         auto loadedAsset = loadSync(AssetT::AssetTypeName(), virtualPath);
         if(!loadedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'"), ownerName, ConvertString(AssetT::s_AssetTypeText), ConvertString(virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to load {} asset '{}'"), ownerName, ConvertString(AssetT::s_AssetTypeText), ConvertString(virtualPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         const AssetT* typedAsset = CastAsset<AssetT>(loadedAsset->get());
         if(!typedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}"), ownerName, ConvertString(virtualPath.resolvedText()), ConvertString(AssetT::s_AssetTypeText));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: asset '{}' is not a {}"), ownerName, ConvertString(virtualPath.resolvedText()), ConvertString(AssetT::s_AssetTypeText));
             return MakeUnexpected(Failure{});
         }
         return UniquePtr<AssetT>(checked_cast<AssetT*>(loadedAsset->release()));

@@ -10,8 +10,8 @@
 
 native{
 #include <core/task/gpu/types.h>
+#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
 namespace NWB::Impl{
-struct MaterialPassDrawItemsView;
 using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
 using AvboitGeometryResourceSetId = Core::GpuGraphResourceSetId;
 };

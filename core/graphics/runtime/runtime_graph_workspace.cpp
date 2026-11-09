@@ -29,7 +29,7 @@ void StandaloneGraphWorkspace::reset(){
         if(planAccess.valid()){
             const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration != 0u && !transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration))
-                NWB_FATAL_ASSERT_MSG(false, "standalone graph workspace reuse requires every unaccepted packet to resolve");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "standalone graph workspace reuse requires every unaccepted packet to resolve");
             transaction.reset(compiledGraph);
             recordedGraph.reset(compiledGraph);
         }
@@ -119,7 +119,7 @@ void StandaloneGraphWorkspacePool::discard(StandaloneGraphWorkspace& workspace){
             break;
         }
     }
-    NWB_ASSERT(discarded);
+    FOUNDATION_ASSERT(discarded);
 }
 
 

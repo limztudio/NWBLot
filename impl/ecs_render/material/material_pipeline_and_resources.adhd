@@ -278,7 +278,7 @@ namespace __hidden_material_pipeline{
 Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer){
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
-    NWB_ASSERT(materialKey);
+    FOUNDATION_ASSERT(materialKey);
 
     auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
@@ -294,7 +294,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return MakeUnexpected(Failure{});
     };
 
-    NWB_ASSERT(!materialInfo.shaderVariant.empty());
+    FOUNDATION_ASSERT(!materialInfo.shaderVariant.empty());
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(m_arena);
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
@@ -307,14 +307,14 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline){
         const auto csgProjectEvaluatorModuleInclude = __hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(m_arena, m_csgShapeRegistry, pipelineKey.csgEvaluatorVariant);
         if(!csgProjectEvaluatorModuleInclude){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgProjectEvaluatorModuleAssignment = CsgShaderVariantBuilder().buildEvaluatorAssignment(AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
             const Expected<AStringView> existingEvaluatorModuleAssignment = CsgShaderVariantBuilder().findDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant);
             if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
                 return failMaterialPipeline();
             }
             if(!existingEvaluatorModuleAssignment)
@@ -325,7 +325,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline && !avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant = Move(*variant);
@@ -334,7 +334,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant = Move(*variant);
@@ -343,7 +343,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(Core::ShaderArchive::s_DefaultVariant, Core::ShaderArchive::s_DefaultVariant, avboitProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         avboitCsgShaderVariant = Move(*variant);
@@ -365,7 +365,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             materialInfo.avboitExtinctionPixelShader,
             materialInfo.avboitAccumulatePixelShader
         );
-        NWB_ASSERT(!materialInfo.transparent || avboitPixelShaderSelection.materialDriven());
+        FOUNDATION_ASSERT(!materialInfo.transparent || avboitPixelShaderSelection.materialDriven());
     }
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -386,7 +386,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
     const auto materialPassBindingLayout = prepareMaterialPassBindingLayout();
@@ -419,12 +419,12 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     const b8 meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
     // Surface info admission already requires the mesh shader and the opaque pixel shader.
-    NWB_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
-    NWB_ASSERT(materialInfo.meshShader.valid());
+    FOUNDATION_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
+    FOUNDATION_ASSERT(materialInfo.meshShader.valid());
 
     if(meshSupported){
         if(!pipelineBuilder.buildMesh()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
 
@@ -441,7 +441,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             return failMaterialPipeline();
     }
     else if(!pipelineBuilder.buildCompute()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), ConvertString(materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), ConvertString(materialKey.resolvedText()));
         return failMaterialPipeline();
     }
 
@@ -515,7 +515,7 @@ b8 MaterialPipelineBuilder::buildMesh(){
     else
         m_inputs.resources.meshletPipeline.reset();
     if(!meshletPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
 
@@ -544,7 +544,7 @@ b8 MaterialPipelineBuilder::buildIndexed(){
     else
         m_inputs.resources.indexedPipeline.reset();
     if(!indexedPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
     m_inputs.resources.renderPath = RenderPath::VertexIndexed;
@@ -554,9 +554,9 @@ b8 MaterialPipelineBuilder::buildIndexed(){
 b8 MaterialPipelineBuilder::buildCompute(){
     if(!m_inputs.system.createComputeEmulationResources())
         return false;
-    NWB_ASSERT(m_inputs.materialState.m_computeBindingLayout);
-    NWB_ASSERT(m_inputs.materialState.m_emulationVertexShader);
-    NWB_ASSERT(m_inputs.materialState.m_emulationInputLayout);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_computeBindingLayout);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_emulationVertexShader);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_emulationInputLayout);
     const Name& meshComputeArchiveStageName = ShaderBinaryPayload::s_MeshComputeArchiveStageName;
     if(!m_inputs.shaderSystem.loadShader<ComputeShader>(m_inputs.materialInfo.meshShader.name(), m_inputs.meshShaderVariant, s_RendererCsDebugName, &meshComputeArchiveStageName, m_inputs.resources.computeShader))
         return false;
@@ -564,7 +564,7 @@ b8 MaterialPipelineBuilder::buildCompute(){
         return false;
     // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_inputs.device, m_inputs.resources.computeShader, m_inputs.materialState.m_computeBindingLayout, false, m_inputs.resources.computePipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
 
@@ -581,7 +581,7 @@ b8 MaterialPipelineBuilder::buildCompute(){
     else
         m_inputs.resources.emulationPipeline.reset();
     if(!emulationPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         m_inputs.resources.computePipeline.reset();
         return false;
     }
@@ -680,7 +680,7 @@ b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Entit
 Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset){
     const Name materialPath = materialAsset.name();
     if(!materialPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: renderer material is empty"));
         return MakeUnexpected(Failure{});
     }
 
@@ -700,8 +700,8 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
 
     MaterialSurfaceInfo createdInfo(m_arena);
     // Material::loadBinary already rejected empty shader variants and missing material interfaces.
-    NWB_ASSERT(!material.shaderVariant().empty());
-    NWB_ASSERT(material.materialInterface());
+    FOUNDATION_ASSERT(!material.shaderVariant().empty());
+    FOUNDATION_ASSERT(material.materialInterface());
 
     const auto pixelShader = material.findShader<PixelShader>();
     const auto meshShader = material.findShader<MeshShader>();
@@ -716,10 +716,10 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
 
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
-    NWB_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
-    NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
+    FOUNDATION_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
     if(!MaterialSurfaceBuilder().populate(
         materialPath,
         AStringView(material.shaderVariant()),
@@ -866,8 +866,8 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     if(!mutableRange)
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*constantRange));
-    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*mutableRange));
+    FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*constantRange));
+    FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*mutableRange));
     const NWB::Impl::Scene::TransformComponent defaultTransform;
     const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
     ShadowOccluderMaterialContext context;
@@ -906,7 +906,7 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
             && IsNothrowDestructible_V<Iterator>
             && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<CacheT&>().end()))
             && noexcept(++DeclVal<Iterator&>())
-#if NWB_OCCUR_ASSERT
+#if FOUNDATION_OCCUR_ASSERT
             && noexcept(static_cast<b8>(!DeclVal<Iterator&>().value()))
 #endif
             && noexcept(DeclVal<ReleaseFn&>()(*DeclVal<Iterator&>().value()))
@@ -915,7 +915,7 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
     }()
 ){
     for(auto it = cache.begin(); it != cache.end(); ++it){
-        NWB_ASSERT(it.value());
+        FOUNDATION_ASSERT(it.value());
         releaseItem(*it.value());
     }
     cache.clear();
@@ -936,7 +936,7 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 
 template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
 [[nodiscard]] static Expected<NotNull<ResourceT*>> FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle ResourceT::* descriptorMember, LoadFn&& loadResource){
-    NWB_ASSERT(assetRef.valid());
+    FOUNDATION_ASSERT(assetRef.valid());
     const Name& assetPath = assetRef.name();
     auto assetIt = cache.find(assetPath);
     if(assetIt == cache.end()){
@@ -952,7 +952,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         if(insertResult.second)
             retireUnpublished.release();
     }
-    NWB_ASSERT(assetIt.value());
+    FOUNDATION_ASSERT(assetIt.value());
     return MakeNotNull(assetIt.value().get());
 }
 
@@ -966,7 +966,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
             if(!TextureAssetLoader::Load(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), ConvertString(assetPath.resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), ConvertString(assetPath.resolvedText()));
                 return false;
             }
             return true;
@@ -974,7 +974,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!textureResourceResult)
         return MakeUnexpected(textureResourceResult.error());
     const NotNull<TextureGpuResource*> textureResource = *textureResourceResult;
-    NWB_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
+    FOUNDATION_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
     return textureResource->sampledImageHeapHandle.slot();
 }
 
@@ -990,7 +990,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());
     const NotNull<SamplerGpuResource*> samplerResource = *samplerResourceResult;
-    NWB_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
+    FOUNDATION_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
     return samplerResource->samplerHeapHandle.slot();
 }
 
@@ -1016,7 +1016,7 @@ b8 RendererMaterialResourceResolver::Resolve(MaterialSurfaceInfo& materialInfo, 
 
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));
         return false;
     }
 
@@ -1026,19 +1026,19 @@ b8 RendererMaterialResourceResolver::Resolve(MaterialSurfaceInfo& materialInfo, 
         case MaterialResourceKind::SampledImage2D:
             heapSlot = __hidden_material_surface::ResolveTextureAssetSlot(resources, resourceReference.textureAsset, graphicsModule, assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.textureAsset.name().resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.textureAsset.name().resolvedText()));
                 return false;
             }
             break;
         case MaterialResourceKind::Sampler:
             heapSlot = __hidden_material_surface::ResolveSamplerAssetSlot(resources, resourceReference.samplerAsset, graphicsModule, assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.samplerAsset.name().resolvedText()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.samplerAsset.name().resolvedText()));
                 return false;
             }
             break;
         default:
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
 
@@ -1141,12 +1141,12 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mater
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:{
             // Resolved references own valid 2D cache entries until release clears the flag.
-            NWB_ASSERT(resourceReference.textureAsset.valid());
+            FOUNDATION_ASSERT(resourceReference.textureAsset.valid());
             const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
-            NWB_ASSERT(foundTexture != resources.textureAssetCache.end() && foundTexture.value());
+            FOUNDATION_ASSERT(foundTexture != resources.textureAssetCache.end() && foundTexture.value());
 
             const TextureGpuResource& textureResource = *foundTexture.value();
-            NWB_ASSERT(textureResource.valid() && textureResource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
+            FOUNDATION_ASSERT(textureResource.valid() && textureResource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
 
             collector.append(textureResource.texture);
             break;
@@ -1154,7 +1154,7 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mater
         case MaterialResourceKind::Sampler:
             break;
         default:
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }

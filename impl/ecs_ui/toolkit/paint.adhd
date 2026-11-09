@@ -101,9 +101,9 @@ public:
 public:
     // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
     void begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
-        NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
-        NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
-        NWB_ASSERT(IsFinite(skin.referenceDensity()));
+        FOUNDATION_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
+        FOUNDATION_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
+        FOUNDATION_ASSERT(IsFinite(skin.referenceDensity()));
         m_snapshot.m_generation = generation;
         m_snapshot.m_displayMetrics = metrics;
         m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
@@ -140,7 +140,7 @@ public:
     }
     void fillRect(const Rect& rectangle, const Color& color = {}){ emitQuad(rectangle, {}, color, PaintMaterial::Solid); }
     [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         return DrawPaintSkinRegion(
             m_recording,
             m_clips.back(),
@@ -161,7 +161,7 @@ public:
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
     [[nodiscard]] b8 prepareGlyphPages(const Span<const SharedGlyphPage> pages){ return prepareImages(pages, {}); }
     [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         if(!page || !IsValidPaintUvRect(uv))
             return false;
         u32 index = 0u;
@@ -178,11 +178,11 @@ public:
     }
     [[nodiscard]] b8 prepareSdfPages(const Span<const SharedSdfAtlasPage> pages){ return prepareImages({}, pages); }
     [[nodiscard]] b8 prepareImages(const Span<const SharedGlyphPage> glyphPages, const Span<const SharedSdfAtlasPage> sdfPages, const Span<const SharedImageSource> textureImages = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         return m_snapshot.m_images.prepare(glyphPages, sdfPages, textureImages);
     }
     [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         if(!page || channel >= page->binding().channelCount || !IsValidPaintUvRect(uv))
             return false;
         u32 index = 0u;
@@ -200,7 +200,7 @@ public:
     [[nodiscard]] b8 prepareTextureImages(const Span<const SharedImageSource> images){ return prepareImages({}, {}, images); }
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
     [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         if(!source || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
             return false;
         const Rect clip = m_clips.back();
@@ -224,14 +224,14 @@ public:
     }
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const noexcept{
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         return m_clips.back();
     }
 
 
 private:
     void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex = Limit<u32>::s_Max, const u32 sdfPageIndex = Limit<u32>::s_Max, const u32 sdfChannel = 0u, const u32 textureImageIndex = Limit<u32>::s_Max){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         EmitPaintQuad(
             m_recording,
             m_clips.back(),

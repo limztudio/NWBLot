@@ -29,19 +29,19 @@ void LogValidationFailure(const StagedFilePairPaths<ArenaT>& paths, const Staged
     switch(result.failureStage){
     case StagedFilePairFailureStage::QueryOutput:
     case StagedFilePairFailureStage::QueryWorkPath:
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
         break;
     case StagedFilePairFailureStage::InspectOutput:
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
         break;
     case StagedFilePairFailureStage::NonRegularOutput:
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
         break;
     case StagedFilePairFailureStage::WorkPathAlreadyExists:
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
         break;
     case StagedFilePairFailureStage::OutputAlreadyExists:
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files."), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files."), PathToString<tchar>(path));
         break;
     default:
         break;
@@ -105,7 +105,7 @@ Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, const ASt
         if(outputBase.extensionView().empty() || PathHasListedExtension(outputBase, s_NwbOutputExtensions))
             paths.metadata = outputBase;
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return MakeUnexpected(Failure{});
         }
         paths.metadata.replaceExtension(Core::Assets::s_NwbExtension);
@@ -128,12 +128,12 @@ b8 ValidateOutputPaths(const OutputPaths& outputPaths, const b8 force, Core::All
 
 b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, const b8 force, Core::Alloc::ScratchArena& scratchArena){
     if(payload.bytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an empty prepared texture."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: cannot write an empty prepared texture."));
         return false;
     }
     const auto metadata = __hidden_output::BuildMetadata(payload, scratchArena);
     if(!metadata){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot describe an invalid prepared texture."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: cannot describe an invalid prepared texture."));
         return false;
     }
 
@@ -156,16 +156,16 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
     if(!published){
         switch(published.failureStage){
         case StagedFilePairFailureStage::StagePrimary:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(paths.primaryTemporary), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(paths.primaryTemporary), ConvertString(published.error.message()));
             break;
         case StagedFilePairFailureStage::StageSecondary:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(paths.secondaryTemporary), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(paths.secondaryTemporary), ConvertString(published.error.message()));
             break;
         case StagedFilePairFailureStage::PreserveExistingOutput:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
             break;
         case StagedFilePairFailureStage::FinalizeOutput:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
             break;
         default:
             __hidden_output::LogValidationFailure(paths, published);
@@ -174,7 +174,7 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
         for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
             if(published.backedUp[index] && (published.removalErrors[index] || published.restorationErrors[index])){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
+                    FOUNDATION_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
                     , PathToString<tchar>(*outputs[index])
                     , PathToString<tchar>(*backups[index])
                     , published.removalErrors[index].value()
@@ -182,10 +182,10 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
                 );
             }
             if(!published.backedUp[index] && published.removalErrors[index]){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
             }
             if(published.temporaryErrors[index]){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(published.temporaryErrors[index].message()));
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(published.temporaryErrors[index].message()));
             }
         }
         return false;
@@ -193,7 +193,7 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
 
     for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
         if(published.backupCleanupErrors[index]){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
         }
     }
     return true;

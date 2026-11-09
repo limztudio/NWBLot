@@ -147,7 +147,7 @@ b8 Recorder::appendUnlocked(EventSlotLease& lease, const EventHeader& header, co
     if(payloadBytes != 0u){
         auto& destination = lease.m_slot->record.payload;
         destination.resize(payloadBytes);
-        NWB_MEMCPY(destination.data(), destination.size(), payload, payloadBytes);
+        FOUNDATION_MEMCPY(destination.data(), destination.size(), payload, payloadBytes);
     }
 
     publishSlotUnlocked(lease, header);
@@ -227,7 +227,7 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const Span<const u
     }
     // Both capacities were admitted before publication. Byte initialization and owning-pointer movement cannot throw.
     destination.resize(payloadBytes);
-    NWB_MEMCPY(destination.data(), destination.size(), payload.data(), payloadBytes);
+    FOUNDATION_MEMCPY(destination.data(), destination.size(), payload.data(), payloadBytes);
     available.record.header = __hidden_telemetry_recorder::MakeEventHeader(EventKind::Diagnostic, frameIndex, payloadBytes, streamId);
     m_diagnosticAvailableSlots = available.nextAvailable;
     available.nextAvailable = nullptr;

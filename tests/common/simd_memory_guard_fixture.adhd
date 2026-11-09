@@ -12,9 +12,9 @@ native{
 #include <global/process.h>
 #include <global/simd/memory.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <Windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
@@ -23,7 +23,7 @@ NWB_BEGIN
 
 namespace Tests{
 
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
 struct GuardedBytes final : NoCopy{
     void* mapping = nullptr;
     u8* data = nullptr;
@@ -40,7 +40,7 @@ public:
 };
 
 inline GuardedBytes::GuardedBytes()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     SYSTEM_INFO systemInfo{};
     GetSystemInfo(&systemInfo);
     pageBytes = static_cast<usize>(systemInfo.dwPageSize);
@@ -54,7 +54,7 @@ inline GuardedBytes::GuardedBytes()noexcept{
         return;
     accessibleBytes = pageBytes * 4u;
     mappingBytes = pageBytes * 6u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     mapping = VirtualAlloc(nullptr, mappingBytes, MEM_RESERVE, PAGE_NOACCESS);
     if(mapping == nullptr)
         return;
@@ -78,7 +78,7 @@ inline GuardedBytes::GuardedBytes()noexcept{
 inline GuardedBytes::~GuardedBytes()noexcept{
     if(mapping == nullptr)
         return;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(VirtualFree(mapping, 0u, MEM_RELEASE) == 0)
         abort();
 #else

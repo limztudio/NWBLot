@@ -61,7 +61,7 @@ inline Expected<u64> AddAlignedStagingMipSize(const u64 size, const u64 mipSize,
 
 
 Expected<VulkanDetail::TextureTransferLayout::StagingLayout> VulkanDetail::TextureTransferLayout::BuildStagingLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 bufferOffsetAlignment){
-    NWB_ASSERT(desc.mipLevels != 0u);
+    FOUNDATION_ASSERT(desc.mipLevels != 0u);
     StagingLayout result{ 0u, VulkanDetail::StagingTextureMipLayoutVector(arena) };
     result.mipLayouts.reserve(desc.mipLevels);
     for(u32 mip = 0u; mip < desc.mipLevels; ++mip){
@@ -91,7 +91,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
     TStringView operationName
 ){
     BufferImageCopyLayout outLayout{};
-    NWB_ASSERT(formatLayout.blockWidth != 0u && formatLayout.blockHeight != 0u && formatLayout.bytesPerBlock != 0u);
+    FOUNDATION_ASSERT(formatLayout.blockWidth != 0u && formatLayout.blockHeight != 0u && formatLayout.bytesPerBlock != 0u);
 
     const u64 blockCountX = Max<u64>(DivideUp(static_cast<u64>(extent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
     const u64 blockCountY = Max<u64>(DivideUp(static_cast<u64>(extent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
@@ -100,12 +100,12 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
     const u64 effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
     if(blockCountY > UINT64_MAX / effectiveRowPitch){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
         return MakeUnexpected(Failure{});
     }
     if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatLayout.bytesPerBlock) != 0){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -113,7 +113,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
     const u64 effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
     if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -121,7 +121,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(bufferRowBlocks > UINT64_MAX / formatLayout.blockWidth || bufferImageBlocks > UINT64_MAX / formatLayout.blockHeight){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -129,7 +129,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
     const u64 bufferImageHeight = bufferImageBlocks * formatLayout.blockHeight;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits"), operationName);
         return MakeUnexpected(Failure{});
     }
 
@@ -137,7 +137,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
         const auto requiredSize = ComputeStridedRangeByteSize(Max<u32>(extent.depth, 1u), effectiveDepthPitch, packedSlicePitch);
         if(!requiredSize){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return MakeUnexpected(Failure{});
         }
         outLayout.requiredSize = *requiredSize;
@@ -146,14 +146,14 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayou
         const u64 depthOffset = static_cast<u64>(extent.depth - 1);
         if(depthOffset > UINT64_MAX / effectiveDepthPitch){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return MakeUnexpected(Failure{});
         }
         const u64 depthBytes = depthOffset * effectiveDepthPitch;
         const u64 rowBytes = static_cast<u64>(blockCountY - 1) * effectiveRowPitch;
         if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return MakeUnexpected(Failure{});
         }
         outLayout.requiredSize = depthBytes + rowBytes + naturalRowPitch;

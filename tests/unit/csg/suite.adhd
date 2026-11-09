@@ -324,7 +324,7 @@ TEST(Csg, OversizedProjectShapeDoesNotChangeRegistry){
     EXPECT_EQ(registry.shapeTypeCount(), count);
     EXPECT_EQ(registry.revision(), revision);
     EXPECT_FALSE(registry.findShapeType(Name(NWB::Tests::CsgCases::s_CsgLookupNameProjectCsgOversized)));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parameter size larger than the inline shader ABI")));
+    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("parameter size larger than the inline shader ABI")));
 }
 
 TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){

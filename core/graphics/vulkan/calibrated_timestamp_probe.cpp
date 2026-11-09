@@ -30,7 +30,7 @@ namespace __hidden_calibrated_timestamp_probe{
 
 b8 CalibratedTimestampProbe::Query(const VkPhysicalDevice physicalDevice, const VkDevice device, const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR enumerateTimeDomains, const PFN_vkGetCalibratedTimestampsKHR getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
     if(!enumerateTimeDomains || !getCalibratedTimestamps){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp entry points are unavailable."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Calibrated timestamp entry points are unavailable."));
         return false;
     }
 
@@ -40,7 +40,7 @@ b8 CalibratedTimestampProbe::Query(const VkPhysicalDevice physicalDevice, const 
         if(countResult == VK_INCOMPLETE)
             continue;
         if(countResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to enumerate calibrated timestamp domains. {}"), ResultToString(countResult));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to enumerate calibrated timestamp domains. {}"), ResultToString(countResult));
             return false;
         }
         if(timeDomainCount == 0u)
@@ -52,11 +52,11 @@ b8 CalibratedTimestampProbe::Query(const VkPhysicalDevice physicalDevice, const 
         if(domainsResult == VK_INCOMPLETE)
             continue;
         if(domainsResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read calibrated timestamp domains. {}"), ResultToString(domainsResult));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to read calibrated timestamp domains. {}"), ResultToString(domainsResult));
             return false;
         }
         if(writtenTimeDomainCount > timeDomains.size()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp domain enumeration returned an invalid count."));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Calibrated timestamp domain enumeration returned an invalid count."));
             return false;
         }
 
@@ -77,13 +77,13 @@ b8 CalibratedTimestampProbe::Query(const VkPhysicalDevice physicalDevice, const 
         u64 maxDeviation = 0u;
         const VkResult timestampResult = getCalibratedTimestamps(device, 1u, &timestampInfo, &timestamp, &maxDeviation);
         if(timestampResult != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe the calibrated device timestamp domain. {}"), ResultToString(timestampResult));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to probe the calibrated device timestamp domain. {}"), ResultToString(timestampResult));
             return false;
         }
         return true;
     }
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp domain enumeration did not stabilize."));
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Calibrated timestamp domain enumeration did not stabilize."));
     return false;
 }
 

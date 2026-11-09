@@ -6,11 +6,12 @@
 
 
 #include <logger/common.h>
+#include <logger/server/server_values.adhd.h>
 
 #include <global/diagnostics.h>
 #include <global/filesystem/operations.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 
 

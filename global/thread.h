@@ -17,9 +17,9 @@
 #include "type.h"
 #include "platform.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
@@ -47,7 +47,7 @@ inline void SleepMS(u32 duration)noexcept{
 [[nodiscard]] inline ThreadId QueryCurrentThreadId()noexcept{ return std::this_thread::get_id(); }
 
 [[nodiscard]] inline u32 CurrentThreadId()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return static_cast<u32>(GetCurrentThreadId());
 #elif defined(SYS_gettid)
     return static_cast<u32>(syscall(SYS_gettid));

@@ -24,7 +24,7 @@ NWB_ASSETS_BEGIN
 
 using AssetBytes = AssetVector<u8>;
 
-inline constexpr TStringView s_UnnamedAssetPathText = NWB_TEXT("<unnamed>");
+inline constexpr TStringView s_UnnamedAssetPathText = FOUNDATION_TEXT("<unnamed>");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

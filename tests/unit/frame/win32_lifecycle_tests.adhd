@@ -40,8 +40,8 @@ namespace __hidden_win32_lifecycle_tests{
 
 
 inline constexpr Name s_LoggerArena = NWB::Tests::FrameCases::s_OneOffNameTestsFrameClampObserver;
-inline constexpr TStringView s_ClampMessage = NWB_TEXT("Frame Win32 client size clamped");
-inline constexpr TStringView s_FrameClassName = NWB_TEXT("NWB_FRAME");
+inline constexpr TStringView s_ClampMessage = FOUNDATION_TEXT("Frame Win32 client size clamped");
+inline constexpr TStringView s_FrameClassName = FOUNDATION_TEXT("NWB_FRAME");
 inline constexpr int s_ClampObserverFailure = NWB::Tests::FrameCases::s_FrameTestClampObserverFailure;
 inline constexpr int s_UnexpectedFailure = NWB::Tests::FrameCases::s_FrameTestUnexpectedFailure;
 inline constexpr u32 s_InitializationAttempts = NWB::Tests::FrameCases::s_FrameTestInitializationAttempts;
@@ -94,7 +94,7 @@ class LoopLogger final : public NWB::Core::Common::ILogger{
 private:
     static void Record(const NWB::Core::Common::LogString& text, const NWB::Core::Common::LogType::Enum type){
         if(type >= NWB::Core::Common::LogType::Warning)
-            NWB_TCERR << text.data() << NWB_TEXT("\n");
+            FOUNDATION_TCERR << text.data() << FOUNDATION_TEXT("\n");
     }
 
 

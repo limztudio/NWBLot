@@ -32,7 +32,7 @@ inline constexpr AStringView s_ImplDirectoryName = "impl";
 
 
 static void CanonicalizeRootIdentity([[maybe_unused]] const AssetRootDuplicatePolicy::Enum duplicatePolicy, [[maybe_unused]] ScratchString& identity)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(duplicatePolicy == AssetRootDuplicatePolicy::HostFilesystem)
         CanonicalizeTextInPlace(identity);
 #endif
@@ -105,13 +105,13 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
 b8 PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
     const auto removed = RemoveAllIfExists(includeRoot);
     if(!removed){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(removed.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to clear generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(removed.error().message()));
         return false;
     }
 
     const auto ensured = EnsureDirectories(includeRoot);
     if(!ensured){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
         return false;
     }
     return true;

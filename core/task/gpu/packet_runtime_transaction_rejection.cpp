@@ -42,7 +42,7 @@ public:
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
         const b8 abandoned = m_graph.abandonUnacceptedPacketWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingAttemptGeneration, m_submissionBinding);
-        NWB_FATAL_ASSERT_MSG(abandoned, "throwing discard observer must leave an abandonable graph packet");
+        FOUNDATION_FATAL_ASSERT_MSG(abandoned, "throwing discard observer must leave an abandonable graph packet");
         m_transaction.completeRejectedPacketWithinSubmissionOperation(m_graph, m_compiledGraph, m_planAccess, m_packet, false);
     }
 
@@ -80,7 +80,7 @@ public:
     ~RejectingSubmissionUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
-        NWB_FATAL_ASSERT_MSG(!m_lease.valid(), "throwing submission discard observer must consume its graph lease");
+        FOUNDATION_FATAL_ASSERT_MSG(!m_lease.valid(), "throwing submission discard observer must consume its graph lease");
         m_transaction.completeRejectedPacketWithinSubmissionOperation(m_graph, m_compiledGraph, m_planAccess, m_packet, true);
     }
 
@@ -380,17 +380,17 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
         && lease.m_planGeneration == planAccess.planGeneration()
         && matchesRecordingAttemptBinding(graph, compiledGraph, lease.m_recordingAttemptGeneration, lease.m_submissionBinding)
     ;
-    NWB_FATAL_ASSERT_MSG(inputValid, "pre-submit exception cleanup must retain its exact transaction submission lease");
+    FOUNDATION_FATAL_ASSERT_MSG(inputValid, "pre-submit exception cleanup must retain its exact transaction submission lease");
 
     {
         NothrowScopedLock lock(m_mutex);
         const b8 runtimeValid = validForLocked(planAccess) && m_recordingAttemptGeneration == lease.m_recordingAttemptGeneration && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Submitting;
-        NWB_FATAL_ASSERT_MSG(runtimeValid, "pre-submit exception cleanup must retain its submitting packet runtime");
+        FOUNDATION_FATAL_ASSERT_MSG(runtimeValid, "pre-submit exception cleanup must retain its submitting packet runtime");
         m_packets[packetID.index].state = PacketRuntimeState::Rejecting;
     }
 
     const b8 abandoned = graph.abandonPacketSubmissionWithoutCallbacks(compiledGraph, planAccess, packetID, lease);
-    NWB_FATAL_ASSERT_MSG(abandoned && !lease.valid(), "pre-submit exception cleanup must consume its exact graph submission lease without observers");
+    FOUNDATION_FATAL_ASSERT_MSG(abandoned && !lease.valid(), "pre-submit exception cleanup must consume its exact graph submission lease without observers");
     completeRejectedPacketWithinSubmissionOperation(graph, compiledGraph, planAccess, packetID, true);
 }
 
@@ -404,12 +404,12 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
 )noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     const b8 inputValid = SubmissionOperation::ActiveFor(*this) && planAccess.validFor(compiledGraph) && packetView.valid();
-    NWB_FATAL_ASSERT_MSG(inputValid, "rejected packet completion requires its exact transaction operation and packet");
+    FOUNDATION_FATAL_ASSERT_MSG(inputValid, "rejected packet completion requires its exact transaction operation and packet");
 
     const GpuSubmissionPacket& packet = *packetView.plan;
     NothrowScopedLock lock(m_mutex);
     const b8 runtimeValid = validForLocked(planAccess) && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Rejecting;
-    NWB_FATAL_ASSERT_MSG(runtimeValid, "rejected packet completion must retain its rejecting transaction state");
+    FOUNDATION_FATAL_ASSERT_MSG(runtimeValid, "rejected packet completion must retain its rejecting transaction state");
     PacketRuntime& runtime = m_packets[packetID.index];
     runtime.state = PacketRuntimeState::Rejected;
     runtime.nativeSubmissionRejected = nativeSubmissionRejected;
@@ -422,7 +422,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
 
 void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)noexcept{
     const b8 operationValid = SubmissionOperation::ActiveExclusiveFor(*this) && planAccess.validFor(compiledGraph);
-    NWB_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");
+    FOUNDATION_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");
 
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
         GpuGraphSubmissionBinding submissionBinding;
@@ -430,13 +430,13 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
         {
             NothrowScopedLock lock(m_mutex);
             const b8 transactionValid = validForLocked(planAccess) && m_activeSubmissionBinding.valid() && m_recordingAttemptGeneration != 0u && packetIndex < m_packets.size();
-            NWB_FATAL_ASSERT_MSG(transactionValid, "exception cleanup must retain its graph submission binding");
+            FOUNDATION_FATAL_ASSERT_MSG(transactionValid, "exception cleanup must retain its graph submission binding");
 
             PacketRuntime& runtime = m_packets[packetIndex];
             if(runtime.state == PacketRuntimeState::Accepted || runtime.state == PacketRuntimeState::Rejected)
                 continue;
             const b8 packetReady = runtime.state == PacketRuntimeState::Declared;
-            NWB_FATAL_ASSERT_MSG(packetReady, "exception cleanup cannot cross an active packet operation");
+            FOUNDATION_FATAL_ASSERT_MSG(packetReady, "exception cleanup cannot cross an active packet operation");
             runtime.state = PacketRuntimeState::Rejecting;
             submissionBinding = m_activeSubmissionBinding;
             recordingAttemptGeneration = m_recordingAttemptGeneration;
@@ -444,7 +444,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
 
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
         const b8 abandoned = packetID.valid() && graph.abandonUnacceptedPacketWithoutCallbacks(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
-        NWB_FATAL_ASSERT_MSG(abandoned, "exception cleanup must terminalize every unaccepted graph packet");
+        FOUNDATION_FATAL_ASSERT_MSG(abandoned, "exception cleanup must terminalize every unaccepted graph packet");
 
         const GpuCompiledPacketView packetView = planAccess.packet(packetID);
         if(!packetView.valid())
@@ -452,7 +452,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
         const GpuSubmissionPacket& packet = *packetView.plan;
         NothrowScopedLock lock(m_mutex);
         const b8 runtimeValid = validForLocked(planAccess) && packetIndex < m_packets.size() && m_packets[packetIndex].state == PacketRuntimeState::Rejecting;
-        NWB_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
+        FOUNDATION_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
         PacketRuntime& runtime = m_packets[packetIndex];
         runtime.state = PacketRuntimeState::Rejected;
         ++m_submissionStatistics.rejectedPacketCount;
@@ -462,7 +462,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
     NothrowScopedLock lock(m_mutex);
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
     const b8 resolutionValid = allPacketsTerminalLocked() && m_submissionBindingResolved;
-    NWB_FATAL_ASSERT_MSG(resolutionValid, "exception cleanup must resolve its complete graph submission attempt");
+    FOUNDATION_FATAL_ASSERT_MSG(resolutionValid, "exception cleanup must resolve its complete graph submission attempt");
 }
 
 

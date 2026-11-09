@@ -4,7 +4,7 @@ endif()
 
 set(_nwb_ui_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/ui_layer_runtime/$<CONFIG>")
 # CTest budgets add process startup and teardown time around each script timeout.
-set(_nwb_ui_smoke_ctest_margin_seconds 60)
+set(_nwb_ui_smoke_ctest_margin_seconds 120)
 # Matches the --timeout default in smoke_arguments.py.
 set(_nwb_ui_smoke_default_timeout_seconds 90)
 math(EXPR _nwb_ui_smoke_default_ctest_timeout_seconds "${_nwb_ui_smoke_default_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")

@@ -54,24 +54,24 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     {
         res = VulkanDetail::InitializeVolkLoader();
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to initialize volk. {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to initialize volk. {}"), ResultToString(res));
             return false;
         }
         m_getInstanceProcAddr = vkGetInstanceProcAddr;
         if(!m_getInstanceProcAddr){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Volk initialized without vkGetInstanceProcAddr."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Volk initialized without vkGetInstanceProcAddr."));
             return false;
         }
     }
 
-#ifdef NWB_PLATFORM_WINDOWS
+#ifdef FOUNDATION_PLATFORM_WINDOWS
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
         m_enabledExtensions.instance.emplace(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, m_arena);
         if(m_deviceParams.enableHDR10Output)
             m_optionalExtensions.instance.emplace(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_arena);
     }
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
         if(m_deviceParams.enableHDR10Output)
@@ -91,7 +91,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
 #endif
         case Common::LinuxFrameBackend::None:
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a Linux surface without a valid native window backend."));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot create a Linux surface without a valid native window backend."));
             return false;
         }
     }
@@ -112,7 +112,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     requiredExtensions.reserve(m_enabledExtensions.instance.size());
     for(const auto& name : m_enabledExtensions.instance){
         if(!requiredExtensions.emplace(AStringView(name), scratchArena).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
@@ -120,18 +120,18 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     uint32_t extensionCount = 0;
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extension count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate instance extension count. {}"), ResultToString(res));
         return false;
     }
     Vector<VkExtensionProperties, Alloc::ScratchArena> availableExtensions(extensionCount, scratchArena);
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extensions. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate instance extensions. {}"), ResultToString(res));
         return false;
     }
 
     for(const auto& ext : availableExtensions){
-        const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
+        const AStringView name(ext.extensionName, FOUNDATION_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
         const b8 enableOptionalExtension = m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end();
         requiredExtensions.erase(name);
         if(enableOptionalExtension)
@@ -143,7 +143,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << "\n  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(ss.str()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {}"), ConvertString(ss.str()));
         return false;
     }
 
@@ -159,7 +159,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     requiredLayers.reserve(m_enabledExtensions.layers.size());
     for(const auto& name : m_enabledExtensions.layers){
         if(!requiredLayers.emplace(AStringView(name), scratchArena).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }
@@ -167,18 +167,18 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     uint32_t layerCount = 0;
     res = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layer count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate layer count. {}"), ResultToString(res));
         return false;
     }
     Vector<VkLayerProperties, Alloc::ScratchArena> availableLayers(layerCount, scratchArena);
     res = vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layers. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate layers. {}"), ResultToString(res));
         return false;
     }
 
     for(const auto& layer : availableLayers){
-        const AStringView name(layer.layerName, NWB_STRNLEN(layer.layerName, VK_MAX_EXTENSION_NAME_SIZE));
+        const AStringView name(layer.layerName, FOUNDATION_STRNLEN(layer.layerName, VK_MAX_EXTENSION_NAME_SIZE));
         const b8 enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
         requiredLayers.erase(name);
         if(enableOptionalLayer)
@@ -190,7 +190,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << "\n  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(ss.str()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {}"), ConvertString(ss.str()));
         return false;
     }
 
@@ -224,12 +224,12 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
 
     res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance version. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to enumerate instance version. {}"), ResultToString(res));
         return false;
     }
 
     if(applicationInfo.apiVersion < s_MinimumVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: API version {}.{}.{} is too low, at least {}.{}.{} is required.")
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: API version {}.{}.{} is too low, at least {}.{}.{} is required.")
             , VK_API_VERSION_MAJOR(applicationInfo.apiVersion)
             , VK_API_VERSION_MINOR(applicationInfo.apiVersion)
             , VK_API_VERSION_PATCH(applicationInfo.apiVersion)
@@ -241,7 +241,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     }
 
     if(VK_API_VERSION_VARIANT(applicationInfo.apiVersion) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Unexpected API variant: {}"), VK_API_VERSION_VARIANT(applicationInfo.apiVersion));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Unexpected API variant: {}"), VK_API_VERSION_VARIANT(applicationInfo.apiVersion));
         return false;
     }
 
@@ -267,7 +267,7 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
 
     res = vkCreateInstance(&createInfo, nullptr, &m_vulkanInstance);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create instance. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create instance. {}"), ResultToString(res));
         return false;
     }
 
@@ -284,7 +284,7 @@ void BackendContext::installDebugMessenger(){
     VkResult res = VK_SUCCESS;
 
     if(!m_instanceDispatch.vkCreateDebugUtilsMessengerEXT){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan GPU debug: vkCreateDebugUtilsMessengerEXT is unavailable; validation messages will not be routed to the logger."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan GPU debug: vkCreateDebugUtilsMessengerEXT is unavailable; validation messages will not be routed to the logger."));
         return;
     }
 
@@ -298,10 +298,10 @@ void BackendContext::installDebugMessenger(){
     res = m_instanceDispatch.vkCreateDebugUtilsMessengerEXT(m_vulkanInstance, &createInfo, nullptr, &m_debugUtilsMessenger);
     if(res != VK_SUCCESS){
         m_debugUtilsMessenger = VK_NULL_HANDLE;
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug messenger. {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to install debug messenger. {}"), ResultToString(res));
     }
     else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan GPU debug: debug utils messenger installed."));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Vulkan GPU debug: debug utils messenger installed."));
 }
 
 

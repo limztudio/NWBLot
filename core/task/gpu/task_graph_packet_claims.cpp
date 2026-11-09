@@ -32,8 +32,8 @@ void GpuRecordingAttemptScope::complete()noexcept{
 
 
 void GpuRecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const b8 previousPlanWasActive)noexcept{
-    NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
-    NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
+    FOUNDATION_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
+    FOUNDATION_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
     m_graph = &graph;
     m_compiledGraph = &compiledGraph;
     m_recordingAttemptGeneration = recordingAttemptGeneration;
@@ -70,7 +70,7 @@ GpuPacketRecordingAbort::GpuPacketRecordingAbort(GpuPacketRecordingAbort&& other
 
 GpuPacketRecordingAbort::~GpuPacketRecordingAbort()noexcept{
     if(valid())
-        NWB_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
+        FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
 }
 
 void GpuPacketRecordingAbort::reset()noexcept{

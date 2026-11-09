@@ -76,7 +76,7 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     config.volumeName = ACompactString(AssetsVolumeCookDetail::s_AssetVolumeName);
     const auto metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
     if(!metadataSize || *metadataSize == Limit<u64>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: metadata size overflow while planning volume"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: metadata size overflow while planning volume"));
         return MakeUnexpected(Failure{});
     }
 
@@ -84,7 +84,7 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     config.segmentSize = s_DefaultSegmentSize;
     while(config.segmentSize <= config.metadataSize){
         if(config.segmentSize > Limit<u64>::s_Max / s_SegmentGrowthFactor){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: segment size overflow while planning volume"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: segment size overflow while planning volume"));
             return MakeUnexpected(Failure{});
         }
         config.segmentSize *= s_SegmentGrowthFactor;
@@ -95,13 +95,13 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
 
 static b8 PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem){
     if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
         return false;
     }
     if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
     return false;
 }
 
@@ -118,7 +118,7 @@ static b8 ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePa
     if(static_cast<u64>(manifest.entries.size()) == manifest.plannedFileCount)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest file count mismatch, planned {} but produced {}"), manifest.plannedFileCount, manifest.entries.size());
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest file count mismatch, planned {} but produced {}"), manifest.plannedFileCount, manifest.entries.size());
     return false;
 }
 
@@ -127,7 +127,7 @@ static b8 ValidateUniqueManifestPaths(const AssetsVolumeCookDetail::AssetVolumeP
     paths.reserve(manifest.entries.size());
     for(const auto& entry : manifest.entries){
         if(!paths.insert(entry.virtualPath).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate manifest identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: duplicate manifest identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
     }
@@ -181,14 +181,14 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resol
         mountDesc.createIfMissing = true;
         mountDesc.usage = Core::Filesystem::VolumeUsage::CookWrite;
         if(!filesystem.mount(mountDesc)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to mount staged volume filesystem"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to mount staged volume filesystem"));
             return MakeUnexpected(Failure{});
         }
 
         if(!__hidden_asset_volume_writer::PushManifestToVolume(manifest, filesystem))
             return MakeUnexpected(Failure{});
         if(!filesystem.flush()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to flush staged volume metadata"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to flush staged volume metadata"));
             return MakeUnexpected(Failure{});
         }
 

@@ -84,7 +84,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_fbx_scene::FormatUfbxError(error, scratchArena)));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_fbx_scene::FormatUfbxError(error, scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -140,7 +140,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     }
     if(EqualsAsciiIgnoreCase(normalized, s_FirstMeshSelectorText)){
         if(instances.empty()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), ConvertString(selector));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Invalid mesh selector '{}': no mesh instances are available"), ConvertString(selector));
             return MakeUnexpected(Failure{});
         }
         outSelection.push_back(0u);
@@ -150,7 +150,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     const auto parsedIndex = TryParseMeshIndexSelector(normalized);
     if(parsedIndex){
         if(*parsedIndex >= instances.size()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));
             return MakeUnexpected(Failure{});
         }
         outSelection.push_back(*parsedIndex);
@@ -175,7 +175,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
         return outSelection;
     }
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), ConvertString(selector));
+    NWB_LOGGER_WARNING(FOUNDATION_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), ConvertString(selector));
     return MakeUnexpected(Failure{});
 }
 

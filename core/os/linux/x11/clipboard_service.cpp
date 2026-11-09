@@ -90,7 +90,7 @@ b8 X11ClipboardService::initialize(){
 }
 
 b8 X11ClipboardService::handleEvent(const XEvent& event){
-    NWB_ASSERT(isOwnerThread());
+    FOUNDATION_ASSERT(isOwnerThread());
     if(event.type == SelectionRequest && event.xselectionrequest.owner == m_ownerWindow){
         answerSelection(event.xselectionrequest);
         return true;
@@ -243,7 +243,7 @@ void X11ClipboardService::releaseOperation(){
 
 void X11ClipboardService::finishOperation(const ClipboardStatus::Enum status, const AStringView text){
     if(m_operationToken.valid() && !completeNativeRequest(m_operationToken, status, text))
-        NWB_FATAL_ASSERT(false);
+        FOUNDATION_FATAL_ASSERT(false);
     releaseOperation();
 }
 
@@ -282,7 +282,7 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
 Expected<GlobalUniquePtr<IClipboardService>> CreateX11ClipboardService(Alloc::GlobalArena& arena, _XDisplay& display){
     auto service = MakeGlobalUnique<X11ClipboardService>(arena, arena, display);
     if(!service || !service->initialize()){
-        NWB_LOGGER_ERROR(NWB_TEXT("X11 clipboard initialization failed"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("X11 clipboard initialization failed"));
         return MakeUnexpected(Failure{});
     }
     return service;

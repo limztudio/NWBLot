@@ -199,7 +199,7 @@ public:
 public:
     virtual b8 parseDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context)override{
         if(!m_parseDocument){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -212,7 +212,7 @@ public:
 
     virtual b8 parseValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context)override{
         if(!m_parseValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -246,7 +246,7 @@ public:
     }
 
     virtual b8 writeCookedAssets(CookEntryWriteContext& context)override{
-        NWB_ASSERT(m_entryLocations.size() == m_entries.size());
+        FOUNDATION_ASSERT(m_entryLocations.size() == m_entries.size());
 
         CodecT codec;
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
@@ -279,7 +279,7 @@ public:
             EntryT& entry = m_entries[entryIndex++];
             const auto virtualPath = CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath);
             if(!virtualPath){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
                 return false;
             }
             const Name resolvedVirtualPath = *virtualPath ? **virtualPath : s_NameNone;
@@ -289,7 +289,7 @@ public:
             auto asset = m_buildAsset.get()(entry, assetArena, context.scratchArena);
             if(!asset){
                 if(m_logBuildFailure){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'"), m_assetKindText, ConvertString(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath)));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to build {} '{}'"), m_assetKindText, ConvertString(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath)));
                 }
                 return false;
             }
@@ -306,7 +306,7 @@ private:
     b8 appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
         const auto virtualPath = CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath);
         if(!virtualPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
             return false;
         }
         const usize nextCount = m_entries.size() + 1u;
@@ -363,7 +363,7 @@ public:
     template<typename BucketT>
     b8 registerCustomType(const Name& assetType){
         if(!assetType){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed custom cook entry type"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: tried to register an unnamed custom cook entry type"));
             return false;
         }
 
@@ -384,11 +384,11 @@ public:
         const b8 logBuildFailure = true
     ){
         if(!assetType){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook entry type"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: tried to register an unnamed cook entry type"));
             return false;
         }
         if(!buildAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function"), ConvertString(assetType.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: cook entry type '{}' has no build function"), ConvertString(assetType.resolvedText()));
             return false;
         }
 

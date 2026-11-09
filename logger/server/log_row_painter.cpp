@@ -3,8 +3,9 @@
 
 
 #include "log_row_painter.h"
+#include <logger/server/server_values.adhd.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 #include <global/diagnostics.h>
 #include <global/scope_exit.h>

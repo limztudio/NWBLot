@@ -314,7 +314,7 @@ usize RendererTaskTimingFeedbackState::findPendingSample(const Core::GpuTimingSa
 }
 
 void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex)noexcept{
-    NWB_ASSERT(pendingIndex < m_pendingSamples.size());
+    FOUNDATION_ASSERT(pendingIndex < m_pendingSamples.size());
     m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
 }
 
@@ -335,7 +335,7 @@ RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena&
     , m_snapshot(arena)
     , m_feedbackCollectionScopes(arena)
 {
-    NWB_ASSERT(!feedbackCollectionScopes.empty());
+    FOUNDATION_ASSERT(!feedbackCollectionScopes.empty());
     m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
     m_feedbackCollectionScopes.assign(feedbackCollectionScopes.begin(), feedbackCollectionScopes.end());
 }
@@ -355,7 +355,7 @@ void RendererTaskTimingFeedback::activate(){
     Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
     const auto subscriptionResult = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
     if(!subscriptionResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
         return;
     }
     const Core::GpuTimingSampleSubscription subscription = *subscriptionResult;
@@ -363,7 +363,7 @@ void RendererTaskTimingFeedback::activate(){
 
     if(feedbackCollectionEnabled){
         if(!timing.setFeedbackCollectionScopes(subscription, m_feedbackCollectionScopes)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
             return;
         }
     }
@@ -447,7 +447,7 @@ void RendererTaskTimingFeedback::configureCompileOptions(Core::GpuTaskGraphCompi
         }
     }
     if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u)
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s)."), drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s)."), drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
 }
 
 void RendererTaskTimingFeedback::reset()noexcept{
@@ -571,7 +571,7 @@ b8 RendererGpuTimingScopeReservations::Prepare(Core::GraphicsRuntime& graphics){
 
     for(const ScopeReservation& reservation : scopeReservations){
         if(!graphics.gpuTiming().prepareScopeQueries(reservation.scope.identity, device, reservation.queryCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), ConvertString(reservation.scope.identity.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), ConvertString(reservation.scope.identity.resolvedText()));
             return false;
         }
     }

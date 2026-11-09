@@ -13,6 +13,8 @@ native{
 
 #include <gtest/gtest.h>
 
+#include <core/alloc/general.h>
+
 #include <global/algorithm.h>
 #include <global/containers.h>
 #include <global/limit.h>
@@ -136,10 +138,10 @@ TEST(Global, CheckedDivideUpRejectsZeroDivisor){
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sched.h>
 #endif
 
@@ -153,7 +155,7 @@ TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
 }
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     ASSERT_EXIT({
         auto placements = QueryCpuWorkerPlacements();
@@ -215,7 +217,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
 #endif
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
     auto placements = QueryCpuWorkerPlacements();
     ASSERT_TRUE(placements);
@@ -537,8 +539,8 @@ static_assert(!CanTrimView<ACompactString>);
 static_assert(!CanTrimView<const ACompactString>);
 static_assert(CanTrimView<AStringView>);
 static_assert(CanTrimView<AStringView&>);
-static_assert(CanTrimView<AString<>&>);
-static_assert(!CanTrimView<AString<>>);
+static_assert(CanTrimView<AString<::NWB::Core::Alloc::GlobalArena>&>);
+static_assert(!CanTrimView<AString<::NWB::Core::Alloc::GlobalArena>>);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -891,7 +893,7 @@ namespace __hidden_simd_memory_tests{
 
 using NWB::Tests::ExitOnAbort;
 using NWB::Tests::GuardAddress;
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
 using NWB::Tests::GuardedBytes;
 #endif
 using NWB::Tests::PatternByte;
@@ -940,7 +942,7 @@ public:
     return 0xDEADBEEF80000000ull ^ (static_cast<u64>(packetIndex + 1u) << 32u) ^ (static_cast<u64>(laneIndex + 1u) * 0x01020304ull);
 }
 
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
 void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
     // An access violation cannot satisfy this predicate, so rejection must happen before either range is accessed.
     EXPECT_EXIT({
@@ -975,19 +977,19 @@ TEST(SIMDMemory, AlignedCacheLineOffsetsAndVectorBoundaryTailsPreserveExactRange
     for(const usize count : s_Lengths){
         for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += s_SIMDMemoryCopyAlignment){
             for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += s_SIMDMemoryCopyAlignment){
-                NWB_MEMSET(destination.data(), s_Poison, destination.size());
-                NWB_MEMSET(expected.data(), s_Poison, expected.size());
+                FOUNDATION_MEMSET(destination.data(), s_Poison, destination.size());
+                FOUNDATION_MEMSET(expected.data(), s_Poison, expected.size());
                 const usize sourceStart = s_GuardBytes + sourceOffset;
                 const usize destinationStart = s_GuardBytes + destinationOffset;
                 for(usize index = 0u; index < count; ++index)
                     expected[destinationStart + index] = original[sourceStart + index];
                 volatile usize runtimeCount = count;
-                NWB_SIMD_MEMCPY(destination.data() + destinationStart, count, source.data() + sourceStart, runtimeCount);
-                EXPECT_EQ(NWB_MEMCMP(destination.data(), expected.data(), destination.size()), 0) << count << ':' << sourceOffset << ':' << destinationOffset;
+                FOUNDATION_SIMD_MEMCPY(destination.data() + destinationStart, count, source.data() + sourceStart, runtimeCount);
+                EXPECT_EQ(FOUNDATION_MEMCMP(destination.data(), expected.data(), destination.size()), 0) << count << ':' << sourceOffset << ':' << destinationOffset;
             }
         }
     }
-    EXPECT_EQ(NWB_MEMCMP(source.data(), original.data(), source.size()), 0);
+    EXPECT_EQ(FOUNDATION_MEMCMP(source.data(), original.data(), source.size()), 0);
 }
 
 TEST(SIMDMemory, AlignedVectorAliasedAppendReallocationAndOverlappingAssignmentPreserveRawPackets){
@@ -1043,13 +1045,13 @@ TEST(SIMDMemory, AdjacentRangesInOneLiveByteArrayAreAcceptedWithoutClobberingGua
                 expected[destinationStart + index] = PatternByte(sourceStart + index);
             volatile usize runtimeCount = count;
             SIMDMemoryCopy(bytes.data() + destinationStart, count, bytes.data() + sourceStart, runtimeCount);
-            EXPECT_EQ(NWB_MEMCMP(bytes.data(), expected.data(), bytes.size()), 0) << count << ':' << destinationFirst;
+            EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), expected.data(), bytes.size()), 0) << count << ':' << destinationFirst;
         }
     }
 }
 
 TEST(SIMDMemory, ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores){
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
     using namespace __hidden_simd_memory_tests;
     GuardedBytes source;
     GuardedBytes destination;
@@ -1064,7 +1066,7 @@ TEST(SIMDMemory, ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores)
         const usize count = lengthIndex == s_Lengths.size() ? source.accessibleBytes : s_Lengths[lengthIndex];
         for(const b8 sourceAtEnd : { false, true }){
             for(const b8 destinationAtEnd : { false, true }){
-                NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
+                FOUNDATION_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                 // Nonmultiple tails leave less than one vector of poison before the upper guard to keep both starts aligned.
                 const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
                 const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
@@ -1089,13 +1091,13 @@ TEST(SIMDMemory, ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutAccess
     alignas(16) Array<u8, 3> bytes = { 0x12u, 0x34u, 0x56u };
     volatile usize zero = 0u;
     SIMDMemoryCopy(nullptr, 0u, nullptr, zero);
-    NWB_SIMD_MEMCPY(bytes.data() + bytes.size(), 0u, nullptr, zero);
+    FOUNDATION_SIMD_MEMCPY(bytes.data() + bytes.size(), 0u, nullptr, zero);
     SIMDMemoryCopy(nullptr, Limit<usize>::s_Max, bytes.data() + bytes.size(), zero);
     SIMDMemoryCopy(bytes.data(), 0u, bytes.data(), zero);
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
     GuardedBytes guarded;
     ASSERT_NE(guarded.data, nullptr);
-    NWB_SIMD_MEMCPY(guarded.mapping, 0u, guarded.data + guarded.accessibleBytes, zero);
+    FOUNDATION_SIMD_MEMCPY(guarded.mapping, 0u, guarded.data + guarded.accessibleBytes, zero);
     SIMDMemoryCopy(guarded.data + guarded.accessibleBytes, Limit<usize>::s_Max, guarded.mapping, zero);
     SIMDMemoryCopy(GuardAddress(guarded.mapping, 1u), 0u, GuardAddress(guarded.data, guarded.accessibleBytes + 8u), zero);
 #endif
@@ -1105,7 +1107,7 @@ TEST(SIMDMemory, ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutAccess
 }
 
 TEST(SIMDMemory, InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess){
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
     using namespace __hidden_simd_memory_tests;
     GuardedBytes guarded;
     ASSERT_NE(guarded.data, nullptr);

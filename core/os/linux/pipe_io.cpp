@@ -106,7 +106,7 @@ ClipboardPipeWriter::~ClipboardPipeWriter()noexcept{
 }
 
 b8 ClipboardPipeWriter::begin(const int fd, const AStringView text){
-    NWB_FATAL_ASSERT(m_fd < 0);
+    FOUNDATION_FATAL_ASSERT(m_fd < 0);
     m_text.clear();
     m_offset = 0u;
     m_fd = fd;

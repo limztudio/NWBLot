@@ -31,13 +31,13 @@ Expected<Assets::AssetVector<Assets::AssetString>> AssetGatherInputDiscovery::Co
     for(const Assets::AssetString& input : options.inputs){
         const auto absolutePath = AbsolutePath(Path(arena, input));
         if(!absolutePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve input '{}'"), ConvertString(input));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to resolve input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         const Path path = absolutePath->lexicallyNormal();
         const auto directory = IsDirectory(path);
         if(!directory){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input '{}'"), ConvertString(input));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to inspect input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         if(!*directory){
@@ -48,7 +48,7 @@ Expected<Assets::AssetVector<Assets::AssetString>> AssetGatherInputDiscovery::Co
         const Path manifest = path / Assets::BuiltAssetDetail::s_ManifestFilename;
         const auto manifestExists = FileExists(manifest);
         if(!manifestExists){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect build manifest '{}'"), PathToString<tchar>(manifest));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to inspect build manifest '{}'"), PathToString<tchar>(manifest));
             return MakeUnexpected(Failure{});
         }
         if(*manifestExists){
@@ -58,13 +58,13 @@ Expected<Assets::AssetVector<Assets::AssetString>> AssetGatherInputDiscovery::Co
         }
         const auto entries = RecursiveDirectoryIterator<Assets::AssetArena>::Create(path);
         if(!entries){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), ConvertString(input));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to scan input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         for(const auto& entry : *entries){
             const auto regular = entry.isRegularFile();
             if(!regular){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
                 return MakeUnexpected(Failure{});
             }
             if(*regular && PathToString(scratchArena, entry.path().extensionView()) == Assets::BuiltAssetDetail::s_Extension)

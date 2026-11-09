@@ -119,7 +119,7 @@ TEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate){
     VerifyUnknownAndBoundaryTokens<char>();
 }
 
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){
     VerifyUnknownAndBoundaryTokens<wchar>();
 }
@@ -129,7 +129,7 @@ TEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText){
     VerifyResolvedSpans<char>();
 }
 
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){
     VerifyResolvedSpans<wchar>();
 }
@@ -290,7 +290,7 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     ASSERT_TRUE(executableDirectory);
     ASSERT_TRUE(executableName);
     NameSymbolTestPath namesymPath = *executableDirectory / *executableName;
-    namesymPath.replaceExtension(NWB_TEXT(".namesym"));
+    namesymPath.replaceExtension(FOUNDATION_TEXT(".namesym"));
     // The application exception path exports after its scoped runtime callbacks have already detached.
     NameSymbols::UninstallRuntimeRegistry();
     ASSERT_TRUE(NameSymbols::WriteDefaultFile());
@@ -397,7 +397,7 @@ namespace __hidden_logging_boundary_tests{
 
 using CapturingLogger = NWB::Tests::CapturingLogger;
 
-inline constexpr TStringView s_ParallelLoggerMessage = NWB_TEXT("parallel logger message");
+inline constexpr TStringView s_ParallelLoggerMessage = FOUNDATION_TEXT("parallel logger message");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -409,7 +409,7 @@ TEST(CommonLoggingBoundaries, LoggerMacrosBehaveAsSingleStatements){
 
     b8 elseBranchRan = false;
     if(false)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("unreachable"));
     else
         elseBranchRan = true;
 
@@ -526,13 +526,13 @@ TEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWitho
         void handle(const TStringView text, const NWB::Core::Common::LogType::Enum){
             m_callbackCount.fetch_add(1u, MemoryOrder::relaxed);
             m_bothEnteredGate.arrive_and_wait();
-            if(text == NWB_TEXT("self-unregister")){
+            if(text == FOUNDATION_TEXT("self-unregister")){
                 m_unregistrationStarted.testAndSet(MemoryOrder::release);
                 m_unregistrationStarted.notifyAll();
                 m_guardSlot.reset();
                 if(m_peerStillInCallback.load(MemoryOrder::acquire))
                     m_unregistrationReturnedWhilePeerActive.store(true, MemoryOrder::relaxed);
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("routed-to-base-after-self-unregister"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("routed-to-base-after-self-unregister"));
                 return;
             }
 
@@ -576,10 +576,10 @@ TEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWitho
     nestedGuard.emplace(callbackLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
 
     Thread selfUnregisterThread([](){
-        NWB_LOGGER_ERROR(NWB_TEXT("self-unregister"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("self-unregister"));
     });
     Thread peerReaderThread([](){
-        NWB_LOGGER_ERROR(NWB_TEXT("peer-reader"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("peer-reader"));
     });
 
     selfUnregisterThread.join();
@@ -589,7 +589,7 @@ TEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWitho
     EXPECT_FALSE(unregistrationReturnedWhilePeerActive.load(MemoryOrder::relaxed));
     EXPECT_EQ(callbackCount.load(MemoryOrder::relaxed), 2u);
     EXPECT_EQ(baseLogger.messageCount(), 1u);
-    EXPECT_TRUE(baseLogger.sawMessageContaining(NWB_TEXT("routed-to-base-after-self-unregister")));
+    EXPECT_TRUE(baseLogger.sawMessageContaining(FOUNDATION_TEXT("routed-to-base-after-self-unregister")));
 }
 
 
@@ -617,7 +617,7 @@ namespace __hidden_frame_data_tests{
 
 
 TEST(FrameData, CopiesIndependentWindowState){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     NWB::Core::Common::WinFrame source;
     source.width() = 1234u;
     source.height() = 567u;
@@ -637,7 +637,7 @@ TEST(FrameData, CopiesIndependentWindowState){
     EXPECT_EQ(copy.windowClass(), 42u);
     EXPECT_TRUE(source.isActive());
     EXPECT_FALSE(copy.isActive());
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     NWB::Core::Common::LinuxFrame source;
     source.width() = 1234u;
     source.height() = 567u;

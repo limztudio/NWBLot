@@ -30,7 +30,7 @@ inline TerminateHandler ExchangeTerminateHandler(const TerminateHandler handler)
     return std::set_terminate(handler);
 }
 
-[[nodiscard]] NWB_INLINE i32 UncaughtExceptionCount()noexcept{
+[[nodiscard]] FOUNDATION_INLINE i32 UncaughtExceptionCount()noexcept{
     return std::uncaught_exceptions();
 }
 

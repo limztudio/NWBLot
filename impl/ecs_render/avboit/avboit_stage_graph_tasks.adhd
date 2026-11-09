@@ -63,7 +63,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         timing.transparentCsgIntervalClearTimingState
     );
     if(!transparentCsgIntervalResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
         return MakeUnexpected(Failure{});
     }
     FrameGraphTransparentCsgTasks transparentCsgTasks(m_graph, m_avboitSystem);
@@ -114,7 +114,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         avboitCsgIntervalCombinePayload
     );
     if(!transparentCsgTaskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult->intervalCompletionTask;
@@ -167,7 +167,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         generatedGeometry
     );
     if(!occupancyUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
         return MakeUnexpected(Failure{});
     }
 
@@ -191,7 +191,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         timing.clearTimingState
     );
     if(!avboitClearChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
         return MakeUnexpected(Failure{});
     }
 
@@ -203,7 +203,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     avboitOccupancyRecordInputs.clearTask = avboitClearChainResult->clearTask;
     AvboitOccupancyRecordBuilder avboitOccupancyRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
     if(!avboitOccupancyRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
         return MakeUnexpected(Failure{});
     }
     if(occupancyUploadChainResult->producesReusableGeometry){
@@ -228,7 +228,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
             .hasTransparentRenderers = inputs.hasTransparentRenderers,
         });
     if(!avboitDepthWarpStageResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT inputs.resources.depth-warp graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT inputs.resources.depth-warp graph task"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult->completionTask;
@@ -293,7 +293,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
         generatedGeometry
     );
     if(!extinctionUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
         return false;
     }
 
@@ -308,7 +308,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
     avboitExtinctionRecordInputs.depthWarpCompletionTask = avboitDepthWarpCompletionTask;
     AvboitExtinctionRecordBuilder avboitExtinctionRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
     if(!avboitExtinctionRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return false;
     }
     if(extinctionUploadChainResult->producesReusableGeometry){
@@ -331,7 +331,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
             .integrationTimingTicket = timing.integrationTimingTicket,
             .timingFeedback = m_timingFeedback,
         })){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return false;
     }
     return true;
@@ -384,7 +384,7 @@ b8 FrameGraphAvboitStage::declareAccumulation(
         generatedGeometry
     );
     if(!accumulationUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
         return false;
     }
 
@@ -402,7 +402,7 @@ b8 FrameGraphAvboitStage::declareAccumulation(
     avboitAccumulationRecordInputs.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
     AvboitAccumulationRecordBuilder avboitAccumulationRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
     if(!avboitAccumulationRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
         return false;
     }
     if(accumulationUploadChainResult->producesReusableGeometry){
@@ -611,7 +611,7 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
             AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, });
         if(!depthWarpTaskResult){
             m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return MakeUnexpected(Failure{});
         }
         m_avboitSystem.taskGraphStage().m_depthWarpTask = *depthWarpTaskResult;
@@ -661,7 +661,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
         AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, });
     if(!integrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return false;
     }
     m_avboitSystem.taskGraphStage().m_integrationTask = *integrationTaskResult;
@@ -879,7 +879,7 @@ b8 AvboitAccumulationRecordBuilder::declare(
     const auto accumulationFinalizeTaskResult = m_graph.addTask<AvboitAccumulationFinalizeGraphTask>(accumulationFinalizeDesc, AvboitAccumulationFinalizeGraphTask::Payload{});
     if(!accumulationFinalizeTaskResult){
         stage.m_accumulationFinalizeTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
         return false;
     }
     stage.m_accumulationFinalizeTask = *accumulationFinalizeTaskResult;

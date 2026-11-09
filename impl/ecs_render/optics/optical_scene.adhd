@@ -88,7 +88,7 @@ struct alignas(SIMDVectorSingle) OpticalWorldBounds{
 static_assert(alignof(Expected<OpticalWorldBounds>) >= alignof(OpticalWorldBounds));
 
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
-[[nodiscard]] Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax)noexcept;
+[[nodiscard]] Expected<OpticalWorldBounds> FOUNDATION_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -233,7 +233,7 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
+Expected<OpticalWorldBounds> FOUNDATION_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
     OpticalWorldBounds bounds{};
     if(!OpticalBoundsEvaluator{}.computeWorldBounds(objectToWorld, localMin, localMax, bounds.minimum, bounds.maximum))
         return MakeUnexpected(Failure{});
@@ -361,7 +361,7 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
     const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
     const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
     if(!outputReady){
-        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize buffers"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return MakeUnexpected(Failure{});
     }
     RayTracingOpticalBoundsFinalizeHandle snapshot;
@@ -435,7 +435,7 @@ b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem
         m_shader,
         m_pipeline
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical bounds: failed to create finalize pipeline"));
         return false;
     }
     return true;

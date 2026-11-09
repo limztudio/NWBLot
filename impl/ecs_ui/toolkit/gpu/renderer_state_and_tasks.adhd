@@ -170,7 +170,7 @@ b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuT
     if(!__hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, capture, commands))
         return false;
     if(hasDraw)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiGpuRenderer: raster command IR replay active"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiGpuRenderer: raster command IR replay active"));
     return true;
 }
 
@@ -353,7 +353,7 @@ namespace __hidden_ui_gpu_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
+static constexpr TStringView s_ImageLoadContext = FOUNDATION_TEXT("UI Texture Image");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -511,7 +511,7 @@ b8 GpuImageResources::prepareGlyphPages(GpuFrameData& frame){
 Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
@@ -520,7 +520,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::Gp
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuGlyphPageReadyPrefix,
                 .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,
-                .completionLabel = NWB_TEXT("glyph page"),
+                .completionLabel = FOUNDATION_TEXT("glyph page"),
                 .readinessToken = page->m_readinessToken,
                 .texturePrefix = s_GpuGlyphPagePrefix,
                 .textureMarkerLabel = s_GpuGlyphPageMarkerLabel,
@@ -532,7 +532,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::Gp
         );
         if(!texture){
             if(texture.error() == GpuSampledTextureImportError::Texture)
-                NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
             return MakeUnexpected(Failure{});
         }
         resources->push_back(*texture);
@@ -633,7 +633,7 @@ b8 GpuImageResources::prepareSdfPages(GpuFrameData& frame){
 Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
@@ -642,7 +642,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuT
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuSdfPageReadyPrefix,
                 .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,
-                .completionLabel = NWB_TEXT("SDF page"),
+                .completionLabel = FOUNDATION_TEXT("SDF page"),
                 .readinessToken = page->m_readinessToken,
                 .texturePrefix = s_GpuSdfPagePrefix,
                 .textureMarkerLabel = s_GpuSdfPageMarkerLabel,
@@ -654,7 +654,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuT
         );
         if(!texture){
             if(texture.error() == GpuSampledTextureImportError::Texture)
-                NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
             return MakeUnexpected(Failure{});
         }
         resources->push_back(*texture);
@@ -692,7 +692,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuImageResources::prepareTextureIm
         return Move(reused);
     }
     // The source factory owns structural payload validation; immutable cache insertion keeps a debug-only invariant.
-    NWB_ASSERT(source->texture().validatePayload());
+    FOUNDATION_ASSERT(source->texture().validatePayload());
     auto versionResult = MakeGpuVersion<GpuTextureImageVersion>(m_arena, m_graphics, source);
     if(!versionResult)
         return MakeUnexpected(versionResult.error());
@@ -700,7 +700,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuImageResources::prepareTextureIm
     if(!TextureAssetLoader::Create(source->texture(), source->identity().name(), __hidden_ui_gpu_resources::s_ImageLoadContext, m_graphics, version->m_texture))
         return MakeUnexpected(Failure{});
     if(!__hidden_ui_gpu_resources::ValidVersion(*version)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
         return MakeUnexpected(Failure{});
     }
     if(ShouldEvictGpuImageCacheBeforeInsert(m_imageCache.glyphs().size(), m_imageCache.sdfs().size(), m_imageCache.textures().size()))
@@ -725,7 +725,7 @@ b8 GpuImageResources::prepareTextureImages(GpuFrameData& frame){
 Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
     Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_textureImages.size(); ++index){
@@ -737,7 +737,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core:
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuTextureImageReadyPrefix,
                 .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,
-                .completionLabel = NWB_TEXT("texture"),
+                .completionLabel = FOUNDATION_TEXT("texture"),
                 .readinessToken = image->m_texture.readinessToken,
                 .texturePrefix = s_GpuTextureImagePrefix,
                 .textureMarkerLabel = s_GpuTextureImageMarkerLabel,
@@ -749,7 +749,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core:
         );
         if(!texture){
             if(texture.error() == GpuSampledTextureImportError::Texture)
-                NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
             return MakeUnexpected(Failure{});
         }
         resources->push_back(*texture);

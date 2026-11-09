@@ -86,9 +86,9 @@ public:
         , m_captureFrameCount(captureFrameCount)
     {
         if(m_outputPath.empty())
-            markFailed(NWB_TEXT("capture output path is empty"));
+            markFailed(FOUNDATION_TEXT("capture output path is empty"));
         if(m_captureFrameCount == 0u)
-            markFailed(NWB_TEXT("capture frame count must be greater than zero"));
+            markFailed(FOUNDATION_TEXT("capture frame count must be greater than zero"));
     }
 
     virtual ~FramebufferCapture()noexcept override{
@@ -105,7 +105,7 @@ public:
         Core::GraphicsRuntime& graphics = getGraphics();
         Core::IGpuTaskGraphPresentationContributor* const contributor = graphics.taskGraphPresentationContributor();
         if(contributor && contributor != this){
-            markFailed(NWB_TEXT("another task-graph presentation contributor is already registered"));
+            markFailed(FOUNDATION_TEXT("another task-graph presentation contributor is already registered"));
             return false;
         }
 
@@ -147,35 +147,35 @@ public:
         if(!acceptedToken.valid())
             return;
         if(!acceptedToken.hasPhysicalQueueIdentity()){
-            markFailed(NWB_TEXT("accepted readback submission has no physical queue identity"));
+            markFailed(FOUNDATION_TEXT("accepted readback submission has no physical queue identity"));
             requestTerminalQuit();
             return;
         }
 
         Core::GraphicsBackend::Device& device = getGraphics().getDevice();
         if(acceptedToken.deviceGeneration != device.getDeviceGeneration()){
-            markFailed(NWB_TEXT("accepted readback submission belongs to a stale graphics device"));
+            markFailed(FOUNDATION_TEXT("accepted readback submission belongs to a stale graphics device"));
             requestTerminalQuit();
             return;
         }
         const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration, };
         const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
         if(!completedValue){
-            markFailed(NWB_TEXT("failed to query readback submission completion"));
+            markFailed(FOUNDATION_TEXT("failed to query readback submission completion"));
             requestTerminalQuit();
             return;
         }
         if(*completedValue < acceptedToken.value)
             return;
         if(!m_readback){
-            markFailed(NWB_TEXT("accepted readback submission lost its staging texture"));
+            markFailed(FOUNDATION_TEXT("accepted readback submission lost its staging texture"));
             requestTerminalQuit();
             return;
         }
 
         const auto mapping = device.mapStagingTexture(*m_readback, Core::TextureSlice{}, Core::CpuAccessMode::Read);
         if(!mapping){
-            markFailed(NWB_TEXT("failed to map the completed readback staging texture"));
+            markFailed(FOUNDATION_TEXT("failed to map the completed readback staging texture"));
             requestTerminalQuit();
             return;
         }
@@ -184,14 +184,14 @@ public:
         const b8 captureWritten = BitmapCaptureWriter(m_outputPath, m_captureDescription).write(MakeNotNull(static_cast<const u8*>(mapping->data)), mapping->rowPitch, scratchArena);
         device.unmapStagingTexture(*m_readback);
         if(!captureWritten){
-            markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
+            markFailed(FOUNDATION_TEXT("failed to write the framebuffer capture atomically"));
             requestTerminalQuit();
             return;
         }
 
         m_captureReady = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: capture ready"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: capture ready"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
         if(m_options.quitWhenReady)
             requestTerminalQuit();
     }
@@ -219,7 +219,7 @@ public:
     [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
 
     void finish(){
-        NWB_ASSERT(m_captureReady);
+        FOUNDATION_ASSERT(m_captureReady);
         requestTerminalQuit();
     }
 
@@ -236,7 +236,7 @@ public:
 
         const Core::Texture* const backbuffer = getGraphics().getBackBuffer(0u);
         if(!backbuffer){
-            markFailed(NWB_TEXT("swap-chain texture is unavailable during capture resource setup"));
+            markFailed(FOUNDATION_TEXT("swap-chain texture is unavailable during capture resource setup"));
             return false;
         }
         return prepareReadback(backbuffer->getCreationDescription());
@@ -266,11 +266,11 @@ public:
 
         if(!getGraphics().isSwapChainReadbackAvailable()){
             m_skipped = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
             return true;
         }
         if(!frame.valid()){
-            markFailed(NWB_TEXT("renderer supplied an invalid acquired presentation frame"));
+            markFailed(FOUNDATION_TEXT("renderer supplied an invalid acquired presentation frame"));
             return true;
         }
 
@@ -289,7 +289,7 @@ public:
             return true;
 
         if(!stagingMatches(description)){
-            markFailed(NWB_TEXT("framebuffer readback staging texture was not prepared for the current swap chain"));
+            markFailed(FOUNDATION_TEXT("framebuffer readback staging texture was not prepared for the current swap chain"));
             return true;
         }
 
@@ -325,7 +325,7 @@ public:
             || frame.backBuffer.index != m_preparedFrame.backBuffer.index
             || frame.framebuffer != m_preparedFrame.framebuffer
         ){
-            markFailed(NWB_TEXT("presentation declaration no longer matches the prepared acquired frame"));
+            markFailed(FOUNDATION_TEXT("presentation declaration no longer matches the prepared acquired frame"));
             return MakeUnexpected(Failure{});
         }
 
@@ -339,7 +339,7 @@ public:
         const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCaptureStaging))
             .setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
         if(!stagingHazardResult){
-            markFailed(NWB_TEXT("failed to declare the framebuffer staging hazard domain"));
+            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer staging hazard domain"));
             return MakeUnexpected(Failure{});
         }
 
@@ -363,7 +363,7 @@ public:
                 .generation = m_completionState->generation,
             });
         if(!readbackTask){
-            markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
+            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer readback task"));
             return MakeUnexpected(Failure{});
         }
 
@@ -378,7 +378,7 @@ private:
             return;
 
         m_failed = true;
-        NWB_LOGGER_ERROR(NWB_TEXT("FramebufferCapture: {}"), reason);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FramebufferCapture: {}"), reason);
     }
 
     void requestTerminalQuit(){
@@ -417,11 +417,11 @@ private:
 
     [[nodiscard]] b8 prepareReadback(const Core::TextureDesc& description){
         if(!__hidden_framebuffer_capture::IsSupportedSdrFormat(description.format)){
-            markFailed(NWB_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
+            markFailed(FOUNDATION_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
             return false;
         }
         if(description.width == 0u || description.height == 0u || description.depth != 1u || description.arraySize != 1u || description.mipLevels != 1u || description.sampleCount != 1u || description.dimension != Core::TextureDimension::Texture2D){
-            markFailed(NWB_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
+            markFailed(FOUNDATION_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
             return false;
         }
         if(stagingMatches(description))
@@ -435,7 +435,7 @@ private:
         else
             m_readback.reset();
         if(!readbackResult){
-            markFailed(NWB_TEXT("failed to allocate the matching framebuffer readback staging texture"));
+            markFailed(FOUNDATION_TEXT("failed to allocate the matching framebuffer readback staging texture"));
             return false;
         }
         return true;
@@ -495,7 +495,7 @@ public:
         if(frameCountText){
             const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
             if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: capture frame count must be a positive u32"), projectName);
                 return MakeUnexpected(Failure{});
             }
             captureFrameCount = static_cast<u32>(*parsedFrameCount);

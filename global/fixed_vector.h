@@ -151,7 +151,7 @@ public:
     }
 
     constexpr void resize(size_type newSize){
-        NWB_ASSERT(newSize <= s_MaxElements);
+        FOUNDATION_ASSERT(newSize <= s_MaxElements);
         if(newSize > s_MaxElements)
             throw RuntimeException("FixedVector size exceeds capacity");
 
@@ -195,19 +195,19 @@ private:
     }
 
     constexpr void requireIndex(const size_type pos)const{
-        NWB_ASSERT(pos < m_currentSize);
+        FOUNDATION_ASSERT(pos < m_currentSize);
         if(pos >= m_currentSize)
             throw RuntimeException("FixedVector index out of range");
     }
 
     constexpr void requireNonEmpty(const NotNull<const char*> message)const{
-        NWB_ASSERT(m_currentSize > 0);
+        FOUNDATION_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
             throw RuntimeException(message.get());
     }
 
     constexpr void requireCapacity()const{
-        NWB_ASSERT(m_currentSize < s_MaxElements);
+        FOUNDATION_ASSERT(m_currentSize < s_MaxElements);
         if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
     }

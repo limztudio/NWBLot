@@ -25,7 +25,7 @@ namespace __hidden_texture_transfer_staging{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and destination slices violate the copy contract");
+static constexpr TStringView s_SliceCopyContractReason = FOUNDATION_TEXT("source and destination slices violate the copy contract");
 
 [[nodiscard]] inline Expected<VkBufferImageCopy> BuildStagingTextureCopyRegion(
     const TextureSlice& stagingSlice,
@@ -41,7 +41,7 @@ static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and de
     if(!range)
         return MakeUnexpected(Failure{});
     // The required alignment is the common multiple of both copy alignments.
-    NWB_ASSERT((range->byteOffset % s_BufferAlignmentBytes) == 0u && (range->byteOffset % stagingFormatLayout.bytesPerBlock) == 0u);
+    FOUNDATION_ASSERT((range->byteOffset % s_BufferAlignmentBytes) == 0u && (range->byteOffset % stagingFormatLayout.bytesPerBlock) == 0u);
 
     VkBufferImageCopy region{};
     region.bufferOffset = range->byteOffset;
@@ -69,7 +69,7 @@ static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and de
 
 
 void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
-    constexpr TStringView s_OperationName = NWB_TEXT("copy texture to staging texture");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("copy texture to staging texture");
     if(!validateStagingTextureCopyResources(dest, src, CpuAccessMode::Read, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, s_OperationName))
         return;
     if(!validateTextureForGpuState(&src, ResourceStates::CopySource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
@@ -105,7 +105,7 @@ void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlic
 }
 
 void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice){
-    constexpr TStringView s_OperationName = NWB_TEXT("copy staging texture to texture");
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("copy staging texture to texture");
     if(!validateStagingTextureCopyResources(src, dest, CpuAccessMode::Write, VK_IMAGE_USAGE_TRANSFER_DST_BIT, s_OperationName))
         return;
     if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
@@ -160,27 +160,27 @@ b8 CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTextu
         || &activeCommandBuffer->m_queue != expectedQueue
         || m_recordingLeaseSerial == 0u
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("command list has no exact active command-buffer lease"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("command list has no exact active command-buffer lease"));
         return false;
     }
     if(&stagingTexture.m_context != &m_context || &texture.m_context != &m_context){
-        rejectCommandRecording(operationName, NWB_TEXT("staging texture and texture must belong to this device"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("staging texture and texture must belong to this device"));
         return false;
     }
     if(stagingTexture.m_buffer == VK_NULL_HANDLE || !stagingTexture.m_allocation || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(operationName, NWB_TEXT("staging buffer and image handles must be non-null"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("staging buffer and image handles must be non-null"));
         return false;
     }
     if(stagingTexture.m_cpuAccess != requiredCpuAccess){
-        rejectCommandRecording(operationName, NWB_TEXT("staging texture CPU-access direction is incompatible"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("staging texture CPU-access direction is incompatible"));
         return false;
     }
     if((texture.m_imageInfo.usage & requiredImageUsage) != requiredImageUsage){
-        rejectCommandRecording(operationName, NWB_TEXT("image lacks the required transfer usage"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("image lacks the required transfer usage"));
         return false;
     }
 
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(
         stagingTexture.m_creationDesc.arraySize != 0u
         && stagingTexture.m_creationDesc.mipLevels != 0u
         && stagingTexture.m_mipLayouts.size() == stagingTexture.m_creationDesc.mipLevels
@@ -190,10 +190,10 @@ b8 CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTextu
 
     const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     if(!exactQueue){
-        rejectCommandRecording(operationName, NWB_TEXT("command list has no valid exact physical queue"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("command list has no valid exact physical queue"));
         return false;
     }
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(
         stagingTexture.m_admittedQueueFamilies.size() <= Limit<u32>::s_Max
         && (
             (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_admittedQueueFamilies.size() == 1u)
@@ -209,11 +209,11 @@ b8 CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTextu
         }
     }
     if(!familyAdmitted){
-        rejectCommandRecording(operationName, NWB_TEXT("exact command queue family was not admitted at creation"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("exact command queue family was not admitted at creation"));
         return false;
     }
     if(stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && !ResourceQueueSharing::IncludesQueueClass(stagingTexture.m_creationQueueSharing, exactQueue->queueClass)){
-        rejectCommandRecording(operationName, NWB_TEXT("exact command queue class was not admitted at creation"));
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("exact command queue class was not admitted at creation"));
         return false;
     }
     return true;
@@ -226,8 +226,8 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
         return MakeUnexpected(Failure{});
     if(textureDesc.format != stagingDesc.format)
         return MakeUnexpected(Failure{});
-    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo));
-    NWB_ASSERT(
+    FOUNDATION_ASSERT(VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo));
+    FOUNDATION_ASSERT(
         VulkanTextureDetail::TextureImagePolicy::TextureFormatMetadataMatches(stagingDesc.format, stagingResource.m_aspectMask, stagingResource.m_formatLayout)
         && VulkanTextureDetail::TextureImagePolicy::TextureFormatMetadataMatches(textureDesc.format, textureResource.m_aspectMask, textureResource.m_formatLayout)
         && stagingResource.m_creationQueueSharing == stagingDesc.queueSharing
@@ -246,7 +246,7 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
     if(resolvedStaging->width != resolvedTexture->width || resolvedStaging->height != resolvedTexture->height || resolvedStaging->depth != resolvedTexture->depth)
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(resolvedStaging->mipLevel < stagingResource.m_mipLayouts.size());
+    FOUNDATION_ASSERT(resolvedStaging->mipLevel < stagingResource.m_mipLayouts.size());
     return __hidden_texture_transfer_staging::BuildStagingTextureCopyRegion(
         *resolvedStaging,
         *resolvedTexture,

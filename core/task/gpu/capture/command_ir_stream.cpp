@@ -422,7 +422,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
         break;
     }
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Known command IR opcode lost its decoder"));
+        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Known command IR opcode lost its decoder"));
         fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
     }

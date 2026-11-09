@@ -60,7 +60,7 @@ static void StoreBreadcrumb(const AStringView category, const AStringView messag
     CrashDetail::PublishCrashStateSnapshot();
 }
 
-NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const CrashDetail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, CrashDetail::CrashDumpRequestOptions& options){
+FOUNDATION_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const CrashDetail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, CrashDetail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(CrashDetail::s_ManualDumpCategory) : category;
 
     {
@@ -85,7 +85,7 @@ NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const CrashDetail:
     return CrashDetail::RequestCrashDump(reasonKind, 0u, options);
 }
 
-NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
+FOUNDATION_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
     CrashDetail::CrashDumpRequestOptions options;
     options.event = DiagnosticEventNameFromRecord(record);
     options.triggerCategory = record.category;
@@ -235,7 +235,7 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     }
 
     ScopeExit rollbackPlatform([&]()noexcept{ CrashDetail::UninstallPlatformResources(observations); });
-#if !defined(NWB_PLATFORM_ANDROID)
+#if !defined(FOUNDATION_PLATFORM_ANDROID)
     const auto handler = CrashDetail::StartDesktopHandler(handlerExecutablePath, scratchArena, observations);
     if(!handler){
         observations.recordPrimary(handler.error());

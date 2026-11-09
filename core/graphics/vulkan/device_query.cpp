@@ -176,14 +176,14 @@ void Device::probeCompressedTextureFormats(){
             }
         }
         else{
-            NWB_ASSERT(Format::IsBCCompressedFormat(format));
+            FOUNDATION_ASSERT(Format::IsBCCompressedFormat(format));
             ++bcFormatCount;
             if(readable)
                 ++readableBcFormatCount;
         }
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats.")
+    NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats.")
         , readableAstcLdrFormatCount
         , astcLdrFormatCount
         , readableAstcHdrFormatCount
@@ -253,7 +253,7 @@ b8 Device::canCreateSampledTextureFormat(const Format::Enum format)const{
         return true;
 
     if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"), ConvertString(GetFormatInfo(format).getName()), ResultToString(res));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"), ConvertString(GetFormatInfo(format).getName()), ResultToString(res));
     }
     return false;
 }

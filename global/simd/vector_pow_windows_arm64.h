@@ -7,7 +7,7 @@
 
 #include "vector_arithmetic.h"
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(NWB_DEBUG)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(FOUNDATION_DEBUG)
 #include "../floating_point_environment.h"
 
 #include <cerrno>
@@ -118,7 +118,7 @@ inline constexpr u32 s_ArmMayUnderflowMultiplierBits = 0x1a200000u;
 
 
 template<b8 Equal>
-NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
+FOUNDATION_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     const auto aLow = SIMDVectorDoubleDetail::GetLow(a), aHigh = SIMDVectorDoubleDetail::GetHigh(a);
     const auto bLow = SIMDVectorDoubleDetail::GetLow(b), bHigh = SIMDVectorDoubleDetail::GetHigh(b);
     uint64x2_t low{}, high{};
@@ -138,7 +138,7 @@ struct ArmArithmetic{
     u32 control;
 
     template<typename T, typename Operation>
-    [[nodiscard]] NWB_INLINE T evaluate(const Operation& operation)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE T evaluate(const Operation& operation)const noexcept{
 #pragma STDC FENV_ACCESS ON
         if constexpr(!Ordered)
             return operation();
@@ -181,37 +181,37 @@ struct ArmArithmetic{
         }
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorAdd(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleAdd(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble doubleAdd(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleAdd(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleSubtract(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble doubleSubtract(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleSubtract(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorMultiply(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleMultiply(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble doubleMultiply(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiply(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleFma(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble doubleFma(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiplyAdd(a, b, c); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle narrow(SIMDVectorDouble a)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle narrow(SIMDVectorDouble a)const noexcept{
 #pragma STDC FENV_ACCESS ON
         if constexpr(Ordered){
             // Conversion tests tininess before rounding and before inexact.
@@ -229,20 +229,20 @@ struct ArmArithmetic{
         return evaluate<SIMDVectorSingle>([&]()noexcept{ return ConvertVectorDoubleToSingle(a); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle divide(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle divide(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         __asm__ __volatile__("" : "+w"(a), "+w"(b));
         return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorDivide(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle invalid(SIMDVectorSingle x)const noexcept{
+    [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle invalid(SIMDVectorSingle x)const noexcept{
 #pragma STDC FENV_ACCESS ON
         const SIMDVectorSingle z = evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorSubtract(x, x); });
         return divide(z, z);
     }
 };
 
-[[nodiscard]] NWB_INLINE i32 ArmCheckInt(const u32 bits)noexcept{
+[[nodiscard]] FOUNDATION_INLINE i32 ArmCheckInt(const u32 bits)noexcept{
     const u32 exponent = (bits >> s_F32MantissaBitCount) & s_F32ExponentFieldMask;
     if(exponent < s_F32ExponentBias)
         return s_ArmNotInteger;
@@ -254,16 +254,16 @@ struct ArmArithmetic{
     return (bits & (1u << shift)) != 0u ? s_ArmOddInteger : s_ArmEvenInteger;
 }
 
-[[nodiscard]] NWB_INLINE b8 ArmSpecialBits(const u32 bits)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ArmSpecialBits(const u32 bits)noexcept{
     return 2u * bits - 1u >= 2u * s_F32InfinityBits - 1u;
 }
 
-[[nodiscard]] NWB_INLINE b8 ArmSignaling(const u32 bits)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ArmSignaling(const u32 bits)noexcept{
     return 2u * (bits ^ s_F32QuietBit) > 2u * s_F32QuietNaNBits;
 }
 
 template<b8 Ordered, b8 Bounded = false>
-NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
+FOUNDATION_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
 #pragma STDC FENV_ACCESS ON
     const ArmArithmetic<Ordered> math{ control };
     UInt4 ix = BitCast<UInt4>(x), iy = BitCast<UInt4>(y), admitted{}, result{}, sign{};
@@ -440,12 +440,12 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
 }
 
 template<b8 Ordered>
-NWB_NOINLINE SIMDVectorSingle ArmPackedPacket(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
+FOUNDATION_NOINLINE SIMDVectorSingle ArmPackedPacket(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
 #pragma STDC FENV_ACCESS ON
     return ArmPackedBody<Ordered, false>(x, y, control);
 }
 
-NWB_NOINLINE inline SIMDVectorSingle NWB_SIMD_CALL ArmEnabledPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle FOUNDATION_SIMD_CALL ArmEnabledPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
 #pragma STDC FENV_ACCESS ON
     u32 control{};
     if(_controlfp_s(&control, 0u, 0u) != 0)
@@ -463,11 +463,11 @@ NWB_NOINLINE inline SIMDVectorSingle NWB_SIMD_CALL ArmEnabledPower(const SIMDVec
     return ArmPackedPacket<false>(x, y, control);
 }
 
-NWB_NOINLINE inline SIMDVectorSingle NWB_SIMD_CALL ArmIDEOriginal(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle FOUNDATION_SIMD_CALL ArmIDEOriginal(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorSet(::Pow(VectorGetX(x), VectorGetX(y)), ::Pow(VectorGetY(x), VectorGetY(y)), ::Pow(VectorGetZ(x), VectorGetZ(y)), ::Pow(VectorGetW(x), VectorGetW(y)));
 }
 
-NWB_NOINLINE inline SIMDVectorSingle NWB_SIMD_CALL Pow(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle FOUNDATION_SIMD_CALL Pow(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
 #pragma STDC FENV_ACCESS ON
     u64 nativeControl{};
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));

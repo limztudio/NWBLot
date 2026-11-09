@@ -46,12 +46,12 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         ufbx_node* joint = joints[jointIndex];
         if(!joint){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
             return MakeUnexpected(Failure{});
         }
         const auto inserted = sourceJointLookup.emplace(MakeNotNull<const ufbx_node*>(joint), jointIndex);
         if(!inserted.second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
             return MakeUnexpected(Failure{});
         }
         sortNames.push_back(NodeName(joint, jointIndex, scratchArena));
@@ -94,7 +94,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     for(const usize oldJointIndex : sortedJointIndices){
         const u32 parentIndex = parentIndices[oldJointIndex];
         if(!Impl::IsFiniteSkeletonJointMatrix(LoadFloat(inverseBindMatrices[oldJointIndex]))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite"), ConvertString(sortNames[oldJointIndex]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite"), ConvertString(sortNames[oldJointIndex]));
             return MakeUnexpected(Failure{});
         }
 
@@ -102,7 +102,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
         const SIMDMatrix parentGlobalBindPose = hasParent ? LoadFloat(bindPoseMatrices[parentIndex]) : SIMDMatrix{};
         const auto localBindPoseMatrix = TryBuildFbxLocalBindPoseMatrix(LoadFloat(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose);
         if(!localBindPoseMatrix){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), ConvertString(sortNames[oldJointIndex]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), ConvertString(sortNames[oldJointIndex]));
             return MakeUnexpected(Failure{});
         }
         JointMatrix localBindPose{};

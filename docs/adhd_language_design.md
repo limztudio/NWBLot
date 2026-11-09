@@ -154,7 +154,7 @@
 - **Mandatory Parameter Passing Determiners (`in` & `mut`)**:
   - Every function/method parameter **must** explicitly specify `in` or `mut` (there is no C++-style `const T` parameter qualifier):
  - **`in T`**: Read-only input parameter.
- - Emits `CallTraits<T>::param_type` (`const T` by value for scalars/handles, `NWB_SIMD_CALL` register value for SIMD types, or `const T&` / borrowed `Span<const E>` / `AStringView` for aggregates, containers, and strings).
+ - Emits `CallTraits<T>::param_type` (`const T` by value for scalars/handles, `FOUNDATION_SIMD_CALL` register value for SIMD types, or `const T&` / borrowed `Span<const E>` / `AStringView` for aggregates, containers, and strings).
  - Mutation of an `in` parameter inside the function is a compile error.
  - **`mut T`**: Mutable in/out reference parameter.
  - Emits `T&`.
@@ -193,8 +193,8 @@
  - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`, and all generated `adhd` functions emit `noexcept` in C++.
   - **Built-In Diagnostics (`assert`, `info`, `warning`, `error` & `[essential]` Attribute)**:
  - `adhd` provides built-in `assert`, `info`, `warning`, and `error` statements (`global/assert.h`, `core/common/log.h`), optionally prefixed with the `[essential]` attribute:
- - `assert(cond);` / `assert(cond, "msg", ...);` -> `NWB_ASSERT` / `NWB_ASSERT_MSG`
- - `[essential] assert(cond);` / `[essential] assert(cond, "msg", ...);` -> `NWB_FATAL_ASSERT` / `NWB_FATAL_ASSERT_MSG`
+ - `assert(cond);` / `assert(cond, "msg", ...);` -> `FOUNDATION_ASSERT` / `FOUNDATION_ASSERT_MSG`
+ - `[essential] assert(cond);` / `[essential] assert(cond, "msg", ...);` -> `FOUNDATION_FATAL_ASSERT` / `FOUNDATION_FATAL_ASSERT_MSG`
  - `info("msg", ...);` -> `NWB_LOGGER_INFO`
  - `[essential] info("msg", ...);` -> `NWB_LOGGER_ESSENTIAL_INFO`
  - `warning("msg", ...);` -> `NWB_LOGGER_WARNING`
@@ -321,7 +321,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
-  - **Auto text form (`"..."`) and UTF-8 bridge**: Coders write plain UTF-8 `"..."` text in all `.adhd` (never `NWB_TEXT("...")`). The `adhd` tool puts out UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`. It auto fits UTF-8 text (`NWB_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when sent to `assert`, `info`, `warning`, `error`, or `Path`.
+  - **Auto text form (`"..."`) and UTF-8 bridge**: Coders write plain UTF-8 `"..."` text in all `.adhd` (never `FOUNDATION_TEXT("...")`). The `adhd` tool puts out UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`. It auto fits UTF-8 text (`FOUNDATION_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when sent to `assert`, `info`, `warning`, `error`, or `Path`.
 - **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`
@@ -472,7 +472,7 @@ All owning containers are automatically bound to the enclosing class's static ar
  Vector<i32> b(6);
  native(in a, mut b) {
  // b.data() -> i32* (void*), a.data() -> const i32* (const void*)
- NWB_MEMCPY(b.data(), b.size() * sizeof(i32), a.data(), a.size() * sizeof(i32));
+ FOUNDATION_MEMCPY(b.data(), b.size() * sizeof(i32), a.data(), a.size() * sizeof(i32));
  }
  ```
 - **Passing Callbacks (`Func<...>`) into `native`**:

@@ -23,7 +23,7 @@ public:
     void enter()noexcept{ ++m_depth; }
 
     [[nodiscard]] b8 leave()noexcept{
-        NWB_ASSERT(m_depth > 0u);
+        FOUNDATION_ASSERT(m_depth > 0u);
         --m_depth;
         return m_depth == 0u && m_retiring;
     }

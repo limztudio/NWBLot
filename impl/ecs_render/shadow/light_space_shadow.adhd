@@ -71,8 +71,6 @@ struct LightSpaceShadowCaster{
     b8 csg = false;
 };
 
-[[nodiscard]] Expected<u32> LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster> casters)noexcept;
-
 struct LightSpaceShadowDiagnostics{
     Core::BufferHandle readback;
     Core::QueueSubmissionToken submission;

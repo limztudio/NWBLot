@@ -1,0 +1,1596 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ImplEcsRenderRaytraceCoreAndStateAdhdModule(in u64 value){
+    return value != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
+#include <global/simdmath.h>
+#include <impl/global.adhd.h>
+#include <core/graphics/api.h>
+#include <impl/ecs_render/shadow/rt_shadow_state.adhd.h>
+#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
+#include <impl/ecs_render/raytrace/rt_private.adhd.h>
+#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd.h>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd.h>
+#include <global/overflow.h>
+#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
+#include <impl/ecs_render/shadow/light_space_resource_set.adhd.h>
+#include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/runtime.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
+#include <global/simd/vector.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
+#include <impl/ecs_render/raytrace/frame_graph_trace_geometry.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <core/common/log.h>
+#include <impl/ecs_render/optics/task_graph_optical_scene_upload.adhd.h>
+#include <impl/assets_graphics/bvh_subsystem.adhd.h>
+#include <impl/ecs_render/raytrace/rt_swbvh_helpers.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd.h>
+#include <impl/ecs_render/raytrace/software_scene_refit.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
+#include <impl/ecs_render/shader/shader_system.adhd.h>
+#include <core/graphics/shader_archive.h>
+#include <global/algorithm.h>
+#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
+#include <impl/ecs_render/raytrace/scene_bvh_upload_policy.adhd.h>
+#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd.h>
+#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
+#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
+#include <impl/ecs_render/shadow/light_space_scene_gather.adhd.h>
+#include <impl/ecs_render/shadow/shadow_material_context_preparer.adhd.h>
+#include <impl/ecs_render/shadow/shadow_occluder_material_gather.adhd.h>
+#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+#ifndef NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
+#define NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
+class RendererShaderSystem;
+class RayTraceMaterialResources;
+
+
+class SoftwareBvhBuilder final : NoCopy{
+public:
+    SoftwareBvhBuilder(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_shaderSystem(shaderSystem)
+        , m_state(state)
+    {}
+
+
+public:
+    void releaseSwBvhScratchHeapHandles();
+    [[nodiscard]] b8 ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials);
+    [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
+    [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
+    [[nodiscard]] b8 buildMeshSwBvhPrepared(
+        u32 positionHeapSlot,
+        u32 triangleIndexHeapSlot,
+        u32 primitiveCount,
+        const Float3Int& aabbMin,
+        const Float3Int& aabbMax,
+        Core::GpuDescriptorHandle nodeHeapHandle,
+        Core::GpuDescriptorHandle parentHeapHandle,
+        Core::CommandList& commandList,
+        Core::BufferHandle& nodeBuffer,
+        Core::BufferHandle& parentBuffer
+    );
+    [[nodiscard]] b8 refitMeshSwBvhPrepared(
+        u32 positionHeapSlot,
+        u32 triangleIndexHeapSlot,
+        u32 primitiveCount,
+        Core::GpuDescriptorHandle nodeHeapHandle,
+        Core::GpuDescriptorHandle parentHeapHandle,
+        Core::CommandList& commandList,
+        Core::BufferHandle& nodeBuffer,
+        Core::BufferHandle& parentBuffer
+    );
+
+
+private:
+    [[nodiscard]] b8 ensureBvhSortPipeline();
+    [[nodiscard]] b8 ensureBvhSortBuffers(usize paddedCount);
+    [[nodiscard]] b8 bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
+    [[nodiscard]] b8 ensureBvhBuildPipeline();
+    [[nodiscard]] b8 ensureBvhVisitCounterBuffer(usize primitiveCount);
+    [[nodiscard]] b8 createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    RendererShaderSystem& m_shaderSystem;
+    RtSceneBvhState& m_state;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TlasStaticSceneIdentity final{
+public:
+    [[nodiscard]] static u64 Compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
+
+private:
+    static void Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshHeapHandleGather final{
+public:
+    MeshHeapHandleGather(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache)noexcept : m_heap(heap), m_cache(cache){}
+    void begin()noexcept;
+    [[nodiscard]] Expected<Core::GpuDescriptorHandle> acquire(const Core::BufferHandle& bufferHandle);
+    void sweep();
+
+private:
+    Core::GpuDescriptorHeap& m_heap;
+    RtMeshHeapHandleCache& m_cache;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{ struct MeshRayTracingResourceSnapshot; };
+
+class PreparedMeshBlasBuilder final{
+public:
+    [[nodiscard]] static Expected<PreparedMeshBlasBuild> Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
+    [[nodiscard]] static b8 Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept;
+    [[nodiscard]] static b8 Record(const PreparedMeshBlasBuild& build, b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList);
+};
+
+#endif
+
+
+
+b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
+    m_lightSpaceShadow.m_captureHistory.beginFrame();
+    m_lightSpaceShadow.m_captureSceneTrusted = false;
+    m_lightSpaceShadow.m_sceneBuffers.clear();
+    m_lightSpaceShadow.m_sceneTextures.clear();
+    m_lightSpaceShadow.m_snapshot.captureTicket = {};
+    m_lightSpaceShadow.m_snapshot.ready = false;
+    m_lightSpaceShadow.m_resourcesPrepared = false;
+    m_lightSpaceShadow.m_sceneEligible = false;
+    m_lightSpaceShadow.m_casters.clear();
+    // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.
+    // Full invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
+    m_shadowVisibilityPreparedTargets = nullptr;
+    m_preparedSceneContentStamp = {};
+    m_hardwareOpticalScene.resetPrepared();
+    m_softwareOpticalScene.resetPrepared();
+    m_shadowVisibilityResourcesPreflighted = false;
+    m_shadowVisibilityHardwareSupported = false;
+    m_opticalCausticReaderAdmitted = false;
+    m_shadowVisibilityTraceResourcesPreflighted = false;
+    m_shadowVisibilityBackendPipelinePreflighted = false;
+    clearPreparedShadowTraceMaterialSampledTextures();
+    clearPreparedShadowMaterialContext();
+    clearPreparedSceneBvh();
+    m_preparedSceneTlas.clear();
+    clearPreparedMeshBlasBuilds();
+    clearPreparedMeshSwBvhBuilds();
+    // Surfel GI consumes the scene below per frame. Never reuse the prior frame's selection after an empty/rejected preflight.
+    m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
+    m_rayTracingState.m_softTransparentReady = false;
+    m_rayTracingState.m_softTransparentTemporalReady = false;
+    m_rayTracingState.m_surfelEnabled = false;
+    m_rayTracingState.m_surfelUseHwTrace = false;
+    if(!targets.shadowVisibility)
+        return false;
+    // The material-context selector is a global heap entry. Set it before gathering; the graph imports the backing handle.
+    if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
+
+    // Caustic target storage is selected before graph compilation. Uploading the gathered payload remains in the graph-owned preparation packet.
+    if(!prepareCausticEmissionTargetResources(scratchArena))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target gather failed"));
+
+    ShadowPipelineSet shadowPipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState, m_rayTracingState);
+    m_shadowVisibilityHardwareSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    if(m_shadowVisibilityHardwareSupported){
+        if(!preparePendingMeshBlasResources(scratchArena)){
+            if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+                return false;
+            m_shadowVisibilityPreparedTargets = &targets;
+            m_shadowVisibilityResourcesPreflighted = true;
+            return true;
+        }
+
+        const b8 sceneReady = prepareSceneTlasResources(scratchArena);
+        if(!sceneReady){
+            if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+                return false;
+            m_shadowVisibilityPreparedTargets = &targets;
+            m_shadowVisibilityResourcesPreflighted = true;
+            return true;
+        }
+        if(!ensureCsgTraceContextResources())
+            return false;
+
+        // Hardware shadows and optical effects share one immutable TLAS/material context.
+        if(!capturePreparedMeshBlasBuilds(scratchArena)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
+            m_preparedSceneTlas.clear();
+            return false;
+        }
+        m_shadowVisibilityTraceResourcesPreflighted = true;
+        const b8 backendReady = shadowPipelines.ensureShadowPipeline();
+        m_shadowVisibilityBackendPipelinePreflighted = backendReady;
+
+        // HW opaque shadow shares the SW half-res denoise chain: jittered trace, temporal merge, a-trous resolve, upsample.
+        // The HW trace writes shadowSoftHalfA; the shared block denoises through the same m_softShadow* state as SW.
+        // Non-fatal: a failure leaves m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
+        m_rayTracingState.m_softShadowReady = backendReady && shadowPipelines.ensureShadowSoftPipeline() && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
+        if(backendReady && !m_rayTracingState.m_softShadowReady)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
+
+        // Soft opaque shadow TEMPORAL accumulation (shared reproject-merge): same as the SW branch.
+        // Non-fatal: a failure leaves m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
+        m_rayTracingState.m_softShadowTemporalReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
+        if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+
+        // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
+        // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
+        HardwareTransparentShadowResources transparentResources(m_arena, m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+        m_rayTracingState.m_softTransparentReady = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && transparentResources.prepareHardwareTransparentShadowResources(targets) && shadowPipelines.ensureSoftTransparentResolvePipeline();
+        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && !m_rayTracingState.m_softTransparentReady)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
+
+        m_rayTracingState.m_softTransparentTemporalReady = m_rayTracingState.m_softTransparentReady && m_rayTracingState.m_softShadowTemporalReady;
+
+        shadowPipelines.prepareSoftCombinedResolvePipelines();
+
+        // Build HW caustic resources with the shadow ones. Non-fatal to shadows: failure leaves a black caustic buffer.
+        if(!prepareHwCausticResources(targets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
+
+        // Hardware surfel GI reuses the TLAS, per-mesh geometry, and instance records built for shadows and caustics.
+        // Gated on the HW shadow backend being ready + a non-empty TLAS.
+        // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
+        if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
+            m_rayTracingState.m_surfelEnabled = true;
+            m_rayTracingState.m_surfelUseHwTrace = true;
+            if(!prepareSurfelResources(targets))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW surfel GI resource preparation failed"));
+        }
+
+        if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+            return false;
+        m_shadowVisibilityPreparedTargets = &targets;
+        preflightLightSpaceShadowResources();
+        if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shadow map preparation failed"));
+            return false;
+        }
+        m_shadowVisibilityResourcesPreflighted = true;
+        return true;
+    }
+
+    // No HW ray tracing: build/refit per-mesh software BVHs from skinned geometry, then the per-frame scene BVH.
+    const b8 meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
+    if(!meshResourcesReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
+    if(!meshResourcesReady || !prepareSceneSwBvhResources(scratchArena)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH build failed"));
+        m_shadowVisibilityPreparedTargets = &targets;
+        m_shadowVisibilityResourcesPreflighted = true;
+        return true;
+    }
+    if(!ensureCsgTraceContextResources())
+        return false;
+
+    // Enable surfel GI on the SW path once the scene BVH is resident; pool resources live on state so resize never resets them.
+    if(m_rayTracingState.m_sceneBvhInstanceCount > 0u && m_rayTracingState.m_swShadowMeshCount > 0u){
+        m_rayTracingState.m_surfelEnabled = true;
+        m_rayTracingState.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
+        if(!prepareSurfelResources(targets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI resource preparation failed"));
+    }
+
+    if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
+        if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+            return false;
+        m_shadowVisibilityPreparedTargets = &targets;
+        m_shadowVisibilityResourcesPreflighted = true;
+        return true;
+    }
+    // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal hardware fallback.
+    if(!capturePreparedMeshSwBvhBuilds(scratchArena)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
+        return false;
+    }
+    m_shadowVisibilityTraceResourcesPreflighted = true;
+
+    const b8 backendReady = shadowPipelines.ensureSwShadowPipeline();
+    m_shadowVisibilityBackendPipelinePreflighted = backendReady;
+
+    // Soft opaque shadow: downsample + a-trous pipelines denoise half-res trace; non-fatal.
+    m_rayTracingState.m_softShadowReady = backendReady && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
+    if(backendReady && !m_rayTracingState.m_softShadowReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
+
+    // Temporal accumulation: reproject-merge plus SOFT_HALF variants; falls back to spatial.
+    m_rayTracingState.m_softShadowTemporalReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
+    if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+
+    // Colored transparent shadow: RGB resolve gated on opaque path; falls back to coarse/adaptive.
+    m_rayTracingState.m_softTransparentReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureSoftTransparentResolvePipeline();
+    if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softTransparentReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame"));
+
+    m_rayTracingState.m_softTransparentTemporalReady = m_rayTracingState.m_softTransparentReady && m_rayTracingState.m_softShadowTemporalReady;
+
+    shadowPipelines.prepareSoftCombinedResolvePipelines();
+
+    // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH + per-mesh geometry).
+    // Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
+    if(!prepareGpuBvhCausticResources(targets))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic producer resource preparation failed"));
+
+    if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+        return false;
+    m_shadowVisibilityPreparedTargets = &targets;
+    preflightLightSpaceShadowResources();
+    if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shadow map preparation failed"));
+        return false;
+    }
+    m_shadowVisibilityResourcesPreflighted = true;
+    return true;
+}
+
+Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const b8 sceneTlasBuildGraphOwned,
+    const b8 meshBlasBuildsGraphOwned,
+    const b8 meshBlasGeometryBuildInputStatesGraphOwned,
+    const b8 meshSwBvhBuildsGraphOwned,
+    const b8 preparedMeshSwBvhBuildsRecordedByGraph
+){
+    if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
+        return MakeUnexpected(Failure{});
+
+    // A non-fatal preflight miss disables tracing this frame; no capacity retry, the graph already froze its imports.
+    if(!m_shadowVisibilityTraceResourcesPreflighted)
+        return false;
+
+    if(m_shadowVisibilityHardwareSupported){
+        if(meshBlasBuildsGraphOwned && !recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
+            return MakeUnexpected(Failure{});
+        if(sceneTlasBuildGraphOwned && !m_preparedSceneTlas.record(m_rayTracingState, commandList))
+            return MakeUnexpected(Failure{});
+        return m_shadowVisibilityBackendPipelinePreflighted;
+    }
+
+    if(!m_preparedMeshSwBvhBuildPlanFrozen || (meshSwBvhBuildsGraphOwned && !preparedMeshSwBvhBuildsRecordedByGraph)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
+        return MakeUnexpected(Failure{});
+    }
+    // Pure software frames have no opaque-HW fallback. Uploads and cache reuse keep their traversal snapshot; recording checks that plan.
+    // A missing or stale plan rejects the packet.
+    if(!m_preparedSceneSwBvhTraversal.ready()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
+        return MakeUnexpected(Failure{});
+    }
+    if(!m_preparedSceneSwBvhTraversal.record())
+        return MakeUnexpected(Failure{});
+    if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
+        m_rayTracingState.m_surfelEnabled = false;
+        m_rayTracingState.m_surfelUseHwTrace = false;
+        return false;
+    }
+
+    return m_shadowVisibilityBackendPipelinePreflighted;
+}
+
+void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
+    invalidateLightSpaceShadowCapture();
+    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
+    m_preparedShadowTraceGeometryBuffers.clear();
+    clearPreparedShadowTraceMaterialSampledTextures();
+    m_preparedCausticEmissionTargetBytes.clear();
+    clearPreparedShadowMaterialContext();
+    clearPreparedSceneBvh();
+    m_preparedSceneTlas.clear();
+    clearPreparedMeshBlasBuilds();
+    clearPreparedMeshSwBvhBuilds();
+    m_shadowVisibilityPreparedTargets = nullptr;
+    m_preparedSceneContentStamp = {};
+    m_hardwareOpticalScene.resetPrepared();
+    m_softwareOpticalScene.resetPrepared();
+    m_shadowVisibilityResourcesPreflighted = false;
+    m_shadowVisibilityHardwareSupported = false;
+    m_opticalCausticReaderAdmitted = false;
+    m_shadowVisibilityTraceResourcesPreflighted = false;
+    m_shadowVisibilityBackendPipelinePreflighted = false;
+
+    // A rejected prep packet may have grown storage without uploading it; keep allocs, drop semantic caches, rebuild next preflight.
+    m_rayTracingState.m_tlasStaticSceneHashValid = false;
+    m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+    m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
+    m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+    m_rayTracingState.m_surfelEnabled = false;
+    m_rayTracingState.m_surfelUseHwTrace = false;
+
+    // Flags update optimistically. If the packet never submits, keep retained structures rebuildable for later frames.
+    m_meshSystem.discardRayTracingBuildState();
+}
+
+b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
+    m_preparedShadowTraceGeometryBuffers.clear();
+    if(!m_shadowVisibilityResourcesPreflighted)
+        return false;
+
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+
+    // Raw tables are populated by preflight. Only the selected backend contributes trace geometry.
+    const ShadowTraceGeometrySelection selection{
+        .hardwarePositions = m_rayTracingState.m_shadowMeshPositionBuffers,
+        .hardwareIndices = m_rayTracingState.m_shadowMeshIndexBuffers,
+        .hardwareAttributes = m_rayTracingState.m_shadowMeshAttributeBuffers,
+        .softwareNodes = m_rayTracingState.m_swShadowMeshNodeBuffers,
+        .softwarePositions = m_rayTracingState.m_swShadowMeshPositionBuffers,
+        .softwareIndices = m_rayTracingState.m_swShadowMeshIndexBuffers,
+        .softwareAttributes = m_rayTracingState.m_swShadowMeshAttributeBuffers,
+        .includeHardware = m_shadowVisibilityHardwareSupported && m_shadowVisibilityTraceResourcesPreflighted,
+        .includeSoftware = m_shadowVisibilityTraceResourcesPreflighted
+            && !m_shadowVisibilityHardwareSupported,
+    };
+    return FreezePreparedShadowTraceGeometryBuffers(meshes, selection, scratchArena, m_acceptedShadowTraceGeometryBuffers, m_preparedShadowTraceGeometryBuffers);
+}
+
+void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
+    for(PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
+        if(resource.buffer && resource.normalizationPending){
+            NWB_ASSERT(m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity());
+            m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);
+            resource.normalizationPending = false;
+        }
+    }
+}
+
+void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noexcept{
+    m_preparedShadowTraceGeometryBuffers.clear();
+    m_acceptedShadowTraceGeometryBuffers.clear();
+    clearPreparedShadowTraceMaterialSampledTextures();
+}
+
+void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
+    if(m_preparedSceneBvh.publishAcceptedUpload(m_rayTracingState))
+        clearPreparedSceneBvh();
+}
+
+Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialState()const noexcept{
+    const auto& state = m_rayTracingState;
+    return state.m_tlasBackingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
+}
+
+b8 RendererRayTracingSystem::capturePreparedSceneBvh(
+    const b8 staticScene,
+    const u64 staticSceneHash,
+    const Span<const NwbBvhNodeGpu> nodes,
+    const Span<const SceneSwBvhInstanceGpu> instances
+){
+    clearPreparedSceneBvh();
+    return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
+}
+
+b8 RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
+    clearPreparedSceneBvh();
+    return m_preparedSceneBvh.captureCacheReuse(m_rayTracingState, staticSceneHash, instanceCount);
+}
+
+void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
+    m_preparedSceneSwBvhRefit.reset();
+    m_preparedSceneSwBvhTraversal.clear();
+    m_preparedSceneBvh.clear();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::invalidateResources(){
+    SoftwareBvhBuilder bvh(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
+    discardPreflightShadowVisibilityResources();
+    invalidatePreparedShadowTraceGeometryBuffers();
+    m_hardwareOpticalScene.invalidate();
+    m_softwareOpticalScene.invalidate();
+    m_preparedSceneSwBvhRefit.reset();
+    m_sceneSwBvhRefit.invalidate();
+    releaseSceneTlasHeapHandle();
+    releaseCausticEmissionTargetHeapHandle();
+    CausticActivityResources activity(m_graphics, m_rayTracingState.m_causticResolve.m_activity);
+    activity.releaseCausticResolveActivity();
+    RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).releaseRayTraceMaterialContextHeapHandles();
+    bvh.releaseSwBvhScratchHeapHandles();
+    releaseSurfelGiHeapHandles();
+    HardwareTransparentShadowResources transparentResources(m_arena, m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+    transparentResources.releaseHardwareTransparentShadowResources();
+    LightSpaceResourceSet resources(m_arena, m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
+    resources.releaseLightSpaceShadowResources();
+    m_refraction.invalidateResources();
+    m_rayTracingState.invalidateResources();
+}
+
+void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(heap.isInitialized()){
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
+        return;
+    }
+    m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+}
+
+RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const noexcept{
+    return { .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount, };
+}
+
+void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const SceneLightGpuData> lights){
+    m_rayTracingState.m_causticLightCount = classification.causticLightCount;
+    RayTracingDiagnostics().unsupportedCausticVolumes(
+        m_shadowVisibilityTraceResourcesPreflighted,
+        classification.causticLightCount,
+        m_unsupportedCausticVolumeCount,
+        m_unsupportedCausticVolumeHash,
+        m_firstUnsupportedCausticVolumeEntity,
+        m_unsupportedCausticVolumeReported,
+        m_reportedUnsupportedCausticVolumeHash
+    );
+    m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights);
+    prepareLightSpaceShadows(lights);
+
+    // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
+    // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
+    RayTracingDiagnostics().causticEmissionGate(
+        classification.causticLightCount,
+        m_rayTracingState.m_causticRefractiveInstanceCount,
+        LoadFloat(m_rayTracingState.m_causticTargetBoundsMin),
+        LoadFloat(m_rayTracingState.m_causticTargetBoundsMax),
+        lights,
+        m_rayTracingState.m_causticEmissionGateLogged
+    );
+}
+
+RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
+    return RayTracingShadowPreparationResourceSnapshot{
+        .sceneTlas = m_rayTracingState.m_tlas,
+        .sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr,
+        .bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer,
+        .bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer,
+        .bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer,
+        .swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer,
+        .swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer,
+        .swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer,
+    };
+}
+
+RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
+    const auto& state = m_rayTracingState;
+    const b8 hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    usize contextReadTokenCount = 0u;
+    for(const auto& token : state.m_rayTraceContextReadSubmissionTokens){
+        if(token.valid()){
+            contextReadTokenCount = state.m_rayTraceContextReadSubmissionTokens.size();
+            break;
+        }
+    }
+    return RayTracingDeferredGraphResourceSnapshot{
+        .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
+        .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
+        .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
+            ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
+            : Span<const Core::QueueSubmissionToken>{},
+        .csgTraceBoundsBuffers = hasCsgTrace ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds) : Span<const Core::BufferHandle>{},
+        .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
+        .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
+        .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
+        .causticEmissionTargetBuffer = state.m_causticEmissionTargets.buffer,
+        .surfelFrameConstantsBuffer = state.m_surfelConstants,
+        .hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer,
+        .hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer,
+        .hardwareTransparentOverflowArgsBuffer = state.m_hardwareTransparentShadow.m_overflowArgsBuffer,
+        .sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer,
+        .sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer,
+        .sceneTlas = state.m_tlas,
+        .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
+        .surfelUsesHardwareTrace = state.m_surfelUseHwTrace,
+        .surfelSplitGraphPipelinesReady =
+            state.m_surfelAgeFreePipeline
+            && state.m_surfelHashBuildPipeline
+            && state.m_surfelSpawnPipeline
+            && (state.m_surfelUseHwTrace ? (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgHwPipeline : state.m_surfelTraceHwPipeline) : (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgPipeline : state.m_surfelTracePipeline))
+            && state.m_surfelResolvePipeline
+            && state.m_surfelUpsamplePipeline
+            && state.m_surfelTraceBuildArgsPipeline,
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::logCapabilityOnce(){
+    RayTracingDiagnostics().rayTracingCapability(
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct),
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline),
+        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        m_rayTracingState.m_capabilityLogged
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RayTracingFrameCpuStateSnapshot RendererRayTracingState::captureFrameCpuState()const noexcept{
+    return RayTracingFrameCpuStateSnapshot{
+        .surfelCountReadbackSubmissionToken = m_surfelCountReadbackSubmissionToken,
+        .softShadowFrameIndex = m_softShadowFrameIndex,
+        .surfelFrameIndex = m_surfelFrameIndex,
+        .surfelCountReadbackFrame = m_surfelCountReadbackFrame,
+        .softShadowSlotMask = m_softShadowSlotMask,
+        .causticLightCount = m_causticLightCount,
+        .swShadowDispatchLogged = m_swShadowDispatchLogged,
+        .causticAccumulatorInitialized = m_causticAccumulatorInitialized,
+        .swCausticDispatchLogged = m_swCausticDispatchLogged,
+        .hwCausticDispatchLogged = m_hwCausticDispatchLogged,
+        .causticEmissionGateLogged = m_causticEmissionGateLogged,
+        .surfelSeeded = m_surfelSeeded,
+    };
+}
+
+void RendererRayTracingState::restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
+    m_softShadowFrameIndex = snapshot.softShadowFrameIndex;
+    m_swShadowDispatchLogged = snapshot.swShadowDispatchLogged;
+}
+
+void RendererRayTracingState::restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
+    m_causticAccumulatorInitialized = snapshot.causticAccumulatorInitialized;
+    m_swCausticDispatchLogged = snapshot.swCausticDispatchLogged;
+    m_hwCausticDispatchLogged = snapshot.hwCausticDispatchLogged;
+    m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
+}
+
+void RendererRayTracingState::restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
+    m_surfelFrameIndex = snapshot.surfelFrameIndex;
+    m_surfelSeeded = snapshot.surfelSeeded;
+    m_surfelCountReadbackFrame = snapshot.surfelCountReadbackFrame;
+    m_surfelCountReadbackSubmissionToken = snapshot.surfelCountReadbackSubmissionToken;
+}
+
+void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
+    m_softShadowSlotMask = snapshot.softShadowSlotMask;
+    m_causticLightCount = snapshot.causticLightCount;
+    m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
+}
+
+void RendererRayTracingState::invalidateResources()noexcept{
+    m_hardwareTransparentShadow = HardwareTransparentShadowState{};
+    for(u32 csg = 0u; csg < 2u; ++csg){
+        for(u32 dense = 0u; dense < 2u; ++dense){
+            m_refractionDiagnosticHwShaders[csg][dense].reset();
+            m_refractionDiagnosticHwPipelines[csg][dense].reset();
+            m_refractionDiagnosticHwPipelineFailed[csg][dense] = false;
+        }
+    }
+    m_refractionBindingLayout.reset();
+    m_refractionClassifyTilesShader.reset();
+    m_refractionClassifyTilesPipeline.reset();
+    m_refractionFinalizeTilesShader.reset();
+    m_refractionFinalizeTilesPipeline.reset();
+    m_refractionScreenShader.reset();
+    m_refractionHwShader.reset();
+    m_refractionCsgHwShader.reset();
+    m_refractionDenseScreenShader.reset();
+    m_refractionDenseHwShader.reset();
+    m_refractionDenseCsgHwShader.reset();
+    m_refractionScreenPipeline.reset();
+    m_refractionHwPipeline.reset();
+    m_refractionCsgHwPipeline.reset();
+    m_refractionDenseScreenPipeline.reset();
+    m_refractionDenseHwPipeline.reset();
+    m_refractionDenseCsgHwPipeline.reset();
+    m_refractionScreenPipelineFailed = false;
+    m_refractionHwPipelineFailed = false;
+    m_refractionCsgHwPipelineFailed = false;
+    m_refractionDenseScreenPipelineFailed = false;
+    m_refractionDenseHwPipelineFailed = false;
+    m_refractionDenseCsgHwPipelineFailed = false;
+    m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
+    m_refractionUseHardwareTrace = false;
+    // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
+    m_tlas.reset();
+    m_tlasBackingFresh = false;
+    m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_tlasMaxInstances = 0u;
+    m_tlasInstanceCount = 0u;
+    m_tlasStaticSceneHash = 0u;
+    m_sceneSwBvhStaticSceneHash = 0u;
+    m_tlasStaticSceneHashValid = false;
+    m_sceneSwBvhStaticSceneHashValid = false;
+    m_hwShadowMaterialContextHash = 0u;
+    m_swShadowMaterialContextHash = 0u;
+    m_hwShadowMaterialContextHashValid = false;
+    m_swShadowMaterialContextHashValid = false;
+    m_shadowShader.reset();
+    m_shadowPipeline.reset();
+    m_shadowBindingLayout.reset();
+    m_shadowSoftShader.reset();
+    m_shadowSoftPipeline.reset();
+    m_shadowMeshCount = 0u;
+    m_shadowMeshIndexBuffers.clear();
+    m_shadowMeshAttributeBuffers.clear();
+    m_shadowMeshPositionBuffers.clear();
+    m_shadowMeshIndexHandles.clear();
+    m_shadowMeshAttributeHandles.clear();
+    m_shadowMeshPositionHandles.clear();
+    m_shadowInstanceMaterialBuffer.reset();
+    m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadowInstanceMaterialCapacity = 0u;
+    m_shadowInstanceBuffer.reset();
+    m_shadowMaterialTypedBuffer.reset();
+    m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadowInstanceCapacity = 0u;
+    m_shadowMaterialTypedCapacity = 0u;
+    m_bvhSortBindingLayout.reset();
+    m_bvhSortShader.reset();
+    m_bvhSortPipeline.reset();
+    m_bvhSortKeysBuffer.reset();
+    m_bvhSortPayloadBuffer.reset();
+    m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_bvhSortCapacity = 0u;
+    m_bvhBuildBindingLayout.reset();
+    m_bvhMortonShader.reset();
+    m_bvhMortonPipeline.reset();
+    m_bvhTopologyShader.reset();
+    m_bvhTopologyPipeline.reset();
+    m_bvhFitShader.reset();
+    m_bvhFitPipeline.reset();
+    m_bvhVisitCounterBuffer.reset();
+    m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_bvhBuildCapacity = 0u;
+    m_sceneBvhNodeBuffer.reset();
+    m_sceneInstanceBuffer.reset();
+    m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTraceMaterialContextSlotsBuffer.reset();
+    m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgTraceContextBuffer.reset();
+    m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    for(auto& token : m_rayTraceContextReadSubmissionTokens)
+        token = {};
+    m_sceneBvhNodeCapacity = 0u;
+    m_sceneInstanceCapacity = 0u;
+    m_sceneBvhInstanceCount = 0u;
+    m_causticEmissionTargets.reset();
+    m_causticRefractiveInstanceCount = 0u;
+    m_causticLightCount = 0u;
+    m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    m_causticEmissionGateLogged = false;
+    m_swShadowBindingLayout.reset();
+    m_swShadowOpaquePrepassShader.reset();
+    m_swShadowOpaquePrepassPipeline.reset();
+    m_swShadowSoftOpaqueShader.reset();
+    m_swShadowSoftOpaquePipeline.reset();
+    m_swShadowTransparentCoarseShader.reset();
+    m_swShadowTransparentCoarsePipeline.reset();
+    m_swShadowTransparentResolveShader.reset();
+    m_swShadowTransparentResolvePipeline.reset();
+    m_swShadowTransparentClassifyShader.reset();
+    m_swShadowTransparentClassifyPipeline.reset();
+    m_swShadowTransparentBuildArgsShader.reset();
+    m_swShadowTransparentBuildArgsPipeline.reset();
+    m_swShadowTransparentIndirectShader.reset();
+    m_swShadowTransparentIndirectPipeline.reset();
+    m_swShadowMeshCount = 0u;
+    m_swShadowMeshNodeBuffers.clear();
+    m_swShadowMeshPositionBuffers.clear();
+    m_swShadowMeshIndexBuffers.clear();
+    m_swShadowMeshAttributeBuffers.clear();
+    m_swShadowMeshNodeHandles.clear();
+    m_swShadowMeshPositionHandles.clear();
+    m_swShadowMeshIndexHandles.clear();
+    m_swShadowMeshAttributeHandles.clear();
+    // Drop pinned handle caches so teardown leaves no dangling handles.
+    m_hwMeshHeapHandleCache.clear();
+    m_swMeshHeapHandleCache.clear();
+    m_softwareTransparentSampling = SoftwareTransparentSamplingState{};
+    m_softShadowFrameIndex = 0u;
+    m_softShadowSlotMask = 0u;
+    m_softShadowResolve = SoftShadowResolveState{};
+    m_shadowGeometryDownsampleBindingLayout.reset();
+    m_shadowGeometryDownsampleShader.reset();
+    m_shadowGeometryDownsamplePipeline.reset();
+    m_shadowGeometryDownsamplePipelineFailed = false;
+    m_softShadowReady = false;
+    m_prevWorldToClip = {};
+    m_prevWorldToClipValid = false;
+    m_softShadowHistoryFrontIsA = 1u;
+    m_softShadowTemporalSeeded = false;
+    m_softShadowTemporalHistoryAdvancePending = false;
+    m_softShadowTemporalReady = false;
+    m_shadowReprojectMergeBindingLayout.reset();
+    m_shadowReprojectMergeShader.reset();
+    m_shadowReprojectMergePipeline.reset();
+    m_shadowReprojectMergePipelineFailed = false;
+    m_softTransparentReady = false;
+    m_softTransparentTemporalReady = false;
+    m_transparentShadowSamplingHistory.reset();
+    m_swShadowEdgeCounterBuffer.reset();
+    m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_swShadowEdgeListBuffer.reset();
+    m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_swShadowEdgeListCapacity = 0u;
+    m_swShadowIndirectArgsBuffer.reset();
+    m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_sceneHasTransparentOccluder = false;
+    m_swCausticBindingLayout.reset();
+    m_swCausticShader.reset();
+    m_swCausticPipeline.reset();
+    m_swCausticCsgShader.reset();
+    m_swCausticCsgPipeline.reset();
+    m_hwCausticBindingLayout.reset();
+    m_hwCausticPipeline.reset();
+    m_hwCausticShaderTable.reset();
+    m_hwCausticCsgPipeline.reset();
+    m_hwCausticCsgShaderTable.reset();
+    m_causticResolve = CausticResolveState{};
+    m_causticGeometryDownsampleBindingLayout.reset();
+    m_causticGeometryDownsampleShader.reset();
+    m_causticGeometryDownsamplePipeline.reset();
+    m_causticGeometryDownsamplePipelineFailed = false;
+    m_causticAccumulatorDecayBindingLayout.reset();
+    m_causticAccumulatorDecayShader.reset();
+    m_causticAccumulatorDecayPipeline.reset();
+    m_causticAccumulatorDecayPipelineFailed = false;
+    // Accumulator target is recreated on invalidation; re-seed the EMA.
+    m_causticAccumulatorInitialized = false;
+    // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
+    m_surfelHeapBindingLayout.reset();
+    m_surfelSpawnShader.reset();
+    m_surfelSpawnPipeline.reset();
+    m_surfelAgeFreeShader.reset();
+    m_surfelAgeFreePipeline.reset();
+    m_surfelHashBuildShader.reset();
+    m_surfelHashBuildPipeline.reset();
+    m_surfelTraceShader.reset();
+    m_surfelTracePipeline.reset();
+    m_surfelTraceCsgShader.reset();
+    m_surfelTraceCsgPipeline.reset();
+    m_surfelResolveShader.reset();
+    m_surfelResolvePipeline.reset();
+    m_surfelUpsampleShader.reset();
+    m_surfelUpsamplePipeline.reset();
+    m_surfelTraceBuildArgsShader.reset();
+    m_surfelTraceBuildArgsPipeline.reset();
+    m_surfelTraceHwShader.reset();
+    m_surfelTraceHwPipeline.reset();
+    m_surfelTraceCsgHwShader.reset();
+    m_surfelTraceCsgHwPipeline.reset();
+    m_surfelUseHwTrace = false;
+    m_surfelUseCsgTrace = false;
+    m_surfelPoolBuffer.reset();
+    m_surfelGuidePoolBuffer.reset();
+    m_surfelCellHeadBuffer.reset();
+    m_surfelCounterBuffer.reset();
+    m_surfelTraceIndirectArgsBuffer.reset();
+    m_surfelFreeListBuffer.reset();
+    m_surfelPoolSnapshotBuffer.reset();
+    m_surfelCellHeadSnapshotBuffer.reset();
+    m_surfelCounterReadback.reset();
+    m_surfelConstants.reset();
+    m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelTraceGeometryFailureFlags = 0u;
+    m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
+    m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
+    m_surfelFrameIndex = 0u;
+    m_surfelCountReadbackFrame = 0u;
+    m_surfelCountReadbackSubmissionToken = {};
+    m_surfelSeeded = false;
+    m_surfelResourcesNeedClear = false;
+    m_surfelResourcesClearPending = false;
+    m_surfelEnabled = false;
+    m_surfelSpawnPipelineFailed = false;
+    m_surfelAgeFreePipelineFailed = false;
+    m_surfelHashBuildPipelineFailed = false;
+    m_surfelTracePipelineFailed = false;
+    m_surfelTraceHwPipelineFailed = false;
+    m_surfelTraceCsgPipelineFailed = false;
+    m_surfelTraceCsgHwPipelineFailed = false;
+    m_surfelResolvePipelineFailed = false;
+    m_surfelResolveDispatchLogged = false;
+    m_surfelUpsamplePipelineFailed = false;
+    m_surfelTraceBuildArgsPipelineFailed = false;
+    m_shadowPipelineFailed = false;
+    m_shadowSoftPipelineFailed = false;
+    m_bvhSortPipelineFailed = false;
+    m_bvhBuildPipelineFailed = false;
+    m_swShadowPipelineFailed = false;
+    m_swShadowDispatchLogged = false;
+    m_swCausticPipelineFailed = false;
+    m_swCausticCsgPipelineFailed = false;
+    m_swCausticDispatchLogged = false;
+    m_hwCausticPipelineFailed = false;
+    m_hwCausticCsgPipelineFailed = false;
+    m_hwCausticDispatchLogged = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RayTracingDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, const Core::ECS::EntityID entity){
+    auto resolvedMesh = meshSystem.resolveRenderableMeshStatus(entity);
+    if(!resolvedMesh)
+        return MakeUnexpected(resolvedMesh.error());
+    auto mesh = rendererMeshSystem.findRenderableRayTracingResourceSnapshot(*resolvedMesh);
+    if(!mesh)
+        return MakeUnexpected(RenderableMeshResolution::Unavailable);
+    return RenderableRayTracingMeshResources{ Move(*resolvedMesh), Move(*mesh) };
+}
+
+[[nodiscard]] b8 IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
+    return RendererDescriptorRegisterDetail::IsDescriptorClass(handle, descriptorClass);
+}
+
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable){
+    const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : (writable ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer))
+    ;
+    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, descriptorClass, item);
+}
+
+[[nodiscard]] b8 EnsureHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
+    if(inOutHandle.valid())
+        return IsHeapHandle(inOutHandle, descriptorClass);
+
+    const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
+    if(!acquired)
+        return false;
+    inOutHandle = *acquired;
+    return true;
+}
+
+[[nodiscard]] b8 ReplaceHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
+    const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : (writable ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer))
+    ;
+    return RendererDescriptorRegisterDetail::ReplaceDescriptor(heap, descriptorClass, item, inOutHandle);
+}
+
+void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, handle);
+}
+
+Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept{
+    Core::ComputeState state;
+    state.setPipeline(pipeline.get());
+    // Set 0 is push-only; keep it so heap sets retain layout indices.
+    return state;
+}
+
+// Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
+u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes){
+    return ::NWB::Impl::BuildSceneBvhNode(lo, hi, primitiveBounds, instanceLeafCost, indices, nodes);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RendererRayTracingSystem::prepareSceneQueryResources(){
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(
+        !m_shadowVisibilityHardwareSupported
+        || !m_shadowVisibilityTraceResourcesPreflighted
+        || !m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+        || !heap.isInitialized()
+        || !heap.hasAccelStructLayout()
+        || !m_rayTracingState.m_tlas
+        || !m_rayTracingState.m_tlasHeapHandle.valid()
+        || !m_rayTracingState.m_shadowInstanceMaterialBuffer
+        || !m_rayTracingState.m_shadowMaterialTypedBuffer
+        || !m_rayTracingState.m_shadowInstanceBuffer
+        || !m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
+    )
+        return false;
+    return RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle();
+}
+
+RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResources()const noexcept{
+    const auto& state = m_rayTracingState;
+    RayTracingSceneGraphResources resources;
+    if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted){
+        resources.contentStamp = m_preparedSceneContentStamp;
+        resources.opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+    }
+    if(!m_shadowVisibilityHardwareSupported || !m_shadowVisibilityTraceResourcesPreflighted || !state.m_rayTraceMaterialContextSlotsHeapHandle.valid())
+        return resources;
+    resources.sceneTlas = state.m_tlas;
+    resources.tlasHeapHandle = state.m_tlasHeapHandle;
+    resources.materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer;
+    resources.instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
+    resources.materialTypedBuffer = state.m_shadowMaterialTypedBuffer;
+    resources.instanceBuffer = state.m_shadowInstanceBuffer;
+    if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        resources.csgTraceContextBuffer = state.m_csgTraceContextBuffer;
+        resources.csgTraceBoundsBuffers = m_lightSpaceShadow.m_csg.dynamicBounds;
+    }
+    resources.materialContextSlotsHeapSlot = state.m_rayTraceMaterialContextSlotsHeapHandle.slot();
+    resources.hardwareAvailable = true;
+    return resources;
+}
+
+Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
+    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
+    // Never recreate here: a recording-time replacement would break frozen identity and the selector snapshot.
+    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer)
+        return MakeUnexpected(Failure{});
+
+    RayTraceMaterialContextSlots slots;
+    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle)noexcept -> Expected<u32>{
+        if(!buffer)
+            return 0u;
+        if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
+            return MakeUnexpected(Failure{});
+        return handle.slot();
+    };
+
+    const auto sceneBvhNodes = resolveStorageSlot(m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle);
+    if(!sceneBvhNodes){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.sceneBvhNodes = *sceneBvhNodes;
+    const auto sceneInstances = resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle);
+    if(!sceneInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.sceneInstances = *sceneInstances;
+    const auto instanceMaterial = resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
+    if(!instanceMaterial){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.instanceMaterial = *instanceMaterial;
+    const auto materialTyped = resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
+    if(!materialTyped){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.materialTyped = *materialTyped;
+    const auto meshInstances = resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
+    if(!meshInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.meshInstances = *meshInstances;
+
+    // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
+    const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+    if(opticalScene.valid()){
+        slots.opticalScene = opticalScene.descriptor.slot();
+        slots.opticalInstanceCount = opticalScene.upload->instanceCount;
+    }
+
+    if(m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        const auto csgContext = resolveStorageSlot(m_rayTracingState.m_csgTraceContextBuffer.get(), m_rayTracingState.m_csgTraceContextHeapHandle);
+        if(!csgContext || !m_rayTracingState.m_csgTraceContextBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context is unavailable"));
+            return MakeUnexpected(Failure{});
+        }
+        slots.csgContext = *csgContext;
+    }
+
+    return slots;
+}
+
+void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles(){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(m_scene.m_sceneBvhNodeHeapHandle);
+        heap.free(m_scene.m_sceneInstanceHeapHandle);
+        heap.free(m_shadow.m_shadowInstanceMaterialHeapHandle);
+        heap.free(m_shadow.m_shadowMaterialTypedHeapHandle);
+        heap.free(m_shadow.m_shadowInstanceHeapHandle);
+        heap.free(m_scene.m_rayTraceMaterialContextSlotsHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_scene.m_csgTraceContextHeapHandle);
+        heap.free(m_shadow.m_swShadowEdgeCounterHeapHandle);
+        heap.free(m_shadow.m_swShadowEdgeListHeapHandle);
+        heap.free(m_shadow.m_swShadowIndirectArgsHeapHandle);
+    }
+    m_scene.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene.m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+}
+
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer(){
+    if(m_scene.m_rayTraceMaterialContextSlotsBuffer)
+        return true;
+
+    Core::BufferDesc slotsBufferDesc;
+    slotsBufferDesc
+        .setByteSize(sizeof(RayTraceMaterialContextSlots))
+        .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name(s_RenderNameRaytraceMaterialContextSlots))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto rayTraceMaterialContextSlotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    if(rayTraceMaterialContextSlotsBufferResult)
+        m_scene.m_rayTraceMaterialContextSlotsBuffer = Move(*rayTraceMaterialContextSlotsBufferResult);
+    else
+        m_scene.m_rayTraceMaterialContextSlotsBuffer.reset();
+    if(!rayTraceMaterialContextSlotsBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
+        return false;
+    }
+    return true;
+}
+
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsHeapHandle(){
+    if(!ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_scene.m_rayTraceMaterialContextSlotsBuffer.get(), m_scene.m_rayTraceMaterialContextSlotsHeapHandle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
+        return false;
+    }
+    return true;
+}
+
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    if(handle.valid())
+        return true;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    if(!RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
+        return false;
+    }
+    return true;
+}
+
+b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    if(!RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+    FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
+    using namespace RendererTaskGraphDetail;
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = inputs.rayTracingShadowResources;
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
+    if(inputs.softwareTraceResourcesPrepared){
+        const auto meshSoftwareBvhParentBuildStates = m_meshSystem.collectSoftwareBvhParentBuildStates(scratchArena);
+        if(!meshSoftwareBvhParentBuildStates)
+            return MakeUnexpected(Failure{});
+        // Sort keys, sort payload, and visit counter follow the parent build states.
+        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates->size() + s_SortBuildStateCapacity);
+        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates->size() + s_SortBuildStateCapacity);
+        const auto appendSoftwareBvhBuildState = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label){
+            if(!buffer || !identity)
+                return false;
+            for(const NotNull<Core::Buffer*> existing : softwareBvhBuildStateBuffers){
+                if(existing.get() == buffer.get())
+                    return true;
+            }
+            const auto resourceResult = ImportExternalBuffer(m_graph, buffer, identity, label);
+            if(!resourceResult)
+                return false;
+            const Core::GpuGraphResourceId resource = *resourceResult;
+            softwareBvhBuildStateBuffers.push_back(MakeNotNull(buffer.get()));
+            softwareBvhBuildStateResources.push_back(resource);
+            return true;
+        };
+        for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : *meshSoftwareBvhParentBuildStates){
+            if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
+                return MakeUnexpected(Failure{});
+            }
+        }
+        if(
+            !rayTracingShadowResources.bvhSortKeysBuffer
+            || !rayTracingShadowResources.bvhSortPayloadBuffer
+            || !rayTracingShadowResources.bvhVisitCounterBuffer
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortKeysBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortKeys), "Software BVH Sort Keys")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortPayload), "Software BVH Sort Payload")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name(s_RenderNameRenderShadowTraceSwBvhVisitCounter), "Software BVH Visit Counter")
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    result.buildStateResources = Move(softwareBvhBuildStateResources);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources){
+    using namespace RendererTaskGraphDetail;
+
+    // Preflight froze the mesh tables; import each buffer once and fan out IDs.
+    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(scratchArena)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+        return MakeUnexpected(Failure{});
+    }
+    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
+    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
+
+    FrameGraphTraceGeometryResult result(scratchArena);
+    result.traceGeometry.reserve(preparedTraceGeometry.size());
+    result.hardwareTraceGeometry.reserve(preparedTraceGeometry.size());
+    result.softwareTraceGeometry.reserve(preparedTraceGeometry.size());
+    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
+        Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
+        desc.setInitialState(preparedBuffer.initialState);
+        const auto resourceResult = m_graph.importBuffer(preparedBuffer.buffer, desc);
+        if(!resourceResult){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
+            return MakeUnexpected(Failure{});
+        }
+        const Core::GpuGraphResourceId resource = *resourceResult;
+        result.traceGeometry.push_back(resource);
+        if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::HardwarePosition | PreparedShadowTraceGeometryRole::HardwareIndex | PreparedShadowTraceGeometryRole::HardwareAttribute))
+            result.hardwareTraceGeometry.push_back(resource);
+        if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::SoftwareNode | PreparedShadowTraceGeometryRole::SoftwarePosition | PreparedShadowTraceGeometryRole::SoftwareIndex | PreparedShadowTraceGeometryRole::SoftwareAttribute))
+            result.softwareTraceGeometry.push_back(resource);
+    }
+    // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", m_graph, scratchArena);
+    if(!traceMaterialSampledTextureResources){
+        switch(traceMaterialSampledTextureResources.error()){
+        case SampledTextureImportFailure::GraphUnavailable:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+            return MakeUnexpected(Failure{});
+        case SampledTextureImportFailure::MissingIdentity:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+            return MakeUnexpected(Failure{});
+        case SampledTextureImportFailure::ImportFailed:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    result.shadowTraceGeometrySet = importSet(result.traceGeometry, Name(s_RenderNameRenderPostGbufferTraceGeometry), "Post-G-Buffer Trace Geometry");
+    result.softwareTraceGeometrySet = importSet(result.softwareTraceGeometry, Name(s_RenderNameRenderSoftwareTraceGeometry), "Software Trace Geometry");
+    if(!traceMaterialSampledTextureResources->empty()){
+        const auto traceMaterialSampledTextureSetResult = m_graph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name(s_RenderNameRenderTraceMaterialSampledTextures))
+                .setMarkerLabel("Trace Material Sampled Textures")
+                .setMembers(*traceMaterialSampledTextureResources)
+        );
+        if(!traceMaterialSampledTextureSetResult){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
+            return MakeUnexpected(Failure{});
+        }
+        result.traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
+    }
+    result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name(s_RenderNameRenderHardwareTraceGeometry), "Hardware Trace Geometry");
+
+    result.softwareTraceResourcesPrepared = !result.softwareTraceGeometry.empty();
+    FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_graph, m_meshSystem);
+    auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
+        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = result.softwareTraceResourcesPrepared, },
+        scratchArena
+    );
+    if(!softwareBvhBuildStateResult){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+        return MakeUnexpected(Failure{});
+    }
+    result.softwareBvhBuildState = Move(softwareBvhBuildStateResult->buildStateResources);
+    return result;
+}
+
+// Empty member lists and failed imports leave the set invalid.
+Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name& identity, const AStringView markerLabel){
+    if(members.empty())
+        return {};
+
+    const auto setResult = m_graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(markerLabel).setMembers(members));
+    if(!setResult)
+        return {};
+    return *setResult;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RayTracingSceneGraphResources::valid()const noexcept{
+    return hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid();
+}
+
+b8 RayTracingSceneGraphReads::valid()const noexcept{
+    for(const auto& use : uses){
+        if(!use.resource.valid())
+            return false;
+    }
+    for(const auto& use : csgUses){
+        if(!use.resource.valid())
+            return false;
+    }
+    return true;
+}
+
+Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
+    const RayTracingSceneGraphResources& resources,
+    const Core::ResourceStates::Mask tlasInitialState,
+    const Core::GpuTaskId priorReadersDrained,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    if(!resources.valid())
+        return MakeUnexpected(Failure{});
+
+    const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneImportedBufferCount> buffers = {
+        resources.materialContextSlotsBuffer,
+        resources.instanceMaterialBuffer,
+        resources.materialTypedBuffer,
+        resources.instanceBuffer,
+    };
+    Array<Core::GpuGraphResourceId, s_SceneImportedBufferCount> importedBuffers{};
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure{});
+        for(usize index = 0u; index < s_SceneImportedBufferCount; ++index)
+            importedBuffers[index] = declarations.findImportedBuffer(buffers[index]);
+    }
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
+        if(importedBuffers[index].valid())
+            continue;
+        const Core::BufferHandle& buffer = buffers[index];
+        const Name identity = buffer->getCreationDescription().debugName;
+        if(!identity)
+            return MakeUnexpected(Failure{});
+        const auto importedBufferResult = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
+        if(!importedBufferResult)
+            return MakeUnexpected(Failure{});
+        importedBuffers[index] = *importedBufferResult;
+    }
+
+    // Shared consumers reuse this identity. Reimporting the same TLAS returns it, keeping producer and cross-effect deps.
+    const auto tlasResult = graph.importAccelStruct(
+        resources.sceneTlas,
+        RendererTaskGraphDetail::AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel)
+            .setInitialState(tlasInitialState)
+    );
+    if(!tlasResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId tlas = *tlasResult;
+
+    auto opticalResult = ImportRayTracingOpticalSceneBuffer(resources.opticalScene, priorReadersDrained, graph, scratchArena);
+    if(!opticalResult)
+        return MakeUnexpected(Failure{});
+    const RayTracingOpticalSceneGraphBuffer optical = Move(*opticalResult);
+
+    RayTracingSceneGraphReads result(scratchArena);
+    result.uses[0] = RendererTaskGraphDetail::ReadUse(tlas, Core::ResourceStates::AccelStructRead);
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
+        const Core::ResourceStates::Mask state = index == 0u ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::ShaderResource;
+        result.uses[index + 1u] = RendererTaskGraphDetail::ReadUse(importedBuffers[index], state);
+    }
+    result.uses[LengthOf(result.uses) - 1u] = RendererTaskGraphDetail::ReadUse(optical.resource);
+    if(resources.csgTraceContextBuffer){
+        result.csgUses.reserve(1u + resources.csgTraceBoundsBuffers.size());
+        if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+            resources.csgTraceContextBuffer,
+            resources.csgTraceBoundsBuffers,
+            graph,
+            result.csgUses
+        ))
+            return MakeUnexpected(Failure{});
+    }
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererFramePipelineDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AppendRayTracingSceneShadowBuffers(
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+){
+    const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneShadowBufferCount> sceneShadowBuffers = {
+        rayTracingResources.sceneBvhNodeBuffer,
+        rayTracingResources.sceneInstanceBuffer,
+        rayTracingResources.shadowInstanceMaterialBuffer,
+        rayTracingResources.shadowMaterialTypedBuffer,
+        rayTracingResources.shadowInstanceBuffer,
+    };
+    const Array<Name, s_SceneShadowBufferCount> sceneShadowIdentities = {
+        Name(s_SceneBvhNodesName),
+        Name(s_SceneInstancesName),
+        Name(s_SceneShadowInstanceMaterialName),
+        Name(s_SceneShadowMaterialTypedName),
+        Name(s_SceneShadowInstancesName),
+    };
+    const Array<AStringView, s_SceneShadowBufferCount> sceneShadowLabels = {
+        s_SceneBvhNodesLabel,
+        s_SceneInstancesLabel,
+        s_SceneShadowInstanceMaterialLabel,
+        s_SceneShadowMaterialTypedLabel,
+        s_SceneShadowInstancesLabel,
+    };
+    for(usize bufferIndex = 0u; bufferIndex < s_SceneShadowBufferCount; ++bufferIndex){
+        const Core::BufferHandle& buffer = sceneShadowBuffers[bufferIndex];
+        if(!buffer)
+            continue;
+        const auto resourceResult = RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
+        if(!resourceResult)
+            return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
+        resourceUses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    return true;
+}
+
+b8 AppendCurrentCsgRayGeometry(
+    const Core::BufferHandle& context,
+    const Span<const Core::BufferHandle> bounds,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+){
+    if(!context)
+        return true;
+    const auto appendRead = [&](const Core::BufferHandle& buffer){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedBuffer(buffer);
+        }
+        if(!resource.valid()){
+            const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, buffer->getCreationDescription().debugName, "Current CSG Ray Geometry");
+            if(!importedResource)
+                return false;
+            resource = *importedResource;
+        }
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(RendererTaskGraphDetail::ReadUse(resource));
+        return true;
+    };
+    if(!appendRead(context))
+        return false;
+    for(const Core::BufferHandle& boundBuffer : bounds){
+        if(!appendRead(boundBuffer))
+            return false;
+    }
+    return true;
+}
+
+TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet)noexcept{
+    TraceResourceSetUses result;
+    if(traceGeometrySet.valid())
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    if(traceMaterialSampledTextureSet.valid())
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+NWB_IMPL_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

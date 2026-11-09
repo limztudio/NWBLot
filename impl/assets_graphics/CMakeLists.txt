@@ -44,6 +44,8 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/runtime_components.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_components.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_shader_plan_and_validation.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_graphics_volume_pipeline.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/shader_cook_plan.adhd"
     )

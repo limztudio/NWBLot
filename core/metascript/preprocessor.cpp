@@ -325,7 +325,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                 expandedLine.append(commentPrefix.data(), commentPrefix.size());
             MString expandedTail(m_arena);
             PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
-            if(!macroExpander.expand(effectiveLine, startLine, expandedTail))
+            if(!macroExpander.expand(effectiveLine, startLine, expandedTail, inNativeKeywordPendingBrace, nativeBraceDepth))
                 return false;
             expandedLine.append(expandedTail.data(), expandedTail.size());
 
@@ -536,11 +536,16 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
         const MStringView paramList = TrimView(rest.substr(nameEnd + 1u, closeParen - (nameEnd + 1u)));
         if(!paramList.empty()){
             usize pStart = 0u;
-            while(pStart < paramList.size()){
+            for(;;){
                 usize comma = paramList.find(',', pStart);
-                if(comma == MStringView::npos)
+                const b8 hasComma = (comma != MStringView::npos);
+                if(!hasComma)
                     comma = paramList.size();
                 const MStringView paramName = TrimView(paramList.substr(pStart, comma - pStart));
+                if(paramName == "..." && !hasComma){
+                    macro.isVariadic = true;
+                    break;
+                }
                 b8 validParam = !paramName.empty() && IsAsciiIdentifierStart(paramName[0]);
                 for(usize cIdx = 1u; validParam && cIdx < paramName.size(); ++cIdx){
                     if(!IsAsciiIdentifierChar(paramName[cIdx]))
@@ -555,6 +560,8 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
                     return false;
                 }
                 macro.parameters.push_back(MString(paramName.data(), paramName.size(), m_arena));
+                if(!hasComma)
+                    break;
                 pStart = comma + 1u;
             }
         }

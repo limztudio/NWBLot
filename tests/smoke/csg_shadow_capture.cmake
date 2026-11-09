@@ -2,11 +2,6 @@
         nwb_declare_executable(nwb_csg_shadow_smoke)
         target_sources(nwb_csg_shadow_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.h"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_atlas.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_atlas.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_csg_shadow_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_shadow_smoke "${_nwb_csg_shadow_runtime_root}")
@@ -55,17 +50,6 @@
         nwb_declare_executable(nwb_csg_caustic_smoke)
         target_sources(nwb_csg_caustic_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.h"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_atlas.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_atlas.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_timing_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
         )
         target_compile_definitions(nwb_csg_caustic_smoke PRIVATE NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_caustic_smoke "${_nwb_csg_caustic_runtime_root}" nwb_ecs_csg)

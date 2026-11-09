@@ -2,12 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "smoke_capture_factory.h"
-#include "csg_visible_scene.h"
 #include "framebuffer_capture.h"
-#include "fps_probe.h"
+#include "csg_visible_scene.h"
+#include <tests/smoke/presentation_types.adhd.h>
 #include "gpu_pass_timing_probe.h"
-#include "smoke_capture_teardown.h"
 #include "smoke_scene_helpers.h"
 
 #include <tests/smoke/scene_types.adhd.h>

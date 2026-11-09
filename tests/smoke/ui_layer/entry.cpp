@@ -42,7 +42,6 @@
 #include <global/text_utils.h>
 #include <global/assert.h>
 #include <global/bit.h>
-#include "../smoke_capture_factory.h"
 #include "../framebuffer_capture.h"
 #include <impl/ecs_ui/layer_system.h>
 #include <core/graphics/backend_selection/backend.h>

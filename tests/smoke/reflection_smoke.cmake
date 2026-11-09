@@ -1,33 +1,6 @@
 nwb_declare_executable(nwb_reflection_smoke)
 target_sources(nwb_reflection_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke_configuration.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke_configuration.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_statistics_reporter.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_statistics_reporter.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_reference_scene.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_reference_scene.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_timing_render_pass.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_timing_render_pass.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_probe.h"
-    "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_csg_context_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_csg_context_probe.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_probe.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_csg_builder.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_csg_builder.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_scene.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_scene.h"
-    "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
 )
 target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
 nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)

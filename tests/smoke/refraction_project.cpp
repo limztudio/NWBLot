@@ -2,18 +2,860 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "smoke_capture_factory.h"
+
+#include "smoke_scene_helpers.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Optional gallery cases use the same renderer and readback path as the original regression fixture.
+[[nodiscard]] b8 CreateRefractionGalleryScene(AStringView caseName, b8 geometryPreview, Core::ECS::World& world);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_project_helpers.h"
+#include "csg_smoke_helpers.h"
+
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+
+#include <impl/ecs_csg/shape_registry.h>
+
+#include <global/expected.h>
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_refraction_gallery_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr SmokeMeshRef s_Plane{"project/meshes/shadow_plane"};
+constexpr SmokeMeshRef s_Sphere{"project/meshes/caustic_sphere"};
+constexpr SmokeMeshRef s_Torus{"project/meshes/refraction_torus"};
+constexpr SmokeMeshRef s_Shells{"project/meshes/refraction_two_shells"};
+constexpr SmokeMeshRef s_Prism{"project/meshes/refraction_prism"};
+constexpr SmokeMeshRef s_Cube{"project/meshes/cube_hard_edges"};
+constexpr SmokeMaterialRef s_Glass{"project/smoke/refraction/materials/gallery_glass"};
+constexpr SmokeMaterialRef s_OpticalVolume{"project/smoke/reflection/materials/optical_volume"};
+constexpr SmokeMaterialRef s_Preview{"project/smoke/refraction/materials/gallery_preview"};
+constexpr SmokeMaterialRef s_Opaque{"project/smoke/refraction/materials/opaque"};
+constexpr SmokeMaterialRef s_Transparent{"project/smoke/refraction/materials/transparent"};
+constexpr AStringView s_Interface = ::NWB::Tests::Smoke::s_RefractionGalleryInterface;
+constexpr AStringView s_OpticalInterface = ::NWB::Tests::Smoke::s_RefractionGalleryOpticalInterface;
+constexpr Name s_DuplicateOpticalGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeRefractionGalleryDuplicateVolume;
+constexpr f32 s_GalleryCameraDistance = ::NWB::Tests::Smoke::s_RefractionGalleryCameraDistance;
+constexpr f32 s_IdentityForeignFront = ::NWB::Tests::Smoke::s_RefractionGalleryIdentityForeignFront;
+// Place the near plane between the foreign entry and the primary z=0 entry.
+constexpr f32 s_IdentityNearPlane = ::NWB::Tests::Smoke::s_RefractionGalleryIdentityNearPlane;
+// Camera, objects and backdrop share this height.
+constexpr f32 s_GalleryCenterHeight = ::NWB::Tests::Smoke::s_RefractionGalleryCenterHeight;
+constexpr f32 s_SlabFaceScale = ::NWB::Tests::Smoke::s_RefractionGallerySlabFaceScale;
+constexpr f32 s_PreviewAlpha = ::NWB::Tests::Smoke::s_RefractionGalleryPreviewAlpha;
+constexpr f32 s_OpticalIor = ::NWB::Tests::Smoke::s_RefractionGalleryOpticalIor;
+// The slab tint and its unit transmission use the same color.
+constexpr Float4 s_OpticalTransmission(0.45f, 0.8f, 0.95f, 0.f);
+constexpr f32 s_TintedCoverage = ::NWB::Tests::Smoke::s_RefractionGalleryTintedCoverage;
+constexpr f32 s_DuplicateSphereRadius = ::NWB::Tests::Smoke::s_RefractionGalleryDuplicateSphereRadius;
+constexpr i32 s_WinningOpticalPriority = ::NWB::Tests::Smoke::s_RefractionGalleryWinningOpticalPriority;
+constexpr f32 s_BackdropDepth = ::NWB::Tests::Smoke::s_RefractionGalleryBackdropDepth;
+constexpr f32 s_BackdropHalfHeight = ::NWB::Tests::Smoke::s_RefractionGalleryBackdropHalfHeight;
+constexpr f32 s_DepthMarkerAlpha = ::NWB::Tests::Smoke::s_RefractionGalleryDepthMarkerAlpha;
+
+constexpr AStringView s_CaseCsgReference = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgReference;
+constexpr AStringView s_CaseCsgCap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgCap;
+constexpr AStringView s_CaseCsgMiddle = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgMiddle;
+constexpr AStringView s_CaseCsgUncut = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCsgUncut;
+constexpr AStringView s_CaseIdentityReference = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentityReference;
+constexpr AStringView s_CaseIdentitySameIor = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentitySameIor;
+constexpr AStringView s_CaseIdentityDifferentIor = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIdentityDifferentIor;
+constexpr AStringView s_CaseCrossingOverflow = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCrossingOverflow;
+constexpr AStringView s_CaseNearAirOrdinary = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearAirOrdinary;
+constexpr AStringView s_CaseNearAirCsg = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearAirCsg;
+constexpr AStringView s_CaseSingle = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSingle;
+constexpr AStringView s_CaseSeparate = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSeparate;
+constexpr AStringView s_CaseStacked = ::NWB::Tests::Smoke::s_RefractionGalleryCaseStacked;
+constexpr AStringView s_CaseIntersecting = ::NWB::Tests::Smoke::s_RefractionGalleryCaseIntersecting;
+constexpr AStringView s_CaseNested = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNested;
+constexpr AStringView s_CaseDuplicateSingleCool = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleCool;
+constexpr AStringView s_CaseDuplicateSingleWarm = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleWarm;
+constexpr AStringView s_CaseDuplicateSingleCoolTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleCoolTinted;
+constexpr AStringView s_CaseDuplicateSingleWarmTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseDuplicateSingleWarmTinted;
+constexpr AStringView s_CaseCoincident = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincident;
+constexpr AStringView s_CaseCoincidentTinted = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTinted;
+constexpr AStringView s_CaseCoincidentReversed = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentReversed;
+constexpr AStringView s_CaseCoincidentTintedReversed = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedReversed;
+constexpr AStringView s_CaseCoincidentPrioritySwap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentPrioritySwap;
+constexpr AStringView s_CaseCoincidentTintedPrioritySwap = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedPrioritySwap;
+constexpr AStringView s_CaseCoincidentIdentical = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentIdentical;
+constexpr AStringView s_CaseCoincidentTintedIdentical = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentTintedIdentical;
+constexpr AStringView s_CaseNearCoincident = ::NWB::Tests::Smoke::s_RefractionGalleryCaseNearCoincident;
+constexpr AStringView s_CaseCoincidentPreserved = ::NWB::Tests::Smoke::s_RefractionGalleryCaseCoincidentPreserved;
+constexpr AStringView s_CaseTorus = ::NWB::Tests::Smoke::s_RefractionGalleryCaseTorus;
+constexpr AStringView s_CaseSameMesh = ::NWB::Tests::Smoke::s_RefractionGalleryCaseSameMesh;
+constexpr AStringView s_CasePrism = ::NWB::Tests::Smoke::s_RefractionGalleryCasePrism;
+
+
+class GalleryBuilder final{
+public:
+    GalleryBuilder(const b8 preview, Core::ECS::World& world)noexcept
+        : m_world(world)
+        , m_preview(preview)
+    {}
+
+
+public:
+    void object(
+        const SmokeMeshRef& mesh,
+        const Float4& position,
+        const Float4& scale,
+        const b8 second = false,
+        const f32 coverage = 0.0f,
+        const f32 yaw = 0.0f,
+        const f32 roll = 0.0f,
+        const f32 pitch = 0.0f,
+        const Name opticalGroup = s_NameNone,
+        const i32 opticalPriority = 0,
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
+    ){
+        const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, s_PreviewAlpha) : Float4(0.90f, 0.98f, 1.0f, coverage);
+        const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, s_PreviewAlpha) : Float4(1.0f, 0.94f, 0.88f, coverage);
+        const Float4 tint = second ? secondTint : firstTint;
+        const auto entity = CreateTintedStaticMeshEntity(mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale, m_world);
+
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
+        auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
+        StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), transform.rotation);
+        if(!m_preview){
+            auto& renderer = m_world.entity(entity).getComponent<Impl::RendererComponent>();
+            renderer.opticalVolumeGroup = opticalGroup;
+            renderer.opticalVolumePriority = opticalPriority;
+            renderer.opticalVolumeCoincidence = opticalCoincidence;
+        }
+    }
+
+    void sphere(
+        const f32 x,
+        const f32 z,
+        const f32 radius,
+        const b8 second = false,
+        const f32 coverage = 0.0f,
+        const Name opticalGroup = s_NameNone,
+        const i32 opticalPriority = 0,
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
+    ){
+        object(s_Sphere, Float4(x, s_GalleryCenterHeight, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage, 0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence);
+    }
+
+    Expected<void> opticalParameters(const Core::ECS::EntityID entity, const f32 ior, const Float4& transmission){
+        if(m_preview)
+            return {};
+        const Half packedIor = ConvertFloatToHalf(ior);
+        const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedIor)))
+            return MakeUnexpected(Failure{});
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))))
+            return MakeUnexpected(Failure{});
+        return {};
+    }
+
+    Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const NameText<char> surfaceInterface){
+        const b8 reference = caseName == s_CaseCsgReference;
+        const b8 middle = caseName == s_CaseCsgMiddle;
+        const auto entity = CreateTintedStaticMeshEntity(
+            s_Cube,
+            m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
+            Float4(0.f, s_GalleryCenterHeight, reference || middle ? 0.5f : 0.f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, reference ? 1.f : (middle ? 3.f : 2.f), 0.f),
+            m_world
+        );
+        if(!entity.valid())
+            return MakeUnexpected(Failure{});
+        if(caseName != s_CaseCsgCap && !middle)
+            return entity;
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionCsgOptics;
+        AddStaticCsgMeshReceiver(entity, group, false, true, m_world);
+        // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
+        for(u32 index = 0u; index < (middle ? 2u : 1u); ++index){
+            auto cutterEntity = m_world.createEntity();
+            if(!cutterEntity.id().valid())
+                return MakeUnexpected(Failure{});
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+            cutter.receiverGroup = group;
+            cutter.shapeType = Impl::s_CsgPlaneShapeName;
+            Impl::CsgPlaneShapeParameters parameters;
+            parameters.normalDistance = index == 0u ? Float4(0.f, 0.f, 1.f, 0.f) : Float4(0.f, 0.f, -1.f, 1.f);
+            AssignCsgCutterParameters(parameters, cutter);
+            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+        }
+        return entity;
+    }
+
+    b8 identitySlab(const AStringView caseName){
+        if(caseName != s_CaseIdentityReference){
+            // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
+            constexpr f32 s_ForeignExit = ::NWB::Tests::Smoke::s_RefractionGalleryForeignExit;
+            const auto foreign = CreateTintedStaticMeshEntity(
+                s_Cube,
+                m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
+                Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
+                Float4(0.f, s_GalleryCenterHeight, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
+                Float4(s_SlabFaceScale, s_SlabFaceScale, s_ForeignExit - s_IdentityForeignFront, 0.f),
+                m_world
+            );
+            if(!foreign.valid())
+                return false;
+            if(!opticalParameters(foreign, caseName == s_CaseIdentityDifferentIor ? 3.8f : s_OpticalIor, s_OpticalTransmission))
+                return false;
+        }
+        // Reusing an actual ECS slot exercises generation bits beyond float32's exact integer range.
+        for(u32 generation = 0u; generation < 32u; ++generation){
+            const auto recycled = m_world.createEntity();
+            if(!recycled.id().valid())
+                return false;
+            m_world.destroyEntity(recycled.id());
+        }
+        const auto primary = csgSlab(s_CaseCsgReference, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f), s_OpticalVolume, s_OpticalInterface);
+        if(!primary || primary->id <= (1u << 24u))
+            return false;
+        if(!opticalParameters(*primary, s_OpticalIor, s_OpticalTransmission))
+            return false;
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionIdentity;
+        if(!farPlaneReceiver(*primary, group))
+            return false;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: full primary entity identity {}"), primary->id);
+        return true;
+    }
+
+    [[nodiscard]] b8 farPlaneReceiver(const Core::ECS::EntityID entity, const Name group){
+        AddStaticCsgMeshReceiver(entity, group, false, true, m_world);
+        auto cutterEntity = m_world.createEntity();
+        if(!cutterEntity.id().valid())
+            return false;
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
+        cutter.receiverGroup = group;
+        cutter.shapeType = Impl::s_CsgPlaneShapeName;
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(parameters, cutter);
+        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
+        return true;
+    }
+
+    b8 crossingOverflow(){
+        const auto entity = CreateTintedStaticMeshEntity(
+            SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
+            m_preview ? s_Preview : s_Glass, s_Interface, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
+            Float4(0.f, s_GalleryCenterHeight, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f),
+            m_world
+        );
+        if(!entity.valid())
+            return false;
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionCsgCrossingOverflow;
+        if(!farPlaneReceiver(entity, group))
+            return false;
+        return true;
+    }
+
+    b8 nearAirSlab(const b8 csg){
+        const auto entity = CreateTintedStaticMeshEntity(
+            s_Cube,
+            m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
+            Float4(1.f, 1.f, 1.f, m_preview ? s_PreviewAlpha : 0.f),
+            Float4(0.f, s_GalleryCenterHeight, 1.25f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, 3.f, 0.f),
+            m_world
+        );
+        if(!entity.valid())
+            return false;
+        // The first half IOR above air still has a three-unit Beer path, even with negligible bending.
+        if(!opticalParameters(entity, 1.f + 0x1p-10f, Float4(0.55f, 0.8f, 1.f, 0.f)))
+            return false;
+        if(!csg)
+            return true;
+        const Name group = NWB::Tests::Smoke::s_SmokeNameSmokeRefractionNearAir;
+        if(!farPlaneReceiver(entity, group))
+            return false;
+        return true;
+    }
+
+    void panel(const SmokeMaterialRef& material, const Float4& tint, const f32 x, const f32 y, const f32 z, const f32 halfWidth, const f32 halfHeight){
+        const auto entity = CreateTintedStaticMeshEntity(s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f), m_world);
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
+        auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+    }
+
+    void backdrop(){
+        if(m_preview){
+            // Translucent, nonrefractive geometry preview makes nested/overlapping surfaces visible.
+            panel(s_Opaque, Float4(0.075f, 0.085f, 0.11f, 1.0f), 0.0f, s_GalleryCenterHeight, s_BackdropDepth, 6.0f, s_BackdropHalfHeight);
+            return;
+        }
+        for(u32 stripe = 0u; stripe < 36u; ++stripe){
+            const f32 value = (stripe & 1u) != 0u ? 0.9f : 0.045f;
+            panel(s_Opaque, Float4(value, value, value, 1.0f), static_cast<f32>(stripe) * 0.3f + -5.25f, s_GalleryCenterHeight, s_BackdropDepth, 0.15f, s_BackdropHalfHeight);
+        }
+        // A second direction and colored depth markers make ray displacement legible.
+        for(u32 row = 0u; row < 9u; ++row)
+            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, static_cast<f32>(row) * 0.7f + -1.4f, 4.48f, 5.4f, 0.015f);
+        panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, s_DepthMarkerAlpha), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
+        panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, s_DepthMarkerAlpha), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
+    }
+
+
+private:
+    Core::ECS::World& m_world;
+    b8 m_preview;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CreateRefractionGalleryScene(const AStringView caseName, const b8 geometryPreview, Core::ECS::World& world){
+    using namespace __hidden_refraction_gallery_scene;
+
+    const auto camera = CreateSmokeCamera(s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f, world);
+    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+    if(!camera.valid() || !light.valid())
+        return false;
+    world.entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
+    // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
+    auto& cameraComponent = world.entity(camera).getComponent<Impl::Scene::CameraComponent>();
+    cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));
+    if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor)
+        cameraComponent.setNearPlane(s_IdentityNearPlane);
+    GalleryBuilder scene(geometryPreview, world);
+    if(caseName == s_CaseCsgReference || caseName == s_CaseCsgCap || caseName == s_CaseCsgMiddle || caseName == s_CaseCsgUncut){
+        const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), s_Glass, s_Interface);
+        if(!slab)
+            return false;
+    }
+    else if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor){
+        if(!scene.identitySlab(caseName))
+            return false;
+    }
+    else if(caseName == s_CaseCrossingOverflow){
+        if(!scene.crossingOverflow())
+            return false;
+    }
+    else if(caseName == s_CaseNearAirOrdinary || caseName == s_CaseNearAirCsg){
+        if(!scene.nearAirSlab(caseName == s_CaseNearAirCsg))
+            return false;
+    }
+    else if(caseName == s_CaseSingle)
+        scene.sphere(0.0f, 0.0f, 1.15f);
+    else if(caseName == s_CaseSeparate){
+        scene.sphere(-1.15f, 0.0f, 0.85f);
+        scene.sphere(1.15f, 0.0f, 0.85f, true);
+    }
+    else if(caseName == s_CaseStacked){
+        scene.sphere(-0.25f, -0.95f, 0.8f);
+        scene.sphere(0.25f, 0.95f, 0.8f, true);
+    }
+    else if(caseName == s_CaseIntersecting){
+        scene.sphere(-0.45f, -0.3f, 1.0f);
+        scene.sphere(0.45f, 0.3f, 1.0f, true);
+    }
+    else if(caseName == s_CaseNested){
+        scene.sphere(0.0f, 0.0f, 1.2f);
+        scene.sphere(0.2f, 0.15f, 0.62f, true);
+    }
+    else if(caseName == s_CaseDuplicateSingleCool || caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted){
+        const b8 warm = caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleWarmTinted;
+        const b8 tinted = caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted;
+        const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, warm, coverage);
+    }
+    else if(caseName == s_CaseCoincident || caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap){
+        const b8 tinted = caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const b8 reversed = caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed;
+        const b8 warmWins = caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
+        const i32 coolPriority = warmWins ? 0 : s_WinningOpticalPriority;
+        const i32 warmPriority = warmWins ? s_WinningOpticalPriority : 0;
+        const Name opticalGroup = s_DuplicateOpticalGroup;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, reversed, coverage, opticalGroup, reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, !reversed, coverage, opticalGroup, reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+    }
+    else if(caseName == s_CaseCoincidentIdentical || caseName == s_CaseCoincidentTintedIdentical){
+        const f32 coverage = caseName == s_CaseCoincidentTintedIdentical ? s_TintedCoverage : 0.0f;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+    }
+    else if(caseName == s_CaseNearCoincident){
+        const Name opticalGroup = s_DuplicateOpticalGroup;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage, opticalGroup, s_WinningOpticalPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.04f, 0.0f, s_DuplicateSphereRadius, true, s_TintedCoverage, opticalGroup, 0, Impl::OpticalVolumeCoincidence::SharedGroup);
+    }
+    else if(caseName == s_CaseCoincidentPreserved){
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage);
+    }
+    else if(caseName == s_CaseTorus)
+        scene.object(s_Torus, Float4(0.0f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.2f, 1.2f, 1.2f, 0.0f), false, 0.0f, 1.2f, 0.23f);
+    else if(caseName == s_CaseSameMesh)
+        scene.object(s_Shells, Float4(0.0f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), false, 0.0f, -0.20f);
+    else if(caseName == s_CasePrism)
+        scene.object(s_Prism, Float4(0.08f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f);
+    else{
+        NWB_LOGGER_WARNING(NWB_TEXT("RefractionSmokeProject: unknown gallery case"));
+        return false;
+    }
+    scene.backdrop();
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: gallery case {} created"), ConvertString(caseName));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/ecs/world.h>
+#include <loader/project_entry.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RefractionQueryDiagnostics final{
+public:
+    RefractionQueryDiagnostics(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
+        : m_context(context)
+        , m_world(world)
+    {}
+
+
+public:
+    [[nodiscard]] b8 configure(Core::Alloc::ScratchArena& arena, b8 densityEnabled, b8 lifecycleEnabled, b8 timingEnabled);
+    void update();
+    [[nodiscard]] b8 enabled()const noexcept{ return m_enabled; }
+    [[nodiscard]] b8 shouldCapture(u64 graphicsFrame)const noexcept{ return m_reported && graphicsFrame > m_sourceFrame; }
+
+
+private:
+    ProjectRuntimeContext& m_context;
+    Core::ECS::World& m_world;
+    Optional<u64> m_targetStart;
+    u64 m_sourceFrame = 0u;
+    b8 m_enabled = false;
+    b8 m_reported = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_environment.h"
+
+#include <tests/smoke/scene_types.adhd.h>
+
+#include <impl/ecs_render/module.h>
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RefractionQueryDiagnostics::configure(Core::Alloc::ScratchArena& arena, const b8 densityEnabled, const b8 lifecycleEnabled, const b8 timingEnabled){
+    const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
+    if(!configured || (*configured && **configured != "0" && **configured != "1")){
+        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: diagnostics must be absent, 0, or 1"));
+        return false;
+    }
+    m_enabled = *configured && **configured == "1";
+    if(!m_enabled)
+        return true;
+    const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
+    const auto readback = ReadSmokeEnvironmentText(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
+    if(!freeze || !hardware || *freeze || !readback || !densityEnabled || lifecycleEnabled || timingEnabled || (*hardware && **hardware != "1")){
+        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
+        return false;
+    }
+    auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());
+    renderer.setRefractionDiagnosticsEnabled(true);
+    return true;
+}
+
+
+void RefractionQueryDiagnostics::update(){
+    if(!m_enabled || m_reported)
+        return;
+    i32 width = 0;
+    i32 height = 0;
+    m_context.graphics.getWindowDimensions(width, height);
+    const auto target = NWB::QueryProjectFrameClientSize();
+    const u64 currentFrame = m_context.graphics.getFrameIndex();
+    if(width != target.width || height != target.height || (m_targetStart && currentFrame < *m_targetStart)){
+        m_targetStart.reset();
+        return;
+    }
+    if(!m_targetStart){
+        m_targetStart = currentFrame;
+        return;
+    }
+    constexpr u64 s_RequiredTargetFrames = s_RefractionDiagnosticsRequiredTargetFrames;
+    if(currentFrame - *m_targetStart < s_RequiredTargetFrames)
+        return;
+    const auto& renderer = *MakeNotNull(m_world.getSystem<NWB::Impl::RendererSystem>());
+    const auto result = renderer.tryGetLatestRefractionStatistics();
+    if(!result)
+        return;
+    const auto& statistics = *result;
+    if(
+        statistics.width != target.width
+        || statistics.height != target.height
+        || statistics.graphicsFrameIndex < *m_targetStart
+        || statistics.graphicsFrameIndex - *m_targetStart < s_RequiredTargetFrames
+        || statistics.graphicsFrameIndex > currentFrame
+    )
+        return;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
+        NWB_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
+        , statistics.sequence
+        , statistics.generation
+        , statistics.graphicsFrameIndex
+        , currentFrame
+        , *m_targetStart
+        , statistics.graphicsFrameIndex - *m_targetStart
+        , statistics.frameIndex
+        , statistics.width
+        , statistics.height
+        , statistics.hardwareRequested ? 1u : 0u
+        , statistics.hardwareAvailable ? 1u : 0u
+        , statistics.hardwareReady ? 1u : 0u
+        , statistics.csgHardwareEnabled ? 1u : 0u
+        , statistics.acceptedToken.valid() ? 1u : 0u
+        , statistics.acceptedToken.hasPhysicalQueueIdentity() ? 1u : 0u
+        , static_cast<u32>(statistics.acceptedToken.queue)
+        , statistics.acceptedToken.value
+        , statistics.acceptedToken.physicalQueueIndex
+        , statistics.acceptedToken.deviceGeneration
+    );
+#define NWB_SMOKE_REFRACTION_LOG_COUNTER(name, offset) \
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryCounter: sequence={} generation={} name={} value={}"), statistics.sequence, statistics.generation, NWB_TEXT(#name), statistics.name);
+    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_LOG_COUNTER)
+#undef NWB_SMOKE_REFRACTION_LOG_COUNTER
+#define NWB_SMOKE_REFRACTION_COUNT_COUNTER(name, offset) + 1u
+    constexpr u32 s_CounterCount = 0u NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_COUNT_COUNTER);
+#undef NWB_SMOKE_REFRACTION_COUNT_COUNTER
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
+    m_sourceFrame = statistics.graphicsFrameIndex;
+    m_reported = true;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_scene_helpers.h"
+
+#include <tests/smoke/scene_types.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RefractionScene final{
+public:
+    static constexpr SmokeMaterialRef s_ClearMaterial{"project/smoke/refraction/materials/clear"};
+    static constexpr SmokeMaterialRef s_OpaqueMaterial{"project/smoke/refraction/materials/opaque"};
+    static constexpr AStringView s_MaterialInterface = s_SmokeSurfaceMaterialInterface;
+
+
+public:
+    static Core::ECS::EntityID CreatePanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale, Core::ECS::World& world);
+    [[nodiscard]] static b8 CreateDensity(u32 percent, Core::Alloc::ScratchArena& arena, Core::ECS::World& world, ProjectRuntimeContext& context, Core::ECS::EntityID& glass);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_environment.h"
+
+#include <global/simd/constant.h>
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_refraction_scene{
+
+static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
+static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::ECS::EntityID RefractionScene::CreatePanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale, Core::ECS::World& world){
+    using namespace __hidden_refraction_scene;
+    const auto entity = CreateTintedStaticMeshEntity(s_PlaneMesh, material, s_MaterialInterface, tint, position, scale, world);
+    NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
+    auto& transform = *MakeNotNull(world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity));
+    // Rotate the XZ plane to face the camera along -Z.
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+    return entity;
+}
+
+
+b8 RefractionScene::CreateDensity(const u32 percent, Core::Alloc::ScratchArena& arena, Core::ECS::World& world, ProjectRuntimeContext& context, Core::ECS::EntityID& glass){
+    using namespace __hidden_refraction_scene;
+    const auto configuredExtent = ReadSmokeEnvironmentText(arena, "NWB_REFRACTION_SMOKE_EXTENT");
+    if(!configuredExtent || (*configuredExtent != "960x720" && *configuredExtent != "1600x900" && *configuredExtent != "1920x1080")){
+        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires explicit extent 960x720, 1600x900, or 1920x1080"));
+        return false;
+    }
+    const auto enabled = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_ENABLED");
+    const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
+    if(!enabled || !hardware || (*enabled && **enabled != "1") || (*hardware && **hardware != "0" && **hardware != "1")){
+        NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires refraction enabled and hardware selection absent, 0, or 1"));
+        return false;
+    }
+    const b8 hardwareRequested = !*hardware || **hardware == "1";
+    const auto extent = NWB::QueryProjectFrameClientSize();
+    const u32 frameWidth = extent.width;
+    const u32 frameHeight = extent.height;
+    const f32 frameWidthFloat = static_cast<f32>(frameWidth);
+    const f32 frameHeightFloat = static_cast<f32>(frameHeight);
+    const f32 aspect = frameWidthFloat / frameHeightFloat;
+    const f32 tangent = Tan(s_PI / 6.f);
+    const f32 fractionEdge = Sqrt(static_cast<f32>(percent) * 0.01f);
+    const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(frameWidthFloat * fractionEdge * 0.5f + 0.5f));
+    const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(frameHeightFloat * fractionEdge * 0.5f + 0.5f));
+    const u32 left = percent == 0u ? 0u : (frameWidth - coveredWidth) / 2u;
+    const u32 top = percent == 0u ? 0u : (frameHeight - coveredHeight) / 2u;
+    const u32 right = left + coveredWidth;
+    const u32 bottom = top + coveredHeight;
+    const u64 admittedPixels = static_cast<u64>(coveredWidth) * coveredHeight;
+    const u64 totalPixels = static_cast<u64>(extent.width) * extent.height;
+    constexpr u32 s_TileEdge = s_RefractionDensityTileEdge;
+    const u32 activeTiles = percent == 0u ? 0u : (DivideUp(right, s_TileEdge) - left / s_TileEdge) * (DivideUp(bottom, s_TileEdge) - top / s_TileEdge);
+    const u32 totalTiles = DivideUp(frameWidth, s_TileEdge) * DivideUp(frameHeight, s_TileEdge);
+
+    const auto camera = CreateSmokeCamera(1.4f, 6.f, 0.f, world);
+    if(!camera.valid())
+        return false;
+    auto& cameraComponent = world.entity(camera).getComponent<NWB::Impl::Scene::CameraComponent>();
+    cameraComponent.setVerticalFovRadians(s_PI / 3.f);
+    cameraComponent.setAspectRatio(aspect);
+    const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(world, 0.f, 0.f, 0.f, Float4(1.f, 1.f, 1.f, 1.f), 1.f);
+    if(!light.valid())
+        return false;
+    world.entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
+
+    // Shared opaque backdrop that occludes the behind-wall slab.
+    constexpr f32 s_BackdropDepth = s_RefractionDensityBackdropDepth;
+    const f32 backdropHalfHeight = tangent * (6.f + s_BackdropDepth);
+    const f32 backdropHalfWidth = backdropHalfHeight * aspect;
+    const f32 backdropPanelHalfWidth = backdropHalfWidth * 1.05f;
+    const f32 backdropPanelHalfHeight = backdropHalfHeight * 1.05f;
+    CreatePanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(backdropPanelHalfWidth, 1.f, backdropPanelHalfHeight, 0.f), world);
+    constexpr u32 s_StripeCount = s_RefractionDensityStripeCount;
+    const f32 stripeHalfWidth = backdropHalfWidth / static_cast<f32>(s_StripeCount);
+    const f32 stripeStart = -backdropHalfWidth;
+    for(u32 stripe = 1u; stripe < s_StripeCount; stripe += 2u){
+        const f32 stripeSlot = 2.f * static_cast<f32>(stripe) + 1.f;
+        const f32 x = stripeSlot * stripeHalfWidth + stripeStart;
+        CreatePanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(stripeHalfWidth, 1.f, backdropPanelHalfHeight, 0.f), world);
+    }
+
+    // Full coverage extends past the viewport while empty coverage hides the refractor behind the wall.
+    const f32 frontDepthValue = percent == 0u ? 4.f : 0.f;
+    const f32 projectedWidth = percent == 0u || percent == 100u ? frameWidthFloat + 2.f : static_cast<f32>(coveredWidth);
+    const f32 projectedHeight = percent == 0u || percent == 100u ? frameHeightFloat + 2.f : static_cast<f32>(coveredHeight);
+    const f32 halfHeight = (6.f + frontDepthValue) * tangent;
+    const Float4 scale((halfHeight * 2.f * aspect * projectedWidth) / frameWidthFloat, (halfHeight * 2.f * projectedHeight) / frameHeightFloat, 0.2f, 0.f);
+    glass = CreateTintedStaticMeshEntity(s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, frontDepthValue + 0.1f, 0.f), scale, world);
+    if(!glass.valid())
+        return false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: extent {}x{} requested_percent {} admitted_pixels {} total_pixels {} active_tiles {} total_tiles {} glass_instances 1 capture_mode {}")
+        , extent.width
+        , extent.height
+        , percent
+        , admittedPixels
+        , totalPixels
+        , activeTiles
+        , totalTiles
+        , percent == 0u ? NWB_TEXT("occluded") : NWB_TEXT("visible")
+    );
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: pixel_bounds {} {} {} {}"), left, top, right, bottom);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: tracing requested {} ray_query_supported {} refraction_enabled 1")
+        , hardwareRequested ? NWB_TEXT("hardware") : NWB_TEXT("screen-space")
+        , context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 1u : 0u
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "framebuffer_capture.h"
 #include "avboit_timing_render_pass.h"
-#include "fps_probe.h"
+#include <tests/smoke/presentation_types.adhd.h>
 #include "gpu_pass_timing_probe.h"
-#include "smoke_capture_teardown.h"
-#include "refraction_gallery_scene.h"
-#include "refraction_scene.h"
-#include "refraction_query_diagnostics.h"
+#include "smoke_scene_helpers.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
 #include "stress_frame_graph_snapshot.h"
 
 #include <loader/project_entry.h>
@@ -375,4 +1217,3 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

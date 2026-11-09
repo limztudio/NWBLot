@@ -9,16 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-namespace NWB::Impl{
-using MutableByteSpan = Span<u8>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialInstanceOverrideField{
     public MaterialTypedLayoutField field;
     public u32 blockByteBegin = 0u;
@@ -180,7 +170,7 @@ class MaterialInstanceOverrideApplier{
         in MaterialInstanceParameter parameter,
         in u32 fieldByteSize,
         in u32 byteOffset,
-        mut MutableByteSpan inOutMutableTypedBytes
+        mut Span<u8> inOutMutableTypedBytes
     )const{
         assert(fieldByteSize != 0u && fieldByteSize <= 16u);
         const Array<u8, 16> valueBytes = this.unpackBytes(parameter.value);
@@ -197,7 +187,7 @@ class MaterialInstanceOverrideApplier{
         in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
         in Span<MaterialTypedLayoutField> typedLayoutFields,
         in MaterialInstanceComponent materialInstance,
-        mut MutableByteSpan inOutMutableTypedBytes
+        mut Span<u8> inOutMutableTypedBytes
     )const{
         if(!this.validateInterface(entityId, materialInstance.materialInterface, materialName, materialInterface))
             return false;

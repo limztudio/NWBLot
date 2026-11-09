@@ -64,42 +64,11 @@ TEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes){
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/math/case_types.adhd.h>
 
 #include <global/simdmath.h>
 
 #include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_current_contract_boundary_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr f64 s_DoubleEpsilon = 2.0e-14;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ExpectSingleDirectionNear(SIMDVectorSingle actual, SIMDVectorSingle expected){
-    for(usize lane = 0u; lane < 3u; ++lane)
-        EXPECT_NEAR(VectorGetByIndex(actual, lane), VectorGetByIndex(expected, lane), NWB::Tests::s_DefaultNearlyEqualEpsilon) << lane;
-}
-
-void ExpectDoubleDirectionNear(SIMDVectorDouble actual, SIMDVectorDouble expected){
-    for(usize lane = 0u; lane < 3u; ++lane)
-        EXPECT_NEAR(actual[lane], expected[lane], s_DoubleEpsilon) << lane;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,7 +96,7 @@ TEST(CurrentMathContractBoundaries, OppositelyOrientedThinBoxesDoNotInventAnInte
 }
 
 TEST(CurrentMathContractBoundaries, OrientedBoxTransformationAppliesTheNewRotationAfterItsExistingRotation){
-    using namespace __hidden_current_contract_boundary_tests;
+    using namespace NWB::Tests::MathCases;
     Float4 orientation;
     StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV2), orientation);
     const BoundingOrientedBox source(Float3U(0.0f, 0.0f, 0.0f), Float3U(2.0f, 0.1f, 0.1f), orientation);
@@ -189,7 +158,7 @@ TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPla
 }
 
 TEST(CurrentMathContractBoundaries, ShearedSphereContainsATransformedSurfacePointWithoutChangingAdmittedSrt){
-    using namespace __hidden_current_contract_boundary_tests;
+    using namespace NWB::Tests::MathCases;
     const BoundingSphere source(Float3U(0.0f, 0.0f, 0.0f), 1.0f);
     SIMDMatrix shear = MatrixIdentity();
     shear.v[0] = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
@@ -242,7 +211,7 @@ TEST(CurrentMathContractBoundaries, SphereContainmentAndIntersectionAgreeAtExter
 }
 
 TEST(CurrentMathContractBoundaries, FrustumTransformationAppliesTheNewRotationAfterItsExistingRotation){
-    using namespace __hidden_current_contract_boundary_tests;
+    using namespace NWB::Tests::MathCases;
     Float4 orientation;
     StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV2), orientation);
     const BoundingFrustum source(Float3U(0.0f, 0.0f, 0.0f), orientation, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 2.0f);
@@ -288,7 +257,7 @@ TEST(CurrentMathContractBoundaries, FrustumTransformationAppliesTheNewRotationAf
 
 
 TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotatedAxesAndReflections){
-    using namespace __hidden_current_contract_boundary_tests;
+    using namespace NWB::Tests::MathCases;
     const SIMDVectorSingle orientation = QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV4);
     Float4 orientationStorage;
     StoreFloat(orientation, orientationStorage);
@@ -1713,16 +1682,8 @@ TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOve
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_quaternion_contract_tests{
-void ExpectSingleDirectionNear(SIMDVectorSingle actual, SIMDVectorSingle expected){
-    for(usize lane = 0u; lane < 3u; ++lane)
-        EXPECT_NEAR(VectorGetByIndex(actual, lane), VectorGetByIndex(expected, lane), NWB::Tests::s_DefaultNearlyEqualEpsilon) << lane;
-}
-};
-
-
 TEST(CurrentMathContractBoundaries, SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection){
-    using namespace __hidden_quaternion_contract_tests;
+    using namespace NWB::Tests::MathCases;
     const SIMDMatrix matrix = MatrixSet(0.0f, -1.0f, 0.0f, 7.0f, 1.0f, 0.0f, 0.0f, -11.0f, 0.0f, 0.0f, 1.0f, 5.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     const SIMDVectorSingle direction = VectorSet(2.0f, -3.0f, 4.0f, 0.0f);
     const auto quaternion = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);

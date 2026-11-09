@@ -2,6 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <impl/ecs_render/kernel/task_timing_feedback.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/reflection/statistics_readback.h>
+#include <impl/ecs_render/refraction/statistics_readback.h>
+#include <core/task/gpu/task_graph.h>
+#include <gtest/gtest.h>
+
+namespace NWB::Tests::EcsGraphicsCases{
+using MeshRayTracingResourceSnapshot = NWB::Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
+using ReflectionStatistics = NWB::Impl::ReflectionStatistics;
+constexpr NWB::Impl::ReflectionTraceMode::Enum s_HybridReflectionTraceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
+using RefractionStatistics = NWB::Impl::RefractionStatistics;
+using GpuTaskDesc = NWB::Core::GpuTaskDesc;
+using QueueSubmissionToken = NWB::Core::QueueSubmissionToken;
+using GpuTaskTimingKey = NWB::Core::GpuTaskTimingKey;
+using GpuPhysicalQueueId = NWB::Core::GpuPhysicalQueueId;
+using GpuTimingSample = NWB::Core::GpuTimingSample;
+using GpuTimingSampleAttribution = NWB::Core::GpuTimingSampleAttribution;
+using GpuTaskTimingFeedbackPolicy = NWB::Core::GpuTaskTimingFeedbackPolicy;
+}
+}
+
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_EcsGraphicsCaseTestsStatistics = "tests/statistics";
 const Name s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch = "tests/runtime_mesh_pruning/request_scratch";
 const Name s_EcsGraphicsCaseTestsRuntimeMeshPruningNotRequested = "tests/runtime_mesh_pruning/not_requested";
@@ -91,6 +120,118 @@ const Name s_EcsGraphicsMutableParameter = "runtime.value";
 const Name s_EcsCaseTestsOpaqueGbufferCsgSparse = "tests/opaque_gbuffer/csg_sparse";
 const Name s_EcsCaseTestsSoftShadowResolveDispatchBuilder = "tests/soft_shadow_resolve_dispatch_builder";
 const u64 s_EcsGraphicsCollisionHash = 41u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MeshRayTracingResourceSnapshot AcceptedRuntimeGeometry(){
+    MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+    mesh.runtimeMesh = true;
+    mesh.runtimeGeometryContentRevision = 7u;
+    mesh.blasGeometryContentRevision = 7u;
+    mesh.swBvhGeometryContentRevision = 7u;
+    mesh.blasBuildAccepted = true;
+    mesh.swBvhBuildAccepted = true;
+    mesh.swBvhTopologyBuilt = true;
+    return mesh;
+}
+
+ReflectionStatistics MakeReflectionStatisticsMetadataAt(in u32 frameIndex){
+    ReflectionStatistics value = ReflectionStatistics();
+    value.frameIndex = frameIndex;
+    value.width = 320u;
+    value.height = 180u;
+    value.requestedHardwareBudget = 128u;
+    value.effectiveHardwareBudget = 64u;
+    value.queueCapacity = 64u;
+    value.maxOpticalQueries = 8u;
+    value.traceMode = s_HybridReflectionTraceMode;
+    value.hardwareRequested = true;
+    value.hardwareAvailable = true;
+    return value;
+}
+
+ReflectionStatistics MakeReflectionStatisticsMetadata(){
+    return MakeReflectionStatisticsMetadataAt(9u);
+}
+
+GpuTaskDesc MakeReflectionStatisticsTaskDesc(){
+    GpuTaskDesc desc = GpuTaskDesc();
+    desc.setIdentity(s_EcsCaseTestsReflectionStatisticsLease).setMarkerLabel("Statistics lease");
+    return desc;
+}
+
+RefractionStatistics MakeRefractionStatisticsMetadataAt(in u32 frameIndex){
+    RefractionStatistics value = RefractionStatistics();
+    value.frameIndex = frameIndex;
+    value.graphicsFrameIndex = 100u + frameIndex;
+    value.width = 320u;
+    value.height = 180u;
+    value.hardwareRequested = true;
+    value.hardwareAvailable = true;
+    value.csgHardwareEnabled = true;
+    return value;
+}
+
+RefractionStatistics MakeRefractionStatisticsMetadata(){
+    return MakeRefractionStatisticsMetadataAt(9u);
+}
+
+QueueSubmissionToken AcceptedToken(in GpuTaskTimingKey key, in GpuPhysicalQueueId queue){
+    QueueSubmissionToken token = QueueSubmissionToken();
+    token.value = 1u;
+    token.physicalQueueIndex = queue.index;
+    token.deviceGeneration = queue.deviceGeneration;
+    token.queue = key.queue;
+    return token;
+}
+
+GpuTimingSample PublishedSample(
+    in GpuTimingSampleAttribution attribution,
+    in Name scopeName,
+    in GpuPhysicalQueueId queue,
+    in u64 sourceFrameIndex,
+    in f64 durationSeconds
+){
+    GpuTimingSample sample = GpuTimingSample();
+    sample.sourceFrameIndex = sourceFrameIndex;
+    sample.durationSeconds = durationSeconds;
+    sample.scopeName = scopeName;
+    sample.attribution = attribution;
+    sample.physicalQueue = queue;
+    sample.published = true;
+    return sample;
+}
+
+GpuTimingSample RetiredSample(in GpuTimingSampleAttribution attribution, in GpuPhysicalQueueId queue){
+    GpuTimingSample sample = GpuTimingSample();
+    sample.sourceFrameIndex = 0u;
+    sample.durationSeconds = 0.0;
+    sample.scopeName = s_NameNone;
+    sample.attribution = attribution;
+    sample.physicalQueue = queue;
+    sample.published = false;
+    return sample;
+}
+
+void ExpectArenaMemoryUnchanged(in ArenaMemoryStats before, in ArenaMemoryStats after){
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+}
+
+void ExpectPolicyEqual(in GpuTaskTimingFeedbackPolicy actual, in GpuTaskTimingFeedbackPolicy expected){
+    EXPECT_EQ(actual.enabled, expected.enabled);
+    EXPECT_EQ(actual.minimumSampleCount, expected.minimumSampleCount);
+    EXPECT_EQ(actual.calibrationIntervalFrames, expected.calibrationIntervalFrames);
+    EXPECT_EQ(actual.minimumAbsoluteBenefitSeconds, expected.minimumAbsoluteBenefitSeconds);
+    EXPECT_EQ(actual.minimumRelativeBenefit, expected.minimumRelativeBenefit);
+    EXPECT_EQ(actual.minimumFramesBetweenSwitches, expected.minimumFramesBetweenSwitches);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

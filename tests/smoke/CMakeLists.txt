@@ -9,32 +9,27 @@ if(TARGET nwb_logserver AND Python3_Interpreter_FOUND)
 endif()
 
 nwb_declare_static_library(nwb_presentation_smoke_types)
-nwb_target_adhd_sources(nwb_presentation_smoke_types NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/presentation_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/scene_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_values.adhd")
+nwb_target_adhd_sources(nwb_presentation_smoke_types NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/presentation_types.adhd" "${CMAKE_CURRENT_LIST_DIR}/scene_types.adhd")
 target_link_libraries(nwb_presentation_smoke_types PUBLIC nwb_common nwb_test_common_names nwb_loader_runtime_constants)
 
 nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
+nwb_target_adhd_sources(nwb_presentation_fps_probe_tests NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/smoke_test_cases.adhd")
 target_sources(nwb_presentation_fps_probe_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
 )
 target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common nwb_presentation_smoke_types)
 
 
 nwb_declare_gtest_executable(nwb_skinning_benchmark_pose_tests)
+nwb_target_adhd_sources(nwb_skinning_benchmark_pose_tests NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/smoke_test_cases.adhd")
 target_sources(nwb_skinning_benchmark_pose_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_animator.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_animator.h"
     "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_tests.cpp"
 )
 target_link_libraries(nwb_skinning_benchmark_pose_tests PRIVATE nwb_ecs_skeleton nwb_ecs nwb_common nwb_alloc nwb_presentation_smoke_types)
 
 nwb_declare_gtest_executable(nwb_csg_shadow_mode_tests)
+nwb_target_adhd_sources(nwb_csg_shadow_mode_tests NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/smoke_test_cases.adhd")
 target_sources(nwb_csg_shadow_mode_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_mode_tests.cpp"
 )
 target_link_libraries(nwb_csg_shadow_mode_tests PRIVATE nwb_common nwb_alloc nwb_presentation_smoke_types)
@@ -116,40 +111,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
         target_sources("${TARGET_NAME}" PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/arrow_yaw_input_handler.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/arrow_yaw_input_handler.h"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.h"
-            "${CMAKE_CURRENT_LIST_DIR}/fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/bitmap_capture_writer.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/bitmap_capture_writer.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_factory.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_factory.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.h"
-            "${CMAKE_CURRENT_LIST_DIR}/gpu_pass_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/gpu_pass_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
-            "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_teardown.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_teardown.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_environment.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_environment.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.h"
         )
-        if("nwb_ecs_model" IN_LIST ARGN)
-            target_sources("${TARGET_NAME}" PRIVATE
-                "${CMAKE_CURRENT_LIST_DIR}/smoke_skinned_scene_helpers.cpp"
-                "${CMAKE_CURRENT_LIST_DIR}/smoke_skinned_scene_helpers.h"
-            )
-        endif()
         set_target_properties("${TARGET_NAME}" PROPERTIES DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}")
         nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics)
         target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_input nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics nwb_presentation_smoke_types ${ARGN})
@@ -183,14 +146,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_transparent_multi_smoke)
         target_sources(nwb_transparent_multi_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
 
@@ -198,14 +153,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
         target_sources(nwb_frame_lagged_async_lighting_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         target_compile_definitions(nwb_frame_lagged_async_lighting_smoke PRIVATE NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1)
         nwb_configure_runtime_smoke_target(nwb_frame_lagged_async_lighting_smoke "${_nwb_transparent_multi_runtime_root}")
@@ -225,10 +172,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_avboit_depth_warp_probe_smoke)
         target_sources(nwb_avboit_depth_warp_probe_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_oracle.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_oracle.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_integration_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/refraction_tile_probe.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}")
         add_dependencies(nwb_avboit_depth_warp_probe_smoke nwb_transparent_multi_smoke_assets)
@@ -247,14 +190,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_transparent_csg_smoke)
         target_sources(nwb_transparent_csg_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         target_compile_definitions(nwb_transparent_csg_smoke PRIVATE NWB_TRANSPARENT_MULTI_ENABLE_CSG=1)
         nwb_configure_runtime_smoke_target(nwb_transparent_csg_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_csg)
@@ -292,15 +227,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_caustic_sphere_smoke)
         target_sources(nwb_caustic_sphere_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_renderer_setup.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_transforms.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}")
@@ -321,9 +247,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_csg_visible_smoke)
         target_sources(nwb_csg_visible_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_csg_visible_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_visible_smoke "${_nwb_csg_visible_runtime_root}" nwb_ecs_csg)
@@ -331,10 +254,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_gtest_executable(nwb_csg_visible_scene_tests)
         target_sources(nwb_csg_visible_scene_tests PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene_tests.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.h"
         )
-        target_sources(nwb_csg_visible_scene_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.cpp")
         target_link_libraries(nwb_csg_visible_scene_tests PRIVATE nwb_ecs_csg nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_input nwb_common nwb_alloc nwb_presentation_smoke_types)
         nwb_add_fixture_smoke_assets(nwb_csg_visible_smoke_assets csg_visible "${_nwb_csg_visible_runtime_root}" "CSG visible" csg_visible_assets)
         add_dependencies(nwb_csg_visible_smoke nwb_csg_visible_smoke_assets)
@@ -431,11 +351,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_skinning_culling_benchmark)
         target_sources(nwb_skinning_culling_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/skinning_culling_benchmark_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_animator.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_pose_animator.h"
-            "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/skinning_benchmark_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/skinning_culling_runtime_provider.h"
         )
         nwb_configure_runtime_smoke_target(nwb_skinning_culling_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
 
@@ -457,9 +372,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         target_sources(nwb_skinned_caustic_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_transition.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_transition.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_skinned_caustic_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_skinned_caustic_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
@@ -478,16 +390,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         nwb_configure_runtime_smoke_target(nwb_stress_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
@@ -502,16 +404,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK=1)
         nwb_configure_runtime_smoke_target(nwb_hardware_shadow_boundary_healthy_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
@@ -520,22 +412,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         # Both M4 arms share assets while the async arm requires a dedicated Compute queue.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
-            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1 NWB_SMOKE_DISABLE_ASYNC_COMPUTE=1)
         nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_sync_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
@@ -544,22 +421,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot_writer.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
-            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1)
         nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_async_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
@@ -576,10 +438,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
-            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
         # Cook private timing materials for NWB_SOFT_SHADOW_TEST_TIMING=1 A/B runs.
@@ -591,14 +449,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_compile_definitions(nwb_gi_test_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         target_sources(nwb_gi_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/complex_gi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/complex_gi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_gi_scene.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_gi_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.h"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg)
         # Coverage, complex, and CSG GI scenes cook private GI material families.

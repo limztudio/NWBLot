@@ -4,10 +4,13 @@
 
 native{
 #include <global/arena_memory.h>
+#include <gtest/gtest.h>
 namespace NWB::Tests::AllocCases{
 using ArenaStatsValue = ::ArenaMemoryStats;
 };
 }
+
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,6 +81,18 @@ class AllocatorWorkerResult{
     public ArenaStatsValue stats = ArenaStatsValue();
     public b8 allocationFailed = false;
     public b8 contentsPreserved = true;
+}
+
+void FillPattern(mut Span<u8> bytes){
+    for(usize index = 0u; index < bytes.size(); ++index)
+        bytes[index] = cast<u8>(index * 17u + 3u);
+}
+
+void ExpectPattern(in Span<u8> bytes){
+    for(usize index = 0u; index < bytes.size(); ++index){
+        const u8 expected = cast<u8>(index * 17u + 3u);
+        EXPECT_EQ(bytes[index], expected);
+    }
 }
 
 

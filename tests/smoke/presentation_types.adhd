@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/common/global.h>
+#include <core/common/log.h>
+#include <global/algorithm.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
+#include <global/timer.h>
+#include <global/type.h>
+}
+
+
 const Name s_SmokeScratchNameTestsSmokeReflectionFrameGraph = "tests/smoke/reflection_frame_graph";
 const Name s_SmokeNameDepthWarpProbeCoverage = "DepthWarpProbeCoverage";
 const Name s_SmokeNameDepthWarpProbeWarp = "DepthWarpProbeWarp";
@@ -121,6 +132,314 @@ class RendererGatherBenchmarkSceneCounts{
     public u32 runtimeRenderers = 0u;
     public u32 runtimeOwners = 0u;
     public u32 transparentRenderers = 0u;
+}
+
+class PresentationPacingRing{
+    private Array<PresentationPacingSample, 4096u> m_samples = Array<PresentationPacingSample, 4096u>();
+    private usize m_count = 0u;
+    private usize m_head = 0u;
+    private u64 m_previousCount = 0u;
+    private u64 m_stalls = 0u;
+    private Timer m_previousObservationTime = Timer();
+    private Timer m_previousPresentationTime = Timer();
+    private b8 m_started = false;
+    private b8 m_pendingStallCounted = false;
+
+    public void reset(){
+        this.m_count = 0u;
+        this.m_head = 0u;
+        this.m_previousCount = 0u;
+        this.m_previousObservationTime = Timer();
+        this.m_previousPresentationTime = Timer();
+        this.m_started = false;
+        this.m_pendingStallCounted = false;
+        this.m_stalls = 0u;
+    }
+
+    public void record(in u64 successfulPresentations, in Timer now){
+        if(!this.m_started){
+            this.m_started = true;
+            this.m_previousCount = successfulPresentations;
+            this.m_previousObservationTime = now;
+            this.m_previousPresentationTime = now;
+            return;
+        }
+        b8 regressedTime = false;
+        f64 wallIntervalMs = 0.0;
+        native(in now, in prevObs = this.m_previousObservationTime, in prevPres = this.m_previousPresentationTime, mut regressedTime, mut wallIntervalMs){
+            regressedTime = now < prevObs;
+            wallIntervalMs = DurationInSeconds<f64>(now, prevPres) * s_PresentationPacingMsPerSecond;
+        }
+        if(regressedTime || successfulPresentations < this.m_previousCount){
+            this.reset();
+            return;
+        }
+        this.m_previousObservationTime = now;
+        const u64 advanced = successfulPresentations - this.m_previousCount;
+        if(advanced == 0u){
+            if(!this.m_pendingStallCounted && wallIntervalMs >= s_PresentationPacingStallThresholdMs){
+                ++this.m_stalls;
+                this.m_pendingStallCounted = true;
+            }
+            return;
+        }
+        const f64 wallMs = wallIntervalMs / cast<f64>(advanced);
+        if(!this.m_pendingStallCounted && wallMs >= s_PresentationPacingStallThresholdMs)
+            ++this.m_stalls;
+        this.m_samples[this.m_head] = PresentationPacingSample(wallMs);
+        this.m_head = (this.m_head + 1u) % s_PresentationPacingRingCapacity;
+        if(this.m_count < s_PresentationPacingRingCapacity)
+            ++this.m_count;
+        this.m_previousCount = successfulPresentations;
+        this.m_previousPresentationTime = now;
+        this.m_pendingStallCounted = false;
+    }
+
+    public PresentationPacingSummary summarize()const{
+        PresentationPacingSummary summary;
+        summary.stallsOver50Ms = this.m_stalls;
+        if(this.m_count == 0u)
+            return summary;
+        Array<f64, 4096u> sorted;
+        for(usize i = 0u; i < this.m_count; ++i)
+            sorted[i] = this.m_samples[(this.m_head + s_PresentationPacingRingCapacity - this.m_count + i) % s_PresentationPacingRingCapacity].wallMsPerPresentation;
+        native(in count = this.m_count, mut sorted){
+            Sort(sorted.begin(), sorted.begin() + count);
+        }
+        summary.samples = this.m_count;
+        usize p50Index = (this.m_count * 50u) / 100u;
+        if(p50Index >= this.m_count)
+            p50Index = this.m_count - 1u;
+        usize p95Index = (this.m_count * 95u) / 100u;
+        if(p95Index >= this.m_count)
+            p95Index = this.m_count - 1u;
+        summary.p50Ms = sorted[p50Index];
+        summary.p95Ms = sorted[p95Index];
+        summary.maxMs = sorted[this.m_count - 1u];
+        return summary;
+    }
+
+    public usize sampleCount()const{
+        return this.m_count;
+    }
+
+    public u64 stallCount()const{
+        return this.m_stalls;
+    }
+}
+
+class PresentationFpsProbe{
+    private PresentationFpsSample m_interval;
+    private PresentationFpsSample m_total;
+    private f64 m_warmupSeconds;
+    private f64 m_measurementSeconds;
+    private Timer m_warmupBegin;
+    private Timer m_measurementBegin;
+    private Timer m_intervalBegin;
+    private Timer m_previousObservation;
+    private u64 m_previousPresentationCount;
+    private u64 m_intervalPresentationCount;
+    private b8 m_started;
+    private b8 m_measuring;
+    private b8 m_complete;
+    private b8 m_invalid;
+
+    public PresentationFpsProbe(){
+        this.m_interval = PresentationFpsSample();
+        this.m_total = PresentationFpsSample();
+        this.m_warmupSeconds = 0.25;
+        this.m_measurementSeconds = 0.0;
+        this.m_warmupBegin = Timer();
+        this.m_measurementBegin = Timer();
+        this.m_intervalBegin = Timer();
+        this.m_previousObservation = Timer();
+        this.m_previousPresentationCount = 0u;
+        this.m_intervalPresentationCount = 0u;
+        this.m_started = false;
+        this.m_measuring = false;
+        this.m_complete = false;
+        this.m_invalid = false;
+    }
+
+    public PresentationFpsProbe(in f64 warmupSeconds){
+        this.m_interval = PresentationFpsSample();
+        this.m_total = PresentationFpsSample();
+        this.m_warmupSeconds = warmupSeconds;
+        this.m_measurementSeconds = 0.0;
+        this.m_warmupBegin = Timer();
+        this.m_measurementBegin = Timer();
+        this.m_intervalBegin = Timer();
+        this.m_previousObservation = Timer();
+        this.m_previousPresentationCount = 0u;
+        this.m_intervalPresentationCount = 0u;
+        this.m_started = false;
+        this.m_measuring = false;
+        this.m_complete = false;
+        this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0;
+    }
+
+    public PresentationFpsProbe(in f64 warmupSeconds, in f64 measurementSeconds){
+        this.m_interval = PresentationFpsSample();
+        this.m_total = PresentationFpsSample();
+        this.m_warmupSeconds = warmupSeconds;
+        this.m_measurementSeconds = measurementSeconds;
+        this.m_warmupBegin = Timer();
+        this.m_measurementBegin = Timer();
+        this.m_intervalBegin = Timer();
+        this.m_previousObservation = Timer();
+        this.m_previousPresentationCount = 0u;
+        this.m_intervalPresentationCount = 0u;
+        this.m_started = false;
+        this.m_measuring = false;
+        this.m_complete = false;
+        this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0 || !IsFinite(measurementSeconds) || measurementSeconds < 0.0;
+    }
+
+    public PresentationFpsStatus observe(in u64 successfulPresentations, in Timer now){
+        if(this.m_invalid)
+            return PresentationFpsStatus::Invalid;
+        if(this.m_complete)
+            return PresentationFpsStatus::Waiting;
+        if(!this.m_started){
+            this.m_started = true;
+            this.m_warmupBegin = now;
+            this.m_previousObservation = now;
+            this.m_previousPresentationCount = successfulPresentations;
+        }
+        b8 regressedTime = false;
+        native(in now, in prevObs = this.m_previousObservation, mut regressedTime){
+            regressedTime = now < prevObs;
+        }
+        if(regressedTime || successfulPresentations < this.m_previousPresentationCount){
+            this.m_invalid = true;
+            return PresentationFpsStatus::Invalid;
+        }
+        this.m_previousObservation = now;
+        this.m_previousPresentationCount = successfulPresentations;
+
+        if(!this.m_measuring){
+            f64 warmupElapsed = 0.0;
+            native(in now, in warmupBegin = this.m_warmupBegin, mut warmupElapsed){
+                warmupElapsed = DurationInSeconds<f64>(now, warmupBegin);
+            }
+            if(warmupElapsed < this.m_warmupSeconds)
+                return PresentationFpsStatus::Waiting;
+            this.m_measuring = true;
+            this.m_measurementBegin = now;
+            this.m_intervalBegin = now;
+            this.m_intervalPresentationCount = successfulPresentations;
+            this.m_total.firstPresentationCount = successfulPresentations;
+            this.m_total.lastPresentationCount = successfulPresentations;
+            return PresentationFpsStatus::Waiting;
+        }
+
+        this.m_total.lastPresentationCount = successfulPresentations;
+        f64 totalWallSeconds = 0.0;
+        f64 intervalSeconds = 0.0;
+        native(in now, in measBegin = this.m_measurementBegin, in intBegin = this.m_intervalBegin, mut totalWallSeconds, mut intervalSeconds){
+            totalWallSeconds = DurationInSeconds<f64>(now, measBegin);
+            intervalSeconds = DurationInSeconds<f64>(now, intBegin);
+        }
+        this.m_total.wallSeconds = totalWallSeconds;
+        this.m_complete = this.m_measurementSeconds > 0.0 && this.m_total.wallSeconds >= this.m_measurementSeconds;
+        if(!this.m_complete && intervalSeconds < 0.5)
+            return PresentationFpsStatus::Waiting;
+
+        this.m_interval.firstPresentationCount = this.m_intervalPresentationCount;
+        this.m_interval.lastPresentationCount = successfulPresentations;
+        this.m_interval.wallSeconds = intervalSeconds;
+        this.m_intervalBegin = now;
+        this.m_intervalPresentationCount = successfulPresentations;
+        if(this.m_complete)
+            return PresentationFpsStatus::Complete;
+        return PresentationFpsStatus::Interval;
+    }
+
+    public PresentationFpsSample interval()const{
+        return this.m_interval;
+    }
+
+    public PresentationFpsSample total()const{
+        return this.m_total;
+    }
+
+    public b8 measurementStarted()const{
+        return this.m_measuring;
+    }
+}
+
+class FpsProbe{
+    private TStringView m_label;
+    private f64 m_elapsedSeconds;
+    private f64 m_intervalSeconds;
+    private f64 m_minFrameSeconds;
+    private f64 m_maxFrameSeconds;
+    private u32 m_intervalFrames;
+    private b8 m_samplingStarted;
+
+    public FpsProbe(in TStringView label){
+        this.m_label = label;
+        this.m_elapsedSeconds = 0.0;
+        this.m_intervalSeconds = 0.0;
+        this.m_minFrameSeconds = 0.0;
+        this.m_maxFrameSeconds = 0.0;
+        this.m_intervalFrames = 0u;
+        this.m_samplingStarted = false;
+    }
+
+    public void recordFrame(in f32 delta){
+        f64 safeDelta = 0.0;
+        if(IsFinite(delta))
+            safeDelta = Max(cast<f64>(delta), 0.0);
+        if(safeDelta <= 0.0)
+            return;
+
+        this.m_elapsedSeconds += safeDelta;
+        if(this.m_elapsedSeconds < 0.25)
+            return;
+
+        if(!this.m_samplingStarted){
+            this.m_samplingStarted = true;
+            this.m_intervalSeconds = 0.0;
+            this.m_intervalFrames = 0u;
+            this.m_minFrameSeconds = 0.0;
+            this.m_maxFrameSeconds = 0.0;
+        }
+
+        this.m_intervalSeconds += safeDelta;
+        ++this.m_intervalFrames;
+        const VectorDouble frameSeconds = VectorDouble(safeDelta);
+        const VectorDouble extremaSeconds = VectorDouble(this.m_minFrameSeconds, this.m_maxFrameSeconds, 0.0, 0.0);
+        const VectorDouble minVec = Min(extremaSeconds, frameSeconds);
+        const VectorDouble maxVec = Max(extremaSeconds, frameSeconds);
+        if(this.m_intervalFrames == 1u)
+            this.m_minFrameSeconds = safeDelta;
+        else
+            this.m_minFrameSeconds = minVec.x;
+        this.m_maxFrameSeconds = maxVec.y;
+
+        if(this.m_intervalSeconds < 0.5 || this.m_intervalFrames == 0u)
+            return;
+
+        const f64 averageFrameSeconds = this.m_intervalSeconds / cast<f64>(this.m_intervalFrames);
+        const f64 averageFps = 1.0 / averageFrameSeconds;
+        const VectorDouble frameMs = VectorDouble(averageFrameSeconds, this.m_minFrameSeconds, this.m_maxFrameSeconds, 0.0) * 1000.0;
+        [essential] info(
+            "{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds=",
+            this.m_label,
+            averageFps,
+            frameMs.x,
+            frameMs.y,
+            frameMs.z,
+            this.m_intervalFrames,
+            this.m_intervalSeconds
+        );
+
+        this.m_intervalSeconds = 0.0;
+        this.m_intervalFrames = 0u;
+        this.m_minFrameSeconds = 0.0;
+        this.m_maxFrameSeconds = 0.0;
+    }
 }
 
 

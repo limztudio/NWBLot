@@ -13,9 +13,7 @@ target_sources(nwb_telemetry_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     "${CMAKE_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
-    "${CMAKE_SOURCE_DIR}/tests/smoke/gpu_pass_timing_probe.cpp"
     "${CMAKE_SOURCE_DIR}/tests/smoke/gpu_pass_timing_probe.h"
-    "${CMAKE_SOURCE_DIR}/tests/smoke/smoke_environment.cpp"
     "${CMAKE_SOURCE_DIR}/tests/smoke/smoke_environment.h"
 )
 target_link_libraries(nwb_telemetry_tests PRIVATE nwb_telemetry nwb_logtelemetry nwb_common nwb_alloc nwb_presentation_smoke_types)

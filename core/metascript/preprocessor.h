@@ -27,6 +27,7 @@ struct PreprocessorMacro{
     MVector<MString> parameters;
     MString body;
     b8 isFunctionLike = false;
+    b8 isVariadic = false;
 
 
 public:

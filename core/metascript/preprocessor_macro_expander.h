@@ -28,7 +28,7 @@ public:
 
 public:
     [[nodiscard]] static usize AppendDefinedOperand(MStringView source, usize index, MString& out);
-    [[nodiscard]] b8 expand(MStringView lineText, u32 line, MString& outExpanded);
+    [[nodiscard]] b8 expand(MStringView lineText, u32 line, MString& outExpanded, b8 initialPendingNativeBrace = false, u32 initialNativeBraceDepth = 0u);
 
 
 private:

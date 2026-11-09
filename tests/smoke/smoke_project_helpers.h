@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include "arrow_yaw_input_handler.h"
 #include "framebuffer_capture.h"
 #include "smoke_environment.h"
+
+#include <tests/smoke/scene_types.adhd.h>
 
 #include <loader/project_entry.h>
 
@@ -17,6 +18,8 @@
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
+#include <core/input/input_event.h>
+#include <core/input/module.h>
 
 #include <global/algorithm.h>
 #include <global/simd/frame.h>
@@ -44,9 +47,54 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ArrowYawInputHandler final : public Core::IInputEventHandler{
+public:
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(const i32 key, const i32 /*scancode*/, const i32 action, const i32 /*mods*/)noexcept override{
+        const b8 pressed = action == Core::InputAction::Press || action == Core::InputAction::Repeat;
+        if(key == Core::Key::Left){
+            m_leftHeld = pressed;
+            return true;
+        }
+        if(key == Core::Key::Right){
+            m_rightHeld = pressed;
+            return true;
+        }
+        return false;
+    }
+
+    void clear()noexcept{
+        m_leftHeld = false;
+        m_rightHeld = false;
+    }
+
+    [[nodiscard]] f32 axis()const noexcept{
+        return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f);
+    }
+
+
+private:
+    b8 m_leftHeld = false;
+    b8 m_rightHeld = false;
+};
+
+
 class YawSpinController final{
 public:
-    void update(f32 safeDelta, f32 frozenYaw, b8 frozenYawValid, const ArrowYawInputHandler& arrowYawInput, f32 manualYawSpeed, f32 spinSpeed, f32 maxSpinDelta)noexcept;
+    void update(const f32 safeDelta, const f32 frozenYaw, const b8 frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta)noexcept{
+        if(frozenYawValid){
+            m_yaw = frozenYaw;
+            return;
+        }
+
+        const f32 manualAxis = arrowYawInput.axis();
+        if(manualAxis != 0.0f)
+            m_manualControl = true;
+
+        if(m_manualControl)
+            m_yaw += manualAxis * manualYawSpeed * safeDelta;
+        else
+            m_yaw += Min(safeDelta, maxSpinDelta) * spinSpeed;
+    }
 
     [[nodiscard]] f32 yaw()const noexcept{ return m_yaw; }
 
@@ -62,25 +110,84 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SmokeBoxBounds{
-    Float3U minimum;
-    Float3U maximum;
-};
+[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
+    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
+    if(!world){
+        NWB_LOGGER_FATAL(NWB_TEXT("{}: ECS world allocation failed"), projectName);
+        throw RuntimeException("Smoke project initialization failed");
+    }
+    if(!context.shaderPathResolver){
+        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
+        throw RuntimeException("Smoke project initialization failed");
+    }
 
-[[nodiscard]] inline constexpr b8 SmokeBoxBoundsValid(const SmokeBoxBounds& box)noexcept{
-    return box.minimum.x < box.maximum.x && box.minimum.y < box.maximum.y && box.minimum.z < box.maximum.z;
+    return MakeNotNullUnique(Move(world));
 }
 
-[[nodiscard]] b8 BuildSmokeBoxSubtractionPieces(const SmokeBoxBounds& box, const SmokeBoxBounds& cutter, Array<SmokeBoxBounds, 6>& outPieces)noexcept;
+[[nodiscard]] inline Core::ECS::EntityID CreateSmokeCamera(const f32 cameraHeight, const f32 cameraDistance, const f32 cameraPitch, Core::ECS::World& world){
+    auto activeCameraEntity = world.createEntity();
+    auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
+    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, Float4(0.0f, cameraHeight, -cameraDistance, 0.0f));
+    auto& cameraTransform = *MakeNotNull(world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera));
+    StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform.rotation);
 
-[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
-[[nodiscard]] Core::ECS::EntityID CreateSmokeCamera(f32 cameraHeight, f32 cameraDistance, f32 cameraPitch, Core::ECS::World& world);
-[[nodiscard]] f32 ReadSmokeFrozenYawFromEnvironment(AStringView variableName);
-[[nodiscard]] f32 ReadSmokeFrozenYawCached(AStringView variableName);
-[[nodiscard]] u32 RendererBaselineCaptureFreezeFrame();
-[[nodiscard]] f32 RendererBaselineFixedDelta();
-[[nodiscard]] SIMDVectorSingle CalculateSmokeYawDisplay(SIMDVectorSingle yaw, SIMDVectorSingle turn)noexcept;
-void SetSmokeYawWindowTitle(f32 yaw, b8 manualControl, f32 twoPi, ProjectRuntimeContext& context);
+    return activeCamera.camera;
+}
+
+[[nodiscard]] inline f32 ReadSmokeFrozenYawFromEnvironment(const AStringView variableName){
+    const auto parsed = ReadSmokeEnvironmentF32(variableName);
+    return parsed ? *parsed : -1.0f;
+}
+
+[[nodiscard]] inline f32 ReadSmokeFrozenYawCached(const AStringView variableName){
+    static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment(variableName);
+    return s_Yaw;
+}
+
+[[nodiscard]] inline u32 RendererBaselineCaptureFreezeFrame(){
+    static const u32 s_CaptureFrame = [](){
+        const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
+        if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f)
+            return 0u;
+        return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
+    }();
+    return s_CaptureFrame;
+}
+
+[[nodiscard]] inline f32 RendererBaselineFixedDelta(){
+    static const f32 s_FixedDelta = [](){
+        const auto configuredDelta = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS");
+        if(!configuredDelta || !IsFinite(*configuredDelta) || *configuredDelta <= 0.0f || *configuredDelta > 1.0f)
+            return 0.0f;
+        return *configuredDelta;
+    }();
+    return s_FixedDelta;
+}
+
+[[nodiscard]] inline SIMDVectorSingle CalculateSmokeYawDisplay(const SIMDVectorSingle yaw, const SIMDVectorSingle turn)noexcept{
+    SIMDVectorSingle wrapped = VectorMod(yaw, turn);
+    wrapped = VectorSelect(wrapped, VectorAdd(wrapped, turn), VectorLess(wrapped, VectorZero()));
+
+    return VectorSelect(wrapped, VectorMultiply(wrapped, VectorDivide(VectorReplicate(s_DegreesPerTurn), turn)), s_SIMDMaskY);
+}
+
+inline void SetSmokeYawWindowTitle(const f32 yaw, const b8 manualControl, const f32 twoPi, ProjectRuntimeContext& context){
+    const SIMDVectorSingle display = CalculateSmokeYawDisplay(VectorReplicate(yaw), VectorReplicate(twoPi));
+
+    static constexpr usize s_TitleCapacity = 192u;
+    Array<tchar, s_TitleCapacity> title{};
+    NWB_TSPRINTF(
+        title.data(),
+        s_TitleCapacity,
+        NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
+        static_cast<i32>(QueryProjectWindowTitle().size()),
+        QueryProjectWindowTitle().data(),
+        VectorGetX(display),
+        VectorGetY(display),
+        manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+    );
+    context.graphics.setWindowTitle(TStringView(title.data()));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,4 +203,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

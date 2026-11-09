@@ -2,20 +2,594 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "arrow_yaw_input_handler.h"
+
+
+#include <core/alloc/scratch.h>
+#include <core/ecs/entity_id.h>
+
+#include <global/containers.h>
+#include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Core::ECS{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class World;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StressCsgScene final{
+public:
+    [[nodiscard]] b8 initialize(Span<const Core::ECS::EntityID> owners, b8 opaqueOnly, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 update(f32 yaw, Core::ECS::World& world);
+
+
+private:
+    Array<Core::ECS::EntityID, 2> m_cutters = {};
+    b8 m_enabled = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "csg_smoke_helpers.h"
+#include "smoke_environment.h"
+#include "smoke_skinned_scene_helpers.h"
+
+#include <tests/smoke/presentation_types.adhd.h>
+
+#include <impl/assets_csg/shape_id.adhd.h>
+#include <impl/ecs_csg/module.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_stress_csg_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<Name, 2> s_Groups = { Name(NWB::Tests::Smoke::s_SmokeNameStressCsgTransparent), Name(NWB::Tests::Smoke::s_SmokeNameStressCsgOpaque) };
+using NWB::Tests::Smoke::s_SmokeNameMesh;
+static constexpr usize s_BodyCount = 20u;
+static constexpr Float4 s_CutterHalfExtents(4.5f, 0.08f, 0.65f, 0.0f);
+static constexpr f32 s_CutterHeight = 0.9f;
+static constexpr f32 s_CutterAmplitude = 0.1f;
+static constexpr Array<f32, 2> s_RowDepth = { -0.55f, 0.55f };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, const b8 opaqueOnly, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
+    const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
+    if(!value || AStringView(value->data(), value->size()) == "none")
+        return true;
+    if(AStringView(value->data(), value->size()) != "waist_bands"){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
+        return false;
+    }
+    const usize ownerCount = owners.size();
+    if(ownerCount != __hidden_stress_csg_scene::s_BodyCount || opaqueOnly){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class"));
+        return false;
+    }
+    Array<Core::ECS::EntityID, __hidden_stress_csg_scene::s_BodyCount> meshes = {};
+    for(usize index = 0u; index < ownerCount; ++index){
+        meshes[index] = FindSpawnedModelObject(owners[index], __hidden_stress_csg_scene::s_SmokeNameMesh, Impl::ModelObjectKind::SkinnedMesh, world);
+        if(!meshes[index].valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
+            return false;
+        }
+    }
+    for(usize index = 0u; index < ownerCount; ++index){
+        const usize row = index % m_cutters.size();
+        AddSkinnedCsgMeshReceiver(meshes[index], __hidden_stress_csg_scene::s_Groups[row], row == 1u, row == 0u, world);
+    }
+    for(usize row = 0u; row < m_cutters.size(); ++row){
+        auto entity = world.createEntity();
+        auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
+        cutter.receiverGroup = __hidden_stress_csg_scene::s_Groups[row];
+        cutter.shapeType = Name(NWB::Impl::s_CsgBoxShapeName);
+        Impl::CsgBoxShapeParameters parameters;
+        parameters.halfExtents = __hidden_stress_csg_scene::s_CutterHalfExtents;
+        AssignCsgCutterParameters(parameters, cutter);
+        m_cutters[row] = entity.id();
+    }
+    m_enabled = true;
+    if(!update(0.0f, world))
+        return false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}") NWB_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
+        , ownerCount
+        , ownerCount / m_cutters.size()
+        , ownerCount / m_cutters.size()
+        , m_cutters.size()
+        , __hidden_stress_csg_scene::s_CutterHalfExtents.x
+        , __hidden_stress_csg_scene::s_CutterHalfExtents.y
+        , __hidden_stress_csg_scene::s_CutterHalfExtents.z
+        , __hidden_stress_csg_scene::s_CutterHeight
+        , __hidden_stress_csg_scene::s_CutterAmplitude
+        , __hidden_stress_csg_scene::s_RowDepth[0]
+        , __hidden_stress_csg_scene::s_RowDepth[1]
+    );
+    return true;
+}
+
+b8 StressCsgScene::update(const f32 yaw, Core::ECS::World& world){
+    if(!m_enabled)
+        return true;
+    if(!IsFinite(yaw)){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: nonfinite CSG cutter yaw"));
+        return false;
+    }
+    const SIMDVectorSingle phases = VectorAdd(VectorReplicate(yaw), VectorSet(0.0f, s_PI, 0.0f, 0.0f));
+    const SIMDVectorSingle heights = VectorMultiplyAddExpression(VectorSin(phases), VectorReplicate(__hidden_stress_csg_scene::s_CutterAmplitude), VectorReplicate(__hidden_stress_csg_scene::s_CutterHeight));
+    for(usize row = 0u; row < m_cutters.size(); ++row){
+        auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(m_cutters[row]);
+        if(!cutter){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
+            return false;
+        }
+        const f32 height = row == 0u ? VectorGetX(heights) : VectorGetY(heights);
+        AssignCsgCutterTransform(VectorSet(0.0f, height, __hidden_stress_csg_scene::s_RowDepth[row], 0.0f), QuaternionIdentity(), *cutter);
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/alloc/general.h>
+
+#include <global/simd/type.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB{
+struct ProjectRuntimeContext;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StressCrowdScene final{
+public:
+    StressCrowdScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] b8 initialize(ProjectRuntimeContext& context, u32 charactersPerClass, b8 comparison, b8 opaqueOnly, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 update(f32 yaw);
+
+
+private:
+    [[nodiscard]] Core::ECS::EntityID createCharacter(u32 index);
+    [[nodiscard]] Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, f32 yawDeg, f32 spanScale);
+    [[nodiscard]] Core::ECS::EntityID createCeiling(const Float4& colorTint);
+    void spinCharacters(f32 yaw)noexcept;
+
+
+private:
+    Core::ECS::World& m_world;
+    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> m_characterOwners;
+    StressCsgScene m_csgScene;
+    Core::ECS::EntityID m_groundEntity = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID m_wallPosX = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID m_wallNegX = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID m_wallPosZ = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID m_ceiling = Core::ECS::s_InvalidEntityId;
+    u32 m_charactersPerClass = 0u;
+    b8 m_comparison = false;
+    b8 m_opaqueOnly = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_scene_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
+#include <tests/smoke/scene_types.adhd.h>
+
+#include <loader/project_entry.h>
+
+#include <impl/assets_material/asset.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_model/system.h>
+#include <impl/ecs_render/material/material_instance.h>
+
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/quaternion.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_stress_crowd_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::CreateTintedModelEntity;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
+
+using StressModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using StressMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Spinning opaque/glass crowds exercise TLAS updates and overlapping shadows inside the GI box.
+static constexpr StressModelRef s_Model{"project/characters/body/model"};
+static constexpr StressModelRef s_CausticModel{"project/characters/caustic_closed_body/model"};
+static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr StressMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
+
+static constexpr u32 s_CharacterTintCount = NWB::Tests::Smoke::s_StressCrowdCharacterTintCount;
+static constexpr f32 s_CharacterSpacingX = NWB::Tests::Smoke::s_StressCrowdCharacterSpacingX; // tight so neighbours' shadows overlap
+static constexpr f32 s_TransparentRowZ = -0.55f;
+static constexpr f32 s_OpaqueRowZ = NWB::Tests::Smoke::s_StressCrowdOpaqueRowZ;
+static constexpr f32 s_CharacterLift = NWB::Tests::Smoke::s_StressCrowdCharacterLift;
+
+// Lanes are side half-width and depth half-width.
+static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);
+static constexpr f32 s_BoxHeight = NWB::Tests::Smoke::s_StressCrowdBoxHeight;
+static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;
+
+static constexpr f32 s_ComparisonCameraDistance = NWB::Tests::Smoke::s_StressCrowdComparisonCameraDistance;
+static constexpr f32 s_ComparisonCameraHeight = NWB::Tests::Smoke::s_StressCrowdComparisonCameraHeight;
+static constexpr f32 s_ComparisonCameraPitch = NWB::Tests::Smoke::s_StressCrowdComparisonCameraPitch;
+static constexpr f32 s_CameraDistance = NWB::Tests::Smoke::s_StressCrowdCameraDistance;
+static constexpr f32 s_CameraHeight = NWB::Tests::Smoke::s_StressCrowdCameraHeight;
+static constexpr f32 s_CameraPitch = NWB::Tests::Smoke::s_StressCrowdCameraPitch;
+
+static constexpr f32 s_DirectionalLightPitch = NWB::Tests::Smoke::s_StressCrowdDirectionalLightPitch;
+static constexpr f32 s_DirectionalLightYaw = NWB::Tests::Smoke::s_StressCrowdDirectionalLightYaw;
+static constexpr f32 s_DirectionalLightIntensity = NWB::Tests::Smoke::s_StressCrowdDirectionalLightIntensity;
+
+static constexpr f32 s_PointLightHeight = NWB::Tests::Smoke::s_StressCrowdPointLightHeight;
+static constexpr f32 s_PointLightIntensity = NWB::Tests::Smoke::s_StressCrowdPointLightIntensity;
+static constexpr f32 s_PointLightRange = NWB::Tests::Smoke::s_StressCrowdPointLightRange;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Cycle the five-color palette across each material row.
+[[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const b8 transparent)noexcept{
+    static const Array<Float4, s_CharacterTintCount> s_TransparentTints = {
+        Float4(0.72f, 0.86f, 1.00f, 0.42f),
+        Float4(0.60f, 1.00f, 0.85f, 0.42f),
+        Float4(1.00f, 0.82f, 0.88f, 0.44f),
+        Float4(0.86f, 0.80f, 1.00f, 0.45f),
+        Float4(0.70f, 0.96f, 1.00f, 0.40f),
+    };
+    static const Array<Float4, s_CharacterTintCount> s_OpaqueTints = {
+        Float4(0.90f, 0.52f, 0.42f, 1.0f),
+        Float4(0.52f, 0.70f, 0.90f, 1.0f),
+        Float4(0.62f, 0.82f, 0.52f, 1.0f),
+        Float4(0.88f, 0.78f, 0.50f, 1.0f),
+        Float4(0.74f, 0.62f, 0.84f, 1.0f),
+    };
+    const u32 slot = classIndex % s_CharacterTintCount;
+    return transparent ? s_TransparentTints[slot] : s_OpaqueTints[slot];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StressCrowdScene::StressCrowdScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
+    : m_world(world)
+    , m_characterOwners(context.objectArena)
+{}
+
+b8 StressCrowdScene::initialize([[maybe_unused]] ProjectRuntimeContext& context, const u32 charactersPerClass, const b8 comparison, const b8 opaqueOnly, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_stress_crowd_scene;
+
+    m_charactersPerClass = charactersPerClass;
+    m_comparison = comparison;
+    m_opaqueOnly = opaqueOnly;
+    const f32 cameraHeight = comparison ? s_ComparisonCameraHeight : s_CameraHeight;
+    const f32 cameraDistance = comparison ? s_ComparisonCameraDistance : s_CameraDistance;
+    const f32 cameraPitch = comparison ? s_ComparisonCameraPitch : s_CameraPitch;
+    const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(cameraHeight, cameraDistance, cameraPitch, m_world);
+    const auto* const camera = m_world.tryGetComponent<NWB::Impl::Scene::CameraComponent>(activeCamera);
+    if(!camera){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: workload camera is unavailable"));
+        return false;
+    }
+
+    const f32 cameraVerticalFov = camera->verticalFovRadians();
+    const f32 cameraNearPlane = camera->nearPlane();
+    const f32 cameraFarPlane = camera->farPlane();
+    const f32 cameraAspectRatio = camera->aspectRatio();
+
+    const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
+    const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
+
+    m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), m_world);
+
+    // Lanes are side-wall extent and back-wall extent.
+    const SIMDVectorSingle wallSpans = VectorMultiply(VectorReplicate(2.0f), VectorSet(s_BoxHalf.y, s_BoxHalf.x, 0.0f, 0.0f));
+    m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, VectorGetX(wallSpans));
+    m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, VectorGetX(wallSpans));
+    m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, VectorGetY(wallSpans));
+    m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));
+
+    const u32 characterCount = m_charactersPerClass * 2u;
+    m_characterOwners.reserve(characterCount);
+    for(u32 index = 0u; index < characterCount; ++index)
+        m_characterOwners.push_back(createCharacter(index));
+
+    SyncSmokeModelRuntimes(m_world);
+    for(usize index = 0u; index < m_characterOwners.size(); ++index){
+        if(m_opaqueOnly || index % 2u != 0u)
+            continue;
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_characterOwners[index], Name(NWB::Tests::Smoke::s_SmokeNameMesh), NWB::Impl::ModelObjectKind::SkinnedMesh, m_world);
+        auto* const renderer = m_world.tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
+        if(!renderer){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: closed refractor renderer is unavailable (index {})"), index);
+            return false;
+        }
+        renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+    }
+    if(!m_csgScene.initialize(m_characterOwners, m_opaqueOnly, m_world, scratchArena))
+        return false;
+
+    b8 allCharactersValid = m_characterOwners.size() == characterCount;
+    for(const NWB::Core::ECS::EntityID owner : m_characterOwners)
+        allCharactersValid = allCharactersValid && owner.valid();
+
+    NWB_FATAL_ASSERT_MSG(
+        activeCamera.valid() && directionalLight.valid() && pointLight.valid() && m_groundEntity.valid() && allCharactersValid
+        && m_wallPosX.valid() && m_wallNegX.valid() && m_wallPosZ.valid() && m_ceiling.valid(),
+        NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
+    );
+
+#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+    const b8 rayQueryCapable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+    if(!rayQueryCapable)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"));
+    else{
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available"));
+        if(m_opaqueOnly)
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
+        else
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"));
+    }
+#endif
+
+    const u32 transparentCharacterCount = m_opaqueOnly ? 0u : m_charactersPerClass;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
+        , m_characterOwners.size()
+        , transparentCharacterCount
+        , characterCount - transparentCharacterCount
+    );
+    const TStringView layout = comparison ? NWB_TEXT("zigzag_v1") : NWB_TEXT("two_rows_v1");
+    const SIMDVectorSingle rowSpacing = VectorMultiply(VectorReplicate(s_CharacterSpacingX), VectorSet(comparison ? 2.0f : 1.0f, comparison ? 0.5f : 0.25f, 0.0f, 0.0f));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: workload characters_per_class={} total={} transparent={} opaque={}")
+        NWB_TEXT(" layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1")
+        NWB_TEXT(" camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}")
+        , m_charactersPerClass
+        , m_characterOwners.size()
+        , transparentCharacterCount
+        , characterCount - transparentCharacterCount
+        , layout
+        , m_charactersPerClass
+        , VectorGetX(rowSpacing)
+        , VectorGetY(rowSpacing)
+        , s_TransparentRowZ
+        , s_OpaqueRowZ
+        , cameraHeight
+        , -cameraDistance
+        , cameraPitch
+        , cameraVerticalFov
+        , cameraNearPlane
+        , cameraFarPlane
+        , cameraAspectRatio
+    );
+    return true;
+}
+
+b8 StressCrowdScene::update(const f32 yaw){
+    spinCharacters(yaw);
+    return m_csgScene.update(yaw, m_world);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB::Core::ECS::EntityID StressCrowdScene::createCharacter(const u32 index){
+    using namespace __hidden_stress_crowd_scene;
+
+    // Comparison mode uses the zigzag layout instead of staggered material rows.
+    const b8 transparentMaterialClass = (index % 2u) == 0u;
+    const b8 transparent = !m_opaqueOnly && transparentMaterialClass;
+    const u32 classIndex = index / 2u;
+    const b8 comparison = m_comparison;
+    const f32 slot = static_cast<f32>(comparison ? index : classIndex);
+    const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
+    const f32 slotOffset = slot - lastSlot * 0.5f;
+    const f32 x = comparison ? slotOffset * s_CharacterSpacingX : slotOffset * s_CharacterSpacingX + (transparentMaterialClass ? -0.25f : 0.25f) * s_CharacterSpacingX;
+    const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
+
+    const auto modelResult = CreateTintedModelEntity(
+        transparentMaterialClass ? s_CausticModel : s_Model,
+        transparent ? s_TransparentMaterial : s_OpaqueMaterial,
+        s_SmokeSurfaceMaterialInterface,
+        CharacterTint(classIndex, transparent),
+        Float4(x, s_CharacterLift, z, 0.0f),
+        Float4(1.0f, 1.0f, 1.0f, 0.0f),
+        m_world
+    );
+    const NWB::Core::ECS::EntityID entity = modelResult.entity;
+    if(!modelResult.tintApplied)
+        NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);
+
+    return entity;
+}
+
+// The XZ source plane spans -1..+1, so wall scales are half-extents.
+NWB::Core::ECS::EntityID StressCrowdScene::createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
+    using namespace __hidden_stress_crowd_scene;
+
+    const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
+    const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
+    // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
+    const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
+
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f), m_world);
+    if(entity.valid()){
+        if(auto* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+            StoreFloat(wallRotation, transform->rotation);
+    }
+    return entity;
+}
+
+// Face the ceiling downward so it bounces light into the crowd.
+NWB::Core::ECS::EntityID StressCrowdScene::createCeiling(const Float4& colorTint){
+    using namespace __hidden_stress_crowd_scene;
+
+    const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
+    const Float4 ceilingScale(2.0f * s_BoxHalf.x, 1.0f, 2.0f * s_BoxHalf.y, 0.0f);
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale, m_world);
+    if(entity.valid()){
+        if(auto* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+            StoreFloat(ceilingRotation, transform->rotation);
+    }
+    return entity;
+}
+
+void StressCrowdScene::spinCharacters(const f32 yawBase)noexcept{
+    const f32 phaseStep = s_2PI / static_cast<f32>(m_charactersPerClass * 2u);
+    for(usize index = 0u; index < m_characterOwners.size(); ++index){
+        auto* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
+        if(!transform)
+            continue;
+
+        const f32 yaw = yawBase + static_cast<f32>(index) * phaseStep;
+        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f), transform->rotation);
+    }
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_project_helpers.h"
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
-#include "smoke_capture_teardown.h"
+#include "smoke_scene_helpers.h"
 #include "smoke_cpu_gpu_timing_probe.h"
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #include "stress_frame_graph_snapshot.h"
 #endif
-#include "stress_crowd_scene.h"
-#include "presentation_fps_probe.h"
-#include "presentation_pacing_ring.h"
-#include "render_quality_settings.h"
-#include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
+#include <tests/smoke/presentation_types.adhd.h>
 #include "smoke_skinned_scene_helpers.h"
 
 #include <tests/smoke/presentation_types.adhd.h>
@@ -488,4 +1062,3 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

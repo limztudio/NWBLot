@@ -141,6 +141,8 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
     if(!m_cursor.consumeBalancedBracesRaw(stmt->nativeCode))
         return nullptr;
 
+    while(m_cursor.match(TokenType::Semicolon)){}
+
     return stmt;
 }
 

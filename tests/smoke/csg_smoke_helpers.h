@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <impl/ecs_csg/components.adhd.h>
 
 #include <core/ecs/entity.h>
@@ -43,9 +45,21 @@ inline ReceiverComponentT& AddCsgMeshReceiver(const Core::ECS::EntityID entity, 
     return receiver;
 }
 
-void AssignCsgCutterTransform(SIMDVectorSingle center, SIMDVectorSingle rotation, Impl::CsgCutterComponent& cutter)noexcept;
-Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(Core::ECS::EntityID entity, Name receiverGroup, b8 affectOpaquePass, b8 affectTransparentPass, Core::ECS::World& world);
-Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(Core::ECS::EntityID entity, Name receiverGroup, b8 affectOpaquePass, b8 affectTransparentPass, Core::ECS::World& world);
+inline void AssignCsgCutterTransform(const SIMDVectorSingle center, const SIMDVectorSingle rotation, Impl::CsgCutterComponent& cutter)noexcept{
+    SIMDMatrix worldToShape;
+    SIMDMatrix shapeToWorld;
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, cutter.worldToShape);
+    StoreFloat(shapeToWorld, cutter.shapeToWorld);
+}
+
+inline Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
+    return AddCsgMeshReceiver<Impl::StaticCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+}
+
+inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
+    return AddCsgMeshReceiver<Impl::SkinnedCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,4 +75,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

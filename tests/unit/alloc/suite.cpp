@@ -377,24 +377,12 @@ namespace __hidden_persistent_arena_tests{
 
 using NWB::Core::Alloc::PersistentArena;
 using NWB::Tests::ExpectMemoryStatsEqual;
+using NWB::Tests::AllocCases::FillPattern;
+using NWB::Tests::AllocCases::ExpectPattern;
 
 
 inline constexpr usize s_PersistentArenaHighAlignment = NWB::Tests::AllocCases::s_AllocCasePersistentArenaHighAlignment;
 inline constexpr usize s_SmallArenaPayloadBytes = NWB::Tests::AllocCases::s_AllocCaseSmallArenaPayloadBytes;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void FillPattern(const Span<u8> bytes)noexcept{
-    for(usize index = 0u; index < bytes.size(); ++index)
-        bytes[index] = static_cast<u8>(index * 17u + 3u);
-}
-
-void ExpectPattern(const Span<const u8> bytes){
-    for(usize index = 0u; index < bytes.size(); ++index)
-        EXPECT_EQ(bytes[index], static_cast<u8>(index * 17u + 3u));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

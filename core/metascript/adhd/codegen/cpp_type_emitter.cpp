@@ -129,6 +129,16 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
 
 void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type, const b8 topLevelConst)const{
     if(mode == ParamPassingMode::Mut){
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(type.name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
+            if(topLevelConst)
+                out.append("const ");
+            const MStringView cppViewName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : MStringView(type.name);
+            out.append(cppViewName.data(), cppViewName.size());
+            out.push_back('<');
+            emitTypeCpp(out, *type.templateArgs[0].type);
+            out.push_back('>');
+            return;
+        }
         emitTypeCpp(out, type);
         out.push_back('&');
         return;

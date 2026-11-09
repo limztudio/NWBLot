@@ -2,16 +2,674 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "smoke_capture_factory.h"
+
+
+#include <impl/assets_material/asset.h>
+#include <core/assets/ref.h>
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Core::ECS{ class World; }
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComplexGiScene final{
+public:
+    static constexpr Core::Assets::AssetRef<Impl::Material> s_DiffuseMaterial{"project/smoke/gi/materials/diffuse"};
+    static constexpr Float4 s_BlackEnclosureTint{ 0.0f, 0.0f, 0.0f, 1.0f };
+
+
+public:
+    [[nodiscard]] static b8 Create(Core::ECS::World& world, b8 coverageViewEnabled);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_scene_helpers.h"
+
+#include <tests/smoke/scene_types.adhd.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/quaternion.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_complex_gi_scene{
+
+using GiTestMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
+
+static constexpr GiTestMeshRef s_BoxMesh{"project/meshes/cube_hard_edges"};
+static constexpr GiTestMaterialRef s_ComplexIndirectMaterial{"project/smoke/gi/materials/indirect"};
+static constexpr GiTestMaterialRef s_CoverageProbeMaterial{"project/smoke/gi/materials/coverage_probe"};
+static constexpr Float4 s_NeutralPanelTint(0.76f, 0.76f, 0.76f, 1.0f);
+static constexpr Float4 s_WhiteReceiverTint(0.92f, 0.92f, 0.92f, 1.0f);
+static constexpr Float4 s_RedBounceTint(0.84f, 0.10f, 0.08f, 1.0f);
+static constexpr Float4 s_BlueBounceTint(0.08f, 0.14f, 0.86f, 1.0f);
+static constexpr Float4 s_BlackEnclosureTint = NWB::Tests::Smoke::ComplexGiScene::s_BlackEnclosureTint;
+static constexpr u32 s_ComplexRandomBodyCount = NWB::Tests::Smoke::s_ComplexGiRandomBodyCount;
+static constexpr u32 s_ComplexRandomBodySeed = NWB::Tests::Smoke::s_ComplexGiRandomBodySeed;
+
+struct ComplexSceneBox{
+    Float4 position;
+    Float4 scale;
+    Float4 tint;
+    f32 yawDegrees;
+    b8 indirectOnly = false;
+};
+
+// Offset partition doorways expose different mixes of red and blue bounce light.
+static constexpr Array<ComplexSceneBox, 28> s_ComplexSceneBoxes = {{
+    // Front doorway: x=-0.4..0.5 at z=-0.35, with a high lintel.
+    { Float4(-1.20f, 0.625f, -0.35f, 0.0f), Float4(1.60f, 1.25f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 1.25f, 0.625f, -0.35f, 0.0f), Float4(1.50f, 1.25f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4(-0.42f, 1.525f, -0.35f, 0.0f), Float4(0.13f, 0.55f, 0.16f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 0.52f, 1.525f, -0.35f, 0.0f), Float4(0.13f, 0.55f, 0.16f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 0.05f, 1.90f, -0.35f, 0.0f), Float4(0.90f, 0.20f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+
+    // Rear doorway is shifted right, forcing a turn and hiding much of the far receiver from direct view.
+    { Float4(-0.675f, 0.85f, 0.95f, 0.0f), Float4(2.65f, 1.70f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 1.725f, 0.85f, 0.95f, 0.0f), Float4(0.55f, 1.70f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 1.05f, 1.85f, 0.95f, 0.0f), Float4(0.80f, 0.30f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4(-0.65f, 0.60f, 0.30f, 0.0f), Float4(0.13f, 1.20f, 1.15f, 0.0f), s_NeutralPanelTint, 0.0f },
+
+    // Foreground pillars and plinths provide distinct shadow edges and horizontal indirect-light receivers.
+    { Float4(-1.60f, 0.65f, -1.50f, 0.0f), Float4(0.30f, 1.30f, 0.30f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 1.60f, 0.65f, -1.35f, 0.0f), Float4(0.30f, 1.30f, 0.30f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4(-1.80f, 0.48f, -1.82f, 0.0f), Float4(0.18f, 0.96f, 0.56f, 0.0f), s_BlueBounceTint, 0.0f },
+    { Float4( 1.80f, 0.48f, -1.82f, 0.0f), Float4(0.18f, 0.96f, 0.56f, 0.0f), s_RedBounceTint, 0.0f },
+    { Float4(-0.85f, 0.23f, -1.30f, 0.0f), Float4(0.70f, 0.46f, 0.60f, 0.0f), s_WhiteReceiverTint, 0.0f },
+    { Float4( 0.95f, 0.32f, -1.45f, 0.0f), Float4(0.60f, 0.64f, 0.65f, 0.0f), s_WhiteReceiverTint, 0.0f },
+    { Float4( 0.00f, 0.20f,  0.35f, 0.0f), Float4(0.52f, 0.40f, 0.50f, 0.0f), s_WhiteReceiverTint, 0.0f },
+
+    // Angled white fins catch directional bounce from the colored panels.
+    { Float4(-1.30f, 0.65f, -0.75f, 0.0f), Float4(0.10f, 1.30f, 1.00f, 0.0f), s_WhiteReceiverTint,  55.0f, true },
+    { Float4( 1.30f, 0.65f, -0.75f, 0.0f), Float4(0.10f, 1.30f, 1.00f, 0.0f), s_WhiteReceiverTint, -55.0f, true },
+    { Float4( 1.72f, 0.70f,  0.38f, 0.0f), Float4(0.12f, 1.40f, 0.72f, 0.0f), s_RedBounceTint, 0.0f },
+    { Float4(-1.72f, 0.70f,  0.38f, 0.0f), Float4(0.12f, 1.40f, 0.72f, 0.0f), s_BlueBounceTint, 0.0f },
+
+    // Rear receivers and broken canopy make a deeper, partly skylit third bay with another indirect-light path.
+    { Float4(-1.12f, 0.60f, 1.55f, 0.0f), Float4(0.34f, 1.20f, 0.34f, 0.0f), s_WhiteReceiverTint, 0.0f },
+    { Float4( 1.05f, 0.55f, 1.55f, 0.0f), Float4(0.40f, 1.10f, 0.42f, 0.0f), s_WhiteReceiverTint, 0.0f },
+    { Float4(-1.10f, 1.93f, 1.55f, 0.0f), Float4(1.50f, 0.14f, 0.78f, 0.0f), s_NeutralPanelTint, 0.0f },
+    { Float4( 1.30f, 1.93f, 1.55f, 0.0f), Float4(1.10f, 0.14f, 0.78f, 0.0f), s_NeutralPanelTint, 0.0f },
+
+    // A 1.9 by 1.1 metre skylight admits the near-vertical sun onto the colored floor patches below.
+    { Float4(-1.475f, 2.04f,  0.000f, 0.0f), Float4(1.05f, 0.12f, 4.00f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 1.475f, 2.04f,  0.000f, 0.0f), Float4(1.05f, 0.12f, 4.00f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 0.000f, 2.04f, -1.575f, 0.0f), Float4(1.90f, 0.12f, 0.85f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 0.000f, 2.04f,  0.975f, 0.0f), Float4(1.90f, 0.12f, 2.05f, 0.0f), s_BlackEnclosureTint, 0.0f },
+}};
+
+// Indirect-only white fins next to the floor patches show only bounced light.
+static constexpr Array<ComplexSceneBox, 2> s_ComplexBouncePatches = {{
+    { Float4(-0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_RedBounceTint, 0.0f },
+    { Float4( 0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_BlueBounceTint, 0.0f },
+}};
+
+// Enclose the maze behind the camera so light enters only through the skylight.
+static constexpr Array<ComplexSceneBox, 5> s_ComplexFrontEnclosureBoxes = {{
+    { Float4(-2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 0.00f, 1.00f, -5.00f, 0.0f), Float4(4.10f, 2.10f, 0.12f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 0.00f,-0.06f, -3.50f, 0.0f), Float4(4.10f, 0.12f, 3.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
+    { Float4( 0.00f, 2.04f, -3.50f, 0.0f), Float4(4.10f, 0.12f, 3.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
+}};
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ComplexGiScene::Create(Core::ECS::World& world, const b8 coverageViewEnabled){
+    using namespace __hidden_complex_gi_scene;
+    for(const ComplexSceneBox& box : s_ComplexSceneBoxes){
+        const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_DiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, world);
+        if(!entity.valid())
+            return false;
+        if(box.yawDegrees != 0.0f){
+            auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+            if(!transform)
+                return false;
+            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, box.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f)), transform->rotation);
+        }
+    }
+
+    for(const ComplexSceneBox& box : s_ComplexBouncePatches){
+        const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_DiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, world);
+        if(!entity.valid())
+            return false;
+    }
+
+    for(const ComplexSceneBox& box : s_ComplexFrontEnclosureBoxes){
+        const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_DiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, world);
+        if(!entity.valid())
+            return false;
+    }
+
+    // Place 20 non-overlapping seeded bodies without blocking the skylight or doorways.
+    Array<ComplexSceneBox, s_ComplexRandomBodyCount> placedBodies{};
+    u32 placedBodyCount = 0u;
+    u32 randomState = s_ComplexRandomBodySeed;
+    // Scale the top 24 random bits into 0..1.
+    const auto nextRandom24 = [&randomState]()noexcept -> f32{
+        randomState = randomState * 1664525u + 1013904223u;
+        return static_cast<f32>(randomState >> 8u);
+    };
+    const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> b8{
+        const f32 aHalfY = a.scale.y * 0.5f;
+        const f32 bHalfY = b.scale.y * 0.5f;
+        if(a.position.y + aHalfY <= b.position.y - bHalfY || b.position.y + bHalfY <= a.position.y - aHalfY)
+            return false;
+        const SIMDVectorSingle angles = VectorScale(VectorSet(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f);
+        SIMDVectorSingle sine;
+        SIMDVectorSingle cosine;
+        VectorSinCos(sine, cosine, angles);
+        const SIMDVectorSingle absoluteSine = VectorAbs(sine);
+        const SIMDVectorSingle absoluteCosine = VectorAbs(cosine);
+        const SIMDVectorSingle cosineSine = VectorMergeX(absoluteCosine, absoluteSine, VectorSplatY(absoluteCosine), VectorSplatY(absoluteSine));
+        const SIMDVectorSingle halfExtents = VectorScale(
+            VectorMultiplyAddExpression(cosineSine, VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x), VectorMultiply(VectorSwizzle<1, 0, 3, 2>(cosineSine), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))),
+            0.5f
+        );
+        const SIMDVectorSingle combinedHalfExtents = VectorAdd(VectorAdd(halfExtents, VectorSwizzle<2, 3, 0, 1>(halfExtents)), VectorReplicate(0.06f));
+        const SIMDVectorSingle separation = VectorAbs(VectorSubtract(VectorSet(a.position.x, a.position.z, 0.0f, 0.0f), VectorSet(b.position.x, b.position.z, 0.0f, 0.0f)));
+        return (VectorMoveMask(VectorLess(separation, combinedHalfExtents)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
+    };
+    for(u32 attempt = 0u; placedBodyCount < s_ComplexRandomBodyCount && attempt < 4096u; ++attempt){
+        // Draw order is x, z, width, depth, height, shade, yaw.
+        const f32 xRandom = nextRandom24();
+        const f32 zRandom = nextRandom24();
+        const f32 widthRandom = nextRandom24();
+        const f32 depthRandom = nextRandom24();
+        const f32 heightRandom = nextRandom24();
+        const f32 shadeRandom = nextRandom24();
+        const f32 yawRandom = nextRandom24();
+        const SIMDVectorSingle footprint = VectorMultiplyAddExpression(VectorSet(3.40f, 4.45f, 0.26f, 0.36f), VectorScale(VectorSet(xRandom, zRandom, widthRandom, depthRandom), 1.0f / 16777216.0f), VectorSet(-1.70f, -2.70f, 0.18f, 0.18f));
+        const f32 x = VectorGetX(footprint);
+        const f32 z = VectorGetY(footprint);
+        const b8 frontRow = z < -1.8f;
+        const f32 height = (frontRow ? 0.22f : 0.30f) + (frontRow ? 0.34f : 0.68f) * (heightRandom / 16777216.0f);
+        const f32 shade = 0.62f + 0.32f * (shadeRandom / 16777216.0f);
+        // Truncate equals a u32 cast here because the scaled value is in 0..7.
+        const f32 yawSteps = (static_cast<f32>(static_cast<u32>((yawRandom / 16777216.0f) * 7.0f)) - 3.0f) * 15.0f;
+        const f32 width = VectorGetZ(footprint);
+        const f32 depth = VectorGetW(footprint);
+        const f32 yawDegrees = yawSteps;
+        const Float4 position(x, height * 0.5f, z, 0.0f);
+        const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
+        // Leave the line from the camera through the front doorway clear.
+        if(z < -1.8f && Abs(x) < 0.72f)
+            continue;
+        // Sun through the roof opening must still land on both colored floor sources.
+        if(x > -1.12f && x < 1.12f && z > -1.20f && z < 0.18f)
+            continue;
+
+        b8 blocked = false;
+        for(const ComplexSceneBox& box : s_ComplexSceneBoxes)
+            blocked |= overlaps(body, box);
+        for(const ComplexSceneBox& box : s_ComplexBouncePatches)
+            blocked |= overlaps(body, box);
+        for(const ComplexSceneBox& box : s_ComplexFrontEnclosureBoxes)
+            blocked |= overlaps(body, box);
+        for(u32 i = 0u; i < placedBodyCount; ++i)
+            blocked |= overlaps(body, placedBodies[i]);
+        if(blocked)
+            continue;
+
+        const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_DiffuseMaterial, s_SmokeSurfaceMaterialInterface, body.tint, body.position, body.scale, world);
+        if(!entity.valid())
+            return false;
+        if(body.yawDegrees != 0.0f){
+            auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+            if(!transform)
+                return false;
+            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, body.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f)), transform->rotation);
+        }
+        placedBodies[placedBodyCount++] = body;
+    }
+    if(placedBodyCount != s_ComplexRandomBodyCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: could place only {} of {} seeded bodies"), placedBodyCount, s_ComplexRandomBodyCount);
+        return false;
+    }
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created")
+        , s_ComplexSceneBoxes.size()
+        , s_ComplexBouncePatches.size()
+        , s_ComplexFrontEnclosureBoxes.size()
+        , placedBodyCount
+        , s_ComplexRandomBodySeed
+    );
+    if(coverageViewEnabled){
+        // Place the probe cube where its -X and -Z faces share one spatial cell.
+        const auto probe = CreateTintedStaticMeshEntity(s_BoxMesh, s_CoverageProbeMaterial, s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f), world);
+        if(!probe.valid())
+            return false;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
+    }
+    return true;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "framebuffer_capture.h"
-#include "gpu_pass_timing_probe.h"
-#include "smoke_capture_teardown.h"
-#include "csg_gi_scene.h"
-#include "complex_gi_scene.h"
-#include "presentation_fps_probe.h"
-#include "smoke_environment.h"
+
+#include <core/ecs/world.h>
+
+#include <global/timer.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgGiScene final{
+private:
+    [[nodiscard]] static b8 ShouldCapture(void* context, u64 frameIndex)noexcept;
+
+
+public:
+    CsgGiScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
+
+
+public:
+    [[nodiscard]] Expected<b8> start();
+    void stop();
+    void update();
+    [[nodiscard]] b8 active()const noexcept{ return m_active; }
+
+
+private:
+    UniquePtr<FramebufferCapture> m_capture;
+    ProjectRuntimeContext& m_context;
+    Core::ECS::World& m_world;
+    Timer m_liveWarmupStartTime = {};
+    u64 m_requiredPresentations = 360u;
+    u64 m_liveWarmupStartPresentations = 0u;
+    b8 m_liveWarmupStarted = false;
+    b8 m_liveWarmupComplete = false;
+    b8 m_captureReceiptLogged = false;
+    b8 m_active = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "framebuffer_capture.h"
+
+#include "csg_smoke_helpers.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+
+#include <tests/smoke/scene_types.adhd.h>
+
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+
+#include <core/alloc/scratch.h>
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_csg_gi_scene{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_ReferenceArm = "reference";
+constexpr AStringView s_BoxShapePath = "engine/csg/box";
+constexpr AStringView s_CutArm = "cut";
+
+static constexpr f64 s_LiveWarmupSeconds = 30.0;
+static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
+static constexpr SmokeMeshRef s_MixedMesh{"project/meshes/gi_csg_mixed"};
+static constexpr SmokeMeshRef s_OpenQuadMesh{"project/meshes/gi_csg_open_quad"};
+static constexpr SmokeMaterialRef s_DiffuseMaterial{"project/smoke/gi/materials/diffuse"};
+static constexpr SmokeMaterialRef s_IndirectMaterial{"project/smoke/gi/materials/indirect"};
+static constexpr SmokeMaterialRef s_CapMaterial{"project/smoke/gi/materials/csg_cap"};
+static constexpr SmokeMaterialRef s_MixedMaterial{"project/smoke/gi/materials/csg_mixed"};
+static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surface";
+static constexpr Float4 s_Black(0.0f, 0.0f, 0.0f, 1.0f);
+static constexpr Float4 s_White(1.0f, 1.0f, 1.0f, 1.0f);
+static constexpr Array<Name, 3> s_Groups = { Name(s_SmokeSceneNameSmokeGiPassage), Name(s_SmokeSceneNameSmokeGiCap), Name(s_SmokeSceneNameSmokeGiMixed) };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Box = SmokeBoxBounds;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Core::ECS::EntityID CreateBox(const Box& box, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
+    const SIMDVectorSingle minimum = LoadFloat(box.minimum);
+    const SIMDVectorSingle maximum = LoadFloat(box.maximum);
+    Float4 center;
+    Float4 extent;
+    StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
+    StoreFloat(VectorSubtract(maximum, minimum), extent);
+    return CreateTintedStaticMeshEntity(s_CubeMesh, material, s_MaterialInterface, tint, center, extent, world);
+}
+
+[[nodiscard]] static b8 CreateReferencePieces(const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
+    // Ordinary closed pieces provide independent triangle geometry for the same subtraction union.
+    Array<Box, 6> pieces{};
+    if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces))
+        return false;
+    for(const auto& piece : pieces){
+        if(!SmokeBoxBoundsValid(piece))
+            continue;
+        if(!CreateBox(piece, material, tint, world).valid())
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 CreateSubtraction(const Box& box, const Box& cutter, const u32 slot, const AStringView arm, Core::ECS::World& world){
+    const auto& material = slot == 0u ? s_DiffuseMaterial : s_CapMaterial;
+    const Float4& tint = slot == 0u ? s_Black : s_White;
+    if(arm == s_ReferenceArm)
+        return CreateReferencePieces(box, cutter, material, tint, world);
+
+    const auto receiver = CreateBox(box, material, tint, world);
+    if(!receiver.valid())
+        return false;
+    AddStaticCsgMeshReceiver(receiver, s_Groups[slot], true, false, world);
+    // Overlapping cutters form one opening without an internal GI seam.
+    const f32 cutterSpan = cutter.maximum.x - cutter.minimum.x;
+    const f32 overlapBegin = cutter.minimum.x + cutterSpan * 0.35f;
+    const f32 overlapEnd = cutter.minimum.x + cutterSpan * 0.65f;
+    const Array<Box, 2> cuts = {{
+        { cutter.minimum, Float3U(overlapEnd, cutter.maximum.y, cutter.maximum.z) },
+        { Float3U(overlapBegin, cutter.minimum.y, cutter.minimum.z), cutter.maximum },
+    }};
+    for(const auto& cut : cuts){
+        auto entity = world.createEntity();
+        auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+        component.receiverGroup = s_Groups[slot];
+        component.shapeType = Name(s_BoxShapePath);
+        component.active = arm == s_CutArm;
+        Impl::CsgBoxShapeParameters parameters;
+        const SIMDVectorSingle minimum = LoadFloat(cut.minimum);
+        const SIMDVectorSingle maximum = LoadFloat(cut.maximum);
+        StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
+        AssignCsgCutterParameters(parameters, component);
+        AssignCsgCutterTransform(VectorScale(VectorAdd(minimum, maximum), 0.5f), QuaternionIdentity(), component);
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 CreateMixedSubtraction(const AStringView arm, Core::ECS::World& world){
+    const Box box{ Float3U(-0.5f, -0.8f, -0.8f), Float3U(0.5f, 0.2f, 0.8f) };
+    const Box cutter{ Float3U(-0.25f, -1.0f, -1.2f), Float3U(0.25f, 0.2f, 1.0f) };
+    if(arm == s_ReferenceArm){
+        if(!CreateReferencePieces(box, cutter, s_MixedMaterial, s_White, world))
+            return false;
+        const Array<f32, 2> quadCenters = { -0.875f, 0.875f };
+        for(const f32 x : quadCenters){
+            if(!CreateTintedStaticMeshEntity(s_OpenQuadMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(x, -0.3f, -1.0f, 0.0f), Float4(1.25f, 1.0f, 1.0f, 0.0f), world).valid())
+                return false;
+        }
+        return true;
+    }
+
+    // One asset contains a closed solid and an independently open two-triangle surface.
+    const auto receiver = CreateTintedStaticMeshEntity(s_MixedMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(0.0f, -0.3f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.6f, 0.0f), world);
+    if(!receiver.valid())
+        return false;
+    AddStaticCsgMeshReceiver(receiver, s_Groups[2], true, false, world);
+    auto entity = world.createEntity();
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+    component.receiverGroup = s_Groups[2];
+    component.shapeType = Name(s_BoxShapePath);
+    component.active = arm == s_CutArm;
+    Impl::CsgBoxShapeParameters parameters;
+    parameters.halfExtents = Float4(0.25f, 0.6f, 1.1f, 0.0f);
+    AssignCsgCutterParameters(parameters, component);
+    AssignCsgCutterTransform(VectorSet(0.0f, -0.4f, -0.1f, 0.0f), QuaternionIdentity(), component);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CsgGiScene::ShouldCapture(void* context, const u64)noexcept{
+    const auto& scene = *MakeNotNull(static_cast<CsgGiScene*>(context));
+    return scene.m_liveWarmupComplete && scene.m_context.graphics.getSuccessfulPresentationCount() >= scene.m_requiredPresentations;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CsgGiScene::CsgGiScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
+    : m_context(context)
+    , m_world(world)
+{}
+
+Expected<b8> CsgGiScene::start(){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+    const auto configuredArm = ReadSmokeEnvironmentText(scratchArena, "NWB_GI_CSG_ARM");
+    if(!configuredArm)
+        return false;
+    const AStringView arm(configuredArm->data(), configuredArm->size());
+    if(arm != __hidden_csg_gi_scene::s_ReferenceArm && arm != __hidden_csg_gi_scene::s_CutArm && arm != "uncut"){
+        NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_CSG_ARM"));
+        return MakeUnexpected(Failure{});
+    }
+    if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
+        const auto count = ParseU64(AStringView(value->data(), value->size()));
+        constexpr u32 s_MinimumWarmupPresentations = 360u;
+        if(!count || *count < s_MinimumWarmupPresentations || *count > Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations"));
+            return MakeUnexpected(Failure{});
+        }
+        m_requiredPresentations = *count;
+    }
+
+    Impl::RendererSystem& renderer = *MakeNotNull(m_world.getSystem<Impl::RendererSystem>());
+    if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
+        renderer.setFrameLaggedAsyncLightingEnabled(true);
+    Impl::ReflectionSettings reflection;
+    reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
+    Impl::PresentationSettings presentation;
+    presentation.toneMap = Impl::PresentationToneMap::LinearClamp;
+    if(!renderer.setReflectionSettings(reflection) || !renderer.setPresentationSettings(presentation))
+        return MakeUnexpected(Failure{});
+    renderer.setRefractionEnabled(false);
+
+    const auto camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, m_world);
+    const auto light = Impl::Scene::CreatePointLightEntity(m_world, Float4(0.0f, 1.3f, -3.0f, 0.0f), __hidden_csg_gi_scene::s_White, 20.0f, 15.0f);
+    auto* lightComponent = m_world.tryGetComponent<Impl::Scene::LightComponent>(light);
+    if(!camera.valid() || !lightComponent)
+        return MakeUnexpected(Failure{});
+    lightComponent->sourceRadius = 0.0f;
+    lightComponent->enableCaustics = false;
+
+    using namespace __hidden_csg_gi_scene;
+    if(!CreateBox({ Float3U(-5.0f, -1.0f, -6.6f), Float3U(5.0f, 5.0f, -6.5f) }, s_DiffuseMaterial, Float4(0.02f, 0.02f, 1.0f, 1.0f), m_world).valid())
+        return MakeUnexpected(Failure{});
+    for(u32 slot = 0u; slot < 2u; ++slot){
+        const f32 x = slot == 0u ? -1.3f : 1.3f;
+        const Box receiver{ Float3U(x - 0.9f, 0.3f, -0.8f), Float3U(x + 0.9f, 2.3f, 0.8f) };
+        const Box cutter{ Float3U(x - 0.65f, 0.55f, -1.0f), Float3U(x + 0.65f, 2.05f, slot == 0u ? 1.0f : 0.4f) };
+        if(!CreateSubtraction(receiver, cutter, slot, arm, m_world))
+            return MakeUnexpected(Failure{});
+    }
+    if(!CreateMixedSubtraction(arm, m_world))
+        return MakeUnexpected(Failure{});
+    const auto passage = CreateBox({ Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White, m_world);
+    // The cavity receiver sees bounced light from the green generated back cap.
+    const auto cavity = CreateBox({ Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White, m_world);
+    const auto control = CreateBox({ Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White, m_world);
+    if(!passage.valid() || !cavity.valid() || !control.valid())
+        return MakeUnexpected(Failure{});
+    const auto mixedPassage = CreateBox({ Float3U(-0.2f, -0.7f, 1.0f), Float3U(0.2f, -0.4f, 1.08f) }, s_IndirectMaterial, s_White, m_world);
+    const auto mixedFloor = CreateBox({ Float3U(-1.3f, -0.82f, -1.85f), Float3U(-0.75f, -0.77f, -1.08f) }, s_IndirectMaterial, s_White, m_world);
+    if(!mixedPassage.valid() || !mixedFloor.valid())
+        return MakeUnexpected(Failure{});
+
+    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
+    constexpr u32 s_DefaultCaptureFrameCount = 360u;
+    auto capture = NWB::Tests::Smoke::SmokeCaptureFactory(m_context).configure(NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options, scratchArena);
+    if(!capture)
+        return MakeUnexpected(Failure{});
+    m_capture = Move(*capture);
+    m_active = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}"), ConvertString(arm), m_requiredPresentations);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles"));
+    return true;
+}
+
+void CsgGiScene::stop(){
+    if(m_capture){
+        m_capture->stop();
+        m_capture.reset();
+    }
+    m_active = false;
+}
+
+void CsgGiScene::update(){
+    if(!m_capture)
+        return;
+
+    const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
+    if(presentations >= m_requiredPresentations && !m_liveWarmupComplete){
+        const Timer now = TimerNow();
+        const u64 frameIndex = m_context.graphics.getFrameIndex();
+        if(!m_liveWarmupStarted){
+            m_liveWarmupStartTime = now;
+            m_liveWarmupStartPresentations = presentations;
+            m_liveWarmupStarted = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}")
+                , frameIndex
+                , presentations
+                , m_requiredPresentations
+                , __hidden_csg_gi_scene::s_LiveWarmupSeconds
+            );
+        }else{
+            const f64 elapsedSeconds = DurationInSeconds<f64>(now, m_liveWarmupStartTime);
+            if(elapsedSeconds >= __hidden_csg_gi_scene::s_LiveWarmupSeconds && presentations > m_liveWarmupStartPresentations){
+                m_liveWarmupComplete = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}"), frameIndex, presentations, elapsedSeconds);
+            }
+        }
+    }
+
+    m_capture->update();
+    if(m_capture->captureReady() && !m_captureReceiptLogged){
+        m_captureReceiptLogged = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI capture source_frame={}"), m_capture->capturedGraphicsFrameIndex());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "framebuffer_capture.h"
+#include "gpu_pass_timing_probe.h"
+#include "smoke_scene_helpers.h"
+#include <tests/smoke/presentation_types.adhd.h>
+#include "smoke_environment.h"
+#include "smoke_project_helpers.h"
 
 #include <tests/smoke/scene_types.adhd.h>
 
@@ -391,4 +1049,3 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

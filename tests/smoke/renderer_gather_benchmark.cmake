@@ -14,12 +14,6 @@ if(NWB_BUILD_RENDERER_GATHER_BENCHMARK)
     nwb_declare_executable(nwb_renderer_gather_benchmark)
     target_sources(nwb_renderer_gather_benchmark PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_project.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_scene.h"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_scene.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_probe.h"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_probe.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_compiler_statistics_probe.h"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_compiler_statistics_probe.cpp"
     )
     nwb_configure_runtime_smoke_target(nwb_renderer_gather_benchmark "${_nwb_gather_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
     add_dependencies(nwb_renderer_gather_benchmark nwb_renderer_gather_benchmark_assets)

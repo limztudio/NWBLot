@@ -1679,6 +1679,41 @@ TEST(AdhdCompiler, HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDupli
     CompileResult res(arena.arena);
     EXPECT_TRUE(Compiler::Compile(s_NativeBraceCharSource, "impl/data/indexed_bucket.adhd", arena.arena, res));
 
+    static constexpr MStringView s_VariadicNativeMacroSource =
+        "#define EXPECTED_COUNT 1u\r\n"
+        "#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }\r\n"
+        "#define EXPECT_NEAR_VAL(val, ...) native{ EXPECT_NEAR(val, __VA_ARGS__) }\r\n"
+        "void FillBytes(mut Span<u8> bytes) {\r\n"
+        "    for(usize i = 0u; i < bytes.size(); ++i)\r\n"
+        "        bytes[i] = cast<u8>(i);\r\n"
+        "}\r\n"
+        "void ConsumeVec(in Vector<i32> items) {}\r\n"
+        "void VerifyItems(in f32 sample) {\r\n"
+        "    Vector<i32> items;\r\n"
+        "    items.push_back(42);\r\n"
+        "    ConsumeVec(items);\r\n"
+        "    if(!items.empty())\r\n"
+        "        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n"
+        "    else\r\n"
+        "        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n"
+        "}\r\n";
+    CompileResult variadicMacroRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_VariadicNativeMacroSource, "tests/unit/sample_check.adhd", arena.arena, variadicMacroRes));
+    const MStringView variadicHdrView(variadicMacroRes.generatedHeader.data(), variadicMacroRes.generatedHeader.size());
+    const MStringView variadicSrcView(variadicMacroRes.generatedSource.data(), variadicMacroRes.generatedSource.size());
+    EXPECT_NE(variadicHdrView.find("void FillBytes(const Span<u8> bytes)noexcept;"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("void FillBytes(const Span<u8> bytes)noexcept{"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("EXPECT_EQ(items.size(), 1u);"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("EXPECT_NEAR(sample, 0.0f, 1e-4f);"), MStringView::npos);
+    EXPECT_NE(variadicSrcView.find("ConsumeVec(items);"), MStringView::npos);
+    EXPECT_EQ(variadicSrcView.find("Move(items)"), MStringView::npos);
+
+    static constexpr MStringView s_BadVariadicParamSource =
+        "#define BAD_VARIADIC(..., x) (x)\r\n"
+        "const i32 kVal = 1;\r\n";
+    CompileResult badVariadicRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadVariadicParamSource, "impl/data/bad_variadic.adhd", arena.arena, badVariadicRes));
+
     static constexpr MStringView s_DuplicateFreeFnSource =
         "i32 DupFn(in i32 x) { return x; }\r\n"
         "i32 DupFn(in i32 x) { return x + 1; }\r\n";

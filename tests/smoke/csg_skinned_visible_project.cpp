@@ -3,8 +3,8 @@
 
 
 #include "csg_smoke_helpers.h"
-#include "fps_probe.h"
-#include "smoke_capture_teardown.h"
+#include <tests/smoke/presentation_types.adhd.h>
+#include "smoke_scene_helpers.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 

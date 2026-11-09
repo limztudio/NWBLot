@@ -14,38 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_BEGIN
-
-
-namespace Tests::Smoke{
-
-
-Core::ECS::EntityID CreateTintedStaticMeshEntity(
-    [[maybe_unused]] const SmokeMeshRef& mesh,
-    [[maybe_unused]] const SmokeMaterialRef& material,
-    [[maybe_unused]] const NameText<char> materialInterfacePath,
-    [[maybe_unused]] const Float4& colorTint,
-    const Float4& position,
-    const Float4& scale,
-    Core::ECS::World& world
-){
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-    return entity.id();
-}
-
-
-};
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_csg_visible_scene_tests{
 
 

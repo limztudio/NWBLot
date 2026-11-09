@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "skinning_benchmark_pose_animator.h"
-
+#include <tests/smoke/smoke_test_cases.adhd.h>
 #include <tests/common/ecs_test_world.h>
+
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/ecs/entity.h>
 
@@ -20,6 +21,15 @@ namespace __hidden_skinning_benchmark_pose_tests{
 using namespace NWB;
 
 
+static void AnimateEntities(Core::ECS::World& world, const Span<const Core::ECS::EntityID> entities, const Span<const Impl::SkeletonJointMatrix> bindJoints, const f32 timeSeconds, const b8 staticPreview)noexcept{
+    for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
+        auto* pose = world.tryGetComponent<Impl::SkeletonPoseComponent>(entities[entityIndex]);
+        if(!pose)
+            continue;
+        Tests::Smoke::AnimateSkinningBenchmarkPoseJoints(bindJoints, static_cast<u32>(entityIndex), timeSeconds, staticPreview, pose->localJoints);
+    }
+}
+
 TEST(SkinningBenchmarkPose, MissingPoseIsSkippedAndSeededJointsAreDeterministic){
     Tests::EcsTestWorld context;
     auto& world = context.world;
@@ -33,29 +43,14 @@ TEST(SkinningBenchmarkPose, MissingPoseIsSkippedAndSeededJointsAreDeterministic)
         pose.localJoints.push_back(bindJoints.back());
     }
     const Array<Core::ECS::EntityID, 2> entities = { missingPose, skeleton };
-    Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(world, entities, bindJoints, 0.25f, true);
-    EXPECT_EQ(NWB_MEMCMP(&pose.localJoints[0u], &bindJoints[0u], sizeof(bindJoints[0u])), 0);
-    u32 changedJoints = 0u;
-    for(usize i = 0u; i < bindJoints.size(); ++i){
-        firstPose.push_back(pose.localJoints[i]);
-        if(NWB_MEMCMP(&pose.localJoints[i], &bindJoints[i], sizeof(bindJoints[i])) != 0)
-            ++changedJoints;
-    }
-    EXPECT_GT(changedJoints, 0u);
-    Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(world, entities, bindJoints, 0.25f, true);
-    for(usize i = 0u; i < firstPose.size(); ++i)
-        EXPECT_EQ(NWB_MEMCMP(&pose.localJoints[i], &firstPose[i], sizeof(firstPose[i])), 0);
-    Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(world, entities, bindJoints, 1.0f, true);
-    b8 changedWithTime = false;
-    for(usize i = 1u; i < firstPose.size(); ++i)
-        changedWithTime |= NWB_MEMCMP(&pose.localJoints[i], &firstPose[i], sizeof(firstPose[i])) != 0;
-    EXPECT_TRUE(changedWithTime);
-    Tests::Smoke::SkinningBenchmarkPoseAnimator::Animate(world, entities, bindJoints, 0.25f, false);
-    EXPECT_EQ(NWB_MEMCMP(&pose.localJoints[0u], &bindJoints[0u], sizeof(bindJoints[0u])), 0);
-    b8 changedInBenchmarkMode = false;
-    for(usize i = 1u; i < bindJoints.size(); ++i)
-        changedInBenchmarkMode |= NWB_MEMCMP(&pose.localJoints[i], &bindJoints[i], sizeof(bindJoints[i])) != 0;
-    EXPECT_TRUE(changedInBenchmarkMode);
+    AnimateEntities(world, entities, bindJoints, 0.25f, true);
+    Tests::Smoke::VerifySkinningBenchmarkPoseStep1(bindJoints, pose.localJoints, firstPose);
+    AnimateEntities(world, entities, bindJoints, 0.25f, true);
+    Tests::Smoke::VerifySkinningBenchmarkPoseStep2(firstPose, pose.localJoints);
+    AnimateEntities(world, entities, bindJoints, 1.0f, true);
+    Tests::Smoke::VerifySkinningBenchmarkPoseStep3(firstPose, pose.localJoints);
+    AnimateEntities(world, entities, bindJoints, 0.25f, false);
+    Tests::Smoke::VerifySkinningBenchmarkPoseStep4(bindJoints, pose.localJoints);
 }
 
 
@@ -66,4 +61,3 @@ TEST(SkinningBenchmarkPose, MissingPoseIsSkippedAndSeededJointsAreDeterministic)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

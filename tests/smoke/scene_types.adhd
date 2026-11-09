@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <global/environment.h>
+}
+
+
 const StringView s_ShadowSmokeAnalyticAtlas = "analytic";
 const f32 s_ShadowSmokeCameraDepth = -4.0f;
 const StringView s_ShadowSmokeCapsuleShapePath = "engine/csg/capsule";
@@ -355,6 +360,447 @@ class ReflectionCsgContextEntities{
     public EntityID denseReceiver = s_InvalidEntityId;
     public EntityID smallCutter = s_InvalidEntityId;
     public EntityID denseCutter = s_InvalidEntityId;
+}
+
+const StringView s_RefractionGalleryInterface = "project/shaders/smoke_surface";
+const StringView s_RefractionGalleryOpticalInterface = "project/shaders/reflection_optical";
+const f32 s_RefractionGalleryCameraDistance = 6.0f;
+const f32 s_RefractionGalleryIdentityForeignFront = -0.0005f;
+const f32 s_RefractionGalleryIdentityNearPlane = s_RefractionGalleryCameraDistance - 0.00025f;
+const f32 s_RefractionGalleryCenterHeight = 1.4f;
+const f32 s_RefractionGallerySlabFaceScale = 2.6f;
+const f32 s_RefractionGalleryPreviewAlpha = 0.48f;
+const f32 s_RefractionGalleryOpticalIor = 1.5f;
+const f32 s_RefractionGalleryTintedCoverage = 0.3f;
+const f32 s_RefractionGalleryDuplicateSphereRadius = 1.1f;
+const i32 s_RefractionGalleryWinningOpticalPriority = 10;
+const f32 s_RefractionGalleryBackdropDepth = 4.5f;
+const f32 s_RefractionGalleryBackdropHalfHeight = 5.0f;
+const f32 s_RefractionGalleryDepthMarkerAlpha = 0.70f;
+const StringView s_RefractionGalleryCaseCsgReference = "csg_reference";
+const StringView s_RefractionGalleryCaseCsgCap = "csg_cap";
+const StringView s_RefractionGalleryCaseCsgMiddle = "csg_middle";
+const StringView s_RefractionGalleryCaseCsgUncut = "csg_uncut";
+const StringView s_RefractionGalleryCaseIdentityReference = "identity_reference";
+const StringView s_RefractionGalleryCaseIdentitySameIor = "identity_same_ior";
+const StringView s_RefractionGalleryCaseIdentityDifferentIor = "identity_different_ior";
+const StringView s_RefractionGalleryCaseCrossingOverflow = "crossing_overflow";
+const StringView s_RefractionGalleryCaseNearAirOrdinary = "near_air_ordinary";
+const StringView s_RefractionGalleryCaseNearAirCsg = "near_air_csg";
+const StringView s_RefractionGalleryCaseSingle = "single";
+const StringView s_RefractionGalleryCaseSeparate = "separate";
+const StringView s_RefractionGalleryCaseStacked = "stacked";
+const StringView s_RefractionGalleryCaseIntersecting = "intersecting";
+const StringView s_RefractionGalleryCaseNested = "nested";
+const StringView s_RefractionGalleryCaseDuplicateSingleCool = "duplicate_single_cool";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarm = "duplicate_single_warm";
+const StringView s_RefractionGalleryCaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
+const StringView s_RefractionGalleryCaseCoincident = "coincident";
+const StringView s_RefractionGalleryCaseCoincidentTinted = "coincident_tinted";
+const StringView s_RefractionGalleryCaseCoincidentReversed = "coincident_reversed";
+const StringView s_RefractionGalleryCaseCoincidentTintedReversed = "coincident_tinted_reversed";
+const StringView s_RefractionGalleryCaseCoincidentPrioritySwap = "coincident_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentIdentical = "coincident_identical";
+const StringView s_RefractionGalleryCaseCoincidentTintedIdentical = "coincident_tinted_identical";
+const StringView s_RefractionGalleryCaseNearCoincident = "near_coincident";
+const StringView s_RefractionGalleryCaseCoincidentPreserved = "coincident_preserved";
+const StringView s_RefractionGalleryCaseTorus = "torus";
+const StringView s_RefractionGalleryCaseSameMesh = "same_mesh";
+const StringView s_RefractionGalleryCasePrism = "prism";
+const f32 s_RefractionGalleryForeignExit = 0.25f;
+
+class SmokeBoxBounds{
+    public f32x3u minimum;
+    public f32x3u maximum;
+
+    public SmokeBoxBounds(){
+        this.minimum = f32x3u(0.0f, 0.0f, 0.0f);
+        this.maximum = f32x3u(0.0f, 0.0f, 0.0f);
+    }
+
+    public SmokeBoxBounds(in f32x3u minVal, in f32x3u maxVal){
+        this.minimum = minVal;
+        this.maximum = maxVal;
+    }
+}
+
+b8 SmokeBoxBoundsValid(in SmokeBoxBounds box){
+    return box.minimum.x < box.maximum.x && box.minimum.y < box.maximum.y && box.minimum.z < box.maximum.z;
+}
+
+b8 BuildSmokeBoxSubtractionPieces(in SmokeBoxBounds box, in SmokeBoxBounds cutter, mut Array<SmokeBoxBounds, 6u> outPieces){
+    const VectorSingle minVec = Max(VectorSingle(box.minimum, 0.0f), VectorSingle(cutter.minimum, 0.0f));
+    const VectorSingle maxVec = Min(VectorSingle(box.maximum, 0.0f), VectorSingle(cutter.maximum, 0.0f));
+    const f32x3u lower = f32x3u(minVec);
+    const f32x3u upper = f32x3u(maxVec);
+    const SmokeBoxBounds intersection = SmokeBoxBounds(lower, upper);
+    outPieces[0u] = SmokeBoxBounds(box.minimum, f32x3u(lower.x, box.maximum.y, box.maximum.z));
+    outPieces[1u] = SmokeBoxBounds(f32x3u(upper.x, box.minimum.y, box.minimum.z), box.maximum);
+    outPieces[2u] = SmokeBoxBounds(f32x3u(lower.x, box.minimum.y, box.minimum.z), f32x3u(upper.x, lower.y, box.maximum.z));
+    outPieces[3u] = SmokeBoxBounds(f32x3u(lower.x, upper.y, box.minimum.z), f32x3u(upper.x, box.maximum.y, box.maximum.z));
+    outPieces[4u] = SmokeBoxBounds(f32x3u(lower.x, lower.y, box.minimum.z), f32x3u(upper.x, upper.y, lower.z));
+    outPieces[5u] = SmokeBoxBounds(f32x3u(lower.x, lower.y, upper.z), f32x3u(upper.x, upper.y, box.maximum.z));
+    return SmokeBoxBoundsValid(intersection);
+}
+
+const u32 s_AvboitCoverageWords = 9u;
+const u32 s_AvboitControlWordCount = 8u;
+const u32 s_AvboitTotalCaseCount = s_AvboitBoundaryCaseCount + s_AvboitExhaustiveCaseCount + s_AvboitRandomCaseCount;
+
+class AvboitDepthWarpCase{
+    public Array<u32, s_AvboitCoverageWords> coverage;
+    public u32 virtualCount = 1u;
+    public u32 physicalCount = 1u;
+    public u32 scenario = 0u;
+
+    public b8 occupied(in u32 slice)const{
+        return (this.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
+    }
+
+    public void setOccupied(in u32 slice){
+        if(slice < this.virtualCount)
+            this.coverage[slice / 32u] |= 1u << (slice % 32u);
+    }
+
+    public void poisonUnusedCoverage(){
+        for(u32 slice = this.virtualCount; slice < s_AvboitCoverageWords * 32u; ++slice)
+            this.coverage[slice / 32u] |= 1u << (slice % 32u);
+    }
+}
+
+class AvboitDepthWarpResult{
+    public Array<u32, s_AvboitMaxVirtualCount> warp;
+    public Array<u32, s_AvboitControlWordCount> control;
+}
+
+AvboitDepthWarpResult BuildAvboitDepthWarpOracle(in AvboitDepthWarpCase probe, in Array<u32, 4u> frame){
+    Array<u32, s_AvboitMaxVirtualCount> occupiedSlices;
+    u32 occupiedCount = 0u;
+    for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
+        if(probe.occupied(slice)){
+            occupiedSlices[occupiedCount] = slice;
+            ++occupiedCount;
+        }
+    }
+
+    Array<u32, s_AvboitMaxVirtualCount> distinctBins;
+    u32 binWidth = 1u;
+    u32 shift = 0u;
+    u32 distinctCount = 0u;
+    while(true){
+        distinctCount = 0u;
+        for(u32 index = 0u; index < occupiedCount; ++index){
+            const u32 bin = occupiedSlices[index] / binWidth;
+            if(distinctCount == 0u || distinctBins[distinctCount - 1u] != bin){
+                distinctBins[distinctCount] = bin;
+                ++distinctCount;
+            }
+        }
+        if(distinctCount <= probe.physicalCount)
+            break;
+        binWidth *= 2u;
+        ++shift;
+    }
+
+    AvboitDepthWarpResult oracle;
+    u32 nextBin = 0u;
+    u32 precedingRank = 0u;
+    for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
+        while(nextBin < distinctCount && distinctBins[nextBin] <= slice / binWidth){
+            precedingRank = nextBin;
+            ++nextBin;
+        }
+        oracle.warp[slice] = precedingRank;
+    }
+    oracle.control[0u] = Max(distinctCount, 1u);
+    oracle.control[1u] = shift;
+    oracle.control[2u] = probe.virtualCount;
+    oracle.control[3u] = probe.physicalCount;
+    oracle.control[4u] = frame[2u];
+    oracle.control[5u] = frame[3u];
+    oracle.control[6u] = frame[0u];
+    oracle.control[7u] = frame[1u];
+    return oracle;
+}
+
+const u32 s_AvboitVirtualCountCount = 21u;
+const u32 s_AvboitPhysicalCountCount = 5u;
+
+u32 AvboitVirtualCount(in u32 index){
+    switch(index){
+    case 0u: return 1u;
+    case 1u: return 2u;
+    case 2u: return 3u;
+    case 3u: return 7u;
+    case 4u: return 8u;
+    case 5u: return 9u;
+    case 6u: return 31u;
+    case 7u: return 32u;
+    case 8u: return 33u;
+    case 9u: return 63u;
+    case 10u: return 64u;
+    case 11u: return 65u;
+    case 12u: return 95u;
+    case 13u: return 96u;
+    case 14u: return 97u;
+    case 15u: return 127u;
+    case 16u: return 128u;
+    case 17u: return 129u;
+    case 18u: return 255u;
+    case 19u: return 256u;
+    }
+    return 257u;
+}
+
+u32 AvboitPhysicalCount(in u32 index){
+    switch(index){
+    case 0u: return 1u;
+    case 1u: return 2u;
+    case 2u: return 31u;
+    case 3u: return 32u;
+    }
+    return 64u;
+}
+
+void BuildAvboitDepthWarpCases(mut Vector<AvboitDepthWarpCase> cases){
+    cases.reserve(s_AvboitTotalCaseCount);
+    for(u32 vIdx = 0u; vIdx < s_AvboitVirtualCountCount; ++vIdx){
+        const u32 virtualCount = AvboitVirtualCount(vIdx);
+        for(u32 pIdx = 0u; pIdx < s_AvboitPhysicalCountCount; ++pIdx){
+            const u32 physicalCount = AvboitPhysicalCount(pIdx);
+            for(u32 pattern = 0u; pattern < 10u; ++pattern){
+                AvboitDepthWarpCase probe;
+                probe.virtualCount = virtualCount;
+                probe.physicalCount = physicalCount;
+                probe.scenario = pattern;
+                for(u32 slice = 0u; slice < virtualCount; ++slice){
+                    const b8 occupied = pattern == 1u
+                        || (pattern == 2u && slice + 1u == virtualCount)
+                        || (pattern == 3u && slice >= virtualCount / 2u && slice < virtualCount / 2u + 3u)
+                        || (pattern == 4u && slice % 2u == 1u)
+                        || (pattern == 5u && (slice % 32u == 0u || slice % 32u == 31u))
+                        || (pattern == 6u && slice < 64u)
+                        || (pattern == 7u && slice < 65u)
+                        || (pattern == 8u && slice + 64u >= virtualCount)
+                        || (pattern == 9u && slice == 0u);
+                    if(occupied)
+                        probe.setOccupied(slice);
+                }
+                probe.poisonUnusedCoverage();
+                cases.push_back(probe);
+            }
+        }
+    }
+    for(u32 virtualCount = 1u; virtualCount <= 8u; ++virtualCount){
+        for(u32 mask = 0u; mask < (1u << virtualCount); ++mask){
+            for(u32 pIdx = 0u; pIdx < s_AvboitPhysicalCountCount; ++pIdx){
+                AvboitDepthWarpCase probe;
+                probe.virtualCount = virtualCount;
+                probe.physicalCount = AvboitPhysicalCount(pIdx);
+                probe.scenario = 10u;
+                probe.coverage[0u] = mask;
+                probe.poisonUnusedCoverage();
+                cases.push_back(probe);
+            }
+        }
+    }
+    u32 random = s_AvboitRandomCaseInitialSeed;
+    for(u32 index = 0u; index < s_AvboitRandomCaseCount; ++index){
+        AvboitDepthWarpCase probe;
+        probe.virtualCount = 1u + index * s_AvboitRandomVirtualCountStride % s_AvboitMaxVirtualCount;
+        probe.physicalCount = AvboitPhysicalCount(index % s_AvboitPhysicalCountCount);
+        probe.scenario = s_AvboitRandomScenarioId;
+        for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
+            random ^= random << s_AvboitXorShift1;
+            random ^= random >> s_AvboitXorShift2;
+            random ^= random << s_AvboitXorShift3;
+            if(random % 8u < 1u + index % 7u)
+                probe.setOccupied(slice);
+        }
+        probe.poisonUnusedCoverage();
+        cases.push_back(probe);
+    }
+}
+
+const f32x2u s_CsgVisibleShapeGridHalfSpacing = f32x2u(1.55f, 1.05f);
+const f32 s_CsgVisibleCutterScale = s_CsgVisibleReceiverScale / s_CsgVisibleReceiverBaseScale;
+
+enum<u64> CsgVisibleShapeSlot{
+    Plane,
+    Box,
+    Sphere,
+    Capsule,
+    kCount
+}
+
+VectorSingle BuildCsgVisibleCubeRotation(in f32 time, in f32 phase){
+    const VectorSingle angles = VectorSingle(time * 0.35f, time + phase, time * 0.18f, 0.0f);
+    return QuaternionRotationRollPitchYawFromVector(angles);
+}
+
+VectorSingle CsgVisibleShapePosition(in usize shapeSlot){
+    const VectorSingle offsetY = VectorSingle(0.0f, s_CsgVisibleShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    const VectorSingle left = VectorSingle(-s_CsgVisibleShapeGridHalfSpacing.x, s_CsgVisibleCameraTargetY, 0.0f, 0.0f);
+    const VectorSingle right = VectorSingle(s_CsgVisibleShapeGridHalfSpacing.x, s_CsgVisibleCameraTargetY, 0.0f, 0.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Plane)) return left + offsetY;
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Box)) return right + offsetY;
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Sphere)) return left - offsetY;
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Capsule)) return right - offsetY;
+    return VectorSingle(0.0f, s_CsgVisibleCameraTargetY, 0.0f, 0.0f);
+}
+
+f32x4 CsgVisibleShapeColor(in usize shapeSlot){
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Plane)) return f32x4(0.24f, 0.56f, 0.86f, 1.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Box)) return f32x4(0.72f, 0.40f, 0.20f, 1.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Sphere)) return f32x4(0.34f, 0.70f, 0.42f, 1.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Capsule)) return f32x4(0.84f, 0.28f, 0.44f, 1.0f);
+    return f32x4(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+VectorSingle CsgVisibleCutterLocalOffset(in usize shapeSlot){
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Plane)) return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Box)) return VectorSingle(0.0f, 0.0f, -0.30f * s_CsgVisibleCutterScale, 0.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Sphere)) return VectorSingle(0.0f, 0.0f, -0.32f * s_CsgVisibleCutterScale, 0.0f);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Capsule)) return VectorSingle(0.0f, 0.0f, -0.32f * s_CsgVisibleCutterScale, 0.0f);
+    return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+const u32 s_RefractionTileProbeWidth = 2049u;
+const u32 s_RefractionTileProbeHeight = 2049u;
+const u32 s_RefractionTileProbeGroupSize = 8u;
+const u32 s_RefractionTileProbeMaxGroupCountX = 65535u;
+const u32 s_RefractionTileProbeTilesX = 257u;
+const u32 s_RefractionTileProbeTilesY = 257u;
+const u32 s_RefractionTileProbeTileCount = 66049u;
+const u32 s_RefractionTileProbeMissingTile = (s_RefractionTileProbeTilesY / 2u) * s_RefractionTileProbeTilesX + s_RefractionTileProbeTilesX / 2u;
+
+b8 IsRefractionProbeTileActive(in u32 phase, in u32 tile){
+    if(phase == 0u)
+        return true;
+    if(phase == 1u)
+        return false;
+    if(phase == 2u){
+        return tile == 0u
+            || tile == s_RefractionTileProbeTilesX - 1u
+            || tile == (s_RefractionTileProbeTilesY - 1u) * s_RefractionTileProbeTilesX
+            || tile == s_RefractionTileProbeTileCount - 1u
+            || tile == 65534u
+            || tile == 65535u;
+    }
+    if(phase == 5u)
+        return tile != s_RefractionTileProbeMissingTile;
+    if(phase == 3u)
+        return tile < s_RefractionTileProbeMaxGroupCountX;
+    return tile < s_RefractionTileProbeMaxGroupCountX + 1u;
+}
+
+u32 ExpectedRefractionProbeTileCount(in u32 phase){
+    if(phase == 0u) return s_RefractionTileProbeTileCount;
+    if(phase == 1u) return 0u;
+    if(phase == 2u) return 6u;
+    if(phase == 3u) return s_RefractionTileProbeMaxGroupCountX;
+    if(phase == 4u) return s_RefractionTileProbeMaxGroupCountX + 1u;
+    return s_RefractionTileProbeTileCount - 1u;
+}
+
+class CsgShadowMode{
+    public CsgShadowArm arm = CsgShadowArm::Cut;
+    public CsgShadowOpenCase openCase = CsgShadowOpenCase::Retained;
+    public b8 pointLight = false;
+    public b8 finiteLightSource = false;
+    public b8 analyticAtlas = false;
+    public b8 openAtlas = false;
+
+    public b8 applyEnvironmentValues(
+        in StringView armText,
+        in b8 hasArm,
+        in StringView lightText,
+        in b8 hasLight,
+        in StringView sourceText,
+        in b8 hasSource,
+        in StringView atlasText,
+        in b8 hasAtlas,
+        in StringView openCaseText,
+        in b8 hasOpenCase,
+        in b8 caustic
+    ){
+        if(hasArm){
+            if(!TryParseCsgShadowArm(armText, this.arm))
+                return false;
+        }
+        if(hasLight){
+            if(lightText != s_ShadowSmokeDirectional && lightText != s_ShadowSmokePoint)
+                return false;
+            this.pointLight = lightText == s_ShadowSmokePoint;
+        }
+        if(hasSource){
+            if(sourceText != s_ShadowSmokeHard && sourceText != s_ShadowSmokeFinite)
+                return false;
+            this.finiteLightSource = sourceText == s_ShadowSmokeFinite;
+        }
+        if(hasAtlas){
+            if(atlasText != "boxes" && atlasText != s_ShadowSmokeAnalyticAtlas && atlasText != s_ShadowSmokeOpenAtlas)
+                return false;
+            this.analyticAtlas = atlasText == s_ShadowSmokeAnalyticAtlas;
+            this.openAtlas = atlasText == s_ShadowSmokeOpenAtlas;
+        }
+        if(this.openAtlas){
+            if(!hasOpenCase || this.pointLight || this.finiteLightSource || this.arm != CsgShadowArm::Cut || caustic)
+                return false;
+            if(!TryParseCsgShadowOpenCase(openCaseText, this.openCase))
+                return false;
+        }
+        return !this.analyticAtlas || (!this.pointLight && (this.arm == CsgShadowArm::Cut || this.arm == CsgShadowArm::Uncut));
+    }
+
+    public b8 read(in b8 caustic){
+        String armStr;
+        String lightStr;
+        String sourceStr;
+        String atlasStr;
+        String openCaseStr;
+        b8 hasArm = false;
+        b8 hasLight = false;
+        b8 hasSource = false;
+        b8 hasAtlas = false;
+        b8 hasOpenCase = false;
+        native(mut armStr, mut lightStr, mut sourceStr, mut atlasStr, mut openCaseStr, mut hasArm, mut hasLight, mut hasSource, mut hasAtlas, mut hasOpenCase){
+            const auto ReadEnv = [&](const AStringView varName, auto& outStr, b8& outHas){
+                const auto v = ReadEnvironmentVariable(__adhd_scratch, varName);
+                if(v && *v && !(*v)->empty()){
+                    outStr.assign((*v)->data(), (*v)->size());
+                    outHas = true;
+                }
+            };
+            ReadEnv("NWB_CSG_SHADOW_ARM", armStr, hasArm);
+            ReadEnv("NWB_CSG_SHADOW_LIGHT", lightStr, hasLight);
+            ReadEnv("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr, hasSource);
+            ReadEnv("NWB_CSG_SHADOW_ATLAS", atlasStr, hasAtlas);
+            ReadEnv("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr, hasOpenCase);
+        }
+        return this.applyEnvironmentValues(armStr, hasArm, lightStr, hasLight, sourceStr, hasSource, atlasStr, hasAtlas, openCaseStr, hasOpenCase, caustic);
+    }
+
+    public StringView openCaseName()const{
+        return ResolveCsgShadowOpenCaseName(this.openCase);
+    }
+}
+
+void AnimateSkinningBenchmarkPoseJoints(
+    in Span<f32x3x4> bindJoints,
+    in u32 entityIndex,
+    in f32 timeSeconds,
+    in b8 staticPreview,
+    mut Vector<f32x3x4> outLocalJoints
+){
+    const usize count = Min(bindJoints.size(), outLocalJoints.size());
+    for(usize i = 0u; i < count; ++i){
+        const u32 jointIndex = cast<u32>(i);
+        const MatrixSingle animated = BuildSkinningBenchmarkAnimatedJointMatrix(MatrixSingle(bindJoints[i]), jointIndex, entityIndex, timeSeconds, staticPreview);
+        outLocalJoints[i] = f32x3x4(animated);
+    }
 }
 
 

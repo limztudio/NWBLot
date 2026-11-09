@@ -2,9 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <gtest/gtest.h>
+}
+
+#define EXPECT_NEAR(...) native{ EXPECT_NEAR(...) }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const f32 s_MathMatrixAffineEpsilon = 0.000001f;
 const f32 s_MathMatrixDeterminantEpsilon = 0.000000000001f;
 const f32 s_MathMatrixRigidEpsilon = 0.001f;
+const f32 s_SingleDirectionEpsilon = 0.00001f;
+const f64 s_DoubleDirectionEpsilon = 0.00000000000002;
 
 
 class EqualityObservation{
@@ -13,6 +25,17 @@ class EqualityObservation{
     public u32 rawFlags = 0u;
 }
 
+void ExpectSingleDirectionNear(in VectorSingle actual, in VectorSingle expected){
+    EXPECT_NEAR(VectorGetX(actual), VectorGetX(expected), s_SingleDirectionEpsilon);
+    EXPECT_NEAR(VectorGetY(actual), VectorGetY(expected), s_SingleDirectionEpsilon);
+    EXPECT_NEAR(VectorGetZ(actual), VectorGetZ(expected), s_SingleDirectionEpsilon);
+}
+
+void ExpectDoubleDirectionNear(in VectorDouble actual, in VectorDouble expected){
+    EXPECT_NEAR(VectorDoubleGetX(actual), VectorDoubleGetX(expected), s_DoubleDirectionEpsilon);
+    EXPECT_NEAR(VectorDoubleGetY(actual), VectorDoubleGetY(expected), s_DoubleDirectionEpsilon);
+    EXPECT_NEAR(VectorDoubleGetZ(actual), VectorDoubleGetZ(expected), s_DoubleDirectionEpsilon);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -10,10 +10,7 @@ if(TARGET nwb_tex_conv)
 
     nwb_declare_executable(nwb_texture_smoke)
     target_sources(nwb_texture_smoke PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/texture_srgb_clear_probe.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/texture_srgb_clear_probe.h"
     )
     target_compile_definitions(nwb_texture_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
     nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}")

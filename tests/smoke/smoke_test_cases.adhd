@@ -1,0 +1,246 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <tests/smoke/presentation_types.adhd.h>
+#include <tests/smoke/scene_types.adhd.h>
+#include <core/common/global.h>
+#include <global/timer.h>
+#include <cstdlib>
+#include <gtest/gtest.h>
+}
+
+#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
+#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
+#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#define EXPECT_GT(...) native{ EXPECT_GT(...) }
+#define EXPECT_DOUBLE_EQ(...) native{ EXPECT_DOUBLE_EQ(...) }
+#define ASSERT_TRUE(...) native{ ASSERT_TRUE(...) }
+#define ASSERT_EQ(...) native{ ASSERT_EQ(...) }
+
+
+Timer SmokeTimerAddMs(in Timer begin, in i64 milliseconds){
+    Timer result = Timer();
+    native(in begin, in milliseconds, mut result){
+        result = TimerAddMS(begin, milliseconds);
+    }
+    return result;
+}
+
+void VerifyPresentationFpsProbeIdleCallbacks(){
+    PresentationFpsProbe probe(0.0);
+    const Timer begin = Timer();
+    EXPECT_EQ(probe.observe(12u, begin), PresentationFpsStatus::Waiting);
+    for(i64 milliseconds = 1; milliseconds < 500; ++milliseconds)
+        EXPECT_EQ(probe.observe(12u, SmokeTimerAddMs(begin, milliseconds)), PresentationFpsStatus::Waiting);
+    ASSERT_EQ(probe.observe(12u, SmokeTimerAddMs(begin, 500)), PresentationFpsStatus::Interval);
+    EXPECT_EQ(probe.interval().presentations(), 0u);
+    EXPECT_DOUBLE_EQ(probe.interval().averageFps(), 0.0);
+}
+
+void VerifyPresentationFpsProbeBatchedObservations(){
+    PresentationFpsProbe probe(0.0);
+    const Timer begin = Timer();
+    EXPECT_EQ(probe.observe(100u, begin), PresentationFpsStatus::Waiting);
+    ASSERT_EQ(probe.observe(115u, SmokeTimerAddMs(begin, 500)), PresentationFpsStatus::Interval);
+    ASSERT_EQ(probe.observe(116u, SmokeTimerAddMs(begin, 2500)), PresentationFpsStatus::Interval);
+    EXPECT_EQ(probe.interval().presentations(), 1u);
+    EXPECT_DOUBLE_EQ(probe.interval().averageFps(), 0.5);
+    EXPECT_EQ(probe.total().presentations(), 16u);
+    EXPECT_DOUBLE_EQ(probe.total().averageFps(), 6.4);
+}
+
+void VerifyPresentationFpsProbeWarmupAndCompletion(){
+    PresentationFpsProbe probe(5.0, 30.0);
+    const Timer begin = Timer();
+    EXPECT_EQ(probe.observe(0u, begin), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(probe.observe(90u, SmokeTimerAddMs(begin, 4999)), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(probe.observe(91u, SmokeTimerAddMs(begin, 5100)), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(probe.observe(540u, SmokeTimerAddMs(begin, 35000)), PresentationFpsStatus::Interval);
+    ASSERT_EQ(probe.observe(542u, SmokeTimerAddMs(begin, 35200)), PresentationFpsStatus::Complete);
+    EXPECT_EQ(probe.total().firstPresentationCount, 91u);
+    EXPECT_EQ(probe.total().lastPresentationCount, 542u);
+    EXPECT_DOUBLE_EQ(probe.total().wallSeconds, 30.1);
+    EXPECT_DOUBLE_EQ(probe.total().averageFps(), 451.0 / 30.1);
+    EXPECT_EQ(probe.observe(600u, SmokeTimerAddMs(begin, 40000)), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(probe.total().lastPresentationCount, 542u);
+}
+
+void VerifyPresentationFpsProbeZeroPresentations(){
+    PresentationFpsProbe probe(0.0, 1.0);
+    const Timer begin = Timer();
+    EXPECT_EQ(probe.observe(0u, begin), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(probe.observe(0u, SmokeTimerAddMs(begin, 1000)), PresentationFpsStatus::Complete);
+    EXPECT_EQ(probe.total().presentations(), 0u);
+    EXPECT_DOUBLE_EQ(probe.total().averageFps(), 0.0);
+}
+
+void VerifyPresentationPacingRingFrequentIdlePolls(){
+    PresentationPacingRing ring = PresentationPacingRing();
+    const Timer begin = Timer();
+    ring.record(0u, begin);
+    for(i64 milliseconds = 10; milliseconds <= 90; milliseconds += 10)
+        ring.record(0u, SmokeTimerAddMs(begin, milliseconds));
+    EXPECT_EQ(ring.sampleCount(), 0u);
+    EXPECT_EQ(ring.stallCount(), 1u);
+    ring.record(1u, SmokeTimerAddMs(begin, 100));
+    ring.record(1u, SmokeTimerAddMs(begin, 150));
+    ring.record(1u, SmokeTimerAddMs(begin, 160));
+    EXPECT_EQ(ring.stallCount(), 2u);
+    ring.record(2u, SmokeTimerAddMs(begin, 200));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_DOUBLE_EQ(summary.p50Ms, 100.0);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 100.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 2u);
+}
+
+void VerifyPresentationPacingRingBatchedAdvance(){
+    PresentationPacingRing ring = PresentationPacingRing();
+    const Timer begin = Timer();
+    ring.record(10u, begin);
+    ring.record(10u, SmokeTimerAddMs(begin, 25));
+    ring.record(14u, SmokeTimerAddMs(begin, 80));
+    ring.record(14u, SmokeTimerAddMs(begin, 88));
+    ring.record(15u, SmokeTimerAddMs(begin, 96));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 20.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 0u);
+}
+
+void VerifyPresentationPacingRingIdleClockRegression(){
+    PresentationPacingRing ring = PresentationPacingRing();
+    const Timer begin = Timer();
+    ring.record(10u, begin);
+    ring.record(11u, SmokeTimerAddMs(begin, 16));
+    ring.record(11u, SmokeTimerAddMs(begin, 80));
+    EXPECT_EQ(ring.stallCount(), 1u);
+    ring.record(11u, SmokeTimerAddMs(begin, 70));
+    EXPECT_EQ(ring.sampleCount(), 0u);
+    EXPECT_EQ(ring.stallCount(), 0u);
+    ring.record(11u, SmokeTimerAddMs(begin, 100));
+    ring.record(12u, SmokeTimerAddMs(begin, 116));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 1u);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 16.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 0u);
+}
+
+void VerifyPresentationPacingRingRegressingCount(){
+    PresentationPacingRing ring = PresentationPacingRing();
+    const Timer begin = Timer();
+    ring.record(100u, begin);
+    ring.record(110u, SmokeTimerAddMs(begin, 160));
+    EXPECT_EQ(ring.sampleCount(), 1u);
+    ring.record(99u, SmokeTimerAddMs(begin, 320));
+    EXPECT_EQ(ring.sampleCount(), 0u);
+    ring.record(99u, SmokeTimerAddMs(begin, 320));
+    ring.record(100u, SmokeTimerAddMs(begin, 336));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 1u);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 16.0);
+}
+
+void VerifyPresentationFpsProbeRegressingCountOrClock(){
+    const Timer begin = Timer();
+    PresentationFpsProbe countProbe(0.0);
+    EXPECT_EQ(countProbe.observe(100u, begin), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(countProbe.observe(99u, SmokeTimerAddMs(begin, 500)), PresentationFpsStatus::Invalid);
+    EXPECT_EQ(countProbe.observe(101u, SmokeTimerAddMs(begin, 1000)), PresentationFpsStatus::Invalid);
+    PresentationFpsProbe clockProbe(0.0);
+    EXPECT_EQ(clockProbe.observe(0u, begin), PresentationFpsStatus::Waiting);
+    EXPECT_EQ(clockProbe.observe(1u, SmokeTimerAddMs(begin, -1)), PresentationFpsStatus::Invalid);
+}
+
+void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 hasValue){
+    String nameCopy = String(name);
+    String valueCopy = String(value);
+    native(in nameCopy, in valueCopy, in hasValue){
+        ASSERT_EQ(hasValue ? ::setenv(nameCopy.c_str(), valueCopy.c_str(), 1) : ::unsetenv(nameCopy.c_str()), 0);
+    }
+}
+
+void VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations(){
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "", false);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ATLAS", "open", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "", false);
+    CsgShadowMode initial = CsgShadowMode();
+    EXPECT_FALSE(initial.read(false));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "boundary64", true);
+    CsgShadowMode open = CsgShadowMode();
+    ASSERT_TRUE(open.read(false));
+    EXPECT_EQ(open.openCase, CsgShadowOpenCase::Boundary64);
+    EXPECT_EQ(open.openCaseName(), "boundary64");
+    CsgShadowMode openCaustic = CsgShadowMode();
+    EXPECT_FALSE(openCaustic.read(true));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "point", true);
+    CsgShadowMode openPoint = CsgShadowMode();
+    EXPECT_FALSE(openPoint.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT", "directional", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "finite", true);
+    CsgShadowMode openFinite = CsgShadowMode();
+    EXPECT_FALSE(openFinite.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_LIGHT_SOURCE", "hard", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_OPEN_CASE", "unknown", true);
+    CsgShadowMode openUnknown = CsgShadowMode();
+    EXPECT_FALSE(openUnknown.read(false));
+
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ATLAS", "analytic", true);
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "uncut", true);
+    CsgShadowMode analyticUncut = CsgShadowMode();
+    EXPECT_TRUE(analyticUncut.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "moved", true);
+    CsgShadowMode analyticMoved = CsgShadowMode();
+    EXPECT_FALSE(analyticMoved.read(false));
+    SetCsgShadowModeEnvironment("NWB_CSG_SHADOW_ARM", "invalid", true);
+    CsgShadowMode analyticInvalid = CsgShadowMode();
+    EXPECT_FALSE(analyticInvalid.read(false));
+}
+
+b8 JointMatricesEqual(in Span<f32x3x4> lhs, in Span<f32x3x4> rhs, in usize index){
+    b8 equal = false;
+    native(in lhs, in rhs, in index, mut equal){
+        equal = NWB_MEMCMP(&lhs[index], &rhs[index], sizeof(lhs[index])) == 0;
+    }
+    return equal;
+}
+
+void VerifySkinningBenchmarkPoseStep1(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints, mut Vector<f32x3x4> firstPose){
+    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    u32 changedJoints = 0u;
+    for(usize i = 0u; i < bindJoints.size(); ++i){
+        firstPose.push_back(localJoints[i]);
+        if(!JointMatricesEqual(localJoints, bindJoints, i))
+            ++changedJoints;
+    }
+    EXPECT_GT(changedJoints, 0u);
+}
+
+void VerifySkinningBenchmarkPoseStep2(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
+    for(usize i = 0u; i < firstPose.size(); ++i)
+        EXPECT_TRUE(JointMatricesEqual(localJoints, firstPose, i));
+}
+
+void VerifySkinningBenchmarkPoseStep3(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
+    b8 changedWithTime = false;
+    for(usize i = 1u; i < firstPose.size(); ++i)
+        changedWithTime = changedWithTime || !JointMatricesEqual(localJoints, firstPose, i);
+    EXPECT_TRUE(changedWithTime);
+}
+
+void VerifySkinningBenchmarkPoseStep4(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints){
+    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    b8 changedInBenchmarkMode = false;
+    for(usize i = 1u; i < bindJoints.size(); ++i)
+        changedInBenchmarkMode = changedInBenchmarkMode || !JointMatricesEqual(localJoints, bindJoints, i);
+    EXPECT_TRUE(changedInBenchmarkMode);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

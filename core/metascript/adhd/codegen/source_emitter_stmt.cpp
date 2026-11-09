@@ -292,7 +292,10 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append(");\r\n");
         }
         emitIndent(out, indent + 1u);
-        AppendTextDiscardCrAndExpandLf(out, stmt.nativeCode);
+        const MStringView trimmedNative = TrimView(stmt.nativeCode);
+        AppendTextDiscardCrAndExpandLf(out, trimmedNative);
+        if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}')
+            out.push_back(';');
         out.append("\r\n");
         emitIndent(out, indent);
         out.append("}\r\n");

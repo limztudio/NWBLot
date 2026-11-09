@@ -5,6 +5,8 @@
 #include "last_use_move_analyzer.h"
 #include "type_checker.h"
 
+#include <global/source_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,9 +51,50 @@ namespace __hidden_adhd_type_checker_infer{
     return false;
 }
 
+[[nodiscard]] b8 NativeCodeReferencesIdentifier(const MStringView nativeCode, const MStringView varName)noexcept{
+    if(nativeCode.empty() || varName.empty())
+        return false;
+    usize i = 0u;
+    while(i < nativeCode.size()){
+        const MChar ch = nativeCode[i];
+        if(ch == '\'' && i > 0u && (IsAsciiDigit(nativeCode[i - 1u]) || IsAsciiIdentifierChar(nativeCode[i - 1u]))){
+            ++i;
+            continue;
+        }
+        if(ch == '"' || ch == '\''){
+            i = SkipQuotedLiteral(nativeCode, i);
+            continue;
+        }
+        if(i + 1u < nativeCode.size() && ch == '/' && nativeCode[i + 1u] == '/'){
+            while(i < nativeCode.size() && nativeCode[i] != '\n')
+                ++i;
+            continue;
+        }
+        if(i + 1u < nativeCode.size() && ch == '/' && nativeCode[i + 1u] == '*'){
+            const usize closeComment = nativeCode.find("*/", i + 2u);
+            if(closeComment == MStringView::npos)
+                break;
+            i = closeComment + 2u;
+            continue;
+        }
+        if(IsAsciiIdentifierStart(ch)){
+            const usize start = i;
+            while(i < nativeCode.size() && IsAsciiIdentifierChar(nativeCode[i]))
+                ++i;
+            if(nativeCode.substr(start, i - start) == varName)
+                return true;
+            continue;
+        }
+        ++i;
+    }
+    return false;
+}
+
 [[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, const MStringView varName)noexcept{
     if(!stmt)
         return false;
+    if(stmt->kind == StmtKind::NativeBlock && NativeCodeReferencesIdentifier(stmt->nativeCode, varName))
+        return true;
     if(stmt->initStmt && StmtReferencesIdentifier(stmt->initStmt, varName))
         return true;
     if(ExprReferencesIdentifier(stmt->expr, varName) || ExprReferencesIdentifier(stmt->condition, varName) || ExprReferencesIdentifier(stmt->stepExpr, varName))

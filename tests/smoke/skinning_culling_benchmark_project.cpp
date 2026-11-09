@@ -2,10 +2,250 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "skinning_culling_runtime_provider.h"
-#include "skinning_benchmark_pose_animator.h"
-#include "skinning_benchmark_scene.h"
-#include "smoke_capture_teardown.h"
+
+
+#include "smoke_skinned_scene_helpers.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+class SkinningBenchmarkScene final{
+public:
+    [[nodiscard]] static b8 Populate(
+        u32 characterCount,
+        b8 staticPreview,
+        const SmokeModelRef& model,
+        const SmokeMaterialRef& material,
+        Name skeletonObject,
+        const Float4& cameraPosition,
+        Core::ECS::World& world,
+        Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena>& skeletonEntities,
+        Core::ECS::EntityID& cameraEntity
+    );
+};
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/module.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SkinningBenchmarkScene::Populate(
+    const u32 characterCount,
+    const b8 staticPreview,
+    const SmokeModelRef& model,
+    const SmokeMaterialRef& material,
+    const Name skeletonObject,
+    const Float4& cameraPosition,
+    Core::ECS::World& world,
+    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena>& skeletonEntities,
+    Core::ECS::EntityID& cameraEntity
+){
+    auto activeCameraEntity = world.createEntity();
+    auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
+    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, cameraPosition);
+    cameraEntity = activeCamera.camera;
+    const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(world, -0.65f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
+    if(!activeCamera.camera.valid() || !directionalLight.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+        return false;
+    }
+
+    skeletonEntities.reserve(characterCount);
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSkinningCullingModelOwners)};
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> modelOwners(scratchArena);
+    modelOwners.reserve(characterCount);
+    for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
+        auto entity = world.createEntity();
+        auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+        const SIMDVectorSingle position = staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
+        StoreFloat(position, transform.position);
+        transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
+        auto& modelComponent = entity.addComponent<Impl::ModelComponent>();
+        modelComponent.model = model;
+        auto& renderer = entity.addComponent<Impl::RendererComponent>();
+        renderer.material = material;
+        modelOwners.push_back(entity.id());
+    }
+
+    SyncSmokeModelRuntimes(world);
+    for(const Core::ECS::EntityID owner : modelOwners){
+        const Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(owner, skeletonObject, Impl::ModelObjectKind::Skeleton, world);
+        if(!skeletonEntity.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
+            return false;
+        }
+        skeletonEntities.push_back(skeletonEntity);
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_mesh/skinning/system.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SkinningCullingBenchmarkImpl{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace BenchmarkMode{
+    enum Enum : u8{
+        NoCulling,
+        FrustumOnly,
+        FrustumCone,
+    };
+};
+
+class BenchmarkRuntimeMeshProvider final : public NWB::Impl::IRuntimeMeshProvider{
+public:
+    BenchmarkRuntimeMeshProvider()noexcept = default;
+    virtual ~BenchmarkRuntimeMeshProvider()noexcept override{
+        uninstall();
+    }
+
+
+public:
+    void install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::MeshSkinningSystem& meshSkinningSystem){
+        if(m_registered)
+            return;
+
+        m_meshSystem = &meshSystem;
+        m_meshSkinningSystem = &meshSkinningSystem;
+        m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
+        m_meshSystem->registerRuntimeMeshProvider(*this);
+        m_registered = true;
+    }
+
+    void uninstall(){
+        if(!m_registered || !m_meshSystem || !m_meshSkinningSystem)
+            return;
+
+        m_meshSystem->unregisterRuntimeMeshProvider(*this);
+        m_meshSystem->registerRuntimeMeshProvider(*m_meshSkinningSystem);
+        m_meshSystem = nullptr;
+        m_meshSkinningSystem = nullptr;
+        m_registered = false;
+    }
+
+    void setMode(const BenchmarkMode::Enum mode)noexcept{
+        m_mode = mode;
+    }
+
+    virtual Expected<NWB::Impl::RuntimeMeshDesc> resolveRuntimeMesh(const NWB::Core::ECS::EntityID entity)override{
+        if(!m_meshSkinningSystem)
+            return MakeUnexpected(Failure{});
+        auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
+        if(!mesh)
+            return MakeUnexpected(Failure{});
+
+        switch(m_mode){
+        case BenchmarkMode::NoCulling:
+            mesh->dynamicMeshletBoundsFresh = false;
+            mesh->dynamicMeshletConesFresh = false;
+            return Move(*mesh);
+        case BenchmarkMode::FrustumOnly:
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = false;
+            return Move(*mesh);
+        case BenchmarkMode::FrustumCone:
+        default:
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = true;
+            return Move(*mesh);
+        }
+    }
+
+    virtual void markLiveRuntimeMeshes(NWB::Impl::RuntimeMeshRequestSet& requests)override{
+        if(m_meshSkinningSystem)
+            m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
+    }
+
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const noexcept override{
+        return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
+    }
+
+
+private:
+    NWB::Impl::MeshSystem* m_meshSystem = nullptr;
+    NWB::Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
+    BenchmarkMode::Enum m_mode = BenchmarkMode::FrustumCone;
+    b8 m_registered = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "smoke_skinned_scene_helpers.h"
+#include "smoke_scene_helpers.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 #include "gpu_pass_timing_probe.h"
@@ -396,4 +636,3 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

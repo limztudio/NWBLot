@@ -3364,6 +3364,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
 
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -3379,18 +3380,7 @@ namespace __hidden_mesh_acceleration_update_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
-
-[[nodiscard]] static ECSRenderDetail::MeshRayTracingResourceSnapshot AcceptedRuntimeGeometry()noexcept{
-    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-    mesh.runtimeMesh = true;
-    mesh.runtimeGeometryContentRevision = 7u;
-    mesh.blasGeometryContentRevision = 7u;
-    mesh.swBvhGeometryContentRevision = 7u;
-    mesh.blasBuildAccepted = true;
-    mesh.swBvhBuildAccepted = true;
-    mesh.swBvhTopologyBuilt = true;
-    return mesh;
-}
+using NWB::Tests::EcsGraphicsCases::AcceptedRuntimeGeometry;
 
 TEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration){
     auto mesh = AcceptedRuntimeGeometry();
@@ -5458,27 +5448,9 @@ using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<Reflecti
 using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<ReflectionStatisticsReservation>;
 
 inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
-
-[[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
-    ReflectionStatistics value;
-    value.frameIndex = frameIndex;
-    value.width = 320u;
-    value.height = 180u;
-    value.requestedHardwareBudget = 128u;
-    value.effectiveHardwareBudget = 64u;
-    value.queueCapacity = 64u;
-    value.maxOpticalQueries = 8u;
-    value.traceMode = ReflectionTraceMode::Hybrid;
-    value.hardwareRequested = true;
-    value.hardwareAvailable = true;
-    return value;
-}
-
-[[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionStatisticsLease)).setMarkerLabel("Statistics lease");
-    return desc;
-}
+using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsMetadata;
+using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsMetadataAt;
+using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsTaskDesc;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -5487,23 +5459,23 @@ inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZ
 TEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(Metadata());
-    const auto second = context.control->reserve(Metadata());
-    const auto third = context.control->reserve(Metadata());
+    const auto first = context.control->reserve(MakeReflectionStatisticsMetadata());
+    const auto second = context.control->reserve(MakeReflectionStatisticsMetadata());
+    const auto third = context.control->reserve(MakeReflectionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     EXPECT_NE(first.slot, second.slot);
     EXPECT_NE(second.slot, third.slot);
-    EXPECT_FALSE(context.control->reserve(Metadata()).valid());
+    EXPECT_FALSE(context.control->reserve(MakeReflectionStatisticsMetadata()).valid());
 }
 
 TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMutation){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(Metadata());
+    const auto previous = context.control->reserve(MakeReflectionStatisticsMetadata());
     context.control->discard(previous);
-    const auto current = context.control->reserve(Metadata(10u));
+    const auto current = context.control->reserve(MakeReflectionStatisticsMetadataAt(10u));
     ASSERT_EQ(previous.slot, current.slot);
     ASSERT_GT(current.sequence, previous.sequence);
     context.control->discard(previous);
@@ -5520,7 +5492,7 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
     for(const b8 csgHardwareEnabled : s_Variants){
         StatisticsContext context;
         ASSERT_TRUE(context.control);
-        ReflectionStatistics metadata = Metadata();
+        ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
         metadata.csgHardwareEnabled = csgHardwareEnabled;
         const auto key = context.control->reserve(metadata);
         metadata.frameIndex = 500u;
@@ -5550,7 +5522,7 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
 TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    ReflectionStatistics metadata = Metadata();
+    ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
     metadata.feedbackRequested = true;
     metadata.feedbackSequence = 12u;
     metadata.schedulingCounterValid = true;
@@ -5575,8 +5547,8 @@ TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
 TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto older = context.control->reserve(Metadata(10u));
-    const auto newer = context.control->reserve(Metadata(11u));
+    const auto older = context.control->reserve(MakeReflectionStatisticsMetadataAt(10u));
+    const auto newer = context.control->reserve(MakeReflectionStatisticsMetadataAt(11u));
     context.control->accept(older, Token(20u), true);
     context.control->accept(newer, Token(21u), false);
     const Array<u32, s_ReflectionCounterWordCount> counters = {};
@@ -5588,13 +5560,13 @@ TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     EXPECT_EQ(statistics->sequence, newer.sequence);
     EXPECT_EQ(statistics->frameIndex, 11u);
     EXPECT_FALSE(statistics->hardwareReady);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, older.slot);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, older.slot);
 }
 
 TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(Metadata());
+    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
     context.control->accept(key, Token(), true);
     const Array<u32, s_ReflectionCounterWordCount> counters = {};
     Core::QueueSubmissionToken wrong = Token();
@@ -5614,14 +5586,14 @@ TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
 TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(Metadata());
+    const auto previous = context.control->reserve(MakeReflectionStatisticsMetadata());
     context.control->accept(previous, Token(), true);
     const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(8u);
     Expected<ReflectionStatistics> statistics;
     EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    const auto current = context.control->reserve(Metadata(12u));
+    const auto current = context.control->reserve(MakeReflectionStatisticsMetadataAt(12u));
     EXPECT_GT(current.generation, previous.generation);
     context.control->accept(previous, Token(), true);
     context.control->discard(previous);
@@ -5639,41 +5611,41 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
 TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(Metadata());
+    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
     context.control->accept(key, Token(), true);
     context.control->complete(key, Token(), {});
     EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
 TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(Metadata());
+    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
     context.control->accept(key, {}, true);
     context.control->discard(key);
     EXPECT_FALSE(context.control->pending(key.slot));
     EXPECT_FALSE(context.control->pending(s_StatisticsReadbackSlotCount));
     EXPECT_FALSE(context.control->pending(Limit<u32>::s_Max));
-    EXPECT_NE(context.control->reserve(Metadata()).slot, key.slot);
+    EXPECT_NE(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
     context.control->reset(7u);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
 TEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    ReflectionStatisticsReservation first(context.control, Metadata());
+    ReflectionStatisticsReservation first(context.control, MakeReflectionStatisticsMetadata());
     const u32 firstSlot = first.slotIndex();
     ReflectionStatisticsReservation second(Move(first));
     EXPECT_FALSE(first.valid());
     EXPECT_EQ(second.slotIndex(), firstSlot);
-    ReflectionStatisticsReservation third(context.control, Metadata());
+    ReflectionStatisticsReservation third(context.control, MakeReflectionStatisticsMetadata());
     const u32 replacedSlot = third.slotIndex();
     third = Move(second);
     EXPECT_FALSE(second.valid());
     EXPECT_EQ(third.slotIndex(), firstSlot);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, replacedSlot);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);
 }
 
 TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
@@ -5681,32 +5653,32 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
     ASSERT_TRUE(context.control);
     u32 index = 0u;
     {
-        ReflectionStatisticsReservation lease(context.control, Metadata());
+        ReflectionStatisticsReservation lease(context.control, MakeReflectionStatisticsMetadata());
         index = lease.slotIndex();
         lease.acceptReservation(Token(), true);
     }
-    EXPECT_NE(context.control->reserve(Metadata()).slot, index);
+    EXPECT_NE(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, index);
     const auto pending = context.control->pending(index);
     ASSERT_TRUE(pending);
     const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(pending->key, pending->token, counters);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, index);
 }
 
 TEST(ReflectionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).has_value());
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
+    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())}).has_value());
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
     context.control->reset(1u);
     {
-        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(MakeReflectionStatisticsTaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())});
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
 TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback){
@@ -5714,12 +5686,12 @@ TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback
     ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     {
-        const auto gpuTaskAdmission = graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        const auto gpuTaskAdmission = graph.addTask<DestructorLeaseTask>(MakeReflectionStatisticsTaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())});
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
+    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
 
@@ -5755,18 +5727,8 @@ using ReflectionStatisticsTestHelpers::Token;
 using StatisticsContext = ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsControl>;
 
 inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
-
-[[nodiscard]] RefractionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
-    RefractionStatistics value;
-    value.frameIndex = frameIndex;
-    value.graphicsFrameIndex = 100u + frameIndex;
-    value.width = 320u;
-    value.height = 180u;
-    value.hardwareRequested = true;
-    value.hardwareAvailable = true;
-    value.csgHardwareEnabled = true;
-    return value;
-}
+using NWB::Tests::EcsGraphicsCases::MakeRefractionStatisticsMetadata;
+using NWB::Tests::EcsGraphicsCases::MakeRefractionStatisticsMetadataAt;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -5775,9 +5737,9 @@ inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_
 TEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(Metadata());
-    const auto second = context.control->reserve(Metadata());
-    const auto third = context.control->reserve(Metadata());
+    const auto first = context.control->reserve(MakeRefractionStatisticsMetadata());
+    const auto second = context.control->reserve(MakeRefractionStatisticsMetadata());
+    const auto third = context.control->reserve(MakeRefractionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
@@ -5786,18 +5748,18 @@ TEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork){
     EXPECT_NE(second.slot, third.slot);
     context.control->accept(first, Token(), true);
     context.control->discard(first);
-    EXPECT_FALSE(context.control->reserve(Metadata()).valid());
+    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
     context.control->discard(second);
-    const auto reused = context.control->reserve(Metadata(10u));
+    const auto reused = context.control->reserve(MakeRefractionStatisticsMetadataAt(10u));
     EXPECT_EQ(reused.slot, second.slot);
     EXPECT_GT(reused.sequence, second.sequence);
-    EXPECT_FALSE(context.control->reserve(Metadata()).valid());
+    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
 }
 
 TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(Metadata());
+    const auto key = context.control->reserve(MakeRefractionStatisticsMetadata());
     context.control->accept(key, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};
     Core::QueueSubmissionToken wrong = Token();
@@ -5824,7 +5786,7 @@ TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
 TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    RefractionStatistics metadata = Metadata(10u);
+    RefractionStatistics metadata = MakeRefractionStatisticsMetadataAt(10u);
     const auto older = context.control->reserve(metadata);
     metadata.frameIndex = 11u;
     metadata.graphicsFrameIndex = 111u;
@@ -5859,21 +5821,21 @@ TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
 #define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics->field, s_Counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
     NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
 #undef NWB_CHECK_REFRACTION_COUNTER
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, older.slot);
+    EXPECT_EQ(context.control->reserve(MakeRefractionStatisticsMetadata()).slot, older.slot);
 }
 
 TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(Metadata());
+    const auto previous = context.control->reserve(MakeRefractionStatisticsMetadata());
     context.control->accept(previous, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(0u);
     EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    EXPECT_FALSE(context.control->reserve(Metadata()).valid());
+    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
     context.control->reset(8u);
-    const auto current = context.control->reserve(Metadata(12u));
+    const auto current = context.control->reserve(MakeRefractionStatisticsMetadataAt(12u));
     ASSERT_TRUE(current.valid());
     EXPECT_GT(current.generation, previous.generation);
     context.control->accept(previous, Token(), true);
@@ -5895,17 +5857,17 @@ TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
 TEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(Metadata());
+    const auto first = context.control->reserve(MakeRefractionStatisticsMetadata());
     context.control->accept(first, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};
     context.control->complete(first, Token(), counters);
-    const auto failed = context.control->reserve(Metadata(10u));
+    const auto failed = context.control->reserve(MakeRefractionStatisticsMetadataAt(10u));
     context.control->accept(failed, Token(21u), true);
     context.control->complete(failed, Token(21u), {});
     const auto statistics = context.control->tryGetLatestStatistics();
     ASSERT_TRUE(statistics);
     EXPECT_EQ(statistics->sequence, first.sequence);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, failed.slot);
+    EXPECT_EQ(context.control->reserve(MakeRefractionStatisticsMetadata()).slot, failed.slot);
 }
 
 
@@ -7377,37 +7339,11 @@ namespace __hidden_task_timing_feedback_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
-
-
-[[nodiscard]] static Core::QueueSubmissionToken AcceptedToken(const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& queue)noexcept{
-    return Core::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = queue.index, .deviceGeneration = queue.deviceGeneration, .queue = key.queue, };
-}
-
-[[nodiscard]] static Core::GpuTimingSample PublishedSample(const Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuPhysicalQueueId& queue, const u64 sourceFrameIndex, const f64 durationSeconds)noexcept{
-    return Core::GpuTimingSample{ .sourceFrameIndex = sourceFrameIndex, .durationSeconds = durationSeconds, .scopeName = scopeName, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = true, };
-}
-
-[[nodiscard]] static Core::GpuTimingSample RetiredSample(const Core::GpuTimingSampleAttribution attribution, const Core::GpuPhysicalQueueId& queue)noexcept{
-    return Core::GpuTimingSample{ .sourceFrameIndex = 0u, .durationSeconds = 0.0, .scopeName = s_NameNone, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = false, };
-}
-
-static void ExpectArenaMemoryUnchanged(const ArenaMemoryStats& before, const ArenaMemoryStats& after){
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-    EXPECT_EQ(after.allocationCount, before.allocationCount);
-    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-}
-
-static void ExpectPolicyEqual(const Core::GpuTaskTimingFeedbackPolicy& actual, const Core::GpuTaskTimingFeedbackPolicy& expected){
-    EXPECT_EQ(actual.enabled, expected.enabled);
-    EXPECT_EQ(actual.minimumSampleCount, expected.minimumSampleCount);
-    EXPECT_EQ(actual.calibrationIntervalFrames, expected.calibrationIntervalFrames);
-    EXPECT_EQ(actual.minimumAbsoluteBenefitSeconds, expected.minimumAbsoluteBenefitSeconds);
-    EXPECT_EQ(actual.minimumRelativeBenefit, expected.minimumRelativeBenefit);
-    EXPECT_EQ(actual.minimumFramesBetweenSwitches, expected.minimumFramesBetweenSwitches);
-}
+using NWB::Tests::EcsGraphicsCases::AcceptedToken;
+using NWB::Tests::EcsGraphicsCases::PublishedSample;
+using NWB::Tests::EcsGraphicsCases::RetiredSample;
+using NWB::Tests::EcsGraphicsCases::ExpectArenaMemoryUnchanged;
+using NWB::Tests::EcsGraphicsCases::ExpectPolicyEqual;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

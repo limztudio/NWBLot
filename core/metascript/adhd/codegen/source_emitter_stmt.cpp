@@ -59,6 +59,17 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
     case StmtKind::VarDecl:{
         if(tryEmitSimdVarDeclStmt(out, stmt, indent))
             break;
+        if(stmt.varType && stmt.varType->isAuto && stmt.varType->refMode != ParamPassingMode::None && stmt.expr){
+            emitIndent(out, indent);
+            if(stmt.isConst)
+                out.append("const ");
+            out.append("auto ");
+            out.append(stmt.name.data(), stmt.name.size());
+            out.append(stmt.varType->refMode == ParamPassingMode::In ? " = ([&]()noexcept{ const auto& __adhd_ref = (" : " = ([&]()noexcept{ auto& __adhd_ref = (");
+            emitExpr(out, *stmt.expr);
+            out.append("); return ::MakeNotNull(&__adhd_ref); }());\r\n");
+            break;
+        }
         emitIndent(out, indent);
         if(stmt.isConst)
             out.append("const ");
@@ -277,9 +288,24 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
     case StmtKind::NativeBlock:{
         emitIndent(out, indent);
         out.append("{\r\n");
-        for(const NativeBinding& binding : stmt.nativeBindings){
-            if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName)
+        b8 hasDerefShadowBindings = false;
+        for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
+            const NativeBinding& binding = stmt.nativeBindings[i];
+            if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName){
+                if(binding.sourceExpr->derefNotNull){
+                    hasDerefShadowBindings = true;
+                    emitIndent(out, indent + 1u);
+                    if(binding.mode == ParamPassingMode::In)
+                        out.append("const auto* __adhd_native_ptr_");
+                    else
+                        out.append("auto* __adhd_native_ptr_");
+                    AppendUnsignedDecimal(out, static_cast<u32>(i));
+                    out.append(" = &(");
+                    emitExpr(out, *binding.sourceExpr);
+                    out.append(");\r\n");
+                }
                 continue;
+            }
             emitIndent(out, indent + 1u);
             if(binding.mode == ParamPassingMode::In)
                 out.append("const auto& ");
@@ -291,7 +317,26 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 emitExpr(out, *binding.sourceExpr);
             out.append(");\r\n");
         }
-        emitIndent(out, indent + 1u);
+        const u32 bodyIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        if(hasDerefShadowBindings){
+            emitIndent(out, indent + 1u);
+            out.append("{\r\n");
+            for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
+                const NativeBinding& binding = stmt.nativeBindings[i];
+                if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && binding.sourceExpr->derefNotNull){
+                    emitIndent(out, bodyIndent);
+                    if(binding.mode == ParamPassingMode::In)
+                        out.append("const auto& ");
+                    else
+                        out.append("auto& ");
+                    out.append(binding.aliasName.data(), binding.aliasName.size());
+                    out.append(" = *__adhd_native_ptr_");
+                    AppendUnsignedDecimal(out, static_cast<u32>(i));
+                    out.append(";\r\n");
+                }
+            }
+        }
+        emitIndent(out, bodyIndent);
         const MStringView trimmedNative = TrimView(stmt.nativeCode);
         AppendTextDiscardCrAndExpandLf(out, trimmedNative);
         const usize lastNl = trimmedNative.rfind('\n');
@@ -299,6 +344,10 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}' && (lastLine.empty() || lastLine[0] != '#'))
             out.push_back(';');
         out.append("\r\n");
+        if(hasDerefShadowBindings){
+            emitIndent(out, indent + 1u);
+            out.append("}\r\n");
+        }
         emitIndent(out, indent);
         out.append("}\r\n");
         break;

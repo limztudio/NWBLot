@@ -2,26 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "gtest_macros.adhd"
+
 native{
 #include <engine_namespace.h>
 
 #include <global/arena_memory.h>
 #include <global/global.h>
 
-#include <gtest/gtest.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_BEGIN
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace Tests{
 
-[[nodiscard]] ArenaMemoryStats OwnerStats(const Name& name, ArenaMemorySource::Enum source = ArenaMemorySource::Arena)noexcept;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ArenaMemorySourceEnum = ArenaMemorySource::Enum;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_END
 }
-
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,26 +54,26 @@ void ExpectMemoryStatsEqual(in ArenaMemoryStats expected, in ArenaMemoryStats ac
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-native{
-NWB_BEGIN
-
-namespace Tests{
-
-ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source)noexcept{
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.ownerName == name && snapshot.source == source)
-            return snapshot.stats;
+ArenaMemoryStats OwnerStats(in Name name, in ArenaMemorySourceEnum source){
+    ArenaMemoryStats stats = ArenaMemoryStats();
+    native(in name, in source, mut stats){
+        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+        while(record){
+            ArenaMemoryOwnerSnapshot snapshot;
+            record = ReadArenaMemoryOwnerRecord(*record, snapshot);
+            if(snapshot.ownerName == name && snapshot.source == source){
+                stats = snapshot.stats;
+                break;
+            }
+        }
     }
-    return {};
+    return stats;
 }
 
-};
-
-NWB_END
+ArenaMemoryStats OwnerStats(in Name name){
+    return OwnerStats(name, ArenaMemorySource::Arena);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

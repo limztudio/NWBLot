@@ -8,30 +8,33 @@ native{
 #include <core/common/application_entry.h>
 
 #include <global/global.h>
-
-namespace NWB::Tests{
-inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
-};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-i32 GoogleTestInitFailureExitCode(){
-    return -1;
-}
+const StringView s_ThreadsafeDeathTestStyle = "threadsafe";
+const i32 s_GoogleTestInitFailureExitCode = -1;
 
 native{
 NWB_BEGIN
 
-namespace Tests{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::GTestMain{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static int GoogleTestEntryPoint(const isize argc, tchar** argv, [[maybe_unused]] void* userData){
     Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "test common initialization failed\n";
-        return GoogleTestInitFailureExitCode();
+        return s_GoogleTestInitFailureExitCode;
     }
 
     int googleTestArgc = static_cast<int>(argc);
@@ -41,12 +44,21 @@ static int GoogleTestEntryPoint(const isize argc, tchar** argv, [[maybe_unused]]
     return RUN_ALL_TESTS();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_END
 
-NWB_DEFINE_APPLICATION_ENTRY_POINT(::NWB::Tests::GoogleTestEntryPoint)
+NWB_DEFINE_APPLICATION_ENTRY_POINT(::NWB::Tests::GTestMain::GoogleTestEntryPoint)
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

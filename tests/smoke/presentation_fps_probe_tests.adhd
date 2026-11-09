@@ -2,18 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/gtest_macros.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 
 native{
 #include <core/common/global.h>
 #include <global/timer.h>
-#include <gtest/gtest.h>
 }
-
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-#define EXPECT_DOUBLE_EQ(...) native{ EXPECT_DOUBLE_EQ(...) }
-#define ASSERT_EQ(...) native{ ASSERT_EQ(...) }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,43 +149,16 @@ void VerifyPresentationFpsProbeRegressingCountOrClock(){
     EXPECT_EQ(clockProbe.observe(1u, SmokeTimerAddMs(begin, -1)), PresentationFpsStatus::Invalid);
 }
 
-native{
-TEST(PresentationFpsProbe, IdleCallbacksNeverBecomePresentations){
-    VerifyPresentationFpsProbeIdleCallbacks();
-}
-
-TEST(PresentationFpsProbe, BatchedObservationsCountEveryPresentationAndKeepLongStalls){
-    VerifyPresentationFpsProbeBatchedObservations();
-}
-
-TEST(PresentationFpsProbe, WarmupAndCompletionUseActualWallAnchorsWithoutClamping){
-    VerifyPresentationFpsProbeWarmupAndCompletion();
-}
-
-TEST(PresentationFpsProbe, ZeroPresentationsCanCompleteButCannotClaimThroughput){
-    VerifyPresentationFpsProbeZeroPresentations();
-}
-
-TEST(PresentationPacingRing, FrequentIdlePollsCountEachPendingStallOnce){
-    VerifyPresentationPacingRingFrequentIdlePolls();
-}
-
-TEST(PresentationPacingRing, BatchedAdvanceAveragesTheWholeIntervalAfterIdlePolling){
-    VerifyPresentationPacingRingBatchedAdvance();
-}
-
-TEST(PresentationPacingRing, IdleClockRegressionResetsEvenAfterLastPresentationTime){
-    VerifyPresentationPacingRingIdleClockRegression();
-}
-
-TEST(PresentationPacingRing, RegressingCountResetsInsteadOfWrapping){
-    VerifyPresentationPacingRingRegressingCount();
-}
-
-TEST(PresentationFpsProbe, RegressingCountOrClockInvalidatesInsteadOfWrapping){
-    VerifyPresentationFpsProbeRegressingCountOrClock();
-}
-}
+NWB_ADHD_GTEST(PresentationFpsProbe, IdleCallbacksNeverBecomePresentations, VerifyPresentationFpsProbeIdleCallbacks)
+NWB_ADHD_GTEST(PresentationFpsProbe, BatchedObservationsCountEveryPresentationAndKeepLongStalls, VerifyPresentationFpsProbeBatchedObservations)
+NWB_ADHD_GTEST(PresentationFpsProbe, WarmupAndCompletionUseActualWallAnchorsWithoutClamping, VerifyPresentationFpsProbeWarmupAndCompletion)
+NWB_ADHD_GTEST(PresentationFpsProbe, ZeroPresentationsCanCompleteButCannotClaimThroughput, VerifyPresentationFpsProbeZeroPresentations)
+NWB_ADHD_GTEST(PresentationPacingRing, FrequentIdlePollsCountEachPendingStallOnce, VerifyPresentationPacingRingFrequentIdlePolls)
+NWB_ADHD_GTEST(PresentationPacingRing, BatchedAdvanceAveragesTheWholeIntervalAfterIdlePolling, VerifyPresentationPacingRingBatchedAdvance)
+NWB_ADHD_GTEST(PresentationPacingRing, IdleClockRegressionResetsEvenAfterLastPresentationTime, VerifyPresentationPacingRingIdleClockRegression)
+NWB_ADHD_GTEST(PresentationPacingRing, RegressingCountResetsInsteadOfWrapping, VerifyPresentationPacingRingRegressingCount)
+NWB_ADHD_GTEST(PresentationFpsProbe, RegressingCountOrClockInvalidatesInsteadOfWrapping, VerifyPresentationFpsProbeRegressingCountOrClock)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

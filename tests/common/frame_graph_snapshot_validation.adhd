@@ -7,6 +7,10 @@
 native{
 #include <core/telemetry/frame_graph.h>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::Smoke{
 using FrameGraphPayload = Core::Telemetry::FrameGraphPayload;
 using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics;
@@ -18,66 +22,75 @@ using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics
 
 
 b8 ValidateNormalFrameSnapshotCompletion(in FrameGraphPayload payload, in FrameGraphRuntimeStatistics statistics){
-    b8 valid = false;
-    native(in payload, in statistics, mut valid){
-        const auto& compile = statistics.compile;
-        const auto& submission = statistics.submission;
-        const b8 allAccepted = submission.rejectedPacketCount == 0u && submission.rejectedTaskCount == 0u;
-        const b8 unusedRecovery = submission.rejectedPacketCount == 1u && submission.rejectedTaskCount == 1u;
-        const u64 discarded = unusedRecovery ? 1u : 0u;
+    in auto compile = statistics.compile;
+    in auto submission = statistics.submission;
+    const b8 allAccepted = submission.rejectedPacketCount == 0u && submission.rejectedTaskCount == 0u;
+    const b8 unusedRecovery = submission.rejectedPacketCount == 1u && submission.rejectedTaskCount == 1u;
+    u64 discarded = 0u;
+    if(unusedRecovery)
+        discarded = 1u;
+    if(
+        compile.packetCount == 0u
+        || compile.taskCount == 0u
+        || (!allAccepted && !unusedRecovery)
+        || submission.rejectedSubmissionCount != 0u
+        || submission.recoverySubmissionCount != 0u
+        || submission.acceptedPacketCount != compile.packetCount - discarded
+        || submission.acceptedTaskCount != compile.taskCount - discarded
+        || cast<u64>(payload.packetSubmissionStatistics.size()) != submission.acceptedPacketCount
+    )
+        return false;
+
+    u64 acceptedTasksRemaining = submission.acceptedTaskCount;
+    for(usize index = 0u; index < payload.packetSubmissionStatistics.size(); ++index){
+        in auto packet = payload.packetSubmissionStatistics[index];
         if(
-            compile.packetCount == 0u || compile.taskCount == 0u || (!allAccepted && !unusedRecovery)
-            || submission.rejectedSubmissionCount != 0u || submission.recoverySubmissionCount != 0u || submission.acceptedPacketCount != compile.packetCount - discarded
-            || submission.acceptedTaskCount != compile.taskCount - discarded || payload.packetSubmissionStatistics.size() != submission.acceptedPacketCount
-        ){
-            valid = false;
-            return valid;
-        }
-
-        u64 acceptedTasksRemaining = submission.acceptedTaskCount;
-        for(usize index = 0u; index < payload.packetSubmissionStatistics.size(); ++index){
-            const auto& packet = payload.packetSubmissionStatistics[index];
-            if(packet.packetGeneration != statistics.planGeneration || packet.packetIndex >= compile.packetCount || !packet.queue.valid() || packet.recoverySubmission || packet.taskCount == 0u || packet.taskCount > acceptedTasksRemaining)
-                return false;
-            for(usize previous = 0u; previous < index; ++previous){
-                if(payload.packetSubmissionStatistics[previous].packetIndex == packet.packetIndex)
-                    return false;
-            }
-            u64 compiledTasks = 0u;
-            for(const auto& node : payload.nodes){
-                if(node.compiledTask.present && node.compiledTask.packetIndex == packet.packetIndex)
-                    ++compiledTasks;
-            }
-            if(compiledTasks != packet.taskCount)
-                return false;
-            acceptedTasksRemaining -= packet.taskCount;
-        }
-        if(acceptedTasksRemaining != 0u)
+            packet.packetGeneration != statistics.planGeneration
+            || cast<u64>(packet.packetIndex) >= compile.packetCount
+            || !packet.queue.valid()
+            || packet.recoverySubmission
+            || packet.taskCount == 0u
+            || cast<u64>(packet.taskCount) > acceptedTasksRemaining
+        )
             return false;
-
-        u64 compiledTasks = 0u;
-        u64 unusedRecoveryTasks = 0u;
-        for(const auto& node : payload.nodes){
-            if(!node.compiledTask.present)
-                continue;
-            ++compiledTasks;
-            if(node.compiledTask.planGeneration != statistics.planGeneration || node.compiledTask.packetIndex >= compile.packetCount)
-                return false;
-            b8 accepted = false;
-            for(const auto& packet : payload.packetSubmissionStatistics)
-                accepted = accepted || packet.packetIndex == node.compiledTask.packetIndex;
-            if(node.name == CommonCases::s_CommonCaseNameRenderFrameRecovery){
-                if(!unusedRecovery || accepted)
-                    return false;
-                ++unusedRecoveryTasks;
-            }
-            else if(!accepted)
+        for(usize previous = 0u; previous < index; ++previous){
+            if(payload.packetSubmissionStatistics[previous].packetIndex == packet.packetIndex)
                 return false;
         }
-        valid = compiledTasks == compile.taskCount && unusedRecoveryTasks == discarded;
+        u64 compiledTasks = 0u;
+        for(in auto node : payload.nodes){
+            if(node.compiledTask.present && node.compiledTask.packetIndex == packet.packetIndex)
+                ++compiledTasks;
+        }
+        if(compiledTasks != cast<u64>(packet.taskCount))
+            return false;
+        acceptedTasksRemaining -= cast<u64>(packet.taskCount);
     }
-    return valid;
+    if(acceptedTasksRemaining != 0u)
+        return false;
+
+    u64 compiledTasks = 0u;
+    u64 unusedRecoveryTasks = 0u;
+    for(in auto node : payload.nodes){
+        if(!node.compiledTask.present)
+            continue;
+        ++compiledTasks;
+        if(node.compiledTask.planGeneration != statistics.planGeneration || cast<u64>(node.compiledTask.packetIndex) >= compile.packetCount)
+            return false;
+        b8 accepted = false;
+        for(in auto packet : payload.packetSubmissionStatistics)
+            accepted = accepted || packet.packetIndex == node.compiledTask.packetIndex;
+        if(node.name == CommonCases::s_CommonCaseNameRenderFrameRecovery){
+            if(!unusedRecovery || accepted)
+                return false;
+            ++unusedRecoveryTasks;
+        }
+        else if(!accepted)
+            return false;
+    }
+    return compiledTasks == compile.taskCount && unusedRecoveryTasks == discarded;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

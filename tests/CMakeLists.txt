@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_test_common_names)
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests::CommonCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/common/name_cases.adhd")
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/common/gtest_macros.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/test_helpers.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/arena_owner_fixture.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/capturing_logger.adhd"

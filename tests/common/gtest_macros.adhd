@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <engine_namespace.h>
+
+#include <global/generic.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ScopedTestTrace final : NoCopy{
+public:
+    template<typename T>
+    explicit ScopedTestTrace(const T& message, const char* const file = __builtin_FILE(), const i32 line = __builtin_LINE())
+        : m_trace(file, line, message)
+    {}
+
+
+private:
+    ::testing::ScopedTrace m_trace;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+}
+
+#define EXPECT_TRUE(cond) native(in __adhd_cond = (cond)){ EXPECT_TRUE(__adhd_cond); }
+#define EXPECT_FALSE(cond) native(in __adhd_cond = (cond)){ EXPECT_FALSE(__adhd_cond); }
+#define EXPECT_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_EQ(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_NE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_NE(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_LT(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_LT(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_LE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_LE(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_GT(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_GT(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_GE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_GE(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_NEAR(lhs, rhs, absErr) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs), in __adhd_err = (absErr)){ EXPECT_NEAR(__adhd_lhs, __adhd_rhs, __adhd_err); }
+#define EXPECT_FLOAT_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_FLOAT_EQ(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_DOUBLE_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_DOUBLE_EQ(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_STREQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_STREQ(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_STRNE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ EXPECT_STRNE(__adhd_lhs, __adhd_rhs); }
+#define EXPECT_NO_THROW(...) native{ EXPECT_NO_THROW(__VA_ARGS__) }
+#define EXPECT_THROW(...) native{ EXPECT_THROW(__VA_ARGS__) }
+#define EXPECT_ANY_THROW(...) native{ EXPECT_ANY_THROW(__VA_ARGS__) }
+#define EXPECT_DEATH(...) native{ EXPECT_DEATH(__VA_ARGS__) }
+#define EXPECT_DEATH_IF_SUPPORTED(...) native{ EXPECT_DEATH_IF_SUPPORTED(__VA_ARGS__) }
+#define EXPECT_EXIT(...) native{ EXPECT_EXIT(__VA_ARGS__) }
+#define EXPECT_NO_FATAL_FAILURE(...) native{ EXPECT_NO_FATAL_FAILURE(__VA_ARGS__) }
+
+#define ASSERT_TRUE(cond) native(in __adhd_cond = (cond)){ ASSERT_TRUE(__adhd_cond); }
+#define ASSERT_FALSE(cond) native(in __adhd_cond = (cond)){ ASSERT_FALSE(__adhd_cond); }
+#define ASSERT_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_EQ(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_NE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_NE(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_LT(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_LT(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_LE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_LE(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_GT(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_GT(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_GE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_GE(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_NEAR(lhs, rhs, absErr) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs), in __adhd_err = (absErr)){ ASSERT_NEAR(__adhd_lhs, __adhd_rhs, __adhd_err); }
+#define ASSERT_FLOAT_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_FLOAT_EQ(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_DOUBLE_EQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_DOUBLE_EQ(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_STREQ(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_STREQ(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_STRNE(lhs, rhs) native(in __adhd_lhs = (lhs), in __adhd_rhs = (rhs)){ ASSERT_STRNE(__adhd_lhs, __adhd_rhs); }
+#define ASSERT_NO_THROW(...) native{ ASSERT_NO_THROW(__VA_ARGS__) }
+#define ASSERT_THROW(...) native{ ASSERT_THROW(__VA_ARGS__) }
+#define ASSERT_ANY_THROW(...) native{ ASSERT_ANY_THROW(__VA_ARGS__) }
+#define ASSERT_DEATH(...) native{ ASSERT_DEATH(__VA_ARGS__) }
+#define ASSERT_DEATH_IF_SUPPORTED(...) native{ ASSERT_DEATH_IF_SUPPORTED(__VA_ARGS__) }
+#define ASSERT_EXIT(...) native{ ASSERT_EXIT(__VA_ARGS__) }
+#define ASSERT_NO_FATAL_FAILURE(...) native{ ASSERT_NO_FATAL_FAILURE(__VA_ARGS__) }
+
+#define ADD_FAILURE(...) native{ ADD_FAILURE(__VA_ARGS__) }
+#define FAIL(...) native{ FAIL(__VA_ARGS__) }
+#define SUCCEED(...) native{ SUCCEED(__VA_ARGS__) }
+#define GTEST_SKIP(...) native{ GTEST_SKIP(__VA_ARGS__) }
+
+#define NWB_ADHD_GTEST(Suite, Case, ...) native{ TEST(Suite, Case){ __VA_ARGS__(); } }
+#define NWB_ADHD_GTEST_F(Fixture, Case, ...) native{ TEST_F(Fixture, Case){ __VA_ARGS__(*this); } }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

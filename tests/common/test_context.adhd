@@ -13,13 +13,24 @@ native{
 
 #include <gtest/gtest.h>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace Tests{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr Name s_TestArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonTestArena;
 inline constexpr Name s_DefaultTestArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonDefaultTestArena;
-inline constexpr f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
 inline constexpr usize s_TestPropertyNumberBufferBytes = 32u;
 inline constexpr Array<u32, 3> s_TriangleIndices = { 0u, 1u, 2u };
 inline constexpr Array<u32, 6> s_QuadTriangleIndices = { 0u, 1u, 2u, 0u, 2u, 3u };
@@ -45,28 +56,20 @@ template<typename T>
 using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>;
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
-[[nodiscard]] inline b8 NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return Abs(lhs - rhs) <= epsilon;
-}
-
-[[nodiscard]] inline b8 NearlyEqual3(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return Vector3LessOrEqual(VectorAbs(VectorSubtract(value, VectorSet(x, y, z, 0.0f))), VectorReplicate(epsilon));
-}
-
-[[nodiscard]] inline b8 NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon);
-}
-
-[[nodiscard]] inline b8 NearlyEqual4(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return Vector4LessOrEqual(VectorAbs(VectorSubtract(value, VectorSet(x, y, z, w))), VectorReplicate(epsilon));
-}
-
 template<typename ArenaT>
 [[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){
     return ::Path<ArenaT>(arena, sourceFile).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_END
 }
@@ -75,7 +78,43 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CountText(in AStringView text, in AStringView expected){
+const f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
+
+b8 NearlyEqual(in f32 lhs, in f32 rhs, in f32 epsilon){
+    return Abs(lhs - rhs) <= epsilon;
+}
+
+b8 NearlyEqual(in f32 lhs, in f32 rhs){
+    return NearlyEqual(lhs, rhs, s_DefaultNearlyEqualEpsilon);
+}
+
+b8 NearlyEqual3(in VectorSingle value, in f32 x, in f32 y, in f32 z, in f32 epsilon){
+    const VectorSingle diff = Abs(value - VectorSingle(x, y, z, 0.0f));
+    return diff.x <= epsilon && diff.y <= epsilon && diff.z <= epsilon;
+}
+
+b8 NearlyEqual3(in VectorSingle value, in f32 x, in f32 y, in f32 z){
+    return NearlyEqual3(value, x, y, z, s_DefaultNearlyEqualEpsilon);
+}
+
+b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z, in f32 epsilon){
+    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon);
+}
+
+b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z){
+    return NearlyEqual3(value, x, y, z, s_DefaultNearlyEqualEpsilon);
+}
+
+b8 NearlyEqual4(in VectorSingle value, in f32 x, in f32 y, in f32 z, in f32 w, in f32 epsilon){
+    const VectorSingle diff = Abs(value - VectorSingle(x, y, z, w));
+    return diff.x <= epsilon && diff.y <= epsilon && diff.z <= epsilon && diff.w <= epsilon;
+}
+
+b8 NearlyEqual4(in VectorSingle value, in f32 x, in f32 y, in f32 z, in f32 w){
+    return NearlyEqual4(value, x, y, z, w, s_DefaultNearlyEqualEpsilon);
+}
+
+usize CountText(in StringView text, in StringView expected){
     if(expected.empty())
         return 0u;
 
@@ -83,7 +122,7 @@ usize CountText(in AStringView text, in AStringView expected){
     usize offset = 0u;
     while(offset < text.size()){
         const usize found = text.find(expected, offset);
-        if(found == AStringView::npos)
+        if(found >= text.size())
             break;
         ++count;
         offset = found + expected.size();
@@ -91,7 +130,7 @@ usize CountText(in AStringView text, in AStringView expected){
     return count;
 }
 
-void RecordUnsignedTestProperty(in AStringView key, in u64 value){
+void RecordUnsignedTestProperty(in StringView key, in u64 value){
     native(in key, in value){
         Array<char, s_TestPropertyNumberBufferBytes> text{};
         const AStringView formatted = FormatDecimal(value, text);
@@ -103,17 +142,34 @@ void RecordUnsignedTestProperty(in AStringView key, in u64 value){
 native{
 NWB_BEGIN
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace Tests::TestDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena(s_DefaultTestArena);
     return s_Arena;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_END
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

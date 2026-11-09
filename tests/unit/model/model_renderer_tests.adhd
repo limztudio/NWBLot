@@ -51,7 +51,6 @@ void VerifyMissingOwnerOverridesDoNotCreateMaterialInstance(){
     }
 }
 
-NWB_ADHD_GTEST(ModelRenderer, MissingOwnerOverridesDoNotCreateMaterialInstance, VerifyMissingOwnerOverridesDoNotCreateMaterialInstance)
 
 usize MaterialInstanceComponentAddress(in World world, in EntityID entity){
     usize address = 0u;
@@ -98,6 +97,7 @@ void VerifyModelRendererOwnerOverridesSurvivePoolGrowth(){
     EXPECT_TRUE(relocated);
 }
 
+NWB_ADHD_GTEST(ModelRenderer, MissingOwnerOverridesDoNotCreateMaterialInstance, VerifyMissingOwnerOverridesDoNotCreateMaterialInstance)
 NWB_ADHD_GTEST(ModelRenderer, OwnerOverridesSurviveMaterialComponentPoolGrowth, VerifyModelRendererOwnerOverridesSurvivePoolGrowth)
 
 

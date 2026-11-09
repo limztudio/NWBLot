@@ -26,7 +26,7 @@ namespace Operation{
 enum Enum : u32{ Move, EqualFloat, EqualDouble, EqualDoubleXYZ };
 };
 
-struct Dataset{
+struct MaskDataset{
     Array<UInt64x4, 64> left = {};
     Array<UInt64x4, 64> right = {};
 };
@@ -139,7 +139,7 @@ NWB_NOINLINE u32 Qualify()noexcept{
     return 0u;
 }
 
-NWB_NOINLINE void InitializeDataset(Dataset& dataset)noexcept{
+NWB_NOINLINE void InitializeDataset(MaskDataset& dataset)noexcept{
     u64 state = 0x5629842965734193ull;
     for(usize i = 0u; i < 64u; ++i){
         const SIMDVectorDouble left = VectorDoubleSetInt(NextSeed(state), NextSeed(state), NextSeed(state), NextSeed(state));
@@ -162,7 +162,7 @@ NWB_INLINE u32 Apply(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
+NWB_NOINLINE u64 Workload(const MaskDataset& data, const usize iterations, const b8 latency)noexcept{
     Array<u64, 8> results = {};
     if(latency){
         usize index = 1u;
@@ -186,7 +186,7 @@ NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const b8 
 }
 
 template<Operation::Enum Kind, b8 Candidate>
-void Measure(const Dataset& data, const usize iterations, const b8 latency){
+void Measure(const MaskDataset& data, const usize iterations, const b8 latency){
     const Timer start = TimerNow();
     const u64 checksum = Workload<Kind, Candidate>(data, iterations, latency);
     const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
@@ -199,7 +199,7 @@ void Measure(const Dataset& data, const usize iterations, const b8 latency){
 }
 
 template<Operation::Enum Kind>
-void SelectVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
+void SelectVariant(const MaskDataset& data, const b8 candidate, const usize iterations, const b8 latency){
     if(candidate)
         Measure<Kind, true>(data, iterations, latency);
     else
@@ -239,7 +239,7 @@ int main(const int argc, const char* const* argv){
         return 2;
     const b8 candidate = options->candidate;
     const usize iterations = options->iterations;
-    Dataset data{};
+    MaskDataset data{};
     InitializeDataset(data);
     if(StringView(argv[2]) == "move")
         SelectVariant<Operation::Move>(data, candidate, iterations, latency);

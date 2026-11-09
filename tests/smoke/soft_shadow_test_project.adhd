@@ -187,7 +187,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
     public SoftShadowTestSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_SoftShadowProjectName, SmokeSkinnedRenderWorldOptions(), context);
+        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_SoftShadowProjectName, SmokeRenderQualitySettings(), context);
         this.m_timingRenderPass = ShadowTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(s_SoftShadowProjectName);
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(s_SoftShadowProjectName);

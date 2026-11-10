@@ -105,8 +105,9 @@ struct Token{
 
 class Lexer final{
 public:
-    explicit Lexer(const MStringView source)noexcept
+    explicit Lexer(const MStringView source, const b8 allowCppNativeConstructs = false)noexcept
         : m_source(source)
+        , m_allowCppNativeConstructs(allowCppNativeConstructs)
     {}
 
 
@@ -121,6 +122,7 @@ private:
     [[nodiscard]] Token readNumber()noexcept;
     [[nodiscard]] Token readString()noexcept;
     [[nodiscard]] Token readCharLiteral()noexcept;
+    [[nodiscard]] Token readCppQuotedToken(TokenType::Enum tokenType, MChar quote, usize startOffset, u32 startLine, u32 startColumn)noexcept;
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length)noexcept;
     [[nodiscard]] Token makeErrorToken(MStringView message)noexcept{ return makeErrorToken(message, m_line, m_column); }
     [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column)noexcept;
@@ -143,6 +145,8 @@ private:
     Array<u32, s_MaxSavedIncludeDepth> m_savedLines{};
     u32 m_savedLineDepth = 0;
     b8 m_hasPendingError = false;
+    b8 m_allowCppNativeConstructs = false;
+    b8 m_atLineStart = true;
 };
 
 

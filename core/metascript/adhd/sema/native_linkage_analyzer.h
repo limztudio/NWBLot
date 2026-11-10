@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../ast/ast_common.h"
+#include "../ast/ast_decl.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,9 +17,10 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NativeBlockClassifier final{
+class NativeLinkageAnalyzer final{
 public:
-    [[nodiscard]] static b8 HasCppSourceOdrDefinition(MStringView code)noexcept;
+    static void ClassifyTranslationUnit(TranslationUnit& unit);
+    [[nodiscard]] static b8 HasExternalCppDefinition(MStringView code)noexcept;
 };
 
 

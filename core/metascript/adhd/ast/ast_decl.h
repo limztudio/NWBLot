@@ -207,7 +207,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct NativeBlockDecl{
+    MStringView code;
+    b8 hasPrecedingLocalDecl = false;
+    b8 hasFollowingLocalDecl = false;
+    b8 isImported = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TranslationUnit{
+    MVector<NativeBlockDecl> nativeBlocks;
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
     MVector<MString> includedAdhdFiles;
@@ -225,7 +237,8 @@ struct TranslationUnit{
 
 public:
     explicit TranslationUnit(MetaArena& arena)noexcept
-        : topLevelNativeBlocks(arena)
+        : nativeBlocks(arena)
+        , topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
         , includedAdhdFiles(arena)
         , resolvedIncludedFiles(arena)

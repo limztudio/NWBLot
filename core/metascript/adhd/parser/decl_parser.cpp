@@ -9,7 +9,6 @@
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "decl_parser.h"
-#include "native_block_classifier.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,17 +43,11 @@ b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize
 }
 
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
-    m_pendingImplicitSourceNativeBlocks.clear();
-    m_hasPriorLocalDecl = false;
-    m_hasPriorLocalNativeBlock = false;
-    m_hasPendingImportedNativeBlock = false;
+    m_seenLocalAdhdDecl = false;
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
     }
-    for(const MStringView& pending : m_pendingImplicitSourceNativeBlocks)
-        outUnit.sourceNativeBlocks.push_back(pending);
-    m_pendingImplicitSourceNativeBlocks.clear();
     return !m_cursor.failed();
 }
 
@@ -96,34 +89,20 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         MStringView code;
         if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
-        if(!isImported){
-            if(m_hasPriorLocalDecl || m_hasPriorLocalNativeBlock || NativeBlockClassifier::HasCppSourceOdrDefinition(code))
-                m_pendingImplicitSourceNativeBlocks.push_back(code);
-            else
-                outUnit.topLevelNativeBlocks.push_back(code);
-            m_hasPriorLocalNativeBlock = true;
-        }
-        else if(!NativeBlockClassifier::HasCppSourceOdrDefinition(code)){
-            outUnit.hasImportedNativeBlocks = true;
-        }
-        else{
-            m_hasPendingImportedNativeBlock = true;
-        }
+        NativeBlockDecl block{};
+        block.code = code;
+        block.isImported = isImported;
+        block.hasPrecedingLocalDecl = !isImported && m_seenLocalAdhdDecl;
+        outUnit.nativeBlocks.push_back(block);
         return true;
     }
 
-    if(!isImported){
-        if(!m_pendingImplicitSourceNativeBlocks.empty()){
-            for(const MStringView& pending : m_pendingImplicitSourceNativeBlocks)
-                outUnit.topLevelNativeBlocks.push_back(pending);
-            m_pendingImplicitSourceNativeBlocks.clear();
-        }
-        m_hasPriorLocalDecl = true;
+    for(NativeBlockDecl& block : outUnit.nativeBlocks){
+        if(block.isImported == isImported)
+            block.hasFollowingLocalDecl = true;
     }
-    else if(m_hasPendingImportedNativeBlock){
-        outUnit.hasImportedNativeBlocks = true;
-        m_hasPendingImportedNativeBlock = false;
-    }
+    if(!isImported)
+        m_seenLocalAdhdDecl = true;
 
     if(m_cursor.matchIdentifier("const")){
         if(!attributes.empty()){

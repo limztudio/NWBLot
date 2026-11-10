@@ -97,7 +97,7 @@ f32 ComputePaddedWidth(in ElementBox box){
 ## 2. Compiler-Owned Decisions & Prohibited Constructs
 
 1. **No `[inline]` / `[noinline]` or `[header]` / `[source]` Attributes, and No `inline` / `noinline` Keywords**:
-   - Both callable inlining (`ShouldAutoInlineCallable`) and top-level `native{}` header-vs-source placement (`NativeBlockClassifier`) are decided **exclusively and automatically by the `adhd` compiler itself**, never by the user.
+   - Both callable inlining (`ShouldAutoInlineCallable`) and top-level `native{}` header-vs-source placement (`NativeLinkageAnalyzer`) are decided **exclusively and automatically by the `adhd` compiler itself**, never by the user.
    - Writing `[inline]`, `[noinline]`, `inline`, `noinline`, `[header]`, or `[source]` in `.adhd` is a compile-time error.
 2. **No `namespace` Keyword**:
    - `.adhd` files never declare `namespace`. The C++ namespace is configured on the CMake target via `nwb_target_adhd_sources(<target> NAMESPACE "NWB::...")`.

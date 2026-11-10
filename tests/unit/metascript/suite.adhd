@@ -911,11 +911,11 @@ void VerifyAdhdCompiler_AutomaticallyClassifiesHeaderAndSourceNativeBlocksAndRej
     EXPECT_NE(GeneratedSourceView(singleSourceRes).find("ExternalOnlyInCpp"), usize.max);
 
     CompileResult twoBlockZeroDeclRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("native{\r\nstruct SplitHeaderType {};\r\n}\r\nnative{\r\nstatic constexpr int kSplitCppConst = 42;\r\n}\r\n", "impl/auto_split_native.adhd", arena.arena, twoBlockZeroDeclRes));
-    EXPECT_NE(GeneratedHeaderView(twoBlockZeroDeclRes).find("SplitHeaderType"), usize.max);
-    EXPECT_EQ(GeneratedSourceView(twoBlockZeroDeclRes).find("SplitHeaderType"), usize.max);
-    EXPECT_EQ(GeneratedHeaderView(twoBlockZeroDeclRes).find("kSplitCppConst"), usize.max);
-    EXPECT_NE(GeneratedSourceView(twoBlockZeroDeclRes).find("kSplitCppConst"), usize.max);
+    ASSERT_TRUE(Compile("native{\r\nstruct SplitHeaderType { int eval()const; };\r\n}\r\nnative{\r\nint SplitHeaderType::eval()const{ return 42; }\r\n}\r\n", "impl/auto_split_native.adhd", arena.arena, twoBlockZeroDeclRes));
+    EXPECT_NE(GeneratedHeaderView(twoBlockZeroDeclRes).find("struct SplitHeaderType"), usize.max);
+    EXPECT_EQ(GeneratedSourceView(twoBlockZeroDeclRes).find("struct SplitHeaderType"), usize.max);
+    EXPECT_EQ(GeneratedHeaderView(twoBlockZeroDeclRes).find("return 42;"), usize.max);
+    EXPECT_NE(GeneratedSourceView(twoBlockZeroDeclRes).find("return 42;"), usize.max);
 
     CompileResult beforeDeclFlushedRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile("native{\r\nint NeededBeforeAdhdDecl(){ return 7; }\r\n}\r\nconst u32 s_UsesHeader = 7u;\r\n", "impl/auto_flush_before_decl.adhd", arena.arena, beforeDeclFlushedRes));

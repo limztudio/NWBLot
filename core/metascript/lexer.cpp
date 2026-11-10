@@ -66,11 +66,17 @@ Token Lexer::next()noexcept{
     if(IsAsciiDigit(c))
         return readNumber();
 
-    if(c == '"')
+    if(c == '"'){
+        if(m_allowCppNativeConstructs)
+            return readCppQuotedToken(TokenType::StringLiteral, '"', m_current, m_line, m_column);
         return readString();
+    }
 
-    if(c == '\'')
+    if(c == '\''){
+        if(m_allowCppNativeConstructs)
+            return readCppQuotedToken(TokenType::IntegerLiteral, '\'', m_current, m_line, m_column);
         return readCharLiteral();
+    }
 
     switch(c){
     case '+':
@@ -173,6 +179,10 @@ Token Lexer::next()noexcept{
         break;
     }
 
+    if(m_allowCppNativeConstructs){
+        return makeToken(TokenType::Hash, 1);
+    }
+
     {
         Token tok = makeErrorToken("unexpected character");
         advance();
@@ -273,12 +283,27 @@ void Lexer::skipWhitespaceAndComments()noexcept{
             return;
 
         const MChar c = peek();
-        if(c == ' ' || c == '\t' || c == '\r'){
+        if(c == ' ' || c == '\t' || c == '\r' || (m_allowCppNativeConstructs && (c == '\v' || c == '\f'))){
             advance();
             continue;
         }
         if(c == '\n'){
             advance();
+            continue;
+        }
+        if(m_allowCppNativeConstructs && m_atLineStart && c == '#'){
+            for(;;){
+                MChar lastNonSpace = '\0';
+                while(!isAtEnd() && peek() != '\n'){
+                    const MChar dc = advance();
+                    if(dc != ' ' && dc != '\t' && dc != '\r' && dc != '\v' && dc != '\f')
+                        lastNonSpace = dc;
+                }
+                if(!isAtEnd() && peek() == '\n')
+                    advance();
+                if(lastNonSpace != '\\' || isAtEnd())
+                    break;
+            }
             continue;
         }
 
@@ -289,6 +314,8 @@ void Lexer::skipWhitespaceAndComments()noexcept{
         }
 
         if(c == '/' && peekNext() == '*'){
+            const b8 wasAtLineStart = m_atLineStart;
+            b8 sawNewlineInComment = false;
             const usize commentStart = m_current;
             const u32 commentLine = m_line;
             const u32 commentColumn = m_column;
@@ -303,8 +330,11 @@ void Lexer::skipWhitespaceAndComments()noexcept{
                     terminated = true;
                     break;
                 }
-                advance();
+                if(advance() == '\n')
+                    sawNewlineInComment = true;
             }
+            if(!sawNewlineInComment)
+                m_atLineStart = wasAtLineStart;
 
             if(!terminated){
                 m_hasPendingError = true;
@@ -341,9 +371,56 @@ Token Lexer::readIdentifier()noexcept{
     while(!isAtEnd() && IsAsciiIdentifierChar(peek()))
         advance();
 
+    const MStringView ident = m_source.substr(start, m_current - start);
+    if(m_allowCppNativeConstructs && !isAtEnd()){
+        if(peek() == '"' && (ident == "R" || ident == "LR" || ident == "uR" || ident == "UR" || ident == "u8R")){
+            const usize savedCurrent = m_current;
+            const u32 savedLine = m_line;
+            const u32 savedCol = m_column;
+            advance();
+            const usize delimStart = m_current;
+            b8 validDelim = true;
+            while(!isAtEnd() && peek() != '('){
+                const MChar dc = peek();
+                if((m_current - delimStart) >= 16u || dc == ' ' || dc == '\t' || dc == '\r' || dc == '\n' || dc == '\\' || dc == ')'){
+                    validDelim = false;
+                    break;
+                }
+                advance();
+            }
+            if(validDelim && !isAtEnd() && peek() == '('){
+                const MStringView delim = m_source.substr(delimStart, m_current - delimStart);
+                advance();
+                while(!isAtEnd()){
+                    if(peek() == ')' && m_current + 1u + delim.size() < m_source.size() && m_source.substr(m_current + 1u, delim.size()) == delim && m_source[m_current + 1u + delim.size()] == '"'){
+                        for(usize skip = 0u; skip < delim.size() + 2u; ++skip)
+                            advance();
+                        break;
+                    }
+                    advance();
+                }
+                while(!isAtEnd() && IsAsciiIdentifierChar(peek()))
+                    advance();
+                Token rawTok;
+                rawTok.type = TokenType::StringLiteral;
+                rawTok.text = m_source.substr(start, m_current - start);
+                rawTok.line = startLine;
+                rawTok.column = startColumn;
+                return rawTok;
+            }
+            m_current = savedCurrent;
+            m_line = savedLine;
+            m_column = savedCol;
+        }
+        if((peek() == '"' || peek() == '\'') && (ident == "L" || ident == "u" || ident == "U" || ident == "u8")){
+            const MChar q = peek();
+            return readCppQuotedToken(q == '"' ? TokenType::StringLiteral : TokenType::IntegerLiteral, q, start, startLine, startColumn);
+        }
+    }
+
     Token tok;
     tok.type = TokenType::Identifier;
-    tok.text = m_source.substr(start, m_current - start);
+    tok.text = ident;
     tok.line = startLine;
     tok.column = startColumn;
     return tok;
@@ -506,7 +583,8 @@ Token Lexer::readNumber()noexcept{
     if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || (isDouble && peek() == '.' && IsAsciiDigit(peekNext())))){
         while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
             advance();
-        return makeErrorToken(MStringView("invalid suffix on numeric literal"), startLine, startColumn);
+        if(!m_allowCppNativeConstructs)
+            return makeErrorToken(MStringView("invalid suffix on numeric literal"), startLine, startColumn);
     }
 
     Token tok;
@@ -651,6 +729,28 @@ Token Lexer::readCharLiteral()noexcept{
     return tok;
 }
 
+Token Lexer::readCppQuotedToken(const TokenType::Enum tokenType, const MChar quote, const usize startOffset, const u32 startLine, const u32 startColumn)noexcept{
+    advance();
+    while(!isAtEnd() && peek() != quote){
+        if(peek() == '\\'){
+            advance();
+            if(isAtEnd())
+                break;
+        }
+        advance();
+    }
+    if(!isAtEnd())
+        advance();
+    while(!isAtEnd() && IsAsciiIdentifierChar(peek()))
+        advance();
+    Token tok;
+    tok.type = tokenType;
+    tok.text = m_source.substr(startOffset, m_current - startOffset);
+    tok.line = startLine;
+    tok.column = startColumn;
+    return tok;
+}
+
 Token Lexer::makeToken(TokenType::Enum type, usize length)noexcept{
     Token tok;
     tok.type = type;
@@ -683,9 +783,13 @@ MChar Lexer::advance()noexcept{
     if(c == '\n'){
         ++m_line;
         m_column = 1;
+        m_atLineStart = true;
     }
-    else
+    else{
         ++m_column;
+        if(c != ' ' && c != '\t' && c != '\r' && c != '\v' && c != '\f')
+            m_atLineStart = false;
+    }
 
     return c;
 }
